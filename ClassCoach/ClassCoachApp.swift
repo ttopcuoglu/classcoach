@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct ClassCoachApp: App {
@@ -6,5 +7,11 @@ struct ClassCoachApp: App {
         WindowGroup {
             RootTabView()
         }
+        .modelContainer(for: [
+            Scenario.self,
+            ScenarioAttempt.self,
+            QAExchange.self,
+            UserProfile.self
+        ])
     }
 }
