@@ -1,0 +1,54 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// Category is one of: defiance, disengagement, peer_conflict, disruption,
+// transitions, technology_misuse. GradeBand is "6-8" or "9-12". SQLite has no
+// native enum support in Prisma, so these are validated at the application
+// layer instead of the schema layer.
+model Scenario {
+  id         String   @id @default(cuid())
+  text       String
+  category   String
+  gradeBand  String
+  source     String // "generated" | "curated"
+  createdAt  DateTime @default(now())
+
+  attempts ScenarioAttempt[]
+}
+
+model ScenarioAttempt {
+  id             String   @id @default(cuid())
+  scenarioId     String
+  scenario       Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  responseText   String
+  feedback       String? // Claude's coaching feedback on the teacher's response
+  modelResponse  String? // Claude's suggested model response
+  saved          Boolean  @default(false)
+  createdAt      DateTime @default(now())
+}
+
+model QAExchange {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String
+  starred   Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model UserProfile {
+  id           String   @id @default(cuid())
+  name         String?
+  gradeLevels  String? // comma-separated, e.g. "7th,8th"
+  subjects     String? // comma-separated, e.g. "Math,Science"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
