@@ -1,5 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { ChatBubbleIcon, HomeIcon, ScenarioIcon, UserIcon } from './icons'
+import { logout } from '../lib/api'
+import type { UserProfile } from '../lib/api'
+import { ChatBubbleIcon, ChecklistIcon, HomeIcon, ScenarioIcon, UserIcon } from './icons'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Home', icon: HomeIcon, end: true },
@@ -17,7 +19,12 @@ function navLinkClasses(isActive: boolean) {
   ].join(' ')
 }
 
-export default function Layout() {
+export default function Layout({ user, onLogout }: { user: UserProfile | null; onLogout: () => void }) {
+  async function handleLogout() {
+    await logout().catch(() => {})
+    onLogout()
+  }
+
   return (
     <div className="flex min-h-screen bg-canvas text-ink">
       {/* Desktop sidebar */}
@@ -26,20 +33,39 @@ export default function Layout() {
           <p className="text-lg font-semibold text-ink">ClassCoach</p>
           <p className="text-xs text-ink-soft">Classroom management, sharpened</p>
         </div>
-        <nav className="flex flex-col gap-1 px-3">
+        <nav className="flex flex-1 flex-col gap-1 px-3">
           {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} className={({ isActive }) => navLinkClasses(isActive)}>
               <Icon className="h-5 w-5" />
               {label}
             </NavLink>
           ))}
+          {user?.role === 'admin' && (
+            <NavLink to="/admin" className={({ isActive }) => navLinkClasses(isActive)}>
+              <ChecklistIcon className="h-5 w-5" />
+              Admin
+            </NavLink>
+          )}
         </nav>
+        <div className="border-t border-border px-6 py-4">
+          {user?.email && <p className="truncate text-xs text-ink-soft">{user.email}</p>}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="mt-1.5 text-sm font-medium text-ink-soft hover:text-ink"
+          >
+            Log out
+          </button>
+        </div>
       </aside>
 
       <div className="flex min-h-screen flex-1 flex-col">
         {/* Mobile top bar */}
         <header className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 md:hidden">
           <p className="text-base font-semibold text-ink">ClassCoach</p>
+          <button type="button" onClick={handleLogout} className="text-sm font-medium text-ink-soft">
+            Log out
+          </button>
         </header>
 
         <main className="flex-1 px-4 py-6 pb-24 md:px-10 md:py-10 md:pb-10">

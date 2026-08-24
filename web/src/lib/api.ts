@@ -35,12 +35,24 @@ export type ScenarioAttempt = {
 
 export type UserProfile = {
   id: string
+  email: string
   name: string | null
+  role: 'teacher' | 'admin'
   gradeLevels: string | null
   subjects: string | null
   onboardingProgress: string | null
   createdAt: string
   updatedAt: string
+}
+
+export type AdminOverview = {
+  totalTeachers: number
+  activeThisWeek: number
+  categoryTally: Record<string, number>
+  growth: {
+    recentStrongShare: number | null
+    priorStrongShare: number | null
+  }
 }
 
 export type Debrief = {
@@ -87,6 +99,7 @@ export type SharedDebrief = {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     ...init,
   })
   if (!res.ok) {
@@ -94,6 +107,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(body?.error ?? `Request failed with status ${res.status}`)
   }
   return res.json()
+}
+
+export function signInWithGoogle(credential: string): Promise<UserProfile> {
+  return request('/api/auth/google', { method: 'POST', body: JSON.stringify({ credential }) })
+}
+
+export function getMe(): Promise<UserProfile> {
+  return request('/api/auth/me')
+}
+
+export function logout(): Promise<{ status: string }> {
+  return request('/api/auth/logout', { method: 'POST' })
+}
+
+export function getAdminOverview(): Promise<AdminOverview> {
+  return request('/api/admin/overview')
 }
 
 export function getQAHistory(): Promise<QAExchange[]> {
