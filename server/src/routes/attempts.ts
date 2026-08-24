@@ -1,6 +1,8 @@
 import { Router } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
+import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
+import { generateShareToken } from '../lib/shareToken.ts'
 
 export const attemptsRouter = Router()
 
@@ -19,11 +21,6 @@ A model example of what the teacher could say or do in the moment, written as th
 <rating>
 A single integer 1-5 rating your honest private assessment of how effectively this response follows classroom management best practice. This is never shown to the teacher — it's used only to track their growth over time — so rate honestly rather than generously. Output only the digit, nothing else.
 </rating>`
-
-function extractTag(text: string, tag: string): string | null {
-  const match = text.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`))
-  return match ? match[1].trim() : null
-}
 
 attemptsRouter.get('/', async (req, res) => {
   const { scenarioId, saved } = req.query
@@ -101,4 +98,18 @@ attemptsRouter.patch('/:id', async (req, res) => {
   } catch {
     res.status(404).json({ error: 'Attempt not found' })
   }
+})
+
+attemptsRouter.post('/:id/share', async (req, res) => {
+  const existing = await prisma.scenarioAttempt.findUnique({ where: { id: req.params.id } })
+  if (!existing) {
+    res.status(404).json({ error: 'Attempt not found' })
+    return
+  }
+  const shareToken = existing.shareToken ?? generateShareToken()
+  const attempt = await prisma.scenarioAttempt.update({
+    where: { id: req.params.id },
+    data: { shareToken },
+  })
+  res.json({ shareToken: attempt.shareToken })
 })

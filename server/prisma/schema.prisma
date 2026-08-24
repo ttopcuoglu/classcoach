@@ -36,6 +36,7 @@ model ScenarioAttempt {
   modelResponse  String? // Claude's suggested model response
   rating         Int? // Claude's private 1-5 self-assessment, for growth trends only — never shown to the teacher as a score
   saved          Boolean  @default(false)
+  shareToken     String?  @unique
   createdAt      DateTime @default(now())
 }
 
@@ -47,11 +48,37 @@ model QAExchange {
   createdAt DateTime @default(now())
 }
 
-model UserProfile {
+// A teacher reflecting on something that already happened, as opposed to
+// ScenarioAttempt's hypothetical practice. category is optional and
+// user-picked (not inferred) from the same 6 categories as Scenario.
+model Debrief {
   id           String   @id @default(cuid())
-  name         String?
-  gradeLevels  String? // comma-separated, e.g. "7th,8th"
-  subjects     String? // comma-separated, e.g. "Math,Science"
+  incidentText String
+  category     String?
+  feedback     String?
+  followUp     String? // "next time" guidance — analogous to ScenarioAttempt.modelResponse
+  rating       Int? // same private growth-tracking rating as ScenarioAttempt
+  saved        Boolean  @default(false)
+  shareToken   String?  @unique
   createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+}
+
+// tone is one of: warm, firm, informational, requesting_meeting
+model ParentMessage {
+  id              String   @id @default(cuid())
+  incidentSummary String
+  tone            String
+  draftText       String
+  saved           Boolean  @default(false)
+  createdAt       DateTime @default(now())
+}
+
+model UserProfile {
+  id                 String   @id @default(cuid())
+  name               String?
+  gradeLevels        String? // comma-separated, e.g. "7th,8th"
+  subjects           String? // comma-separated, e.g. "Math,Science"
+  onboardingProgress String? // comma-separated completed First-30-Days step ids
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
