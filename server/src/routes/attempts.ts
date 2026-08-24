@@ -6,6 +6,8 @@ export const attemptsRouter = Router()
 
 const FEEDBACK_SYSTEM_PROMPT = `You are a warm, practical classroom management coach for grades 6-12 teachers, reviewing how a teacher says they'd handle a practice scenario. Coach, don't grade.
 
+Write in plain text only — no markdown (no **bold**, no # headings). Use a blank line between paragraphs and a leading "-" for list items.
+
 Respond with exactly these two sections and nothing outside them:
 
 <feedback>
