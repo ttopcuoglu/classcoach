@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { prisma } from '../lib/prisma.ts'
+import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const parentMessageRouter = Router()
 
@@ -29,7 +30,7 @@ function isValidTone(value: unknown): value is (typeof TONES)[number] {
 parentMessageRouter.get('/', async (req, res) => {
   const { saved } = req.query
   const messages = await prisma.parentMessage.findMany({
-    where: saved === 'true' ? { saved: true } : {},
+    where: { userId: req.user!.userId, ...(saved === 'true' ? { saved: true } : {}) },
     orderBy: { createdAt: 'desc' },
   })
   res.json(messages)
@@ -43,6 +44,12 @@ parentMessageRouter.post('/', async (req, res) => {
   }
   if (!isValidTone(tone)) {
     res.status(400).json({ error: `tone must be one of: ${TONES.join(', ')}` })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'parent_message')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
     return
   }
 
@@ -66,7 +73,7 @@ parentMessageRouter.post('/', async (req, res) => {
       .trim()
 
     const message = await prisma.parentMessage.create({
-      data: { incidentSummary, tone, draftText },
+      data: { userId: req.user!.userId, incidentSummary, tone, draftText },
     })
     res.status(201).json(message)
   } catch (error) {
@@ -81,10 +88,14 @@ parentMessageRouter.patch('/:id', async (req, res) => {
     res.status(400).json({ error: 'saved must be a boolean' })
     return
   }
-  try {
-    const message = await prisma.parentMessage.update({ where: { id: req.params.id }, data: { saved } })
-    res.json(message)
-  } catch {
+  const { count } = await prisma.parentMessage.updateMany({
+    where: { id: req.params.id, userId: req.user!.userId },
+    data: { saved },
+  })
+  if (count === 0) {
     res.status(404).json({ error: 'Parent message not found' })
+    return
   }
+  const message = await prisma.parentMessage.findUnique({ where: { id: req.params.id } })
+  res.json(message)
 })

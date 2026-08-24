@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { prisma } from '../lib/prisma.ts'
+import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const qaRouter = Router()
 
@@ -22,6 +23,12 @@ qaRouter.post('/ask', async (req, res) => {
     return
   }
 
+  const allowed = await checkAndLogUsage(req.user!.userId, 'qa_ask')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -35,7 +42,7 @@ qaRouter.post('/ask', async (req, res) => {
       .map((block) => block.text)
       .join('\n')
 
-    const exchange = await prisma.qAExchange.create({ data: { question, answer } })
+    const exchange = await prisma.qAExchange.create({ data: { userId: req.user!.userId, question, answer } })
     res.status(201).json(exchange)
   } catch (error) {
     console.error('[qa] ask failed:', error)
@@ -46,7 +53,7 @@ qaRouter.post('/ask', async (req, res) => {
 qaRouter.get('/', async (req, res) => {
   const { starred } = req.query
   const exchanges = await prisma.qAExchange.findMany({
-    where: starred === 'true' ? { starred: true } : {},
+    where: { userId: req.user!.userId, ...(starred === 'true' ? { starred: true } : {}) },
     orderBy: { createdAt: 'desc' },
   })
   res.json(exchanges)
@@ -58,7 +65,7 @@ qaRouter.post('/', async (req, res) => {
     res.status(400).json({ error: 'question and answer are required strings' })
     return
   }
-  const exchange = await prisma.qAExchange.create({ data: { question, answer } })
+  const exchange = await prisma.qAExchange.create({ data: { userId: req.user!.userId, question, answer } })
   res.status(201).json(exchange)
 })
 
@@ -68,13 +75,14 @@ qaRouter.patch('/:id', async (req, res) => {
     res.status(400).json({ error: 'starred must be a boolean' })
     return
   }
-  try {
-    const exchange = await prisma.qAExchange.update({
-      where: { id: req.params.id },
-      data: { starred },
-    })
-    res.json(exchange)
-  } catch {
+  const { count } = await prisma.qAExchange.updateMany({
+    where: { id: req.params.id, userId: req.user!.userId },
+    data: { starred },
+  })
+  if (count === 0) {
     res.status(404).json({ error: 'Q&A exchange not found' })
+    return
   }
+  const exchange = await prisma.qAExchange.findUnique({ where: { id: req.params.id } })
+  res.json(exchange)
 })

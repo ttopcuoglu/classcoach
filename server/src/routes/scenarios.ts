@@ -1,8 +1,10 @@
 import { Router } from 'express'
+import { pickWeightedCategory, pickWeightedDifficulty } from '../lib/adaptivePractice.ts'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { getCuratedFallback } from '../lib/curatedFallback.ts'
 import { prisma } from '../lib/prisma.ts'
-import { pickCategory, pickDifficulty, pickGradeBand } from '../lib/scenarioCategories.ts'
+import { pickDifficulty, pickGradeBand } from '../lib/scenarioCategories.ts'
+import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const scenariosRouter = Router()
 
@@ -31,10 +33,16 @@ scenariosRouter.get('/', async (req, res) => {
 
 scenariosRouter.post('/generate', async (req, res) => {
   const { category, gradeBand, difficulty, subject } = req.body ?? {}
-  const chosenCategory = pickCategory(category)
+  const chosenCategory = await pickWeightedCategory(req.user!.userId, category)
   const chosenGradeBand = pickGradeBand(gradeBand)
-  const chosenDifficulty = pickDifficulty(difficulty)
+  const chosenDifficulty = await pickWeightedDifficulty(req.user!.userId, chosenCategory, difficulty)
   const chosenSubject = typeof subject === 'string' && subject.trim() ? subject.trim() : null
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'scenario_generate')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
 
   try {
     const context = [

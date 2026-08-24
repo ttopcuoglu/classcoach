@@ -4,6 +4,7 @@ import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
 import { SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
+import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const debriefRouter = Router()
 
@@ -31,6 +32,7 @@ debriefRouter.get('/', async (req, res) => {
   const { saved, category } = req.query
   const debriefs = await prisma.debrief.findMany({
     where: {
+      userId: req.user!.userId,
       ...(saved === 'true' ? { saved: true } : {}),
       ...(typeof category === 'string' ? { category } : {}),
     },
@@ -47,6 +49,12 @@ debriefRouter.post('/', async (req, res) => {
   }
   if (category !== undefined && !isValidCategory(category)) {
     res.status(400).json({ error: 'category must be one of the known scenario categories' })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'debrief_feedback')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
     return
   }
 
@@ -70,7 +78,7 @@ debriefRouter.post('/', async (req, res) => {
     const rating = parsedRating >= 1 && parsedRating <= 5 ? parsedRating : null
 
     const debrief = await prisma.debrief.create({
-      data: { incidentText, category: category ?? null, feedback, followUp, rating },
+      data: { userId: req.user!.userId, incidentText, category: category ?? null, feedback, followUp, rating },
     })
     res.status(201).json(debrief)
   } catch (error) {
@@ -85,16 +93,22 @@ debriefRouter.patch('/:id', async (req, res) => {
     res.status(400).json({ error: 'saved must be a boolean' })
     return
   }
-  try {
-    const debrief = await prisma.debrief.update({ where: { id: req.params.id }, data: { saved } })
-    res.json(debrief)
-  } catch {
+  const { count } = await prisma.debrief.updateMany({
+    where: { id: req.params.id, userId: req.user!.userId },
+    data: { saved },
+  })
+  if (count === 0) {
     res.status(404).json({ error: 'Debrief not found' })
+    return
   }
+  const debrief = await prisma.debrief.findUnique({ where: { id: req.params.id } })
+  res.json(debrief)
 })
 
 debriefRouter.post('/:id/share', async (req, res) => {
-  const existing = await prisma.debrief.findUnique({ where: { id: req.params.id } })
+  const existing = await prisma.debrief.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+  })
   if (!existing) {
     res.status(404).json({ error: 'Debrief not found' })
     return

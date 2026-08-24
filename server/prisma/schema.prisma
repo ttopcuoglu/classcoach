@@ -10,11 +10,43 @@ datasource db {
   provider = "sqlite"
 }
 
+// role is "teacher" (default) | "admin". Signed in via Google — googleId is
+// the Google account's stable "sub" claim. No passwords are stored anywhere.
+model User {
+  id                 String   @id @default(cuid())
+  googleId           String   @unique
+  email              String   @unique
+  name               String?
+  role               String   @default("teacher")
+  gradeLevels        String? // comma-separated, e.g. "7th,8th"
+  subjects           String? // comma-separated, e.g. "Math,Science"
+  onboardingProgress String? // comma-separated completed First-30-Days step ids
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  attempts       ScenarioAttempt[]
+  debriefs       Debrief[]
+  parentMessages ParentMessage[]
+  qaExchanges    QAExchange[]
+  usageLogs      UsageLog[]
+}
+
+// One row per Claude-costing call, used to enforce a per-user daily limit
+// now that a single shared API key funds every teacher's usage.
+model UsageLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String // "scenario_generate" | "attempt_feedback" | "debrief_feedback" | "parent_message" | "qa_ask"
+  createdAt DateTime @default(now())
+}
+
 // Category is one of: defiance, disengagement, peer_conflict, disruption,
 // transitions, technology_misuse. GradeBand is "6-8" or "9-12". Difficulty is
 // "beginner" | "intermediate" | "advanced". SQLite has no native enum support
 // in Prisma, so these are validated at the application layer instead of the
-// schema layer.
+// schema layer. Scenarios are shared content (curated + generated), not
+// scoped to a user.
 model Scenario {
   id         String   @id @default(cuid())
   text       String
@@ -29,6 +61,8 @@ model Scenario {
 
 model ScenarioAttempt {
   id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   scenarioId     String
   scenario       Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
   responseText   String
@@ -42,6 +76,8 @@ model ScenarioAttempt {
 
 model QAExchange {
   id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   question  String
   answer    String
   starred   Boolean  @default(false)
@@ -53,6 +89,8 @@ model QAExchange {
 // user-picked (not inferred) from the same 6 categories as Scenario.
 model Debrief {
   id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   incidentText String
   category     String?
   feedback     String?
@@ -66,19 +104,11 @@ model Debrief {
 // tone is one of: warm, firm, informational, requesting_meeting
 model ParentMessage {
   id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   incidentSummary String
   tone            String
   draftText       String
   saved           Boolean  @default(false)
   createdAt       DateTime @default(now())
-}
-
-model UserProfile {
-  id                 String   @id @default(cuid())
-  name               String?
-  gradeLevels        String? // comma-separated, e.g. "7th,8th"
-  subjects           String? // comma-separated, e.g. "Math,Science"
-  onboardingProgress String? // comma-separated completed First-30-Days step ids
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
 }

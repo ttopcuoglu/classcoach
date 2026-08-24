@@ -3,17 +3,13 @@ import { prisma } from '../lib/prisma.ts'
 
 export const profileRouter = Router()
 
-// No auth in v1 — a single local profile row represents "the teacher using
-// this install." Created lazily on first read.
-async function getOrCreateProfile() {
-  const existing = await prisma.userProfile.findFirst()
-  if (existing) return existing
-  return prisma.userProfile.create({ data: {} })
-}
-
-profileRouter.get('/', async (_req, res) => {
-  const profile = await getOrCreateProfile()
-  res.json(profile)
+profileRouter.get('/', async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.user!.userId } })
+  if (!user) {
+    res.status(401).json({ error: 'Not signed in' })
+    return
+  }
+  res.json(user)
 })
 
 profileRouter.put('/', async (req, res) => {
@@ -35,23 +31,26 @@ profileRouter.put('/', async (req, res) => {
     return
   }
 
-  const profile = await getOrCreateProfile()
-  const updated = await prisma.userProfile.update({
-    where: { id: profile.id },
+  const updated = await prisma.user.update({
+    where: { id: req.user!.userId },
     data: { name, gradeLevels, subjects, onboardingProgress },
   })
   res.json(updated)
 })
 
 // Clears the teacher's own data (saved scenarios, attempts, debriefs, parent
-// messages, Q&A history, profile) but leaves the scenario bank (curated +
-// previously generated scenario text) alone, since that's shared prompt
-// content, not "their" data.
-profileRouter.post('/reset', async (_req, res) => {
-  await prisma.scenarioAttempt.deleteMany({})
-  await prisma.debrief.deleteMany({})
-  await prisma.parentMessage.deleteMany({})
-  await prisma.qAExchange.deleteMany({})
-  await prisma.userProfile.deleteMany({})
+// messages, Q&A history) but leaves their account and the scenario bank
+// (curated + previously generated scenario text) alone — that's shared
+// prompt content, not "their" data.
+profileRouter.post('/reset', async (req, res) => {
+  const userId = req.user!.userId
+  await prisma.scenarioAttempt.deleteMany({ where: { userId } })
+  await prisma.debrief.deleteMany({ where: { userId } })
+  await prisma.parentMessage.deleteMany({ where: { userId } })
+  await prisma.qAExchange.deleteMany({ where: { userId } })
+  await prisma.user.update({
+    where: { id: userId },
+    data: { name: null, gradeLevels: null, subjects: null, onboardingProgress: null },
+  })
   res.json({ status: 'ok' })
 })

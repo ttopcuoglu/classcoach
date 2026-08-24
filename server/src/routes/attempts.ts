@@ -3,6 +3,7 @@ import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
+import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const attemptsRouter = Router()
 
@@ -26,6 +27,7 @@ attemptsRouter.get('/', async (req, res) => {
   const { scenarioId, saved } = req.query
   const attempts = await prisma.scenarioAttempt.findMany({
     where: {
+      userId: req.user!.userId,
       ...(typeof scenarioId === 'string' ? { scenarioId } : {}),
       ...(saved === 'true' ? { saved: true } : {}),
     },
@@ -44,6 +46,12 @@ attemptsRouter.post('/', async (req, res) => {
   const scenario = await prisma.scenario.findUnique({ where: { id: scenarioId } })
   if (!scenario) {
     res.status(404).json({ error: 'Scenario not found' })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'attempt_feedback')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
     return
   }
 
@@ -72,7 +80,7 @@ attemptsRouter.post('/', async (req, res) => {
     const rating = parsedRating >= 1 && parsedRating <= 5 ? parsedRating : null
 
     const attempt = await prisma.scenarioAttempt.create({
-      data: { scenarioId, responseText, feedback, modelResponse, rating },
+      data: { userId: req.user!.userId, scenarioId, responseText, feedback, modelResponse, rating },
       include: { scenario: true },
     })
     res.status(201).json(attempt)
@@ -88,20 +96,25 @@ attemptsRouter.patch('/:id', async (req, res) => {
     res.status(400).json({ error: 'saved must be a boolean' })
     return
   }
-  try {
-    const attempt = await prisma.scenarioAttempt.update({
-      where: { id: req.params.id },
-      data: { saved },
-      include: { scenario: true },
-    })
-    res.json(attempt)
-  } catch {
+  const { count } = await prisma.scenarioAttempt.updateMany({
+    where: { id: req.params.id, userId: req.user!.userId },
+    data: { saved },
+  })
+  if (count === 0) {
     res.status(404).json({ error: 'Attempt not found' })
+    return
   }
+  const attempt = await prisma.scenarioAttempt.findUnique({
+    where: { id: req.params.id },
+    include: { scenario: true },
+  })
+  res.json(attempt)
 })
 
 attemptsRouter.post('/:id/share', async (req, res) => {
-  const existing = await prisma.scenarioAttempt.findUnique({ where: { id: req.params.id } })
+  const existing = await prisma.scenarioAttempt.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+  })
   if (!existing) {
     res.status(404).json({ error: 'Attempt not found' })
     return
