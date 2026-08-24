@@ -19,10 +19,14 @@ const ADMIN_EMAILS = new Set(
     .filter(Boolean),
 )
 
+const isProd = process.env.NODE_ENV === 'production'
+
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
+  secure: isProd,
+  // Frontend and backend live on different Render subdomains in production,
+  // so the cookie must be sent cross-site — 'none' requires 'secure: true'.
+  sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
   maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
 }
 

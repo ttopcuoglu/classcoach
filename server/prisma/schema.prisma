@@ -7,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 // role is "teacher" (default) | "admin". Signed in via Google — googleId is

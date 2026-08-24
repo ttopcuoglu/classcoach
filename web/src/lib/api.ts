@@ -96,8 +96,10 @@ export type SharedDebrief = {
   createdAt: string
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? ''
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     ...init,

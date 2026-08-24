@@ -15,9 +15,12 @@ import { requireAuth } from './lib/auth.ts'
 
 const app = express()
 
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN ?? 'http://localhost:5180'
+const FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGINS ?? 'http://localhost:5180')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
 
-app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }))
+app.use(cors({ origin: FRONTEND_ORIGINS, credentials: true }))
 app.use(express.json())
 app.use(cookieParser())
 
