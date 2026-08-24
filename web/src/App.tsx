@@ -11,7 +11,7 @@ import Shared from './pages/Shared'
 import CheatSheet from './pages/CheatSheet'
 import FirstThirtyDays from './pages/FirstThirtyDays'
 import AdminDashboard from './pages/AdminDashboard'
-import Login from './pages/Login'
+import Landing from './pages/Landing'
 import { getMe, type UserProfile } from './lib/api'
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string
@@ -28,7 +28,7 @@ function RequireAuth({
   children: React.ReactNode
 }) {
   if (loading) return null
-  if (!user) return <Login onSignedIn={onSignedIn} />
+  if (!user) return <Landing onSignedIn={onSignedIn} />
   return <>{children}</>
 }
 
