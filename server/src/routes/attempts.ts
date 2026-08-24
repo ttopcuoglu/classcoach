@@ -1,7 +1,24 @@
 import { Router } from 'express'
+import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { prisma } from '../lib/prisma.ts'
 
 export const attemptsRouter = Router()
+
+const FEEDBACK_SYSTEM_PROMPT = `You are a warm, practical classroom management coach for grades 6-12 teachers, reviewing how a teacher says they'd handle a practice scenario. Coach, don't grade.
+
+Respond with exactly these two sections and nothing outside them:
+
+<feedback>
+Constructive feedback on their approach, what worked well, and 1-3 alternative or additional strategies grounded in classroom management best practice (clear/consistent expectations, de-escalation, restorative practices). Keep it skimmable, encouraging, and practical — never academic or jargon-heavy.
+</feedback>
+<model_response>
+A model example of what the teacher could say or do in the moment, written as the teacher's own words/actions.
+</model_response>`
+
+function extractTag(text: string, tag: string): string | null {
+  const match = text.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`))
+  return match ? match[1].trim() : null
+}
 
 attemptsRouter.get('/', async (req, res) => {
   const { scenarioId, saved } = req.query
@@ -17,7 +34,7 @@ attemptsRouter.get('/', async (req, res) => {
 })
 
 attemptsRouter.post('/', async (req, res) => {
-  const { scenarioId, responseText, feedback, modelResponse } = req.body ?? {}
+  const { scenarioId, responseText } = req.body ?? {}
   if (typeof scenarioId !== 'string' || typeof responseText !== 'string') {
     res.status(400).json({ error: 'scenarioId and responseText are required strings' })
     return
@@ -27,15 +44,37 @@ attemptsRouter.post('/', async (req, res) => {
     res.status(404).json({ error: 'Scenario not found' })
     return
   }
-  const attempt = await prisma.scenarioAttempt.create({
-    data: {
-      scenarioId,
-      responseText,
-      feedback: typeof feedback === 'string' ? feedback : null,
-      modelResponse: typeof modelResponse === 'string' ? modelResponse : null,
-    },
-  })
-  res.status(201).json(attempt)
+
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 1024,
+      system: FEEDBACK_SYSTEM_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: `Scenario: ${scenario.text}\n\nTeacher's response: ${responseText}`,
+        },
+      ],
+    })
+
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+
+    const feedback = extractTag(text, 'feedback') ?? text.trim()
+    const modelResponse = extractTag(text, 'model_response')
+
+    const attempt = await prisma.scenarioAttempt.create({
+      data: { scenarioId, responseText, feedback, modelResponse },
+      include: { scenario: true },
+    })
+    res.status(201).json(attempt)
+  } catch (error) {
+    console.error('[attempts] feedback generation failed:', error)
+    res.status(502).json({ error: 'Claude request failed' })
+  }
 })
 
 attemptsRouter.patch('/:id', async (req, res) => {
@@ -48,6 +87,7 @@ attemptsRouter.patch('/:id', async (req, res) => {
     const attempt = await prisma.scenarioAttempt.update({
       where: { id: req.params.id },
       data: { saved },
+      include: { scenario: true },
     })
     res.json(attempt)
   } catch {
