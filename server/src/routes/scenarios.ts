@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
+import { getCuratedFallback } from '../lib/curatedFallback.ts'
 import { prisma } from '../lib/prisma.ts'
 import { pickCategory, pickGradeBand } from '../lib/scenarioCategories.ts'
 
@@ -52,8 +53,13 @@ scenariosRouter.post('/generate', async (req, res) => {
     })
     res.status(201).json(scenario)
   } catch (error) {
-    console.error('[scenarios] generate failed:', error)
-    res.status(502).json({ error: 'Claude request failed' })
+    console.error('[scenarios] generate failed, falling back to curated bank:', error)
+    const fallback = await getCuratedFallback(chosenCategory, chosenGradeBand)
+    if (!fallback) {
+      res.status(502).json({ error: 'Claude request failed' })
+      return
+    }
+    res.json({ ...fallback, fallback: true })
   }
 })
 
@@ -66,7 +72,6 @@ scenariosRouter.get('/:id', async (req, res) => {
   res.json(scenario)
 })
 
-// For seeding the curated fallback bank.
 scenariosRouter.post('/', async (req, res) => {
   const { text, category, gradeBand, source } = req.body ?? {}
   if (

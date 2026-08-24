@@ -172,6 +172,11 @@ export default function TryItOut() {
                 {categoryLabel(attempt.scenario.category)} · Grades {attempt.scenario.gradeBand}
               </span>
               <p className="mt-3 text-sm text-ink">{attempt.scenario.text}</p>
+              {attempt.scenario.fallback && (
+                <p className="mt-2 text-xs text-ink-soft">
+                  Couldn't reach your coach for a fresh scenario, so here's one from the practice bank.
+                </p>
+              )}
             </div>
 
             {!hasFeedback ? (

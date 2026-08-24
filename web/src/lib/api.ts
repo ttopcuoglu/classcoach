@@ -13,6 +13,9 @@ export type Scenario = {
   gradeBand: string
   source: string
   createdAt: string
+  // Only present on a generate response — true when Claude generation
+  // failed and a curated scenario was served instead.
+  fallback?: boolean
 }
 
 export type ScenarioAttempt = {
