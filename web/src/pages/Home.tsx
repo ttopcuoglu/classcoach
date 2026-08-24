@@ -1,16 +1,31 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChatBubbleIcon, ScenarioIcon } from '../components/icons'
+import { ChatBubbleIcon, ChecklistIcon, ScenarioIcon, StarIcon } from '../components/icons'
 import { getAttempts, getProfile, getQAHistory, type QAExchange, type ScenarioAttempt } from '../lib/api'
+import { pickDailyTip, type Mood } from '../lib/dailyTips'
 
 type Activity =
   | { type: 'scenario'; id: string; createdAt: string; attempt: ScenarioAttempt }
   | { type: 'qa'; id: string; createdAt: string; exchange: QAExchange }
 
+const MOODS: { label: string; value: Mood }[] = [
+  { label: 'Good', value: 'good' },
+  { label: 'Okay', value: 'okay' },
+  { label: 'Stressed', value: 'stressed' },
+  { label: 'Overwhelmed', value: 'overwhelmed' },
+]
+
+const MOOD_SUGGESTED_CATEGORY: Partial<Record<Mood, string>> = {
+  stressed: 'disruption',
+  overwhelmed: 'transitions',
+}
+
 export default function Home() {
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [activity, setActivity] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
+  const [mood, setMood] = useState<Mood | null>(null)
+  const [tip, setTip] = useState(() => pickDailyTip(null))
 
   useEffect(() => {
     getProfile()
@@ -31,6 +46,14 @@ export default function Home() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
+
+  function handleMoodSelect(value: Mood) {
+    setMood(value)
+    setTip(pickDailyTip(value))
+    const suggested = MOOD_SUGGESTED_CATEGORY[value]
+    if (suggested) sessionStorage.setItem('classcoach.suggestedCategory', suggested)
+    else sessionStorage.removeItem('classcoach.suggestedCategory')
+  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -80,12 +103,52 @@ export default function Home() {
         </Link>
       </div>
 
+      <div className="rounded-2xl border border-border bg-surface p-5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">How are you feeling today?</p>
+        <div className="mt-2.5 flex flex-wrap gap-2">
+          {MOODS.map(({ label, value }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => handleMoodSelect(value)}
+              className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                mood === value
+                  ? 'border-brand-500 bg-brand-50 text-brand-600'
+                  : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="rounded-2xl border border-border bg-warm-100/60 p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-warm-500">Daily tip</p>
-        <p className="mt-2 text-sm text-ink">
-          Consistency beats intensity. A calm, predictable response to small disruptions does more
-          for classroom culture than an occasional dramatic one.
-        </p>
+        <p className="mt-2 text-sm text-ink">{tip}</p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Link
+          to="/cheat-sheet"
+          className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4 transition-shadow hover:shadow-sm"
+        >
+          <StarIcon className="h-5 w-5 shrink-0 text-brand-500" />
+          <div>
+            <p className="text-sm font-semibold text-ink">Your Cheat Sheet</p>
+            <p className="text-xs text-ink-soft">Go-to phrases, auto-built from your saved content.</p>
+          </div>
+        </Link>
+        <Link
+          to="/first-30-days"
+          className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4 transition-shadow hover:shadow-sm"
+        >
+          <ChecklistIcon className="h-5 w-5 shrink-0 text-brand-500" />
+          <div>
+            <p className="text-sm font-semibold text-ink">First 30 Days</p>
+            <p className="text-xs text-ink-soft">New teacher? Start your guided track.</p>
+          </div>
+        </Link>
       </div>
 
       <div>

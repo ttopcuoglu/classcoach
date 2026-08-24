@@ -131,6 +131,24 @@ export default function Profile() {
       </form>
 
       <div className="rounded-2xl border border-border bg-surface p-6">
+        <h2 className="text-sm font-semibold text-ink">More</h2>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <Link
+            to="/cheat-sheet"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+          >
+            Your Cheat Sheet
+          </Link>
+          <Link
+            to="/first-30-days"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+          >
+            First 30 Days
+          </Link>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-surface p-6">
         <h2 className="text-sm font-semibold text-ink">Data</h2>
         <p className="mt-1 text-sm text-ink-soft">
           Export your saved scenarios and starred Q&A, or clear your data from this device.
