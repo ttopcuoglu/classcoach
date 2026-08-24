@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { getProfile, resetData, updateProfile } from '../lib/api'
 
 export default function Profile() {
@@ -132,16 +133,24 @@ export default function Profile() {
       <div className="rounded-2xl border border-border bg-surface p-6">
         <h2 className="text-sm font-semibold text-ink">Data</h2>
         <p className="mt-1 text-sm text-ink-soft">
-          Clear your saved scenarios, Q&A history, and profile from this device.
+          Export your saved scenarios and starred Q&A, or clear your data from this device.
         </p>
-        <button
-          type="button"
-          onClick={handleReset}
-          disabled={resetting}
-          className="mt-4 rounded-lg border border-warm-500 px-4 py-2 text-sm font-semibold text-warm-500 transition-colors hover:bg-warm-100 disabled:opacity-60"
-        >
-          {resetting ? 'Resetting...' : 'Reset & clear data'}
-        </button>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Link
+            to="/export"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+          >
+            Export playbook
+          </Link>
+          <button
+            type="button"
+            onClick={handleReset}
+            disabled={resetting}
+            className="rounded-lg border border-warm-500 px-4 py-2 text-sm font-semibold text-warm-500 transition-colors hover:bg-warm-100 disabled:opacity-60"
+          >
+            {resetting ? 'Resetting...' : 'Reset & clear data'}
+          </button>
+        </div>
         {resetDone && <p className="mt-2 text-sm text-brand-600">Your data has been cleared.</p>}
         {resetError && <p className="mt-2 text-sm text-warm-500">{resetError}</p>}
       </div>

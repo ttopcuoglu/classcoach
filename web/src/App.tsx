@@ -4,6 +4,7 @@ import Home from './pages/Home'
 import TryItOut from './pages/TryItOut'
 import AskExpert from './pages/AskExpert'
 import Profile from './pages/Profile'
+import Export from './pages/Export'
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
           <Route path="ask-an-expert" element={<AskExpert />} />
           <Route path="profile" element={<Profile />} />
         </Route>
+        <Route path="export" element={<Export />} />
       </Routes>
     </BrowserRouter>
   )
