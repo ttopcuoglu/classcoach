@@ -38,3 +38,13 @@ profileRouter.put('/', async (req, res) => {
   })
   res.json(updated)
 })
+
+// Clears the teacher's own data (saved scenarios, attempts, Q&A history,
+// profile) but leaves the scenario bank (curated + previously generated
+// scenario text) alone, since that's shared prompt content, not "their" data.
+profileRouter.post('/reset', async (_req, res) => {
+  await prisma.scenarioAttempt.deleteMany({})
+  await prisma.qAExchange.deleteMany({})
+  await prisma.userProfile.deleteMany({})
+  res.json({ status: 'ok' })
+})

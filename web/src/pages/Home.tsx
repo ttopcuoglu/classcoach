@@ -1,7 +1,37 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChatBubbleIcon, ScenarioIcon } from '../components/icons'
+import { getAttempts, getProfile, getQAHistory, type QAExchange, type ScenarioAttempt } from '../lib/api'
+
+type Activity =
+  | { type: 'scenario'; id: string; createdAt: string; attempt: ScenarioAttempt }
+  | { type: 'qa'; id: string; createdAt: string; exchange: QAExchange }
 
 export default function Home() {
+  const [needsOnboarding, setNeedsOnboarding] = useState(false)
+  const [activity, setActivity] = useState<Activity[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getProfile()
+      .then((profile) => {
+        setNeedsOnboarding(!profile.name && !profile.gradeLevels && !profile.subjects)
+      })
+      .catch(() => {})
+
+    Promise.all([getAttempts(), getQAHistory()])
+      .then(([attempts, exchanges]) => {
+        const combined: Activity[] = [
+          ...attempts.map((a): Activity => ({ type: 'scenario', id: a.id, createdAt: a.createdAt, attempt: a })),
+          ...exchanges.map((e): Activity => ({ type: 'qa', id: e.id, createdAt: e.createdAt, exchange: e })),
+        ]
+        combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        setActivity(combined.slice(0, 4))
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -10,6 +40,21 @@ export default function Home() {
           Here's a quick way back into your practice and your questions.
         </p>
       </div>
+
+      {needsOnboarding && (
+        <div className="rounded-2xl border border-brand-100 bg-brand-50 p-5">
+          <p className="text-sm font-semibold text-brand-600">Get more relevant coaching</p>
+          <p className="mt-1 text-sm text-ink">
+            Add your grade level and subject to your profile so scenarios and advice fit your classroom.
+          </p>
+          <Link
+            to="/profile"
+            className="mt-3 inline-block text-sm font-semibold text-brand-600 underline underline-offset-2"
+          >
+            Complete your profile
+          </Link>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Link
@@ -47,9 +92,32 @@ export default function Home() {
         <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">
           Recent activity
         </h2>
-        <div className="mt-3 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
-          Nothing yet — completed scenarios and saved answers will show up here.
-        </div>
+        {loading ? (
+          <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
+        ) : activity.length === 0 ? (
+          <div className="mt-3 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
+            Nothing yet — completed scenarios and saved answers will show up here.
+          </div>
+        ) : (
+          <div className="mt-3 flex flex-col gap-2">
+            {activity.map((item) => (
+              <Link
+                key={item.id}
+                to={item.type === 'scenario' ? '/try-it-out' : '/ask-an-expert'}
+                className="flex items-start gap-3 rounded-xl border border-border bg-surface p-3.5 transition-shadow hover:shadow-sm"
+              >
+                {item.type === 'scenario' ? (
+                  <ScenarioIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
+                ) : (
+                  <ChatBubbleIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
+                )}
+                <p className="line-clamp-2 text-sm text-ink">
+                  {item.type === 'scenario' ? item.attempt.scenario.text : item.exchange.question}
+                </p>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

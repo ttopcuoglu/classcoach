@@ -3,6 +3,7 @@ import { StarIcon } from '../components/icons'
 import {
   generateScenario,
   getAttempts,
+  getProfile,
   setAttemptSaved,
   submitAttempt,
   type ScenarioAttempt,
@@ -42,6 +43,13 @@ export default function TryItOut() {
       .then(setAllAttempts)
       .catch(() => {})
       .finally(() => setHistoryLoading(false))
+
+    getProfile()
+      .then((profile) => {
+        const levels = profile.gradeLevels?.toLowerCase() ?? ''
+        if (/\b(9|10|11|12)\b|9-12|high ?school/.test(levels)) setGradeBand('9-12')
+      })
+      .catch(() => {})
   }, [])
 
   const savedAttempts = allAttempts.filter((a) => a.saved)

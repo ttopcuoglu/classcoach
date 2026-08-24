@@ -29,6 +29,15 @@ export type ScenarioAttempt = {
   scenario: Scenario
 }
 
+export type UserProfile = {
+  id: string
+  name: string | null
+  gradeLevels: string | null
+  subjects: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
@@ -68,4 +77,20 @@ export function submitAttempt(scenarioId: string, responseText: string): Promise
 
 export function setAttemptSaved(id: string, saved: boolean): Promise<ScenarioAttempt> {
   return request(`/api/attempts/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) })
+}
+
+export function getProfile(): Promise<UserProfile> {
+  return request('/api/profile')
+}
+
+export function updateProfile(data: {
+  name?: string
+  gradeLevels?: string
+  subjects?: string
+}): Promise<UserProfile> {
+  return request('/api/profile', { method: 'PUT', body: JSON.stringify(data) })
+}
+
+export function resetData(): Promise<{ status: string }> {
+  return request('/api/profile/reset', { method: 'POST' })
 }
