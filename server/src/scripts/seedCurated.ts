@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import { CURATED_SCENARIOS } from '../data/curatedScenarios.ts'
 import { prisma } from '../lib/prisma.ts'
 
