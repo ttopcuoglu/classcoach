@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { getCuratedFallback } from '../lib/curatedFallback.ts'
 import { prisma } from '../lib/prisma.ts'
-import { pickCategory, pickGradeBand } from '../lib/scenarioCategories.ts'
+import { pickCategory, pickDifficulty, pickGradeBand } from '../lib/scenarioCategories.ts'
 
 export const scenariosRouter = Router()
 
@@ -11,8 +11,10 @@ const SCENARIO_SYSTEM_PROMPT = `You write realistic classroom management scenari
 Rules:
 - Write 2-4 sentences. Be concrete and specific — a short, realistic dialogue snippet helps.
 - Stay to everyday classroom management challenges. Never include weapons, abuse, self-harm, or other extreme/rare situations.
-- Vary the tone, difficulty, and specific situation each time, within the given category and grade band.
+- Vary the tone and specific situation each time, within the given category and grade band.
 - Never include real, identifiable people — use generic descriptions like "a student" or "two students."
+- Match the requested difficulty: "beginner" scenarios have a single clear behavior with an obvious response; "intermediate" scenarios add some ambiguity or a mildly reluctant student; "advanced" scenarios have competing considerations (multiple students, conflicting needs, or a defiance layer stacked on the core issue).
+- If a subject is given, set the scenario in a context that fits it (e.g. a science lab, a math worksheet, an English discussion) rather than a generic classroom.
 - Respond with ONLY the scenario text. No title, label, or preamble.`
 
 scenariosRouter.get('/', async (req, res) => {
@@ -28,18 +30,27 @@ scenariosRouter.get('/', async (req, res) => {
 })
 
 scenariosRouter.post('/generate', async (req, res) => {
-  const { category, gradeBand } = req.body ?? {}
+  const { category, gradeBand, difficulty, subject } = req.body ?? {}
   const chosenCategory = pickCategory(category)
   const chosenGradeBand = pickGradeBand(gradeBand)
+  const chosenDifficulty = pickDifficulty(difficulty)
+  const chosenSubject = typeof subject === 'string' && subject.trim() ? subject.trim() : null
 
   try {
+    const context = [
+      `Category: ${chosenCategory}`,
+      `Grade band: ${chosenGradeBand}`,
+      `Difficulty: ${chosenDifficulty}`,
+      chosenSubject ? `Subject: ${chosenSubject}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n')
+
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 300,
       system: SCENARIO_SYSTEM_PROMPT,
-      messages: [
-        { role: 'user', content: `Category: ${chosenCategory}\nGrade band: ${chosenGradeBand}` },
-      ],
+      messages: [{ role: 'user', content: context }],
     })
 
     const text = response.content
@@ -49,12 +60,18 @@ scenariosRouter.post('/generate', async (req, res) => {
       .trim()
 
     const scenario = await prisma.scenario.create({
-      data: { text, category: chosenCategory, gradeBand: chosenGradeBand, source: 'generated' },
+      data: {
+        text,
+        category: chosenCategory,
+        gradeBand: chosenGradeBand,
+        difficulty: chosenDifficulty,
+        source: 'generated',
+      },
     })
     res.status(201).json(scenario)
   } catch (error) {
     console.error('[scenarios] generate failed, falling back to curated bank:', error)
-    const fallback = await getCuratedFallback(chosenCategory, chosenGradeBand)
+    const fallback = await getCuratedFallback(chosenCategory, chosenGradeBand, chosenDifficulty)
     if (!fallback) {
       res.status(502).json({ error: 'Claude request failed' })
       return
@@ -73,7 +90,7 @@ scenariosRouter.get('/:id', async (req, res) => {
 })
 
 scenariosRouter.post('/', async (req, res) => {
-  const { text, category, gradeBand, source } = req.body ?? {}
+  const { text, category, gradeBand, difficulty, source } = req.body ?? {}
   if (
     typeof text !== 'string' ||
     typeof category !== 'string' ||
@@ -83,6 +100,8 @@ scenariosRouter.post('/', async (req, res) => {
     res.status(400).json({ error: 'text, category, gradeBand, and source are required strings' })
     return
   }
-  const scenario = await prisma.scenario.create({ data: { text, category, gradeBand, source } })
+  const scenario = await prisma.scenario.create({
+    data: { text, category, gradeBand, source, difficulty: pickDifficulty(difficulty) },
+  })
   res.status(201).json(scenario)
 })

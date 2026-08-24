@@ -8,14 +8,17 @@ const FEEDBACK_SYSTEM_PROMPT = `You are a warm, practical classroom management c
 
 Write in plain text only — no markdown (no **bold**, no # headings). Use a blank line between paragraphs and a leading "-" for list items.
 
-Respond with exactly these two sections and nothing outside them:
+Respond with exactly these three sections and nothing outside them:
 
 <feedback>
 Constructive feedback on their approach, what worked well, and 1-3 alternative or additional strategies grounded in classroom management best practice (clear/consistent expectations, de-escalation, restorative practices). Keep it skimmable, encouraging, and practical — never academic or jargon-heavy.
 </feedback>
 <model_response>
 A model example of what the teacher could say or do in the moment, written as the teacher's own words/actions.
-</model_response>`
+</model_response>
+<rating>
+A single integer 1-5 rating your honest private assessment of how effectively this response follows classroom management best practice. This is never shown to the teacher — it's used only to track their growth over time — so rate honestly rather than generously. Output only the digit, nothing else.
+</rating>`
 
 function extractTag(text: string, tag: string): string | null {
   const match = text.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`))
@@ -67,9 +70,12 @@ attemptsRouter.post('/', async (req, res) => {
 
     const feedback = extractTag(text, 'feedback') ?? text.trim()
     const modelResponse = extractTag(text, 'model_response')
+    const ratingText = extractTag(text, 'rating')
+    const parsedRating = ratingText ? Number.parseInt(ratingText, 10) : NaN
+    const rating = parsedRating >= 1 && parsedRating <= 5 ? parsedRating : null
 
     const attempt = await prisma.scenarioAttempt.create({
-      data: { scenarioId, responseText, feedback, modelResponse },
+      data: { scenarioId, responseText, feedback, modelResponse, rating },
       include: { scenario: true },
     })
     res.status(201).json(attempt)

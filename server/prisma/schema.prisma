@@ -11,14 +11,16 @@ datasource db {
 }
 
 // Category is one of: defiance, disengagement, peer_conflict, disruption,
-// transitions, technology_misuse. GradeBand is "6-8" or "9-12". SQLite has no
-// native enum support in Prisma, so these are validated at the application
-// layer instead of the schema layer.
+// transitions, technology_misuse. GradeBand is "6-8" or "9-12". Difficulty is
+// "beginner" | "intermediate" | "advanced". SQLite has no native enum support
+// in Prisma, so these are validated at the application layer instead of the
+// schema layer.
 model Scenario {
   id         String   @id @default(cuid())
   text       String
   category   String
   gradeBand  String
+  difficulty String   @default("intermediate")
   source     String // "generated" | "curated"
   createdAt  DateTime @default(now())
 
@@ -32,6 +34,7 @@ model ScenarioAttempt {
   responseText   String
   feedback       String? // Claude's coaching feedback on the teacher's response
   modelResponse  String? // Claude's suggested model response
+  rating         Int? // Claude's private 1-5 self-assessment, for growth trends only — never shown to the teacher as a score
   saved          Boolean  @default(false)
   createdAt      DateTime @default(now())
 }
