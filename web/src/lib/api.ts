@@ -11,6 +11,7 @@ export type Scenario = {
   text: string
   category: string
   gradeBand: string
+  difficulty: string
   source: string
   createdAt: string
   // Only present on a generate response — true when Claude generation
@@ -24,6 +25,9 @@ export type ScenarioAttempt = {
   responseText: string
   feedback: string | null
   modelResponse: string | null
+  // Claude's private 1-5 self-assessment, for growth trends only — never
+  // shown to the user as a literal score.
+  rating: number | null
   saved: boolean
   createdAt: string
   scenario: Scenario
@@ -62,8 +66,16 @@ export function setQAStarred(id: string, starred: boolean): Promise<QAExchange> 
   return request(`/api/qa/${id}`, { method: 'PATCH', body: JSON.stringify({ starred }) })
 }
 
-export function generateScenario(category?: string, gradeBand?: string): Promise<Scenario> {
-  return request('/api/scenarios/generate', { method: 'POST', body: JSON.stringify({ category, gradeBand }) })
+export function generateScenario(
+  category?: string,
+  gradeBand?: string,
+  difficulty?: string,
+  subject?: string,
+): Promise<Scenario> {
+  return request('/api/scenarios/generate', {
+    method: 'POST',
+    body: JSON.stringify({ category, gradeBand, difficulty, subject }),
+  })
 }
 
 export function getAttempts(params?: { saved?: boolean }): Promise<ScenarioAttempt[]> {

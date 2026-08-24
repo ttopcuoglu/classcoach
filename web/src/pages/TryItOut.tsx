@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { StarIcon } from '../components/icons'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowUpIcon, MicIcon, StarIcon } from '../components/icons'
+import { CATEGORIES, categoryLabel } from '../lib/categories'
 import {
   generateScenario,
   getAttempts,
@@ -9,31 +10,53 @@ import {
   type ScenarioAttempt,
 } from '../lib/api'
 
-const CATEGORIES: { label: string; value?: string }[] = [
-  { label: 'All' },
-  { label: 'Defiance', value: 'defiance' },
-  { label: 'Disengagement', value: 'disengagement' },
-  { label: 'Peer conflict', value: 'peer_conflict' },
-  { label: 'Disruption', value: 'disruption' },
-  { label: 'Transitions', value: 'transitions' },
-  { label: 'Technology misuse', value: 'technology_misuse' },
-]
-
 const GRADE_BANDS = ['6-8', '9-12'] as const
 
-function categoryLabel(value: string) {
-  return CATEGORIES.find((c) => c.value === value)?.label ?? value
+const DIFFICULTIES: { label: string; value?: string }[] = [
+  { label: 'Any difficulty' },
+  { label: 'Beginner', value: 'beginner' },
+  { label: 'Intermediate', value: 'intermediate' },
+  { label: 'Advanced', value: 'advanced' },
+]
+
+const SESSION_LENGTH = 3
+
+type SpeechRecognitionLike = {
+  continuous: boolean
+  interimResults: boolean
+  onresult: ((event: any) => void) | null
+  onend: (() => void) | null
+  onerror: (() => void) | null
+  start: () => void
+  stop: () => void
+}
+
+const SpeechRecognitionCtor: (new () => SpeechRecognitionLike) | undefined =
+  typeof window !== 'undefined'
+    ? ((window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition)
+    : undefined
+
+function difficultyLabel(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
 export default function TryItOut() {
   const [category, setCategory] = useState<string | undefined>(undefined)
   const [gradeBand, setGradeBand] = useState<(typeof GRADE_BANDS)[number]>('6-8')
+  const [difficulty, setDifficulty] = useState<string | undefined>(undefined)
+  const [subject, setSubject] = useState<string | undefined>(undefined)
 
   const [attempt, setAttempt] = useState<ScenarioAttempt | null>(null)
   const [responseText, setResponseText] = useState('')
   const [generating, setGenerating] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [listening, setListening] = useState(false)
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+
+  const [sessionState, setSessionState] = useState<{ index: number; total: number; done: boolean } | null>(
+    null,
+  )
 
   const [allAttempts, setAllAttempts] = useState<ScenarioAttempt[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
@@ -48,6 +71,8 @@ export default function TryItOut() {
       .then((profile) => {
         const levels = profile.gradeLevels?.toLowerCase() ?? ''
         if (/\b(9|10|11|12)\b|9-12|high ?school/.test(levels)) setGradeBand('9-12')
+        const firstSubject = profile.subjects?.split(',')[0]?.trim()
+        if (firstSubject) setSubject(firstSubject)
       })
       .catch(() => {})
   }, [])
@@ -62,19 +87,46 @@ export default function TryItOut() {
     return counts
   }, [allAttempts])
 
+  const growthInsight = useMemo(() => {
+    const byCategory = new Map<string, ScenarioAttempt[]>()
+    for (const a of allAttempts) {
+      if (a.rating == null) continue
+      const list = byCategory.get(a.scenario.category) ?? []
+      list.push(a)
+      byCategory.set(a.scenario.category, list)
+    }
+
+    let best: { category: string; delta: number } | null = null
+    for (const [cat, attempts] of byCategory) {
+      if (attempts.length < 2) continue
+      const sorted = [...attempts].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      )
+      const mid = Math.max(1, Math.floor(sorted.length / 2))
+      const firstHalf = sorted.slice(0, mid)
+      const secondHalf = sorted.slice(mid)
+      if (secondHalf.length === 0) continue
+      const avg = (arr: ScenarioAttempt[]) => arr.reduce((sum, a) => sum + (a.rating ?? 0), 0) / arr.length
+      const delta = avg(secondHalf) - avg(firstHalf)
+      if (delta > 0 && (!best || delta > best.delta)) best = { category: cat, delta }
+    }
+    return best
+  }, [allAttempts])
+
   async function handleNewScenario() {
     setGenerating(true)
     setError(null)
     setAttempt(null)
     setResponseText('')
     try {
-      const scenario = await generateScenario(category, gradeBand)
+      const scenario = await generateScenario(category, gradeBand, difficulty, subject)
       setAttempt({
         id: `draft-${scenario.id}`,
         scenarioId: scenario.id,
         responseText: '',
         feedback: null,
         modelResponse: null,
+        rating: null,
         saved: false,
         createdAt: scenario.createdAt,
         scenario,
@@ -84,6 +136,27 @@ export default function TryItOut() {
     } finally {
       setGenerating(false)
     }
+  }
+
+  async function handleStartSession() {
+    setSessionState({ index: 1, total: SESSION_LENGTH, done: false })
+    await handleNewScenario()
+  }
+
+  async function handleSessionAdvance() {
+    if (!sessionState) return
+    if (sessionState.index >= sessionState.total) {
+      setSessionState((s) => (s ? { ...s, done: true } : s))
+      return
+    }
+    setSessionState((s) => (s ? { ...s, index: s.index + 1 } : s))
+    await handleNewScenario()
+  }
+
+  function handleEndSession() {
+    setSessionState(null)
+    setAttempt(null)
+    setResponseText('')
   }
 
   async function handleSubmitResponse() {
@@ -114,7 +187,33 @@ export default function TryItOut() {
     }
   }
 
+  function toggleListening() {
+    if (!SpeechRecognitionCtor) return
+    if (listening) {
+      recognitionRef.current?.stop()
+      return
+    }
+    const recognition = new SpeechRecognitionCtor()
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.onresult = (event: any) => {
+      let finalTranscript = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript
+      }
+      if (finalTranscript.trim()) {
+        setResponseText((prev) => (prev ? `${prev} ${finalTranscript.trim()}` : finalTranscript.trim()))
+      }
+    }
+    recognition.onend = () => setListening(false)
+    recognition.onerror = () => setListening(false)
+    recognitionRef.current = recognition
+    recognition.start()
+    setListening(true)
+  }
+
   const hasFeedback = attempt && (attempt.feedback || attempt.modelResponse)
+  const filtersLocked = !!sessionState && !sessionState.done
 
   return (
     <div className="flex flex-col gap-6">
@@ -123,7 +222,7 @@ export default function TryItOut() {
         <p className="text-ink-soft">Practice realistic scenarios and get coaching on your approach.</p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className={`flex flex-wrap gap-2 ${filtersLocked ? 'pointer-events-none opacity-50' : ''}`}>
         {CATEGORIES.map(({ label, value }) => {
           const isActive = category === value
           const count = value ? categoryTally.get(value) : undefined
@@ -145,7 +244,7 @@ export default function TryItOut() {
         })}
       </div>
 
-      <div className="flex gap-2">
+      <div className={`flex flex-wrap gap-2 ${filtersLocked ? 'pointer-events-none opacity-50' : ''}`}>
         {GRADE_BANDS.map((band) => (
           <button
             key={band}
@@ -160,24 +259,69 @@ export default function TryItOut() {
         ))}
       </div>
 
+      <div className={`flex flex-wrap gap-2 ${filtersLocked ? 'pointer-events-none opacity-50' : ''}`}>
+        {DIFFICULTIES.map(({ label, value }) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => setDifficulty(value)}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+              difficulty === value ? 'bg-ink text-white' : 'bg-canvas text-ink-soft hover:text-ink'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div className="rounded-2xl border border-border bg-surface p-6">
-        {!attempt ? (
+        {sessionState?.done ? (
           <div className="p-2 text-center">
-            <p className="text-sm text-ink-soft">No scenario loaded yet.</p>
+            <p className="text-lg font-semibold text-ink">Session complete!</p>
+            <p className="mt-1 text-sm text-ink-soft">
+              You practiced {sessionState.total} scenarios back to back. Nice work.
+            </p>
             <button
               type="button"
-              onClick={handleNewScenario}
-              disabled={generating}
-              className="mt-4 rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+              onClick={handleEndSession}
+              className="mt-4 rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
             >
-              {generating ? 'Generating...' : 'New Scenario'}
+              Back to practice
             </button>
+          </div>
+        ) : !attempt ? (
+          <div className="p-2 text-center">
+            <p className="text-sm text-ink-soft">No scenario loaded yet.</p>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={handleNewScenario}
+                disabled={generating}
+                className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+              >
+                {generating ? 'Generating...' : 'New Scenario'}
+              </button>
+              <button
+                type="button"
+                onClick={handleStartSession}
+                disabled={generating}
+                className="rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
+              >
+                Quick Session ({SESSION_LENGTH} scenarios)
+              </button>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-4">
             <div>
+              {sessionState && (
+                <p className="mb-1.5 text-xs font-semibold text-ink-soft">
+                  Quick Session — scenario {sessionState.index} of {sessionState.total}
+                </p>
+              )}
               <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600">
-                {categoryLabel(attempt.scenario.category)} · Grades {attempt.scenario.gradeBand}
+                {categoryLabel(attempt.scenario.category)} · Grades {attempt.scenario.gradeBand} ·{' '}
+                {difficultyLabel(attempt.scenario.difficulty)}
               </span>
               <p className="mt-3 text-sm text-ink">{attempt.scenario.text}</p>
               {attempt.scenario.fallback && (
@@ -200,20 +344,37 @@ export default function TryItOut() {
                     className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
                   />
                 </label>
-                <div className="flex items-center justify-between">
+                {SpeechRecognitionCtor && (
                   <button
                     type="button"
-                    onClick={handleNewScenario}
-                    disabled={generating}
-                    className="text-sm font-medium text-ink-soft hover:text-ink"
+                    onClick={toggleListening}
+                    disabled={submitting}
+                    className={`flex w-fit items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      listening
+                        ? 'border-warm-500 bg-warm-100 text-warm-500'
+                        : 'border-border text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                    }`}
                   >
-                    Try a different scenario
+                    <MicIcon className="h-3.5 w-3.5" />
+                    {listening ? 'Listening... tap to stop' : 'Speak your response'}
                   </button>
+                )}
+                <div className="flex items-center justify-between">
+                  {!sessionState && (
+                    <button
+                      type="button"
+                      onClick={handleNewScenario}
+                      disabled={generating}
+                      className="text-sm font-medium text-ink-soft hover:text-ink"
+                    >
+                      Try a different scenario
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={handleSubmitResponse}
                     disabled={submitting || !responseText.trim()}
-                    className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                    className="ml-auto rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
                   >
                     {submitting ? 'Getting feedback...' : 'Get Feedback'}
                   </button>
@@ -257,11 +418,17 @@ export default function TryItOut() {
                   </button>
                   <button
                     type="button"
-                    onClick={handleNewScenario}
+                    onClick={sessionState ? handleSessionAdvance : handleNewScenario}
                     disabled={generating}
                     className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
                   >
-                    {generating ? 'Generating...' : 'New Scenario'}
+                    {generating
+                      ? 'Generating...'
+                      : sessionState
+                        ? sessionState.index < sessionState.total
+                          ? `Next (${sessionState.index + 1} of ${sessionState.total})`
+                          : 'Finish Session'
+                        : 'New Scenario'}
                   </button>
                 </div>
               </div>
@@ -271,6 +438,16 @@ export default function TryItOut() {
 
         {error && <p className="mt-4 text-center text-sm text-warm-500">{error}</p>}
       </div>
+
+      {growthInsight && (
+        <div className="flex items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50 p-4">
+          <ArrowUpIcon className="h-5 w-5 shrink-0 text-brand-600" />
+          <p className="text-sm text-ink">
+            <span className="font-semibold text-brand-600">You're showing growth</span> in{' '}
+            {categoryLabel(growthInsight.category)} scenarios.
+          </p>
+        </div>
+      )}
 
       <div>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Saved scenarios</h2>

@@ -39,6 +39,23 @@ export function UserIcon({ className }: IconProps) {
   )
 }
 
+export function MicIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 14.5a3 3 0 0 0 3-3v-5a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v3" />
+    </svg>
+  )
+}
+
+export function ArrowUpIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 19V5M6 11l6-6 6 6" />
+    </svg>
+  )
+}
+
 export function StarIcon({ className, filled }: IconProps & { filled?: boolean }) {
   return (
     <svg
