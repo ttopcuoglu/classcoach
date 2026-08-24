@@ -38,3 +38,21 @@ export function UserIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function StarIcon({ className, filled }: IconProps & { filled?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill={filled ? 'currentColor' : 'none'}
+      strokeWidth={1.75}
+      stroke="currentColor"
+      className={className}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="m12 4.5 2.36 4.78 5.27.77-3.82 3.72.9 5.25L12 16.6l-4.71 2.42.9-5.25-3.82-3.72 5.27-.77L12 4.5Z"
+      />
+    </svg>
+  )
+}
