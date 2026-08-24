@@ -38,8 +38,50 @@ export type UserProfile = {
   name: string | null
   gradeLevels: string | null
   subjects: string | null
+  onboardingProgress: string | null
   createdAt: string
   updatedAt: string
+}
+
+export type Debrief = {
+  id: string
+  incidentText: string
+  category: string | null
+  feedback: string | null
+  followUp: string | null
+  rating: number | null
+  saved: boolean
+  shareToken: string | null
+  createdAt: string
+}
+
+export type ParentMessageTone = 'warm' | 'firm' | 'informational' | 'requesting_meeting'
+
+export type ParentMessage = {
+  id: string
+  incidentSummary: string
+  tone: ParentMessageTone
+  draftText: string
+  saved: boolean
+  createdAt: string
+}
+
+export type SharedAttempt = {
+  type: 'attempt'
+  scenario: Scenario
+  responseText: string
+  feedback: string | null
+  modelResponse: string | null
+  createdAt: string
+}
+
+export type SharedDebrief = {
+  type: 'debrief'
+  incidentText: string
+  category: string | null
+  feedback: string | null
+  followUp: string | null
+  createdAt: string
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -91,6 +133,10 @@ export function setAttemptSaved(id: string, saved: boolean): Promise<ScenarioAtt
   return request(`/api/attempts/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) })
 }
 
+export function shareAttempt(id: string): Promise<{ shareToken: string }> {
+  return request(`/api/attempts/${id}/share`, { method: 'POST' })
+}
+
 export function getProfile(): Promise<UserProfile> {
   return request('/api/profile')
 }
@@ -99,10 +145,52 @@ export function updateProfile(data: {
   name?: string
   gradeLevels?: string
   subjects?: string
+  onboardingProgress?: string
 }): Promise<UserProfile> {
   return request('/api/profile', { method: 'PUT', body: JSON.stringify(data) })
 }
 
 export function resetData(): Promise<{ status: string }> {
   return request('/api/profile/reset', { method: 'POST' })
+}
+
+export function getDebriefs(params?: { saved?: boolean }): Promise<Debrief[]> {
+  const query = params?.saved ? '?saved=true' : ''
+  return request(`/api/debriefs${query}`)
+}
+
+export function submitDebrief(incidentText: string, category?: string): Promise<Debrief> {
+  return request('/api/debriefs', { method: 'POST', body: JSON.stringify({ incidentText, category }) })
+}
+
+export function setDebriefSaved(id: string, saved: boolean): Promise<Debrief> {
+  return request(`/api/debriefs/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) })
+}
+
+export function shareDebrief(id: string): Promise<{ shareToken: string }> {
+  return request(`/api/debriefs/${id}/share`, { method: 'POST' })
+}
+
+export function getParentMessages(params?: { saved?: boolean }): Promise<ParentMessage[]> {
+  const query = params?.saved ? '?saved=true' : ''
+  return request(`/api/parent-messages${query}`)
+}
+
+export function draftParentMessage(
+  incidentSummary: string,
+  tone: ParentMessageTone,
+): Promise<ParentMessage> {
+  return request('/api/parent-messages', { method: 'POST', body: JSON.stringify({ incidentSummary, tone }) })
+}
+
+export function setParentMessageSaved(id: string, saved: boolean): Promise<ParentMessage> {
+  return request(`/api/parent-messages/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) })
+}
+
+export function getSharedAttempt(token: string): Promise<SharedAttempt> {
+  return request(`/api/share/attempt/${token}`)
+}
+
+export function getSharedDebrief(token: string): Promise<SharedDebrief> {
+  return request(`/api/share/debrief/${token}`)
 }

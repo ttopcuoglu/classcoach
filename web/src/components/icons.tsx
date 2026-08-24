@@ -56,6 +56,35 @@ export function ArrowUpIcon({ className }: IconProps) {
   )
 }
 
+export function ShareIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.5 13.5 15.5 9M8.5 10.5l7-4.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.5 15a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17.5 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17.5 20a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+    </svg>
+  )
+}
+
+export function MailIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 6.5h15a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="m4 7 8 6 8-6" />
+    </svg>
+  )
+}
+
+export function ChecklistIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="m5 7 1.5 1.5L9 6M5 13l1.5 1.5L9 12M5 19l1.5 1.5L9 17" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 7h7M12 13h7M12 19h7" />
+    </svg>
+  )
+}
+
 export function StarIcon({ className, filled }: IconProps & { filled?: boolean }) {
   return (
     <svg
