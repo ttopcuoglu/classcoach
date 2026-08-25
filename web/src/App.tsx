@@ -11,6 +11,8 @@ import Shared from './pages/Shared'
 import CheatSheet from './pages/CheatSheet'
 import FirstThirtyDays from './pages/FirstThirtyDays'
 import AdminDashboard from './pages/AdminDashboard'
+import AudioCoaching from './pages/AudioCoaching'
+import AudioCoachingExport from './pages/AudioCoachingExport'
 import Landing from './pages/Landing'
 import { getMe, type UserProfile } from './lib/api'
 
@@ -66,6 +68,14 @@ export default function App() {
             }
           />
           <Route
+            path="audio-coaching/:id/export"
+            element={
+              <RequireAuth user={user} loading={loading} onSignedIn={refreshUser}>
+                <AudioCoachingExport />
+              </RequireAuth>
+            }
+          />
+          <Route
             element={
               <RequireAuth user={user} loading={loading} onSignedIn={refreshUser}>
                 <Layout user={user} onLogout={handleLogout} />
@@ -75,6 +85,7 @@ export default function App() {
             <Route index element={<Home />} />
             <Route path="try-it-out" element={<TryItOut />} />
             <Route path="ask-an-expert" element={<AskExpert />} />
+            <Route path="audio-coaching" element={<AudioCoaching />} />
             <Route path="profile" element={<Profile />} />
             <Route path="cheat-sheet" element={<CheatSheet />} />
             <Route path="first-30-days" element={<FirstThirtyDays />} />

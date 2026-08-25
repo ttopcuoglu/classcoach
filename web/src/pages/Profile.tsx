@@ -7,6 +7,7 @@ export default function Profile() {
   const [name, setName] = useState('')
   const [gradeLevels, setGradeLevels] = useState('')
   const [subjects, setSubjects] = useState('')
+  const [audioRetentionDays, setAudioRetentionDays] = useState<string>('')
 
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -22,6 +23,7 @@ export default function Profile() {
         setName(profile.name ?? '')
         setGradeLevels(profile.gradeLevels ?? '')
         setSubjects(profile.subjects ?? '')
+        setAudioRetentionDays(profile.audioRetentionDays != null ? String(profile.audioRetentionDays) : '')
       })
       .catch(() => setSaveError('Could not load your profile.'))
       .finally(() => setLoading(false))
@@ -33,7 +35,12 @@ export default function Profile() {
     setSaveError(null)
     setSaved(false)
     try {
-      await updateProfile({ name, gradeLevels, subjects })
+      await updateProfile({
+        name,
+        gradeLevels,
+        subjects,
+        audioRetentionDays: audioRetentionDays ? Number(audioRetentionDays) : null,
+      })
       setSaved(true)
     } catch {
       setSaveError('Could not save your changes. Please try again.')
@@ -153,6 +160,27 @@ export default function Profile() {
         <p className="mt-1 text-sm text-ink-soft">
           Export your saved scenarios and starred Q&A, or clear your data from this device.
         </p>
+
+        <label className="mt-4 flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-ink">Audio Coaching retention</span>
+          <select
+            value={audioRetentionDays}
+            onChange={(e) => {
+              setAudioRetentionDays(e.target.value)
+              setSaved(false)
+            }}
+            className="w-fit rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none"
+          >
+            <option value="">Keep indefinitely</option>
+            <option value="7">Delete after 7 days</option>
+            <option value="30">Delete after 30 days</option>
+            <option value="90">Delete after 90 days</option>
+          </select>
+          <span className="text-xs text-ink-soft">
+            Applies to new Audio Coaching transcripts and reports. Use "Save changes" above to apply this.
+          </span>
+        </label>
+
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <Link
             to="/export"

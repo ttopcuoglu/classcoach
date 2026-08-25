@@ -13,7 +13,7 @@ profileRouter.get('/', async (req, res) => {
 })
 
 profileRouter.put('/', async (req, res) => {
-  const { name, gradeLevels, subjects, onboardingProgress } = req.body ?? {}
+  const { name, gradeLevels, subjects, onboardingProgress, audioRetentionDays } = req.body ?? {}
   if (name !== undefined && typeof name !== 'string') {
     res.status(400).json({ error: 'name must be a string' })
     return
@@ -30,10 +30,14 @@ profileRouter.put('/', async (req, res) => {
     res.status(400).json({ error: 'onboardingProgress must be a string' })
     return
   }
+  if (audioRetentionDays !== undefined && audioRetentionDays !== null && typeof audioRetentionDays !== 'number') {
+    res.status(400).json({ error: 'audioRetentionDays must be a number or null' })
+    return
+  }
 
   const updated = await prisma.user.update({
     where: { id: req.user!.userId },
-    data: { name, gradeLevels, subjects, onboardingProgress },
+    data: { name, gradeLevels, subjects, onboardingProgress, audioRetentionDays },
   })
   res.json(updated)
 })
@@ -48,6 +52,7 @@ profileRouter.post('/reset', async (req, res) => {
   await prisma.debrief.deleteMany({ where: { userId } })
   await prisma.parentMessage.deleteMany({ where: { userId } })
   await prisma.qAExchange.deleteMany({ where: { userId } })
+  await prisma.audioSession.deleteMany({ where: { userId } })
   await prisma.user.update({
     where: { id: userId },
     data: { name: null, gradeLevels: null, subjects: null, onboardingProgress: null },

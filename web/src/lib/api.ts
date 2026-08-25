@@ -41,6 +41,7 @@ export type UserProfile = {
   gradeLevels: string | null
   subjects: string | null
   onboardingProgress: string | null
+  audioRetentionDays: number | null
   createdAt: string
   updatedAt: string
 }
@@ -95,6 +96,60 @@ export type SharedDebrief = {
   followUp: string | null
   createdAt: string
 }
+
+// status is one of: setup, recording, paused, transcribing, tagging,
+// analyzed, locked
+export type AudioSessionStatus =
+  | 'setup'
+  | 'recording'
+  | 'paused'
+  | 'transcribing'
+  | 'tagging'
+  | 'analyzed'
+  | 'locked'
+
+export type AudioHighlight = { label: string; timestampSec: number; excerpt: string }
+export type AudioPhase = { label: string; startSec: number; endSec: number }
+
+export type AudioSession = {
+  id: string
+  teacherName: string | null
+  classSubject: string | null
+  period: string | null
+  gradeLevel: string | null
+  sessionDate: string
+  consentConfirmed: boolean
+  status: AudioSessionStatus
+  durationSec: number | null
+  teacherTalkPct: number | null
+  studentTalkPct: number | null
+  questionCount: number | null
+  higherOrderPct: number | null
+  avgWaitTimeSec: number | null
+  cfuCount: number | null
+  metricsDetail: Record<string, number | null> | null
+  highlights: AudioHighlight[] | null
+  phases: AudioPhase[] | null
+  strengths: string | null
+  growthAreas: string | null
+  nextStep: string | null
+  followUpDate: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type TranscriptSegment = {
+  id: string
+  speakerLabel: string
+  rawSpeakerTag: string
+  startSec: number
+  endSec: number
+  text: string
+}
+
+export type AudioSessionWithSegments = AudioSession & { segments: TranscriptSegment[] }
+
+export type SpeakerSample = { rawSpeakerTag: string; sample: string }
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? ''
 
@@ -177,6 +232,7 @@ export function updateProfile(data: {
   gradeLevels?: string
   subjects?: string
   onboardingProgress?: string
+  audioRetentionDays?: number | null
 }): Promise<UserProfile> {
   return request('/api/profile', { method: 'PUT', body: JSON.stringify(data) })
 }
@@ -224,4 +280,74 @@ export function getSharedAttempt(token: string): Promise<SharedAttempt> {
 
 export function getSharedDebrief(token: string): Promise<SharedDebrief> {
   return request(`/api/share/debrief/${token}`)
+}
+
+export function getAudioSessions(): Promise<AudioSession[]> {
+  return request('/api/audio-sessions')
+}
+
+export function getAudioSession(id: string): Promise<AudioSessionWithSegments> {
+  return request(`/api/audio-sessions/${id}`)
+}
+
+export function createAudioSession(data: {
+  teacherName?: string
+  classSubject?: string
+  period?: string
+  gradeLevel?: string
+  sessionDate?: string
+  consentConfirmed: boolean
+}): Promise<AudioSession> {
+  return request('/api/audio-sessions', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function updateAudioSession(
+  id: string,
+  data: Partial<{
+    teacherName: string
+    classSubject: string
+    period: string
+    gradeLevel: string
+    sessionDate: string
+    status: AudioSessionStatus
+    strengths: string
+    growthAreas: string
+    nextStep: string
+    followUpDate: string | null
+    phases: AudioPhase[]
+    durationSec: number
+  }>,
+): Promise<AudioSession> {
+  return request(`/api/audio-sessions/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+}
+
+// Uses fetch directly rather than the JSON-only request() helper, since it
+// needs to send FormData (the recorded audio blob), not a JSON body.
+export async function transcribeAudioSession(
+  id: string,
+  audioBlob: Blob,
+): Promise<{ speakers: SpeakerSample[] }> {
+  const formData = new FormData()
+  formData.append('audio', audioBlob, 'session-audio')
+  const res = await fetch(`${API_BASE_URL}/api/audio-sessions/${id}/transcribe`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error ?? `Request failed with status ${res.status}`)
+  }
+  return res.json()
+}
+
+export function tagSpeaker(id: string, rawSpeakerTag: string): Promise<AudioSessionWithSegments> {
+  return request(`/api/audio-sessions/${id}/tag-speaker`, {
+    method: 'POST',
+    body: JSON.stringify({ rawSpeakerTag }),
+  })
+}
+
+export function deleteAudioSession(id: string): Promise<{ status: string }> {
+  return request(`/api/audio-sessions/${id}`, { method: 'DELETE' })
 }

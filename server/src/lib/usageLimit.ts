@@ -8,6 +8,7 @@ export type UsageAction =
   | 'debrief_feedback'
   | 'parent_message'
   | 'qa_ask'
+  | 'audio_session_notes'
 
 // Counts today's Claude-costing calls for this user and logs this one if
 // they're still under the daily cap. One shared API key funds every

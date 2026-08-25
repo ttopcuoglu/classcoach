@@ -1,12 +1,13 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { logout } from '../lib/api'
 import type { UserProfile } from '../lib/api'
-import { ChatBubbleIcon, ChecklistIcon, HomeIcon, ScenarioIcon, UserIcon } from './icons'
+import { ChatBubbleIcon, ChecklistIcon, HomeIcon, MicIcon, ScenarioIcon, UserIcon } from './icons'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Home', icon: HomeIcon, end: true },
   { to: '/try-it-out', label: 'Try It Out', icon: ScenarioIcon, end: false },
   { to: '/ask-an-expert', label: 'Ask an Expert', icon: ChatBubbleIcon, end: false },
+  { to: '/audio-coaching', label: 'Audio Coaching', icon: MicIcon, end: false },
   { to: '/profile', label: 'Profile', icon: UserIcon, end: false },
 ]
 

@@ -21,6 +21,7 @@ model User {
   gradeLevels        String? // comma-separated, e.g. "7th,8th"
   subjects           String? // comma-separated, e.g. "Math,Science"
   onboardingProgress String? // comma-separated completed First-30-Days step ids
+  audioRetentionDays Int? // null = keep audio-coaching transcripts/reports indefinitely
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -29,6 +30,7 @@ model User {
   parentMessages ParentMessage[]
   qaExchanges    QAExchange[]
   usageLogs      UsageLog[]
+  audioSessions  AudioSession[]
 }
 
 // One row per Claude-costing call, used to enforce a per-user daily limit
@@ -37,7 +39,7 @@ model UsageLog {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  action    String // "scenario_generate" | "attempt_feedback" | "debrief_feedback" | "parent_message" | "qa_ask"
+  action    String // "scenario_generate" | "attempt_feedback" | "debrief_feedback" | "parent_message" | "qa_ask" | "audio_session_notes"
   createdAt DateTime @default(now())
 }
 
@@ -111,4 +113,65 @@ model ParentMessage {
   draftText       String
   saved           Boolean  @default(false)
   createdAt       DateTime @default(now())
+}
+
+// A recorded class period, transcribed once (never stored as audio) and
+// analyzed for a self-coaching report. No sharing, no admin visibility —
+// this is strictly the owning teacher's own data, unlike Scenario/Debrief.
+// status is one of: setup, recording, paused, transcribing, tagging,
+// analyzed, locked — validated at the application layer, same convention
+// as Scenario.difficulty / ParentMessage.tone above.
+model AudioSession {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  teacherName      String?
+  classSubject     String?
+  period           String?
+  gradeLevel       String?
+  sessionDate      DateTime  @default(now())
+
+  consentConfirmed Boolean   @default(false)
+  status           String    @default("setup")
+  durationSec      Int?
+
+  // Trended across sessions, kept as real columns for cheap history queries
+  teacherTalkPct   Float?
+  studentTalkPct   Float?
+  questionCount    Int?
+  higherOrderPct   Float?
+  avgWaitTimeSec   Float?
+  cfuCount         Int?
+
+  // The long tail of metrics, plus coach-editable highlights/phases. One-off
+  // use of Json in this schema — the alternative (dozens of scalar columns
+  // for a shape that will keep evolving) is worse.
+  metricsDetail    Json?
+  highlights       Json? // [{ label, timestampSec, excerpt }]
+  phases           Json? // [{ label, startSec, endSec }], coach-editable
+
+  strengths        String?
+  growthAreas      String?
+  nextStep         String?
+  followUpDate     DateTime?
+
+  deleteAfter      DateTime? // computed from User.audioRetentionDays at creation
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  segments         TranscriptSegment[]
+}
+
+model TranscriptSegment {
+  id            String       @id @default(cuid())
+  sessionId     String
+  session       AudioSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  speakerLabel  String // "Speaker N" pre-tagging, then "Teacher" | "Student"
+  rawSpeakerTag String // original diarized label, kept so re-tagging stays possible
+  startSec      Float
+  endSec        Float
+  text          String
+  createdAt     DateTime     @default(now())
 }

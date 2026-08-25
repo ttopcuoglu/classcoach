@@ -4,6 +4,7 @@ import cors from 'cors'
 import express from 'express'
 import { adminRouter } from './routes/admin.ts'
 import { attemptsRouter } from './routes/attempts.ts'
+import { audioSessionsRouter } from './routes/audioSessions.ts'
 import { authRouter } from './routes/auth.ts'
 import { debriefRouter } from './routes/debrief.ts'
 import { parentMessageRouter } from './routes/parentMessage.ts'
@@ -40,6 +41,7 @@ app.use('/api/profile', requireAuth, profileRouter)
 app.use('/api/debriefs', requireAuth, debriefRouter)
 app.use('/api/parent-messages', requireAuth, parentMessageRouter)
 app.use('/api/admin', requireAuth, adminRouter)
+app.use('/api/audio-sessions', requireAuth, audioSessionsRouter)
 
 const port = Number(process.env.PORT) || 3001
 app.listen(port, () => {
