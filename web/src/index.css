@@ -2,6 +2,7 @@
 
 @theme {
   --font-sans: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
 
   --color-canvas: #faf7f2;
   --color-surface: #ffffff;
@@ -18,6 +19,10 @@
   --color-warm-100: #f6e8dd;
   --color-warm-400: #d98a53;
   --color-warm-500: #c1673d;
+
+  /* Chalkboard-dark ground, used only for the landing page's hero/footer. */
+  --color-night: #16231f;
+  --color-night-soft: #cfd8d2;
 }
 
 html,
