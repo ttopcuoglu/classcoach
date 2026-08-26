@@ -1,11 +1,17 @@
 import { Router } from 'express'
+import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
+import { detectFileKind, extractDocxText, extractSpreadsheetText } from '../lib/documentExtract.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const lessonPlansRouter = Router()
+
+// A lesson plan document is a page or two — memory storage only, generous
+// ceiling as a safety cap rather than a target.
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } })
 
 const FEEDBACK_SYSTEM_PROMPT = `You are a warm, practical instructional coach for K-12 teachers, reviewing a lesson plan the teacher wrote themselves. Coach, don't grade.
 
@@ -70,6 +76,17 @@ lessonPlansRouter.get('/', async (req, res) => {
   res.json(lessonPlans)
 })
 
+lessonPlansRouter.get('/:id', async (req, res) => {
+  const lessonPlan = await prisma.lessonPlan.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+  })
+  if (!lessonPlan) {
+    res.status(404).json({ error: 'Lesson plan not found' })
+    return
+  }
+  res.json(lessonPlan)
+})
+
 function readContext(body: Record<string, unknown>) {
   const { objective, unitName, essentialQuestion, standard, subject, gradeLevel } = body
   return {
@@ -80,6 +97,65 @@ function readContext(body: Record<string, unknown>) {
     subject: typeof subject === 'string' && subject.trim() ? subject.trim() : null,
     gradeLevel: typeof gradeLevel === 'string' && gradeLevel.trim() ? gradeLevel.trim() : null,
   }
+}
+
+type FeedbackContext = ReturnType<typeof readContext>
+
+// Shared by both /feedback (pasted text) and /feedback-upload (uploaded
+// file) — only how `content` is built differs between the two callers.
+async function runFeedback(
+  res: import('express').Response,
+  userId: string,
+  context: FeedbackContext,
+  planTextForDisplay: string,
+  content: string | Array<Record<string, unknown>>,
+) {
+  const response = await anthropic.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: 1024,
+    system: FEEDBACK_SYSTEM_PROMPT,
+    // The upload path passes a document+text content block array; the SDK's
+    // strict union type doesn't need to know that shape ahead of time here.
+    messages: [{ role: 'user', content: content as never }],
+  })
+  const text = response.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n')
+
+  const feedback = extractTag(text, 'feedback') ?? text.trim()
+  const ratingText = extractTag(text, 'rating')
+  const parsedRating = ratingText ? Number.parseInt(ratingText, 10) : NaN
+  const rating = parsedRating >= 1 && parsedRating <= 5 ? parsedRating : null
+
+  const lessonPlan = await prisma.lessonPlan.create({
+    data: {
+      userId,
+      mode: 'feedback',
+      objective: context.objective,
+      unitName: context.unitName,
+      essentialQuestion: context.essentialQuestion,
+      standard: context.standard,
+      subject: context.subject,
+      gradeLevel: context.gradeLevel,
+      planText: planTextForDisplay,
+      feedback,
+      rating,
+    },
+  })
+  res.status(201).json(lessonPlan)
+}
+
+function buildPromptHeader(context: FeedbackContext): string {
+  return [
+    `Objective: ${context.objective}`,
+    context.unitName ? `Unit: ${context.unitName}` : null,
+    context.standard ? `Standard: ${context.standard}` : null,
+    context.subject ? `Subject: ${context.subject}` : null,
+    context.gradeLevel ? `Grade level: ${context.gradeLevel}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 lessonPlansRouter.post('/feedback', async (req, res) => {
@@ -102,51 +178,68 @@ lessonPlansRouter.post('/feedback', async (req, res) => {
   }
 
   try {
-    const promptContext = [
-      `Objective: ${context.objective}`,
-      context.unitName ? `Unit: ${context.unitName}` : null,
-      context.standard ? `Standard: ${context.standard}` : null,
-      context.subject ? `Subject: ${context.subject}` : null,
-      context.gradeLevel ? `Grade level: ${context.gradeLevel}` : null,
-      `\nLesson plan:\n${planText.trim()}`,
-    ]
-      .filter(Boolean)
-      .join('\n')
-
-    const response = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 1024,
-      system: FEEDBACK_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: promptContext }],
-    })
-    const text = response.content
-      .filter((block) => block.type === 'text')
-      .map((block) => block.text)
-      .join('\n')
-
-    const feedback = extractTag(text, 'feedback') ?? text.trim()
-    const ratingText = extractTag(text, 'rating')
-    const parsedRating = ratingText ? Number.parseInt(ratingText, 10) : NaN
-    const rating = parsedRating >= 1 && parsedRating <= 5 ? parsedRating : null
-
-    const lessonPlan = await prisma.lessonPlan.create({
-      data: {
-        userId: req.user!.userId,
-        mode: 'feedback',
-        objective: context.objective,
-        unitName: context.unitName,
-        essentialQuestion: context.essentialQuestion,
-        standard: context.standard,
-        subject: context.subject,
-        gradeLevel: context.gradeLevel,
-        planText: planText.trim(),
-        feedback,
-        rating,
-      },
-    })
-    res.status(201).json(lessonPlan)
+    const content = `${buildPromptHeader(context)}\n\nLesson plan:\n${planText.trim()}`
+    await runFeedback(res, req.user!.userId, context, planText.trim(), content)
   } catch (error) {
     console.error('[lesson-plans] feedback generation failed:', error)
+    res.status(502).json({ error: 'Claude request failed' })
+  }
+})
+
+lessonPlansRouter.post('/feedback-upload', upload.single('file'), async (req, res) => {
+  const context = readContext(req.body ?? {})
+
+  if (!context.objective) {
+    res.status(400).json({ error: 'objective is required' })
+    return
+  }
+  if (!req.file) {
+    res.status(400).json({ error: 'A file is required' })
+    return
+  }
+
+  const kind = detectFileKind(req.file.originalname, req.file.mimetype)
+  if (kind === 'legacy') {
+    res
+      .status(400)
+      .json({ error: 'Legacy .doc/.xls files are not supported — please save as .docx, .xlsx, or PDF and try again.' })
+    return
+  }
+  if (kind === 'unsupported') {
+    res.status(400).json({ error: 'Unsupported file type — upload a PDF, .docx, or .xlsx file.' })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'lesson_plan_feedback')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  try {
+    const header = buildPromptHeader(context)
+
+    if (kind === 'pdf') {
+      const content = [
+        {
+          type: 'document',
+          source: { type: 'base64', media_type: 'application/pdf', data: req.file.buffer.toString('base64') },
+        },
+        { type: 'text', text: `${header}\n\nThe lesson plan is the attached PDF.` },
+      ]
+      await runFeedback(res, req.user!.userId, context, `Uploaded file: ${req.file.originalname}`, content)
+      return
+    }
+
+    const extracted = kind === 'xlsx' ? await extractSpreadsheetText(req.file.buffer) : await extractDocxText(req.file.buffer)
+    if (!extracted) {
+      res.status(422).json({ error: 'Could not read any text from that file. Please try a different file.' })
+      return
+    }
+    const content = `${header}\n\nLesson plan:\n${extracted}`
+    await runFeedback(res, req.user!.userId, context, extracted, content)
+  } catch (error) {
+    console.error('[lesson-plans] upload feedback failed:', error)
     res.status(502).json({ error: 'Claude request failed' })
   }
 })

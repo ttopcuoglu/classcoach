@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ShareIcon, StarIcon } from '../components/icons'
 import {
   generateLessonPlan,
@@ -6,9 +7,12 @@ import {
   setLessonPlanSaved,
   shareLessonPlan,
   submitLessonPlanFeedback,
+  uploadLessonPlanFeedback,
   type LessonPlan,
   type LessonPlanContext,
 } from '../lib/api'
+
+const ACCEPTED_FILE_TYPES = '.pdf,.docx,.xlsx'
 
 type ContextForm = {
   objective: string
@@ -334,7 +338,15 @@ function SavedPlanCard({ plan }: { plan: LessonPlan }) {
               )}
             </>
           )}
-          <ShareButton onShare={() => shareLessonPlan(plan.id)} />
+          <div className="flex items-center gap-4">
+            <ShareButton onShare={() => shareLessonPlan(plan.id)} />
+            <Link
+              to={`/lesson-planning/${plan.id}/export`}
+              className="text-sm font-medium text-ink-soft hover:text-brand-600"
+            >
+              Download
+            </Link>
+          </div>
         </div>
       )}
     </div>
@@ -426,6 +438,12 @@ function GeneratePanel() {
               <div className="flex items-center gap-4">
                 <SaveButton plan={plan} onToggle={handleToggleSaved} />
                 <ShareButton onShare={() => shareLessonPlan(plan.id)} />
+                <Link
+                  to={`/lesson-planning/${plan.id}/export`}
+                  className="text-sm font-medium text-ink-soft hover:text-brand-600"
+                >
+                  Download
+                </Link>
               </div>
               <button
                 type="button"
@@ -447,7 +465,9 @@ function GeneratePanel() {
 
 function FeedbackPanel() {
   const [context, setContext] = useState<ContextForm>(EMPTY_CONTEXT)
+  const [inputMode, setInputMode] = useState<'text' | 'file'>('text')
   const [planText, setPlanText] = useState('')
+  const [file, setFile] = useState<File | null>(null)
   const [plan, setPlan] = useState<LessonPlan | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -464,16 +484,21 @@ function FeedbackPanel() {
 
   const savedPlans = allPlans.filter((p) => p.saved)
 
+  const canSubmit = context.objective.trim() && (inputMode === 'text' ? planText.trim() : file)
+
   async function handleSubmit() {
-    if (!context.objective.trim() || !planText.trim() || submitting) return
+    if (!canSubmit || submitting) return
     setSubmitting(true)
     setError(null)
     try {
-      const result = await submitLessonPlanFeedback(toApiContext(context), planText.trim())
+      const result =
+        inputMode === 'file' && file
+          ? await uploadLessonPlanFeedback(toApiContext(context), file)
+          : await submitLessonPlanFeedback(toApiContext(context), planText.trim())
       setPlan(result)
       setAllPlans((prev) => [result, ...prev])
-    } catch {
-      setError('Could not get coaching feedback. Please try again.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not get coaching feedback. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -482,6 +507,7 @@ function FeedbackPanel() {
   function handleNew() {
     setPlan(null)
     setPlanText('')
+    setFile(null)
     setError(null)
   }
 
@@ -504,21 +530,67 @@ function FeedbackPanel() {
         {!plan ? (
           <div className="flex flex-col gap-4">
             <ContextFields context={context} onChange={setContext} disabled={submitting} />
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-ink">Your lesson plan</span>
-              <textarea
-                value={planText}
-                onChange={(e) => setPlanText(e.target.value)}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setInputMode('text')}
                 disabled={submitting}
-                rows={8}
-                placeholder="Paste or write your plan — Do Now, main activities, closure, etc."
-                className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
-              />
-            </label>
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                  inputMode === 'text'
+                    ? 'border-brand-500 bg-brand-50 text-brand-600'
+                    : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                }`}
+              >
+                Paste text
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputMode('file')}
+                disabled={submitting}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                  inputMode === 'file'
+                    ? 'border-brand-500 bg-brand-50 text-brand-600'
+                    : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                }`}
+              >
+                Upload a file
+              </button>
+            </div>
+
+            {inputMode === 'text' ? (
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium text-ink">Your lesson plan</span>
+                <textarea
+                  value={planText}
+                  onChange={(e) => setPlanText(e.target.value)}
+                  disabled={submitting}
+                  rows={8}
+                  placeholder="Paste or write your plan — Do Now, main activities, closure, etc."
+                  className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                />
+              </label>
+            ) : (
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium text-ink">Your lesson plan file</span>
+                <input
+                  type="file"
+                  accept={ACCEPTED_FILE_TYPES}
+                  disabled={submitting}
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink file:mr-3 file:rounded-md file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-brand-600 disabled:opacity-60"
+                />
+                <span className="text-xs text-ink-soft">
+                  PDF, Word (.docx), or Excel (.xlsx). Older .doc/.xls files aren't supported — save as one of
+                  these first.
+                </span>
+              </label>
+            )}
+
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={submitting || !context.objective.trim() || !planText.trim()}
+              disabled={submitting || !canSubmit}
               className="self-end rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
             >
               {submitting ? 'Getting feedback...' : 'Get Feedback'}
@@ -541,6 +613,12 @@ function FeedbackPanel() {
               <div className="flex items-center gap-4">
                 <SaveButton plan={plan} onToggle={handleToggleSaved} />
                 <ShareButton onShare={() => shareLessonPlan(plan.id)} />
+                <Link
+                  to={`/lesson-planning/${plan.id}/export`}
+                  className="text-sm font-medium text-ink-soft hover:text-brand-600"
+                >
+                  Download
+                </Link>
               </div>
               <button
                 type="button"

@@ -357,11 +357,35 @@ export function getLessonPlans(params?: { saved?: boolean; mode?: LessonPlanMode
   return request(`/api/lesson-plans${qs ? `?${qs}` : ''}`)
 }
 
+export function getLessonPlan(id: string): Promise<LessonPlan> {
+  return request(`/api/lesson-plans/${id}`)
+}
+
 export function submitLessonPlanFeedback(context: LessonPlanContext, planText: string): Promise<LessonPlan> {
   return request('/api/lesson-plans/feedback', {
     method: 'POST',
     body: JSON.stringify({ ...context, planText }),
   })
+}
+
+// Uses fetch directly rather than the JSON-only request() helper, since it
+// needs to send FormData (the uploaded file), not a JSON body.
+export async function uploadLessonPlanFeedback(context: LessonPlanContext, file: File): Promise<LessonPlan> {
+  const formData = new FormData()
+  Object.entries(context).forEach(([key, value]) => {
+    if (value) formData.append(key, value)
+  })
+  formData.append('file', file)
+  const res = await fetch(`${API_BASE_URL}/api/lesson-plans/feedback-upload`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error ?? `Request failed with status ${res.status}`)
+  }
+  return res.json()
 }
 
 export function generateLessonPlan(context: LessonPlanContext): Promise<LessonPlan> {
