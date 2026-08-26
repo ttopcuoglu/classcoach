@@ -9,10 +9,16 @@ export type CuratedScenario = {
 
 // Hand-written fallback bank: used when scenario generation can't reach
 // Claude (missing key, network failure, rate limit) and for local dev/testing
-// without burning API calls. 3 per category (one beginner, one intermediate,
-// one advanced — 6/6/6 split), 9/9 split across grade bands.
+// without burning API calls. 3-4 per category across K-5, 6-8, and 9-12
+// grade bands.
 export const CURATED_SCENARIOS: CuratedScenario[] = [
   // defiance
+  {
+    text: 'During clean-up time, a student refuses to put away the blocks they were using and says, "No, I\'m not done!" when you ask a second time.',
+    category: 'defiance',
+    gradeBand: 'K-5',
+    difficulty: 'beginner',
+  },
   {
     text: "A student is asked to put away a handheld game console during independent work. They slide it under their leg and say, \"I wasn't playing it, I was just holding it.\" When you ask again, they roll their eyes but don't move.",
     category: 'defiance',
@@ -34,6 +40,12 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
 
   // disengagement
   {
+    text: "During independent reading time, a student is flipping through the pages of their book without actually reading, and says, \"I don't want to read this one,\" when you check in.",
+    category: 'disengagement',
+    gradeBand: 'K-5',
+    difficulty: 'beginner',
+  },
+  {
     text: "A student has put their head down on the desk and hasn't touched the assignment in ten minutes. When you crouch down to check in, they mumble, \"I don't get it and I don't care,\" without looking up.",
     category: 'disengagement',
     gradeBand: '6-8',
@@ -53,6 +65,12 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
   },
 
   // peer_conflict
+  {
+    text: 'Two students both grab the same crayon at the art table and start pulling on it, with one shouting, "I had it first!"',
+    category: 'peer_conflict',
+    gradeBand: 'K-5',
+    difficulty: 'beginner',
+  },
   {
     text: 'Two students accuse each other of cheating off a quiz, and their voices are rising as the rest of the class starts to notice. One says, "She\'s lying, I saw her looking at my paper first!"',
     category: 'peer_conflict',
@@ -74,6 +92,12 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
 
   // disruption
   {
+    text: "A student keeps making animal noises during story time, and a couple of nearby classmates start giggling instead of listening.",
+    category: 'disruption',
+    gradeBand: 'K-5',
+    difficulty: 'beginner',
+  },
+  {
     text: 'A student keeps tapping a pencil loudly on the desk and making comments under their breath during a quiet reading period, drawing giggles from nearby classmates.',
     category: 'disruption',
     gradeBand: '6-8',
@@ -94,6 +118,12 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
 
   // transitions
   {
+    text: "When it's time to line up for recess, several students are still wandering around the room instead of forming a line, and one starts wrestling a friend for a spot near the front.",
+    category: 'transitions',
+    gradeBand: 'K-5',
+    difficulty: 'beginner',
+  },
+  {
     text: "It's taking nearly five minutes for students to settle down after coming in from lunch, and several are still wandering between desks instead of sitting down when you start the warm-up.",
     category: 'transitions',
     gradeBand: '6-8',
@@ -113,6 +143,12 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
   },
 
   // technology_misuse
+  {
+    text: "During computer center time, a student switches away from the reading app to a game app when they think you're not looking.",
+    category: 'technology_misuse',
+    gradeBand: 'K-5',
+    difficulty: 'beginner',
+  },
   {
     text: 'A student is texting under the desk during independent work, glancing up occasionally to check if you\'re watching.',
     category: 'technology_misuse',

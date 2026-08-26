@@ -8,7 +8,7 @@ import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const scenariosRouter = Router()
 
-const SCENARIO_SYSTEM_PROMPT = `You write realistic classroom management scenarios so grades 6-12 teachers can practice responding to them.
+const SCENARIO_SYSTEM_PROMPT = `You write realistic classroom management scenarios so K-12 teachers can practice responding to them.
 
 Rules:
 - Write 2-4 sentences. Be concrete and specific — a short, realistic dialogue snippet helps.
@@ -16,6 +16,7 @@ Rules:
 - Vary the tone and specific situation each time, within the given category and grade band.
 - Never include real, identifiable people — use generic descriptions like "a student" or "two students."
 - Match the requested difficulty: "beginner" scenarios have a single clear behavior with an obvious response; "intermediate" scenarios add some ambiguity or a mildly reluctant student; "advanced" scenarios have competing considerations (multiple students, conflicting needs, or a defiance layer stacked on the core issue).
+- For grade band "K-5", use age-appropriate elementary behaviors and language (sharing conflicts, following directions, tattling, difficulty sitting still, minor tantrums) — avoid teen-specific dynamics like phones, sarcasm, or eye-rolling.
 - If a subject is given, set the scenario in a context that fits it (e.g. a science lab, a math worksheet, an English discussion) rather than a generic classroom.
 - Respond with ONLY the scenario text. No title, label, or preamble.`
 

@@ -16,7 +16,7 @@ import {
   type ScenarioAttempt,
 } from '../lib/api'
 
-const GRADE_BANDS = ['6-8', '9-12'] as const
+const GRADE_BANDS = ['K-5', '6-8', '9-12'] as const
 
 const DIFFICULTIES: { label: string; value?: string }[] = [
   { label: 'Any difficulty' },
@@ -113,6 +113,7 @@ function PracticePanel() {
       .then((profile) => {
         const levels = profile.gradeLevels?.toLowerCase() ?? ''
         if (/\b(9|10|11|12)\b|9-12|high ?school/.test(levels)) setGradeBand('9-12')
+        else if (/\bk\b|kindergarten|\b[1-5](st|nd|rd|th)?\b|elementary|k-5/.test(levels)) setGradeBand('K-5')
         const firstSubject = profile.subjects?.split(',')[0]?.trim()
         if (firstSubject) setSubject(firstSubject)
       })
