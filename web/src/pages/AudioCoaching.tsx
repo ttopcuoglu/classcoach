@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { MicIcon, WarningIcon } from '../components/icons'
+import { ArrowUpIcon, MicIcon, WarningIcon } from '../components/icons'
 import {
   createAudioSession,
   deleteAudioSession,
@@ -21,6 +21,7 @@ import {
   getCountMetric,
   getPresenceMetric,
   MIN_DURATION_FOR_CFU_DETECTION_SEC,
+  MIN_N_FOR_PERCENT,
   SHORT_SESSION_THRESHOLD_SEC,
 } from '../lib/reportConfidence'
 
@@ -31,6 +32,7 @@ function formatTime(sec: number): string {
 }
 
 export default function AudioCoaching() {
+  const [view, setView] = useState<'sessions' | 'trends'>('sessions')
   const [sessions, setSessions] = useState<AudioSession[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
   const [active, setActive] = useState<AudioSessionWithSegments | null>(null)
@@ -99,33 +101,58 @@ export default function AudioCoaching() {
         </p>
       </div>
 
-      <SetupForm onCreated={(session) => setActive({ ...session, segments: [] })} />
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setView('sessions')}
+          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+            view === 'sessions' ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:text-ink'
+          }`}
+        >
+          Sessions
+        </button>
+        <button
+          type="button"
+          onClick={() => setView('trends')}
+          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+            view === 'trends' ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:text-ink'
+          }`}
+        >
+          Trends
+        </button>
+      </div>
 
       {error && <p className="text-sm text-warm-500">{error}</p>}
 
-      <TrendBlock sessions={sessions} />
+      {view === 'trends' ? (
+        <TrendsView sessions={sessions} loading={historyLoading} />
+      ) : (
+        <>
+          <SetupForm onCreated={(session) => setActive({ ...session, segments: [] })} />
 
-      <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Past sessions</h2>
-        {historyLoading ? (
-          <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
-        ) : sessions.length === 0 ? (
-          <div className="mt-3 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
-            Sessions you record will show up here.
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Past sessions</h2>
+            {historyLoading ? (
+              <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
+            ) : sessions.length === 0 ? (
+              <div className="mt-3 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
+                Sessions you record will show up here.
+              </div>
+            ) : (
+              <div className="mt-3 flex flex-col gap-3">
+                {sessions.map((s) => (
+                  <SessionCard
+                    key={s.id}
+                    session={s}
+                    onOpen={() => handleOpenSession(s.id)}
+                    onDelete={() => handleDeleteSession(s.id)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="mt-3 flex flex-col gap-3">
-            {sessions.map((s) => (
-              <SessionCard
-                key={s.id}
-                session={s}
-                onOpen={() => handleOpenSession(s.id)}
-                onDelete={() => handleDeleteSession(s.id)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   )
 }
@@ -1073,31 +1100,228 @@ function SessionCard({
   )
 }
 
-function TrendBlock({ sessions }: { sessions: AudioSession[] }) {
+const MAX_TREND_SESSIONS = 20
+
+function TrendsView({ sessions, loading }: { sessions: AudioSession[]; loading: boolean }) {
+  if (loading) {
+    return <p className="text-center text-sm text-ink-soft">Loading...</p>
+  }
+
   const analyzed = sessions
-    .filter((s) => s.teacherTalkPct != null)
-    .slice(0, 5)
-    .reverse()
-  if (analyzed.length < 2) return null
+    .filter((s) => s.teacherTalkPct != null && s.durationSec != null)
+    .slice()
+    .sort((a, b) => new Date(a.sessionDate).getTime() - new Date(b.sessionDate).getTime())
+    .slice(-MAX_TREND_SESSIONS)
+
+  if (analyzed.length < 2) {
+    return (
+      <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
+        Trends need at least 2 analyzed sessions to show a pattern. One session — especially a short one — is
+        too noisy on its own to read much into.
+      </div>
+    )
+  }
+
+  const labels = analyzed.map((s) =>
+    new Date(s.sessionDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+  )
+
+  const teacherTalk = analyzed.map((s) => s.teacherTalkPct)
+  const studentTalk = analyzed.map((s) => s.studentTalkPct)
+
+  const higherOrder = analyzed.map((s) => ((s.questionCount ?? 0) < MIN_N_FOR_PERCENT ? null : s.higherOrderPct))
+
+  const cfuFrequency = analyzed.map((s) => {
+    const duration = s.durationSec ?? 0
+    if (duration < MIN_DURATION_FOR_CFU_DETECTION_SEC) return null
+    return Math.round(((s.cfuCount ?? 0) / (duration / 600)) * 10) / 10
+  })
+  const excludedCfuCount = cfuFrequency.filter((v) => v == null).length
+  const cfuMax = Math.max(4, ...cfuFrequency.filter((v): v is number => v != null)) * 1.2
+
+  const insight = buildTrendInsight(analyzed)
+
+  return (
+    <div className="flex flex-col gap-6">
+      {insight && (
+        <div className="flex items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50 p-4">
+          <ArrowUpIcon className="h-5 w-5 shrink-0 text-brand-600" />
+          <p className="text-sm text-ink">{insight}</p>
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-border bg-surface p-6">
+        <TrendChart
+          title="Talk Ratio"
+          unit="%"
+          maxValue={100}
+          labels={labels}
+          series={[
+            { label: 'Teacher', colorVar: '--color-brand-500', values: teacherTalk },
+            { label: 'Student', colorVar: '--color-warm-400', values: studentTalk },
+          ]}
+        />
+      </div>
+
+      <div className="rounded-2xl border border-border bg-surface p-6">
+        <TrendChart
+          title="Question Quality"
+          unit="%"
+          maxValue={100}
+          labels={labels}
+          series={[{ label: 'Higher-order questions', colorVar: '--color-brand-500', values: higherOrder }]}
+          emptyMessage="Not enough questions asked yet in any single session to trend this reliably."
+        />
+      </div>
+
+      <div className="rounded-2xl border border-border bg-surface p-6">
+        <TrendChart
+          title="Checks for Understanding"
+          unit="/10min"
+          maxValue={cfuMax}
+          labels={labels}
+          series={[{ label: 'CFUs per 10 min', colorVar: '--color-brand-500', values: cfuFrequency }]}
+        />
+        {excludedCfuCount > 0 && (
+          <p className="mt-2 text-xs text-ink-soft">
+            {excludedCfuCount} session{excludedCfuCount === 1 ? '' : 's'} under{' '}
+            {Math.round(MIN_DURATION_FOR_CFU_DETECTION_SEC / 60)} min excluded from this line — too short to
+            reliably detect CFUs.
+          </p>
+        )}
+      </div>
+
+      <p className="text-xs text-ink-soft">
+        Showing your last {analyzed.length} analyzed session{analyzed.length === 1 ? '' : 's'}. Short sessions
+        add noise — read the overall direction, not any single point.
+      </p>
+    </div>
+  )
+}
+
+function buildTrendInsight(sessions: AudioSession[]): string | null {
+  if (sessions.length < 3) return null
+
+  const withTalk = sessions.filter((s) => s.teacherTalkPct != null)
+  if (withTalk.length >= 3) {
+    const delta = withTalk[withTalk.length - 1].teacherTalkPct! - withTalk[0].teacherTalkPct!
+    if (delta <= -8) {
+      return `Teacher talk time is down ${Math.abs(Math.round(delta))} points since your first tracked session — more room for student voice.`
+    }
+  }
+
+  const withQuestions = sessions.filter(
+    (s) => (s.questionCount ?? 0) >= MIN_N_FOR_PERCENT && s.higherOrderPct != null,
+  )
+  if (withQuestions.length >= 3) {
+    const delta = withQuestions[withQuestions.length - 1].higherOrderPct! - withQuestions[0].higherOrderPct!
+    if (delta >= 10) {
+      return `Higher-order questions are up ${Math.round(delta)} points since your first tracked session — nice trend.`
+    }
+  }
+
+  return null
+}
+
+type TrendSeries = { label: string; colorVar: string; values: (number | null)[] }
+
+function TrendChart({
+  title,
+  unit,
+  maxValue,
+  labels,
+  series,
+  emptyMessage,
+}: {
+  title: string
+  unit: string
+  maxValue: number
+  labels: string[]
+  series: TrendSeries[]
+  emptyMessage?: string
+}) {
+  const width = 600
+  const height = 140
+  const padX = 8
+  const padY = 14
+  const usableW = width - padX * 2
+  const usableH = height - padY * 2
+  const n = labels.length
+
+  const totalValid = series.reduce((sum, s) => sum + s.values.filter((v) => v != null).length, 0)
+  const latestBySeries = series.map((s) => {
+    const vals = s.values.filter((v): v is number => v != null)
+    return vals.length ? vals[vals.length - 1] : null
+  })
 
   return (
     <div>
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">
-        Teacher talk time — last {analyzed.length} sessions
-      </h2>
-      <div className="mt-3 flex flex-col gap-2">
-        {analyzed.map((s) => (
-          <div key={s.id} className="flex items-center gap-3">
-            <span className="w-24 shrink-0 text-xs text-ink-soft">
-              {new Date(s.sessionDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-sm font-semibold text-ink">{title}</h3>
+        <div className="flex items-center gap-3">
+          {series.map((s, i) => (
+            <span key={s.label} className="flex items-center gap-1.5 text-xs text-ink-soft">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: `var(${s.colorVar})` }} />
+              {s.label}
+              {latestBySeries[i] != null ? `: ${latestBySeries[i]}${unit}` : ''}
             </span>
-            <div className="h-2 flex-1 overflow-hidden rounded-full bg-canvas">
-              <div className="h-full rounded-full bg-brand-500" style={{ width: `${s.teacherTalkPct}%` }} />
-            </div>
-            <span className="w-10 shrink-0 text-right text-xs text-ink-soft">{s.teacherTalkPct}%</span>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
+
+      {totalValid < 2 ? (
+        <p className="mt-4 text-sm text-ink-soft">{emptyMessage ?? 'Not enough data yet.'}</p>
+      ) : (
+        <>
+          <svg
+            viewBox={`0 0 ${width} ${height}`}
+            width="100%"
+            height={height}
+            preserveAspectRatio="none"
+            className="mt-3"
+          >
+            {series.map((s) => {
+              const coords = s.values.map((v, i) => ({
+                x: n > 1 ? padX + (i / (n - 1)) * usableW : padX + usableW / 2,
+                y: v == null ? null : padY + usableH - (Math.min(v, maxValue) / maxValue) * usableH,
+              }))
+              const segments: string[] = []
+              let current: string[] = []
+              coords.forEach((c) => {
+                if (c.y == null) {
+                  if (current.length > 1) segments.push(current.join(' '))
+                  current = []
+                } else {
+                  current.push(`${current.length === 0 ? 'M' : 'L'}${c.x.toFixed(1)},${c.y.toFixed(1)}`)
+                }
+              })
+              if (current.length > 1) segments.push(current.join(' '))
+
+              return (
+                <g key={s.label}>
+                  {segments.map((d, i) => (
+                    <path
+                      key={i}
+                      d={d}
+                      fill="none"
+                      stroke={`var(${s.colorVar})`}
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                    />
+                  ))}
+                  {coords.map((c, i) =>
+                    c.y == null ? null : <circle key={i} cx={c.x} cy={c.y} r={3} fill={`var(${s.colorVar})`} />,
+                  )}
+                </g>
+              )
+            })}
+          </svg>
+          <div className="mt-1 flex justify-between text-[11px] text-ink-soft">
+            <span>{labels[0]}</span>
+            <span>{labels[labels.length - 1]}</span>
+          </div>
+        </>
+      )}
     </div>
   )
 }
