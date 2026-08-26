@@ -85,6 +85,16 @@ export function ChecklistIcon({ className }: IconProps) {
   )
 }
 
+export function LessonPlanIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 3.5h6l3.5 3.5V19a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14 3.5V7h3.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 11h5M9.5 14h5M9.5 17h3" />
+    </svg>
+  )
+}
+
 export function WarningIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>

@@ -7,6 +7,7 @@ import { attemptsRouter } from './routes/attempts.ts'
 import { audioSessionsRouter } from './routes/audioSessions.ts'
 import { authRouter } from './routes/auth.ts'
 import { debriefRouter } from './routes/debrief.ts'
+import { lessonPlansRouter } from './routes/lessonPlans.ts'
 import { parentMessageRouter } from './routes/parentMessage.ts'
 import { profileRouter } from './routes/profile.ts'
 import { qaRouter } from './routes/qa.ts'
@@ -42,6 +43,7 @@ app.use('/api/debriefs', requireAuth, debriefRouter)
 app.use('/api/parent-messages', requireAuth, parentMessageRouter)
 app.use('/api/admin', requireAuth, adminRouter)
 app.use('/api/audio-sessions', requireAuth, audioSessionsRouter)
+app.use('/api/lesson-plans', requireAuth, lessonPlansRouter)
 
 const port = Number(process.env.PORT) || 3001
 app.listen(port, () => {

@@ -31,6 +31,7 @@ model User {
   qaExchanges    QAExchange[]
   usageLogs      UsageLog[]
   audioSessions  AudioSession[]
+  lessonPlans    LessonPlan[]
 }
 
 // One row per Claude-costing call, used to enforce a per-user daily limit
@@ -39,7 +40,7 @@ model UsageLog {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  action    String // "scenario_generate" | "attempt_feedback" | "debrief_feedback" | "parent_message" | "qa_ask" | "audio_session_notes"
+  action    String // "scenario_generate" | "attempt_feedback" | "debrief_feedback" | "parent_message" | "qa_ask" | "audio_session_notes" | "lesson_plan_feedback" | "lesson_plan_generate"
   createdAt DateTime @default(now())
 }
 
@@ -113,6 +114,43 @@ model ParentMessage {
   draftText       String
   saved           Boolean  @default(false)
   createdAt       DateTime @default(now())
+}
+
+// mode is "feedback" (teacher submits their own plan in planText, gets
+// coaching + a private rating) or "generated" (teacher gives only an
+// objective + context, Claude drafts a sample single-day plan into the
+// doNow/agenda/closure/hots/homework fields — for ideas, not a mandate).
+// Structure modeled on a standard gradual-release lesson plan template:
+// Standard -> Objective (SWBAT) -> Do Now -> Agenda (I Do/We Do/You Do)
+// -> Closure -> HOTS -> Homework.
+model LessonPlan {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mode              String
+
+  objective         String
+  unitName          String?
+  essentialQuestion String?
+  standard          String?
+  subject           String?
+  gradeLevel        String?
+
+  // "feedback" mode only — the teacher's own submitted plan
+  planText          String?
+  feedback          String?
+  rating            Int? // same private growth-tracking rating as ScenarioAttempt/Debrief
+
+  // "generated" mode only — Claude's sample plan, one field per template section
+  doNow             String?
+  agenda            String?
+  closure           String?
+  hots              String?
+  homework          String?
+
+  saved             Boolean  @default(false)
+  shareToken        String?  @unique
+  createdAt         DateTime @default(now())
 }
 
 // A recorded class period, transcribed once (never stored as audio) and

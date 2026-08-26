@@ -13,6 +13,7 @@ import FirstThirtyDays from './pages/FirstThirtyDays'
 import AdminDashboard from './pages/AdminDashboard'
 import AudioCoaching from './pages/AudioCoaching'
 import AudioCoachingExport from './pages/AudioCoachingExport'
+import LessonPlanning from './pages/LessonPlanning'
 import Landing from './pages/Landing'
 import { getMe, type UserProfile } from './lib/api'
 
@@ -86,6 +87,7 @@ export default function App() {
             <Route path="try-it-out" element={<TryItOut />} />
             <Route path="ask-an-expert" element={<AskExpert />} />
             <Route path="audio-coaching" element={<AudioCoaching />} />
+            <Route path="lesson-planning" element={<LessonPlanning />} />
             <Route path="profile" element={<Profile />} />
             <Route path="cheat-sheet" element={<CheatSheet />} />
             <Route path="first-30-days" element={<FirstThirtyDays />} />

@@ -97,6 +97,51 @@ export type SharedDebrief = {
   createdAt: string
 }
 
+// mode is "feedback" (teacher's own plan + coaching) or "generated" (a
+// sample plan from just an objective) — see server/prisma/schema.prisma.
+export type LessonPlanMode = 'feedback' | 'generated'
+
+export type LessonPlan = {
+  id: string
+  mode: LessonPlanMode
+  objective: string
+  unitName: string | null
+  essentialQuestion: string | null
+  standard: string | null
+  subject: string | null
+  gradeLevel: string | null
+  planText: string | null
+  feedback: string | null
+  rating: number | null
+  doNow: string | null
+  agenda: string | null
+  closure: string | null
+  hots: string | null
+  homework: string | null
+  saved: boolean
+  shareToken: string | null
+  createdAt: string
+}
+
+export type SharedLessonPlan = {
+  type: 'lesson-plan'
+  mode: LessonPlanMode
+  objective: string
+  unitName: string | null
+  essentialQuestion: string | null
+  standard: string | null
+  subject: string | null
+  gradeLevel: string | null
+  planText: string | null
+  feedback: string | null
+  doNow: string | null
+  agenda: string | null
+  closure: string | null
+  hots: string | null
+  homework: string | null
+  createdAt: string
+}
+
 // status is one of: setup, recording, paused, transcribing, tagging,
 // analyzed, locked
 export type AudioSessionStatus =
@@ -289,6 +334,46 @@ export function getSharedAttempt(token: string): Promise<SharedAttempt> {
 
 export function getSharedDebrief(token: string): Promise<SharedDebrief> {
   return request(`/api/share/debrief/${token}`)
+}
+
+export function getSharedLessonPlan(token: string): Promise<SharedLessonPlan> {
+  return request(`/api/share/lesson-plan/${token}`)
+}
+
+export type LessonPlanContext = {
+  objective: string
+  unitName?: string
+  essentialQuestion?: string
+  standard?: string
+  subject?: string
+  gradeLevel?: string
+}
+
+export function getLessonPlans(params?: { saved?: boolean; mode?: LessonPlanMode }): Promise<LessonPlan[]> {
+  const query = new URLSearchParams()
+  if (params?.saved) query.set('saved', 'true')
+  if (params?.mode) query.set('mode', params.mode)
+  const qs = query.toString()
+  return request(`/api/lesson-plans${qs ? `?${qs}` : ''}`)
+}
+
+export function submitLessonPlanFeedback(context: LessonPlanContext, planText: string): Promise<LessonPlan> {
+  return request('/api/lesson-plans/feedback', {
+    method: 'POST',
+    body: JSON.stringify({ ...context, planText }),
+  })
+}
+
+export function generateLessonPlan(context: LessonPlanContext): Promise<LessonPlan> {
+  return request('/api/lesson-plans/generate', { method: 'POST', body: JSON.stringify(context) })
+}
+
+export function setLessonPlanSaved(id: string, saved: boolean): Promise<LessonPlan> {
+  return request(`/api/lesson-plans/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) })
+}
+
+export function shareLessonPlan(id: string): Promise<{ shareToken: string }> {
+  return request(`/api/lesson-plans/${id}/share`, { method: 'POST' })
 }
 
 export function getAudioSessions(): Promise<AudioSession[]> {

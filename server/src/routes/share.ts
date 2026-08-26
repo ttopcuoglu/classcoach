@@ -40,3 +40,29 @@ shareRouter.get('/debrief/:token', async (req, res) => {
     createdAt: debrief.createdAt,
   })
 })
+
+shareRouter.get('/lesson-plan/:token', async (req, res) => {
+  const lessonPlan = await prisma.lessonPlan.findUnique({ where: { shareToken: req.params.token } })
+  if (!lessonPlan) {
+    res.status(404).json({ error: 'Shared lesson plan not found' })
+    return
+  }
+  res.json({
+    type: 'lesson-plan' as const,
+    mode: lessonPlan.mode,
+    objective: lessonPlan.objective,
+    unitName: lessonPlan.unitName,
+    essentialQuestion: lessonPlan.essentialQuestion,
+    standard: lessonPlan.standard,
+    subject: lessonPlan.subject,
+    gradeLevel: lessonPlan.gradeLevel,
+    planText: lessonPlan.planText,
+    feedback: lessonPlan.feedback,
+    doNow: lessonPlan.doNow,
+    agenda: lessonPlan.agenda,
+    closure: lessonPlan.closure,
+    hots: lessonPlan.hots,
+    homework: lessonPlan.homework,
+    createdAt: lessonPlan.createdAt,
+  })
+})
