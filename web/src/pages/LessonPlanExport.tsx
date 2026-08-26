@@ -38,7 +38,7 @@ export default function LessonPlanExport() {
         ) : (
           <>
             <h1 className="text-2xl font-semibold text-ink">
-              ClassCoach — {plan.mode === 'generated' ? 'Sample Lesson Plan' : 'Lesson Plan Feedback'}
+              Wivoza — {plan.mode === 'generated' ? 'Sample Lesson Plan' : 'Lesson Plan Feedback'}
             </h1>
             <p className="mt-1 text-sm text-ink-soft">
               {plan.unitName ? `${plan.unitName} · ` : ''}

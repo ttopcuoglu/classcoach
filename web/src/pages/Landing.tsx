@@ -34,7 +34,7 @@ const LOOP = [
   {
     icon: ArrowUpIcon,
     title: 'Track growth',
-    description: "ClassCoach quietly learns which categories you've got, and which still need reps.",
+    description: "Wivoza quietly learns which categories you've got, and which still need reps.",
   },
 ]
 
@@ -81,7 +81,7 @@ const FEATURES = [
 const STEPS = [
   {
     title: 'Pick a scenario',
-    description: 'Choose a category, or let ClassCoach weight toward what you’ve practiced least.',
+    description: 'Choose a category, or let Wivoza weight toward what you’ve practiced least.',
   },
   {
     title: 'Respond in your own words',
@@ -137,7 +137,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       <header className="border-b border-border bg-surface">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-5">
           <p className="font-display text-xl italic text-ink">
-            ClassCoach<span className="text-brand-500">.</span>
+            Wivoza<span className="text-brand-500">.</span>
           </p>
           <nav className="hidden gap-7 text-sm text-ink-soft sm:flex">
             <a href="#loop" className="hover:text-brand-600">
@@ -170,7 +170,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               Then own it.
             </h1>
             <p className="mt-5 max-w-md text-base text-night-soft">
-              ClassCoach gives teachers a private place to rehearse defiance, disruption, and
+              Wivoza gives teachers a private place to rehearse defiance, disruption, and
               everything in between — then get specific, judgment-free coaching on what to say
               next time.
             </p>
@@ -217,7 +217,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
         <div className="mx-auto mb-12 max-w-xl text-center">
           <h2 className="font-display text-3xl italic text-ink">One tool, three habits</h2>
           <p className="mt-3 text-ink-soft">
-            ClassCoach isn&rsquo;t a script library — it&rsquo;s a loop you run often enough that
+            Wivoza isn&rsquo;t a script library — it&rsquo;s a loop you run often enough that
             the hard moments stop feeling new.
           </p>
         </div>
@@ -292,7 +292,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             after.&rdquo;
           </blockquote>
           <cite className="mt-6 block text-xs font-semibold not-italic uppercase tracking-wide text-canvas/70">
-            The ClassCoach approach
+            The Wivoza approach
           </cite>
         </div>
       </section>
@@ -337,7 +337,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       </section>
 
       <footer className="border-t border-black/10 bg-night py-8 text-center text-xs text-night-soft">
-        ClassCoach — a coaching tool for grades 6&ndash;12 teachers.
+        Wivoza — a coaching tool for grades 6&ndash;12 teachers.
       </footer>
     </div>
   )

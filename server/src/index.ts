@@ -49,5 +49,5 @@ app.use('/api/conversation-prep', requireAuth, conversationPrepRouter)
 
 const port = Number(process.env.PORT) || 3001
 app.listen(port, () => {
-  console.log(`ClassCoach API listening on http://localhost:${port}`)
+  console.log(`Wivoza API listening on http://localhost:${port}`)
 })

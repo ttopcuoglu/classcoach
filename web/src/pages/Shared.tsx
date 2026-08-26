@@ -40,7 +40,7 @@ export default function Shared() {
   return (
     <div className="min-h-screen bg-canvas px-6 py-8">
       <div className="mx-auto max-w-2xl">
-        <p className="text-sm font-semibold text-ink-soft">ClassCoach</p>
+        <p className="text-sm font-semibold text-ink-soft">Wivoza</p>
         <h1 className="mt-1 text-2xl font-semibold text-ink">Shared from a colleague</h1>
 
         {loading ? (

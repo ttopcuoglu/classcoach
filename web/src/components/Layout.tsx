@@ -93,7 +93,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
       {/* Desktop sidebar */}
       <aside className="hidden w-64 shrink-0 border-r border-border bg-surface md:flex md:flex-col">
         <div className="px-6 py-6">
-          <p className="text-lg font-semibold text-ink">ClassCoach</p>
+          <p className="text-lg font-semibold text-ink">Wivoza</p>
           <p className="text-xs text-ink-soft">Instructional coaching, sharpened</p>
         </div>
         <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 pb-4">
@@ -140,7 +140,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
       <div className="flex min-h-screen flex-1 flex-col">
         {/* Mobile top bar */}
         <header className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 md:hidden">
-          <p className="text-base font-semibold text-ink">ClassCoach</p>
+          <p className="text-base font-semibold text-ink">Wivoza</p>
           <button type="button" onClick={handleLogout} className="text-sm font-medium text-ink-soft">
             Log out
           </button>

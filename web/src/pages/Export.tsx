@@ -34,7 +34,7 @@ export default function Export() {
           </button>
         </div>
 
-        <h1 className="text-2xl font-semibold text-ink">ClassCoach — Your Playbook</h1>
+        <h1 className="text-2xl font-semibold text-ink">Wivoza — Your Playbook</h1>
         <p className="mt-1 text-sm text-ink-soft">Saved scenarios and starred Q&A, exported for offline reference.</p>
 
         {loading ? (

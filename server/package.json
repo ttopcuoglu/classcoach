@@ -1,7 +1,7 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "description": "ClassCoach backend: Express API, Prisma/SQLite persistence, Claude API proxy.",
+  "description": "Wivoza backend: Express API, Prisma/SQLite persistence, Claude API proxy.",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

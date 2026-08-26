@@ -1,6 +1,6 @@
-# ClassCoach server
+# Wivoza server
 
-Express + Prisma (SQLite) backend for the ClassCoach web app. Proxies calls to
+Express + Prisma (SQLite) backend for the Wivoza web app. Proxies calls to
 the Anthropic Claude API so the API key never reaches the client.
 
 ## Setup
