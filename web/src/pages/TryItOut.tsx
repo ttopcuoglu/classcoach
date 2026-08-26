@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUpIcon, MicIcon, ShareIcon, StarIcon } from '../components/icons'
 import { CATEGORIES, categoryLabel } from '../lib/categories'
+import { GRADE_BANDS } from '../lib/gradeBands'
 import {
   generateScenario,
   getAttempts,
@@ -15,8 +16,6 @@ import {
   type Debrief,
   type ScenarioAttempt,
 } from '../lib/api'
-
-const GRADE_BANDS = ['K-5', '6-8', '9-12'] as const
 
 const DIFFICULTIES: { label: string; value?: string }[] = [
   { label: 'Any difficulty' },

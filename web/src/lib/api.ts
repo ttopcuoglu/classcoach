@@ -153,6 +153,7 @@ export type ConversationPrep = {
   id: string
   category: ConversationPrepCategory
   source: ConversationPrepSource
+  gradeBand: string | null
   situationText: string
   responseText: string
   feedback: string | null
@@ -166,6 +167,7 @@ export type ConversationPrep = {
 export type SharedConversationPrep = {
   type: 'conversation-prep'
   category: ConversationPrepCategory
+  gradeBand: string | null
   situationText: string
   responseText: string
   feedback: string | null
@@ -385,17 +387,21 @@ export function submitConversationPrep(
   situationText: string,
   responseText: string,
   source: ConversationPrepSource = 'real',
+  gradeBand?: string,
 ): Promise<ConversationPrep> {
   return request('/api/conversation-prep', {
     method: 'POST',
-    body: JSON.stringify({ category, situationText, responseText, source }),
+    body: JSON.stringify({ category, situationText, responseText, source, gradeBand }),
   })
 }
 
-export function generateConversationScenario(category: ConversationPrepCategory): Promise<{ situationText: string }> {
+export function generateConversationScenario(
+  category: ConversationPrepCategory,
+  gradeBand?: string,
+): Promise<{ situationText: string; gradeBand: string }> {
   return request('/api/conversation-prep/generate-scenario', {
     method: 'POST',
-    body: JSON.stringify({ category }),
+    body: JSON.stringify({ category, gradeBand }),
   })
 }
 

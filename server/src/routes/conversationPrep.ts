@@ -3,6 +3,7 @@ import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { isValidConversationPrepCategory } from '../lib/conversationPrepCategories.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
+import { pickGradeBand } from '../lib/scenarioCategories.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
@@ -33,6 +34,18 @@ const SCENARIO_CATEGORY_GUIDANCE: Record<string, string> = {
     "Describe a parent or colleague asking the teacher for something unreasonable or against policy, requiring the teacher to say no or set a limit.",
   formal_meeting:
     'Describe an upcoming formal meeting (IEP/504, parent-teacher conference, or team meeting), including who is attending and what needs to be decided or communicated.',
+}
+
+// The other party's likely concerns shift a lot by the child's age — an
+// elementary parent and a high schooler's parent are not worried about the
+// same things. Same grade bands as Scenario (scenarioCategories.ts).
+const GRADE_BAND_GUIDANCE: Record<string, string> = {
+  'K-5':
+    "The child involved is elementary-age (grades K-5). Ground the situation in elementary concerns — reading level, playground incidents, separation anxiety, following directions — not teen-specific issues like phones, grades pressure, or social media.",
+  '6-8':
+    'The child involved is a middle schooler (grades 6-8). Ground the situation in middle-school concerns — peer social dynamics, homework load, early independence, first real conflicts with friends.',
+  '9-12':
+    'The child involved is a high schooler (grades 9-12). Ground the situation in high-school concerns — grades and college pressure, driving, jobs, greater autonomy, or a more contentious tone than a younger child\'s parent might use.',
 }
 
 const GENERATE_SCENARIO_SYSTEM_PROMPT = `You write realistic hypothetical situations so K-12 teachers can practice a difficult conversation before they face a real one.
@@ -78,12 +91,13 @@ conversationPrepRouter.get('/', async (req, res) => {
 })
 
 conversationPrepRouter.post('/generate-scenario', async (req, res) => {
-  const { category } = req.body ?? {}
+  const { category, gradeBand } = req.body ?? {}
 
   if (!isValidConversationPrepCategory(category)) {
     res.status(400).json({ error: 'category must be one of the known conversation types' })
     return
   }
+  const chosenGradeBand = pickGradeBand(gradeBand)
 
   const allowed = await checkAndLogUsage(req.user!.userId, 'conversation_prep_generate')
   if (!allowed) {
@@ -92,11 +106,15 @@ conversationPrepRouter.post('/generate-scenario', async (req, res) => {
   }
 
   try {
+    const context = [SCENARIO_CATEGORY_GUIDANCE[category], GRADE_BAND_GUIDANCE[chosenGradeBand]]
+      .filter(Boolean)
+      .join('\n\n')
+
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 300,
       system: GENERATE_SCENARIO_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: SCENARIO_CATEGORY_GUIDANCE[category] ?? '' }],
+      messages: [{ role: 'user', content: context }],
     })
     const situationText = response.content
       .filter((block) => block.type === 'text')
@@ -104,7 +122,7 @@ conversationPrepRouter.post('/generate-scenario', async (req, res) => {
       .join('\n')
       .trim()
 
-    res.json({ situationText })
+    res.json({ situationText, gradeBand: chosenGradeBand })
   } catch (error) {
     console.error('[conversation-prep] scenario generation failed:', error)
     res.status(502).json({ error: 'Claude request failed' })
@@ -112,7 +130,7 @@ conversationPrepRouter.post('/generate-scenario', async (req, res) => {
 })
 
 conversationPrepRouter.post('/', async (req, res) => {
-  const { category, situationText, responseText, source } = req.body ?? {}
+  const { category, situationText, responseText, source, gradeBand } = req.body ?? {}
 
   if (!isValidConversationPrepCategory(category)) {
     res.status(400).json({ error: 'category must be one of the known conversation types' })
@@ -127,6 +145,7 @@ conversationPrepRouter.post('/', async (req, res) => {
     return
   }
   const resolvedSource = source === 'practice' ? 'practice' : 'real'
+  const resolvedGradeBand = typeof gradeBand === 'string' && gradeBand.trim() ? pickGradeBand(gradeBand) : null
 
   const allowed = await checkAndLogUsage(req.user!.userId, 'conversation_prep_feedback')
   if (!allowed) {
@@ -135,7 +154,13 @@ conversationPrepRouter.post('/', async (req, res) => {
   }
 
   try {
-    const context = `Situation: ${situationText.trim()}\n\nMy planned response: ${responseText.trim()}`
+    const context = [
+      resolvedGradeBand ? `Grade level: ${resolvedGradeBand}` : null,
+      `Situation: ${situationText.trim()}`,
+      `My planned response: ${responseText.trim()}`,
+    ]
+      .filter(Boolean)
+      .join('\n\n')
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -160,6 +185,7 @@ conversationPrepRouter.post('/', async (req, res) => {
         userId: req.user!.userId,
         category,
         source: resolvedSource,
+        gradeBand: resolvedGradeBand,
         situationText: situationText.trim(),
         responseText: responseText.trim(),
         feedback,

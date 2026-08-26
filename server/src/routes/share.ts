@@ -76,6 +76,7 @@ shareRouter.get('/conversation-prep/:token', async (req, res) => {
   res.json({
     type: 'conversation-prep' as const,
     category: prep.category,
+    gradeBand: prep.gradeBand,
     situationText: prep.situationText,
     responseText: prep.responseText,
     feedback: prep.feedback,

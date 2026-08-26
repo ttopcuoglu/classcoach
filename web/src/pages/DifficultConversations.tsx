@@ -14,6 +14,7 @@ import {
   CONVERSATION_PREP_COPY,
   conversationPrepCategoryLabel,
 } from '../lib/conversationPrepCategories'
+import { GRADE_BANDS, type GradeBand } from '../lib/gradeBands'
 
 export default function DifficultConversations() {
   const [tab, setTab] = useState<'practice' | 'real'>('practice')
@@ -79,6 +80,39 @@ function CategoryPills({
           {label}
         </button>
       ))}
+    </div>
+  )
+}
+
+function GradeBandPills({
+  gradeBand,
+  onChange,
+  disabled,
+}: {
+  gradeBand: GradeBand
+  onChange: (value: GradeBand) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Grade band</span>
+      <div className="flex flex-wrap gap-1.5">
+        {GRADE_BANDS.map((band) => (
+          <button
+            key={band}
+            type="button"
+            onClick={() => onChange(band)}
+            disabled={disabled}
+            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              gradeBand === band
+                ? 'border-brand-500 bg-brand-50 text-brand-600'
+                : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+            }`}
+          >
+            {band}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -162,6 +196,7 @@ function useConversationPrepHistory(source: 'real' | 'practice') {
 
 function PracticePanel() {
   const [category, setCategory] = useState<ConversationPrepCategory>('hostile_response')
+  const [gradeBand, setGradeBand] = useState<GradeBand>('6-8')
   const [situationText, setSituationText] = useState<string | null>(null)
   const [responseText, setResponseText] = useState('')
   const [prep, setPrep] = useState<ConversationPrep | null>(null)
@@ -178,7 +213,7 @@ function PracticePanel() {
     setSituationText(null)
     setResponseText('')
     try {
-      const { situationText: generated } = await generateConversationScenario(category)
+      const { situationText: generated } = await generateConversationScenario(category, gradeBand)
       setSituationText(generated)
     } catch {
       setError('Could not generate a scenario. Please try again.')
@@ -192,7 +227,7 @@ function PracticePanel() {
     setSubmitting(true)
     setError(null)
     try {
-      const result = await submitConversationPrep(category, situationText, responseText.trim(), 'practice')
+      const result = await submitConversationPrep(category, situationText, responseText.trim(), 'practice', gradeBand)
       setPrep(result)
       setAllPreps((prev) => [result, ...prev])
     } catch {
@@ -229,6 +264,7 @@ function PracticePanel() {
         {!prep ? (
           <div className="flex flex-col gap-4">
             <CategoryPills category={category} onChange={setCategory} disabled={generating || submitting} />
+            <GradeBandPills gradeBand={gradeBand} onChange={setGradeBand} disabled={generating || submitting} />
 
             {!situationText ? (
               <div className="p-2 text-center">
@@ -293,6 +329,7 @@ function PracticePanel() {
 
 function RealPanel() {
   const [category, setCategory] = useState<ConversationPrepCategory>('hostile_response')
+  const [gradeBand, setGradeBand] = useState<GradeBand>('6-8')
   const [situationText, setSituationText] = useState('')
   const [responseText, setResponseText] = useState('')
   const [prep, setPrep] = useState<ConversationPrep | null>(null)
@@ -308,7 +345,7 @@ function RealPanel() {
     setSubmitting(true)
     setError(null)
     try {
-      const result = await submitConversationPrep(category, situationText.trim(), responseText.trim(), 'real')
+      const result = await submitConversationPrep(category, situationText.trim(), responseText.trim(), 'real', gradeBand)
       setPrep(result)
       setAllPreps((prev) => [result, ...prev])
     } catch {
@@ -345,6 +382,7 @@ function RealPanel() {
         {!prep ? (
           <div className="flex flex-col gap-4">
             <CategoryPills category={category} onChange={setCategory} disabled={submitting} />
+            <GradeBandPills gradeBand={gradeBand} onChange={setGradeBand} disabled={submitting} />
 
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-ink">{copy.situationLabel}</span>
