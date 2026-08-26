@@ -104,6 +104,23 @@ export function getCountMetric(options: {
   return { state: 'measured', display: String(count) }
 }
 
+// For a plain numeric field that's either present or it isn't (talk %,
+// wait time) — used only to fold these into a category's coverage tally
+// alongside the count/ratio metrics above.
+export function getPresenceMetric(value: number | null | undefined): ConfidentMetric {
+  return value == null
+    ? { state: 'unavailable', display: '—' }
+    : { state: 'measured', display: String(value) }
+}
+
+// "N of M measured" for a category's header — counts anything that isn't
+// 'unavailable' as measured (a confident zero still counts as data).
+export function categoryCoverage(entries: { state: MetricState }[]): string {
+  const total = entries.length
+  const measured = entries.filter((e) => e.state !== 'unavailable').length
+  return `${measured} of ${total} measured`
+}
+
 export function formatDuration(sec: number): string {
   const m = Math.floor(sec / 60)
   const s = Math.floor(sec % 60)

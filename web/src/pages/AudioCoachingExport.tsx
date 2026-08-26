@@ -100,10 +100,16 @@ export default function AudioCoachingExport() {
                   )}
 
                   <section className="mt-6 break-inside-avoid rounded-xl border border-border p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Snapshot</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Talk & Participation</p>
                     <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
                       <Stat label="Teacher talk" value={session.teacherTalkPct != null ? `${session.teacherTalkPct}%` : '—'} />
                       <Stat label="Student talk" value={session.studentTalkPct != null ? `${session.studentTalkPct}%` : '—'} />
+                    </div>
+                  </section>
+
+                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Questioning & Thinking</p>
+                    <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
                       <Stat label="Questions" value={questionsMetric.display} reason={questionsMetric.reason} />
                       <Stat
                         label="Higher-order"
@@ -111,7 +117,13 @@ export default function AudioCoachingExport() {
                         reason={higherOrderRatio?.reason}
                       />
                       <Stat label="Avg. wait time" value={session.avgWaitTimeSec != null ? `${session.avgWaitTimeSec}s` : '—'} />
-                      <Stat label="CFUs" value={cfuMetric.display} reason={cfuMetric.reason} />
+                    </div>
+                  </section>
+
+                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Checking Understanding</p>
+                    <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      <Stat label="Checks for understanding" value={cfuMetric.display} reason={cfuMetric.reason} />
                     </div>
                   </section>
                 </>
@@ -135,7 +147,7 @@ export default function AudioCoachingExport() {
             )}
 
             <section className="mt-6 break-inside-avoid rounded-xl border border-border p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Coach's notes</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Reflecting on your session</p>
               <div className="mt-2 flex flex-col gap-3">
                 <div>
                   <p className="text-xs font-semibold text-ink-soft">Strengths</p>
@@ -161,9 +173,10 @@ export default function AudioCoachingExport() {
             </section>
 
             <p className="mt-6 break-inside-avoid text-xs text-ink-soft">
-              This report is generated from audio only — it does not capture visual engagement, board or
-              visual content, or non-verbal classroom management. No audio recording is stored anywhere;
-              this transcript-derived summary is the sole record of the session.
+              This report reflects what could be heard in the recording — talk patterns, questioning, and
+              classroom routines. It doesn't capture lesson planning, materials, physical space, visual
+              engagement, or anything outside class time. No audio recording is stored anywhere; this
+              transcript-derived summary is the sole record of the session.
             </p>
           </>
         )}

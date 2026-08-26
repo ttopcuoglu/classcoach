@@ -15,9 +15,11 @@ import {
   type SpeakerSample,
 } from '../lib/api'
 import {
+  categoryCoverage,
   formatRatio,
   getCoverage,
   getCountMetric,
+  getPresenceMetric,
   MIN_DURATION_FOR_CFU_DETECTION_SEC,
   SHORT_SESSION_THRESHOLD_SEC,
 } from '../lib/reportConfidence'
@@ -602,25 +604,50 @@ function ReportPanel({
   const metrics = session.metricsDetail ?? {}
   const recordedSec = session.durationSec ?? 0
   const coverage = getCoverage(session.durationSec, session.phases)
+  const num = (key: string) => (typeof metrics[key] === 'number' ? (metrics[key] as number) : null)
 
-  const higherOrderRatio =
-    session.questionCount != null
-      ? formatRatio(typeof metrics.higherOrderQuestionCount === 'number' ? metrics.higherOrderQuestionCount : 0, session.questionCount)
+  // Talk & Participation
+  const teacherTalkMetric = getPresenceMetric(session.teacherTalkPct)
+  const studentTalkMetric = getPresenceMetric(session.studentTalkPct)
+  const silencePct =
+    session.teacherTalkPct != null && session.studentTalkPct != null
+      ? Math.max(0, Math.round(100 - session.teacherTalkPct - session.studentTalkPct))
       : null
+  const silenceMetric = getPresenceMetric(silencePct)
+  const studentSegmentsMetric = getCountMetric({ count: num('studentVoiceSegments'), recordedSec })
+
+  // Questioning & Thinking
   const questionsMetric = getCountMetric({ count: session.questionCount, recordedSec })
+  const higherOrderRatio =
+    session.questionCount != null ? formatRatio(num('higherOrderQuestionCount') ?? 0, session.questionCount) : null
+  const followUpMetric = getCountMetric({ count: num('followUpQuestionCount'), recordedSec })
+  const waitTimeMetric = getPresenceMetric(session.avgWaitTimeSec)
+
+  // Checking Understanding
   const cfuMetric = getCountMetric({
     count: session.cfuCount,
     recordedSec,
     minDurationSec: MIN_DURATION_FOR_CFU_DETECTION_SEC,
   })
-  const studentSegmentsMetric = getCountMetric({
-    count: typeof metrics.studentVoiceSegments === 'number' ? metrics.studentVoiceSegments : null,
-    recordedSec,
-  })
-  const followUpMetric = getCountMetric({
-    count: typeof metrics.followUpQuestionCount === 'number' ? metrics.followUpQuestionCount : null,
-    recordedSec,
-  })
+  const genericCount = num('genericFeedbackCount')
+  const specificCount = num('specificFeedbackCount')
+  const feedbackRatio =
+    genericCount != null && specificCount != null && genericCount + specificCount > 0
+      ? formatRatio(specificCount, genericCount + specificCount)
+      : { state: 'unavailable' as const, display: '—', reason: 'No feedback-after-response moments detected.' }
+
+  // Classroom Routines
+  const transitionMetric = getCountMetric({ count: num('transitionCount'), recordedSec })
+
+  // Climate & Tone
+  const nameMentionMetric = getCountMetric({ count: num('nameMentionCount'), recordedSec })
+  const redirectionMetric = getCountMetric({ count: num('redirectionCount'), recordedSec })
+  const positiveCount = num('positivePhraseCount')
+  const correctiveCount = num('correctivePhraseCount')
+  const toneRatio =
+    positiveCount != null && correctiveCount != null && positiveCount + correctiveCount > 0
+      ? formatRatio(positiveCount, positiveCount + correctiveCount)
+      : { state: 'unavailable' as const, display: '—', reason: 'No positive or corrective phrases detected.' }
 
   return (
     <div className="flex flex-col gap-6">
@@ -661,38 +688,122 @@ function ReportPanel({
           {session.gradeLevel ? ` · ${session.gradeLevel}` : ''}
           {session.durationSec ? ` · ${formatTime(session.durationSec)}` : ''}
         </p>
+      </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <Stat label="Teacher talk" value={session.teacherTalkPct != null ? `${session.teacherTalkPct}%` : '—'} />
-          <Stat label="Student talk" value={session.studentTalkPct != null ? `${session.studentTalkPct}%` : '—'} />
+      <CategorySection
+        title="Talk & Participation"
+        coverage={categoryCoverage([teacherTalkMetric, studentTalkMetric, silenceMetric, studentSegmentsMetric])}
+      >
+        <Stat label="Teacher talk" value={session.teacherTalkPct != null ? `${session.teacherTalkPct}%` : '—'} />
+        <Stat label="Student talk" value={session.studentTalkPct != null ? `${session.studentTalkPct}%` : '—'} />
+        <Stat label="Silence / other" value={silencePct != null ? `${silencePct}%` : '—'} />
+        <Stat
+          label="Student voice segments"
+          value={studentSegmentsMetric.display}
+          muted={studentSegmentsMetric.state === 'unavailable'}
+          reason={studentSegmentsMetric.reason}
+        />
+      </CategorySection>
+
+      <CategorySection
+        title="Questioning & Thinking"
+        coverage={categoryCoverage([questionsMetric, followUpMetric, waitTimeMetric])}
+      >
+        <Stat
+          label="Questions"
+          value={questionsMetric.display}
+          muted={questionsMetric.state === 'unavailable'}
+          reason={questionsMetric.reason}
+          sub={higherOrderRatio ? `${higherOrderRatio.display} higher-order` : undefined}
+        />
+        <Stat
+          label="Follow-up questions"
+          value={followUpMetric.display}
+          muted={followUpMetric.state === 'unavailable'}
+          reason={followUpMetric.reason}
+        />
+        <Stat label="Avg. wait time" value={session.avgWaitTimeSec != null ? `${session.avgWaitTimeSec}s` : '—'} />
+      </CategorySection>
+
+      <CategorySection title="Checking Understanding" coverage={categoryCoverage([cfuMetric, feedbackRatio])}>
+        <Stat
+          label="Checks for understanding"
+          value={cfuMetric.display}
+          muted={cfuMetric.state === 'unavailable'}
+          reason={cfuMetric.reason}
+        />
+        <Stat
+          label="Feedback specificity"
+          value={feedbackRatio.display}
+          muted={feedbackRatio.state === 'unavailable'}
+          reason={feedbackRatio.reason}
+          sub={feedbackRatio.state !== 'unavailable' ? 'specific of total feedback moments' : undefined}
+        />
+      </CategorySection>
+
+      <div>
+        <h2 className="flex items-baseline justify-between text-sm font-semibold uppercase tracking-wide text-ink-soft">
+          <span>Classroom Routines</span>
+          <span className="text-xs font-normal normal-case text-ink-soft">
+            {categoryCoverage([transitionMetric, getPresenceMetric(session.phases?.length ? 1 : null)])}
+          </span>
+        </h2>
+        <div className="mt-3 grid grid-cols-2 gap-4 rounded-2xl border border-border bg-surface p-6 sm:grid-cols-3">
           <Stat
-            label="Questions"
-            value={questionsMetric.display}
-            muted={questionsMetric.state === 'unavailable'}
-            reason={questionsMetric.reason}
-            sub={higherOrderRatio ? `${higherOrderRatio.display} higher-order` : undefined}
-          />
-          <Stat label="Avg. wait time" value={session.avgWaitTimeSec != null ? `${session.avgWaitTimeSec}s` : '—'} />
-          <Stat
-            label="Checks for understanding"
-            value={cfuMetric.display}
-            muted={cfuMetric.state === 'unavailable'}
-            reason={cfuMetric.reason}
-          />
-          <Stat
-            label="Student voice segments"
-            value={studentSegmentsMetric.display}
-            muted={studentSegmentsMetric.state === 'unavailable'}
-            reason={studentSegmentsMetric.reason}
-          />
-          <Stat
-            label="Follow-up questions"
-            value={followUpMetric.display}
-            muted={followUpMetric.state === 'unavailable'}
-            reason={followUpMetric.reason}
+            label="Transitions"
+            value={transitionMetric.display}
+            muted={transitionMetric.state === 'unavailable'}
+            reason={transitionMetric.reason}
           />
         </div>
+
+        {session.phases && session.phases.length > 0 && (
+          <div className="mt-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Session phases</p>
+            <div className="mt-2 flex flex-col gap-2">
+              {session.phases.map((p, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2.5"
+                >
+                  <span className="w-28 shrink-0 text-sm font-medium text-ink">{p.label}</span>
+                  <span className="text-sm text-ink-soft">
+                    {formatTime(p.startSec)} – {formatTime(p.endSec)}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-ink-soft">
+              These boundaries are an automated estimate — treat them as a starting point.
+            </p>
+          </div>
+        )}
       </div>
+
+      <CategorySection
+        title="Climate & Tone"
+        coverage={categoryCoverage([nameMentionMetric, toneRatio, redirectionMetric])}
+      >
+        <Stat
+          label="Student names used"
+          value={nameMentionMetric.display}
+          muted={nameMentionMetric.state === 'unavailable'}
+          reason={nameMentionMetric.reason}
+        />
+        <Stat
+          label="Positive / corrective"
+          value={toneRatio.display}
+          muted={toneRatio.state === 'unavailable'}
+          reason={toneRatio.reason}
+          sub={toneRatio.state !== 'unavailable' ? 'share positive' : undefined}
+        />
+        <Stat
+          label="Redirection language"
+          value={redirectionMetric.display}
+          muted={redirectionMetric.state === 'unavailable'}
+          reason={redirectionMetric.reason ?? 'Count only — tone isn\'t judged automatically.'}
+        />
+      </CategorySection>
 
       {session.highlights && session.highlights.length > 0 && (
         <div>
@@ -710,30 +821,8 @@ function ReportPanel({
         </div>
       )}
 
-      {session.phases && session.phases.length > 0 && (
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Session phases</h2>
-          <div className="mt-3 flex flex-col gap-2">
-            {session.phases.map((p, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2.5"
-              >
-                <span className="w-28 shrink-0 text-sm font-medium text-ink">{p.label}</span>
-                <span className="text-sm text-ink-soft">
-                  {formatTime(p.startSec)} – {formatTime(p.endSec)}
-                </span>
-              </div>
-            ))}
-          </div>
-          <p className="mt-2 text-xs text-ink-soft">
-            These boundaries are an automated estimate — treat them as a starting point.
-          </p>
-        </div>
-      )}
-
       <div className="rounded-2xl border border-border bg-surface p-6">
-        <h2 className="text-sm font-semibold text-ink">Coach's notes</h2>
+        <h2 className="text-sm font-semibold text-ink">Reflecting on your session</h2>
         <div className="mt-4 flex flex-col gap-4">
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-ink">Strengths</span>
@@ -814,9 +903,9 @@ function ReportPanel({
       </div>
 
       <div className="rounded-xl border border-dashed border-border p-4 text-xs text-ink-soft">
-        This report is generated from audio only — it doesn't capture visual engagement, board or visual
-        content, or non-verbal classroom management. Automated counts above are suggestions to confirm or
-        edit, not final judgments.
+        This report reflects what could be heard in the recording — talk patterns, questioning, and classroom
+        routines. It doesn't capture lesson planning, materials, physical space, visual engagement, or anything
+        outside class time. Automated counts above are suggestions to confirm or edit, not final judgments.
       </div>
 
       <Link
@@ -825,6 +914,28 @@ function ReportPanel({
       >
         Open printable report →
       </Link>
+    </div>
+  )
+}
+
+function CategorySection({
+  title,
+  coverage,
+  children,
+}: {
+  title: string
+  coverage: string
+  children: React.ReactNode
+}) {
+  return (
+    <div>
+      <h2 className="flex items-baseline justify-between text-sm font-semibold uppercase tracking-wide text-ink-soft">
+        <span>{title}</span>
+        <span className="text-xs font-normal normal-case text-ink-soft">{coverage}</span>
+      </h2>
+      <div className="mt-3 grid grid-cols-2 gap-4 rounded-2xl border border-border bg-surface p-6 sm:grid-cols-3">
+        {children}
+      </div>
     </div>
   )
 }
