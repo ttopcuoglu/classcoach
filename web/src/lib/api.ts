@@ -145,9 +145,14 @@ export type SharedLessonPlan = {
 // category is one of: hostile_response, phone_call, boundary_setting, formal_meeting
 export type ConversationPrepCategory = 'hostile_response' | 'phone_call' | 'boundary_setting' | 'formal_meeting'
 
+// "real" = an actual upcoming conversation the teacher described; "practice"
+// = a generated hypothetical, same split as Debrief vs. Scenario.
+export type ConversationPrepSource = 'real' | 'practice'
+
 export type ConversationPrep = {
   id: string
   category: ConversationPrepCategory
+  source: ConversationPrepSource
   situationText: string
   responseText: string
   feedback: string | null
@@ -379,10 +384,18 @@ export function submitConversationPrep(
   category: ConversationPrepCategory,
   situationText: string,
   responseText: string,
+  source: ConversationPrepSource = 'real',
 ): Promise<ConversationPrep> {
   return request('/api/conversation-prep', {
     method: 'POST',
-    body: JSON.stringify({ category, situationText, responseText }),
+    body: JSON.stringify({ category, situationText, responseText, source }),
+  })
+}
+
+export function generateConversationScenario(category: ConversationPrepCategory): Promise<{ situationText: string }> {
+  return request('/api/conversation-prep/generate-scenario', {
+    method: 'POST',
+    body: JSON.stringify({ category }),
   })
 }
 

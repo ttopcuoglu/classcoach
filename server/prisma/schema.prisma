@@ -117,14 +117,17 @@ model ParentMessage {
   createdAt       DateTime @default(now())
 }
 
-// A real, upcoming conversation outside the classroom (parent, colleague,
-// or administrator) — not a hypothetical, unlike Scenario. category is one
-// of: hostile_response, phone_call, boundary_setting, formal_meeting.
+// A conversation outside the classroom (parent, colleague, or
+// administrator). category is one of: hostile_response, phone_call,
+// boundary_setting, formal_meeting. source is "real" (an actual upcoming
+// conversation the teacher described) or "practice" (a generated
+// hypothetical, same real/hypothetical split as Debrief vs. Scenario).
 model ConversationPrep {
   id            String   @id @default(cuid())
   userId        String
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   category      String
+  source        String   @default("real")
   situationText String
   responseText  String
   feedback      String?

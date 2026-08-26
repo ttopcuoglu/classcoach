@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ShareIcon, StarIcon } from '../components/icons'
 import {
+  generateConversationScenario,
   getConversationPreps,
   setConversationPrepSaved,
   shareConversationPrep,
@@ -15,34 +16,185 @@ import {
 } from '../lib/conversationPrepCategories'
 
 export default function DifficultConversations() {
-  const [category, setCategory] = useState<ConversationPrepCategory>('hostile_response')
-  const [situationText, setSituationText] = useState('')
-  const [responseText, setResponseText] = useState('')
-  const [prep, setPrep] = useState<ConversationPrep | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [tab, setTab] = useState<'practice' | 'real'>('practice')
 
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Difficult Conversations</h1>
+        <p className="text-ink-soft">
+          Practice a hypothetical scenario, or prepare for a real conversation you have coming up.
+        </p>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setTab('practice')}
+          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+            tab === 'practice' ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:text-ink'
+          }`}
+        >
+          Practice a Scenario
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('real')}
+          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+            tab === 'real' ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:text-ink'
+          }`}
+        >
+          Prepare a Real Conversation
+        </button>
+      </div>
+
+      {tab === 'practice' ? <PracticePanel /> : <RealPanel />}
+    </div>
+  )
+}
+
+function CategoryPills({
+  category,
+  onChange,
+  disabled,
+}: {
+  category: ConversationPrepCategory
+  onChange: (value: ConversationPrepCategory) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {CONVERSATION_PREP_CATEGORIES.map(({ label, value }) => (
+        <button
+          key={value}
+          type="button"
+          onClick={() => onChange(value)}
+          disabled={disabled}
+          className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+            category === value
+              ? 'border-brand-500 bg-brand-50 text-brand-600'
+              : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function ResultCard({ prep, onToggleSaved, onReset, resetLabel }: {
+  prep: ConversationPrep
+  onToggleSaved: (target: ConversationPrep) => void
+  onReset: () => void
+  resetLabel: string
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600">
+          {conversationPrepCategoryLabel(prep.category)}
+        </span>
+        <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">Situation</p>
+        <p className="mt-1 text-sm text-ink">{prep.situationText}</p>
+      </div>
+
+      <div className="rounded-xl border border-border bg-canvas p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Your planned response</p>
+        <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{prep.responseText}</p>
+      </div>
+
+      {prep.feedback && (
+        <div className="rounded-xl border border-border bg-warm-100/60 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-warm-500">Coaching</p>
+          <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{prep.feedback}</p>
+        </div>
+      )}
+
+      {prep.modelResponse && (
+        <div className="rounded-xl border border-border bg-brand-50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+            A model response to compare against
+          </p>
+          <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{prep.modelResponse}</p>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => onToggleSaved(prep)}
+            className={`flex items-center gap-1.5 text-sm font-medium ${
+              prep.saved ? 'text-warm-500' : 'text-ink-soft hover:text-warm-500'
+            }`}
+          >
+            <StarIcon className="h-4 w-4" filled={prep.saved} />
+            {prep.saved ? 'Saved' : 'Save for later'}
+          </button>
+          <ShareButton onShare={() => shareConversationPrep(prep.id)} />
+        </div>
+        <button
+          type="button"
+          onClick={onReset}
+          className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+        >
+          {resetLabel}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function useConversationPrepHistory(source: 'real' | 'practice') {
   const [allPreps, setAllPreps] = useState<ConversationPrep[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
 
   useEffect(() => {
     getConversationPreps()
-      .then(setAllPreps)
+      .then((preps) => setAllPreps(preps.filter((p) => p.source === source)))
       .catch(() => {})
       .finally(() => setHistoryLoading(false))
-  }, [])
+  }, [source])
 
+  return { allPreps, setAllPreps, historyLoading }
+}
+
+function PracticePanel() {
+  const [category, setCategory] = useState<ConversationPrepCategory>('hostile_response')
+  const [situationText, setSituationText] = useState<string | null>(null)
+  const [responseText, setResponseText] = useState('')
+  const [prep, setPrep] = useState<ConversationPrep | null>(null)
+  const [generating, setGenerating] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const { allPreps, setAllPreps, historyLoading } = useConversationPrepHistory('practice')
   const savedPreps = allPreps.filter((p) => p.saved)
-  const copy = CONVERSATION_PREP_COPY[category]
+
+  async function handleGenerate() {
+    setGenerating(true)
+    setError(null)
+    setSituationText(null)
+    setResponseText('')
+    try {
+      const { situationText: generated } = await generateConversationScenario(category)
+      setSituationText(generated)
+    } catch {
+      setError('Could not generate a scenario. Please try again.')
+    } finally {
+      setGenerating(false)
+    }
+  }
 
   async function handleSubmit() {
-    if (!situationText.trim() || !responseText.trim() || submitting) return
+    if (!situationText || !responseText.trim() || submitting) return
     setSubmitting(true)
     setError(null)
     try {
-      const result = await submitConversationPrep(category, situationText.trim(), responseText.trim())
+      const result = await submitConversationPrep(category, situationText, responseText.trim(), 'practice')
       setPrep(result)
-      setAllPreps((prevList) => [result, ...prevList])
+      setAllPreps((prev) => [result, ...prev])
     } catch {
       setError('Could not get coaching feedback. Please try again.')
     } finally {
@@ -50,22 +202,21 @@ export default function DifficultConversations() {
     }
   }
 
-  function handleNew() {
+  function handleReset() {
     setPrep(null)
-    setSituationText('')
+    setSituationText(null)
     setResponseText('')
     setError(null)
   }
 
   async function handleToggleSaved(target: ConversationPrep) {
     const nextSaved = !target.saved
-    const apply = (p: ConversationPrep) => (p.id === target.id ? { ...p, saved: nextSaved } : p)
-    setAllPreps((prevList) => prevList.map(apply))
+    setAllPreps((prev) => prev.map((p) => (p.id === target.id ? { ...p, saved: nextSaved } : p)))
     if (prep?.id === target.id) setPrep((prevPrep) => (prevPrep ? { ...prevPrep, saved: nextSaved } : prevPrep))
     try {
       await setConversationPrepSaved(target.id, nextSaved)
     } catch {
-      setAllPreps((prevList) => prevList.map((p) => (p.id === target.id ? { ...p, saved: !nextSaved } : p)))
+      setAllPreps((prev) => prev.map((p) => (p.id === target.id ? { ...p, saved: !nextSaved } : p)))
       if (prep?.id === target.id) {
         setPrep((prevPrep) => (prevPrep ? { ...prevPrep, saved: !nextSaved } : prevPrep))
       }
@@ -74,34 +225,126 @@ export default function DifficultConversations() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Difficult Conversations</h1>
-        <p className="text-ink-soft">
-          Prepare for a real, upcoming conversation — describe the situation, draft your response, and get
-          coached before you actually have it.
-        </p>
-      </div>
-
       <div className="rounded-2xl border border-border bg-surface p-6">
         {!prep ? (
           <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap gap-2">
-              {CONVERSATION_PREP_CATEGORIES.map(({ label, value }) => (
+            <CategoryPills category={category} onChange={setCategory} disabled={generating || submitting} />
+
+            {!situationText ? (
+              <div className="p-2 text-center">
+                <p className="text-sm text-ink-soft">No scenario loaded yet.</p>
                 <button
-                  key={value}
                   type="button"
-                  onClick={() => setCategory(value)}
-                  disabled={submitting}
-                  className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                    category === value
-                      ? 'border-brand-500 bg-brand-50 text-brand-600'
-                      : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
-                  }`}
+                  onClick={handleGenerate}
+                  disabled={generating}
+                  className="mt-4 rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
                 >
-                  {label}
+                  {generating ? 'Generating...' : 'Generate a Scenario'}
                 </button>
-              ))}
-            </div>
+              </div>
+            ) : (
+              <>
+                <div className="rounded-xl border border-border bg-canvas p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Situation</p>
+                  <p className="mt-1.5 text-sm text-ink">{situationText}</p>
+                </div>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-ink">How would you respond?</span>
+                  <textarea
+                    value={responseText}
+                    onChange={(e) => setResponseText(e.target.value)}
+                    disabled={submitting}
+                    rows={5}
+                    placeholder="Draft what you'd say or write..."
+                    className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                  />
+                </label>
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={handleGenerate}
+                    disabled={generating}
+                    className="text-sm font-medium text-ink-soft hover:text-ink"
+                  >
+                    Try a different scenario
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={submitting || !responseText.trim()}
+                    className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                  >
+                    {submitting ? 'Getting feedback...' : 'Get Feedback'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <ResultCard prep={prep} onToggleSaved={handleToggleSaved} onReset={handleReset} resetLabel="New Scenario" />
+        )}
+        {error && <p className="mt-4 text-center text-sm text-warm-500">{error}</p>}
+      </div>
+
+      <SavedPrepList title="Saved scenarios" loading={historyLoading} preps={savedPreps} />
+    </div>
+  )
+}
+
+function RealPanel() {
+  const [category, setCategory] = useState<ConversationPrepCategory>('hostile_response')
+  const [situationText, setSituationText] = useState('')
+  const [responseText, setResponseText] = useState('')
+  const [prep, setPrep] = useState<ConversationPrep | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const { allPreps, setAllPreps, historyLoading } = useConversationPrepHistory('real')
+  const savedPreps = allPreps.filter((p) => p.saved)
+  const copy = CONVERSATION_PREP_COPY[category]
+
+  async function handleSubmit() {
+    if (!situationText.trim() || !responseText.trim() || submitting) return
+    setSubmitting(true)
+    setError(null)
+    try {
+      const result = await submitConversationPrep(category, situationText.trim(), responseText.trim(), 'real')
+      setPrep(result)
+      setAllPreps((prev) => [result, ...prev])
+    } catch {
+      setError('Could not get coaching feedback. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  function handleReset() {
+    setPrep(null)
+    setSituationText('')
+    setResponseText('')
+    setError(null)
+  }
+
+  async function handleToggleSaved(target: ConversationPrep) {
+    const nextSaved = !target.saved
+    setAllPreps((prev) => prev.map((p) => (p.id === target.id ? { ...p, saved: nextSaved } : p)))
+    if (prep?.id === target.id) setPrep((prevPrep) => (prevPrep ? { ...prevPrep, saved: nextSaved } : prevPrep))
+    try {
+      await setConversationPrepSaved(target.id, nextSaved)
+    } catch {
+      setAllPreps((prev) => prev.map((p) => (p.id === target.id ? { ...p, saved: !nextSaved } : p)))
+      if (prep?.id === target.id) {
+        setPrep((prevPrep) => (prevPrep ? { ...prevPrep, saved: !nextSaved } : prevPrep))
+      }
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="rounded-2xl border border-border bg-surface p-6">
+        {!prep ? (
+          <div className="flex flex-col gap-4">
+            <CategoryPills category={category} onChange={setCategory} disabled={submitting} />
 
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-ink">{copy.situationLabel}</span>
@@ -137,79 +380,17 @@ export default function DifficultConversations() {
             </button>
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
-            <div>
-              <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600">
-                {conversationPrepCategoryLabel(prep.category)}
-              </span>
-              <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">Situation</p>
-              <p className="mt-1 text-sm text-ink">{prep.situationText}</p>
-            </div>
-
-            <div className="rounded-xl border border-border bg-canvas p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Your planned response</p>
-              <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{prep.responseText}</p>
-            </div>
-
-            {prep.feedback && (
-              <div className="rounded-xl border border-border bg-warm-100/60 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-warm-500">Coaching</p>
-                <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{prep.feedback}</p>
-              </div>
-            )}
-
-            {prep.modelResponse && (
-              <div className="rounded-xl border border-border bg-brand-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
-                  A model response to compare against
-                </p>
-                <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{prep.modelResponse}</p>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <button
-                  type="button"
-                  onClick={() => handleToggleSaved(prep)}
-                  className={`flex items-center gap-1.5 text-sm font-medium ${
-                    prep.saved ? 'text-warm-500' : 'text-ink-soft hover:text-warm-500'
-                  }`}
-                >
-                  <StarIcon className="h-4 w-4" filled={prep.saved} />
-                  {prep.saved ? 'Saved' : 'Save for later'}
-                </button>
-                <ShareButton onShare={() => shareConversationPrep(prep.id)} />
-              </div>
-              <button
-                type="button"
-                onClick={handleNew}
-                className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
-              >
-                New Conversation
-              </button>
-            </div>
-          </div>
+          <ResultCard
+            prep={prep}
+            onToggleSaved={handleToggleSaved}
+            onReset={handleReset}
+            resetLabel="New Conversation"
+          />
         )}
         {error && <p className="mt-4 text-center text-sm text-warm-500">{error}</p>}
       </div>
 
-      <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Saved conversations</h2>
-        {historyLoading ? (
-          <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
-        ) : savedPreps.length === 0 ? (
-          <div className="mt-3 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
-            Conversations you save will show up here.
-          </div>
-        ) : (
-          <div className="mt-3 flex flex-col gap-3">
-            {savedPreps.map((p) => (
-              <SavedPrepCard key={p.id} prep={p} />
-            ))}
-          </div>
-        )}
-      </div>
+      <SavedPrepList title="Saved conversations" loading={historyLoading} preps={savedPreps} />
     </div>
   )
 }
@@ -247,6 +428,27 @@ function ShareButton({ onShare }: { onShare: () => Promise<{ shareToken: string 
       <ShareIcon className="h-4 w-4" />
       {copied ? 'Link copied' : url ? 'Copy link' : busy ? 'Sharing...' : 'Share'}
     </button>
+  )
+}
+
+function SavedPrepList({ title, loading, preps }: { title: string; loading: boolean; preps: ConversationPrep[] }) {
+  return (
+    <div>
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">{title}</h2>
+      {loading ? (
+        <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
+      ) : preps.length === 0 ? (
+        <div className="mt-3 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
+          Conversations you save will show up here.
+        </div>
+      ) : (
+        <div className="mt-3 flex flex-col gap-3">
+          {preps.map((p) => (
+            <SavedPrepCard key={p.id} prep={p} />
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
