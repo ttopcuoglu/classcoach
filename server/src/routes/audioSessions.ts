@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
-import { analyzeTranscript, type Segment } from '../lib/audioAnalysis.ts'
+import { analyzeTranscript, detectLessonContent, type Segment } from '../lib/audioAnalysis.ts'
 import { transcribeAudio } from '../lib/deepgram.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
@@ -224,6 +224,7 @@ audioSessionsRouter.post('/:id/tag-speaker', async (req, res) => {
   ).map((s) => ({ speakerLabel: s.speakerLabel, startSec: s.startSec, endSec: s.endSec, text: s.text }))
 
   const analysis = analyzeTranscript(segments)
+  const lessonContent = detectLessonContent(segments, analysis.phases)
 
   let strengths: string | null = null
   let growthAreas: string | null = null
@@ -275,6 +276,7 @@ Generic vs. specific feedback after student responses: ${analysis.metricsDetail.
       metricsDetail: analysis.metricsDetail,
       highlights: analysis.highlights,
       phases: analysis.phases,
+      lessonContent,
       strengths,
       growthAreas,
       nextStep,

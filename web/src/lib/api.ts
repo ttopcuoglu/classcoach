@@ -110,6 +110,14 @@ export type AudioSessionStatus =
 
 export type AudioHighlight = { label: string; timestampSec: number; excerpt: string }
 export type AudioPhase = { label: string; startSec: number; endSec: number }
+export type AudioQuote = { quote: string; timestampSec: number }
+// Keyword/phrase-matched flags and quotes only — never scored.
+export type AudioLessonContent = {
+  topicTerms: string[]
+  statedObjective: { found: boolean | null; quote: string | null; timestampSec: number | null }
+  connections: AudioQuote[]
+  vocabulary: AudioQuote[]
+}
 
 export type AudioSession = {
   id: string
@@ -130,6 +138,7 @@ export type AudioSession = {
   metricsDetail: Record<string, number | null> | null
   highlights: AudioHighlight[] | null
   phases: AudioPhase[] | null
+  lessonContent: AudioLessonContent | null
   strengths: string | null
   growthAreas: string | null
   nextStep: string | null

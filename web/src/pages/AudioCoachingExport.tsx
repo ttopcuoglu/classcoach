@@ -130,6 +130,42 @@ export default function AudioCoachingExport() {
               )
             })()}
 
+            {session.lessonContent && (
+              <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                  Lesson Content <span className="font-normal normal-case italic">(flags & quotes only — not scored)</span>
+                </p>
+                <div className="mt-2 flex flex-col gap-2 text-sm text-ink">
+                  <p>
+                    <span className="text-xs font-semibold text-ink-soft">Topic terms: </span>
+                    {session.lessonContent.topicTerms.length > 0
+                      ? session.lessonContent.topicTerms.join(', ')
+                      : 'None detected.'}
+                  </p>
+                  <p>
+                    <span className="text-xs font-semibold text-ink-soft">Stated objective: </span>
+                    {session.lessonContent.statedObjective.found === null
+                      ? 'Opening phase not captured.'
+                      : session.lessonContent.statedObjective.found
+                        ? `"${session.lessonContent.statedObjective.quote}"`
+                        : 'Not detected.'}
+                  </p>
+                  <p>
+                    <span className="text-xs font-semibold text-ink-soft">Connections: </span>
+                    {session.lessonContent.connections.length > 0
+                      ? session.lessonContent.connections.map((c) => `"${c.quote}"`).join('; ')
+                      : 'None detected.'}
+                  </p>
+                  <p>
+                    <span className="text-xs font-semibold text-ink-soft">Vocabulary: </span>
+                    {session.lessonContent.vocabulary.length > 0
+                      ? session.lessonContent.vocabulary.map((v) => `"${v.quote}"`).join('; ')
+                      : 'None detected.'}
+                  </p>
+                </div>
+              </section>
+            )}
+
             {session.highlights && session.highlights.length > 0 && (
               <section className="mt-6">
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Highlights</p>

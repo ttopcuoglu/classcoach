@@ -602,6 +602,7 @@ function ReportPanel({
   }
 
   const metrics = session.metricsDetail ?? {}
+  const lessonContent = session.lessonContent
   const recordedSec = session.durationSec ?? 0
   const coverage = getCoverage(session.durationSec, session.phases)
   const num = (key: string) => (typeof metrics[key] === 'number' ? (metrics[key] as number) : null)
@@ -804,6 +805,82 @@ function ReportPanel({
           reason={redirectionMetric.reason ?? 'Count only — tone isn\'t judged automatically.'}
         />
       </CategorySection>
+
+      <div>
+        <h2 className="flex items-baseline justify-between text-sm font-semibold uppercase tracking-wide text-ink-soft">
+          <span>Lesson Content</span>
+          <span className="text-xs font-normal normal-case italic text-ink-soft">Flags & quotes only — not scored</span>
+        </h2>
+        <div className="mt-3 flex flex-col gap-4 rounded-2xl border border-border bg-surface p-6">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Topic terms detected</p>
+            {lessonContent && lessonContent.topicTerms.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {lessonContent.topicTerms.map((term) => (
+                  <span
+                    key={term}
+                    className="rounded-full border border-border bg-canvas px-3 py-1 text-xs text-ink"
+                  >
+                    {term}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1 text-sm text-ink-soft">No recurring subject-specific terms detected.</p>
+            )}
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Stated objective</p>
+            {!lessonContent || lessonContent.statedObjective.found === null ? (
+              <p className="mt-1 text-sm text-ink-soft" title="Opening phase not captured.">
+                — Opening phase not captured
+              </p>
+            ) : lessonContent.statedObjective.found ? (
+              <p className="mt-1 text-sm text-ink">
+                Detected: "{lessonContent.statedObjective.quote}"{' '}
+                <span className="text-xs text-ink-soft">
+                  ({formatTime(lessonContent.statedObjective.timestampSec ?? 0)})
+                </span>
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-ink-soft">Not detected in the Opening phase.</p>
+            )}
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+              Real-world / prior-knowledge connections
+            </p>
+            {lessonContent && lessonContent.connections.length > 0 ? (
+              <div className="mt-2 flex flex-col gap-1.5">
+                {lessonContent.connections.map((c, i) => (
+                  <p key={i} className="text-sm text-ink">
+                    "{c.quote}" <span className="text-xs text-ink-soft">({formatTime(c.timestampSec)})</span>
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1 text-sm text-ink-soft">None detected.</p>
+            )}
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Defined vocabulary</p>
+            {lessonContent && lessonContent.vocabulary.length > 0 ? (
+              <div className="mt-2 flex flex-col gap-1.5">
+                {lessonContent.vocabulary.map((v, i) => (
+                  <p key={i} className="text-sm text-ink">
+                    "{v.quote}" <span className="text-xs text-ink-soft">({formatTime(v.timestampSec)})</span>
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1 text-sm text-ink-soft">None detected.</p>
+            )}
+          </div>
+        </div>
+      </div>
 
       {session.highlights && session.highlights.length > 0 && (
         <div>

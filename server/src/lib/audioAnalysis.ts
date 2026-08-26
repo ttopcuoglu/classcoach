@@ -82,6 +82,118 @@ export const CORRECTIVE_PHRASES = [
   'not exactly', 'close, but', "that's not it",
 ]
 
+// Lesson Content — keyword/phrase-matched flags and quotes only, never a
+// score. "Found" vs "not found" is still a confident result once a phase
+// has actually been captured; only a too-short/missing Opening phase makes
+// the stated-objective check itself unavailable (mirrors the same
+// phase-coverage judgment used for Session Phases elsewhere in this
+// report — see reportConfidence.ts on the frontend for why 30s is the
+// floor for "meaningfully captured").
+const MIN_PHASE_DURATION_SEC = 30
+const MAX_CONNECTION_QUOTES = 3
+const MAX_VOCABULARY_QUOTES = 5
+const MAX_TOPIC_TERMS = 6
+
+export type LessonContentResult = {
+  topicTerms: string[]
+  statedObjective: { found: boolean | null; quote: string | null; timestampSec: number | null }
+  connections: { quote: string; timestampSec: number }[]
+  vocabulary: { quote: string; timestampSec: number }[]
+}
+
+export const OBJECTIVE_PHRASES = [
+  'today we are going to', "today we're going to", 'our goal for today', 'our objective',
+  'learning target', 'by the end of class', 'by the end of today', 'you will be able to',
+  'we will be able to', 'the goal of this lesson', "today's objective",
+]
+
+export const CONNECTION_PHRASES = [
+  'in real life', 'remember when we', 'this is like', 'think about a time when',
+  'connects to', 'last week we', 'you might have seen', 'similar to when',
+  'reminds you of', 'have you ever',
+]
+
+export const VOCABULARY_PHRASES = [
+  'the word means', 'is defined as', 'vocabulary word', 'key term',
+  'in other words', 'that means', 'the definition of', 'means that',
+]
+
+const TOPIC_TERM_STOPWORDS = new Set([
+  'that', 'this', 'with', 'from', 'have', 'they', 'what', 'when', 'where', 'which',
+  'your', 'about', 'going', 'because', 'would', 'could', 'should', 'there', 'their',
+  'okay', 'right', 'just', 'like', 'want', 'know', 'think', 'good', 'time', 'today',
+  'were', 'been', 'does', 'each', 'some', 'into', 'only', 'over', 'then', 'them',
+  'these', 'those', 'very', 'will', 'yeah', 'gonna', 'kind', 'sure', 'here',
+])
+
+function extractTopicTerms(segments: Segment[]): string[] {
+  const counts = new Map<string, { count: number; display: string }>()
+  for (const segment of segments) {
+    const words = segment.text.match(/[A-Za-z][A-Za-z'-]{3,}/g) ?? []
+    for (const raw of words) {
+      const lower = raw.toLowerCase()
+      if (TOPIC_TERM_STOPWORDS.has(lower)) continue
+      const entry = counts.get(lower)
+      if (entry) entry.count++
+      else counts.set(lower, { count: 1, display: raw })
+    }
+  }
+  return Array.from(counts.values())
+    .filter((v) => v.count >= 2)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, MAX_TOPIC_TERMS)
+    .map((v) => v.display)
+}
+
+function detectStatedObjective(segments: Segment[], phases: Phase[]): LessonContentResult['statedObjective'] {
+  const opening = phases.find((p) => p.label === 'Opening')
+  if (!opening || opening.endSec - opening.startSec < MIN_PHASE_DURATION_SEC) {
+    return { found: null, quote: null, timestampSec: null }
+  }
+  const openingTeacherSegments = segments.filter(
+    (s) => s.speakerLabel === 'Teacher' && s.startSec >= opening.startSec && s.startSec < opening.endSec,
+  )
+  for (const segment of openingTeacherSegments) {
+    if (countPhraseMatches(segment.text, OBJECTIVE_PHRASES) > 0) {
+      return { found: true, quote: segment.text, timestampSec: segment.startSec }
+    }
+  }
+  return { found: false, quote: null, timestampSec: null }
+}
+
+function detectPhraseQuotes(
+  segments: Segment[],
+  phrases: string[],
+  max: number,
+  extraPattern?: RegExp,
+): { quote: string; timestampSec: number }[] {
+  const results: { quote: string; timestampSec: number }[] = []
+  for (const segment of segments) {
+    if (segment.speakerLabel !== 'Teacher') continue
+    if (countPhraseMatches(segment.text, phrases) > 0 || extraPattern?.test(segment.text)) {
+      results.push({ quote: segment.text, timestampSec: segment.startSec })
+      if (results.length >= max) break
+    }
+  }
+  return results
+}
+
+// "X means Y" / "X is called Y" are two of the most common ways a teacher
+// actually defines a term out loud — much more common than the fixed
+// phrases above, so these get a dedicated pattern rather than relying on
+// substring matching alone.
+const VOCABULARY_PATTERN = /\b[a-z]+ (?:means|is called)\b/i
+
+export function detectLessonContent(segments: Segment[], phases: Phase[]): LessonContentResult {
+  const ordered = [...segments].sort((a, b) => a.startSec - b.startSec)
+  return {
+    topicTerms: extractTopicTerms(ordered),
+    statedObjective: detectStatedObjective(ordered, phases),
+    connections: detectPhraseQuotes(ordered, CONNECTION_PHRASES, MAX_CONNECTION_QUOTES),
+    vocabulary: detectPhraseQuotes(ordered, VOCABULARY_PHRASES, MAX_VOCABULARY_QUOTES, VOCABULARY_PATTERN),
+  }
+}
+
 const NAME_MENTION_PATTERN = /\b[A-Z][a-z]+\b/g
 
 function countPhraseMatches(text: string, phrases: string[]): number {

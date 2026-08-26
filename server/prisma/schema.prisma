@@ -151,6 +151,10 @@ model AudioSession {
   highlights       Json? // [{ label, timestampSec, excerpt }]
   phases           Json? // [{ label, startSec, endSec }], coach-editable
 
+  // Keyword/phrase-matched flags and quotes only — never scored. See
+  // audioAnalysis.ts's LessonContentResult for the exact shape.
+  lessonContent    Json?
+
   strengths        String?
   growthAreas      String?
   nextStep         String?
