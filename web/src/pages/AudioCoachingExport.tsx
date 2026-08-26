@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { WarningIcon } from '../components/icons'
 import { getAudioSession, type AudioSessionWithSegments } from '../lib/api'
+import {
+  formatRatio,
+  getCoverage,
+  getCountMetric,
+  MIN_DURATION_FOR_CFU_DETECTION_SEC,
+  SHORT_SESSION_THRESHOLD_SEC,
+} from '../lib/reportConfidence'
 
 function formatTime(sec: number): string {
   const m = Math.floor(sec / 60)
@@ -55,17 +63,60 @@ export default function AudioCoachingExport() {
               {session.durationSec ? ` · ${formatTime(session.durationSec)}` : ''}
             </p>
 
-            <section className="mt-6 break-inside-avoid rounded-xl border border-border p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Snapshot</p>
-              <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                <Stat label="Teacher talk" value={session.teacherTalkPct != null ? `${session.teacherTalkPct}%` : '—'} />
-                <Stat label="Student talk" value={session.studentTalkPct != null ? `${session.studentTalkPct}%` : '—'} />
-                <Stat label="Questions" value={session.questionCount != null ? `${session.questionCount}` : '—'} />
-                <Stat label="Higher-order %" value={session.higherOrderPct != null ? `${session.higherOrderPct}%` : '—'} />
-                <Stat label="Avg. wait time" value={session.avgWaitTimeSec != null ? `${session.avgWaitTimeSec}s` : '—'} />
-                <Stat label="CFUs" value={session.cfuCount != null ? `${session.cfuCount}` : '—'} />
-              </div>
-            </section>
+            {(() => {
+              const metrics = session.metricsDetail ?? {}
+              const recordedSec = session.durationSec ?? 0
+              const coverage = getCoverage(session.durationSec, session.phases)
+              const higherOrderRatio =
+                session.questionCount != null
+                  ? formatRatio(
+                      typeof metrics.higherOrderQuestionCount === 'number' ? metrics.higherOrderQuestionCount : 0,
+                      session.questionCount,
+                    )
+                  : null
+              const questionsMetric = getCountMetric({ count: session.questionCount, recordedSec })
+              const cfuMetric = getCountMetric({
+                count: session.cfuCount,
+                recordedSec,
+                minDurationSec: MIN_DURATION_FOR_CFU_DETECTION_SEC,
+              })
+
+              return (
+                <>
+                  <p className="mt-4 break-inside-avoid text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                    Coverage: {formatTime(coverage.recordedSec)} recorded of {formatTime(coverage.totalSec)}
+                    {coverage.uncapturedPhases.length > 0 && (
+                      <> · Not meaningfully captured: {coverage.uncapturedPhases.join(', ')}</>
+                    )}
+                  </p>
+                  {coverage.isShort && (
+                    <div className="mt-2 flex items-start gap-3 break-inside-avoid rounded-xl border-2 border-warm-500 bg-warm-100 p-4">
+                      <WarningIcon className="mt-0.5 h-5 w-5 shrink-0 text-warm-500" />
+                      <p className="text-sm font-semibold text-warm-500">
+                        Session under {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes — treat metrics as
+                        indicative, not conclusive.
+                      </p>
+                    </div>
+                  )}
+
+                  <section className="mt-6 break-inside-avoid rounded-xl border border-border p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Snapshot</p>
+                    <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      <Stat label="Teacher talk" value={session.teacherTalkPct != null ? `${session.teacherTalkPct}%` : '—'} />
+                      <Stat label="Student talk" value={session.studentTalkPct != null ? `${session.studentTalkPct}%` : '—'} />
+                      <Stat label="Questions" value={questionsMetric.display} reason={questionsMetric.reason} />
+                      <Stat
+                        label="Higher-order"
+                        value={higherOrderRatio ? higherOrderRatio.display : '—'}
+                        reason={higherOrderRatio?.reason}
+                      />
+                      <Stat label="Avg. wait time" value={session.avgWaitTimeSec != null ? `${session.avgWaitTimeSec}s` : '—'} />
+                      <Stat label="CFUs" value={cfuMetric.display} reason={cfuMetric.reason} />
+                    </div>
+                  </section>
+                </>
+              )
+            })()}
 
             {session.highlights && session.highlights.length > 0 && (
               <section className="mt-6">
@@ -121,11 +172,15 @@ export default function AudioCoachingExport() {
   )
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, reason }: { label: string; value: string; reason?: string }) {
+  const unavailable = value === '—'
   return (
     <div>
       <p className="text-xs text-ink-soft">{label}</p>
-      <p className="text-sm font-semibold text-ink">{value}</p>
+      <p className={`text-sm font-semibold ${unavailable ? 'text-ink-soft' : 'text-ink'}`} title={reason}>
+        {value}
+      </p>
+      {unavailable && reason && <p className="text-xs text-ink-soft">{reason}</p>}
     </div>
   )
 }

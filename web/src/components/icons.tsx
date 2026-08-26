@@ -85,6 +85,19 @@ export function ChecklistIcon({ className }: IconProps) {
   )
 }
 
+export function WarningIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M10.29 3.86 1.82 18a1.5 1.5 0 0 0 1.3 2.25h17.76a1.5 1.5 0 0 0 1.3-2.25L13.71 3.86a1.5 1.5 0 0 0-2.42 0Z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4.5M12 17h.01" />
+    </svg>
+  )
+}
+
 export function StarIcon({ className, filled }: IconProps & { filled?: boolean }) {
   return (
     <svg

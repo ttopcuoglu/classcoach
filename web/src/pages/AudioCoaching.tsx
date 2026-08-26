@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { MicIcon } from '../components/icons'
+import { MicIcon, WarningIcon } from '../components/icons'
 import {
   createAudioSession,
   deleteAudioSession,
@@ -14,6 +14,13 @@ import {
   type AudioSessionWithSegments,
   type SpeakerSample,
 } from '../lib/api'
+import {
+  formatRatio,
+  getCoverage,
+  getCountMetric,
+  MIN_DURATION_FOR_CFU_DETECTION_SEC,
+  SHORT_SESSION_THRESHOLD_SEC,
+} from '../lib/reportConfidence'
 
 function formatTime(sec: number): string {
   const m = Math.floor(sec / 60)
@@ -593,6 +600,27 @@ function ReportPanel({
   }
 
   const metrics = session.metricsDetail ?? {}
+  const recordedSec = session.durationSec ?? 0
+  const coverage = getCoverage(session.durationSec, session.phases)
+
+  const higherOrderRatio =
+    session.questionCount != null
+      ? formatRatio(typeof metrics.higherOrderQuestionCount === 'number' ? metrics.higherOrderQuestionCount : 0, session.questionCount)
+      : null
+  const questionsMetric = getCountMetric({ count: session.questionCount, recordedSec })
+  const cfuMetric = getCountMetric({
+    count: session.cfuCount,
+    recordedSec,
+    minDurationSec: MIN_DURATION_FOR_CFU_DETECTION_SEC,
+  })
+  const studentSegmentsMetric = getCountMetric({
+    count: typeof metrics.studentVoiceSegments === 'number' ? metrics.studentVoiceSegments : null,
+    recordedSec,
+  })
+  const followUpMetric = getCountMetric({
+    count: typeof metrics.followUpQuestionCount === 'number' ? metrics.followUpQuestionCount : null,
+    recordedSec,
+  })
 
   return (
     <div className="flex flex-col gap-6">
@@ -602,6 +630,24 @@ function ReportPanel({
         </button>
         {locked && (
           <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-600">Locked</span>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+          Coverage: {formatTime(coverage.recordedSec)} recorded of {formatTime(coverage.totalSec)}
+          {coverage.uncapturedPhases.length > 0 && (
+            <> · Not meaningfully captured: {coverage.uncapturedPhases.join(', ')}</>
+          )}
+        </p>
+        {coverage.isShort && (
+          <div className="flex items-start gap-3 rounded-xl border-2 border-warm-500 bg-warm-100 p-4">
+            <WarningIcon className="mt-0.5 h-5 w-5 shrink-0 text-warm-500" />
+            <p className="text-sm font-semibold text-warm-500">
+              Session under {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes — treat metrics as indicative,
+              not conclusive.
+            </p>
+          </div>
         )}
       </div>
 
@@ -621,14 +667,29 @@ function ReportPanel({
           <Stat label="Student talk" value={session.studentTalkPct != null ? `${session.studentTalkPct}%` : '—'} />
           <Stat
             label="Questions"
-            value={session.questionCount != null ? `${session.questionCount}` : '—'}
-            sub={session.higherOrderPct != null ? `${session.higherOrderPct}% higher-order` : undefined}
+            value={questionsMetric.display}
+            muted={questionsMetric.state === 'unavailable'}
+            reason={questionsMetric.reason}
+            sub={higherOrderRatio ? `${higherOrderRatio.display} higher-order` : undefined}
           />
           <Stat label="Avg. wait time" value={session.avgWaitTimeSec != null ? `${session.avgWaitTimeSec}s` : '—'} />
-          <Stat label="Checks for understanding" value={session.cfuCount != null ? `${session.cfuCount}` : '—'} />
+          <Stat
+            label="Checks for understanding"
+            value={cfuMetric.display}
+            muted={cfuMetric.state === 'unavailable'}
+            reason={cfuMetric.reason}
+          />
           <Stat
             label="Student voice segments"
-            value={metrics.studentVoiceSegments != null ? `${metrics.studentVoiceSegments}` : '—'}
+            value={studentSegmentsMetric.display}
+            muted={studentSegmentsMetric.state === 'unavailable'}
+            reason={studentSegmentsMetric.reason}
+          />
+          <Stat
+            label="Follow-up questions"
+            value={followUpMetric.display}
+            muted={followUpMetric.state === 'unavailable'}
+            reason={followUpMetric.reason}
           />
         </div>
       </div>
@@ -768,12 +829,33 @@ function ReportPanel({
   )
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Stat({
+  label,
+  value,
+  sub,
+  muted,
+  reason,
+}: {
+  label: string
+  value: string
+  sub?: string
+  muted?: boolean
+  reason?: string
+}) {
   return (
     <div>
       <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-ink">{value}</p>
-      {sub && <p className="text-xs text-ink-soft">{sub}</p>}
+      <p
+        className={`mt-1 text-xl font-semibold ${muted ? 'text-ink-soft' : 'text-ink'}`}
+        title={reason}
+      >
+        {value}
+      </p>
+      {muted && reason ? (
+        <p className="text-xs text-ink-soft">{reason}</p>
+      ) : (
+        sub && <p className="text-xs text-ink-soft">{sub}</p>
+      )}
     </div>
   )
 }
