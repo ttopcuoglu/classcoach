@@ -136,7 +136,6 @@ function SetupForm({ onCreated }: { onCreated: (session: AudioSession) => void }
   const [period, setPeriod] = useState('')
   const [gradeLevel, setGradeLevel] = useState('')
   const [sessionDate, setSessionDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [consentConfirmed, setConsentConfirmed] = useState(false)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -151,7 +150,7 @@ function SetupForm({ onCreated }: { onCreated: (session: AudioSession) => void }
   }, [])
 
   async function handleStart() {
-    if (!consentConfirmed || creating) return
+    if (creating) return
     setCreating(true)
     setError(null)
     try {
@@ -221,20 +220,10 @@ function SetupForm({ onCreated }: { onCreated: (session: AudioSession) => void }
         </label>
       </div>
 
-      <label className="mt-4 flex items-start gap-2.5 text-sm text-ink">
-        <input
-          type="checkbox"
-          checked={consentConfirmed}
-          onChange={(e) => setConsentConfirmed(e.target.checked)}
-          className="mt-0.5"
-        />
-        <span>I confirm my school/district's consent policy for recording this class is satisfied.</span>
-      </label>
-
       <button
         type="button"
         onClick={handleStart}
-        disabled={!consentConfirmed || creating}
+        disabled={creating}
         className="mt-4 rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
       >
         {creating ? 'Starting...' : 'Continue to recording'}

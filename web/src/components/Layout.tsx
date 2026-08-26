@@ -32,7 +32,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
       <aside className="hidden w-64 shrink-0 border-r border-border bg-surface md:flex md:flex-col">
         <div className="px-6 py-6">
           <p className="text-lg font-semibold text-ink">ClassCoach</p>
-          <p className="text-xs text-ink-soft">Classroom management, sharpened</p>
+          <p className="text-xs text-ink-soft">Instructional coaching, sharpened</p>
         </div>
         <nav className="flex flex-1 flex-col gap-1 px-3">
           {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
