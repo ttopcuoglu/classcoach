@@ -5,6 +5,7 @@ import Layout from './components/Layout'
 import Home from './pages/Home'
 import TryItOut from './pages/TryItOut'
 import AskExpert from './pages/AskExpert'
+import ParentMessages from './pages/ParentMessages'
 import Profile from './pages/Profile'
 import Export from './pages/Export'
 import Shared from './pages/Shared'
@@ -95,6 +96,7 @@ export default function App() {
             <Route index element={<Home />} />
             <Route path="try-it-out" element={<TryItOut />} />
             <Route path="ask-an-expert" element={<AskExpert />} />
+            <Route path="parent-messages" element={<ParentMessages />} />
             <Route path="audio-coaching" element={<AudioCoaching />} />
             <Route path="lesson-planning" element={<LessonPlanning />} />
             <Route path="profile" element={<Profile />} />
