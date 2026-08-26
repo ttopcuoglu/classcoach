@@ -25,13 +25,14 @@ model User {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  attempts       ScenarioAttempt[]
-  debriefs       Debrief[]
-  parentMessages ParentMessage[]
-  qaExchanges    QAExchange[]
-  usageLogs      UsageLog[]
-  audioSessions  AudioSession[]
-  lessonPlans    LessonPlan[]
+  attempts          ScenarioAttempt[]
+  debriefs          Debrief[]
+  parentMessages    ParentMessage[]
+  qaExchanges       QAExchange[]
+  usageLogs         UsageLog[]
+  audioSessions     AudioSession[]
+  lessonPlans       LessonPlan[]
+  conversationPreps ConversationPrep[]
 }
 
 // One row per Claude-costing call, used to enforce a per-user daily limit
@@ -40,7 +41,7 @@ model UsageLog {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  action    String // "scenario_generate" | "attempt_feedback" | "debrief_feedback" | "parent_message" | "qa_ask" | "audio_session_notes" | "lesson_plan_feedback" | "lesson_plan_generate"
+  action    String // "scenario_generate" | "attempt_feedback" | "debrief_feedback" | "parent_message" | "qa_ask" | "audio_session_notes" | "lesson_plan_feedback" | "lesson_plan_generate" | "conversation_prep_feedback"
   createdAt DateTime @default(now())
 }
 
@@ -114,6 +115,24 @@ model ParentMessage {
   draftText       String
   saved           Boolean  @default(false)
   createdAt       DateTime @default(now())
+}
+
+// A real, upcoming conversation outside the classroom (parent, colleague,
+// or administrator) — not a hypothetical, unlike Scenario. category is one
+// of: hostile_response, phone_call, boundary_setting, formal_meeting.
+model ConversationPrep {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category      String
+  situationText String
+  responseText  String
+  feedback      String?
+  modelResponse String?
+  rating        Int? // same private growth-tracking rating as ScenarioAttempt/Debrief
+  saved         Boolean  @default(false)
+  shareToken    String?  @unique
+  createdAt     DateTime @default(now())
 }
 
 // mode is "feedback" (teacher submits their own plan in planText, gets

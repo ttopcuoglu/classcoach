@@ -1,18 +1,23 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { categoryLabel } from '../lib/categories'
+import { conversationPrepCategoryLabel } from '../lib/conversationPrepCategories'
 import {
   getSharedAttempt,
+  getSharedConversationPrep,
   getSharedDebrief,
   getSharedLessonPlan,
   type SharedAttempt,
+  type SharedConversationPrep,
   type SharedDebrief,
   type SharedLessonPlan,
 } from '../lib/api'
 
+type SharedContent = SharedAttempt | SharedDebrief | SharedLessonPlan | SharedConversationPrep
+
 export default function Shared() {
   const { type, token } = useParams<{ type: string; token: string }>()
-  const [content, setContent] = useState<SharedAttempt | SharedDebrief | SharedLessonPlan | null>(null)
+  const [content, setContent] = useState<SharedContent | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -23,7 +28,9 @@ export default function Shared() {
         ? getSharedDebrief(token)
         : type === 'lesson-plan'
           ? getSharedLessonPlan(token)
-          : getSharedAttempt(token)
+          : type === 'conversation-prep'
+            ? getSharedConversationPrep(token)
+            : getSharedAttempt(token)
     fetcher
       .then(setContent)
       .catch(() => setError('This link is invalid or has expired.'))
@@ -92,7 +99,7 @@ export default function Shared() {
               </>
             )}
           </div>
-        ) : (
+        ) : content.type === 'lesson-plan' ? (
           <div className="mt-6 rounded-2xl border border-border bg-surface p-6">
             <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600">
               {content.mode === 'generated' ? 'Sample lesson plan' : 'Lesson plan feedback'}
@@ -142,6 +149,32 @@ export default function Shared() {
               <>
                 <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-ink-soft">Homework</p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{content.homework}</p>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="mt-6 rounded-2xl border border-border bg-surface p-6">
+            <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600">
+              {conversationPrepCategoryLabel(content.category)}
+            </span>
+            <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-ink-soft">Situation</p>
+            <p className="mt-1 text-sm text-ink">{content.situationText}</p>
+
+            <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-ink-soft">Planned response</p>
+            <p className="mt-1 text-sm text-ink">{content.responseText}</p>
+
+            {content.feedback && (
+              <>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-warm-500">Coaching</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{content.feedback}</p>
+              </>
+            )}
+            {content.modelResponse && (
+              <>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-brand-600">
+                  Model response
+                </p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{content.modelResponse}</p>
               </>
             )}
           </div>

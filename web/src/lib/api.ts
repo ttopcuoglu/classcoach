@@ -142,6 +142,32 @@ export type SharedLessonPlan = {
   createdAt: string
 }
 
+// category is one of: hostile_response, phone_call, boundary_setting, formal_meeting
+export type ConversationPrepCategory = 'hostile_response' | 'phone_call' | 'boundary_setting' | 'formal_meeting'
+
+export type ConversationPrep = {
+  id: string
+  category: ConversationPrepCategory
+  situationText: string
+  responseText: string
+  feedback: string | null
+  modelResponse: string | null
+  rating: number | null
+  saved: boolean
+  shareToken: string | null
+  createdAt: string
+}
+
+export type SharedConversationPrep = {
+  type: 'conversation-prep'
+  category: ConversationPrepCategory
+  situationText: string
+  responseText: string
+  feedback: string | null
+  modelResponse: string | null
+  createdAt: string
+}
+
 // status is one of: setup, recording, paused, transcribing, tagging,
 // analyzed, locked
 export type AudioSessionStatus =
@@ -338,6 +364,34 @@ export function getSharedDebrief(token: string): Promise<SharedDebrief> {
 
 export function getSharedLessonPlan(token: string): Promise<SharedLessonPlan> {
   return request(`/api/share/lesson-plan/${token}`)
+}
+
+export function getSharedConversationPrep(token: string): Promise<SharedConversationPrep> {
+  return request(`/api/share/conversation-prep/${token}`)
+}
+
+export function getConversationPreps(params?: { saved?: boolean }): Promise<ConversationPrep[]> {
+  const query = params?.saved ? '?saved=true' : ''
+  return request(`/api/conversation-prep${query}`)
+}
+
+export function submitConversationPrep(
+  category: ConversationPrepCategory,
+  situationText: string,
+  responseText: string,
+): Promise<ConversationPrep> {
+  return request('/api/conversation-prep', {
+    method: 'POST',
+    body: JSON.stringify({ category, situationText, responseText }),
+  })
+}
+
+export function setConversationPrepSaved(id: string, saved: boolean): Promise<ConversationPrep> {
+  return request(`/api/conversation-prep/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) })
+}
+
+export function shareConversationPrep(id: string): Promise<{ shareToken: string }> {
+  return request(`/api/conversation-prep/${id}/share`, { method: 'POST' })
 }
 
 export type LessonPlanContext = {

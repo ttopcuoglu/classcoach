@@ -6,6 +6,7 @@ import Home from './pages/Home'
 import TryItOut from './pages/TryItOut'
 import AskExpert from './pages/AskExpert'
 import ParentMessages from './pages/ParentMessages'
+import DifficultConversations from './pages/DifficultConversations'
 import Profile from './pages/Profile'
 import Export from './pages/Export'
 import Shared from './pages/Shared'
@@ -97,6 +98,7 @@ export default function App() {
             <Route path="try-it-out" element={<TryItOut />} />
             <Route path="ask-an-expert" element={<AskExpert />} />
             <Route path="parent-messages" element={<ParentMessages />} />
+            <Route path="difficult-conversations" element={<DifficultConversations />} />
             <Route path="audio-coaching" element={<AudioCoaching />} />
             <Route path="lesson-planning" element={<LessonPlanning />} />
             <Route path="profile" element={<Profile />} />

@@ -66,3 +66,20 @@ shareRouter.get('/lesson-plan/:token', async (req, res) => {
     createdAt: lessonPlan.createdAt,
   })
 })
+
+shareRouter.get('/conversation-prep/:token', async (req, res) => {
+  const prep = await prisma.conversationPrep.findUnique({ where: { shareToken: req.params.token } })
+  if (!prep) {
+    res.status(404).json({ error: 'Shared conversation prep not found' })
+    return
+  }
+  res.json({
+    type: 'conversation-prep' as const,
+    category: prep.category,
+    situationText: prep.situationText,
+    responseText: prep.responseText,
+    feedback: prep.feedback,
+    modelResponse: prep.modelResponse,
+    createdAt: prep.createdAt,
+  })
+})

@@ -11,6 +11,7 @@ export type UsageAction =
   | 'audio_session_notes'
   | 'lesson_plan_feedback'
   | 'lesson_plan_generate'
+  | 'conversation_prep_feedback'
 
 // Counts today's Claude-costing calls for this user and logs this one if
 // they're still under the daily cap. One shared API key funds every
