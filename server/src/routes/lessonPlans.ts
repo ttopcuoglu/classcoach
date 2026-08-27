@@ -27,7 +27,23 @@ Specific, practical coaching on this lesson plan — what's working, what to adj
 A single integer 1-5 rating of your honest private assessment of how well this plan is built. This is never shown to the teacher — it's used only to track their growth over time — so rate honestly rather than generously. Output only the digit, nothing else.
 </rating>`
 
-const LESSON_PLAN_CHAT_SYSTEM_PROMPT = `You are a warm, practical instructional coach for K-12 teachers, continuing a conversation about a lesson plan you already gave feedback on. Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says: if they push back, ask a follow-up, or want to think through a change, engage with that directly rather than repeating your first assessment. Keep in mind whether the plan is a single lesson or a multi-day/weekly plan, as established earlier in the conversation. Stay grounded in what's already been discussed; never invent details about the plan that weren't given to you.`
+const LESSON_PLAN_CHAT_SYSTEM_PROMPT = `You are a warm, practical instructional coach for K-12 teachers, continuing a conversation about a lesson plan you already gave feedback on. Build on what the teacher says: if they push back, ask a follow-up, or want to think through a change, engage with that directly rather than repeating your first assessment. Keep in mind whether the plan is a single lesson or a multi-day/weekly plan, as established earlier in the conversation. Stay grounded in what's already been discussed; never invent details about the plan that weren't given to you.
+
+Write in plain text only — no markdown (no **bold**, no # headings).
+
+Respond with exactly this tag and nothing outside it:
+
+<message>
+Your reply, 2-4 sentences, conversational.
+</message>
+
+If — and only if — the teacher is asking for a concrete change to the plan itself (not just discussing or asking a question), also include a second tag right after </message>:
+
+<revised_plan>
+The full plan, reproduced in its entirety with the requested change incorporated. Not a diff or a summary of the change — the whole plan, ready to replace the original.
+</revised_plan>
+
+Omit <revised_plan> entirely when the teacher is just asking a question, reflecting, or hasn't asked for an edit.`
 
 const GENERATE_SYSTEM_PROMPT = `You write sample single-day lesson plans for K-12 teachers, modeled on a standard gradual-release template, to give a teacher ideas — this is inspiration, not a plan they're required to follow.
 
@@ -230,26 +246,52 @@ lessonPlansRouter.post('/:id/chat', async (req, res) => {
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 300,
+      // Large enough to reproduce the entire plan when a revision is
+      // warranted (not just a short chat reply) — thinking is disabled so
+      // the whole budget goes to visible output.
+      max_tokens: 4096,
       thinking: { type: 'disabled' },
       system: LESSON_PLAN_CHAT_SYSTEM_PROMPT,
       messages: toClaudeMessages(existing, trimmed),
     })
-    const reply = response.content
+    const text = response.content
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('\n')
-      .trim()
+    const reply = extractTag(text, 'message') ?? text.trim()
+    const revisedPlan = extractTag(text, 'revised_plan')
 
     const updated = await prisma.lessonPlan.update({
       where: { id: lessonPlan.id },
-      data: { conversation: appendTurn(existing, trimmed, reply) },
+      data: {
+        conversation: appendTurn(existing, trimmed, reply),
+        ...(revisedPlan ? { suggestedRevision: revisedPlan } : {}),
+      },
     })
     res.json(updated)
   } catch (error) {
     console.error('[lesson-plans] chat failed:', error)
     res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
   }
+})
+
+lessonPlansRouter.post('/:id/apply-revision', async (req, res) => {
+  const lessonPlan = await prisma.lessonPlan.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+  })
+  if (!lessonPlan) {
+    res.status(404).json({ error: 'Lesson plan not found' })
+    return
+  }
+  if (!lessonPlan.suggestedRevision) {
+    res.status(400).json({ error: 'No suggested revision to apply' })
+    return
+  }
+  const updated = await prisma.lessonPlan.update({
+    where: { id: lessonPlan.id },
+    data: { planText: lessonPlan.suggestedRevision, suggestedRevision: null },
+  })
+  res.json(updated)
 })
 
 lessonPlansRouter.post('/generate', async (req, res) => {

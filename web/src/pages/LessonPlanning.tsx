@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ShareIcon, StarIcon } from '../components/icons'
 import CoachingChat from '../components/CoachingChat'
 import {
+  applyLessonPlanRevision,
   generateLessonPlan,
   getLessonPlans,
   sendLessonPlanChat,
@@ -465,7 +466,6 @@ function GeneratePanel() {
 }
 
 function FeedbackPanel() {
-  const [context, setContext] = useState<ContextForm>(EMPTY_CONTEXT)
   const [planText, setPlanText] = useState('')
   const [plan, setPlan] = useState<LessonPlan | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -477,6 +477,9 @@ function FeedbackPanel() {
   const [chatDraft, setChatDraft] = useState('')
   const [chatSending, setChatSending] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
+
+  const [applyingRevision, setApplyingRevision] = useState(false)
+  const [revisionDismissed, setRevisionDismissed] = useState(false)
 
   useEffect(() => {
     getLessonPlans({ mode: 'feedback' })
@@ -494,7 +497,7 @@ function FeedbackPanel() {
     setSubmitting(true)
     setError(null)
     try {
-      const result = await submitLessonPlanFeedback(toApiContext(context), planText.trim())
+      const result = await submitLessonPlanFeedback({ objective: '' }, planText.trim())
       setPlan(result)
       setAllPlans((prev) => [result, ...prev])
       setChatDraft('')
@@ -516,11 +519,26 @@ function FeedbackPanel() {
       const updated = await sendLessonPlanChat(plan.id, trimmed)
       setPlan(updated)
       setAllPlans((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+      setRevisionDismissed(false)
     } catch (err) {
       setChatError((err as Error).message || 'Could not reach your coach. Please try again.')
       setChatDraft(trimmed)
     } finally {
       setChatSending(false)
+    }
+  }
+
+  async function handleApplyRevision() {
+    if (!plan || applyingRevision) return
+    setApplyingRevision(true)
+    try {
+      const updated = await applyLessonPlanRevision(plan.id)
+      setPlan(updated)
+      setAllPlans((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+    } catch {
+      setChatError('Could not apply the revision. Please try again.')
+    } finally {
+      setApplyingRevision(false)
     }
   }
 
@@ -530,6 +548,7 @@ function FeedbackPanel() {
     setError(null)
     setChatDraft('')
     setChatError(null)
+    setRevisionDismissed(false)
   }
 
   async function handleToggleSaved(target: LessonPlan) {
@@ -550,8 +569,6 @@ function FeedbackPanel() {
       <div className="rounded-2xl border border-border bg-surface p-6">
         {!plan ? (
           <div className="flex flex-col gap-4">
-            <ContextFields context={context} onChange={setContext} disabled={submitting} />
-
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-ink">Your lesson plan</span>
               <textarea
@@ -593,8 +610,32 @@ function FeedbackPanel() {
               draft={chatDraft}
               onDraftChange={setChatDraft}
               onSend={handleSendChat}
-              placeholder="Ask a follow-up about this feedback..."
+              placeholder="Ask a follow-up, or ask the coach to revise your plan..."
             />
+            {plan.suggestedRevision && !revisionDismissed && (
+              <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Suggested Revision</p>
+                <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{plan.suggestedRevision}</p>
+                <div className="mt-3 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleApplyRevision}
+                    disabled={applyingRevision}
+                    className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                  >
+                    {applyingRevision ? 'Applying...' : 'Use this version'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRevisionDismissed(true)}
+                    disabled={applyingRevision}
+                    className="text-sm font-medium text-ink-soft hover:text-ink"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <SaveButton plan={plan} onToggle={handleToggleSaved} />

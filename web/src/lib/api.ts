@@ -133,6 +133,7 @@ export type LessonPlan = {
   shareToken: string | null
   createdAt: string
   conversation: ChatMessage[]
+  suggestedRevision: string | null
 }
 
 export type SharedLessonPlan = {
@@ -495,6 +496,10 @@ export function submitLessonPlanFeedback(context: LessonPlanContext, planText: s
 
 export function sendLessonPlanChat(id: string, message: string): Promise<LessonPlan> {
   return request(`/api/lesson-plans/${id}/chat`, { method: 'POST', body: JSON.stringify({ message }) })
+}
+
+export function applyLessonPlanRevision(id: string): Promise<LessonPlan> {
+  return request(`/api/lesson-plans/${id}/apply-revision`, { method: 'POST' })
 }
 
 export function generateLessonPlan(context: LessonPlanContext): Promise<LessonPlan> {

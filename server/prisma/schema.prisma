@@ -199,6 +199,12 @@ model LessonPlan {
 
   // Same convention as ScenarioAttempt.conversation — "feedback" mode only.
   conversation      Json?
+
+  // The coach's latest proposed rewrite of planText, offered during the
+  // follow-up chat — "feedback" mode only. Shown separately, never
+  // auto-applied; null until the teacher accepts it (which copies this into
+  // planText and clears it) or a newer suggestion replaces it.
+  suggestedRevision String?
 }
 
 // A recorded class period, transcribed once (never stored as audio) and
