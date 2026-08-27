@@ -9,12 +9,9 @@ import {
   setLessonPlanSaved,
   shareLessonPlan,
   submitLessonPlanFeedback,
-  uploadLessonPlanFeedback,
   type LessonPlan,
   type LessonPlanContext,
 } from '../lib/api'
-
-const ACCEPTED_FILE_TYPES = '.pdf,.docx,.xlsx'
 
 type ContextForm = {
   objective: string
@@ -469,9 +466,7 @@ function GeneratePanel() {
 
 function FeedbackPanel() {
   const [context, setContext] = useState<ContextForm>(EMPTY_CONTEXT)
-  const [inputMode, setInputMode] = useState<'text' | 'file'>('text')
   const [planText, setPlanText] = useState('')
-  const [file, setFile] = useState<File | null>(null)
   const [plan, setPlan] = useState<LessonPlan | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -492,17 +487,14 @@ function FeedbackPanel() {
 
   const savedPlans = allPlans.filter((p) => p.saved)
 
-  const canSubmit = inputMode === 'text' ? planText.trim().length > 0 : !!file
+  const canSubmit = planText.trim().length > 0
 
   async function handleSubmit() {
     if (!canSubmit || submitting) return
     setSubmitting(true)
     setError(null)
     try {
-      const result =
-        inputMode === 'file' && file
-          ? await uploadLessonPlanFeedback(toApiContext(context), file)
-          : await submitLessonPlanFeedback(toApiContext(context), planText.trim())
+      const result = await submitLessonPlanFeedback(toApiContext(context), planText.trim())
       setPlan(result)
       setAllPlans((prev) => [result, ...prev])
       setChatDraft('')
@@ -535,7 +527,6 @@ function FeedbackPanel() {
   function handleNew() {
     setPlan(null)
     setPlanText('')
-    setFile(null)
     setError(null)
     setChatDraft('')
     setChatError(null)
@@ -561,61 +552,17 @@ function FeedbackPanel() {
           <div className="flex flex-col gap-4">
             <ContextFields context={context} onChange={setContext} disabled={submitting} />
 
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setInputMode('text')}
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-ink">Your lesson plan</span>
+              <textarea
+                value={planText}
+                onChange={(e) => setPlanText(e.target.value)}
                 disabled={submitting}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
-                  inputMode === 'text'
-                    ? 'border-brand-500 bg-brand-50 text-brand-600'
-                    : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
-                }`}
-              >
-                Paste text
-              </button>
-              <button
-                type="button"
-                onClick={() => setInputMode('file')}
-                disabled={submitting}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
-                  inputMode === 'file'
-                    ? 'border-brand-500 bg-brand-50 text-brand-600'
-                    : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
-                }`}
-              >
-                Upload a file
-              </button>
-            </div>
-
-            {inputMode === 'text' ? (
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium text-ink">Your lesson plan</span>
-                <textarea
-                  value={planText}
-                  onChange={(e) => setPlanText(e.target.value)}
-                  disabled={submitting}
-                  rows={8}
-                  placeholder="Paste or write your plan — Do Now, main activities, closure, etc."
-                  className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
-                />
-              </label>
-            ) : (
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium text-ink">Your lesson plan file</span>
-                <input
-                  type="file"
-                  accept={ACCEPTED_FILE_TYPES}
-                  disabled={submitting}
-                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                  className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink file:mr-3 file:rounded-md file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-brand-600 disabled:opacity-60"
-                />
-                <span className="text-xs text-ink-soft">
-                  PDF, Word (.docx), or Excel (.xlsx). Older .doc/.xls files aren't supported — save as one of
-                  these first.
-                </span>
-              </label>
-            )}
+                rows={8}
+                placeholder="Paste or write your plan — Do Now, main activities, closure, etc."
+                className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
+              />
+            </label>
 
             <button
               type="button"

@@ -1,18 +1,12 @@
 import { Router } from 'express'
-import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
-import { detectFileKind, extractDocxText, extractSpreadsheetText } from '../lib/documentExtract.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const lessonPlansRouter = Router()
-
-// A lesson plan document is a page or two — memory storage only, generous
-// ceiling as a safety cap rather than a target.
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } })
 
 const FEEDBACK_SYSTEM_PROMPT = `You are a warm, practical instructional coach for K-12 teachers, reviewing a lesson plan the teacher wrote themselves. Coach, don't grade.
 
@@ -108,21 +102,12 @@ function readContext(body: Record<string, unknown>) {
 
 type FeedbackContext = ReturnType<typeof readContext>
 
-// Shared by both /feedback (pasted text) and /feedback-upload (uploaded
-// file) — only how `content` is built differs between the two callers.
-// `seedContextText` is a plain-text description of the submission used to
-// seed the follow-up chat's first turn — for PDFs this can't include the
-// actual document bytes (chat history is replayed as plain text on later
-// turns), so it's the header + a note of what was uploaded; the assistant's
-// own feedback (which does reflect the real PDF content from this first
-// call) carries the substance forward from there.
 async function runFeedback(
   res: import('express').Response,
   userId: string,
   context: FeedbackContext,
   planTextForDisplay: string,
-  content: string | Array<Record<string, unknown>>,
-  seedContextText: string,
+  content: string,
 ) {
   const response = await anthropic.messages.create({
     model: CLAUDE_MODEL,
@@ -134,9 +119,7 @@ async function runFeedback(
     // expects a short, structured tagged response, not open-ended reasoning.
     thinking: { type: 'disabled' },
     system: FEEDBACK_SYSTEM_PROMPT,
-    // The upload path passes a document+text content block array; the SDK's
-    // strict union type doesn't need to know that shape ahead of time here.
-    messages: [{ role: 'user', content: content as never }],
+    messages: [{ role: 'user', content }],
   })
   const text = response.content
     .filter((block) => block.type === 'text')
@@ -158,7 +141,7 @@ async function runFeedback(
   const parsedRating = ratingText ? Number.parseInt(ratingText, 10) : NaN
   const rating = parsedRating >= 1 && parsedRating <= 5 ? parsedRating : null
 
-  const conversation = appendTurn([], seedContextText, feedback)
+  const conversation = appendTurn([], content, feedback)
 
   const lessonPlan = await prisma.lessonPlan.create({
     data: {
@@ -209,64 +192,9 @@ lessonPlansRouter.post('/feedback', async (req, res) => {
   try {
     const header = buildPromptHeader(context)
     const content = `${header}\n\nLesson plan:\n${planText.trim()}`
-    await runFeedback(res, req.user!.userId, context, planText.trim(), content, content)
+    await runFeedback(res, req.user!.userId, context, planText.trim(), content)
   } catch (error) {
     console.error('[lesson-plans] feedback generation failed:', error)
-    res.status(502).json({ error: 'Claude request failed' })
-  }
-})
-
-lessonPlansRouter.post('/feedback-upload', upload.single('file'), async (req, res) => {
-  const context = readContext(req.body ?? {})
-
-  if (!req.file) {
-    res.status(400).json({ error: 'A file is required' })
-    return
-  }
-
-  const kind = detectFileKind(req.file.originalname, req.file.mimetype)
-  if (kind === 'legacy') {
-    res
-      .status(400)
-      .json({ error: 'Legacy .doc/.xls files are not supported — please save as .docx, .xlsx, or PDF and try again.' })
-    return
-  }
-  if (kind === 'unsupported') {
-    res.status(400).json({ error: 'Unsupported file type — upload a PDF, .docx, or .xlsx file.' })
-    return
-  }
-
-  const allowed = await checkAndLogUsage(req.user!.userId, 'lesson_plan_feedback')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
-    return
-  }
-
-  try {
-    const header = buildPromptHeader(context)
-
-    if (kind === 'pdf') {
-      const content = [
-        {
-          type: 'document',
-          source: { type: 'base64', media_type: 'application/pdf', data: req.file.buffer.toString('base64') },
-        },
-        { type: 'text', text: `${header}\n\nThe lesson plan is the attached PDF.` },
-      ]
-      const seedContextText = `${header}\n\nThe lesson plan was uploaded as a PDF: ${req.file.originalname}`
-      await runFeedback(res, req.user!.userId, context, `Uploaded file: ${req.file.originalname}`, content, seedContextText)
-      return
-    }
-
-    const extracted = kind === 'xlsx' ? await extractSpreadsheetText(req.file.buffer) : await extractDocxText(req.file.buffer)
-    if (!extracted) {
-      res.status(422).json({ error: 'Could not read any text from that file. Please try a different file.' })
-      return
-    }
-    const content = `${header}\n\nLesson plan:\n${extracted}`
-    await runFeedback(res, req.user!.userId, context, extracted, content, content)
-  } catch (error) {
-    console.error('[lesson-plans] upload feedback failed:', error)
     res.status(502).json({ error: 'Claude request failed' })
   }
 })
