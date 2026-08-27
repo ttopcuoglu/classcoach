@@ -138,6 +138,10 @@ async function runFeedback(
     .join('\n')
 
   const feedback = extractTag(text, 'feedback') ?? text.trim()
+  if (!feedback) {
+    res.status(502).json({ error: 'Could not generate coaching feedback. Please try again.' })
+    return
+  }
   const ratingText = extractTag(text, 'rating')
   const parsedRating = ratingText ? Number.parseInt(ratingText, 10) : NaN
   const rating = parsedRating >= 1 && parsedRating <= 5 ? parsedRating : null

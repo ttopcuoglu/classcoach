@@ -1,9 +1,24 @@
 import ExcelJS from 'exceljs'
 import mammoth from 'mammoth'
 
-// Caps how much extracted text goes into a single Claude prompt — a lesson
-// plan document is a page or two, not a novel.
-const MAX_EXTRACTED_CHARS = 6000
+// Caps how much extracted text goes into a single Claude prompt. Raised from
+// an earlier, prose-oriented 6000 — a dense weekly/multi-day spreadsheet plan
+// runs much longer per "page" than a single-day prose plan, and a hard slice
+// at 6000 was cutting off mid-week (and mid-word) for exactly the weekly
+// plans this feature is meant to support.
+const MAX_EXTRACTED_CHARS = 20000
+
+// Slices at the last full line within the cap instead of an arbitrary byte
+// offset, so a truncated plan still reads as "cut off after day N" rather
+// than dying mid-sentence — much easier for Claude (and a teacher glancing
+// at "Your plan") to make sense of.
+function truncateAtLineBoundary(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text
+  const slice = text.slice(0, maxChars)
+  const lastNewline = slice.lastIndexOf('\n')
+  const boundary = lastNewline > maxChars * 0.5 ? lastNewline : maxChars
+  return `${slice.slice(0, boundary).trim()}\n\n[Plan truncated — too long to include in full.]`
+}
 
 export type FileKind = 'pdf' | 'xlsx' | 'docx' | 'legacy' | 'unsupported'
 
@@ -33,10 +48,10 @@ export async function extractSpreadsheetText(buffer: Buffer): Promise<string> {
       if (line) lines.push(line)
     })
   })
-  return lines.join('\n').trim().slice(0, MAX_EXTRACTED_CHARS)
+  return truncateAtLineBoundary(lines.join('\n').trim(), MAX_EXTRACTED_CHARS)
 }
 
 export async function extractDocxText(buffer: Buffer): Promise<string> {
   const result = await mammoth.extractRawText({ buffer })
-  return result.value.trim().slice(0, MAX_EXTRACTED_CHARS)
+  return truncateAtLineBoundary(result.value.trim(), MAX_EXTRACTED_CHARS)
 }
