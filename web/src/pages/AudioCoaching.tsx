@@ -57,7 +57,7 @@ export default function AudioCoaching() {
   const [speakers, setSpeakers] = useState<SpeakerSample[]>([])
   const [error, setError] = useState<string | null>(null)
   const [focusMetric, setFocusMetric] = useState<FocusMetric | null>(null)
-  const [starting, setStarting] = useState(false)
+  const [teacherName, setTeacherName] = useState<string | null>(null)
 
   function refreshHistory() {
     getAudioSessions()
@@ -69,7 +69,10 @@ export default function AudioCoaching() {
   useEffect(() => {
     refreshHistory()
     getProfile()
-      .then((p) => setFocusMetric(p.focusMetric))
+      .then((p) => {
+        setFocusMetric(p.focusMetric)
+        setTeacherName(p.name)
+      })
       .catch(() => {})
   }, [])
 
@@ -98,23 +101,6 @@ export default function AudioCoaching() {
     }
   }
 
-  async function handleStartRecording() {
-    if (starting) return
-    setStarting(true)
-    setError(null)
-    try {
-      const session = await createAudioSession({
-        sessionDate: new Date().toISOString(),
-        consentConfirmed: true,
-      })
-      setActive({ ...session, segments: [] })
-    } catch {
-      setError('Could not start a new recording. Please try again.')
-    } finally {
-      setStarting(false)
-    }
-  }
-
   async function handleDeleteSession(id: string) {
     const confirmed = window.confirm(
       "Permanently delete this recording's transcript and report? This cannot be undone.",
@@ -128,12 +114,18 @@ export default function AudioCoaching() {
     }
   }
 
-  if (active) {
+  // Setup/recording/paused stay on this same page and this same mounted
+  // RecordingPanel instance — switching to SessionFlow's own tree for these
+  // phases would unmount RecordingPanel mid-capture and silently orphan the
+  // live MediaRecorder/stream refs. Only genuinely later phases (which no
+  // longer touch the mic) hand off to SessionFlow.
+  const isRecordingPhase = active === null || active.status === 'setup' || active.status === 'recording' || active.status === 'paused'
+
+  if (active && !isRecordingPhase) {
     return (
       <SessionFlow
         session={active}
         speakers={speakers}
-        onSpeakers={setSpeakers}
         onUpdate={setActive}
         onExit={handleExit}
         sessions={sessions}
@@ -145,49 +137,49 @@ export default function AudioCoaching() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Audio Coaching</h1>
-        <p className="text-ink-soft">
-          Record a class period, get a transcript, and see a coaching report. Audio is never saved — only
-          the text.
-        </p>
-      </div>
+      {!active && (
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold text-ink md:text-3xl">Audio Coaching</h1>
+          <p className="text-ink-soft">
+            Record a class period, get a transcript, and see a coaching report. Audio is never saved — only
+            the text.
+          </p>
+        </div>
+      )}
 
       {error && <p className="text-sm text-warm-500">{error}</p>}
 
-      <div className="rounded-2xl border border-border bg-surface p-6 text-center">
-        <button
-          type="button"
-          onClick={handleStartRecording}
-          disabled={starting}
-          className="inline-flex items-center gap-2 rounded-full bg-warm-500 px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          <MicIcon className="h-4 w-4" />
-          {starting ? 'Starting...' : 'New Recording'}
-        </button>
-      </div>
+      <RecordingPanel
+        session={active}
+        teacherName={teacherName}
+        onUpdate={setActive}
+        onSpeakers={setSpeakers}
+        onExit={handleExit}
+      />
 
-      <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Past sessions</h2>
-        {historyLoading ? (
-          <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
-        ) : sessions.length === 0 ? (
-          <div className="mt-3 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
-            Sessions you record will show up here.
-          </div>
-        ) : (
-          <div className="mt-3 flex flex-col gap-3">
-            {sessions.map((s) => (
-              <SessionCard
-                key={s.id}
-                session={s}
-                onOpen={() => handleOpenSession(s.id)}
-                onDelete={() => handleDeleteSession(s.id)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      {!active && (
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Past sessions</h2>
+          {historyLoading ? (
+            <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
+          ) : sessions.length === 0 ? (
+            <div className="mt-3 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
+              Sessions you record will show up here.
+            </div>
+          ) : (
+            <div className="mt-3 flex flex-col gap-3">
+              {sessions.map((s) => (
+                <SessionCard
+                  key={s.id}
+                  session={s}
+                  onOpen={() => handleOpenSession(s.id)}
+                  onDelete={() => handleDeleteSession(s.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -195,7 +187,6 @@ export default function AudioCoaching() {
 function SessionFlow({
   session,
   speakers,
-  onSpeakers,
   onUpdate,
   onExit,
   sessions,
@@ -204,18 +195,12 @@ function SessionFlow({
 }: {
   session: AudioSessionWithSegments
   speakers: SpeakerSample[]
-  onSpeakers: (s: SpeakerSample[]) => void
   onUpdate: (s: AudioSessionWithSegments) => void
   onExit: () => void
   sessions: AudioSession[]
   focusMetric: FocusMetric | null
   onFocusMetricChange: (metric: FocusMetric | null) => void
 }) {
-  if (session.status === 'setup' || session.status === 'recording' || session.status === 'paused') {
-    return (
-      <RecordingPanel session={session} onUpdate={onUpdate} onSpeakers={onSpeakers} onExit={onExit} />
-    )
-  }
   if (session.status === 'transcribing') {
     return (
       <div className="rounded-2xl border border-border bg-surface p-8 text-center">
@@ -240,11 +225,13 @@ function SessionFlow({
 
 function RecordingPanel({
   session,
+  teacherName = null,
   onUpdate,
   onSpeakers,
   onExit,
 }: {
-  session: AudioSessionWithSegments
+  session: AudioSessionWithSegments | null
+  teacherName?: string | null
   onUpdate: (s: AudioSessionWithSegments) => void
   onSpeakers: (s: SpeakerSample[]) => void
   onExit: () => void
@@ -276,6 +263,14 @@ function RecordingPanel({
   async function handleRecord() {
     setError(null)
     try {
+      if (!session) {
+        const created = await createAudioSession({
+          teacherName: teacherName || undefined,
+          sessionDate: new Date().toISOString(),
+          consentConfirmed: true,
+        })
+        onUpdate({ ...created, segments: [] })
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
       const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
@@ -315,7 +310,7 @@ function RecordingPanel({
 
   async function handleStop() {
     const recorder = recorderRef.current
-    if (!recorder) return
+    if (!recorder || !session) return
     if (intervalRef.current) window.clearInterval(intervalRef.current)
     if (runStartRef.current !== null) {
       accumulatedSecRef.current += (Date.now() - runStartRef.current) / 1000
@@ -351,22 +346,21 @@ function RecordingPanel({
   return (
     <div className="flex flex-col gap-6">
       <div className="rounded-2xl border border-border bg-surface p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold text-ink">
-              {session.classSubject || 'New Recording'} {session.period ? `· ${session.period}` : ''}
-            </p>
-            <p className="text-xs text-ink-soft">
-              {session.teacherName ? `${session.teacherName} · ` : ''}
-              {formatSessionDateTime(session.sessionDate)}
-            </p>
+        {session && (
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-ink">
+                {session.classSubject || teacherName || 'Recording'} {session.period ? `· ${session.period}` : ''}
+              </p>
+              <p className="text-xs text-ink-soft">{formatSessionDateTime(session.sessionDate)}</p>
+            </div>
+            {phase === 'idle' && (
+              <button type="button" onClick={onExit} className="text-sm font-medium text-ink-soft hover:text-ink">
+                Cancel
+              </button>
+            )}
           </div>
-          {phase === 'idle' && (
-            <button type="button" onClick={onExit} className="text-sm font-medium text-ink-soft hover:text-ink">
-              Cancel
-            </button>
-          )}
-        </div>
+        )}
 
         <div className="mt-8 flex flex-col items-center gap-4">
           <div className="flex items-center gap-2.5">
@@ -377,7 +371,7 @@ function RecordingPanel({
               </span>
             )}
             {phase === 'paused' && <span className="h-2.5 w-2.5 rounded-full bg-ink-soft" />}
-            <span className="font-mono text-3xl font-semibold text-ink">{timeLabel}</span>
+            <span className="font-mono text-4xl font-semibold text-ink">{timeLabel}</span>
           </div>
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
             {phase === 'idle' && 'Ready to record'}
@@ -386,14 +380,14 @@ function RecordingPanel({
             {phase === 'uploading' && 'Transcribing your session...'}
           </p>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             {phase === 'idle' && (
               <button
                 type="button"
                 onClick={handleRecord}
-                className="flex items-center gap-2 rounded-full bg-warm-500 px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                className="flex items-center gap-3 rounded-full bg-warm-500 px-10 py-6 text-lg font-semibold text-white transition-opacity hover:opacity-90"
               >
-                <MicIcon className="h-4 w-4" />
+                <MicIcon className="h-6 w-6" />
                 Record
               </button>
             )}
@@ -402,14 +396,14 @@ function RecordingPanel({
                 <button
                   type="button"
                   onClick={handlePause}
-                  className="rounded-full border border-border px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+                  className="rounded-full border border-border px-8 py-5 text-base font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
                 >
                   Pause
                 </button>
                 <button
                   type="button"
                   onClick={handleStop}
-                  className="rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                  className="rounded-full bg-ink px-8 py-5 text-base font-semibold text-white transition-opacity hover:opacity-90"
                 >
                   Stop
                 </button>
@@ -420,14 +414,14 @@ function RecordingPanel({
                 <button
                   type="button"
                   onClick={handleResume}
-                  className="rounded-full bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+                  className="rounded-full bg-brand-500 px-8 py-5 text-base font-semibold text-white transition-colors hover:bg-brand-600"
                 >
                   Resume
                 </button>
                 <button
                   type="button"
                   onClick={handleStop}
-                  className="rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                  className="rounded-full bg-ink px-8 py-5 text-base font-semibold text-white transition-opacity hover:opacity-90"
                 >
                   Stop
                 </button>
