@@ -139,13 +139,12 @@ async function runFeedback(
 
   const feedback = extractTag(text, 'feedback') ?? text.trim()
   if (!feedback) {
-    console.error(
-      '[lesson-plans] empty feedback from Claude — stop_reason:',
-      response.stop_reason,
-      'block types:',
-      response.content.map((block) => block.type),
-    )
-    res.status(502).json({ error: 'Could not generate coaching feedback. Please try again.' })
+    const debugInfo = `stop_reason=${response.stop_reason}, blocks=${JSON.stringify(response.content.map((b) => b.type))}, rawLen=${text.length}, raw=${JSON.stringify(text.slice(0, 400))}`
+    console.error('[lesson-plans] empty feedback from Claude —', debugInfo)
+    // TEMPORARY: surfacing debug info directly in the error response while
+    // tracking down a live repro that isn't reproducible locally. Revert to
+    // a plain user-facing message once root-caused.
+    res.status(502).json({ error: `Could not generate coaching feedback. Please try again. [debug: ${debugInfo}]` })
     return
   }
   const ratingText = extractTag(text, 'rating')
