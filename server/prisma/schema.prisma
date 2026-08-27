@@ -220,6 +220,10 @@ model AudioSession {
   // audioAnalysis.ts's LessonContentResult for the exact shape.
   lessonContent    Json?
 
+  // { subject, notes: [{ id, label, text, timestampSec, excerpt }] } — null
+  // until the teacher explicitly generates it (Lesson Content tab).
+  contentNotes     Json?
+
   strengths        String?
   growthAreas      String?
   nextStep         String?

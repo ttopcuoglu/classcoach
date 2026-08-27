@@ -4,6 +4,7 @@ import { ArrowUpIcon, ChatBubbleIcon, MicIcon, WarningIcon } from '../components
 import {
   createAudioSession,
   deleteAudioSession,
+  generateContentNotes,
   getAudioSession,
   getAudioSessions,
   getProfile,
@@ -13,6 +14,7 @@ import {
   transcribeAudioSession,
   updateAudioSession,
   updateProfile,
+  type AudioContentNotes,
   type AudioHighlight,
   type AudioLessonContent,
   type AudioQuestionLogEntry,
@@ -765,6 +767,8 @@ function ReportPanel({
   const [reflectDraft, setReflectDraft] = useState('')
   const [summarizing, setSummarizing] = useState(false)
   const [summarizeError, setSummarizeError] = useState<string | null>(null)
+  const [contentNotesSending, setContentNotesSending] = useState(false)
+  const [contentNotesError, setContentNotesError] = useState<string | null>(null)
 
   async function handleSaveNotes() {
     setSaving(true)
@@ -845,6 +849,19 @@ function ReportPanel({
       setSummarizeError('Could not summarize your conversation. Please try again.')
     } finally {
       setSummarizing(false)
+    }
+  }
+
+  async function handleGenerateContentNotes() {
+    setContentNotesSending(true)
+    setContentNotesError(null)
+    try {
+      const updated = await generateContentNotes(session.id)
+      onUpdate({ ...session, ...updated })
+    } catch (err) {
+      setContentNotesError((err as Error).message || 'Could not generate content notes. Please try again.')
+    } finally {
+      setContentNotesSending(false)
     }
   }
 
@@ -1003,7 +1020,16 @@ function ReportPanel({
         />
       )}
 
-      {tab === 'lesson' && <LessonContentTab lessonContent={lessonContent} />}
+      {tab === 'lesson' && (
+        <LessonContentTab
+          lessonContent={lessonContent}
+          contentNotes={session.contentNotes}
+          isShort={coverage.isShort}
+          sending={contentNotesSending}
+          error={contentNotesError}
+          onGenerate={handleGenerateContentNotes}
+        />
+      )}
 
       {tab === 'climate' && (
         <ClimateRoutinesTab
@@ -1654,7 +1680,32 @@ function ReflectTab({
   )
 }
 
-function LessonContentTab({ lessonContent }: { lessonContent: AudioLessonContent | null }) {
+const CONTENT_NOTE_LABEL_STYLES: Record<string, string> = {
+  Clarity: 'bg-brand-50 text-brand-600',
+  Vocabulary: 'bg-brand-50 text-brand-600',
+  'Engagement with content': 'bg-brand-50 text-brand-600',
+  'Worth double-checking': 'bg-warm-100 text-warm-500',
+}
+
+function LessonContentTab({
+  lessonContent,
+  contentNotes,
+  isShort,
+  sending,
+  error,
+  onGenerate,
+}: {
+  lessonContent: AudioLessonContent | null
+  contentNotes: AudioContentNotes | null
+  isShort: boolean
+  sending: boolean
+  error: string | null
+  onGenerate: () => void
+}) {
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  const subject = lessonContent?.subject ?? null
+  const visibleNotes = contentNotes?.notes.filter((n) => !dismissed.has(n.id)) ?? []
+
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs font-normal italic text-ink-soft">Flags & quotes only — not scored</p>
@@ -1723,6 +1774,66 @@ function LessonContentTab({ lessonContent }: { lessonContent: AudioLessonContent
             <p className="mt-1 text-sm text-ink-soft">None detected.</p>
           )}
         </div>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Content Specialist Notes</h2>
+        {subject == null ? (
+          <p className="text-sm text-ink-soft">
+            Not enough subject-specific content detected to generate notes this session.
+          </p>
+        ) : !contentNotes ? (
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={sending}
+            className="self-start rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+          >
+            {sending ? 'Generating...' : 'Generate content specialist notes'}
+          </button>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-ink-soft">
+              These notes are generated from a short audio excerpt and may miss context. They're meant as a
+              starting point for your own reflection, not a factual review — please use your own subject
+              expertise as the final word.
+            </p>
+            {isShort && (
+              <p className="text-xs font-semibold text-warm-500">
+                This session is under {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes — content feedback
+                from a short sample is especially limited.
+              </p>
+            )}
+            {visibleNotes.length === 0 ? (
+              <p className="text-sm text-ink-soft">No notes to show.</p>
+            ) : (
+              visibleNotes.map((note) => (
+                <div key={note.id} className="rounded-xl border border-border bg-surface p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${CONTENT_NOTE_LABEL_STYLES[note.label] ?? 'bg-canvas text-ink-soft'}`}
+                    >
+                      {note.label}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setDismissed((prev) => new Set(prev).add(note.id))}
+                      aria-label="Dismiss note"
+                      className="shrink-0 text-ink-soft hover:text-ink"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <p className="mt-2 text-sm text-ink">{note.text}</p>
+                  <p className="mt-2 text-xs text-ink-soft">
+                    "{note.excerpt}" ({formatTime(note.timestampSec)})
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+        {error && <p className="text-sm text-warm-500">{error}</p>}
       </div>
     </div>
   )

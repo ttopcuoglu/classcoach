@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
-import { analyzeTranscript, detectLessonContent, type Segment } from '../lib/audioAnalysis.ts'
+import { analyzeTranscript, buildContentExhibits, detectLessonContent, type Segment } from '../lib/audioAnalysis.ts'
 import { transcribeAudio } from '../lib/deepgram.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
@@ -33,6 +33,60 @@ One concrete, small next step the teacher landed on or that fits what they said.
 
 const REFLECT_TURN_CAP = 8
 const REFLECT_START_MESSAGE = 'Start our reflection conversation.'
+
+const CONTENT_NOTE_LABELS = new Set(['Clarity', 'Vocabulary', 'Engagement with content', 'Worth double-checking'])
+const MIN_CONTENT_EXHIBITS = 3
+const NOT_ENOUGH_CONTENT_ERROR = 'Not enough subject-specific content detected to generate notes this session.'
+
+type ContentNote = { id: string; label: string; text: string; timestampSec: number; excerpt: string }
+
+function buildContentNotesSystemPrompt(subject: string, exhibits: { text: string; timestampSec: number }[]): string {
+  const subjectLabel = subject.replace('_', ' ')
+  return `You are a supportive ${subjectLabel} content-area specialist reviewing a brief excerpt from a classroom. Your tone is warm, collegial, and constructive — like a helpful colleague, never a critic. Assume good intent and strong subject knowledge on the teacher's part.
+
+You are working from a short audio transcript excerpt only. You have not seen the full lesson, materials, board work, or planning documents, and audio transcription may contain errors. Do not state or imply factual corrections with confidence — frame anything content-related as a question, a suggestion to double-check, or an observation, never as an assertion that something is wrong.
+
+Focus primarily on things you can reasonably assess from spoken language alone: clarity of explanation, whether key vocabulary was defined, whether examples helped build understanding, whether the content connects to what students likely already know. Avoid commenting on strict factual accuracy unless a claim is unambiguous and verifiably incorrect independent of context — and even then, phrase it as a gentle check, not a correction.
+
+Never invent or assume standards, curriculum, or grade-level expectations not evident in the transcript.
+
+Below are numbered excerpts from the transcript, each an exact quote. Write 2-4 short notes, each grounded in exactly one excerpt below — reference it only by its number, never quote or restate the excerpt text yourself.
+
+${exhibits.map((e, i) => `[${i + 1}] ${e.text}`).join('\n')}
+
+Write in plain text only — no markdown.
+
+Respond with exactly this block, repeated 2 to 4 times, and nothing else:
+<note>
+<label>one of: Clarity, Vocabulary, Engagement with content, Worth double-checking</label>
+<exhibit>the excerpt number this note is grounded in</exhibit>
+<text>1-2 sentences of warm, constructive feedback</text>
+</note>
+
+Reserve "Worth double-checking" strictly for a concrete, plainly-stated factual claim — never for opinions, interpretations, or open-ended discussion — and always phrase it as a question, e.g. "Worth double-checking: ... — was that the intended framing?" Use it rarely, and only include it at all if something genuinely fits.`
+}
+
+function parseContentNotes(text: string, exhibits: { text: string; timestampSec: number }[]): ContentNote[] {
+  const blocks = text.match(/<note>[\s\S]*?<\/note>/g) ?? []
+  const notes: ContentNote[] = []
+  for (const block of blocks) {
+    const label = extractTag(block, 'label')
+    const exhibitStr = extractTag(block, 'exhibit')
+    const noteText = extractTag(block, 'text')
+    const exhibitIndex = exhibitStr ? Number.parseInt(exhibitStr, 10) - 1 : NaN
+    const exhibit = exhibits[exhibitIndex]
+    if (!label || !CONTENT_NOTE_LABELS.has(label) || !noteText || !exhibit) continue
+    notes.push({
+      id: `${Date.now()}-${notes.length}`,
+      label,
+      text: noteText,
+      timestampSec: exhibit.timestampSec,
+      excerpt: exhibit.text,
+    })
+    if (notes.length >= 4) break
+  }
+  return notes
+}
 
 type ReflectMessage = { role: 'user' | 'assistant'; text: string; createdAt: string }
 
@@ -402,6 +456,75 @@ audioSessionsRouter.post('/:id/reflect-summary', async (req, res) => {
   } catch (error) {
     console.error('[audio-sessions] reflect summary failed:', error)
     res.status(502).json({ error: 'Could not summarize your conversation. Please try again.' })
+  }
+})
+
+audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
+  const session = await prisma.audioSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+    include: { segments: true },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  if (session.status === 'locked') {
+    res.status(403).json({ error: 'This report is locked and can no longer be edited.' })
+    return
+  }
+
+  const lessonContent = session.lessonContent as unknown as { subject: string | null } | null
+  const subject = lessonContent?.subject ?? null
+  if (!subject) {
+    res.status(400).json({ error: NOT_ENOUGH_CONTENT_ERROR })
+    return
+  }
+
+  const segments: Segment[] = session.segments.map((s) => ({
+    speakerLabel: s.speakerLabel,
+    startSec: s.startSec,
+    endSec: s.endSec,
+    text: s.text,
+  }))
+  const exhibits = buildContentExhibits(segments)
+  if (exhibits.length < MIN_CONTENT_EXHIBITS) {
+    res.status(400).json({ error: NOT_ENOUGH_CONTENT_ERROR })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'content_notes')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 600,
+      system: buildContentNotesSystemPrompt(subject, exhibits),
+      messages: [{ role: 'user', content: 'Write the notes now.' }],
+    })
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+
+    const notes = parseContentNotes(text, exhibits)
+    if (notes.length === 0) {
+      res.status(502).json({ error: 'Could not generate content notes. Please try again.' })
+      return
+    }
+
+    const updated = await prisma.audioSession.update({
+      where: { id: session.id },
+      data: { contentNotes: { subject, notes } },
+      include: { segments: { orderBy: { startSec: 'asc' } } },
+    })
+    res.json(updated)
+  } catch (error) {
+    console.error('[audio-sessions] content notes failed:', error)
+    res.status(502).json({ error: 'Could not generate content notes. Please try again.' })
   }
 })
 

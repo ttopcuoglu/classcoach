@@ -207,7 +207,17 @@ export type AudioLessonContent = {
   statedObjective: { found: boolean | null; quote: string | null; timestampSec: number | null }
   connections: AudioQuote[]
   vocabulary: AudioQuote[]
+  subject: string | null
 }
+
+export type AudioContentNote = {
+  id: string
+  label: 'Clarity' | 'Vocabulary' | 'Engagement with content' | 'Worth double-checking'
+  text: string
+  timestampSec: number
+  excerpt: string
+}
+export type AudioContentNotes = { subject: string; notes: AudioContentNote[] }
 
 export type AudioSession = {
   id: string
@@ -231,6 +241,7 @@ export type AudioSession = {
   questionLog: AudioQuestionLogEntry[] | null
   reflectConversation: AudioReflectMessage[] | null
   lessonContent: AudioLessonContent | null
+  contentNotes: AudioContentNotes | null
   strengths: string | null
   growthAreas: string | null
   nextStep: string | null
@@ -583,4 +594,8 @@ export function summarizeReflectConversation(
   id: string,
 ): Promise<{ strengths: string | null; growthAreas: string | null; nextStep: string | null }> {
   return request(`/api/audio-sessions/${id}/reflect-summary`, { method: 'POST' })
+}
+
+export function generateContentNotes(id: string): Promise<AudioSession> {
+  return request(`/api/audio-sessions/${id}/content-notes`, { method: 'POST' })
 }

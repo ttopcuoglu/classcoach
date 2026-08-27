@@ -14,6 +14,7 @@ export type UsageAction =
   | 'conversation_prep_feedback'
   | 'conversation_prep_generate'
   | 'reflect_chat'
+  | 'content_notes'
 
 // Counts today's Claude-costing calls for this user and logs this one if
 // they're still under the daily cap. One shared API key funds every

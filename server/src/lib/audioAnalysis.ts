@@ -117,6 +117,7 @@ export type LessonContentResult = {
   statedObjective: { found: boolean | null; quote: string | null; timestampSec: number | null }
   connections: { quote: string; timestampSec: number }[]
   vocabulary: { quote: string; timestampSec: number }[]
+  subject: string | null
 }
 
 export const OBJECTIVE_PHRASES = [
@@ -202,6 +203,69 @@ function detectPhraseQuotes(
 // substring matching alone.
 const VOCABULARY_PATTERN = /\b[a-z]+ (?:means|is called)\b/i
 
+// Subject detection for Content Specialist Notes — keyword-frequency only,
+// never a confident guess. "World language" is deliberately not included:
+// a class conducted in the target language wouldn't produce meaningful
+// English keyword hits, making it undetectable (not just unreliable) by
+// this method.
+const SUBJECT_KEYWORDS: Record<string, string[]> = {
+  math: [
+    'equation', 'fraction', 'multiply', 'divide', 'algebra', 'geometry', 'variable',
+    'numerator', 'denominator', 'decimal', 'percent',
+  ],
+  ela: [
+    'character', 'theme', 'plot', 'author', 'paragraph', 'metaphor', 'narrator',
+    'protagonist', 'stanza', 'main idea',
+  ],
+  science: [
+    'hypothesis', 'experiment', 'cell', 'molecule', 'ecosystem', 'organism',
+    'reaction', 'photosynthesis', 'energy', 'force',
+  ],
+  social_studies: [
+    'government', 'economy', 'constitution', 'democracy', 'revolution',
+    'civilization', 'amendment', 'geography',
+  ],
+  arts: [
+    'rhythm', 'melody', 'composition', 'canvas', 'palette', 'choreography',
+    'brushstroke', 'instrument',
+  ],
+}
+
+function detectSubject(segments: Segment[]): string | null {
+  const counts: Record<string, number> = {}
+  for (const segment of segments) {
+    for (const [subject, keywords] of Object.entries(SUBJECT_KEYWORDS)) {
+      counts[subject] = (counts[subject] ?? 0) + countPhraseMatches(segment.text, keywords)
+    }
+  }
+  const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1])
+  const [topSubject, topCount] = ranked[0] ?? [null, 0]
+  const runnerUpCount = ranked[1]?.[1] ?? 0
+  if (topSubject && topCount >= 3 && topCount >= runnerUpCount * 2) return topSubject
+  return null
+}
+
+// The grounding material handed to a Claude call for Content Specialist
+// Notes — teacher segments only, long enough to carry actual content (not
+// "okay" or "yes"), excluding pure classroom-management language. Claude is
+// only ever allowed to reference one of these by number, never write or
+// echo quote text itself, so a hallucinated excerpt is structurally
+// impossible.
+export function buildContentExhibits(segments: Segment[]): { text: string; timestampSec: number }[] {
+  const ordered = [...segments].sort((a, b) => a.startSec - b.startSec)
+  const exhibits: { text: string; timestampSec: number }[] = []
+  for (const segment of ordered) {
+    if (segment.speakerLabel !== 'Teacher') continue
+    const wordCount = segment.text.trim().split(/\s+/).filter(Boolean).length
+    if (wordCount < 6) continue
+    if (countPhraseMatches(segment.text, REDIRECTION_PHRASES) > 0) continue
+    if (countPhraseMatches(segment.text, TRANSITION_PHRASES) > 0) continue
+    exhibits.push({ text: segment.text, timestampSec: segment.startSec })
+    if (exhibits.length >= 40) break
+  }
+  return exhibits
+}
+
 export function detectLessonContent(segments: Segment[], phases: Phase[]): LessonContentResult {
   const ordered = [...segments].sort((a, b) => a.startSec - b.startSec)
   return {
@@ -209,6 +273,7 @@ export function detectLessonContent(segments: Segment[], phases: Phase[]): Lesso
     statedObjective: detectStatedObjective(ordered, phases),
     connections: detectPhraseQuotes(ordered, CONNECTION_PHRASES, MAX_CONNECTION_QUOTES),
     vocabulary: detectPhraseQuotes(ordered, VOCABULARY_PHRASES, MAX_VOCABULARY_QUOTES, VOCABULARY_PATTERN),
+    subject: detectSubject(ordered),
   }
 }
 
