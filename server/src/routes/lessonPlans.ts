@@ -127,6 +127,12 @@ async function runFeedback(
   const response = await anthropic.messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 1024,
+    // This model defaults to adaptive extended thinking when the param is
+    // omitted, and thinking tokens are drawn from the same max_tokens
+    // budget — on a long, complex plan it spent the whole budget thinking
+    // and returned zero actual output. Disabled here since this call
+    // expects a short, structured tagged response, not open-ended reasoning.
+    thinking: { type: 'disabled' },
     system: FEEDBACK_SYSTEM_PROMPT,
     // The upload path passes a document+text content block array; the SDK's
     // strict union type doesn't need to know that shape ahead of time here.
@@ -139,12 +145,13 @@ async function runFeedback(
 
   const feedback = extractTag(text, 'feedback') ?? text.trim()
   if (!feedback) {
-    const debugInfo = `stop_reason=${response.stop_reason}, blocks=${JSON.stringify(response.content.map((b) => b.type))}, rawLen=${text.length}, raw=${JSON.stringify(text.slice(0, 400))}`
-    console.error('[lesson-plans] empty feedback from Claude —', debugInfo)
-    // TEMPORARY: surfacing debug info directly in the error response while
-    // tracking down a live repro that isn't reproducible locally. Revert to
-    // a plain user-facing message once root-caused.
-    res.status(502).json({ error: `Could not generate coaching feedback. Please try again. [debug: ${debugInfo}]` })
+    console.error(
+      '[lesson-plans] empty feedback from Claude — stop_reason:',
+      response.stop_reason,
+      'block types:',
+      response.content.map((b) => b.type),
+    )
+    res.status(502).json({ error: 'Could not generate coaching feedback. Please try again.' })
     return
   }
   const ratingText = extractTag(text, 'rating')
@@ -296,6 +303,7 @@ lessonPlansRouter.post('/:id/chat', async (req, res) => {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 300,
+      thinking: { type: 'disabled' },
       system: LESSON_PLAN_CHAT_SYSTEM_PROMPT,
       messages: toClaudeMessages(existing, trimmed),
     })
@@ -345,6 +353,7 @@ lessonPlansRouter.post('/generate', async (req, res) => {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 1024,
+      thinking: { type: 'disabled' },
       system: GENERATE_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: promptContext }],
     })
