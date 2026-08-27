@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
+import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { isValidConversationPrepCategory } from '../lib/conversationPrepCategories.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
@@ -75,6 +76,13 @@ A model version of what they could say instead, grounded in their specific situa
 <rating>
 A single integer 1-5 rating of your honest private assessment of how well-prepared this response is. This is never shown to the teacher — it's used only to track their growth over time — so rate honestly rather than generously. Output only the digit, nothing else.
 </rating>`
+}
+
+function buildChatSystemPrompt(category: string): string {
+  const guidance = CATEGORY_GUIDANCE[category] ?? ''
+  return `You are a warm, practical communication coach for K-12 teachers, continuing a conversation about a real conversation they're preparing for. ${guidance}
+
+Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says: if they push back, ask a follow-up, or want to try different wording, engage with that directly rather than repeating your first assessment. Stay grounded in their specific situation; never invent details.`
 }
 
 conversationPrepRouter.get('/', async (req, res) => {
@@ -180,6 +188,9 @@ conversationPrepRouter.post('/', async (req, res) => {
     const parsedRating = ratingText ? Number.parseInt(ratingText, 10) : NaN
     const rating = parsedRating >= 1 && parsedRating <= 5 ? parsedRating : null
 
+    const seedReply = [feedback, modelResponse ? `Model response: ${modelResponse}` : null].filter(Boolean).join('\n\n')
+    const conversation = appendTurn([], context, seedReply)
+
     const prep = await prisma.conversationPrep.create({
       data: {
         userId: req.user!.userId,
@@ -191,12 +202,65 @@ conversationPrepRouter.post('/', async (req, res) => {
         feedback,
         modelResponse,
         rating,
+        conversation,
       },
     })
     res.status(201).json(prep)
   } catch (error) {
     console.error('[conversation-prep] feedback generation failed:', error)
     res.status(502).json({ error: 'Claude request failed' })
+  }
+})
+
+conversationPrepRouter.post('/:id/chat', async (req, res) => {
+  const { message } = req.body ?? {}
+  if (typeof message !== 'string' || !message.trim()) {
+    res.status(400).json({ error: 'message is required' })
+    return
+  }
+
+  const prep = await prisma.conversationPrep.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+  })
+  if (!prep) {
+    res.status(404).json({ error: 'Conversation prep not found' })
+    return
+  }
+
+  const existing = (prep.conversation as unknown as ChatMessage[] | null) ?? []
+  if (countUserTurns(existing) >= CHAT_TURN_CAP) {
+    res.status(409).json({ error: "You've reached today's practice limit for this conversation." })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'conversation_prep_chat')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  const trimmed = message.trim()
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 300,
+      system: buildChatSystemPrompt(prep.category),
+      messages: toClaudeMessages(existing, trimmed),
+    })
+    const reply = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+      .trim()
+
+    const updated = await prisma.conversationPrep.update({
+      where: { id: prep.id },
+      data: { conversation: appendTurn(existing, trimmed, reply) },
+    })
+    res.json(updated)
+  } catch (error) {
+    console.error('[conversation-prep] chat failed:', error)
+    res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
   }
 })
 

@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
+import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { prisma } from '../lib/prisma.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
@@ -22,6 +23,14 @@ Rules:
 - Never include real, identifiable people's full names — use "your student" or a first-name placeholder like "[Student's name]".
 - Match the requested tone exactly.
 - Output ONLY the message text. No subject line, no "Dear ___" placeholder instructions, no preamble or explanation.`
+
+const PARENT_MESSAGE_CHAT_SYSTEM_PROMPT = `You help grades 6-12 teachers revise a draft message to a student's parent or guardian, based on what the teacher asks for (e.g. "make it warmer," "shorter," "less formal"). This is a live revision, not a discussion — your job each turn is to produce the updated message, not to comment on it.
+
+Rules:
+- Output ONLY the revised message text. No subject line, no preamble, no explanation of what you changed.
+- Keep it a ready-to-send message, factual and specific, never accusatory toward the student or the parent.
+- Never include real, identifiable people's full names — use "your student" or a first-name placeholder like "[Student's name]".
+- Apply the teacher's requested change to the most recent version of the message, keeping everything else about it intact unless asked to change it too.`
 
 function isValidTone(value: unknown): value is (typeof TONES)[number] {
   return typeof value === 'string' && (TONES as readonly string[]).includes(value)
@@ -54,16 +63,12 @@ parentMessageRouter.post('/', async (req, res) => {
   }
 
   try {
+    const context = `Incident: ${incidentSummary}\n\nDesired tone: ${TONE_INSTRUCTIONS[tone]}`
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 512,
       system: PARENT_MESSAGE_SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: `Incident: ${incidentSummary}\n\nDesired tone: ${TONE_INSTRUCTIONS[tone]}`,
-        },
-      ],
+      messages: [{ role: 'user', content: context }],
     })
 
     const draftText = response.content
@@ -72,13 +77,67 @@ parentMessageRouter.post('/', async (req, res) => {
       .join('\n')
       .trim()
 
+    const conversation = appendTurn([], context, draftText)
+
     const message = await prisma.parentMessage.create({
-      data: { userId: req.user!.userId, incidentSummary, tone, draftText },
+      data: { userId: req.user!.userId, incidentSummary, tone, draftText, conversation },
     })
     res.status(201).json(message)
   } catch (error) {
     console.error('[parentMessage] draft generation failed:', error)
     res.status(502).json({ error: 'Claude request failed' })
+  }
+})
+
+parentMessageRouter.post('/:id/chat', async (req, res) => {
+  const { message: userMessage } = req.body ?? {}
+  if (typeof userMessage !== 'string' || !userMessage.trim()) {
+    res.status(400).json({ error: 'message is required' })
+    return
+  }
+
+  const parentMessage = await prisma.parentMessage.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+  })
+  if (!parentMessage) {
+    res.status(404).json({ error: 'Parent message not found' })
+    return
+  }
+
+  const existing = (parentMessage.conversation as unknown as ChatMessage[] | null) ?? []
+  if (countUserTurns(existing) >= CHAT_TURN_CAP) {
+    res.status(409).json({ error: "You've reached today's practice limit for this conversation." })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'parent_message_chat')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  const trimmed = userMessage.trim()
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 512,
+      system: PARENT_MESSAGE_CHAT_SYSTEM_PROMPT,
+      messages: toClaudeMessages(existing, trimmed),
+    })
+    const reply = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+      .trim()
+
+    const updated = await prisma.parentMessage.update({
+      where: { id: parentMessage.id },
+      data: { conversation: appendTurn(existing, trimmed, reply), draftText: reply },
+    })
+    res.json(updated)
+  } catch (error) {
+    console.error('[parentMessage] chat failed:', error)
+    res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
   }
 })
 

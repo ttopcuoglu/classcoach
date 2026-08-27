@@ -1,3 +1,8 @@
+// A follow-up coaching chat thread, appended below a one-shot result.
+// Seeded with the original submission + first reply, grown by follow-up
+// turns. Same shape as Audio Coaching's AudioReflectMessage.
+export type ChatMessage = { role: 'user' | 'assistant'; text: string; createdAt: string }
+
 export type QAExchange = {
   id: string
   question: string
@@ -31,6 +36,7 @@ export type ScenarioAttempt = {
   saved: boolean
   createdAt: string
   scenario: Scenario
+  conversation: ChatMessage[]
 }
 
 export type FocusMetric = 'talkRatio' | 'higherOrderPct' | 'avgWaitTime' | 'cfuCount'
@@ -69,6 +75,7 @@ export type Debrief = {
   saved: boolean
   shareToken: string | null
   createdAt: string
+  conversation: ChatMessage[]
 }
 
 export type ParentMessageTone = 'warm' | 'firm' | 'informational' | 'requesting_meeting'
@@ -80,6 +87,7 @@ export type ParentMessage = {
   draftText: string
   saved: boolean
   createdAt: string
+  conversation: ChatMessage[]
 }
 
 export type SharedAttempt = {
@@ -165,6 +173,7 @@ export type ConversationPrep = {
   saved: boolean
   shareToken: string | null
   createdAt: string
+  conversation: ChatMessage[]
 }
 
 export type SharedConversationPrep = {
@@ -327,6 +336,10 @@ export function submitAttempt(scenarioId: string, responseText: string): Promise
   return request('/api/attempts', { method: 'POST', body: JSON.stringify({ scenarioId, responseText }) })
 }
 
+export function sendAttemptChat(id: string, message: string): Promise<ScenarioAttempt> {
+  return request(`/api/attempts/${id}/chat`, { method: 'POST', body: JSON.stringify({ message }) })
+}
+
 export function setAttemptSaved(id: string, saved: boolean): Promise<ScenarioAttempt> {
   return request(`/api/attempts/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) })
 }
@@ -363,6 +376,10 @@ export function submitDebrief(incidentText: string, category?: string): Promise<
   return request('/api/debriefs', { method: 'POST', body: JSON.stringify({ incidentText, category }) })
 }
 
+export function sendDebriefChat(id: string, message: string): Promise<Debrief> {
+  return request(`/api/debriefs/${id}/chat`, { method: 'POST', body: JSON.stringify({ message }) })
+}
+
 export function setDebriefSaved(id: string, saved: boolean): Promise<Debrief> {
   return request(`/api/debriefs/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) })
 }
@@ -381,6 +398,10 @@ export function draftParentMessage(
   tone: ParentMessageTone,
 ): Promise<ParentMessage> {
   return request('/api/parent-messages', { method: 'POST', body: JSON.stringify({ incidentSummary, tone }) })
+}
+
+export function sendParentMessageChat(id: string, message: string): Promise<ParentMessage> {
+  return request(`/api/parent-messages/${id}/chat`, { method: 'POST', body: JSON.stringify({ message }) })
 }
 
 export function setParentMessageSaved(id: string, saved: boolean): Promise<ParentMessage> {
@@ -419,6 +440,10 @@ export function submitConversationPrep(
     method: 'POST',
     body: JSON.stringify({ category, situationText, responseText, source, gradeBand }),
   })
+}
+
+export function sendConversationPrepChat(id: string, message: string): Promise<ConversationPrep> {
+  return request(`/api/conversation-prep/${id}/chat`, { method: 'POST', body: JSON.stringify({ message }) })
 }
 
 export function generateConversationScenario(

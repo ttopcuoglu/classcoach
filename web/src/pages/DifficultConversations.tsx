@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import CoachingChat from '../components/CoachingChat'
 import { ShareIcon, StarIcon } from '../components/icons'
 import {
   generateConversationScenario,
   getConversationPreps,
+  sendConversationPrepChat,
   setConversationPrepSaved,
   shareConversationPrep,
   submitConversationPrep,
@@ -110,11 +112,26 @@ function GradeBandPills({
   )
 }
 
-function ResultCard({ prep, onToggleSaved, onReset, resetLabel }: {
+function ResultCard({
+  prep,
+  onToggleSaved,
+  onReset,
+  resetLabel,
+  chatSending,
+  chatError,
+  chatDraft,
+  onChatDraftChange,
+  onSendChat,
+}: {
   prep: ConversationPrep
   onToggleSaved: (target: ConversationPrep) => void
   onReset: () => void
   resetLabel: string
+  chatSending: boolean
+  chatError: string | null
+  chatDraft: string
+  onChatDraftChange: (v: string) => void
+  onSendChat: () => void
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -146,6 +163,16 @@ function ResultCard({ prep, onToggleSaved, onReset, resetLabel }: {
           <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{prep.modelResponse}</p>
         </div>
       )}
+
+      <CoachingChat
+        messages={prep.conversation.slice(2)}
+        sending={chatSending}
+        error={chatError}
+        draft={chatDraft}
+        onDraftChange={onChatDraftChange}
+        onSend={onSendChat}
+        placeholder="Ask a follow-up about this feedback..."
+      />
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -196,6 +223,9 @@ function PracticePanel() {
   const [generating, setGenerating] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [chatDraft, setChatDraft] = useState('')
+  const [chatSending, setChatSending] = useState(false)
+  const [chatError, setChatError] = useState<string | null>(null)
 
   const { allPreps, setAllPreps, historyLoading } = useConversationPrepHistory('practice')
   const savedPreps = allPreps.filter((p) => p.saved)
@@ -235,6 +265,8 @@ function PracticePanel() {
     setSituationText(null)
     setResponseText('')
     setError(null)
+    setChatDraft('')
+    setChatError(null)
   }
 
   async function handleToggleSaved(target: ConversationPrep) {
@@ -248,6 +280,23 @@ function PracticePanel() {
       if (prep?.id === target.id) {
         setPrep((prevPrep) => (prevPrep ? { ...prevPrep, saved: !nextSaved } : prevPrep))
       }
+    }
+  }
+
+  async function handleSendChat() {
+    const trimmed = chatDraft.trim()
+    if (!prep || !trimmed || chatSending) return
+    setChatSending(true)
+    setChatError(null)
+    setChatDraft('')
+    try {
+      const updated = await sendConversationPrepChat(prep.id, trimmed)
+      setPrep(updated)
+    } catch (err) {
+      setChatError((err as Error).message || 'Could not reach your coach. Please try again.')
+      setChatDraft(trimmed)
+    } finally {
+      setChatSending(false)
     }
   }
 
@@ -310,7 +359,17 @@ function PracticePanel() {
             )}
           </div>
         ) : (
-          <ResultCard prep={prep} onToggleSaved={handleToggleSaved} onReset={handleReset} resetLabel="New Scenario" />
+          <ResultCard
+            prep={prep}
+            onToggleSaved={handleToggleSaved}
+            onReset={handleReset}
+            resetLabel="New Scenario"
+            chatSending={chatSending}
+            chatError={chatError}
+            chatDraft={chatDraft}
+            onChatDraftChange={setChatDraft}
+            onSendChat={handleSendChat}
+          />
         )}
         {error && <p className="mt-4 text-center text-sm text-warm-500">{error}</p>}
       </div>
@@ -328,6 +387,9 @@ function RealPanel() {
   const [prep, setPrep] = useState<ConversationPrep | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [chatDraft, setChatDraft] = useState('')
+  const [chatSending, setChatSending] = useState(false)
+  const [chatError, setChatError] = useState<string | null>(null)
 
   const { allPreps, setAllPreps, historyLoading } = useConversationPrepHistory('real')
   const savedPreps = allPreps.filter((p) => p.saved)
@@ -353,6 +415,8 @@ function RealPanel() {
     setSituationText('')
     setResponseText('')
     setError(null)
+    setChatDraft('')
+    setChatError(null)
   }
 
   async function handleToggleSaved(target: ConversationPrep) {
@@ -366,6 +430,23 @@ function RealPanel() {
       if (prep?.id === target.id) {
         setPrep((prevPrep) => (prevPrep ? { ...prevPrep, saved: !nextSaved } : prevPrep))
       }
+    }
+  }
+
+  async function handleSendChat() {
+    const trimmed = chatDraft.trim()
+    if (!prep || !trimmed || chatSending) return
+    setChatSending(true)
+    setChatError(null)
+    setChatDraft('')
+    try {
+      const updated = await sendConversationPrepChat(prep.id, trimmed)
+      setPrep(updated)
+    } catch (err) {
+      setChatError((err as Error).message || 'Could not reach your coach. Please try again.')
+      setChatDraft(trimmed)
+    } finally {
+      setChatSending(false)
     }
   }
 
@@ -416,6 +497,11 @@ function RealPanel() {
             onToggleSaved={handleToggleSaved}
             onReset={handleReset}
             resetLabel="New Conversation"
+            chatSending={chatSending}
+            chatError={chatError}
+            chatDraft={chatDraft}
+            onChatDraftChange={setChatDraft}
+            onSendChat={handleSendChat}
           />
         )}
         {error && <p className="mt-4 text-center text-sm text-warm-500">{error}</p>}

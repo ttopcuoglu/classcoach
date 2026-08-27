@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
+import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
 import { SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
@@ -23,6 +24,8 @@ A concrete next step — how to follow up with the student(s) involved, repair t
 <rating>
 A single integer 1-5 rating your honest private assessment of how effectively this was handled, per classroom management best practice. This is never shown to the teacher — it's used only to track their growth over time — so rate honestly rather than generously. Output only the digit, nothing else.
 </rating>`
+
+const DEBRIEF_CHAT_SYSTEM_PROMPT = `You are a warm, practical classroom management coach for grades 6-12 teachers, continuing a conversation about a real incident you already gave reflective feedback on. Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says: if they push back, ask a follow-up, or want to think through a different angle, engage with that directly rather than repeating your first assessment. Stay grounded in what they've told you; never invent details.`
 
 function isValidCategory(value: unknown): value is string {
   return typeof value === 'string' && (SCENARIO_CATEGORIES as readonly string[]).includes(value)
@@ -59,11 +62,12 @@ debriefRouter.post('/', async (req, res) => {
   }
 
   try {
+    const context = `What happened: ${incidentText}`
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 1024,
       system: DEBRIEF_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: `What happened: ${incidentText}` }],
+      messages: [{ role: 'user', content: context }],
     })
 
     const text = response.content
@@ -77,13 +81,68 @@ debriefRouter.post('/', async (req, res) => {
     const parsedRating = ratingText ? Number.parseInt(ratingText, 10) : NaN
     const rating = parsedRating >= 1 && parsedRating <= 5 ? parsedRating : null
 
+    const seedReply = [feedback, followUp ? `Next time: ${followUp}` : null].filter(Boolean).join('\n\n')
+    const conversation = appendTurn([], context, seedReply)
+
     const debrief = await prisma.debrief.create({
-      data: { userId: req.user!.userId, incidentText, category: category ?? null, feedback, followUp, rating },
+      data: { userId: req.user!.userId, incidentText, category: category ?? null, feedback, followUp, rating, conversation },
     })
     res.status(201).json(debrief)
   } catch (error) {
     console.error('[debrief] feedback generation failed:', error)
     res.status(502).json({ error: 'Claude request failed' })
+  }
+})
+
+debriefRouter.post('/:id/chat', async (req, res) => {
+  const { message } = req.body ?? {}
+  if (typeof message !== 'string' || !message.trim()) {
+    res.status(400).json({ error: 'message is required' })
+    return
+  }
+
+  const debrief = await prisma.debrief.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+  })
+  if (!debrief) {
+    res.status(404).json({ error: 'Debrief not found' })
+    return
+  }
+
+  const existing = (debrief.conversation as unknown as ChatMessage[] | null) ?? []
+  if (countUserTurns(existing) >= CHAT_TURN_CAP) {
+    res.status(409).json({ error: "You've reached today's practice limit for this conversation." })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'debrief_chat')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  const trimmed = message.trim()
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 300,
+      system: DEBRIEF_CHAT_SYSTEM_PROMPT,
+      messages: toClaudeMessages(existing, trimmed),
+    })
+    const reply = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+      .trim()
+
+    const updated = await prisma.debrief.update({
+      where: { id: debrief.id },
+      data: { conversation: appendTurn(existing, trimmed, reply) },
+    })
+    res.json(updated)
+  } catch (error) {
+    console.error('[debrief] chat failed:', error)
+    res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
   }
 })
 

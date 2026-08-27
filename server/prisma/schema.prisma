@@ -77,6 +77,11 @@ model ScenarioAttempt {
   saved          Boolean  @default(false)
   shareToken     String?  @unique
   createdAt      DateTime @default(now())
+
+  // [{ role: 'user' | 'assistant', text, createdAt }], seeded with the
+  // original submission + first feedback, grown by follow-up chat turns.
+  // Same convention as AudioSession.reflectConversation.
+  conversation   Json?
 }
 
 model QAExchange {
@@ -104,6 +109,9 @@ model Debrief {
   saved        Boolean  @default(false)
   shareToken   String?  @unique
   createdAt    DateTime @default(now())
+
+  // Same convention as ScenarioAttempt.conversation.
+  conversation Json?
 }
 
 // tone is one of: warm, firm, informational, requesting_meeting
@@ -116,6 +124,12 @@ model ParentMessage {
   draftText       String
   saved           Boolean  @default(false)
   createdAt       DateTime @default(now())
+
+  // Same convention as ScenarioAttempt.conversation. Each chat turn here
+  // also overwrites draftText with the latest revision — unlike the other
+  // three models, the chat reply IS the deliverable, not a discussion
+  // alongside a fixed result.
+  conversation    Json?
 }
 
 // A conversation outside the classroom (parent, colleague, or
@@ -138,6 +152,9 @@ model ConversationPrep {
   saved         Boolean  @default(false)
   shareToken    String?  @unique
   createdAt     DateTime @default(now())
+
+  // Same convention as ScenarioAttempt.conversation.
+  conversation  Json?
 }
 
 // mode is "feedback" (teacher submits their own plan in planText, gets

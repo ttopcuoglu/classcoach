@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import {
   draftParentMessage,
   getParentMessages,
+  sendParentMessageChat,
   setParentMessageSaved,
   type ParentMessage,
   type ParentMessageTone,
 } from '../lib/api'
+import CoachingChat from '../components/CoachingChat'
 import { StarIcon } from '../components/icons'
 
 const TONES: { label: string; value: ParentMessageTone }[] = [
@@ -26,6 +28,10 @@ export default function ParentMessages() {
   const [history, setHistory] = useState<ParentMessage[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
 
+  const [chatDraft, setChatDraft] = useState('')
+  const [chatSending, setChatSending] = useState(false)
+  const [chatError, setChatError] = useState<string | null>(null)
+
   useEffect(() => {
     getParentMessages()
       .then(setHistory)
@@ -41,10 +47,30 @@ export default function ParentMessages() {
       const message = await draftParentMessage(incidentSummary.trim(), tone)
       setCurrent(message)
       setHistory((prev) => [message, ...prev])
+      setChatDraft('')
+      setChatError(null)
     } catch {
       setError('Could not draft a message. Please try again.')
     } finally {
       setDrafting(false)
+    }
+  }
+
+  async function handleSendChat() {
+    const trimmed = chatDraft.trim()
+    if (!current || !trimmed || chatSending) return
+    setChatSending(true)
+    setChatError(null)
+    setChatDraft('')
+    try {
+      const updated = await sendParentMessageChat(current.id, trimmed)
+      setCurrent(updated)
+      setHistory((prev) => prev.map((m) => (m.id === updated.id ? updated : m)))
+    } catch (err) {
+      setChatError((err as Error).message || 'Could not reach your coach. Please try again.')
+      setChatDraft(trimmed)
+    } finally {
+      setChatSending(false)
     }
   }
 
@@ -130,6 +156,20 @@ export default function ParentMessages() {
                 {copied ? 'Copied' : 'Copy'}
               </button>
             </div>
+          </div>
+        )}
+
+        {current && (
+          <div className="mt-4">
+            <CoachingChat
+              messages={current.conversation.slice(2)}
+              sending={chatSending}
+              error={chatError}
+              draft={chatDraft}
+              onDraftChange={setChatDraft}
+              onSend={handleSendChat}
+              placeholder="Ask for a revision, e.g. 'make it warmer' or 'shorter'..."
+            />
           </div>
         )}
       </div>

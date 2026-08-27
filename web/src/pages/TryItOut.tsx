@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import CoachingChat from '../components/CoachingChat'
 import { ArrowUpIcon, MicIcon, ShareIcon, StarIcon } from '../components/icons'
 import { CATEGORIES, categoryLabel } from '../lib/categories'
 import { GRADE_BANDS } from '../lib/gradeBands'
@@ -7,6 +8,8 @@ import {
   getAttempts,
   getDebriefs,
   getProfile,
+  sendAttemptChat,
+  sendDebriefChat,
   setAttemptSaved,
   setDebriefSaved,
   shareAttempt,
@@ -97,6 +100,10 @@ function PracticePanel() {
   const [allAttempts, setAllAttempts] = useState<ScenarioAttempt[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
 
+  const [chatDraft, setChatDraft] = useState('')
+  const [chatSending, setChatSending] = useState(false)
+  const [chatError, setChatError] = useState<string | null>(null)
+
   useEffect(() => {
     getAttempts()
       .then(setAllAttempts)
@@ -158,6 +165,8 @@ function PracticePanel() {
     setError(null)
     setAttempt(null)
     setResponseText('')
+    setChatDraft('')
+    setChatError(null)
     try {
       const scenario = await generateScenario(category, gradeBand, difficulty, subject)
       setAttempt({
@@ -170,6 +179,7 @@ function PracticePanel() {
         saved: false,
         createdAt: scenario.createdAt,
         scenario,
+        conversation: [],
       })
     } catch {
       setError('Could not generate a scenario. Please try again.')
@@ -224,6 +234,23 @@ function PracticePanel() {
     } catch {
       setAllAttempts((prev) => prev.map((a) => (a.id === target.id ? { ...a, saved: !nextSaved } : a)))
       if (attempt?.id === target.id) setAttempt((prev) => (prev ? { ...prev, saved: !nextSaved } : prev))
+    }
+  }
+
+  async function handleSendChat() {
+    const trimmed = chatDraft.trim()
+    if (!attempt || !trimmed || chatSending) return
+    setChatSending(true)
+    setChatError(null)
+    setChatDraft('')
+    try {
+      const updated = await sendAttemptChat(attempt.id, trimmed)
+      setAttempt(updated)
+    } catch (err) {
+      setChatError((err as Error).message || 'Could not reach your coach. Please try again.')
+      setChatDraft(trimmed)
+    } finally {
+      setChatSending(false)
     }
   }
 
@@ -440,6 +467,16 @@ function PracticePanel() {
                   </div>
                 )}
 
+                <CoachingChat
+                  messages={attempt.conversation.slice(2)}
+                  sending={chatSending}
+                  error={chatError}
+                  draft={chatDraft}
+                  onDraftChange={setChatDraft}
+                  onSend={handleSendChat}
+                  placeholder="Ask a follow-up about this feedback..."
+                />
+
                 <div className="flex items-center justify-between">
                   <button
                     type="button"
@@ -600,6 +637,10 @@ function DebriefPanel() {
   const [allDebriefs, setAllDebriefs] = useState<Debrief[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
 
+  const [chatDraft, setChatDraft] = useState('')
+  const [chatSending, setChatSending] = useState(false)
+  const [chatError, setChatError] = useState<string | null>(null)
+
   useEffect(() => {
     getDebriefs()
       .then(setAllDebriefs)
@@ -628,6 +669,25 @@ function DebriefPanel() {
     setDebrief(null)
     setIncidentText('')
     setError(null)
+    setChatDraft('')
+    setChatError(null)
+  }
+
+  async function handleSendChat() {
+    const trimmed = chatDraft.trim()
+    if (!debrief || !trimmed || chatSending) return
+    setChatSending(true)
+    setChatError(null)
+    setChatDraft('')
+    try {
+      const updated = await sendDebriefChat(debrief.id, trimmed)
+      setDebrief(updated)
+    } catch (err) {
+      setChatError((err as Error).message || 'Could not reach your coach. Please try again.')
+      setChatDraft(trimmed)
+    } finally {
+      setChatSending(false)
+    }
   }
 
   async function handleToggleSaved(target: Debrief) {
@@ -716,6 +776,16 @@ function DebriefPanel() {
                 <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink">{debrief.followUp}</p>
               </div>
             )}
+
+            <CoachingChat
+              messages={debrief.conversation.slice(2)}
+              sending={chatSending}
+              error={chatError}
+              draft={chatDraft}
+              onDraftChange={setChatDraft}
+              onSend={handleSendChat}
+              placeholder="Ask a follow-up about this feedback..."
+            />
 
             <div className="flex items-center justify-between">
               <button
