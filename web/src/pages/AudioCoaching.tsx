@@ -7,15 +7,19 @@ import {
   getAudioSession,
   getAudioSessions,
   getProfile,
+  sendReflectMessage,
   tagSpeaker,
   transcribeAudioSession,
   updateAudioSession,
   updateProfile,
+  type AudioHighlight,
   type AudioLessonContent,
   type AudioQuestionLogEntry,
+  type AudioReflectMessage,
   type AudioSession,
   type AudioSessionWithSegments,
   type FocusMetric,
+  type ReflectChatErrorKind,
   type SpeakerSample,
 } from '../lib/api'
 import {
@@ -609,53 +613,33 @@ function TabBar({ tab, onSelect }: { tab: ReportTab; onSelect: (t: ReportTab) =>
   )
 }
 
-type ReflectPrompt = { id: string; text: string; sourceTab: ReportTab; sourceId: string }
-
-function buildReflectPrompts(
+// Plain-language facts safe for the Reflect chat's coach to reference —
+// only from highlights and confidently-zero metrics, never 'unavailable'
+// ones. This is the only place confidence-gated facts get turned into text
+// for Claude; the backend never re-derives measured/zero/unavailable itself.
+function buildReflectContext(
   session: AudioSessionWithSegments,
   cfuMetric: { state: string },
   redirectionMetric: { state: string },
-): ReflectPrompt[] {
-  const prompts: ReflectPrompt[] = []
+): string[] {
+  const context: string[] = []
 
-  const HIGHLIGHT_TEMPLATES: Record<string, (excerpt: string, time: string) => string> = {
-    'Longest uninterrupted teacher monologue': (excerpt, time) =>
-      `At ${time}, you had your longest uninterrupted stretch of talking: "${excerpt}" Looking back, was that a moment worth extending, or a spot where handing off to students earlier might help?`,
-    'Longest wait time': (excerpt, time) =>
-      `Your longest pause after a question was at ${time}, right after "${excerpt}" — was that intentional wait time, or did the silence feel uncomfortable in the moment?`,
-    'Follow-up / probing question': (excerpt, time) =>
-      `At ${time}, you followed up on a student's answer with another question: "${excerpt}" What made you decide to push further there?`,
-    'Redirection cluster': (excerpt, time) =>
-      `Around ${time}, you used a few redirection phrases close together: "${excerpt}" What was happening in the room right before that?`,
-  }
-
-  ;(session.highlights ?? []).forEach((h, i) => {
-    const time = formatTime(h.timestampSec)
-    const template = HIGHLIGHT_TEMPLATES[h.label]
-    const text = template
-      ? template(h.excerpt, time)
-      : `At ${time}, this moment stood out: "${h.excerpt}" — what's your take on it?`
-    prompts.push({ id: `highlight-prompt-${i}`, text, sourceTab: 'overview', sourceId: `highlight-${i}` })
+  ;(session.highlights ?? []).forEach((h) => {
+    context.push(`At ${formatTime(h.timestampSec)}, "${h.label}": "${h.excerpt}"`)
   })
 
   if (cfuMetric.state === 'zero') {
-    prompts.push({
-      id: 'cfu-prompt',
-      text: "You didn't do an explicit check for understanding this session — intentional, or did it slip by?",
-      sourceTab: 'overview',
-      sourceId: 'stat-cfu',
-    })
+    context.push(
+      'No explicit checks for understanding were detected this session (confidently measured, not missing data).',
+    )
   }
   if (redirectionMetric.state === 'zero') {
-    prompts.push({
-      id: 'redirection-prompt',
-      text: 'No redirection language was flagged this session — did the room feel that settled, or did detection just miss it?',
-      sourceTab: 'climate',
-      sourceId: 'stat-redirection',
-    })
+    context.push(
+      'No redirection/behavior language was flagged this session (confidently measured, not missing data).',
+    )
   }
 
-  return prompts.slice(0, 4)
+  return context.slice(0, 8)
 }
 
 function ReportPanel({
@@ -684,6 +668,9 @@ function ReportPanel({
   const [saved, setSaved] = useState(false)
   const [locking, setLocking] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [reflectSending, setReflectSending] = useState(false)
+  const [reflectError, setReflectError] = useState<{ kind: ReflectChatErrorKind; message: string } | null>(null)
+  const [reflectDraft, setReflectDraft] = useState('')
 
   async function handleSaveNotes() {
     setSaving(true)
@@ -716,6 +703,38 @@ function ReportPanel({
       setError('Could not lock the report. Please try again.')
     } finally {
       setLocking(false)
+    }
+  }
+
+  async function handleStartReflect() {
+    setReflectSending(true)
+    setReflectError(null)
+    try {
+      const updated = await sendReflectMessage(session.id, { context: reflectContext })
+      onUpdate({ ...session, ...updated })
+    } catch (err) {
+      const kind = (err as { kind?: ReflectChatErrorKind })?.kind ?? 'other'
+      setReflectError({ kind, message: (err as Error).message })
+    } finally {
+      setReflectSending(false)
+    }
+  }
+
+  async function handleSendReflect() {
+    const trimmed = reflectDraft.trim()
+    if (!trimmed || reflectSending) return
+    setReflectSending(true)
+    setReflectError(null)
+    setReflectDraft('')
+    try {
+      const updated = await sendReflectMessage(session.id, { message: trimmed, context: reflectContext })
+      onUpdate({ ...session, ...updated })
+    } catch (err) {
+      const kind = (err as { kind?: ReflectChatErrorKind })?.kind ?? 'other'
+      setReflectError({ kind, message: (err as Error).message })
+      setReflectDraft(trimmed)
+    } finally {
+      setReflectSending(false)
     }
   }
 
@@ -768,7 +787,7 @@ function ReportPanel({
       ? formatRatio(positiveCount, positiveCount + correctiveCount)
       : { state: 'unavailable' as const, display: '—', reason: 'No positive or corrective phrases detected.' }
 
-  const reflectPrompts = buildReflectPrompts(session, cfuMetric, redirectionMetric)
+  const reflectContext = buildReflectContext(session, cfuMetric, redirectionMetric)
 
   function handleViewSource(sourceTab: ReportTab, sourceId: string) {
     setTab(sourceTab)
@@ -822,8 +841,14 @@ function ReportPanel({
 
       {tab === 'reflect' && (
         <ReflectTab
-          prompts={reflectPrompts}
-          onViewSource={handleViewSource}
+          highlights={session.highlights}
+          conversation={session.reflectConversation}
+          sending={reflectSending}
+          reflectError={reflectError}
+          draft={reflectDraft}
+          onDraftChange={setReflectDraft}
+          onStart={handleStartReflect}
+          onSend={handleSendReflect}
           locked={locked}
           strengths={strengths}
           growthAreas={growthAreas}
@@ -1241,9 +1266,17 @@ function MyGrowthTab({
   )
 }
 
+const REFLECT_TURN_CAP = 8
+
 function ReflectTab({
-  prompts,
-  onViewSource,
+  highlights,
+  conversation,
+  sending,
+  reflectError,
+  draft,
+  onDraftChange,
+  onStart,
+  onSend,
   locked,
   strengths,
   growthAreas,
@@ -1260,8 +1293,14 @@ function ReflectTab({
   onSave,
   onLock,
 }: {
-  prompts: ReflectPrompt[]
-  onViewSource: (tab: ReportTab, id: string) => void
+  highlights: AudioHighlight[] | null
+  conversation: AudioReflectMessage[] | null
+  sending: boolean
+  reflectError: { kind: ReflectChatErrorKind; message: string } | null
+  draft: string
+  onDraftChange: (v: string) => void
+  onStart: () => void
+  onSend: () => void
   locked: boolean
   strengths: string
   growthAreas: string
@@ -1278,29 +1317,113 @@ function ReflectTab({
   onSave: () => void
   onLock: () => void
 }) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const started = conversation != null && conversation.length > 0
+  const userTurnCount = conversation?.filter((m) => m.role === 'user').length ?? 0
+  const turnCapHit = userTurnCount >= REFLECT_TURN_CAP
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
+  }, [conversation, sending])
+
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Questions worth sitting with</h2>
-        {prompts.length === 0 ? (
-          <p className="mt-3 text-sm text-ink-soft">
-            Not enough measured data this session to generate reflection prompts.
-          </p>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">What stood out this session</h2>
+        {!highlights || highlights.length === 0 ? (
+          <p className="mt-3 text-sm text-ink-soft">Nothing stood out enough this session to flag here.</p>
         ) : (
-          <div className="mt-3 flex flex-col gap-3">
-            {prompts.map((p) => (
-              <div key={p.id} className="rounded-xl border border-border bg-surface p-4">
-                <p className="text-sm text-ink">{p.text}</p>
-                <button
-                  type="button"
-                  onClick={() => onViewSource(p.sourceTab, p.sourceId)}
-                  className="mt-2 text-xs font-medium text-brand-600 hover:text-brand-700"
-                >
-                  View the moment this is about →
-                </button>
+          <div className="mt-3 flex flex-col gap-2">
+            {highlights.map((h, i) => (
+              <div key={i} className="rounded-xl border border-border bg-surface p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+                  {h.label} · {formatTime(h.timestampSec)}
+                </p>
+                <p className="mt-1.5 text-sm text-ink">"{h.excerpt}"</p>
               </div>
             ))}
           </div>
+        )}
+      </div>
+
+      <div className="flex flex-col rounded-2xl border border-border bg-surface">
+        <div ref={scrollRef} className="flex max-h-96 min-h-[10rem] flex-col gap-3 overflow-y-auto p-4">
+          {!started ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+              <p className="text-sm text-ink-soft">
+                Talk through this session with your coach — one question at a time, at your pace.
+              </p>
+              {!locked && (
+                <button
+                  type="button"
+                  onClick={onStart}
+                  disabled={sending}
+                  className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+                >
+                  {sending ? 'Starting...' : 'Start reflecting'}
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              {conversation!.map((m, i) => (
+                <div
+                  key={i}
+                  className={
+                    m.role === 'user'
+                      ? 'ml-auto max-w-[85%] rounded-2xl rounded-br-sm bg-brand-500 px-4 py-2.5 text-sm text-white'
+                      : 'max-w-[85%] rounded-2xl rounded-bl-sm border border-border bg-canvas px-4 py-2.5 text-sm whitespace-pre-wrap text-ink'
+                  }
+                >
+                  {m.text}
+                </div>
+              ))}
+              {sending && (
+                <div className="max-w-[85%] rounded-2xl rounded-bl-sm border border-border bg-canvas px-4 py-2.5 text-sm text-ink-soft">
+                  Thinking...
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {reflectError && (
+          <p className="border-t border-border px-4 py-2 text-sm text-warm-500">{reflectError.message}</p>
+        )}
+
+        {started && (
+          <form
+            className="border-t border-border p-4"
+            onSubmit={(e) => {
+              e.preventDefault()
+              onSend()
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={draft}
+                onChange={(e) => onDraftChange(e.target.value)}
+                placeholder="Say what's on your mind..."
+                disabled={sending || locked || turnCapHit}
+                className="flex-1 rounded-lg border border-border bg-canvas px-4 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
+              />
+              <button
+                type="submit"
+                disabled={sending || locked || turnCapHit || !draft.trim()}
+                className="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+              >
+                Send
+              </button>
+            </div>
+            {locked ? (
+              <p className="mt-2 text-xs text-ink-soft">This report is locked — the conversation is read-only.</p>
+            ) : turnCapHit ? (
+              <p className="mt-2 text-xs text-ink-soft">
+                You've reached today's reflection limit for this session.
+              </p>
+            ) : null}
+          </form>
         )}
       </div>
 

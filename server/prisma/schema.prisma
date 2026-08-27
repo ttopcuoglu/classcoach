@@ -225,6 +225,11 @@ model AudioSession {
   nextStep         String?
   followUpDate     DateTime?
 
+  // [{ role: 'user' | 'assistant', text, createdAt }], the Reflect tab's
+  // multi-turn coaching chat. Always read/written as one ordered array —
+  // same convention as highlights/phases, not a child table.
+  reflectConversation Json?
+
   deleteAfter      DateTime? // computed from User.audioRetentionDays at creation
 
   createdAt        DateTime  @default(now())

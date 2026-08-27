@@ -31,6 +31,32 @@ Respond with exactly these three sections and nothing outside them:
 One concrete, small next step to try in the next class period.
 </next_step>`
 
+const REFLECT_TURN_CAP = 8
+const REFLECT_START_MESSAGE = 'Start our reflection conversation.'
+
+type ReflectMessage = { role: 'user' | 'assistant'; text: string; createdAt: string }
+
+function buildReflectSystemPrompt(context: string[]): string {
+  return `You are a warm, practical instructional coach having a short, real-time reflective conversation with a
+teacher right after their own class recording was analyzed. This is not a written report — it's a live,
+back-and-forth chat. Keep every reply to 2-4 sentences, conversational, and grounded only in the facts
+below and in what the teacher has said so far. Never invent a detail — a number, a quote, a moment —
+that isn't given to you.
+
+Ask one open, specific question at a time rather than several. Build on what the teacher just said
+instead of listing unrelated observations. Coach, don't grade — there's no right answer you're steering
+them toward.
+
+Write in plain text only — no markdown (no **bold**, no # headings, no bullet lists).
+
+Here is what's known about this session, and safe to reference (only measured or confidently-zero data —
+nothing here is a guess):
+${context.map((line) => `- ${line}`).join('\n')}
+
+If the teacher asks about something not covered above, say plainly that the data doesn't cover it rather
+than guessing.`
+}
+
 function isValidStatus(value: unknown): value is string {
   return typeof value === 'string' && STATUSES.includes(value)
 }
@@ -286,6 +312,81 @@ Generic vs. specific feedback after student responses: ${analysis.metricsDetail.
   })
 
   res.json(updated)
+})
+
+audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
+  const { message, context } = req.body ?? {}
+  const safeContext: string[] = Array.isArray(context) ? context.filter((c) => typeof c === 'string') : []
+
+  const session = await prisma.audioSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  if (session.status === 'locked') {
+    res.status(403).json({ error: 'This report is locked and can no longer be edited.' })
+    return
+  }
+
+  const existing = (session.reflectConversation as unknown as ReflectMessage[] | null) ?? []
+  const isStart = existing.length === 0 && typeof message !== 'string'
+
+  if (!isStart && (typeof message !== 'string' || !message.trim())) {
+    res.status(400).json({ error: 'message is required' })
+    return
+  }
+
+  const userTurnCount = existing.filter((m) => m.role === 'user').length
+  if (!isStart && userTurnCount >= REFLECT_TURN_CAP) {
+    res.status(409).json({ error: "You've reached today's reflection limit for this session." })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'reflect_chat')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  const trimmedMessage = typeof message === 'string' ? message.trim() : ''
+
+  try {
+    const messages = [
+      ...existing.map((m) => ({ role: m.role, content: m.text })),
+      { role: 'user' as const, content: isStart ? REFLECT_START_MESSAGE : trimmedMessage },
+    ]
+
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 300,
+      system: buildReflectSystemPrompt(safeContext),
+      messages,
+    })
+    const reply = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+      .trim()
+
+    const now = new Date().toISOString()
+    const newTurns: ReflectMessage[] = isStart
+      ? [{ role: 'assistant', text: reply, createdAt: now }]
+      : [
+          { role: 'user', text: trimmedMessage, createdAt: now },
+          { role: 'assistant', text: reply, createdAt: now },
+        ]
+
+    const updated = await prisma.audioSession.update({
+      where: { id: session.id },
+      data: { reflectConversation: [...existing, ...newTurns] },
+    })
+    res.json(updated)
+  } catch (error) {
+    console.error('[audio-sessions] reflect chat failed:', error)
+    res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
+  }
 })
 
 audioSessionsRouter.delete('/:id', async (req, res) => {

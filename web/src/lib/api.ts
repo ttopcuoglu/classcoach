@@ -199,6 +199,8 @@ export type AudioQuestionLogEntry = {
   text: string
   followUps: { timestampSec: number; text: string }[]
 }
+export type AudioReflectMessage = { role: 'user' | 'assistant'; text: string; createdAt: string }
+
 // Keyword/phrase-matched flags and quotes only — never scored.
 export type AudioLessonContent = {
   topicTerms: string[]
@@ -227,6 +229,7 @@ export type AudioSession = {
   highlights: AudioHighlight[] | null
   phases: AudioPhase[] | null
   questionLog: AudioQuestionLogEntry[] | null
+  reflectConversation: AudioReflectMessage[] | null
   lessonContent: AudioLessonContent | null
   strengths: string | null
   growthAreas: string | null
@@ -553,4 +556,25 @@ export function tagSpeaker(id: string, rawSpeakerTag: string): Promise<AudioSess
 
 export function deleteAudioSession(id: string): Promise<{ status: string }> {
   return request(`/api/audio-sessions/${id}`, { method: 'DELETE' })
+}
+
+export type ReflectChatErrorKind = 'locked' | 'turn_cap' | 'daily_limit' | 'other'
+
+export async function sendReflectMessage(
+  id: string,
+  data: { message?: string; context: string[] },
+): Promise<AudioSession> {
+  const res = await fetch(`${API_BASE_URL}/api/audio-sessions/${id}/reflect-chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    const kind: ReflectChatErrorKind =
+      res.status === 403 ? 'locked' : res.status === 409 ? 'turn_cap' : res.status === 429 ? 'daily_limit' : 'other'
+    throw Object.assign(new Error(body?.error ?? `Request failed with status ${res.status}`), { kind })
+  }
+  return res.json()
 }
