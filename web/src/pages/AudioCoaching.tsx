@@ -43,6 +43,13 @@ function formatTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+function formatSessionDateTime(iso: string): string {
+  const d = new Date(iso)
+  const date = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  return `${date} at ${time}`
+}
+
 export default function AudioCoaching() {
   const [sessions, setSessions] = useState<AudioSession[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
@@ -50,6 +57,7 @@ export default function AudioCoaching() {
   const [speakers, setSpeakers] = useState<SpeakerSample[]>([])
   const [error, setError] = useState<string | null>(null)
   const [focusMetric, setFocusMetric] = useState<FocusMetric | null>(null)
+  const [starting, setStarting] = useState(false)
 
   function refreshHistory() {
     getAudioSessions()
@@ -87,6 +95,23 @@ export default function AudioCoaching() {
       setActive(full)
     } catch {
       setError('Could not load that session.')
+    }
+  }
+
+  async function handleStartRecording() {
+    if (starting) return
+    setStarting(true)
+    setError(null)
+    try {
+      const session = await createAudioSession({
+        sessionDate: new Date().toISOString(),
+        consentConfirmed: true,
+      })
+      setActive({ ...session, segments: [] })
+    } catch {
+      setError('Could not start a new recording. Please try again.')
+    } finally {
+      setStarting(false)
     }
   }
 
@@ -130,7 +155,17 @@ export default function AudioCoaching() {
 
       {error && <p className="text-sm text-warm-500">{error}</p>}
 
-      <SetupForm onCreated={(session) => setActive({ ...session, segments: [] })} />
+      <div className="rounded-2xl border border-border bg-surface p-6 text-center">
+        <button
+          type="button"
+          onClick={handleStartRecording}
+          disabled={starting}
+          className="inline-flex items-center gap-2 rounded-full bg-warm-500 px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          <MicIcon className="h-4 w-4" />
+          {starting ? 'Starting...' : 'New Recording'}
+        </button>
+      </div>
 
       <div>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Past sessions</h2>
@@ -153,109 +188,6 @@ export default function AudioCoaching() {
           </div>
         )}
       </div>
-    </div>
-  )
-}
-
-function SetupForm({ onCreated }: { onCreated: (session: AudioSession) => void }) {
-  const [teacherName, setTeacherName] = useState('')
-  const [classSubject, setClassSubject] = useState('')
-  const [period, setPeriod] = useState('')
-  const [gradeLevel, setGradeLevel] = useState('')
-  const [sessionDate, setSessionDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [creating, setCreating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    getProfile()
-      .then((profile) => {
-        if (profile.name) setTeacherName(profile.name)
-        const firstGrade = profile.gradeLevels?.split(',')[0]?.trim()
-        if (firstGrade) setGradeLevel(firstGrade)
-      })
-      .catch(() => {})
-  }, [])
-
-  async function handleStart() {
-    if (creating) return
-    setCreating(true)
-    setError(null)
-    try {
-      const session = await createAudioSession({
-        teacherName: teacherName || undefined,
-        classSubject: classSubject || undefined,
-        period: period || undefined,
-        gradeLevel: gradeLevel || undefined,
-        sessionDate: sessionDate ? new Date(sessionDate).toISOString() : undefined,
-        consentConfirmed: true,
-      })
-      onCreated(session)
-    } catch {
-      setError('Could not start a new session. Please try again.')
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  return (
-    <div className="rounded-2xl border border-border bg-surface p-6">
-      <h2 className="text-sm font-semibold text-ink">New recording</h2>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-ink">Teacher name</span>
-          <input
-            value={teacherName}
-            onChange={(e) => setTeacherName(e.target.value)}
-            className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none"
-          />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-ink">Class / subject</span>
-          <input
-            value={classSubject}
-            onChange={(e) => setClassSubject(e.target.value)}
-            placeholder="e.g. 7th grade Science"
-            className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none"
-          />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-ink">Period</span>
-          <input
-            value={period}
-            onChange={(e) => setPeriod(e.target.value)}
-            placeholder="e.g. Period 3"
-            className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none"
-          />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-ink">Grade level</span>
-          <input
-            value={gradeLevel}
-            onChange={(e) => setGradeLevel(e.target.value)}
-            placeholder="e.g. 7th grade"
-            className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none"
-          />
-        </label>
-        <label className="flex flex-col gap-1.5 sm:col-span-2">
-          <span className="text-sm font-medium text-ink">Date</span>
-          <input
-            type="date"
-            value={sessionDate}
-            onChange={(e) => setSessionDate(e.target.value)}
-            className="w-fit rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none"
-          />
-        </label>
-      </div>
-
-      <button
-        type="button"
-        onClick={handleStart}
-        disabled={creating}
-        className="mt-4 rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-      >
-        {creating ? 'Starting...' : 'Continue to recording'}
-      </button>
-      {error && <p className="mt-3 text-sm text-warm-500">{error}</p>}
     </div>
   )
 }
@@ -422,11 +354,11 @@ function RecordingPanel({
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold text-ink">
-              {session.classSubject || 'Untitled class'} {session.period ? `· ${session.period}` : ''}
+              {session.classSubject || 'New Recording'} {session.period ? `· ${session.period}` : ''}
             </p>
             <p className="text-xs text-ink-soft">
               {session.teacherName ? `${session.teacherName} · ` : ''}
-              {new Date(session.sessionDate).toLocaleDateString()}
+              {formatSessionDateTime(session.sessionDate)}
             </p>
           </div>
           {phase === 'idle' && (
@@ -1124,11 +1056,11 @@ function OverviewTab({
 
       <div className="rounded-2xl border border-border bg-surface p-6">
         <h1 className="text-xl font-semibold text-ink">
-          {session.classSubject || 'Untitled class'} {session.period ? `· ${session.period}` : ''}
+          {session.classSubject || 'New Recording'} {session.period ? `· ${session.period}` : ''}
         </h1>
         <p className="mt-1 text-sm text-ink-soft">
           {session.teacherName ? `${session.teacherName} · ` : ''}
-          {new Date(session.sessionDate).toLocaleDateString()}
+          {formatSessionDateTime(session.sessionDate)}
           {session.gradeLevel ? ` · ${session.gradeLevel}` : ''}
           {session.durationSec ? ` · ${formatTime(session.durationSec)}` : ''}
         </p>
@@ -2072,10 +2004,10 @@ function SessionCard({
     <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-surface p-4">
       <button type="button" onClick={onOpen} className="flex-1 text-left">
         <p className="text-sm font-semibold text-ink">
-          {session.classSubject || 'Untitled class'} {session.period ? `· ${session.period}` : ''}
+          {session.classSubject || 'New Recording'} {session.period ? `· ${session.period}` : ''}
         </p>
         <p className="mt-0.5 text-xs text-ink-soft">
-          {new Date(session.sessionDate).toLocaleDateString()} ·{' '}
+          {formatSessionDateTime(session.sessionDate)} ·{' '}
           {session.status === 'locked'
             ? 'Locked'
             : session.status === 'analyzed'

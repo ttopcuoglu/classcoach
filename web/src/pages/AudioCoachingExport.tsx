@@ -16,6 +16,13 @@ function formatTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+function formatSessionDateTime(iso: string): string {
+  const d = new Date(iso)
+  const date = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  return `${date} at ${time}`
+}
+
 export default function AudioCoachingExport() {
   const { id } = useParams<{ id: string }>()
   const [session, setSession] = useState<AudioSessionWithSegments | null>(null)
@@ -54,12 +61,12 @@ export default function AudioCoachingExport() {
             <h1 className="text-2xl font-semibold text-ink">Wivoza — Audio Coaching Report</h1>
             <p className="mt-1 text-sm text-ink-soft">
               {session.teacherName ? `${session.teacherName} · ` : ''}
-              {session.classSubject || 'Untitled class'}
+              {session.classSubject || 'New Recording'}
               {session.period ? ` · ${session.period}` : ''}
               {session.gradeLevel ? ` · ${session.gradeLevel}` : ''}
             </p>
             <p className="text-sm text-ink-soft">
-              {new Date(session.sessionDate).toLocaleDateString()}
+              {formatSessionDateTime(session.sessionDate)}
               {session.durationSec ? ` · ${formatTime(session.durationSec)}` : ''}
             </p>
 
