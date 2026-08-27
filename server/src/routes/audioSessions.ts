@@ -15,20 +15,20 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200
 
 const STATUSES = ['setup', 'recording', 'paused', 'transcribing', 'tagging', 'analyzed', 'locked']
 
-const NOTES_SYSTEM_PROMPT = `You are a warm, practical instructional coach. Below is a data summary from an automated analysis of a class recording's transcript (talk-time split, question counts, wait time, redirections, feedback patterns) — not the transcript itself. Write brief, encouraging, specific draft notes a coach could use as a starting point; the coach will read and edit every word. Ground every claim only in the numbers given — never invent a detail that isn't in the summary.
+const REFLECT_SUMMARY_SYSTEM_PROMPT = `You are a warm, practical instructional coach. Below is the transcript of a reflective conversation you just had with a teacher about their own class recording. Summarize it into brief, specific draft notes the teacher can edit — ground every claim only in what was actually said in the conversation, never invent a detail that wasn't discussed.
 
 Write in plain text only — no markdown (no **bold**, no # headings).
 
 Respond with exactly these three sections and nothing outside them:
 
 <strengths>
-1-2 specific strengths suggested by the data.
+1-2 specific strengths that came up in the conversation.
 </strengths>
 <growth_areas>
-1-2 growth areas suggested by the data — at most two, don't overwhelm.
+1-2 growth areas that came up — at most two, don't overwhelm.
 </growth_areas>
 <next_step>
-One concrete, small next step to try in the next class period.
+One concrete, small next step the teacher landed on or that fits what they said.
 </next_step>`
 
 const REFLECT_TURN_CAP = 8
@@ -252,43 +252,10 @@ audioSessionsRouter.post('/:id/tag-speaker', async (req, res) => {
   const analysis = analyzeTranscript(segments)
   const lessonContent = detectLessonContent(segments, analysis.phases)
 
-  let strengths: string | null = null
-  let growthAreas: string | null = null
-  let nextStep: string | null = null
-
-  const allowed = await checkAndLogUsage(req.user!.userId, 'audio_session_notes')
-  if (allowed) {
-    try {
-      const summary = `Teacher talk time: ${analysis.teacherTalkPct ?? 'n/a'}%. Student talk time: ${analysis.studentTalkPct ?? 'n/a'}%.
-Total questions: ${analysis.questionCount} (${analysis.higherOrderPct ?? 'n/a'}% higher-order).
-Follow-up/probing questions: ${analysis.metricsDetail.followUpQuestionCount}.
-Average wait time after a question: ${analysis.avgWaitTimeSec ?? 'n/a'} seconds.
-Checks for understanding detected: ${analysis.cfuCount}.
-Longest uninterrupted teacher monologue: ${analysis.metricsDetail.longestTeacherMonologueSec} seconds.
-Distinct student voice segments: ${analysis.metricsDetail.studentVoiceSegments}.
-Redirection/behavior language flagged: ${analysis.metricsDetail.redirectionCount} times.
-Positive-to-corrective phrase ratio: ${analysis.metricsDetail.positiveToCorrectiveRatio ?? 'n/a'}.
-Generic vs. specific feedback after student responses: ${analysis.metricsDetail.genericFeedbackCount} generic, ${analysis.metricsDetail.specificFeedbackCount} specific.`
-
-      const response = await anthropic.messages.create({
-        model: CLAUDE_MODEL,
-        max_tokens: 500,
-        system: NOTES_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: summary }],
-      })
-      const text = response.content
-        .filter((block) => block.type === 'text')
-        .map((block) => block.text)
-        .join('\n')
-
-      strengths = extractTag(text, 'strengths')
-      growthAreas = extractTag(text, 'growth_areas')
-      nextStep = extractTag(text, 'next_step')
-    } catch (error) {
-      console.error('[audio-sessions] suggested notes generation failed:', error)
-    }
-  }
-
+  // Notes are no longer auto-generated from raw metrics here — they're
+  // populated later from the Reflect tab's actual coaching conversation
+  // (see reflect-summary below), so the teacher doesn't see two independent
+  // AI-written takeaways derived from the same numbers.
   const updated = await prisma.audioSession.update({
     where: { id: session.id },
     data: {
@@ -304,9 +271,6 @@ Generic vs. specific feedback after student responses: ${analysis.metricsDetail.
       phases: analysis.phases,
       questionLog: analysis.questionLog,
       lessonContent,
-      strengths,
-      growthAreas,
-      nextStep,
     },
     include: { segments: { orderBy: { startSec: 'asc' } } },
   })
@@ -386,6 +350,58 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
   } catch (error) {
     console.error('[audio-sessions] reflect chat failed:', error)
     res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
+  }
+})
+
+audioSessionsRouter.post('/:id/reflect-summary', async (req, res) => {
+  const session = await prisma.audioSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  if (session.status === 'locked') {
+    res.status(403).json({ error: 'This report is locked and can no longer be edited.' })
+    return
+  }
+
+  const conversation = (session.reflectConversation as unknown as ReflectMessage[] | null) ?? []
+  if (conversation.length === 0) {
+    res.status(400).json({ error: 'Start a reflection conversation first.' })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'audio_session_notes')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  try {
+    const transcript = conversation
+      .map((m) => `${m.role === 'assistant' ? 'Coach' : 'Teacher'}: ${m.text}`)
+      .join('\n')
+
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 500,
+      system: REFLECT_SUMMARY_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: transcript }],
+    })
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+
+    res.json({
+      strengths: extractTag(text, 'strengths'),
+      growthAreas: extractTag(text, 'growth_areas'),
+      nextStep: extractTag(text, 'next_step'),
+    })
+  } catch (error) {
+    console.error('[audio-sessions] reflect summary failed:', error)
+    res.status(502).json({ error: 'Could not summarize your conversation. Please try again.' })
   }
 })
 

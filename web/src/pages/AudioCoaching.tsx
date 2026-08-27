@@ -8,6 +8,7 @@ import {
   getAudioSessions,
   getProfile,
   sendReflectMessage,
+  summarizeReflectConversation,
   tagSpeaker,
   transcribeAudioSession,
   updateAudioSession,
@@ -671,6 +672,8 @@ function ReportPanel({
   const [reflectSending, setReflectSending] = useState(false)
   const [reflectError, setReflectError] = useState<{ kind: ReflectChatErrorKind; message: string } | null>(null)
   const [reflectDraft, setReflectDraft] = useState('')
+  const [summarizing, setSummarizing] = useState(false)
+  const [summarizeError, setSummarizeError] = useState<string | null>(null)
 
   async function handleSaveNotes() {
     setSaving(true)
@@ -735,6 +738,22 @@ function ReportPanel({
       setReflectDraft(trimmed)
     } finally {
       setReflectSending(false)
+    }
+  }
+
+  async function handleSummarizeReflect() {
+    setSummarizing(true)
+    setSummarizeError(null)
+    try {
+      const summary = await summarizeReflectConversation(session.id)
+      if (summary.strengths != null) setStrengths(summary.strengths)
+      if (summary.growthAreas != null) setGrowthAreas(summary.growthAreas)
+      if (summary.nextStep != null) setNextStep(summary.nextStep)
+      setSaved(false)
+    } catch {
+      setSummarizeError('Could not summarize your conversation. Please try again.')
+    } finally {
+      setSummarizing(false)
     }
   }
 
@@ -876,6 +895,9 @@ function ReportPanel({
           error={error}
           onSave={handleSaveNotes}
           onLock={handleLock}
+          onSummarize={handleSummarizeReflect}
+          summarizing={summarizing}
+          summarizeError={summarizeError}
         />
       )}
 
@@ -1292,6 +1314,9 @@ function ReflectTab({
   error,
   onSave,
   onLock,
+  onSummarize,
+  summarizing,
+  summarizeError,
 }: {
   highlights: AudioHighlight[] | null
   conversation: AudioReflectMessage[] | null
@@ -1316,6 +1341,9 @@ function ReflectTab({
   error: string | null
   onSave: () => void
   onLock: () => void
+  onSummarize: () => void
+  summarizing: boolean
+  summarizeError: string | null
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const started = conversation != null && conversation.length > 0
@@ -1428,7 +1456,20 @@ function ReflectTab({
       </div>
 
       <div className="rounded-2xl border border-border bg-surface p-6">
-        <h2 className="text-sm font-semibold text-ink">Your reflection</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-ink">Your reflection</h2>
+          {started && !locked && (
+            <button
+              type="button"
+              onClick={onSummarize}
+              disabled={summarizing}
+              className="text-xs font-medium text-brand-600 hover:text-brand-700 disabled:opacity-60"
+            >
+              {summarizing ? 'Summarizing...' : 'Fill in from our conversation'}
+            </button>
+          )}
+        </div>
+        {summarizeError && <p className="mt-1 text-xs text-warm-500">{summarizeError}</p>}
         <div className="mt-4 flex flex-col gap-4">
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-ink">What went well</span>

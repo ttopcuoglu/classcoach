@@ -578,3 +578,9 @@ export async function sendReflectMessage(
   }
   return res.json()
 }
+
+export function summarizeReflectConversation(
+  id: string,
+): Promise<{ strengths: string | null; growthAreas: string | null; nextStep: string | null }> {
+  return request(`/api/audio-sessions/${id}/reflect-summary`, { method: 'POST' })
+}
