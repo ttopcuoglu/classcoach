@@ -33,6 +33,8 @@ export type ScenarioAttempt = {
   scenario: Scenario
 }
 
+export type FocusMetric = 'talkRatio' | 'higherOrderPct' | 'avgWaitTime' | 'cfuCount'
+
 export type UserProfile = {
   id: string
   email: string
@@ -42,6 +44,7 @@ export type UserProfile = {
   subjects: string | null
   onboardingProgress: string | null
   audioRetentionDays: number | null
+  focusMetric: FocusMetric | null
   createdAt: string
   updatedAt: string
 }
@@ -189,6 +192,13 @@ export type AudioSessionStatus =
 export type AudioHighlight = { label: string; timestampSec: number; excerpt: string }
 export type AudioPhase = { label: string; startSec: number; endSec: number }
 export type AudioQuote = { quote: string; timestampSec: number }
+export type AudioQuestionLogEntry = {
+  timestampSec: number
+  type: 'recall' | 'higher_order'
+  waitTimeSec: number | null
+  text: string
+  followUps: { timestampSec: number; text: string }[]
+}
 // Keyword/phrase-matched flags and quotes only — never scored.
 export type AudioLessonContent = {
   topicTerms: string[]
@@ -216,6 +226,7 @@ export type AudioSession = {
   metricsDetail: Record<string, number | null> | null
   highlights: AudioHighlight[] | null
   phases: AudioPhase[] | null
+  questionLog: AudioQuestionLogEntry[] | null
   lessonContent: AudioLessonContent | null
   strengths: string | null
   growthAreas: string | null
@@ -320,6 +331,7 @@ export function updateProfile(data: {
   subjects?: string
   onboardingProgress?: string
   audioRetentionDays?: number | null
+  focusMetric?: FocusMetric | null
 }): Promise<UserProfile> {
   return request('/api/profile', { method: 'PUT', body: JSON.stringify(data) })
 }

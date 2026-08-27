@@ -12,8 +12,10 @@ profileRouter.get('/', async (req, res) => {
   res.json(user)
 })
 
+const FOCUS_METRICS = new Set(['talkRatio', 'higherOrderPct', 'avgWaitTime', 'cfuCount'])
+
 profileRouter.put('/', async (req, res) => {
-  const { name, gradeLevels, subjects, onboardingProgress, audioRetentionDays } = req.body ?? {}
+  const { name, gradeLevels, subjects, onboardingProgress, audioRetentionDays, focusMetric } = req.body ?? {}
   if (name !== undefined && typeof name !== 'string') {
     res.status(400).json({ error: 'name must be a string' })
     return
@@ -34,10 +36,14 @@ profileRouter.put('/', async (req, res) => {
     res.status(400).json({ error: 'audioRetentionDays must be a number or null' })
     return
   }
+  if (focusMetric !== undefined && focusMetric !== null && !FOCUS_METRICS.has(focusMetric)) {
+    res.status(400).json({ error: 'focusMetric must be one of talkRatio, higherOrderPct, avgWaitTime, cfuCount, or null' })
+    return
+  }
 
   const updated = await prisma.user.update({
     where: { id: req.user!.userId },
-    data: { name, gradeLevels, subjects, onboardingProgress, audioRetentionDays },
+    data: { name, gradeLevels, subjects, onboardingProgress, audioRetentionDays, focusMetric },
   })
   res.json(updated)
 })
@@ -55,7 +61,7 @@ profileRouter.post('/reset', async (req, res) => {
   await prisma.audioSession.deleteMany({ where: { userId } })
   await prisma.user.update({
     where: { id: userId },
-    data: { name: null, gradeLevels: null, subjects: null, onboardingProgress: null },
+    data: { name: null, gradeLevels: null, subjects: null, onboardingProgress: null, focusMetric: null },
   })
   res.json({ status: 'ok' })
 })

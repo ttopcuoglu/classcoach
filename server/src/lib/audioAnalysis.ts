@@ -14,6 +14,13 @@ export type Segment = {
 
 export type Highlight = { label: string; timestampSec: number; excerpt: string }
 export type Phase = { label: string; startSec: number; endSec: number }
+export type QuestionLogEntry = {
+  timestampSec: number
+  type: 'recall' | 'higher_order'
+  waitTimeSec: number | null
+  text: string
+  followUps: { timestampSec: number; text: string }[]
+}
 
 export type AnalysisResult = {
   teacherTalkPct: number | null
@@ -42,6 +49,7 @@ export type AnalysisResult = {
   }
   highlights: Highlight[]
   phases: Phase[]
+  questionLog: QuestionLogEntry[]
 }
 
 export const RECALL_STARTERS = [
@@ -255,12 +263,15 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
   const waitTimes: number[] = []
   const highlights: Highlight[] = []
   const transitionIndexes: number[] = []
+  const questionLog: QuestionLogEntry[] = []
 
   let lastTeacherQuestionEndSec: number | null = null
   let prevTeacherAskedFollowingStudent = false
   const waitCandidates: { wait: number; segment: Segment }[] = []
   let redirectionHighlightTaken = false
   let probingHighlightTaken = false
+  let lastRootQuestionEntry: QuestionLogEntry | null = null
+  let lastQuestionEntryForWait: QuestionLogEntry | null = null
 
   ordered.forEach((segment, index) => {
     const duration = Math.max(0, segment.endSec - segment.startSec)
@@ -285,8 +296,10 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       if (wait >= 0) {
         waitTimes.push(wait)
         waitCandidates.push({ wait, segment })
+        if (lastQuestionEntryForWait) lastQuestionEntryForWait.waitTimeSec = round(wait, 2)
       }
       lastTeacherQuestionEndSec = null
+      lastQuestionEntryForWait = null
     }
 
     const precedingWasStudent = index > 0 && ordered[index - 1].speakerLabel !== 'Teacher'
@@ -331,13 +344,29 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
         if (classification === 'higher_order') higherOrderQuestionCount++
         else recallQuestionCount++
 
+        const entry: QuestionLogEntry = {
+          timestampSec: segment.startSec,
+          type: classification === 'higher_order' ? 'higher_order' : 'recall',
+          waitTimeSec: null,
+          text: sentence.trim(),
+          followUps: [],
+        }
+
         if (precedingWasStudent && prevTeacherAskedFollowingStudent) {
           followUpQuestionCount++
+          // Push the entry itself (not a copy) so a wait-time assigned to it
+          // later actually sticks — followUps is typed narrower but the
+          // extra fields are harmless via structural typing.
+          if (lastRootQuestionEntry) lastRootQuestionEntry.followUps.push(entry)
           if (!probingHighlightTaken) {
             highlights.push({ label: 'Follow-up / probing question', timestampSec: segment.startSec, excerpt: segment.text })
             probingHighlightTaken = true
           }
+        } else {
+          questionLog.push(entry)
+          lastRootQuestionEntry = entry
         }
+        lastQuestionEntryForWait = entry
       })
 
       prevTeacherAskedFollowingStudent = askedQuestionThisSegment && precedingWasStudent
@@ -410,6 +439,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
     },
     highlights: highlights.slice(0, 5),
     phases,
+    questionLog,
   }
 }
 

@@ -276,6 +276,7 @@ Generic vs. specific feedback after student responses: ${analysis.metricsDetail.
       metricsDetail: analysis.metricsDetail,
       highlights: analysis.highlights,
       phases: analysis.phases,
+      questionLog: analysis.questionLog,
       lessonContent,
       strengths,
       growthAreas,

@@ -22,6 +22,7 @@ model User {
   subjects           String? // comma-separated, e.g. "Math,Science"
   onboardingProgress String? // comma-separated completed First-30-Days step ids
   audioRetentionDays Int? // null = keep audio-coaching transcripts/reports indefinitely
+  focusMetric        String? // 'talkRatio' | 'higherOrderPct' | 'avgWaitTime' | 'cfuCount' — the teacher's chosen My Growth focus, null = none set
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -211,6 +212,9 @@ model AudioSession {
   metricsDetail    Json?
   highlights       Json? // [{ label, timestampSec, excerpt }]
   phases           Json? // [{ label, startSec, endSec }], coach-editable
+  // [{ timestampSec, type: 'recall'|'higher_order', waitTimeSec, text, followUps: [{ timestampSec, text }] }]
+  // null for sessions analyzed before this was tracked.
+  questionLog      Json?
 
   // Keyword/phrase-matched flags and quotes only — never scored. See
   // audioAnalysis.ts's LessonContentResult for the exact shape.

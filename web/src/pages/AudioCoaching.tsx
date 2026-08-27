@@ -10,8 +10,12 @@ import {
   tagSpeaker,
   transcribeAudioSession,
   updateAudioSession,
+  updateProfile,
+  type AudioLessonContent,
+  type AudioQuestionLogEntry,
   type AudioSession,
   type AudioSessionWithSegments,
+  type FocusMetric,
   type SpeakerSample,
 } from '../lib/api'
 import {
@@ -23,6 +27,7 @@ import {
   MIN_DURATION_FOR_CFU_DETECTION_SEC,
   MIN_N_FOR_PERCENT,
   SHORT_SESSION_THRESHOLD_SEC,
+  type ConfidentMetric,
 } from '../lib/reportConfidence'
 
 function formatTime(sec: number): string {
@@ -32,12 +37,12 @@ function formatTime(sec: number): string {
 }
 
 export default function AudioCoaching() {
-  const [view, setView] = useState<'sessions' | 'trends'>('sessions')
   const [sessions, setSessions] = useState<AudioSession[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
   const [active, setActive] = useState<AudioSessionWithSegments | null>(null)
   const [speakers, setSpeakers] = useState<SpeakerSample[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [focusMetric, setFocusMetric] = useState<FocusMetric | null>(null)
 
   function refreshHistory() {
     getAudioSessions()
@@ -48,7 +53,19 @@ export default function AudioCoaching() {
 
   useEffect(() => {
     refreshHistory()
+    getProfile()
+      .then((p) => setFocusMetric(p.focusMetric))
+      .catch(() => {})
   }, [])
+
+  async function handleFocusMetricChange(metric: FocusMetric | null) {
+    setFocusMetric(metric)
+    try {
+      await updateProfile({ focusMetric: metric })
+    } catch {
+      // best-effort — the selector already reflects the choice locally
+    }
+  }
 
   function handleExit() {
     setActive(null)
@@ -87,6 +104,9 @@ export default function AudioCoaching() {
         onSpeakers={setSpeakers}
         onUpdate={setActive}
         onExit={handleExit}
+        sessions={sessions}
+        focusMetric={focusMetric}
+        onFocusMetricChange={handleFocusMetricChange}
       />
     )
   }
@@ -101,58 +121,31 @@ export default function AudioCoaching() {
         </p>
       </div>
 
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => setView('sessions')}
-          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-            view === 'sessions' ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:text-ink'
-          }`}
-        >
-          Sessions
-        </button>
-        <button
-          type="button"
-          onClick={() => setView('trends')}
-          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-            view === 'trends' ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:text-ink'
-          }`}
-        >
-          Trends
-        </button>
-      </div>
-
       {error && <p className="text-sm text-warm-500">{error}</p>}
 
-      {view === 'trends' ? (
-        <TrendsView sessions={sessions} loading={historyLoading} />
-      ) : (
-        <>
-          <SetupForm onCreated={(session) => setActive({ ...session, segments: [] })} />
+      <SetupForm onCreated={(session) => setActive({ ...session, segments: [] })} />
 
-          <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Past sessions</h2>
-            {historyLoading ? (
-              <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
-            ) : sessions.length === 0 ? (
-              <div className="mt-3 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
-                Sessions you record will show up here.
-              </div>
-            ) : (
-              <div className="mt-3 flex flex-col gap-3">
-                {sessions.map((s) => (
-                  <SessionCard
-                    key={s.id}
-                    session={s}
-                    onOpen={() => handleOpenSession(s.id)}
-                    onDelete={() => handleDeleteSession(s.id)}
-                  />
-                ))}
-              </div>
-            )}
+      <div>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Past sessions</h2>
+        {historyLoading ? (
+          <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
+        ) : sessions.length === 0 ? (
+          <div className="mt-3 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
+            Sessions you record will show up here.
           </div>
-        </>
-      )}
+        ) : (
+          <div className="mt-3 flex flex-col gap-3">
+            {sessions.map((s) => (
+              <SessionCard
+                key={s.id}
+                session={s}
+                onOpen={() => handleOpenSession(s.id)}
+                onDelete={() => handleDeleteSession(s.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -266,12 +259,18 @@ function SessionFlow({
   onSpeakers,
   onUpdate,
   onExit,
+  sessions,
+  focusMetric,
+  onFocusMetricChange,
 }: {
   session: AudioSessionWithSegments
   speakers: SpeakerSample[]
   onSpeakers: (s: SpeakerSample[]) => void
   onUpdate: (s: AudioSessionWithSegments) => void
   onExit: () => void
+  sessions: AudioSession[]
+  focusMetric: FocusMetric | null
+  onFocusMetricChange: (metric: FocusMetric | null) => void
 }) {
   if (session.status === 'setup' || session.status === 'recording' || session.status === 'paused') {
     return (
@@ -288,7 +287,16 @@ function SessionFlow({
   if (session.status === 'tagging') {
     return <TagSpeakersPanel session={session} speakers={speakers} onUpdate={onUpdate} />
   }
-  return <ReportPanel session={session} onUpdate={onUpdate} onExit={onExit} />
+  return (
+    <ReportPanel
+      session={session}
+      onUpdate={onUpdate}
+      onExit={onExit}
+      sessions={sessions}
+      focusMetric={focusMetric}
+      onFocusMetricChange={onFocusMetricChange}
+    />
+  )
 }
 
 function RecordingPanel({
@@ -564,15 +572,109 @@ function TagSpeakersPanel({
   )
 }
 
+type ReportTab = 'overview' | 'growth' | 'reflect' | 'lesson' | 'climate' | 'discourse'
+
+const REPORT_TABS: { key: ReportTab; label: string }[] = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'growth', label: 'My Growth' },
+  { key: 'reflect', label: 'Reflect' },
+  { key: 'lesson', label: 'Lesson Content' },
+  { key: 'climate', label: 'Climate & Routines' },
+  { key: 'discourse', label: 'Discourse Details' },
+]
+
+const FOCUS_METRIC_LABELS: Record<FocusMetric, string> = {
+  talkRatio: 'Talk ratio',
+  higherOrderPct: 'Higher-order questions',
+  avgWaitTime: 'Avg. wait time',
+  cfuCount: 'Checks for understanding',
+}
+
+function TabBar({ tab, onSelect }: { tab: ReportTab; onSelect: (t: ReportTab) => void }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {REPORT_TABS.map(({ key, label }) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => onSelect(key)}
+          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+            tab === key ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:text-ink'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+type ReflectPrompt = { id: string; text: string; sourceTab: ReportTab; sourceId: string }
+
+function buildReflectPrompts(
+  session: AudioSessionWithSegments,
+  cfuMetric: { state: string },
+  redirectionMetric: { state: string },
+): ReflectPrompt[] {
+  const prompts: ReflectPrompt[] = []
+
+  const HIGHLIGHT_TEMPLATES: Record<string, (excerpt: string, time: string) => string> = {
+    'Longest uninterrupted teacher monologue': (excerpt, time) =>
+      `At ${time}, you had your longest uninterrupted stretch of talking: "${excerpt}" Looking back, was that a moment worth extending, or a spot where handing off to students earlier might help?`,
+    'Longest wait time': (excerpt, time) =>
+      `Your longest pause after a question was at ${time}, right after "${excerpt}" — was that intentional wait time, or did the silence feel uncomfortable in the moment?`,
+    'Follow-up / probing question': (excerpt, time) =>
+      `At ${time}, you followed up on a student's answer with another question: "${excerpt}" What made you decide to push further there?`,
+    'Redirection cluster': (excerpt, time) =>
+      `Around ${time}, you used a few redirection phrases close together: "${excerpt}" What was happening in the room right before that?`,
+  }
+
+  ;(session.highlights ?? []).forEach((h, i) => {
+    const time = formatTime(h.timestampSec)
+    const template = HIGHLIGHT_TEMPLATES[h.label]
+    const text = template
+      ? template(h.excerpt, time)
+      : `At ${time}, this moment stood out: "${h.excerpt}" — what's your take on it?`
+    prompts.push({ id: `highlight-prompt-${i}`, text, sourceTab: 'overview', sourceId: `highlight-${i}` })
+  })
+
+  if (cfuMetric.state === 'zero') {
+    prompts.push({
+      id: 'cfu-prompt',
+      text: "You didn't do an explicit check for understanding this session — intentional, or did it slip by?",
+      sourceTab: 'overview',
+      sourceId: 'stat-cfu',
+    })
+  }
+  if (redirectionMetric.state === 'zero') {
+    prompts.push({
+      id: 'redirection-prompt',
+      text: 'No redirection language was flagged this session — did the room feel that settled, or did detection just miss it?',
+      sourceTab: 'climate',
+      sourceId: 'stat-redirection',
+    })
+  }
+
+  return prompts.slice(0, 4)
+}
+
 function ReportPanel({
   session,
   onUpdate,
   onExit,
+  sessions,
+  focusMetric,
+  onFocusMetricChange,
 }: {
   session: AudioSessionWithSegments
   onUpdate: (s: AudioSessionWithSegments) => void
   onExit: () => void
+  sessions: AudioSession[]
+  focusMetric: FocusMetric | null
+  onFocusMetricChange: (metric: FocusMetric | null) => void
 }) {
+  const [tab, setTab] = useState<ReportTab>('overview')
+  const [pendingScrollId, setPendingScrollId] = useState<string | null>(null)
   const locked = session.status === 'locked'
   const [strengths, setStrengths] = useState(session.strengths ?? '')
   const [growthAreas, setGrowthAreas] = useState(session.growthAreas ?? '')
@@ -666,6 +768,22 @@ function ReportPanel({
       ? formatRatio(positiveCount, positiveCount + correctiveCount)
       : { state: 'unavailable' as const, display: '—', reason: 'No positive or corrective phrases detected.' }
 
+  const reflectPrompts = buildReflectPrompts(session, cfuMetric, redirectionMetric)
+
+  function handleViewSource(sourceTab: ReportTab, sourceId: string) {
+    setTab(sourceTab)
+    setPendingScrollId(sourceId)
+  }
+
+  useEffect(() => {
+    if (!pendingScrollId) return
+    const timeout = setTimeout(() => {
+      document.getElementById(pendingScrollId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setPendingScrollId(null)
+    }, 50)
+    return () => clearTimeout(timeout)
+  }, [tab, pendingScrollId])
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -677,11 +795,136 @@ function ReportPanel({
         )}
       </div>
 
+      <TabBar tab={tab} onSelect={setTab} />
+
+      {tab === 'overview' && (
+        <OverviewTab
+          session={session}
+          coverage={coverage}
+          teacherTalkMetric={teacherTalkMetric}
+          studentTalkMetric={studentTalkMetric}
+          silencePct={silencePct}
+          silenceMetric={silenceMetric}
+          studentSegmentsMetric={studentSegmentsMetric}
+          questionsMetric={questionsMetric}
+          higherOrderRatio={higherOrderRatio}
+          followUpMetric={followUpMetric}
+          waitTimeMetric={waitTimeMetric}
+          cfuMetric={cfuMetric}
+          feedbackRatio={feedbackRatio}
+          focusMetric={focusMetric}
+        />
+      )}
+
+      {tab === 'growth' && (
+        <MyGrowthTab sessions={sessions} focusMetric={focusMetric} onFocusMetricChange={onFocusMetricChange} />
+      )}
+
+      {tab === 'reflect' && (
+        <ReflectTab
+          prompts={reflectPrompts}
+          onViewSource={handleViewSource}
+          locked={locked}
+          strengths={strengths}
+          growthAreas={growthAreas}
+          nextStep={nextStep}
+          followUpDate={followUpDate}
+          onStrengthsChange={(v) => {
+            setStrengths(v)
+            setSaved(false)
+          }}
+          onGrowthAreasChange={(v) => {
+            setGrowthAreas(v)
+            setSaved(false)
+          }}
+          onNextStepChange={(v) => {
+            setNextStep(v)
+            setSaved(false)
+          }}
+          onFollowUpDateChange={(v) => {
+            setFollowUpDate(v)
+            setSaved(false)
+          }}
+          saving={saving}
+          saved={saved}
+          locking={locking}
+          error={error}
+          onSave={handleSaveNotes}
+          onLock={handleLock}
+        />
+      )}
+
+      {tab === 'lesson' && <LessonContentTab lessonContent={lessonContent} />}
+
+      {tab === 'climate' && (
+        <ClimateRoutinesTab
+          transitionMetric={transitionMetric}
+          phasesCount={session.phases?.length ?? 0}
+          onViewPhases={() => handleViewSource('overview', 'session-phases')}
+          nameMentionMetric={nameMentionMetric}
+          toneRatio={toneRatio}
+          redirectionMetric={redirectionMetric}
+        />
+      )}
+
+      {tab === 'discourse' && (
+        <DiscourseDetailsTab questionCount={session.questionCount} questionLog={session.questionLog} />
+      )}
+
+      <div className="rounded-xl border border-dashed border-border p-4 text-xs text-ink-soft">
+        This report reflects what could be heard in your recording — talk patterns, questioning, and classroom
+        routines. It doesn't capture lesson planning, materials, physical space, visual engagement, or anything
+        outside class time. Automated counts above are suggestions to confirm or edit, not final judgments.
+      </div>
+
+      <Link
+        to={`/audio-coaching/${session.id}/export`}
+        className="self-start text-sm font-medium text-brand-600 hover:text-brand-700"
+      >
+        Open printable report →
+      </Link>
+    </div>
+  )
+}
+
+function OverviewTab({
+  session,
+  coverage,
+  teacherTalkMetric,
+  studentTalkMetric,
+  silencePct,
+  silenceMetric,
+  studentSegmentsMetric,
+  questionsMetric,
+  higherOrderRatio,
+  followUpMetric,
+  waitTimeMetric,
+  cfuMetric,
+  feedbackRatio,
+  focusMetric,
+}: {
+  session: AudioSessionWithSegments
+  coverage: ReturnType<typeof getCoverage>
+  teacherTalkMetric: ReturnType<typeof getPresenceMetric>
+  studentTalkMetric: ReturnType<typeof getPresenceMetric>
+  silencePct: number | null
+  silenceMetric: ReturnType<typeof getPresenceMetric>
+  studentSegmentsMetric: ReturnType<typeof getCountMetric>
+  questionsMetric: ReturnType<typeof getCountMetric>
+  higherOrderRatio: ReturnType<typeof formatRatio> | null
+  followUpMetric: ReturnType<typeof getCountMetric>
+  waitTimeMetric: ReturnType<typeof getPresenceMetric>
+  cfuMetric: ReturnType<typeof getCountMetric>
+  feedbackRatio: ConfidentMetric
+  focusMetric: FocusMetric | null
+}) {
+  return (
+    <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-          Coverage: {formatTime(coverage.recordedSec)} recorded of {formatTime(coverage.totalSec)}
+          You recorded {formatTime(coverage.recordedSec)} of {formatTime(coverage.totalSec)}
           {coverage.uncapturedPhases.length > 0 && (
-            <> · Not meaningfully captured: {coverage.uncapturedPhases.join(', ')}</>
+            <> · Not clearly captured: {coverage.uncapturedPhases.join(', ')}</>
           )}
         </p>
         {coverage.isShort && (
@@ -711,8 +954,14 @@ function ReportPanel({
         title="Talk & Participation"
         coverage={categoryCoverage([teacherTalkMetric, studentTalkMetric, silenceMetric, studentSegmentsMetric])}
       >
-        <Stat label="Teacher talk" value={session.teacherTalkPct != null ? `${session.teacherTalkPct}%` : '—'} />
-        <Stat label="Student talk" value={session.studentTalkPct != null ? `${session.studentTalkPct}%` : '—'} />
+        <div id="stat-talkRatio">
+          <Stat
+            label="Your talk time"
+            value={session.teacherTalkPct != null ? `${session.teacherTalkPct}%` : '—'}
+            focused={focusMetric === 'talkRatio'}
+          />
+        </div>
+        <Stat label="Student talk time" value={session.studentTalkPct != null ? `${session.studentTalkPct}%` : '—'} />
         <Stat label="Silence / other" value={silencePct != null ? `${silencePct}%` : '—'} />
         <Stat
           label="Student voice segments"
@@ -726,31 +975,43 @@ function ReportPanel({
         title="Questioning & Thinking"
         coverage={categoryCoverage([questionsMetric, followUpMetric, waitTimeMetric])}
       >
+        <div id="stat-higherOrderPct">
+          <Stat
+            label="Questions you asked"
+            value={questionsMetric.display}
+            muted={questionsMetric.state === 'unavailable'}
+            reason={questionsMetric.reason}
+            sub={higherOrderRatio ? `${higherOrderRatio.display} higher-order` : undefined}
+            focused={focusMetric === 'higherOrderPct'}
+          />
+        </div>
         <Stat
-          label="Questions"
-          value={questionsMetric.display}
-          muted={questionsMetric.state === 'unavailable'}
-          reason={questionsMetric.reason}
-          sub={higherOrderRatio ? `${higherOrderRatio.display} higher-order` : undefined}
-        />
-        <Stat
-          label="Follow-up questions"
+          label="Your follow-up questions"
           value={followUpMetric.display}
           muted={followUpMetric.state === 'unavailable'}
           reason={followUpMetric.reason}
         />
-        <Stat label="Avg. wait time" value={session.avgWaitTimeSec != null ? `${session.avgWaitTimeSec}s` : '—'} />
+        <div id="stat-avgWaitTime">
+          <Stat
+            label="Your avg. wait time"
+            value={session.avgWaitTimeSec != null ? `${session.avgWaitTimeSec}s` : '—'}
+            focused={focusMetric === 'avgWaitTime'}
+          />
+        </div>
       </CategorySection>
 
       <CategorySection title="Checking Understanding" coverage={categoryCoverage([cfuMetric, feedbackRatio])}>
+        <div id="stat-cfu">
+          <Stat
+            label="Your checks for understanding"
+            value={cfuMetric.display}
+            muted={cfuMetric.state === 'unavailable'}
+            reason={cfuMetric.reason}
+            focused={focusMetric === 'cfuCount'}
+          />
+        </div>
         <Stat
-          label="Checks for understanding"
-          value={cfuMetric.display}
-          muted={cfuMetric.state === 'unavailable'}
-          reason={cfuMetric.reason}
-        />
-        <Stat
-          label="Feedback specificity"
+          label="Your feedback specificity"
           value={feedbackRatio.display}
           muted={feedbackRatio.state === 'unavailable'}
           reason={feedbackRatio.reason}
@@ -758,44 +1019,472 @@ function ReportPanel({
         />
       </CategorySection>
 
-      <div>
-        <h2 className="flex items-baseline justify-between text-sm font-semibold uppercase tracking-wide text-ink-soft">
-          <span>Classroom Routines</span>
-          <span className="text-xs font-normal normal-case text-ink-soft">
-            {categoryCoverage([transitionMetric, getPresenceMetric(session.phases?.length ? 1 : null)])}
-          </span>
-        </h2>
-        <div className="mt-3 grid grid-cols-2 gap-4 rounded-2xl border border-border bg-surface p-6 sm:grid-cols-3">
-          <Stat
-            label="Transitions"
-            value={transitionMetric.display}
-            muted={transitionMetric.state === 'unavailable'}
-            reason={transitionMetric.reason}
-          />
+      {session.phases && session.phases.length > 0 && (
+        <div id="session-phases">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Session phases</h2>
+          <div className="mt-3 flex flex-col gap-2">
+            {session.phases.map((p, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2.5"
+              >
+                <span className="w-28 shrink-0 text-sm font-medium text-ink">{p.label}</span>
+                <span className="text-sm text-ink-soft">
+                  {formatTime(p.startSec)} – {formatTime(p.endSec)}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-ink-soft">
+            These boundaries are an automated estimate — treat them as a starting point.
+          </p>
         </div>
+      )}
 
-        {session.phases && session.phases.length > 0 && (
-          <div className="mt-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Session phases</p>
-            <div className="mt-2 flex flex-col gap-2">
-              {session.phases.map((p, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2.5"
-                >
-                  <span className="w-28 shrink-0 text-sm font-medium text-ink">{p.label}</span>
-                  <span className="text-sm text-ink-soft">
-                    {formatTime(p.startSec)} – {formatTime(p.endSec)}
-                  </span>
-                </div>
-              ))}
-            </div>
+      {session.highlights && session.highlights.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Highlights</h2>
+          <div className="mt-3 flex flex-col gap-3">
+            {session.highlights.map((h, i) => (
+              <div key={i} id={`highlight-${i}`} className="rounded-xl border border-border bg-surface p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+                  {h.label} · {formatTime(h.timestampSec)}
+                </p>
+                <p className="mt-1.5 text-sm text-ink">"{h.excerpt}"</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FocusSelector({
+  focusMetric,
+  onChange,
+}: {
+  focusMetric: FocusMetric | null
+  onChange: (metric: FocusMetric | null) => void
+}) {
+  const options = Object.keys(FOCUS_METRIC_LABELS) as FocusMetric[]
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">My focus</span>
+      <div className="flex flex-wrap gap-2">
+        {options.map((key) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onChange(focusMetric === key ? null : key)}
+            className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+              focusMetric === key
+                ? 'border-brand-500 bg-brand-50 text-brand-600'
+                : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+            }`}
+          >
+            {FOCUS_METRIC_LABELS[key]}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function MyGrowthTab({
+  sessions,
+  focusMetric,
+  onFocusMetricChange,
+}: {
+  sessions: AudioSession[]
+  focusMetric: FocusMetric | null
+  onFocusMetricChange: (metric: FocusMetric | null) => void
+}) {
+  const analyzed = sessions
+    .filter((s) => s.teacherTalkPct != null && s.durationSec != null)
+    .slice()
+    .sort((a, b) => new Date(a.sessionDate).getTime() - new Date(b.sessionDate).getTime())
+    .slice(-MAX_TREND_SESSIONS)
+
+  if (analyzed.length < 2) {
+    return (
+      <div className="flex flex-col gap-4">
+        <FocusSelector focusMetric={focusMetric} onChange={onFocusMetricChange} />
+        <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
+          Your growth trends will show up here after a couple more sessions. One session — especially a short
+          one — is too noisy on its own to read much into.
+        </div>
+      </div>
+    )
+  }
+
+  const labels = analyzed.map((s) =>
+    new Date(s.sessionDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+  )
+
+  const teacherTalk = analyzed.map((s) => s.teacherTalkPct)
+  const studentTalk = analyzed.map((s) => s.studentTalkPct)
+  const higherOrder = analyzed.map((s) => ((s.questionCount ?? 0) < MIN_N_FOR_PERCENT ? null : s.higherOrderPct))
+  const avgWaitTime = analyzed.map((s) => s.avgWaitTimeSec)
+  const waitTimeValues = avgWaitTime.filter((v): v is number => v != null)
+  const waitTimeMax = waitTimeValues.length ? Math.max(5, ...waitTimeValues) * 1.2 : 5
+
+  const cfuFrequency = analyzed.map((s) => {
+    const duration = s.durationSec ?? 0
+    if (duration < MIN_DURATION_FOR_CFU_DETECTION_SEC) return null
+    return Math.round(((s.cfuCount ?? 0) / (duration / 600)) * 10) / 10
+  })
+  const excludedCfuCount = cfuFrequency.filter((v) => v == null).length
+  const cfuMax = Math.max(4, ...cfuFrequency.filter((v): v is number => v != null)) * 1.2
+
+  const insight = buildTrendInsight(analyzed)
+
+  const charts: { key: FocusMetric; node: React.ReactNode }[] = [
+    {
+      key: 'talkRatio',
+      node: (
+        <TrendChart
+          title="Talk Ratio"
+          unit="%"
+          maxValue={100}
+          labels={labels}
+          series={[
+            { label: 'You', colorVar: '--color-brand-500', values: teacherTalk },
+            { label: 'Students', colorVar: '--color-warm-400', values: studentTalk },
+          ]}
+        />
+      ),
+    },
+    {
+      key: 'higherOrderPct',
+      node: (
+        <TrendChart
+          title="Question Quality"
+          unit="%"
+          maxValue={100}
+          labels={labels}
+          series={[{ label: 'Higher-order questions', colorVar: '--color-brand-500', values: higherOrder }]}
+          emptyMessage="Not enough questions asked yet in any single session to trend this reliably."
+        />
+      ),
+    },
+    {
+      key: 'avgWaitTime',
+      node: (
+        <TrendChart
+          title="Avg. Wait Time"
+          unit="s"
+          maxValue={waitTimeMax}
+          labels={labels}
+          series={[{ label: 'Your avg. wait time', colorVar: '--color-brand-500', values: avgWaitTime }]}
+        />
+      ),
+    },
+    {
+      key: 'cfuCount',
+      node: (
+        <>
+          <TrendChart
+            title="Checks for Understanding"
+            unit="/10min"
+            maxValue={cfuMax}
+            labels={labels}
+            series={[{ label: 'CFUs per 10 min', colorVar: '--color-brand-500', values: cfuFrequency }]}
+          />
+          {excludedCfuCount > 0 && (
             <p className="mt-2 text-xs text-ink-soft">
-              These boundaries are an automated estimate — treat them as a starting point.
+              {excludedCfuCount} session{excludedCfuCount === 1 ? '' : 's'} under{' '}
+              {Math.round(MIN_DURATION_FOR_CFU_DETECTION_SEC / 60)} min excluded from this line — too short to
+              reliably detect CFUs.
             </p>
+          )}
+        </>
+      ),
+    },
+  ]
+
+  const ordered = focusMetric
+    ? [...charts.filter((c) => c.key === focusMetric), ...charts.filter((c) => c.key !== focusMetric)]
+    : charts
+
+  return (
+    <div className="flex flex-col gap-6">
+      <FocusSelector focusMetric={focusMetric} onChange={onFocusMetricChange} />
+
+      {insight && (
+        <div className="flex items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50 p-4">
+          <ArrowUpIcon className="h-5 w-5 shrink-0 text-brand-600" />
+          <p className="text-sm text-ink">{insight}</p>
+        </div>
+      )}
+
+      {ordered.map((c) => (
+        <div
+          key={c.key}
+          className={`rounded-2xl border p-6 ${
+            focusMetric === c.key ? 'border-brand-400 bg-brand-50/40 ring-1 ring-brand-200' : 'border-border bg-surface'
+          }`}
+        >
+          {focusMetric === c.key && (
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-brand-600">Your focus</p>
+          )}
+          {c.node}
+        </div>
+      ))}
+
+      <p className="text-xs text-ink-soft">
+        Showing your last {analyzed.length} analyzed session{analyzed.length === 1 ? '' : 's'}. Short sessions
+        add noise — read the overall direction, not any single point. This is compared only against your own
+        history, not other teachers.
+      </p>
+    </div>
+  )
+}
+
+function ReflectTab({
+  prompts,
+  onViewSource,
+  locked,
+  strengths,
+  growthAreas,
+  nextStep,
+  followUpDate,
+  onStrengthsChange,
+  onGrowthAreasChange,
+  onNextStepChange,
+  onFollowUpDateChange,
+  saving,
+  saved,
+  locking,
+  error,
+  onSave,
+  onLock,
+}: {
+  prompts: ReflectPrompt[]
+  onViewSource: (tab: ReportTab, id: string) => void
+  locked: boolean
+  strengths: string
+  growthAreas: string
+  nextStep: string
+  followUpDate: string
+  onStrengthsChange: (v: string) => void
+  onGrowthAreasChange: (v: string) => void
+  onNextStepChange: (v: string) => void
+  onFollowUpDateChange: (v: string) => void
+  saving: boolean
+  saved: boolean
+  locking: boolean
+  error: string | null
+  onSave: () => void
+  onLock: () => void
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Questions worth sitting with</h2>
+        {prompts.length === 0 ? (
+          <p className="mt-3 text-sm text-ink-soft">
+            Not enough measured data this session to generate reflection prompts.
+          </p>
+        ) : (
+          <div className="mt-3 flex flex-col gap-3">
+            {prompts.map((p) => (
+              <div key={p.id} className="rounded-xl border border-border bg-surface p-4">
+                <p className="text-sm text-ink">{p.text}</p>
+                <button
+                  type="button"
+                  onClick={() => onViewSource(p.sourceTab, p.sourceId)}
+                  className="mt-2 text-xs font-medium text-brand-600 hover:text-brand-700"
+                >
+                  View the moment this is about →
+                </button>
+              </div>
+            ))}
           </div>
         )}
       </div>
+
+      <div className="rounded-2xl border border-border bg-surface p-6">
+        <h2 className="text-sm font-semibold text-ink">Your reflection</h2>
+        <div className="mt-4 flex flex-col gap-4">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-ink">What went well</span>
+            <textarea
+              value={strengths}
+              onChange={(e) => onStrengthsChange(e.target.value)}
+              disabled={locked}
+              rows={3}
+              className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-ink">What you want to work on</span>
+            <textarea
+              value={growthAreas}
+              onChange={(e) => onGrowthAreasChange(e.target.value)}
+              disabled={locked}
+              rows={3}
+              className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-ink">One thing to try next time</span>
+            <textarea
+              value={nextStep}
+              onChange={(e) => onNextStepChange(e.target.value)}
+              disabled={locked}
+              rows={2}
+              className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-ink">Follow-up date</span>
+            <input
+              type="date"
+              value={followUpDate}
+              onChange={(e) => onFollowUpDateChange(e.target.value)}
+              disabled={locked}
+              className="w-fit rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
+            />
+          </label>
+        </div>
+
+        {!locked && (
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={saving}
+              className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+            >
+              {saving ? 'Saving...' : 'Save notes'}
+            </button>
+            {saved && <span className="text-sm text-brand-600">Saved.</span>}
+            <button
+              type="button"
+              onClick={onLock}
+              disabled={locking}
+              className="ml-auto rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
+            >
+              {locking ? 'Locking...' : 'Lock report'}
+            </button>
+          </div>
+        )}
+        {error && <p className="mt-3 text-sm text-warm-500">{error}</p>}
+      </div>
+    </div>
+  )
+}
+
+function LessonContentTab({ lessonContent }: { lessonContent: AudioLessonContent | null }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs font-normal italic text-ink-soft">Flags & quotes only — not scored</p>
+      <div className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-6">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Topic terms detected</p>
+          {lessonContent && lessonContent.topicTerms.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {lessonContent.topicTerms.map((term) => (
+                <span key={term} className="rounded-full border border-border bg-canvas px-3 py-1 text-xs text-ink">
+                  {term}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-1 text-sm text-ink-soft">No recurring subject-specific terms detected.</p>
+          )}
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Stated objective</p>
+          {!lessonContent || lessonContent.statedObjective.found === null ? (
+            <p className="mt-1 text-sm text-ink-soft" title="Opening phase not captured.">
+              — Opening phase not captured
+            </p>
+          ) : lessonContent.statedObjective.found ? (
+            <p className="mt-1 text-sm text-ink">
+              Detected: "{lessonContent.statedObjective.quote}"{' '}
+              <span className="text-xs text-ink-soft">
+                ({formatTime(lessonContent.statedObjective.timestampSec ?? 0)})
+              </span>
+            </p>
+          ) : (
+            <p className="mt-1 text-sm text-ink-soft">Not detected in the Opening phase.</p>
+          )}
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+            Real-world / prior-knowledge connections
+          </p>
+          {lessonContent && lessonContent.connections.length > 0 ? (
+            <div className="mt-2 flex flex-col gap-1.5">
+              {lessonContent.connections.map((c, i) => (
+                <p key={i} className="text-sm text-ink">
+                  "{c.quote}" <span className="text-xs text-ink-soft">({formatTime(c.timestampSec)})</span>
+                </p>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-1 text-sm text-ink-soft">None detected.</p>
+          )}
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Defined vocabulary</p>
+          {lessonContent && lessonContent.vocabulary.length > 0 ? (
+            <div className="mt-2 flex flex-col gap-1.5">
+              {lessonContent.vocabulary.map((v, i) => (
+                <p key={i} className="text-sm text-ink">
+                  "{v.quote}" <span className="text-xs text-ink-soft">({formatTime(v.timestampSec)})</span>
+                </p>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-1 text-sm text-ink-soft">None detected.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ClimateRoutinesTab({
+  transitionMetric,
+  phasesCount,
+  onViewPhases,
+  nameMentionMetric,
+  toneRatio,
+  redirectionMetric,
+}: {
+  transitionMetric: ReturnType<typeof getCountMetric>
+  phasesCount: number
+  onViewPhases: () => void
+  nameMentionMetric: ReturnType<typeof getCountMetric>
+  toneRatio: ConfidentMetric
+  redirectionMetric: ReturnType<typeof getCountMetric>
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      <CategorySection title="Routines" coverage={categoryCoverage([transitionMetric])}>
+        <Stat
+          label="Your transitions"
+          value={transitionMetric.display}
+          muted={transitionMetric.state === 'unavailable'}
+          reason={transitionMetric.reason}
+        />
+      </CategorySection>
+
+      {phasesCount > 0 && (
+        <button
+          type="button"
+          onClick={onViewPhases}
+          className="self-start text-sm font-medium text-brand-600 hover:text-brand-700"
+        >
+          {phasesCount} phase{phasesCount === 1 ? '' : 's'} detected — see Overview for the full breakdown →
+        </button>
+      )}
 
       <CategorySection
         title="Climate & Tone"
@@ -808,205 +1497,99 @@ function ReportPanel({
           reason={nameMentionMetric.reason}
         />
         <Stat
-          label="Positive / corrective"
+          label="Your positive / corrective ratio"
           value={toneRatio.display}
           muted={toneRatio.state === 'unavailable'}
           reason={toneRatio.reason}
           sub={toneRatio.state !== 'unavailable' ? 'share positive' : undefined}
         />
-        <Stat
-          label="Redirection language"
-          value={redirectionMetric.display}
-          muted={redirectionMetric.state === 'unavailable'}
-          reason={redirectionMetric.reason ?? 'Count only — tone isn\'t judged automatically.'}
-        />
-      </CategorySection>
-
-      <div>
-        <h2 className="flex items-baseline justify-between text-sm font-semibold uppercase tracking-wide text-ink-soft">
-          <span>Lesson Content</span>
-          <span className="text-xs font-normal normal-case italic text-ink-soft">Flags & quotes only — not scored</span>
-        </h2>
-        <div className="mt-3 flex flex-col gap-4 rounded-2xl border border-border bg-surface p-6">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Topic terms detected</p>
-            {lessonContent && lessonContent.topicTerms.length > 0 ? (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {lessonContent.topicTerms.map((term) => (
-                  <span
-                    key={term}
-                    className="rounded-full border border-border bg-canvas px-3 py-1 text-xs text-ink"
-                  >
-                    {term}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-1 text-sm text-ink-soft">No recurring subject-specific terms detected.</p>
-            )}
-          </div>
-
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Stated objective</p>
-            {!lessonContent || lessonContent.statedObjective.found === null ? (
-              <p className="mt-1 text-sm text-ink-soft" title="Opening phase not captured.">
-                — Opening phase not captured
-              </p>
-            ) : lessonContent.statedObjective.found ? (
-              <p className="mt-1 text-sm text-ink">
-                Detected: "{lessonContent.statedObjective.quote}"{' '}
-                <span className="text-xs text-ink-soft">
-                  ({formatTime(lessonContent.statedObjective.timestampSec ?? 0)})
-                </span>
-              </p>
-            ) : (
-              <p className="mt-1 text-sm text-ink-soft">Not detected in the Opening phase.</p>
-            )}
-          </div>
-
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-              Real-world / prior-knowledge connections
-            </p>
-            {lessonContent && lessonContent.connections.length > 0 ? (
-              <div className="mt-2 flex flex-col gap-1.5">
-                {lessonContent.connections.map((c, i) => (
-                  <p key={i} className="text-sm text-ink">
-                    "{c.quote}" <span className="text-xs text-ink-soft">({formatTime(c.timestampSec)})</span>
-                  </p>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-1 text-sm text-ink-soft">None detected.</p>
-            )}
-          </div>
-
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Defined vocabulary</p>
-            {lessonContent && lessonContent.vocabulary.length > 0 ? (
-              <div className="mt-2 flex flex-col gap-1.5">
-                {lessonContent.vocabulary.map((v, i) => (
-                  <p key={i} className="text-sm text-ink">
-                    "{v.quote}" <span className="text-xs text-ink-soft">({formatTime(v.timestampSec)})</span>
-                  </p>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-1 text-sm text-ink-soft">None detected.</p>
-            )}
-          </div>
+        <div id="stat-redirection">
+          <Stat
+            label="Your redirection language"
+            value={redirectionMetric.display}
+            muted={redirectionMetric.state === 'unavailable'}
+            reason={redirectionMetric.reason ?? 'Count only — tone isn\'t judged automatically.'}
+          />
         </div>
-      </div>
+      </CategorySection>
+    </div>
+  )
+}
 
-      {session.highlights && session.highlights.length > 0 && (
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Highlights</h2>
-          <div className="mt-3 flex flex-col gap-3">
-            {session.highlights.map((h, i) => (
+function DiscourseDetailsTab({
+  questionCount,
+  questionLog,
+}: {
+  questionCount: number | null
+  questionLog: AudioQuestionLogEntry[] | null
+}) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-ink-soft">
+        {questionCount != null
+          ? `You asked ${questionCount} question${questionCount === 1 ? '' : 's'} this session.`
+          : 'No question data for this session.'}
+      </p>
+
+      {questionLog === null ? (
+        <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
+          Not available for this session — analyzed before per-question detail was tracked.
+        </div>
+      ) : !expanded ? (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="self-start rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+        >
+          Show full question-by-question breakdown
+        </button>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={() => setExpanded(false)}
+            className="self-start text-sm font-medium text-ink-soft hover:text-ink"
+          >
+            Hide breakdown
+          </button>
+          {questionLog.length === 0 ? (
+            <p className="text-sm text-ink-soft">No individual questions were detected this session.</p>
+          ) : (
+            questionLog.map((q, i) => (
               <div key={i} className="rounded-xl border border-border bg-surface p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
-                  {h.label} · {formatTime(h.timestampSec)}
-                </p>
-                <p className="mt-1.5 text-sm text-ink">"{h.excerpt}"</p>
+                <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                  <span>{formatTime(q.timestampSec)}</span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 ${
+                      q.type === 'higher_order' ? 'bg-brand-50 text-brand-600' : 'bg-canvas text-ink-soft'
+                    }`}
+                  >
+                    {q.type === 'higher_order' ? 'Higher-order' : 'Recall'}
+                  </span>
+                  <span className="normal-case font-normal">
+                    {q.waitTimeSec != null ? `${q.waitTimeSec}s wait` : 'wait not measured'}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-sm text-ink">"{q.text}"</p>
+                {q.followUps.length > 0 && (
+                  <div className="mt-2 flex flex-col gap-1.5 border-l-2 border-border pl-3">
+                    {q.followUps.map((f, j) => (
+                      <p key={j} className="text-sm text-ink-soft">
+                        <span className="text-xs font-semibold uppercase tracking-wide">
+                          {formatTime(f.timestampSec)}
+                        </span>{' '}
+                        "{f.text}"
+                      </p>
+                    ))}
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+            ))
+          )}
         </div>
       )}
-
-      <div className="rounded-2xl border border-border bg-surface p-6">
-        <h2 className="text-sm font-semibold text-ink">Reflecting on your session</h2>
-        <div className="mt-4 flex flex-col gap-4">
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-ink">Strengths</span>
-            <textarea
-              value={strengths}
-              onChange={(e) => {
-                setStrengths(e.target.value)
-                setSaved(false)
-              }}
-              disabled={locked}
-              rows={3}
-              className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
-            />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-ink">Growth areas</span>
-            <textarea
-              value={growthAreas}
-              onChange={(e) => {
-                setGrowthAreas(e.target.value)
-                setSaved(false)
-              }}
-              disabled={locked}
-              rows={3}
-              className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
-            />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-ink">Next step</span>
-            <textarea
-              value={nextStep}
-              onChange={(e) => {
-                setNextStep(e.target.value)
-                setSaved(false)
-              }}
-              disabled={locked}
-              rows={2}
-              className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
-            />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-ink">Follow-up date</span>
-            <input
-              type="date"
-              value={followUpDate}
-              onChange={(e) => {
-                setFollowUpDate(e.target.value)
-                setSaved(false)
-              }}
-              disabled={locked}
-              className="w-fit rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
-            />
-          </label>
-        </div>
-
-        {!locked && (
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={handleSaveNotes}
-              disabled={saving}
-              className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
-            >
-              {saving ? 'Saving...' : 'Save notes'}
-            </button>
-            {saved && <span className="text-sm text-brand-600">Saved.</span>}
-            <button
-              type="button"
-              onClick={handleLock}
-              disabled={locking}
-              className="ml-auto rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
-            >
-              {locking ? 'Locking...' : 'Lock report'}
-            </button>
-          </div>
-        )}
-        {error && <p className="mt-3 text-sm text-warm-500">{error}</p>}
-      </div>
-
-      <div className="rounded-xl border border-dashed border-border p-4 text-xs text-ink-soft">
-        This report reflects what could be heard in the recording — talk patterns, questioning, and classroom
-        routines. It doesn't capture lesson planning, materials, physical space, visual engagement, or anything
-        outside class time. Automated counts above are suggestions to confirm or edit, not final judgments.
-      </div>
-
-      <Link
-        to={`/audio-coaching/${session.id}/export`}
-        className="self-start text-sm font-medium text-brand-600 hover:text-brand-700"
-      >
-        Open printable report →
-      </Link>
     </div>
   )
 }
@@ -1039,16 +1622,25 @@ function Stat({
   sub,
   muted,
   reason,
+  focused,
 }: {
   label: string
   value: string
   sub?: string
   muted?: boolean
   reason?: string
+  focused?: boolean
 }) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
+      <div className="flex items-center gap-1.5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
+        {focused && (
+          <span className="rounded-full bg-brand-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
+            Your focus
+          </span>
+        )}
+      </div>
       <p
         className={`mt-1 text-xl font-semibold ${muted ? 'text-ink-soft' : 'text-ink'}`}
         title={reason}
@@ -1102,103 +1694,6 @@ function SessionCard({
 
 const MAX_TREND_SESSIONS = 20
 
-function TrendsView({ sessions, loading }: { sessions: AudioSession[]; loading: boolean }) {
-  if (loading) {
-    return <p className="text-center text-sm text-ink-soft">Loading...</p>
-  }
-
-  const analyzed = sessions
-    .filter((s) => s.teacherTalkPct != null && s.durationSec != null)
-    .slice()
-    .sort((a, b) => new Date(a.sessionDate).getTime() - new Date(b.sessionDate).getTime())
-    .slice(-MAX_TREND_SESSIONS)
-
-  if (analyzed.length < 2) {
-    return (
-      <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
-        Trends need at least 2 analyzed sessions to show a pattern. One session — especially a short one — is
-        too noisy on its own to read much into.
-      </div>
-    )
-  }
-
-  const labels = analyzed.map((s) =>
-    new Date(s.sessionDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-  )
-
-  const teacherTalk = analyzed.map((s) => s.teacherTalkPct)
-  const studentTalk = analyzed.map((s) => s.studentTalkPct)
-
-  const higherOrder = analyzed.map((s) => ((s.questionCount ?? 0) < MIN_N_FOR_PERCENT ? null : s.higherOrderPct))
-
-  const cfuFrequency = analyzed.map((s) => {
-    const duration = s.durationSec ?? 0
-    if (duration < MIN_DURATION_FOR_CFU_DETECTION_SEC) return null
-    return Math.round(((s.cfuCount ?? 0) / (duration / 600)) * 10) / 10
-  })
-  const excludedCfuCount = cfuFrequency.filter((v) => v == null).length
-  const cfuMax = Math.max(4, ...cfuFrequency.filter((v): v is number => v != null)) * 1.2
-
-  const insight = buildTrendInsight(analyzed)
-
-  return (
-    <div className="flex flex-col gap-6">
-      {insight && (
-        <div className="flex items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50 p-4">
-          <ArrowUpIcon className="h-5 w-5 shrink-0 text-brand-600" />
-          <p className="text-sm text-ink">{insight}</p>
-        </div>
-      )}
-
-      <div className="rounded-2xl border border-border bg-surface p-6">
-        <TrendChart
-          title="Talk Ratio"
-          unit="%"
-          maxValue={100}
-          labels={labels}
-          series={[
-            { label: 'Teacher', colorVar: '--color-brand-500', values: teacherTalk },
-            { label: 'Student', colorVar: '--color-warm-400', values: studentTalk },
-          ]}
-        />
-      </div>
-
-      <div className="rounded-2xl border border-border bg-surface p-6">
-        <TrendChart
-          title="Question Quality"
-          unit="%"
-          maxValue={100}
-          labels={labels}
-          series={[{ label: 'Higher-order questions', colorVar: '--color-brand-500', values: higherOrder }]}
-          emptyMessage="Not enough questions asked yet in any single session to trend this reliably."
-        />
-      </div>
-
-      <div className="rounded-2xl border border-border bg-surface p-6">
-        <TrendChart
-          title="Checks for Understanding"
-          unit="/10min"
-          maxValue={cfuMax}
-          labels={labels}
-          series={[{ label: 'CFUs per 10 min', colorVar: '--color-brand-500', values: cfuFrequency }]}
-        />
-        {excludedCfuCount > 0 && (
-          <p className="mt-2 text-xs text-ink-soft">
-            {excludedCfuCount} session{excludedCfuCount === 1 ? '' : 's'} under{' '}
-            {Math.round(MIN_DURATION_FOR_CFU_DETECTION_SEC / 60)} min excluded from this line — too short to
-            reliably detect CFUs.
-          </p>
-        )}
-      </div>
-
-      <p className="text-xs text-ink-soft">
-        Showing your last {analyzed.length} analyzed session{analyzed.length === 1 ? '' : 's'}. Short sessions
-        add noise — read the overall direction, not any single point.
-      </p>
-    </div>
-  )
-}
-
 function buildTrendInsight(sessions: AudioSession[]): string | null {
   if (sessions.length < 3) return null
 
@@ -1206,7 +1701,7 @@ function buildTrendInsight(sessions: AudioSession[]): string | null {
   if (withTalk.length >= 3) {
     const delta = withTalk[withTalk.length - 1].teacherTalkPct! - withTalk[0].teacherTalkPct!
     if (delta <= -8) {
-      return `Teacher talk time is down ${Math.abs(Math.round(delta))} points since your first tracked session — more room for student voice.`
+      return `Your talk time is down ${Math.abs(Math.round(delta))} points since your first tracked session — more room for student voice.`
     }
   }
 
@@ -1216,7 +1711,7 @@ function buildTrendInsight(sessions: AudioSession[]): string | null {
   if (withQuestions.length >= 3) {
     const delta = withQuestions[withQuestions.length - 1].higherOrderPct! - withQuestions[0].higherOrderPct!
     if (delta >= 10) {
-      return `Higher-order questions are up ${Math.round(delta)} points since your first tracked session — nice trend.`
+      return `Your higher-order questions are up ${Math.round(delta)} points since your first tracked session — nice trend.`
     }
   }
 
