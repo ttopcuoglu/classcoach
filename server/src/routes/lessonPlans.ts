@@ -139,6 +139,12 @@ async function runFeedback(
 
   const feedback = extractTag(text, 'feedback') ?? text.trim()
   if (!feedback) {
+    console.error(
+      '[lesson-plans] empty feedback from Claude — stop_reason:',
+      response.stop_reason,
+      'block types:',
+      response.content.map((block) => block.type),
+    )
     res.status(502).json({ error: 'Could not generate coaching feedback. Please try again.' })
     return
   }

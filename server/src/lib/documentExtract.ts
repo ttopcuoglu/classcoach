@@ -33,6 +33,28 @@ export function detectFileKind(filename: string, mimetype: string): FileKind {
   return 'unsupported'
 }
 
+// ExcelJS gives back a plain string/number/boolean/Date for a simple cell,
+// but a cell with any inline formatting (bold/italic within the cell, a
+// hyperlink, a formula) comes back as an object instead — {richText: [...]},
+// {text, hyperlink}, {formula, result}, {error}. Naively String()-ing one of
+// those objects produces the literal text "[object Object]", which is both
+// useless to Claude and confusing to the teacher in the "Your plan" display.
+// Real lesson-plan templates use rich text constantly (bolded headers inside
+// a merged cell, etc.), so this isn't an edge case — it's the common case.
+function cellToText(value: unknown): string {
+  if (value == null) return ''
+  if (typeof value !== 'object') return String(value)
+  if (value instanceof Date) return value.toLocaleDateString()
+  const obj = value as Record<string, unknown>
+  if (Array.isArray(obj.richText)) {
+    return (obj.richText as Array<{ text?: string }>).map((run) => run.text ?? '').join('')
+  }
+  if (typeof obj.text === 'string') return obj.text
+  if ('result' in obj) return cellToText(obj.result)
+  if (typeof obj.error === 'string') return ''
+  return ''
+}
+
 export async function extractSpreadsheetText(buffer: Buffer): Promise<string> {
   const workbook = new ExcelJS.Workbook()
   await workbook.xlsx.load(buffer as unknown as ArrayBuffer)
@@ -42,7 +64,7 @@ export async function extractSpreadsheetText(buffer: Buffer): Promise<string> {
     worksheet.eachRow((row) => {
       const values = Array.isArray(row.values) ? row.values.slice(1) : []
       const line = values
-        .map((cell) => (cell == null ? '' : String(cell)))
+        .map((cell) => cellToText(cell))
         .join(' | ')
         .trim()
       if (line) lines.push(line)
