@@ -41,10 +41,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Manage',
     icon: ScenarioIcon,
-    items: [
-      { to: '/try-it-out', label: 'Try It Out', icon: ScenarioIcon },
-      { to: '/ask-an-expert', label: 'Ask an Expert', icon: ChatBubbleIcon },
-    ],
+    items: [{ to: '/coach-chat', label: 'Coach Chat', icon: ChatBubbleIcon }],
   },
   {
     label: 'Grow',

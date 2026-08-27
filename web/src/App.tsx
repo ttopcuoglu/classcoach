@@ -3,8 +3,7 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import Home from './pages/Home'
-import TryItOut from './pages/TryItOut'
-import AskExpert from './pages/AskExpert'
+import CoachChat from './pages/CoachChat'
 import ParentMessages from './pages/ParentMessages'
 import DifficultConversations from './pages/DifficultConversations'
 import Profile from './pages/Profile'
@@ -95,8 +94,7 @@ export default function App() {
             }
           >
             <Route index element={<Home />} />
-            <Route path="try-it-out" element={<TryItOut />} />
-            <Route path="ask-an-expert" element={<AskExpert />} />
+            <Route path="coach-chat" element={<CoachChat />} />
             <Route path="parent-messages" element={<ParentMessages />} />
             <Route path="difficult-conversations" element={<DifficultConversations />} />
             <Route path="audio-coaching" element={<AudioCoaching />} />

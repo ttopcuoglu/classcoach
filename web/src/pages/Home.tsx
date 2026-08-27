@@ -81,18 +81,18 @@ export default function Home() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Link
-          to="/try-it-out"
+          to="/coach-chat"
           className="group rounded-2xl border border-border bg-surface p-6 transition-shadow hover:shadow-md"
         >
           <ScenarioIcon className="h-8 w-8 text-brand-500" />
-          <h2 className="mt-4 text-lg font-semibold text-ink">Try It Out</h2>
+          <h2 className="mt-4 text-lg font-semibold text-ink">Practice a Scenario</h2>
           <p className="mt-1 text-sm text-ink-soft">
             Practice a realistic classroom scenario and get coaching on your response.
           </p>
         </Link>
 
         <Link
-          to="/ask-an-expert"
+          to="/coach-chat?tab=ask"
           className="group rounded-2xl border border-border bg-surface p-6 transition-shadow hover:shadow-md"
         >
           <ChatBubbleIcon className="h-8 w-8 text-brand-500" />
@@ -166,7 +166,7 @@ export default function Home() {
             {activity.map((item) => (
               <Link
                 key={item.id}
-                to={item.type === 'scenario' ? '/try-it-out' : '/ask-an-expert'}
+                to={item.type === 'scenario' ? '/coach-chat' : '/coach-chat?tab=ask'}
                 className="flex items-start gap-3 rounded-xl border border-border bg-surface p-3.5 transition-shadow hover:shadow-sm"
               >
                 {item.type === 'scenario' ? (

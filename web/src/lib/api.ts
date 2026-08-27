@@ -294,8 +294,8 @@ export function getAdminOverview(): Promise<AdminOverview> {
   return request('/api/admin/overview')
 }
 
-export function getQAHistory(): Promise<QAExchange[]> {
-  return request('/api/qa')
+export function getQAHistory(starred?: boolean): Promise<QAExchange[]> {
+  return request(`/api/qa${starred ? '?starred=true' : ''}`)
 }
 
 export function askExpert(question: string): Promise<QAExchange> {

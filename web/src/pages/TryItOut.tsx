@@ -50,11 +50,6 @@ export default function TryItOut() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Try It Out</h1>
-        <p className="text-ink-soft">Practice realistic scenarios and get coaching on your approach.</p>
-      </div>
-
       <div className="flex gap-2">
         <button
           type="button"
@@ -654,7 +649,7 @@ function DebriefPanel() {
           <div className="flex flex-col gap-3">
             <p className="text-sm text-ink-soft">
               Describe something that actually happened in your classroom today — get the same kind of
-              coaching Try It Out gives hypotheticals, but reflective and forward-looking.
+              coaching the Practice tab gives hypotheticals, but reflective and forward-looking.
             </p>
             <div className="flex flex-wrap gap-2">
               {CATEGORIES.filter((c) => c.value).map(({ label, value }) => (

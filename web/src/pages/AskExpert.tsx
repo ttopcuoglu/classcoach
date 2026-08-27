@@ -11,23 +11,24 @@ const STARTER_QUESTIONS = [
 
 export default function AskExpert() {
   const [tab, setTab] = useState<'chat' | 'playbook'>('chat')
-  const [history, setHistory] = useState<QAExchange[]>([])
-  const [historyLoading, setHistoryLoading] = useState(true)
+  const [chatHistory, setChatHistory] = useState<QAExchange[]>([])
+  const [playbook, setPlaybook] = useState<QAExchange[]>([])
+  const [playbookLoading, setPlaybookLoading] = useState(true)
   const [question, setQuestion] = useState('')
   const [asking, setAsking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    getQAHistory()
-      .then((exchanges) => setHistory([...exchanges].reverse()))
-      .catch(() => setError('Could not load your Q&A history.'))
-      .finally(() => setHistoryLoading(false))
+    getQAHistory(true)
+      .then(setPlaybook)
+      .catch(() => {})
+      .finally(() => setPlaybookLoading(false))
   }, [])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
-  }, [history, asking])
+  }, [chatHistory, asking])
 
   async function submitQuestion(text: string) {
     const trimmed = text.trim()
@@ -37,7 +38,7 @@ export default function AskExpert() {
     setQuestion('')
     try {
       const exchange = await askExpert(trimmed)
-      setHistory((prev) => [...prev, exchange])
+      setChatHistory((prev) => [...prev, exchange])
     } catch {
       setError('Something went wrong reaching your coach. Please try again.')
       setQuestion(trimmed)
@@ -48,23 +49,30 @@ export default function AskExpert() {
 
   async function toggleStar(exchange: QAExchange) {
     const nextStarred = !exchange.starred
-    setHistory((prev) => prev.map((e) => (e.id === exchange.id ? { ...e, starred: nextStarred } : e)))
+    setChatHistory((prev) => prev.map((e) => (e.id === exchange.id ? { ...e, starred: nextStarred } : e)))
+    setPlaybook((prev) =>
+      nextStarred
+        ? prev.some((e) => e.id === exchange.id)
+          ? prev
+          : [{ ...exchange, starred: true }, ...prev]
+        : prev.filter((e) => e.id !== exchange.id),
+    )
     try {
       await setQAStarred(exchange.id, nextStarred)
     } catch {
-      setHistory((prev) => prev.map((e) => (e.id === exchange.id ? { ...e, starred: !nextStarred } : e)))
+      setChatHistory((prev) => prev.map((e) => (e.id === exchange.id ? { ...e, starred: !nextStarred } : e)))
+      setPlaybook((prev) =>
+        nextStarred
+          ? prev.filter((e) => e.id !== exchange.id)
+          : prev.some((e) => e.id === exchange.id)
+            ? prev
+            : [{ ...exchange, starred: true }, ...prev],
+      )
     }
   }
 
-  const playbook = history.filter((e) => e.starred)
-
   return (
     <div className="flex h-full flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Ask an Expert</h1>
-        <p className="text-ink-soft">Ask a classroom management question, get a clear answer.</p>
-      </div>
-
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
@@ -89,9 +97,7 @@ export default function AskExpert() {
       {tab === 'chat' ? (
         <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-border bg-surface">
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-4">
-            {historyLoading ? (
-              <p className="p-4 text-center text-sm text-ink-soft">Loading your history...</p>
-            ) : history.length === 0 ? (
+            {chatHistory.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
                 <p className="text-sm text-ink-soft">Not sure where to start? Try one of these:</p>
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-center">
@@ -109,7 +115,7 @@ export default function AskExpert() {
               </div>
             ) : (
               <div className="flex flex-col gap-4">
-                {history.map((exchange) => (
+                {chatHistory.map((exchange) => (
                   <div key={exchange.id} className="flex flex-col gap-2">
                     <div className="ml-auto max-w-[85%] rounded-2xl rounded-br-sm bg-brand-500 px-4 py-2.5 text-sm text-white">
                       {exchange.question}
@@ -170,16 +176,26 @@ export default function AskExpert() {
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto rounded-2xl border border-border bg-surface p-4">
-          {playbook.length === 0 ? (
+          {playbookLoading ? (
+            <p className="p-8 text-center text-sm text-ink-soft">Loading...</p>
+          ) : playbook.length === 0 ? (
             <p className="p-8 text-center text-sm text-ink-soft">
               Star an answer from Chat to save it here for later.
             </p>
           ) : (
             <div className="flex flex-col gap-3">
               {playbook.map((exchange) => (
-                <div key={exchange.id} className="rounded-xl border border-border bg-canvas p-4">
+                <div key={exchange.id} className="group relative rounded-xl border border-border bg-canvas p-4 pr-10">
                   <p className="text-sm font-semibold text-ink">{exchange.question}</p>
                   <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink-soft">{exchange.answer}</p>
+                  <button
+                    type="button"
+                    onClick={() => toggleStar(exchange)}
+                    aria-label="Remove from playbook"
+                    className="absolute right-2.5 top-2.5 rounded-full p-1 text-warm-500 transition-colors hover:text-warm-600"
+                  >
+                    <StarIcon className="h-4 w-4" filled />
+                  </button>
                 </div>
               ))}
             </div>
