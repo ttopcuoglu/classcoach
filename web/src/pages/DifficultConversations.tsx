@@ -21,13 +21,6 @@ export default function DifficultConversations() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Difficult Conversations</h1>
-        <p className="text-ink-soft">
-          Practice a hypothetical scenario, or prepare for a real conversation you have coming up.
-        </p>
-      </div>
-
       <div className="flex gap-2">
         <button
           type="button"

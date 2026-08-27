@@ -33,10 +33,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Connect',
     icon: MailIcon,
-    items: [
-      { to: '/parent-messages', label: 'Parent Messages', icon: MailIcon },
-      { to: '/difficult-conversations', label: 'Difficult Conversations', icon: ChatBubbleIcon },
-    ],
+    items: [{ to: '/communications', label: 'Communications', icon: MailIcon }],
   },
   {
     label: 'Manage',

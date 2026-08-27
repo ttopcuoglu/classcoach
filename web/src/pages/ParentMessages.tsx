@@ -73,11 +73,6 @@ export default function ParentMessages() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Parent Messages</h1>
-        <p className="text-ink-soft">Describe an incident and pick a tone — get a ready-to-send draft.</p>
-      </div>
-
       <div className="rounded-2xl border border-border bg-surface p-6">
         <div className="flex flex-wrap gap-2">
           {TONES.map(({ label, value }) => (

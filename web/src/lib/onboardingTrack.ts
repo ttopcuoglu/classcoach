@@ -34,8 +34,8 @@ export const ONBOARDING_TRACK: OnboardingStep[] = [
     id: 'first-parent-message',
     title: 'Draft your first parent message',
     description: 'Practice drafting a message before you need one for real.',
-    linkTo: '/parent-messages',
-    linkLabel: 'Go to Parent Messages',
+    linkTo: '/communications',
+    linkLabel: 'Go to Communications',
   },
   {
     id: 'practice-disengagement',
