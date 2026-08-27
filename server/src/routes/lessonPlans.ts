@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
+import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { detectFileKind, extractDocxText, extractSpreadsheetText } from '../lib/documentExtract.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
@@ -15,18 +16,24 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 
 const FEEDBACK_SYSTEM_PROMPT = `You are a warm, practical instructional coach for K-12 teachers, reviewing a lesson plan the teacher wrote themselves. Coach, don't grade.
 
-Focus your feedback on: whether the activities actually build toward the stated objective, whether there's a clear gradual release of responsibility (I Do / We Do / You Do or an equivalent path toward independence), whether there's a higher-order-thinking element (not just recall), whether the pacing looks realistic, and whether there's a real closure.
+First, work out whether this is a single day's lesson or a multi-day/weekly plan covering several class periods, and adjust your lens accordingly:
+- For a single-day lesson: focus on that lesson's internal structure — whether the activities build toward the objective, a clear gradual release of responsibility (I Do / We Do / You Do or equivalent), a higher-order-thinking element (not just recall), realistic pacing, and a real closure.
+- For a multi-day/weekly plan: focus on pacing and coherence across the days — whether each day builds on the last, whether skills develop appropriately toward the unit's objective(s) over the week, and whether the week as a whole reaches real closure. Don't expect a full gradual-release arc crammed into every single day.
+
+An explicit objective may not have been provided. If so, look for one stated or implied in the plan itself and coach around that — don't just note that none was given.
 
 Write in plain text only — no markdown (no **bold**, no # headings). Use a blank line between paragraphs and a leading "-" for list items.
 
 Respond with exactly these two sections and nothing outside them:
 
 <feedback>
-Specific, practical coaching on this lesson plan — what's working, what to adjust, grounded in the objective the teacher gave. Keep it skimmable and encouraging.
+Specific, practical coaching on this lesson plan — what's working, what to adjust, grounded in the plan's own scope (single lesson vs. the week). Keep it skimmable and encouraging.
 </feedback>
 <rating>
 A single integer 1-5 rating of your honest private assessment of how well this plan is built. This is never shown to the teacher — it's used only to track their growth over time — so rate honestly rather than generously. Output only the digit, nothing else.
 </rating>`
+
+const LESSON_PLAN_CHAT_SYSTEM_PROMPT = `You are a warm, practical instructional coach for K-12 teachers, continuing a conversation about a lesson plan you already gave feedback on. Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says: if they push back, ask a follow-up, or want to think through a change, engage with that directly rather than repeating your first assessment. Keep in mind whether the plan is a single lesson or a multi-day/weekly plan, as established earlier in the conversation. Stay grounded in what's already been discussed; never invent details about the plan that weren't given to you.`
 
 const GENERATE_SYSTEM_PROMPT = `You write sample single-day lesson plans for K-12 teachers, modeled on a standard gradual-release template, to give a teacher ideas — this is inspiration, not a plan they're required to follow.
 
@@ -103,12 +110,19 @@ type FeedbackContext = ReturnType<typeof readContext>
 
 // Shared by both /feedback (pasted text) and /feedback-upload (uploaded
 // file) — only how `content` is built differs between the two callers.
+// `seedContextText` is a plain-text description of the submission used to
+// seed the follow-up chat's first turn — for PDFs this can't include the
+// actual document bytes (chat history is replayed as plain text on later
+// turns), so it's the header + a note of what was uploaded; the assistant's
+// own feedback (which does reflect the real PDF content from this first
+// call) carries the substance forward from there.
 async function runFeedback(
   res: import('express').Response,
   userId: string,
   context: FeedbackContext,
   planTextForDisplay: string,
   content: string | Array<Record<string, unknown>>,
+  seedContextText: string,
 ) {
   const response = await anthropic.messages.create({
     model: CLAUDE_MODEL,
@@ -128,11 +142,13 @@ async function runFeedback(
   const parsedRating = ratingText ? Number.parseInt(ratingText, 10) : NaN
   const rating = parsedRating >= 1 && parsedRating <= 5 ? parsedRating : null
 
+  const conversation = appendTurn([], seedContextText, feedback)
+
   const lessonPlan = await prisma.lessonPlan.create({
     data: {
       userId,
       mode: 'feedback',
-      objective: context.objective,
+      objective: context.objective || null,
       unitName: context.unitName,
       essentialQuestion: context.essentialQuestion,
       standard: context.standard,
@@ -141,6 +157,7 @@ async function runFeedback(
       planText: planTextForDisplay,
       feedback,
       rating,
+      conversation,
     },
   })
   res.status(201).json(lessonPlan)
@@ -148,7 +165,7 @@ async function runFeedback(
 
 function buildPromptHeader(context: FeedbackContext): string {
   return [
-    `Objective: ${context.objective}`,
+    context.objective ? `Objective: ${context.objective}` : null,
     context.unitName ? `Unit: ${context.unitName}` : null,
     context.standard ? `Standard: ${context.standard}` : null,
     context.subject ? `Subject: ${context.subject}` : null,
@@ -162,10 +179,6 @@ lessonPlansRouter.post('/feedback', async (req, res) => {
   const context = readContext(req.body ?? {})
   const { planText } = req.body ?? {}
 
-  if (!context.objective) {
-    res.status(400).json({ error: 'objective is required' })
-    return
-  }
   if (typeof planText !== 'string' || !planText.trim()) {
     res.status(400).json({ error: 'planText is required' })
     return
@@ -178,8 +191,9 @@ lessonPlansRouter.post('/feedback', async (req, res) => {
   }
 
   try {
-    const content = `${buildPromptHeader(context)}\n\nLesson plan:\n${planText.trim()}`
-    await runFeedback(res, req.user!.userId, context, planText.trim(), content)
+    const header = buildPromptHeader(context)
+    const content = `${header}\n\nLesson plan:\n${planText.trim()}`
+    await runFeedback(res, req.user!.userId, context, planText.trim(), content, content)
   } catch (error) {
     console.error('[lesson-plans] feedback generation failed:', error)
     res.status(502).json({ error: 'Claude request failed' })
@@ -189,10 +203,6 @@ lessonPlansRouter.post('/feedback', async (req, res) => {
 lessonPlansRouter.post('/feedback-upload', upload.single('file'), async (req, res) => {
   const context = readContext(req.body ?? {})
 
-  if (!context.objective) {
-    res.status(400).json({ error: 'objective is required' })
-    return
-  }
   if (!req.file) {
     res.status(400).json({ error: 'A file is required' })
     return
@@ -227,7 +237,8 @@ lessonPlansRouter.post('/feedback-upload', upload.single('file'), async (req, re
         },
         { type: 'text', text: `${header}\n\nThe lesson plan is the attached PDF.` },
       ]
-      await runFeedback(res, req.user!.userId, context, `Uploaded file: ${req.file.originalname}`, content)
+      const seedContextText = `${header}\n\nThe lesson plan was uploaded as a PDF: ${req.file.originalname}`
+      await runFeedback(res, req.user!.userId, context, `Uploaded file: ${req.file.originalname}`, content, seedContextText)
       return
     }
 
@@ -237,10 +248,62 @@ lessonPlansRouter.post('/feedback-upload', upload.single('file'), async (req, re
       return
     }
     const content = `${header}\n\nLesson plan:\n${extracted}`
-    await runFeedback(res, req.user!.userId, context, extracted, content)
+    await runFeedback(res, req.user!.userId, context, extracted, content, content)
   } catch (error) {
     console.error('[lesson-plans] upload feedback failed:', error)
     res.status(502).json({ error: 'Claude request failed' })
+  }
+})
+
+lessonPlansRouter.post('/:id/chat', async (req, res) => {
+  const { message } = req.body ?? {}
+  if (typeof message !== 'string' || !message.trim()) {
+    res.status(400).json({ error: 'message is required' })
+    return
+  }
+
+  const lessonPlan = await prisma.lessonPlan.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+  })
+  if (!lessonPlan) {
+    res.status(404).json({ error: 'Lesson plan not found' })
+    return
+  }
+
+  const existing = (lessonPlan.conversation as unknown as ChatMessage[] | null) ?? []
+  if (countUserTurns(existing) >= CHAT_TURN_CAP) {
+    res.status(409).json({ error: "You've reached today's practice limit for this conversation." })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'lesson_plan_chat')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  const trimmed = message.trim()
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 300,
+      system: LESSON_PLAN_CHAT_SYSTEM_PROMPT,
+      messages: toClaudeMessages(existing, trimmed),
+    })
+    const reply = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+      .trim()
+
+    const updated = await prisma.lessonPlan.update({
+      where: { id: lessonPlan.id },
+      data: { conversation: appendTurn(existing, trimmed, reply) },
+    })
+    res.json(updated)
+  } catch (error) {
+    console.error('[lesson-plans] chat failed:', error)
+    res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
   }
 })
 

@@ -170,7 +170,11 @@ model LessonPlan {
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   mode              String
 
-  objective         String
+  // Required for "generated" mode (nothing else to draft from). Optional for
+  // "feedback" mode — a submitted plan usually states its own objective, so
+  // the teacher isn't forced to retype it; Claude is told to note when one
+  // isn't clearly stated instead.
+  objective         String?
   unitName          String?
   essentialQuestion String?
   standard          String?
@@ -192,6 +196,9 @@ model LessonPlan {
   saved             Boolean  @default(false)
   shareToken        String?  @unique
   createdAt         DateTime @default(now())
+
+  // Same convention as ScenarioAttempt.conversation — "feedback" mode only.
+  conversation      Json?
 }
 
 // A recorded class period, transcribed once (never stored as audio) and

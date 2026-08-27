@@ -115,7 +115,7 @@ export type LessonPlanMode = 'feedback' | 'generated'
 export type LessonPlan = {
   id: string
   mode: LessonPlanMode
-  objective: string
+  objective: string | null
   unitName: string | null
   essentialQuestion: string | null
   standard: string | null
@@ -132,6 +132,7 @@ export type LessonPlan = {
   saved: boolean
   shareToken: string | null
   createdAt: string
+  conversation: ChatMessage[]
 }
 
 export type SharedLessonPlan = {
@@ -510,6 +511,10 @@ export async function uploadLessonPlanFeedback(context: LessonPlanContext, file:
     throw new Error(body?.error ?? `Request failed with status ${res.status}`)
   }
   return res.json()
+}
+
+export function sendLessonPlanChat(id: string, message: string): Promise<LessonPlan> {
+  return request(`/api/lesson-plans/${id}/chat`, { method: 'POST', body: JSON.stringify({ message }) })
 }
 
 export function generateLessonPlan(context: LessonPlanContext): Promise<LessonPlan> {

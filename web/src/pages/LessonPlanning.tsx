@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ShareIcon, StarIcon } from '../components/icons'
+import CoachingChat from '../components/CoachingChat'
 import {
   generateLessonPlan,
   getLessonPlans,
+  sendLessonPlanChat,
   setLessonPlanSaved,
   shareLessonPlan,
   submitLessonPlanFeedback,
@@ -168,7 +170,7 @@ function PlanHeader({ plan }: { plan: LessonPlan }) {
         {plan.subject ? ` · ${plan.subject}` : ''}
         {plan.gradeLevel ? ` · ${plan.gradeLevel}` : ''}
       </span>
-      <p className="mt-2 text-sm font-medium text-ink">{plan.objective}</p>
+      {plan.objective && <p className="mt-2 text-sm font-medium text-ink">{plan.objective}</p>}
       {plan.standard && <p className="mt-0.5 text-xs text-ink-soft">Standard: {plan.standard}</p>}
     </div>
   )
@@ -281,7 +283,9 @@ function SavedPlanCard({ plan }: { plan: LessonPlan }) {
           <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-600">
             {plan.mode === 'generated' ? 'Sample plan' : 'Feedback'}
           </span>
-          <p className="mt-1.5 text-sm text-ink">{plan.objective}</p>
+          <p className="mt-1.5 text-sm text-ink">
+            {plan.objective || plan.planText?.slice(0, 80) || 'Lesson plan'}
+          </p>
         </div>
         <span className="shrink-0 text-xs font-medium text-ink-soft">{expanded ? 'Hide' : 'Show'}</span>
       </button>
@@ -475,6 +479,10 @@ function FeedbackPanel() {
   const [allPlans, setAllPlans] = useState<LessonPlan[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
 
+  const [chatDraft, setChatDraft] = useState('')
+  const [chatSending, setChatSending] = useState(false)
+  const [chatError, setChatError] = useState<string | null>(null)
+
   useEffect(() => {
     getLessonPlans({ mode: 'feedback' })
       .then(setAllPlans)
@@ -484,7 +492,7 @@ function FeedbackPanel() {
 
   const savedPlans = allPlans.filter((p) => p.saved)
 
-  const canSubmit = context.objective.trim() && (inputMode === 'text' ? planText.trim() : file)
+  const canSubmit = inputMode === 'text' ? planText.trim().length > 0 : !!file
 
   async function handleSubmit() {
     if (!canSubmit || submitting) return
@@ -497,10 +505,30 @@ function FeedbackPanel() {
           : await submitLessonPlanFeedback(toApiContext(context), planText.trim())
       setPlan(result)
       setAllPlans((prev) => [result, ...prev])
+      setChatDraft('')
+      setChatError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not get coaching feedback. Please try again.')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  async function handleSendChat() {
+    const trimmed = chatDraft.trim()
+    if (!plan || !trimmed || chatSending) return
+    setChatSending(true)
+    setChatError(null)
+    setChatDraft('')
+    try {
+      const updated = await sendLessonPlanChat(plan.id, trimmed)
+      setPlan(updated)
+      setAllPlans((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+    } catch (err) {
+      setChatError((err as Error).message || 'Could not reach your coach. Please try again.')
+      setChatDraft(trimmed)
+    } finally {
+      setChatSending(false)
     }
   }
 
@@ -509,6 +537,8 @@ function FeedbackPanel() {
     setPlanText('')
     setFile(null)
     setError(null)
+    setChatDraft('')
+    setChatError(null)
   }
 
   async function handleToggleSaved(target: LessonPlan) {
@@ -609,6 +639,15 @@ function FeedbackPanel() {
                 <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{plan.feedback}</p>
               </div>
             )}
+            <CoachingChat
+              messages={plan.conversation.slice(2)}
+              sending={chatSending}
+              error={chatError}
+              draft={chatDraft}
+              onDraftChange={setChatDraft}
+              onSend={handleSendChat}
+              placeholder="Ask a follow-up about this feedback..."
+            />
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <SaveButton plan={plan} onToggle={handleToggleSaved} />
