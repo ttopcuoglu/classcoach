@@ -40,6 +40,7 @@ export type AnalysisResult = {
     followUpQuestionCount: number
     redirectionCount: number
     transitionCount: number
+    directiveCount: number
     positivePhraseCount: number
     correctivePhraseCount: number
     positiveToCorrectiveRatio: number | null
@@ -78,6 +79,15 @@ export const TRANSITION_PHRASES = [
   'okay, next', 'ok, next', "let's move on", 'put that away and get out',
   'take out your', 'get out your', 'moving on', "let's transition", 'next up',
   "alright, let's",
+]
+
+// Task-instruction language — distinct from TRANSITION_PHRASES (which is
+// about switching between activities), this is about giving a direction
+// for the current task. Count only — never a judgment of clarity.
+export const DIRECTIVE_PHRASES = [
+  'open your', 'turn to page', 'get into groups', 'work with your partner',
+  'hand in your', 'line up', 'write down', 'copy this down',
+  'raise your hand when', "when you're done",
 ]
 
 export const POSITIVE_PHRASES = [
@@ -209,6 +219,11 @@ function countPhraseMatches(text: string, phrases: string[]): number {
   return phrases.reduce((count, phrase) => (lowerText.includes(phrase) ? count + 1 : count), 0)
 }
 
+function findMatchedPhrase(text: string, phrases: string[]): string | null {
+  const lowerText = text.toLowerCase()
+  return phrases.find((phrase) => lowerText.includes(phrase)) ?? null
+}
+
 function splitSentences(text: string): { sentence: string; endedWithQuestion: boolean }[] {
   const parts = text.split(/([.?!]+)/)
   const sentences: { sentence: string; endedWithQuestion: boolean }[] = []
@@ -254,6 +269,9 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
   let redirectionCount = 0
   let redirectionStreak = 0
   let transitionCount = 0
+  let directiveCount = 0
+  const lastDirectiveSeenAt = new Map<string, number>()
+  let repeatedInstructionHighlightTaken = false
   let positivePhraseCount = 0
   let correctivePhraseCount = 0
   let genericFeedbackCount = 0
@@ -322,6 +340,17 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       if (countPhraseMatches(segment.text, TRANSITION_PHRASES) > 0) {
         transitionCount++
         transitionIndexes.push(index)
+      }
+
+      const directivePhrase = findMatchedPhrase(segment.text, DIRECTIVE_PHRASES)
+      if (directivePhrase) {
+        directiveCount++
+        const lastSeen = lastDirectiveSeenAt.get(directivePhrase)
+        if (lastSeen != null && segment.startSec - lastSeen <= 90 && !repeatedInstructionHighlightTaken) {
+          highlights.push({ label: 'Repeated instruction', timestampSec: segment.startSec, excerpt: segment.text })
+          repeatedInstructionHighlightTaken = true
+        }
+        lastDirectiveSeenAt.set(directivePhrase, segment.startSec)
       }
 
       positivePhraseCount += countPhraseMatches(segment.text, POSITIVE_PHRASES)
@@ -430,6 +459,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       followUpQuestionCount,
       redirectionCount,
       transitionCount,
+      directiveCount,
       positivePhraseCount,
       correctivePhraseCount,
       positiveToCorrectiveRatio: correctivePhraseCount > 0 ? round(positivePhraseCount / correctivePhraseCount, 2) : null,

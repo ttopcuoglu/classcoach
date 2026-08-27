@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowUpIcon, MicIcon, WarningIcon } from '../components/icons'
+import { ArrowUpIcon, ChatBubbleIcon, MicIcon, WarningIcon } from '../components/icons'
 import {
   createAudioSession,
   deleteAudioSession,
@@ -622,6 +622,7 @@ function buildReflectContext(
   session: AudioSessionWithSegments,
   cfuMetric: { state: string },
   redirectionMetric: { state: string },
+  directiveMetric: { state: string },
 ): string[] {
   const context: string[] = []
 
@@ -639,8 +640,98 @@ function buildReflectContext(
       'No redirection/behavior language was flagged this session (confidently measured, not missing data).',
     )
   }
+  if (directiveMetric.state === 'zero') {
+    context.push(
+      'No clear task-instruction language was detected this session (confidently measured, not missing data).',
+    )
+  }
 
   return context.slice(0, 8)
+}
+
+// Coach-voice interpretations of the category stats — deterministic
+// templates, no Claude call (the analysis-time notes generation was
+// removed for exactly this reason: two independent AI summaries of the
+// same numbers felt redundant). Each returns null when the underlying
+// metric's state is 'unavailable' — never comment on missing data.
+function buildTalkInsight(session: AudioSessionWithSegments): string | null {
+  if (session.teacherTalkPct == null) return null
+  if (session.teacherTalkPct >= 65) {
+    return `You did most of the talking today (${session.teacherTalkPct}%) — look for a moment to hand the floor to students.`
+  }
+  if (session.teacherTalkPct <= 40) {
+    return `Students had a strong share of the talk time today (${session.studentTalkPct ?? 100 - session.teacherTalkPct}%) — that's a lot of real student voice in the room.`
+  }
+  return `Talk time was fairly balanced today — you at ${session.teacherTalkPct}%, students at ${session.studentTalkPct ?? '—'}%.`
+}
+
+function buildQuestioningInsight(
+  session: AudioSessionWithSegments,
+  higherOrderRatio: { state: string } | null,
+): string | null {
+  if (!higherOrderRatio || higherOrderRatio.state === 'unavailable' || session.higherOrderPct == null) return null
+  if (session.higherOrderPct >= 40) {
+    return `A good chunk of today's questions pushed for real thinking (${session.higherOrderPct}% higher-order) — that's the harder kind of question to ask on the fly.`
+  }
+  return "Most of today's questions were quick recall checks — a natural spot to slip in one 'why' or 'how' next time."
+}
+
+function buildCfuInsight(cfuMetric: { state: string }): string | null {
+  if (cfuMetric.state === 'measured') {
+    return 'You checked for understanding today — a good habit for catching confusion before it compounds.'
+  }
+  if (cfuMetric.state === 'zero') {
+    return 'No explicit check for understanding came through today — even a quick thumbs-up check can catch confusion early.'
+  }
+  return null
+}
+
+function buildRoutinesInsight(
+  directiveMetric: { state: string; display: string },
+  hasRepeatedInstructionHighlight: boolean,
+): string | null {
+  if (directiveMetric.state === 'measured') {
+    const base = `You gave clear, direct instructions ${directiveMetric.display} today — that kind of clarity helps routines run themselves.`
+    return hasRepeatedInstructionHighlight
+      ? `${base} A couple needed repeating, though — worth double-checking they land the first time.`
+      : base
+  }
+  if (directiveMetric.state === 'zero') {
+    return "No task-instruction language was picked up today — if you gave directions, they may just have been phrased differently than what's detected here."
+  }
+  return null
+}
+
+function buildClimateInsight(
+  redirectionMetric: { state: string; display: string },
+  positiveCount: number | null,
+  correctiveCount: number | null,
+): string | null {
+  if (redirectionMetric.state === 'zero') {
+    return 'No redirection language was needed today — the room ran smoothly.'
+  }
+  if (redirectionMetric.state === 'measured') {
+    let sentence = `You used redirection language ${redirectionMetric.display} today.`
+    if (positiveCount != null && correctiveCount != null && positiveCount + correctiveCount > 0) {
+      if (positiveCount > correctiveCount * 2) {
+        sentence += ' Positive language clearly outweighed corrective — that sets a warm tone alongside the redirects.'
+      } else if (correctiveCount > positiveCount) {
+        sentence += ' Corrective language outweighed positive today — a few more specific call-outs of what\'s going right could balance that.'
+      }
+    }
+    return sentence
+  }
+  return null
+}
+
+function CoachNote({ text }: { text: string | null }) {
+  if (!text) return null
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-brand-100 bg-brand-50 p-4">
+      <ChatBubbleIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
+      <p className="text-sm text-ink">{text}</p>
+    </div>
+  )
 }
 
 function ReportPanel({
@@ -795,6 +886,7 @@ function ReportPanel({
 
   // Classroom Routines
   const transitionMetric = getCountMetric({ count: num('transitionCount'), recordedSec })
+  const directiveMetric = getCountMetric({ count: num('directiveCount'), recordedSec })
 
   // Climate & Tone
   const nameMentionMetric = getCountMetric({ count: num('nameMentionCount'), recordedSec })
@@ -806,7 +898,14 @@ function ReportPanel({
       ? formatRatio(positiveCount, positiveCount + correctiveCount)
       : { state: 'unavailable' as const, display: '—', reason: 'No positive or corrective phrases detected.' }
 
-  const reflectContext = buildReflectContext(session, cfuMetric, redirectionMetric)
+  const reflectContext = buildReflectContext(session, cfuMetric, redirectionMetric, directiveMetric)
+
+  const talkInsight = buildTalkInsight(session)
+  const questioningInsight = buildQuestioningInsight(session, higherOrderRatio)
+  const cfuInsight = buildCfuInsight(cfuMetric)
+  const hasRepeatedInstructionHighlight = (session.highlights ?? []).some((h) => h.label === 'Repeated instruction')
+  const routinesInsight = buildRoutinesInsight(directiveMetric, hasRepeatedInstructionHighlight)
+  const climateInsight = buildClimateInsight(redirectionMetric, positiveCount, correctiveCount)
 
   function handleViewSource(sourceTab: ReportTab, sourceId: string) {
     setTab(sourceTab)
@@ -851,6 +950,9 @@ function ReportPanel({
           cfuMetric={cfuMetric}
           feedbackRatio={feedbackRatio}
           focusMetric={focusMetric}
+          talkInsight={talkInsight}
+          questioningInsight={questioningInsight}
+          cfuInsight={cfuInsight}
         />
       )}
 
@@ -906,11 +1008,14 @@ function ReportPanel({
       {tab === 'climate' && (
         <ClimateRoutinesTab
           transitionMetric={transitionMetric}
+          directiveMetric={directiveMetric}
           phasesCount={session.phases?.length ?? 0}
           onViewPhases={() => handleViewSource('overview', 'session-phases')}
           nameMentionMetric={nameMentionMetric}
           toneRatio={toneRatio}
           redirectionMetric={redirectionMetric}
+          routinesInsight={routinesInsight}
+          climateInsight={climateInsight}
         />
       )}
 
@@ -949,6 +1054,9 @@ function OverviewTab({
   cfuMetric,
   feedbackRatio,
   focusMetric,
+  talkInsight,
+  questioningInsight,
+  cfuInsight,
 }: {
   session: AudioSessionWithSegments
   coverage: ReturnType<typeof getCoverage>
@@ -964,6 +1072,9 @@ function OverviewTab({
   cfuMetric: ReturnType<typeof getCountMetric>
   feedbackRatio: ConfidentMetric
   focusMetric: FocusMetric | null
+  talkInsight: string | null
+  questioningInsight: string | null
+  cfuInsight: string | null
 }) {
   return (
     <div className="flex flex-col gap-6">
@@ -1017,6 +1128,7 @@ function OverviewTab({
           reason={studentSegmentsMetric.reason}
         />
       </CategorySection>
+      <CoachNote text={talkInsight} />
 
       <CategorySection
         title="Questioning & Thinking"
@@ -1046,6 +1158,7 @@ function OverviewTab({
           />
         </div>
       </CategorySection>
+      <CoachNote text={questioningInsight} />
 
       <CategorySection title="Checking Understanding" coverage={categoryCoverage([cfuMetric, feedbackRatio])}>
         <div id="stat-cfu">
@@ -1065,6 +1178,7 @@ function OverviewTab({
           sub={feedbackRatio.state !== 'unavailable' ? 'specific of total feedback moments' : undefined}
         />
       </CategorySection>
+      <CoachNote text={cfuInsight} />
 
       {session.phases && session.phases.length > 0 && (
         <div id="session-phases">
@@ -1616,29 +1730,42 @@ function LessonContentTab({ lessonContent }: { lessonContent: AudioLessonContent
 
 function ClimateRoutinesTab({
   transitionMetric,
+  directiveMetric,
   phasesCount,
   onViewPhases,
   nameMentionMetric,
   toneRatio,
   redirectionMetric,
+  routinesInsight,
+  climateInsight,
 }: {
   transitionMetric: ReturnType<typeof getCountMetric>
+  directiveMetric: ReturnType<typeof getCountMetric>
   phasesCount: number
   onViewPhases: () => void
   nameMentionMetric: ReturnType<typeof getCountMetric>
   toneRatio: ConfidentMetric
   redirectionMetric: ReturnType<typeof getCountMetric>
+  routinesInsight: string | null
+  climateInsight: string | null
 }) {
   return (
     <div className="flex flex-col gap-6">
-      <CategorySection title="Routines" coverage={categoryCoverage([transitionMetric])}>
+      <CategorySection title="Routines" coverage={categoryCoverage([transitionMetric, directiveMetric])}>
         <Stat
           label="Your transitions"
           value={transitionMetric.display}
           muted={transitionMetric.state === 'unavailable'}
           reason={transitionMetric.reason}
         />
+        <Stat
+          label="Clear directions given"
+          value={directiveMetric.display}
+          muted={directiveMetric.state === 'unavailable'}
+          reason={directiveMetric.reason ?? "Count only — clarity isn't judged automatically."}
+        />
       </CategorySection>
+      <CoachNote text={routinesInsight} />
 
       {phasesCount > 0 && (
         <button
@@ -1676,6 +1803,7 @@ function ClimateRoutinesTab({
           />
         </div>
       </CategorySection>
+      <CoachNote text={climateInsight} />
     </div>
   )
 }
