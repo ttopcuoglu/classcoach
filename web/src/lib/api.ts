@@ -260,7 +260,7 @@ export type AudioSessionStatus =
   | 'analyzed'
   | 'locked'
 
-export type AudioHighlight = { label: string; timestampSec: number; excerpt: string }
+export type AudioHighlight = { label: string; timestampSec: number; excerpt: string; durationSec?: number }
 export type AudioPhase = { label: string; startSec: number; endSec: number }
 export type AudioQuote = { quote: string; timestampSec: number }
 export type AudioQuestionLogEntry = {

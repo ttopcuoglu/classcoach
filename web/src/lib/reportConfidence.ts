@@ -28,12 +28,36 @@ export const MIN_DURATION_FOR_CFU_DETECTION_SEC = 3 * 60
 // Closing time.
 export const MIN_PHASE_DURATION_SEC = 30
 
-export type MetricState = 'measured' | 'zero' | 'unavailable'
+export type MetricState =
+  | 'measured'
+  | 'confirmed_none'
+  | 'possible_detection'
+  | 'limited_evidence'
+  | 'not_measurable'
+  | 'not_analyzed'
+  | 'analysis_failed'
 
 export type ConfidentMetric = {
   state: MetricState
   display: string
   reason?: string
+}
+
+// States backed by real, usable evidence — count toward a category's
+// "measured" tally and are never shown as a dash.
+export function isConfidentState(state: MetricState): boolean {
+  return state === 'measured' || state === 'confirmed_none' || state === 'possible_detection'
+}
+
+// States with nothing trustworthy to show — render as "—" with a reason.
+// A plain "0" is reserved for confirmed_none and never appears here.
+export function isMissingState(state: MetricState): boolean {
+  return (
+    state === 'limited_evidence' ||
+    state === 'not_measurable' ||
+    state === 'not_analyzed' ||
+    state === 'analysis_failed'
+  )
 }
 
 export type CoverageInfo = {
@@ -67,10 +91,14 @@ export function getCoverage(durationSec: number | null, phases: AudioPhase[] | n
 // to read as reliable.
 export function formatRatio(numerator: number, denominator: number): ConfidentMetric {
   if (denominator <= 0) {
-    return { state: 'unavailable', display: '—', reason: 'No questions were detected to classify.' }
+    return { state: 'not_measurable', display: '—', reason: 'No questions were detected to classify.' }
   }
   if (denominator < MIN_N_FOR_PERCENT) {
-    return { state: 'measured', display: `${numerator} of ${denominator}` }
+    return {
+      state: 'possible_detection',
+      display: `${numerator} of ${denominator}`,
+      reason: `Only ${denominator} to go on — too few to characterize as a pattern.`,
+    }
   }
   return { state: 'measured', display: `${Math.round((numerator / denominator) * 100)}%` }
 }
@@ -88,7 +116,7 @@ export function getCountMetric(options: {
 
   if (minDurationSec != null && recordedSec < minDurationSec) {
     return {
-      state: 'unavailable',
+      state: 'limited_evidence',
       display: '—',
       reason:
         minDurationReason ??
@@ -96,10 +124,14 @@ export function getCountMetric(options: {
     }
   }
   if (count == null) {
-    return { state: 'unavailable', display: '—', reason: 'Not enough data to determine.' }
+    return {
+      state: 'not_analyzed',
+      display: '—',
+      reason: 'This session was analyzed before this metric was tracked.',
+    }
   }
   if (count === 0) {
-    return { state: 'zero', display: '0' }
+    return { state: 'confirmed_none', display: '0' }
   }
   return { state: 'measured', display: String(count) }
 }
@@ -109,15 +141,15 @@ export function getCountMetric(options: {
 // alongside the count/ratio metrics above.
 export function getPresenceMetric(value: number | null | undefined): ConfidentMetric {
   return value == null
-    ? { state: 'unavailable', display: '—' }
+    ? { state: 'not_measurable', display: '—', reason: 'Not enough data in this session to compute this.' }
     : { state: 'measured', display: String(value) }
 }
 
-// "N of M measured" for a category's header — counts anything that isn't
-// 'unavailable' as measured (a confident zero still counts as data).
+// "N of M measured" for a category's header — counts any confident state
+// (a confident zero, or a small-sample detection, still counts as data).
 export function categoryCoverage(entries: { state: MetricState }[]): string {
   const total = entries.length
-  const measured = entries.filter((e) => e.state !== 'unavailable').length
+  const measured = entries.filter((e) => isConfidentState(e.state)).length
   return `${measured} of ${total} measured`
 }
 
@@ -135,7 +167,7 @@ export function buildEvidenceQualityLine(
   metrics: ConfidentMetric[],
 ): { text: string; tone: 'good' | 'warn' } {
   const total = metrics.length
-  const measured = metrics.filter((m) => m.state !== 'unavailable').length
+  const measured = metrics.filter((m) => isConfidentState(m.state)).length
   const warn = coverage.isShort || (total > 0 && measured / total < 0.6)
   const parts: string[] = [`Recorded ${formatDuration(coverage.recordedSec)}`]
   if (coverage.isShort) {

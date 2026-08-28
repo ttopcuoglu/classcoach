@@ -12,7 +12,7 @@ export type Segment = {
   text: string
 }
 
-export type Highlight = { label: string; timestampSec: number; excerpt: string }
+export type Highlight = { label: string; timestampSec: number; excerpt: string; durationSec?: number }
 export type Phase = { label: string; startSec: number; endSec: number }
 export type QuestionLogEntry = {
   timestampSec: number
@@ -490,6 +490,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       label: 'Longest wait time',
       timestampSec: longestWait.segment.startSec,
       excerpt: longestWait.segment.text,
+      durationSec: round(longestWait.wait, 1),
     })
   }
   if (longestMonologue) {
@@ -497,6 +498,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       label: 'Longest uninterrupted teacher monologue',
       timestampSec: longestMonologue.startSec,
       excerpt: longestMonologue.text,
+      durationSec: round(longestMonologue.durationSec, 1),
     })
   }
 

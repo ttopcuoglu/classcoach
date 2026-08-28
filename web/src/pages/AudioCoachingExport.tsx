@@ -6,6 +6,7 @@ import {
   formatRatio,
   getCoverage,
   getCountMetric,
+  getPresenceMetric,
   MIN_DURATION_FOR_CFU_DETECTION_SEC,
   SHORT_SESSION_THRESHOLD_SEC,
 } from '../lib/reportConfidence'
@@ -14,6 +15,13 @@ function formatTime(sec: number): string {
   const m = Math.floor(sec / 60)
   const s = Math.floor(sec % 60)
   return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+function formatHighlightHeadline(h: { label: string; timestampSec: number; durationSec?: number }): string {
+  if (h.durationSec != null) {
+    return `${h.label}: ${Math.round(h.durationSec)}s — occurred at ${formatTime(h.timestampSec)}`
+  }
+  return `${h.label} · ${formatTime(h.timestampSec)}`
 }
 
 function formatSessionDateTime(iso: string): string {
@@ -87,6 +95,9 @@ export default function AudioCoachingExport() {
                 recordedSec,
                 minDurationSec: MIN_DURATION_FOR_CFU_DETECTION_SEC,
               })
+              const teacherTalkMetric = getPresenceMetric(session.teacherTalkPct)
+              const studentTalkMetric = getPresenceMetric(session.studentTalkPct)
+              const waitTimeMetric = getPresenceMetric(session.avgWaitTimeSec)
 
               return (
                 <>
@@ -109,8 +120,16 @@ export default function AudioCoachingExport() {
                   <section className="mt-6 break-inside-avoid rounded-xl border border-border p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Talk & Participation</p>
                     <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      <Stat label="Teacher talk" value={session.teacherTalkPct != null ? `${session.teacherTalkPct}%` : '—'} />
-                      <Stat label="Student talk" value={session.studentTalkPct != null ? `${session.studentTalkPct}%` : '—'} />
+                      <Stat
+                        label="Teacher talk"
+                        value={session.teacherTalkPct != null ? `${session.teacherTalkPct}%` : teacherTalkMetric.display}
+                        reason={teacherTalkMetric.reason}
+                      />
+                      <Stat
+                        label="Student talk"
+                        value={session.studentTalkPct != null ? `${session.studentTalkPct}%` : studentTalkMetric.display}
+                        reason={studentTalkMetric.reason}
+                      />
                     </div>
                   </section>
 
@@ -123,7 +142,11 @@ export default function AudioCoachingExport() {
                         value={higherOrderRatio ? higherOrderRatio.display : '—'}
                         reason={higherOrderRatio?.reason}
                       />
-                      <Stat label="Avg. wait time" value={session.avgWaitTimeSec != null ? `${session.avgWaitTimeSec}s` : '—'} />
+                      <Stat
+                        label="Avg. wait time"
+                        value={session.avgWaitTimeSec != null ? `${session.avgWaitTimeSec}s` : waitTimeMetric.display}
+                        reason={waitTimeMetric.reason}
+                      />
                     </div>
                   </section>
 
@@ -180,7 +203,7 @@ export default function AudioCoachingExport() {
                   {session.highlights.map((h, i) => (
                     <article key={i} className="break-inside-avoid rounded-xl border border-border p-4">
                       <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
-                        {h.label} · {formatTime(h.timestampSec)}
+                        {formatHighlightHeadline(h)}
                       </p>
                       <p className="mt-1.5 text-sm text-ink">"{h.excerpt}"</p>
                     </article>

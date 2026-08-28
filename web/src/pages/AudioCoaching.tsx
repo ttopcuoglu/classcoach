@@ -33,6 +33,8 @@ import {
   getCoverage,
   getCountMetric,
   getPresenceMetric,
+  isConfidentState,
+  isMissingState,
   judgeTalkBalance,
   MIN_DURATION_FOR_CFU_DETECTION_SEC,
   MIN_N_FOR_PERCENT,
@@ -547,9 +549,9 @@ function TabBar({ tab, onSelect }: { tab: ReportTab; onSelect: (t: ReportTab) =>
 }
 
 // Plain-language facts safe for the Reflect chat's coach to reference —
-// only from highlights and confidently-zero metrics, never 'unavailable'
-// ones. This is the only place confidence-gated facts get turned into text
-// for Claude; the backend never re-derives measured/zero/unavailable itself.
+// only from highlights and confirmed-none metrics, never a missing state.
+// This is the only place confidence-gated facts get turned into text for
+// Claude; the backend never re-derives these states itself.
 function buildReflectContext(
   session: AudioSessionWithSegments,
   cfuMetric: { state: string },
@@ -559,20 +561,22 @@ function buildReflectContext(
   const context: string[] = []
 
   ;(session.highlights ?? []).forEach((h) => {
-    context.push(`At ${formatTime(h.timestampSec)}, "${h.label}": "${h.excerpt}"`)
+    context.push(
+      `At ${formatTime(h.timestampSec)}${h.durationSec != null ? ` (lasted ${Math.round(h.durationSec)}s)` : ''}, "${h.label}": "${h.excerpt}"`,
+    )
   })
 
-  if (cfuMetric.state === 'zero') {
+  if (cfuMetric.state === 'confirmed_none') {
     context.push(
       'No explicit checks for understanding were detected this session (confidently measured, not missing data).',
     )
   }
-  if (redirectionMetric.state === 'zero') {
+  if (redirectionMetric.state === 'confirmed_none') {
     context.push(
       'No redirection/behavior language was flagged this session (confidently measured, not missing data).',
     )
   }
-  if (directiveMetric.state === 'zero') {
+  if (directiveMetric.state === 'confirmed_none') {
     context.push(
       'No clear task-instruction language was detected this session (confidently measured, not missing data).',
     )
@@ -585,7 +589,7 @@ function buildReflectContext(
 // templates, no Claude call (the analysis-time notes generation was
 // removed for exactly this reason: two independent AI summaries of the
 // same numbers felt redundant). Each returns null when the underlying
-// metric's state is 'unavailable' — never comment on missing data.
+// metric's state is a missing one — never comment on missing data.
 // Every talk-balance sentence in the app routes through judgeTalkBalance
 // (reportConfidence.ts) so "balanced" can never be said when student talk is
 // a confirmed zero — the old version here branched only on teacherTalkPct
@@ -614,10 +618,13 @@ function buildTalkInsight(session: AudioSessionWithSegments): string | null {
 
 function buildQuestioningInsight(
   session: AudioSessionWithSegments,
-  higherOrderRatio: { state: string } | null,
+  higherOrderRatio: ConfidentMetric | null,
 ): string | null {
-  if (!higherOrderRatio || higherOrderRatio.state === 'unavailable' || session.higherOrderPct == null) return null
-  if (session.higherOrderPct >= 40) {
+  if (!higherOrderRatio || isMissingState(higherOrderRatio.state)) return null
+  if (higherOrderRatio.state === 'possible_detection') {
+    return `Only ${session.questionCount} question${session.questionCount === 1 ? '' : 's'} came through today — too few to say whether they leaned recall or higher-order.`
+  }
+  if (session.higherOrderPct != null && session.higherOrderPct >= 40) {
     return `A good chunk of today's questions pushed for real thinking (${session.higherOrderPct}% higher-order) — that's the harder kind of question to ask on the fly.`
   }
   return "Most of today's questions were quick recall checks — a natural spot to slip in one 'why' or 'how' next time."
@@ -627,8 +634,8 @@ function buildCfuInsight(cfuMetric: { state: string }): string | null {
   if (cfuMetric.state === 'measured') {
     return 'You checked for understanding today — a good habit for catching confusion before it compounds.'
   }
-  if (cfuMetric.state === 'zero') {
-    return 'No explicit check for understanding came through today — even a quick thumbs-up check can catch confusion early.'
+  if (cfuMetric.state === 'confirmed_none') {
+    return 'No explicit check for understanding was detected this session — even a quick thumbs-up check can catch confusion early.'
   }
   return null
 }
@@ -643,7 +650,7 @@ function buildRoutinesInsight(
       ? `${base} A couple needed repeating, though — worth double-checking they land the first time.`
       : base
   }
-  if (directiveMetric.state === 'zero') {
+  if (directiveMetric.state === 'confirmed_none') {
     return "No task-instruction language was picked up today — if you gave directions, they may just have been phrased differently than what's detected here."
   }
   return null
@@ -654,16 +661,22 @@ function buildClimateInsight(
   positiveCount: number | null,
   correctiveCount: number | null,
 ): string | null {
-  if (redirectionMetric.state === 'zero') {
-    return 'No redirection language was needed today — the room ran smoothly.'
+  if (redirectionMetric.state === 'confirmed_none') {
+    return 'No redirection language was detected this session.'
   }
   if (redirectionMetric.state === 'measured') {
     let sentence = `You used redirection language ${redirectionMetric.display} today.`
-    if (positiveCount != null && correctiveCount != null && positiveCount + correctiveCount > 0) {
-      if (positiveCount > correctiveCount * 2) {
-        sentence += ' Positive language clearly outweighed corrective — that sets a warm tone alongside the redirects.'
-      } else if (correctiveCount > positiveCount) {
-        sentence += ' Corrective language outweighed positive today — a few more specific call-outs of what\'s going right could balance that.'
+    if (positiveCount != null && correctiveCount != null) {
+      const toneTotal = positiveCount + correctiveCount
+      if (toneTotal >= MIN_N_FOR_PERCENT) {
+        if (positiveCount > correctiveCount * 2) {
+          sentence += ' Positive language clearly outweighed corrective — that sets a warm tone alongside the redirects.'
+        } else if (correctiveCount > positiveCount) {
+          sentence += ' Corrective language outweighed positive today — a few more specific call-outs of what\'s going right could balance that.'
+        }
+      } else if (toneTotal > 0) {
+        sentence +=
+          ' Only a few tone-language moments came through today — too few to say whether positive or corrective language dominated.'
       }
     }
     return sentence
@@ -724,6 +737,7 @@ type NoticeCandidate = {
   whyItMatters: string
   timestampSec: number | null
   excerpt: string | null
+  durationSec: number | null
   weight: number
   focusMetric: FocusMetric | null
 }
@@ -763,6 +777,7 @@ function highlightCandidates(
       whyItMatters,
       timestampSec: h.timestampSec,
       excerpt: h.excerpt,
+      durationSec: h.durationSec ?? null,
       weight,
       focusMetric: null,
     }))
@@ -799,6 +814,7 @@ function buildStrengthCandidates(
       whyItMatters: "That's a lot of real student voice in the room — a strong sign of student-centered discussion.",
       timestampSec: null,
       excerpt: null,
+      durationSec: null,
       weight: 1,
       focusMetric: 'talkRatio',
     })
@@ -816,6 +832,7 @@ function buildStrengthCandidates(
       whyItMatters: "That's the harder kind of question to ask on the fly — it pushes for real thinking, not just recall.",
       timestampSec: null,
       excerpt: null,
+      durationSec: null,
       weight: 1,
       focusMetric: 'higherOrderPct',
     })
@@ -828,6 +845,7 @@ function buildStrengthCandidates(
       whyItMatters: 'Giving students real time to think before answering leads to deeper, more complete responses.',
       timestampSec: null,
       excerpt: null,
+      durationSec: null,
       weight: 1,
       focusMetric: 'avgWaitTime',
     })
@@ -840,6 +858,7 @@ function buildStrengthCandidates(
       whyItMatters: 'Catching confusion before it compounds is one of the highest-leverage coaching moves.',
       timestampSec: null,
       excerpt: null,
+      durationSec: null,
       weight: 1,
       focusMetric: 'cfuCount',
     })
@@ -854,6 +873,7 @@ function buildStrengthCandidates(
         whyItMatters: 'Specific feedback gives students something concrete to act on, not just praise or correction.',
         timestampSec: null,
         excerpt: null,
+        durationSec: null,
         weight: 1,
         focusMetric: null,
       })
@@ -907,6 +927,7 @@ function buildPriorityCandidates(
       whyItMatters: 'Look for a moment to hand the floor to students — even a short turn-and-talk shifts the balance.',
       timestampSec: null,
       excerpt: null,
+      durationSec: null,
       weight: 2,
       focusMetric: 'talkRatio',
     })
@@ -924,6 +945,7 @@ function buildPriorityCandidates(
       whyItMatters: "A natural spot to slip in one 'why' or 'how' question next time.",
       timestampSec: null,
       excerpt: null,
+      durationSec: null,
       weight: 1,
       focusMetric: 'higherOrderPct',
     })
@@ -936,18 +958,20 @@ function buildPriorityCandidates(
       whyItMatters: 'A few extra seconds of silence after a question gives more students time to formulate an answer.',
       timestampSec: null,
       excerpt: null,
+      durationSec: null,
       weight: 1,
       focusMetric: 'avgWaitTime',
     })
   }
 
-  if (cfuMetric.state === 'zero') {
+  if (cfuMetric.state === 'confirmed_none') {
     candidates.push({
       id: 'cfu',
-      observation: 'No explicit check for understanding came through today',
+      observation: 'No explicit check for understanding was detected this session',
       whyItMatters: 'Even a quick thumbs-up check can catch confusion early, before it compounds.',
       timestampSec: null,
       excerpt: null,
+      durationSec: null,
       weight: 1,
       focusMetric: 'cfuCount',
     })
@@ -962,6 +986,7 @@ function buildPriorityCandidates(
         whyItMatters: 'Specific feedback gives students something concrete to act on, not just praise or correction.',
         timestampSec: null,
         excerpt: null,
+        durationSec: null,
         weight: 1,
         focusMetric: null,
       })
@@ -969,6 +994,28 @@ function buildPriorityCandidates(
   }
 
   return candidates
+}
+
+// Same duration-vs-timestamp disambiguation as formatCandidateHeadline
+// below, for raw highlight objects (e.g. Reflect's "what stood out" list).
+function formatHighlightHeadline(h: { label: string; timestampSec: number; durationSec?: number }): string {
+  if (h.durationSec != null) {
+    return `${h.label}: ${Math.round(h.durationSec)}s — occurred at ${formatTime(h.timestampSec)}`
+  }
+  return `${h.label} · ${formatTime(h.timestampSec)}`
+}
+
+// Always shows a duration and a timestamp as two distinct, explicitly
+// labeled things — never a bare "label · 0:38" that leaves it ambiguous
+// whether the number is how long something lasted or when it happened.
+function formatCandidateHeadline(candidate: NoticeCandidate): string {
+  if (candidate.durationSec != null && candidate.timestampSec != null) {
+    return `${candidate.observation}: ${Math.round(candidate.durationSec)}s — occurred at ${formatTime(candidate.timestampSec)}`
+  }
+  if (candidate.timestampSec != null) {
+    return `${candidate.observation} · ${formatTime(candidate.timestampSec)}`
+  }
+  return candidate.observation
 }
 
 function StrengthCard({
@@ -983,10 +1030,7 @@ function StrengthCard({
       <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-600">Strength</h2>
       {candidate ? (
         <div className="mt-2 flex flex-col gap-1.5">
-          <p className="text-sm font-semibold text-ink">
-            {candidate.observation}
-            {candidate.timestampSec != null && ` · ${formatTime(candidate.timestampSec)}`}
-          </p>
+          <p className="text-sm font-semibold text-ink">{formatCandidateHeadline(candidate)}</p>
           {candidate.excerpt && <p className="text-sm text-ink-soft">"{candidate.excerpt}"</p>}
           <p className="text-sm text-ink-soft">{candidate.whyItMatters}</p>
         </div>
@@ -1020,10 +1064,7 @@ function CoachingPriorityCard({
       <h2 className="text-sm font-semibold uppercase tracking-wide text-warm-500">Coaching priority</h2>
       {candidate ? (
         <div className="mt-2 flex flex-col gap-1.5">
-          <p className="text-sm font-semibold text-ink">
-            {candidate.observation}
-            {candidate.timestampSec != null && ` · ${formatTime(candidate.timestampSec)}`}
-          </p>
+          <p className="text-sm font-semibold text-ink">{formatCandidateHeadline(candidate)}</p>
           {candidate.excerpt && <p className="text-sm text-ink-soft">"{candidate.excerpt}"</p>}
           <p className="text-sm text-ink-soft">{candidate.whyItMatters}</p>
         </div>
@@ -1353,7 +1394,7 @@ function ReportPanel({
   const feedbackRatio =
     genericCount != null && specificCount != null && genericCount + specificCount > 0
       ? formatRatio(specificCount, genericCount + specificCount)
-      : { state: 'unavailable' as const, display: '—', reason: 'No feedback-after-response moments detected.' }
+      : { state: 'not_measurable' as const, display: '—', reason: 'No feedback-after-response moments detected.' }
 
   // Classroom Routines
   const transitionMetric = getCountMetric({ count: num('transitionCount'), recordedSec })
@@ -1367,7 +1408,7 @@ function ReportPanel({
   const toneRatio =
     positiveCount != null && correctiveCount != null && positiveCount + correctiveCount > 0
       ? formatRatio(positiveCount, positiveCount + correctiveCount)
-      : { state: 'unavailable' as const, display: '—', reason: 'No positive or corrective phrases detected.' }
+      : { state: 'not_measurable' as const, display: '—', reason: 'No positive or corrective phrases detected.' }
 
   const reflectContext = buildReflectContext(session, cfuMetric, redirectionMetric, directiveMetric)
 
@@ -1906,7 +1947,7 @@ function ReflectTab({
             {highlights.map((h, i) => (
               <div key={i} className="rounded-xl border border-border bg-surface p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
-                  {h.label} · {formatTime(h.timestampSec)}
+                  {formatHighlightHeadline(h)}
                 </p>
                 <p className="mt-1.5 text-sm text-ink">"{h.excerpt}"</p>
               </div>
@@ -2267,13 +2308,13 @@ function ClimateRoutinesTab({
         <Stat
           label="Your transitions"
           value={transitionMetric.display}
-          muted={transitionMetric.state === 'unavailable'}
+          muted={isMissingState(transitionMetric.state)}
           reason={transitionMetric.reason}
         />
         <Stat
           label="Clear directions given"
           value={directiveMetric.display}
-          muted={directiveMetric.state === 'unavailable'}
+          muted={isMissingState(directiveMetric.state)}
           reason={directiveMetric.reason ?? "Count only — clarity isn't judged automatically."}
         />
       </CategorySection>
@@ -2296,21 +2337,21 @@ function ClimateRoutinesTab({
         <Stat
           label="Student names used"
           value={nameMentionMetric.display}
-          muted={nameMentionMetric.state === 'unavailable'}
+          muted={isMissingState(nameMentionMetric.state)}
           reason={nameMentionMetric.reason}
         />
         <Stat
           label="Your positive / corrective ratio"
           value={toneRatio.display}
-          muted={toneRatio.state === 'unavailable'}
+          muted={isMissingState(toneRatio.state)}
           reason={toneRatio.reason}
-          sub={toneRatio.state !== 'unavailable' ? 'share positive' : undefined}
+          sub={isConfidentState(toneRatio.state) ? 'share positive' : undefined}
         />
         <div id="stat-redirection">
           <Stat
             label="Your redirection language"
             value={redirectionMetric.display}
-            muted={redirectionMetric.state === 'unavailable'}
+            muted={isMissingState(redirectionMetric.state)}
             reason={redirectionMetric.reason ?? 'Count only — tone isn\'t judged automatically.'}
           />
         </div>
@@ -2376,16 +2417,28 @@ function DiscourseDetailsTab({
         <div id="stat-talkRatio">
           <Stat
             label="Your talk time"
-            value={session.teacherTalkPct != null ? `${session.teacherTalkPct}%` : '—'}
+            value={session.teacherTalkPct != null ? `${session.teacherTalkPct}%` : teacherTalkMetric.display}
+            muted={isMissingState(teacherTalkMetric.state)}
+            reason={teacherTalkMetric.reason}
             focused={focusMetric === 'talkRatio'}
           />
         </div>
-        <Stat label="Student talk time" value={session.studentTalkPct != null ? `${session.studentTalkPct}%` : '—'} />
-        <Stat label="Silence / other" value={silencePct != null ? `${silencePct}%` : '—'} />
+        <Stat
+          label="Student talk time"
+          value={session.studentTalkPct != null ? `${session.studentTalkPct}%` : studentTalkMetric.display}
+          muted={isMissingState(studentTalkMetric.state)}
+          reason={studentTalkMetric.reason}
+        />
+        <Stat
+          label="Silence / other"
+          value={silencePct != null ? `${silencePct}%` : silenceMetric.display}
+          muted={isMissingState(silenceMetric.state)}
+          reason={silenceMetric.reason}
+        />
         <Stat
           label="Student voice segments"
           value={studentSegmentsMetric.display}
-          muted={studentSegmentsMetric.state === 'unavailable'}
+          muted={isMissingState(studentSegmentsMetric.state)}
           reason={studentSegmentsMetric.reason}
         />
       </CategorySection>
@@ -2399,7 +2452,7 @@ function DiscourseDetailsTab({
           <Stat
             label="Questions you asked"
             value={questionsMetric.display}
-            muted={questionsMetric.state === 'unavailable'}
+            muted={isMissingState(questionsMetric.state)}
             reason={questionsMetric.reason}
             sub={higherOrderRatio ? `${higherOrderRatio.display} higher-order` : undefined}
             focused={focusMetric === 'higherOrderPct'}
@@ -2408,13 +2461,15 @@ function DiscourseDetailsTab({
         <Stat
           label="Your follow-up questions"
           value={followUpMetric.display}
-          muted={followUpMetric.state === 'unavailable'}
+          muted={isMissingState(followUpMetric.state)}
           reason={followUpMetric.reason}
         />
         <div id="stat-avgWaitTime">
           <Stat
             label="Your avg. wait time"
-            value={session.avgWaitTimeSec != null ? `${session.avgWaitTimeSec}s` : '—'}
+            value={session.avgWaitTimeSec != null ? `${session.avgWaitTimeSec}s` : waitTimeMetric.display}
+            muted={isMissingState(waitTimeMetric.state)}
+            reason={waitTimeMetric.reason}
             focused={focusMetric === 'avgWaitTime'}
           />
         </div>
@@ -2426,7 +2481,7 @@ function DiscourseDetailsTab({
           <Stat
             label="Your checks for understanding"
             value={cfuMetric.display}
-            muted={cfuMetric.state === 'unavailable'}
+            muted={isMissingState(cfuMetric.state)}
             reason={cfuMetric.reason}
             focused={focusMetric === 'cfuCount'}
           />
@@ -2434,9 +2489,9 @@ function DiscourseDetailsTab({
         <Stat
           label="Your feedback specificity"
           value={feedbackRatio.display}
-          muted={feedbackRatio.state === 'unavailable'}
+          muted={isMissingState(feedbackRatio.state)}
           reason={feedbackRatio.reason}
-          sub={feedbackRatio.state !== 'unavailable' ? 'specific of total feedback moments' : undefined}
+          sub={isConfidentState(feedbackRatio.state) ? 'specific of total feedback moments' : undefined}
         />
       </CategorySection>
       <CoachNote text={cfuInsight} />
