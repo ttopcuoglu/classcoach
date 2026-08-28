@@ -4,6 +4,7 @@ import ShareButton from '../components/ShareButton'
 import { MicIcon, StarIcon } from '../components/icons'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { categoryLabel } from '../lib/categories'
+import { takeAskPrefill } from '../lib/communicationsPrefill'
 import {
   getDebriefs,
   sendDebriefChat,
@@ -42,6 +43,11 @@ export default function Ask() {
       .then(setAllDebriefs)
       .catch(() => {})
       .finally(() => setHistoryLoading(false))
+  }, [])
+
+  useEffect(() => {
+    const prefill = takeAskPrefill()
+    if (prefill?.incidentText) setIncidentText(prefill.incidentText)
   }, [])
 
   const savedDebriefs = allDebriefs.filter((d) => d.saved)

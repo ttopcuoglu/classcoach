@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, MicIcon, WarningIcon } from '../components/icons'
+import { setAskPrefill } from '../lib/communicationsPrefill'
 import {
   createAudioSession,
   deleteAudioSession,
@@ -26,15 +27,18 @@ import {
   type SpeakerSample,
 } from '../lib/api'
 import {
+  buildEvidenceQualityLine,
   categoryCoverage,
   formatRatio,
   getCoverage,
   getCountMetric,
   getPresenceMetric,
+  judgeTalkBalance,
   MIN_DURATION_FOR_CFU_DETECTION_SEC,
   MIN_N_FOR_PERCENT,
   SHORT_SESSION_THRESHOLD_SEC,
   type ConfidentMetric,
+  type TalkBalanceJudgment,
 } from '../lib/reportConfidence'
 
 function formatTime(sec: number): string {
@@ -582,15 +586,30 @@ function buildReflectContext(
 // removed for exactly this reason: two independent AI summaries of the
 // same numbers felt redundant). Each returns null when the underlying
 // metric's state is 'unavailable' — never comment on missing data.
+// Every talk-balance sentence in the app routes through judgeTalkBalance
+// (reportConfidence.ts) so "balanced" can never be said when student talk is
+// a confirmed zero — the old version here branched only on teacherTalkPct
+// and could say "fairly balanced... students at 0%."
+function buildVoiceBalanceCaption(judgment: TalkBalanceJudgment | null): string | null {
+  if (!judgment) return null
+  switch (judgment.kind) {
+    case 'balanced':
+      return `Talk time was fairly balanced today — you at ${judgment.teacherPct}%, students at ${judgment.studentPct}%.`
+    case 'teacher-heavy':
+      return `You did most of the talking today (${judgment.teacherPct}%) — look for a moment to hand the floor to students.`
+    case 'student-heavy':
+      return `Students had a strong share of the talk time today (${judgment.studentPct}%) — that's a lot of real student voice in the room.`
+    case 'student-zero':
+      return `You talked about ${judgment.teacherPct}% of the time; no student talk was separately detected this session.`
+    case 'student-unmeasured':
+      return `You talked about ${judgment.teacherPct}% of the time — student talk wasn't separately measured this session.`
+    case 'student-thin':
+      return `You talked ${judgment.teacherPct}% of the time, students only ${judgment.studentPct}% — worth watching next session.`
+  }
+}
+
 function buildTalkInsight(session: AudioSessionWithSegments): string | null {
-  if (session.teacherTalkPct == null) return null
-  if (session.teacherTalkPct >= 65) {
-    return `You did most of the talking today (${session.teacherTalkPct}%) — look for a moment to hand the floor to students.`
-  }
-  if (session.teacherTalkPct <= 40) {
-    return `Students had a strong share of the talk time today (${session.studentTalkPct ?? 100 - session.teacherTalkPct}%) — that's a lot of real student voice in the room.`
-  }
-  return `Talk time was fairly balanced today — you at ${session.teacherTalkPct}%, students at ${session.studentTalkPct ?? '—'}%.`
+  return buildVoiceBalanceCaption(judgeTalkBalance(session.teacherTalkPct, session.studentTalkPct))
 }
 
 function buildQuestioningInsight(
@@ -660,6 +679,515 @@ function CoachNote({ text }: { text: string | null }) {
       <p className="text-sm text-ink">{text}</p>
     </div>
   )
+}
+
+function EvidenceQualityLine({ text, tone }: { text: string; tone: 'good' | 'warn' }) {
+  if (tone === 'warn') {
+    return (
+      <div className="flex items-start gap-3 rounded-xl border-2 border-warm-500 bg-warm-100 p-4">
+        <WarningIcon className="mt-0.5 h-5 w-5 shrink-0 text-warm-500" />
+        <p className="text-sm font-semibold text-warm-500">{text}</p>
+      </div>
+    )
+  }
+  return <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{text}</p>
+}
+
+// Stitches the existing per-category coach notes into one short narrative —
+// no new Claude call, since these sentences are already grounded in
+// measured/zero data and following the app's no-overclaiming rules.
+function buildWivozaNoticedSummary(
+  talkInsight: string | null,
+  questioningInsight: string | null,
+  cfuInsight: string | null,
+): string | null {
+  const sentences = [talkInsight, questioningInsight, cfuInsight].filter((s): s is string => s != null)
+  return sentences.length > 0 ? sentences.join(' ') : null
+}
+
+function WivozaNoticedCard({ text }: { text: string | null }) {
+  if (!text) return null
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-6">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">What Wivoza noticed</h2>
+      <p className="mt-2 text-sm text-ink">{text}</p>
+    </div>
+  )
+}
+
+// A single candidate for "the one strength" or "the one coaching priority" —
+// either a real moment (highlight, with a timestamp/excerpt) or an
+// aggregate-metric observation (timestamp/excerpt null).
+type NoticeCandidate = {
+  id: string
+  observation: string
+  whyItMatters: string
+  timestampSec: number | null
+  excerpt: string | null
+  weight: number
+  focusMetric: FocusMetric | null
+}
+
+// Fixed tie-break order so ranking is deterministic across renders.
+const CANDIDATE_ORDER = [
+  'highlight-followup',
+  'highlight-redirection',
+  'highlight-repeated',
+  'highlight-monologue',
+  'talk-balance',
+  'questioning',
+  'wait-time',
+  'cfu',
+  'feedback',
+]
+
+function pickTop(candidates: NoticeCandidate[]): NoticeCandidate | null {
+  if (!candidates.length) return null
+  return [...candidates].sort(
+    (a, b) => b.weight - a.weight || CANDIDATE_ORDER.indexOf(a.id) - CANDIDATE_ORDER.indexOf(b.id),
+  )[0]
+}
+
+function highlightCandidates(
+  highlights: AudioHighlight[] | null,
+  label: string,
+  id: string,
+  weight: number,
+  whyItMatters: string,
+): NoticeCandidate[] {
+  return (highlights ?? [])
+    .filter((h) => h.label === label)
+    .map((h) => ({
+      id,
+      observation: h.label,
+      whyItMatters,
+      timestampSec: h.timestampSec,
+      excerpt: h.excerpt,
+      weight,
+      focusMetric: null,
+    }))
+}
+
+// Deliberately restricted to Overview's own three categories (talk,
+// questioning, checking-understanding) plus highlights — Climate & Routines
+// metrics have no FocusMetric key today, so including them would break "Set
+// as my focus" wiring and require extending FocusMetric/My Growth, which is
+// out of scope here.
+function buildStrengthCandidates(
+  session: AudioSessionWithSegments,
+  cfuMetric: ConfidentMetric,
+  feedbackRatio: ConfidentMetric,
+  higherOrderRatio: ConfidentMetric | null,
+): NoticeCandidate[] {
+  const candidates: NoticeCandidate[] = []
+
+  candidates.push(
+    ...highlightCandidates(
+      session.highlights,
+      'Follow-up / probing question',
+      'highlight-followup',
+      3,
+      'Following up on a student answer pushes their thinking further instead of stopping at the first response.',
+    ),
+  )
+
+  const balance = judgeTalkBalance(session.teacherTalkPct, session.studentTalkPct)
+  if (balance?.kind === 'student-heavy') {
+    candidates.push({
+      id: 'talk-balance',
+      observation: `Students had ${balance.studentPct}% of the talk time today`,
+      whyItMatters: "That's a lot of real student voice in the room — a strong sign of student-centered discussion.",
+      timestampSec: null,
+      excerpt: null,
+      weight: 1,
+      focusMetric: 'talkRatio',
+    })
+  }
+
+  if (
+    higherOrderRatio &&
+    higherOrderRatio.state === 'measured' &&
+    session.higherOrderPct != null &&
+    session.higherOrderPct >= 40
+  ) {
+    candidates.push({
+      id: 'questioning',
+      observation: `${session.higherOrderPct}% of your questions were higher-order`,
+      whyItMatters: "That's the harder kind of question to ask on the fly — it pushes for real thinking, not just recall.",
+      timestampSec: null,
+      excerpt: null,
+      weight: 1,
+      focusMetric: 'higherOrderPct',
+    })
+  }
+
+  if (session.avgWaitTimeSec != null && session.avgWaitTimeSec >= 3) {
+    candidates.push({
+      id: 'wait-time',
+      observation: `Your average wait time was ${session.avgWaitTimeSec}s`,
+      whyItMatters: 'Giving students real time to think before answering leads to deeper, more complete responses.',
+      timestampSec: null,
+      excerpt: null,
+      weight: 1,
+      focusMetric: 'avgWaitTime',
+    })
+  }
+
+  if (cfuMetric.state === 'measured') {
+    candidates.push({
+      id: 'cfu',
+      observation: 'You checked for understanding today',
+      whyItMatters: 'Catching confusion before it compounds is one of the highest-leverage coaching moves.',
+      timestampSec: null,
+      excerpt: null,
+      weight: 1,
+      focusMetric: 'cfuCount',
+    })
+  }
+
+  if (feedbackRatio.state === 'measured' && feedbackRatio.display.endsWith('%')) {
+    const pct = parseInt(feedbackRatio.display, 10)
+    if (!Number.isNaN(pct) && pct >= 50) {
+      candidates.push({
+        id: 'feedback',
+        observation: `${feedbackRatio.display} of your feedback was specific`,
+        whyItMatters: 'Specific feedback gives students something concrete to act on, not just praise or correction.',
+        timestampSec: null,
+        excerpt: null,
+        weight: 1,
+        focusMetric: null,
+      })
+    }
+  }
+
+  return candidates
+}
+
+function buildPriorityCandidates(
+  session: AudioSessionWithSegments,
+  cfuMetric: ConfidentMetric,
+  feedbackRatio: ConfidentMetric,
+  higherOrderRatio: ConfidentMetric | null,
+): NoticeCandidate[] {
+  const candidates: NoticeCandidate[] = []
+
+  candidates.push(
+    ...highlightCandidates(
+      session.highlights,
+      'Redirection cluster',
+      'highlight-redirection',
+      3,
+      'A cluster of redirections close together can be a sign the room needs a different routine or transition in that moment.',
+    ),
+  )
+  candidates.push(
+    ...highlightCandidates(
+      session.highlights,
+      'Repeated instruction',
+      'highlight-repeated',
+      3,
+      "When directions need repeating, it's worth double-checking they land clearly the first time.",
+    ),
+  )
+  candidates.push(
+    ...highlightCandidates(
+      session.highlights,
+      'Longest uninterrupted teacher monologue',
+      'highlight-monologue',
+      2,
+      'A long stretch without a break in teacher talk is a natural spot to build in a check-in or a question.',
+    ),
+  )
+
+  const balance = judgeTalkBalance(session.teacherTalkPct, session.studentTalkPct)
+  if (balance?.kind === 'teacher-heavy') {
+    candidates.push({
+      id: 'talk-balance',
+      observation: `You talked ${balance.teacherPct}% of the time today`,
+      whyItMatters: 'Look for a moment to hand the floor to students — even a short turn-and-talk shifts the balance.',
+      timestampSec: null,
+      excerpt: null,
+      weight: 2,
+      focusMetric: 'talkRatio',
+    })
+  }
+
+  if (
+    higherOrderRatio &&
+    higherOrderRatio.state === 'measured' &&
+    session.higherOrderPct != null &&
+    session.higherOrderPct < 40
+  ) {
+    candidates.push({
+      id: 'questioning',
+      observation: `Most of today's questions were quick recall checks (${session.higherOrderPct}% higher-order)`,
+      whyItMatters: "A natural spot to slip in one 'why' or 'how' question next time.",
+      timestampSec: null,
+      excerpt: null,
+      weight: 1,
+      focusMetric: 'higherOrderPct',
+    })
+  }
+
+  if (session.avgWaitTimeSec != null && session.avgWaitTimeSec < 3) {
+    candidates.push({
+      id: 'wait-time',
+      observation: `Your average wait time was ${session.avgWaitTimeSec}s`,
+      whyItMatters: 'A few extra seconds of silence after a question gives more students time to formulate an answer.',
+      timestampSec: null,
+      excerpt: null,
+      weight: 1,
+      focusMetric: 'avgWaitTime',
+    })
+  }
+
+  if (cfuMetric.state === 'zero') {
+    candidates.push({
+      id: 'cfu',
+      observation: 'No explicit check for understanding came through today',
+      whyItMatters: 'Even a quick thumbs-up check can catch confusion early, before it compounds.',
+      timestampSec: null,
+      excerpt: null,
+      weight: 1,
+      focusMetric: 'cfuCount',
+    })
+  }
+
+  if (feedbackRatio.state === 'measured' && feedbackRatio.display.endsWith('%')) {
+    const pct = parseInt(feedbackRatio.display, 10)
+    if (!Number.isNaN(pct) && pct < 50) {
+      candidates.push({
+        id: 'feedback',
+        observation: `Only ${feedbackRatio.display} of your feedback was specific`,
+        whyItMatters: 'Specific feedback gives students something concrete to act on, not just praise or correction.',
+        timestampSec: null,
+        excerpt: null,
+        weight: 1,
+        focusMetric: null,
+      })
+    }
+  }
+
+  return candidates
+}
+
+function StrengthCard({
+  candidate,
+  onViewDiscourse,
+}: {
+  candidate: NoticeCandidate | null
+  onViewDiscourse: () => void
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-6">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-600">Strength</h2>
+      {candidate ? (
+        <div className="mt-2 flex flex-col gap-1.5">
+          <p className="text-sm font-semibold text-ink">
+            {candidate.observation}
+            {candidate.timestampSec != null && ` · ${formatTime(candidate.timestampSec)}`}
+          </p>
+          {candidate.excerpt && <p className="text-sm text-ink-soft">"{candidate.excerpt}"</p>}
+          <p className="text-sm text-ink-soft">{candidate.whyItMatters}</p>
+        </div>
+      ) : (
+        <div className="mt-2 flex flex-col gap-2">
+          <p className="text-sm text-ink-soft">
+            Not enough measured evidence yet for a stand-out strength this session.
+          </p>
+          <button
+            type="button"
+            onClick={onViewDiscourse}
+            className="self-start text-sm font-medium text-brand-600 hover:text-brand-700"
+          >
+            See the full breakdown in Discourse Details →
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CoachingPriorityCard({
+  candidate,
+  coverage,
+}: {
+  candidate: NoticeCandidate | null
+  coverage: ReturnType<typeof getCoverage>
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-6">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-warm-500">Coaching priority</h2>
+      {candidate ? (
+        <div className="mt-2 flex flex-col gap-1.5">
+          <p className="text-sm font-semibold text-ink">
+            {candidate.observation}
+            {candidate.timestampSec != null && ` · ${formatTime(candidate.timestampSec)}`}
+          </p>
+          {candidate.excerpt && <p className="text-sm text-ink-soft">"{candidate.excerpt}"</p>}
+          <p className="text-sm text-ink-soft">{candidate.whyItMatters}</p>
+        </div>
+      ) : (
+        <p className="mt-2 text-sm text-ink-soft">
+          This recording was {formatTime(coverage.recordedSec)} — coaching-priority signals need more length to
+          surface reliably. Aim for at least {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes next time.
+        </p>
+      )}
+    </div>
+  )
+}
+
+function computeVoiceBalance(session: AudioSessionWithSegments, silencePct: number | null) {
+  const recordedSec = session.durationSec ?? 0
+  const toSec = (pct: number | null) => (pct == null ? null : Math.round((pct / 100) * recordedSec))
+  return {
+    teacherPct: session.teacherTalkPct,
+    teacherSec: toSec(session.teacherTalkPct),
+    studentPct: session.studentTalkPct,
+    studentSec: toSec(session.studentTalkPct),
+    // AudioSession has no group-talk field today — this row is structurally
+    // always omitted, kept as a named null pair so a future group-talk
+    // metric can populate it without reshaping this function or its caller.
+    groupPct: null as number | null,
+    groupSec: null as number | null,
+    silencePct,
+    silenceSec: toSec(silencePct),
+  }
+}
+
+function VoiceBalanceBar({
+  label,
+  pct,
+  sec,
+  barClassName,
+}: {
+  label: string
+  pct: number | null
+  sec: number | null
+  barClassName: string
+}) {
+  if (pct == null) return null
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-baseline justify-between text-xs font-medium text-ink-soft">
+        <span>{label}</span>
+        <span>
+          {sec != null ? `${formatTime(sec)} · ` : ''}
+          {pct}%
+        </span>
+      </div>
+      <div className="h-2.5 w-full overflow-hidden rounded-full bg-canvas">
+        <div className={`h-full rounded-full ${barClassName}`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+      </div>
+    </div>
+  )
+}
+
+function ClassroomVoiceBalance({
+  teacherPct,
+  teacherSec,
+  studentPct,
+  studentSec,
+  groupPct,
+  groupSec,
+  silencePct,
+  silenceSec,
+  caption,
+}: {
+  teacherPct: number | null
+  teacherSec: number | null
+  studentPct: number | null
+  studentSec: number | null
+  groupPct: number | null
+  groupSec: number | null
+  silencePct: number | null
+  silenceSec: number | null
+  caption: string | null
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-6">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Classroom voice balance</h2>
+      <div className="mt-3 flex flex-col gap-3">
+        <VoiceBalanceBar label="You" pct={teacherPct} sec={teacherSec} barClassName="bg-brand-500" />
+        <VoiceBalanceBar label="Students" pct={studentPct} sec={studentSec} barClassName="bg-brand-500/60" />
+        <VoiceBalanceBar label="Group work" pct={groupPct} sec={groupSec} barClassName="bg-brand-500/35" />
+        <VoiceBalanceBar label="Silence / other" pct={silencePct} sec={silenceSec} barClassName="bg-ink-soft/40" />
+      </div>
+      {caption && <p className="mt-3 text-sm text-ink-soft">{caption}</p>}
+    </div>
+  )
+}
+
+function TryThisNext({
+  priority,
+  onSetFocus,
+  onGoReflect,
+  onAskCoach,
+}: {
+  priority: NoticeCandidate | null
+  onSetFocus: (metric: FocusMetric) => void
+  onGoReflect: () => void
+  onAskCoach: () => void
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-6">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Try this next</h2>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {priority?.focusMetric && (
+          <button
+            type="button"
+            onClick={() => onSetFocus(priority.focusMetric as FocusMetric)}
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+          >
+            Set as my focus → My Growth
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onGoReflect}
+          className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+        >
+          Reflect on this →
+        </button>
+        <button
+          type="button"
+          onClick={onAskCoach}
+          className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+        >
+          Ask Wivoza Coach →
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function AskWivozaCoachButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center justify-center gap-2 rounded-2xl border-2 border-brand-200 bg-brand-50 px-6 py-4 text-sm font-semibold text-brand-600 transition-colors hover:border-brand-400"
+    >
+      <ChatBubbleIcon className="h-4 w-4" />
+      Ask Wivoza Coach about this session
+    </button>
+  )
+}
+
+// The one place structured session facts are turned into Claude-safe plain
+// text for a fresh Ask conversation, reusing buildReflectContext's output —
+// prefilled via sessionStorage, reviewed and editable, never auto-submitted.
+function composeAskIncidentText(session: AudioSessionWithSegments, contextLines: string[], focusNote?: string): string {
+  const header = `Session context (${session.classSubject || 'class'}, ${formatSessionDateTime(session.sessionDate)}):`
+  const body = contextLines.length
+    ? contextLines.map((l) => `- ${l}`).join('\n')
+    : '- No confidently measured session facts available yet.'
+  return `${header}\n${body}\n\nWhat I'd like to talk through: ${focusNote ?? ''}`
+}
+
+function goToAskCoach(navigate: ReturnType<typeof useNavigate>, incidentText: string) {
+  setAskPrefill({ incidentText })
+  navigate('/coach-chat?tab=ask')
 }
 
 function ReportPanel({
@@ -892,10 +1420,13 @@ function ReportPanel({
           waitTimeMetric={waitTimeMetric}
           cfuMetric={cfuMetric}
           feedbackRatio={feedbackRatio}
-          focusMetric={focusMetric}
+          onFocusMetricChange={onFocusMetricChange}
           talkInsight={talkInsight}
           questioningInsight={questioningInsight}
           cfuInsight={cfuInsight}
+          reflectContext={reflectContext}
+          onGoReflect={() => setTab('reflect')}
+          onViewDiscourse={() => handleViewSource('discourse', '')}
         />
       )}
 
@@ -962,7 +1493,7 @@ function ReportPanel({
           transitionMetric={transitionMetric}
           directiveMetric={directiveMetric}
           phasesCount={session.phases?.length ?? 0}
-          onViewPhases={() => handleViewSource('overview', 'session-phases')}
+          onViewPhases={() => handleViewSource('discourse', 'session-phases')}
           nameMentionMetric={nameMentionMetric}
           toneRatio={toneRatio}
           redirectionMetric={redirectionMetric}
@@ -972,7 +1503,26 @@ function ReportPanel({
       )}
 
       {tab === 'discourse' && (
-        <DiscourseDetailsTab questionCount={session.questionCount} questionLog={session.questionLog} />
+        <DiscourseDetailsTab
+          questionCount={session.questionCount}
+          questionLog={session.questionLog}
+          session={session}
+          teacherTalkMetric={teacherTalkMetric}
+          studentTalkMetric={studentTalkMetric}
+          silencePct={silencePct}
+          silenceMetric={silenceMetric}
+          studentSegmentsMetric={studentSegmentsMetric}
+          questionsMetric={questionsMetric}
+          higherOrderRatio={higherOrderRatio}
+          followUpMetric={followUpMetric}
+          waitTimeMetric={waitTimeMetric}
+          cfuMetric={cfuMetric}
+          feedbackRatio={feedbackRatio}
+          focusMetric={focusMetric}
+          talkInsight={talkInsight}
+          questioningInsight={questioningInsight}
+          cfuInsight={cfuInsight}
+        />
       )}
 
       <div className="rounded-xl border border-dashed border-border p-4 text-xs text-ink-soft">
@@ -1005,10 +1555,13 @@ function OverviewTab({
   waitTimeMetric,
   cfuMetric,
   feedbackRatio,
-  focusMetric,
+  onFocusMetricChange,
   talkInsight,
   questioningInsight,
   cfuInsight,
+  reflectContext,
+  onGoReflect,
+  onViewDiscourse,
 }: {
   session: AudioSessionWithSegments
   coverage: ReturnType<typeof getCoverage>
@@ -1023,31 +1576,35 @@ function OverviewTab({
   waitTimeMetric: ReturnType<typeof getPresenceMetric>
   cfuMetric: ReturnType<typeof getCountMetric>
   feedbackRatio: ConfidentMetric
-  focusMetric: FocusMetric | null
+  onFocusMetricChange: (metric: FocusMetric | null) => void
   talkInsight: string | null
   questioningInsight: string | null
   cfuInsight: string | null
+  reflectContext: string[]
+  onGoReflect: () => void
+  onViewDiscourse: () => void
 }) {
+  const navigate = useNavigate()
+
+  const strength = pickTop(buildStrengthCandidates(session, cfuMetric, feedbackRatio, higherOrderRatio))
+  const priority = pickTop(buildPriorityCandidates(session, cfuMetric, feedbackRatio, higherOrderRatio))
+  const voiceBalance = computeVoiceBalance(session, silencePct)
+  const balanceJudgment = judgeTalkBalance(session.teacherTalkPct, session.studentTalkPct)
+  const evidenceQuality = buildEvidenceQualityLine(coverage, [
+    teacherTalkMetric,
+    studentTalkMetric,
+    silenceMetric,
+    studentSegmentsMetric,
+    questionsMetric,
+    followUpMetric,
+    waitTimeMetric,
+    cfuMetric,
+    feedbackRatio,
+  ])
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-          You recorded {formatTime(coverage.recordedSec)} of {formatTime(coverage.totalSec)}
-          {coverage.uncapturedPhases.length > 0 && (
-            <> · Not clearly captured: {coverage.uncapturedPhases.join(', ')}</>
-          )}
-        </p>
-        {coverage.isShort && (
-          <div className="flex items-start gap-3 rounded-xl border-2 border-warm-500 bg-warm-100 p-4">
-            <WarningIcon className="mt-0.5 h-5 w-5 shrink-0 text-warm-500" />
-            <p className="text-sm font-semibold text-warm-500">
-              Session under {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes — treat metrics as indicative,
-              not conclusive.
-            </p>
-          </div>
-        )}
-      </div>
-
+      {/* 1. Lesson snapshot */}
       <div className="rounded-2xl border border-border bg-surface p-6">
         <h1 className="text-xl font-semibold text-ink">
           {session.classSubject || 'New Recording'} {session.period ? `· ${session.period}` : ''}
@@ -1060,115 +1617,33 @@ function OverviewTab({
         </p>
       </div>
 
-      <CategorySection
-        title="Talk & Participation"
-        coverage={categoryCoverage([teacherTalkMetric, studentTalkMetric, silenceMetric, studentSegmentsMetric])}
-      >
-        <div id="stat-talkRatio">
-          <Stat
-            label="Your talk time"
-            value={session.teacherTalkPct != null ? `${session.teacherTalkPct}%` : '—'}
-            focused={focusMetric === 'talkRatio'}
-          />
-        </div>
-        <Stat label="Student talk time" value={session.studentTalkPct != null ? `${session.studentTalkPct}%` : '—'} />
-        <Stat label="Silence / other" value={silencePct != null ? `${silencePct}%` : '—'} />
-        <Stat
-          label="Student voice segments"
-          value={studentSegmentsMetric.display}
-          muted={studentSegmentsMetric.state === 'unavailable'}
-          reason={studentSegmentsMetric.reason}
-        />
-      </CategorySection>
-      <CoachNote text={talkInsight} />
+      {/* 2. Evidence quality */}
+      <EvidenceQualityLine text={evidenceQuality.text} tone={evidenceQuality.tone} />
 
-      <CategorySection
-        title="Questioning & Thinking"
-        coverage={categoryCoverage([questionsMetric, followUpMetric, waitTimeMetric])}
-      >
-        <div id="stat-higherOrderPct">
-          <Stat
-            label="Questions you asked"
-            value={questionsMetric.display}
-            muted={questionsMetric.state === 'unavailable'}
-            reason={questionsMetric.reason}
-            sub={higherOrderRatio ? `${higherOrderRatio.display} higher-order` : undefined}
-            focused={focusMetric === 'higherOrderPct'}
-          />
-        </div>
-        <Stat
-          label="Your follow-up questions"
-          value={followUpMetric.display}
-          muted={followUpMetric.state === 'unavailable'}
-          reason={followUpMetric.reason}
-        />
-        <div id="stat-avgWaitTime">
-          <Stat
-            label="Your avg. wait time"
-            value={session.avgWaitTimeSec != null ? `${session.avgWaitTimeSec}s` : '—'}
-            focused={focusMetric === 'avgWaitTime'}
-          />
-        </div>
-      </CategorySection>
-      <CoachNote text={questioningInsight} />
+      {/* 3. What Wivoza noticed */}
+      <WivozaNoticedCard text={buildWivozaNoticedSummary(talkInsight, questioningInsight, cfuInsight)} />
 
-      <CategorySection title="Checking Understanding" coverage={categoryCoverage([cfuMetric, feedbackRatio])}>
-        <div id="stat-cfu">
-          <Stat
-            label="Your checks for understanding"
-            value={cfuMetric.display}
-            muted={cfuMetric.state === 'unavailable'}
-            reason={cfuMetric.reason}
-            focused={focusMetric === 'cfuCount'}
-          />
-        </div>
-        <Stat
-          label="Your feedback specificity"
-          value={feedbackRatio.display}
-          muted={feedbackRatio.state === 'unavailable'}
-          reason={feedbackRatio.reason}
-          sub={feedbackRatio.state !== 'unavailable' ? 'specific of total feedback moments' : undefined}
-        />
-      </CategorySection>
-      <CoachNote text={cfuInsight} />
+      {/* 4. Ranked strength (or insufficient-evidence fallback) */}
+      <StrengthCard candidate={strength} onViewDiscourse={onViewDiscourse} />
 
-      {session.phases && session.phases.length > 0 && (
-        <div id="session-phases">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Session phases</h2>
-          <div className="mt-3 flex flex-col gap-2">
-            {session.phases.map((p, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2.5"
-              >
-                <span className="w-28 shrink-0 text-sm font-medium text-ink">{p.label}</span>
-                <span className="text-sm text-ink-soft">
-                  {formatTime(p.startSec)} – {formatTime(p.endSec)}
-                </span>
-              </div>
-            ))}
-          </div>
-          <p className="mt-2 text-xs text-ink-soft">
-            These boundaries are an automated estimate — treat them as a starting point.
-          </p>
-        </div>
-      )}
+      {/* 5. Ranked coaching priority (or recording-length fallback) */}
+      <CoachingPriorityCard candidate={priority} coverage={coverage} />
 
-      {session.highlights && session.highlights.length > 0 && (
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Highlights</h2>
-          <div className="mt-3 flex flex-col gap-3">
-            {session.highlights.map((h, i) => (
-              <div key={i} id={`highlight-${i}`} className="rounded-xl border border-border bg-surface p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
-                  {h.label} · {formatTime(h.timestampSec)}
-                </p>
-                <p className="mt-1.5 text-sm text-ink">"{h.excerpt}"</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* 6. Classroom voice balance */}
+      <ClassroomVoiceBalance {...voiceBalance} caption={buildVoiceBalanceCaption(balanceJudgment)} />
+
+      {/* 7. Try this next — tied to the coaching priority */}
+      <TryThisNext
+        priority={priority}
+        onSetFocus={(metric) => onFocusMetricChange(metric)}
+        onGoReflect={onGoReflect}
+        onAskCoach={() =>
+          goToAskCoach(navigate, composeAskIncidentText(session, reflectContext, priority?.observation))
+        }
+      />
+
+      {/* 8. Persistent Ask Wivoza Coach entry point */}
+      <AskWivozaCoachButton onClick={() => goToAskCoach(navigate, composeAskIncidentText(session, reflectContext))} />
     </div>
   )
 }
@@ -1810,7 +2285,7 @@ function ClimateRoutinesTab({
           onClick={onViewPhases}
           className="self-start text-sm font-medium text-brand-600 hover:text-brand-700"
         >
-          {phasesCount} phase{phasesCount === 1 ? '' : 's'} detected — see Overview for the full breakdown →
+          {phasesCount} phase{phasesCount === 1 ? '' : 's'} detected — see Discourse Details for the full breakdown →
         </button>
       )}
 
@@ -1848,19 +2323,142 @@ function ClimateRoutinesTab({
 function DiscourseDetailsTab({
   questionCount,
   questionLog,
+  session,
+  teacherTalkMetric,
+  studentTalkMetric,
+  silencePct,
+  silenceMetric,
+  studentSegmentsMetric,
+  questionsMetric,
+  higherOrderRatio,
+  followUpMetric,
+  waitTimeMetric,
+  cfuMetric,
+  feedbackRatio,
+  focusMetric,
+  talkInsight,
+  questioningInsight,
+  cfuInsight,
 }: {
   questionCount: number | null
   questionLog: AudioQuestionLogEntry[] | null
+  session: AudioSessionWithSegments
+  teacherTalkMetric: ReturnType<typeof getPresenceMetric>
+  studentTalkMetric: ReturnType<typeof getPresenceMetric>
+  silencePct: number | null
+  silenceMetric: ReturnType<typeof getPresenceMetric>
+  studentSegmentsMetric: ReturnType<typeof getCountMetric>
+  questionsMetric: ReturnType<typeof getCountMetric>
+  higherOrderRatio: ReturnType<typeof formatRatio> | null
+  followUpMetric: ReturnType<typeof getCountMetric>
+  waitTimeMetric: ReturnType<typeof getPresenceMetric>
+  cfuMetric: ReturnType<typeof getCountMetric>
+  feedbackRatio: ConfidentMetric
+  focusMetric: FocusMetric | null
+  talkInsight: string | null
+  questioningInsight: string | null
+  cfuInsight: string | null
 }) {
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <p className="text-sm text-ink-soft">
         {questionCount != null
           ? `You asked ${questionCount} question${questionCount === 1 ? '' : 's'} this session.`
           : 'No question data for this session.'}
       </p>
+
+      <CategorySection
+        title="Talk & Participation"
+        coverage={categoryCoverage([teacherTalkMetric, studentTalkMetric, silenceMetric, studentSegmentsMetric])}
+      >
+        <div id="stat-talkRatio">
+          <Stat
+            label="Your talk time"
+            value={session.teacherTalkPct != null ? `${session.teacherTalkPct}%` : '—'}
+            focused={focusMetric === 'talkRatio'}
+          />
+        </div>
+        <Stat label="Student talk time" value={session.studentTalkPct != null ? `${session.studentTalkPct}%` : '—'} />
+        <Stat label="Silence / other" value={silencePct != null ? `${silencePct}%` : '—'} />
+        <Stat
+          label="Student voice segments"
+          value={studentSegmentsMetric.display}
+          muted={studentSegmentsMetric.state === 'unavailable'}
+          reason={studentSegmentsMetric.reason}
+        />
+      </CategorySection>
+      <CoachNote text={talkInsight} />
+
+      <CategorySection
+        title="Questioning & Thinking"
+        coverage={categoryCoverage([questionsMetric, followUpMetric, waitTimeMetric])}
+      >
+        <div id="stat-higherOrderPct">
+          <Stat
+            label="Questions you asked"
+            value={questionsMetric.display}
+            muted={questionsMetric.state === 'unavailable'}
+            reason={questionsMetric.reason}
+            sub={higherOrderRatio ? `${higherOrderRatio.display} higher-order` : undefined}
+            focused={focusMetric === 'higherOrderPct'}
+          />
+        </div>
+        <Stat
+          label="Your follow-up questions"
+          value={followUpMetric.display}
+          muted={followUpMetric.state === 'unavailable'}
+          reason={followUpMetric.reason}
+        />
+        <div id="stat-avgWaitTime">
+          <Stat
+            label="Your avg. wait time"
+            value={session.avgWaitTimeSec != null ? `${session.avgWaitTimeSec}s` : '—'}
+            focused={focusMetric === 'avgWaitTime'}
+          />
+        </div>
+      </CategorySection>
+      <CoachNote text={questioningInsight} />
+
+      <CategorySection title="Checking Understanding" coverage={categoryCoverage([cfuMetric, feedbackRatio])}>
+        <div id="stat-cfu">
+          <Stat
+            label="Your checks for understanding"
+            value={cfuMetric.display}
+            muted={cfuMetric.state === 'unavailable'}
+            reason={cfuMetric.reason}
+            focused={focusMetric === 'cfuCount'}
+          />
+        </div>
+        <Stat
+          label="Your feedback specificity"
+          value={feedbackRatio.display}
+          muted={feedbackRatio.state === 'unavailable'}
+          reason={feedbackRatio.reason}
+          sub={feedbackRatio.state !== 'unavailable' ? 'specific of total feedback moments' : undefined}
+        />
+      </CategorySection>
+      <CoachNote text={cfuInsight} />
+
+      {session.phases && session.phases.length > 0 && (
+        <div id="session-phases">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Session phases</h2>
+          <div className="mt-3 flex flex-col gap-2">
+            {session.phases.map((p, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2.5">
+                <span className="w-28 shrink-0 text-sm font-medium text-ink">{p.label}</span>
+                <span className="text-sm text-ink-soft">
+                  {formatTime(p.startSec)} – {formatTime(p.endSec)}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-ink-soft">
+            These boundaries are an automated estimate — treat them as a starting point.
+          </p>
+        </div>
+      )}
 
       {questionLog === null ? (
         <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">

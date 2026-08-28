@@ -126,3 +126,53 @@ export function formatDuration(sec: number): string {
   const s = Math.floor(sec % 60)
   return `${m}:${s.toString().padStart(2, '0')}`
 }
+
+// One consolidated read on how much to trust this session's numbers,
+// replacing the old scattered "recorded X of Y" line + separate
+// short-session banner with a single line and a good/warn tone.
+export function buildEvidenceQualityLine(
+  coverage: CoverageInfo,
+  metrics: ConfidentMetric[],
+): { text: string; tone: 'good' | 'warn' } {
+  const total = metrics.length
+  const measured = metrics.filter((m) => m.state !== 'unavailable').length
+  const warn = coverage.isShort || (total > 0 && measured / total < 0.6)
+  const parts: string[] = [`Recorded ${formatDuration(coverage.recordedSec)}`]
+  if (coverage.isShort) {
+    parts.push(`under ${Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} min — treat metrics as indicative, not conclusive`)
+  }
+  parts.push(`${measured} of ${total} metrics measured confidently`)
+  if (coverage.uncapturedPhases.length > 0) {
+    parts.push(`not clearly captured: ${coverage.uncapturedPhases.join(', ')}`)
+  }
+  return { text: parts.join(' · '), tone: warn ? 'warn' : 'good' }
+}
+
+// Below this share of student talk, a caption must never call the split
+// "balanced" even if the teacher's own percentage looks mid-range — this is
+// the structural fix for the bug where "fairly balanced... students at 0%"
+// could be emitted (the old logic branched only on teacherTalkPct).
+export const BALANCED_STUDENT_FLOOR_PCT = 15
+
+export type TalkBalanceJudgment =
+  | { kind: 'teacher-heavy'; teacherPct: number; studentPct: number | null }
+  | { kind: 'student-heavy'; teacherPct: number; studentPct: number }
+  | { kind: 'balanced'; teacherPct: number; studentPct: number }
+  | { kind: 'student-unmeasured'; teacherPct: number }
+  | { kind: 'student-zero'; teacherPct: number }
+  | { kind: 'student-thin'; teacherPct: number; studentPct: number }
+
+export function judgeTalkBalance(
+  teacherPct: number | null,
+  studentPct: number | null,
+): TalkBalanceJudgment | null {
+  if (teacherPct == null) return null
+  if (teacherPct >= 65) return { kind: 'teacher-heavy', teacherPct, studentPct }
+  if (teacherPct <= 40 && studentPct != null && studentPct > teacherPct) {
+    return { kind: 'student-heavy', teacherPct, studentPct }
+  }
+  if (studentPct == null) return { kind: 'student-unmeasured', teacherPct }
+  if (studentPct === 0) return { kind: 'student-zero', teacherPct }
+  if (studentPct < BALANCED_STUDENT_FLOOR_PCT) return { kind: 'student-thin', teacherPct, studentPct }
+  return { kind: 'balanced', teacherPct, studentPct }
+}
