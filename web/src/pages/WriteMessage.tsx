@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import CoachingChat from '../components/CoachingChat'
-import { StarIcon } from '../components/icons'
+import { MicIcon, StarIcon } from '../components/icons'
 import SafetyAdvisoryBanner, { PrivacyReminder } from '../components/SafetyAdvisoryBanner'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import {
@@ -307,12 +307,13 @@ export default function WriteMessage() {
                 type="button"
                 onClick={toggleListening}
                 disabled={drafting}
-                className={`flex w-fit items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                className={`flex w-fit items-center gap-2 rounded-full border-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
                   listening
                     ? 'border-warm-500 bg-warm-100 text-warm-500'
-                    : 'border-border text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                    : 'border-brand-300 bg-brand-50 text-brand-600 hover:border-brand-400 hover:bg-brand-100'
                 }`}
               >
+                <MicIcon className="h-5 w-5" />
                 {listening ? 'Listening... tap to stop' : 'Speak instead'}
               </button>
             )}
