@@ -33,17 +33,23 @@ For a real incident: a single integer 1-5, your honest private assessment of how
 
 const ASK_CHAT_SYSTEM_PROMPT = `You are a warm, practical classroom management coach for grades 6-12 teachers, continuing a conversation you already gave coaching feedback in. Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says: if they push back, ask a follow-up, or want to think through a different angle, engage with that directly rather than repeating your first assessment. Stay grounded in what they've told you; never invent details.`
 
+// Used for both the first "Talk to Me" turn and every follow-up — same
+// persona/pacing throughout a live spoken conversation, unlike Ask's
+// separate "first response" vs. "chat" prompts.
+const TALK_SYSTEM_PROMPT = `You are Coach, a warm, practical classroom management coach for K-12 teachers, having a live SPOKEN conversation — the teacher is talking to you out loud and your reply will be read aloud back to them. Keep every reply to 1-2 short sentences, plain conversational language. No lists, no markdown, no parenthetical asides, nothing that reads awkwardly out loud. Ask at most one question at a time. Stay grounded in what the teacher has actually said; never invent details.`
+
 function isValidCategory(value: unknown): value is string {
   return typeof value === 'string' && (SCENARIO_CATEGORIES as readonly string[]).includes(value)
 }
 
 debriefRouter.get('/', async (req, res) => {
-  const { saved, category } = req.query
+  const { saved, category, source } = req.query
   const debriefs = await prisma.debrief.findMany({
     where: {
       userId: req.user!.userId,
       ...(saved === 'true' ? { saved: true } : {}),
       ...(typeof category === 'string' ? { category } : {}),
+      ...(source === 'ask_tab' ? { OR: [{ source: 'ask_tab' }, { source: null }] } : typeof source === 'string' ? { source } : {}),
     },
     orderBy: { createdAt: 'desc' },
   })
@@ -99,6 +105,50 @@ debriefRouter.post('/', async (req, res) => {
   }
 })
 
+debriefRouter.post('/talk', async (req, res) => {
+  const { message } = req.body ?? {}
+  if (typeof message !== 'string' || !message.trim()) {
+    res.status(400).json({ error: 'message is required' })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'talk_to_me')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  const trimmed = message.trim()
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 150,
+      thinking: { type: 'disabled' },
+      system: TALK_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: trimmed }],
+    })
+    const reply = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+      .trim()
+
+    if (!reply) {
+      res.status(502).json({ error: 'Could not reach Coach. Please try again.' })
+      return
+    }
+
+    const conversation = appendTurn([], trimmed, reply)
+    const debrief = await prisma.debrief.create({
+      data: { userId: req.user!.userId, incidentText: trimmed, source: 'talk_to_me', conversation },
+    })
+    res.status(201).json(debrief)
+  } catch (error) {
+    console.error('[debrief] talk-to-me start failed:', error)
+    res.status(502).json({ error: 'Claude request failed' })
+  }
+})
+
 debriefRouter.post('/:id/chat', async (req, res) => {
   const { message } = req.body ?? {}
   if (typeof message !== 'string' || !message.trim()) {
@@ -120,7 +170,8 @@ debriefRouter.post('/:id/chat', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'debrief_chat')
+  const isTalk = debrief.source === 'talk_to_me'
+  const allowed = await checkAndLogUsage(req.user!.userId, isTalk ? 'talk_to_me_chat' : 'debrief_chat')
   if (!allowed) {
     res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
     return
@@ -130,9 +181,9 @@ debriefRouter.post('/:id/chat', async (req, res) => {
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 300,
+      max_tokens: isTalk ? 150 : 300,
       thinking: { type: 'disabled' },
-      system: ASK_CHAT_SYSTEM_PROMPT,
+      system: isTalk ? TALK_SYSTEM_PROMPT : ASK_CHAT_SYSTEM_PROMPT,
       messages: toClaudeMessages(existing, trimmed),
     })
     const reply = response.content
@@ -140,6 +191,11 @@ debriefRouter.post('/:id/chat', async (req, res) => {
       .map((block) => block.text)
       .join('\n')
       .trim()
+
+    if (!reply) {
+      res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
+      return
+    }
 
     const updated = await prisma.debrief.update({
       where: { id: debrief.id },

@@ -125,3 +125,12 @@ export function StarIcon({ className, filled }: IconProps & { filled?: boolean }
     </svg>
   )
 }
+
+export function WaveformIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h1.5M20.5 12H22" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7 8.5v7M11 5.5v13M15 8.5v7M18.5 10v4" />
+    </svg>
+  )
+}

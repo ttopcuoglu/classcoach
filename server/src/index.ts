@@ -14,6 +14,7 @@ import { parentMessageRouter } from './routes/parentMessage.ts'
 import { profileRouter } from './routes/profile.ts'
 import { scenariosRouter } from './routes/scenarios.ts'
 import { shareRouter } from './routes/share.ts'
+import { ttsRouter } from './routes/tts.ts'
 import { requireAuth } from './lib/auth.ts'
 
 const app = express()
@@ -46,6 +47,7 @@ app.use('/api/audio-sessions', requireAuth, audioSessionsRouter)
 app.use('/api/lesson-plans', requireAuth, lessonPlansRouter)
 app.use('/api/conversation-prep', requireAuth, conversationPrepRouter)
 app.use('/api/conversation-plans', requireAuth, conversationPlanRouter)
+app.use('/api/tts', requireAuth, ttsRouter)
 
 const port = Number(process.env.PORT) || 3001
 app.listen(port, () => {

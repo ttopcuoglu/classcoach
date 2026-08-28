@@ -50,3 +50,29 @@ export async function transcribeAudio(buffer: Buffer, contentType: string): Prom
     }
   })
 }
+
+// Text-to-speech via Deepgram's Aura model — same account/key as
+// transcribeAudio above, just a different REST endpoint. Returns raw MP3
+// bytes; the caller streams them straight back to the browser and never
+// persists them.
+export async function synthesizeSpeech(text: string): Promise<Buffer> {
+  const apiKey = process.env.DEEPGRAM_API_KEY
+  if (!apiKey) throw new Error('DEEPGRAM_API_KEY is not set')
+
+  const response = await fetch('https://api.deepgram.com/v1/speak?model=aura-2-thalia-en', {
+    method: 'POST',
+    headers: {
+      Authorization: `Token ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ text }),
+  })
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    throw new Error(`Deepgram TTS request failed (${response.status}): ${body}`)
+  }
+
+  const arrayBuffer = await response.arrayBuffer()
+  return Buffer.from(arrayBuffer)
+}

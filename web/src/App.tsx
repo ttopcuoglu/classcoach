@@ -15,6 +15,7 @@ import AudioCoaching from './pages/AudioCoaching'
 import AudioCoachingExport from './pages/AudioCoachingExport'
 import LessonPlanning from './pages/LessonPlanning'
 import LessonPlanExport from './pages/LessonPlanExport'
+import TalkToMe from './pages/TalkToMe'
 import Landing from './pages/Landing'
 import { getMe, type UserProfile } from './lib/api'
 
@@ -82,6 +83,14 @@ export default function App() {
             element={
               <RequireAuth user={user} loading={loading} onSignedIn={refreshUser}>
                 <LessonPlanExport />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="talk-to-me"
+            element={
+              <RequireAuth user={user} loading={loading} onSignedIn={refreshUser}>
+                <TalkToMe />
               </RequireAuth>
             }
           />

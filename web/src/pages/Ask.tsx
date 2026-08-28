@@ -38,7 +38,7 @@ export default function Ask() {
   )
 
   useEffect(() => {
-    getDebriefs()
+    getDebriefs({ source: 'ask_tab' })
       .then(setAllDebriefs)
       .catch(() => {})
       .finally(() => setHistoryLoading(false))

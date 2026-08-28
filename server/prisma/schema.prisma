@@ -99,6 +99,10 @@ model Debrief {
   feedback     String?
   followUp     String? // "next time" guidance — analogous to ScenarioAttempt.modelResponse
   rating       Int? // same private growth-tracking rating as ScenarioAttempt
+  // "ask_tab" | "talk_to_me" — which entry point created this conversation.
+  // Null on rows created before this field existed; treated as "ask_tab" at
+  // the application layer.
+  source       String?
   saved        Boolean  @default(false)
   shareToken   String?  @unique
   createdAt    DateTime @default(now())

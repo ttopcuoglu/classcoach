@@ -57,6 +57,8 @@ export type AdminOverview = {
   }
 }
 
+export type DebriefSource = 'ask_tab' | 'talk_to_me'
+
 export type Debrief = {
   id: string
   incidentText: string
@@ -64,6 +66,7 @@ export type Debrief = {
   feedback: string | null
   followUp: string | null
   rating: number | null
+  source: DebriefSource | null
   saved: boolean
   shareToken: string | null
   createdAt: string
@@ -414,9 +417,12 @@ export function resetData(): Promise<{ status: string }> {
   return request('/api/profile/reset', { method: 'POST' })
 }
 
-export function getDebriefs(params?: { saved?: boolean }): Promise<Debrief[]> {
-  const query = params?.saved ? '?saved=true' : ''
-  return request(`/api/debriefs${query}`)
+export function getDebriefs(params?: { saved?: boolean; source?: DebriefSource }): Promise<Debrief[]> {
+  const query = new URLSearchParams()
+  if (params?.saved) query.set('saved', 'true')
+  if (params?.source) query.set('source', params.source)
+  const queryString = query.toString()
+  return request(`/api/debriefs${queryString ? `?${queryString}` : ''}`)
 }
 
 export function submitDebrief(incidentText: string): Promise<Debrief> {
@@ -425,6 +431,27 @@ export function submitDebrief(incidentText: string): Promise<Debrief> {
 
 export function sendDebriefChat(id: string, message: string): Promise<Debrief> {
   return request(`/api/debriefs/${id}/chat`, { method: 'POST', body: JSON.stringify({ message }) })
+}
+
+export function startTalkToMe(message: string): Promise<Debrief> {
+  return request('/api/debriefs/talk', { method: 'POST', body: JSON.stringify({ message }) })
+}
+
+// Returns raw audio, not JSON — uses fetch directly rather than the
+// JSON-only request() helper, same pattern as other binary/non-JSON calls
+// in this file.
+export async function synthesizeSpeech(text: string): Promise<Blob> {
+  const res = await fetch(`${API_BASE_URL}/api/tts`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error ?? `Request failed with status ${res.status}`)
+  }
+  return res.blob()
 }
 
 export function setDebriefSaved(id: string, saved: boolean): Promise<Debrief> {

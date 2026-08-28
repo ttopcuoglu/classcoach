@@ -13,6 +13,7 @@ import {
   ScenarioIcon,
   StarIcon,
   UserIcon,
+  WaveformIcon,
 } from './icons'
 
 type IconComponent = (props: { className?: string }) => React.ReactElement
@@ -20,6 +21,11 @@ type NavItem = { to: string; label: string; icon: IconComponent }
 type NavGroup = { label: string; icon: IconComponent; items: NavItem[] }
 
 const NAV_GROUPS: NavGroup[] = [
+  {
+    label: 'Talk',
+    icon: WaveformIcon,
+    items: [{ to: '/talk-to-me', label: 'Talk to Me', icon: WaveformIcon }],
+  },
   {
     label: 'Coach',
     icon: MicIcon,
