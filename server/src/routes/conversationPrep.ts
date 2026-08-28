@@ -320,7 +320,11 @@ conversationPrepRouter.post('/', async (req, res) => {
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 1400,
+      // Practice's report is 11 tagged sections including a full model
+      // response script — 1400 was cutting the response off before the
+      // last one or two tags. Review's output is shorter but shares this
+      // budget too; extra headroom there is harmless.
+      max_tokens: 2400,
       thinking: { type: 'disabled' },
       system: systemPrompt,
       messages: [{ role: 'user', content: context }],

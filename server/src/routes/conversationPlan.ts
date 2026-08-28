@@ -149,7 +149,10 @@ conversationPlanRouter.post('/', async (req, res) => {
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 1400,
+      // 12 tagged sections including a full model-response script — 1400
+      // risked cutting the response off before the last section(s), same
+      // issue hit in conversationPrep.ts's practice report.
+      max_tokens: 2400,
       thinking: { type: 'disabled' },
       system: PLAN_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: context }],
