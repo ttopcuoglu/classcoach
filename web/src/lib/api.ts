@@ -70,13 +70,25 @@ export type Debrief = {
   conversation: ChatMessage[]
 }
 
-export type ParentMessageTone = 'warm' | 'firm' | 'informational' | 'requesting_meeting'
+// tone values changed with the Communications redesign — old rows may have
+// "informational"/"requesting_meeting" (requesting a meeting is now a
+// `purpose`, not a tone); toneLabel() in communicationOptions.ts falls back
+// to the raw value so old saved messages still render correctly.
+export type ParentMessageTone = 'warm' | 'professional' | 'firm' | 'urgent'
+export type StartingAction = 'new' | 'respond' | 'improve'
 
 export type ParentMessage = {
   id: string
-  incidentSummary: string
+  startingAction: StartingAction | null
+  incidentSummary: string | null
+  receivedMessage: string | null
+  existingDraft: string | null
+  recipientType: string | null
+  purpose: string | null
+  format: string | null
   tone: ParentMessageTone
   draftText: string
+  title: string | null
   saved: boolean
   createdAt: string
   conversation: ChatMessage[]
@@ -147,16 +159,36 @@ export type SharedLessonPlan = {
   createdAt: string
 }
 
-// category is one of: hostile_response, phone_call, boundary_setting, formal_meeting
-export type ConversationPrepCategory = 'hostile_response' | 'phone_call' | 'boundary_setting' | 'formal_meeting'
+// category holds the practice challenge type (see communicationOptions.ts
+// CHALLENGE_TYPES); null for review rows, which have no category picker.
+// Old rows may still have a legacy value (hostile_response/phone_call) —
+// challengeLabel() falls back to the raw value.
+export type ConversationPrepCategory = string
 
-// "real" = an actual upcoming conversation the teacher described; "practice"
-// = a generated hypothetical, same split as Debrief vs. Scenario.
-export type ConversationPrepSource = 'real' | 'practice'
+// "practice" = a generated hypothetical scenario; "review" = an actual
+// received message + planned response (renamed from "real").
+export type ConversationPrepSource = 'practice' | 'review'
+
+export type CoachingReportDimension = { rating: string; feedback: string }
+export type CoachingReport = {
+  clarity: CoachingReportDimension
+  empathy: CoachingReportDimension
+  evidence: CoachingReportDimension
+  boundaries: CoachingReportDimension
+  collaboration: CoachingReportDimension
+  resolution: CoachingReportDimension
+  didWell: string
+  priority: string
+  strongerPhrase: string
+  nextStep: string
+}
 
 export type ConversationPrep = {
   id: string
-  category: ConversationPrepCategory
+  category: ConversationPrepCategory | null
+  personType: string | null
+  difficulty: string | null
+  reviewMode: string | null
   source: ConversationPrepSource
   gradeBand: string | null
   situationText: string
@@ -164,6 +196,8 @@ export type ConversationPrep = {
   feedback: string | null
   modelResponse: string | null
   rating: number | null
+  coachingReport: CoachingReport | null
+  title: string | null
   saved: boolean
   shareToken: string | null
   createdAt: string
@@ -172,13 +206,42 @@ export type ConversationPrep = {
 
 export type SharedConversationPrep = {
   type: 'conversation-prep'
-  category: ConversationPrepCategory
+  category: ConversationPrepCategory | null
   gradeBand: string | null
   situationText: string
   responseText: string
   feedback: string | null
   modelResponse: string | null
   createdAt: string
+}
+
+export type ConversationPlanContent = {
+  opening: string
+  mainConcern: string
+  facts: string
+  questions: string
+  reactions: string
+  recommendedResponses: string
+  phrasesToAvoid: string
+  boundaries: string
+  closing: string
+  nextSteps: string
+  adminInvolvement: string
+}
+
+export type ConversationPlan = {
+  id: string
+  recipientType: string | null
+  situationText: string
+  desiredOutcome: string | null
+  concerns: string | null
+  background: string | null
+  meetingFormat: string | null
+  planContent: ConversationPlanContent | null
+  title: string | null
+  saved: boolean
+  createdAt: string
+  conversation: ChatMessage[]
 }
 
 // status is one of: setup, recording, paused, transcribing, tagging,
@@ -375,11 +438,20 @@ export function getParentMessages(params?: { saved?: boolean }): Promise<ParentM
   return request(`/api/parent-messages${query}`)
 }
 
-export function draftParentMessage(
-  incidentSummary: string,
-  tone: ParentMessageTone,
-): Promise<ParentMessage> {
-  return request('/api/parent-messages', { method: 'POST', body: JSON.stringify({ incidentSummary, tone }) })
+export type DraftMessageInput = {
+  startingAction: StartingAction
+  incidentSummary?: string
+  receivedMessage?: string
+  contextNotes?: string
+  existingDraft?: string
+  recipientType?: string
+  purpose?: string
+  format?: string
+  tone: ParentMessageTone
+}
+
+export function draftParentMessage(input: DraftMessageInput): Promise<ParentMessage> {
+  return request('/api/parent-messages', { method: 'POST', body: JSON.stringify(input) })
 }
 
 export function sendParentMessageChat(id: string, message: string): Promise<ParentMessage> {
@@ -388,6 +460,14 @@ export function sendParentMessageChat(id: string, message: string): Promise<Pare
 
 export function setParentMessageSaved(id: string, saved: boolean): Promise<ParentMessage> {
   return request(`/api/parent-messages/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) })
+}
+
+export function renameParentMessage(id: string, title: string): Promise<ParentMessage> {
+  return request(`/api/parent-messages/${id}`, { method: 'PATCH', body: JSON.stringify({ title }) })
+}
+
+export function deleteParentMessage(id: string): Promise<void> {
+  return request(`/api/parent-messages/${id}`, { method: 'DELETE' })
 }
 
 export function getSharedAttempt(token: string): Promise<SharedAttempt> {
@@ -411,39 +491,82 @@ export function getConversationPreps(params?: { saved?: boolean }): Promise<Conv
   return request(`/api/conversation-prep${query}`)
 }
 
-export function submitConversationPrep(
-  category: ConversationPrepCategory,
-  situationText: string,
-  responseText: string,
-  source: ConversationPrepSource = 'real',
-  gradeBand?: string,
-): Promise<ConversationPrep> {
-  return request('/api/conversation-prep', {
-    method: 'POST',
-    body: JSON.stringify({ category, situationText, responseText, source, gradeBand }),
-  })
+export type SubmitConversationPrepInput = {
+  situationText: string
+  responseText: string
+  source: ConversationPrepSource
+  category?: string
+  gradeBand?: string
+  personType?: string
+  difficulty?: string
+  reviewMode?: string
+}
+
+export function submitConversationPrep(input: SubmitConversationPrepInput): Promise<ConversationPrep> {
+  return request('/api/conversation-prep', { method: 'POST', body: JSON.stringify(input) })
 }
 
 export function sendConversationPrepChat(id: string, message: string): Promise<ConversationPrep> {
   return request(`/api/conversation-prep/${id}/chat`, { method: 'POST', body: JSON.stringify({ message }) })
 }
 
-export function generateConversationScenario(
-  category: ConversationPrepCategory,
-  gradeBand?: string,
-): Promise<{ situationText: string; gradeBand: string }> {
-  return request('/api/conversation-prep/generate-scenario', {
-    method: 'POST',
-    body: JSON.stringify({ category, gradeBand }),
-  })
+export function generateConversationScenario(input: {
+  category: string
+  gradeBand?: string
+  personType?: string
+  difficulty?: string
+}): Promise<{ situationText: string; gradeBand: string }> {
+  return request('/api/conversation-prep/generate-scenario', { method: 'POST', body: JSON.stringify(input) })
 }
 
 export function setConversationPrepSaved(id: string, saved: boolean): Promise<ConversationPrep> {
   return request(`/api/conversation-prep/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) })
 }
 
+export function renameConversationPrep(id: string, title: string): Promise<ConversationPrep> {
+  return request(`/api/conversation-prep/${id}`, { method: 'PATCH', body: JSON.stringify({ title }) })
+}
+
+export function deleteConversationPrep(id: string): Promise<void> {
+  return request(`/api/conversation-prep/${id}`, { method: 'DELETE' })
+}
+
 export function shareConversationPrep(id: string): Promise<{ shareToken: string }> {
   return request(`/api/conversation-prep/${id}/share`, { method: 'POST' })
+}
+
+export type SubmitConversationPlanInput = {
+  situationText: string
+  recipientType?: string
+  desiredOutcome?: string
+  concerns?: string
+  background?: string
+  meetingFormat?: string
+}
+
+export function getConversationPlans(params?: { saved?: boolean }): Promise<ConversationPlan[]> {
+  const query = params?.saved ? '?saved=true' : ''
+  return request(`/api/conversation-plans${query}`)
+}
+
+export function submitConversationPlan(input: SubmitConversationPlanInput): Promise<ConversationPlan> {
+  return request('/api/conversation-plans', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export function sendConversationPlanChat(id: string, message: string): Promise<ConversationPlan> {
+  return request(`/api/conversation-plans/${id}/chat`, { method: 'POST', body: JSON.stringify({ message }) })
+}
+
+export function setConversationPlanSaved(id: string, saved: boolean): Promise<ConversationPlan> {
+  return request(`/api/conversation-plans/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) })
+}
+
+export function renameConversationPlan(id: string, title: string): Promise<ConversationPlan> {
+  return request(`/api/conversation-plans/${id}`, { method: 'PATCH', body: JSON.stringify({ title }) })
+}
+
+export function deleteConversationPlan(id: string): Promise<void> {
+  return request(`/api/conversation-plans/${id}`, { method: 'DELETE' })
 }
 
 export type LessonPlanContext = {

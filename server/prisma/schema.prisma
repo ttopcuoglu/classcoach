@@ -33,6 +33,7 @@ model User {
   audioSessions     AudioSession[]
   lessonPlans       LessonPlan[]
   conversationPreps ConversationPrep[]
+  conversationPlans ConversationPlan[]
 }
 
 // One row per Claude-costing call, used to enforce a per-user daily limit
@@ -106,14 +107,24 @@ model Debrief {
   conversation Json?
 }
 
-// tone is one of: warm, firm, informational, requesting_meeting
+// Backs "Write a Message". tone is one of: warm, professional, firm, urgent
+// (requesting a meeting is a `purpose`, not a tone). startingAction is one
+// of: new, respond, improve — determines which of incidentSummary /
+// receivedMessage / existingDraft is populated for a given row.
 model ParentMessage {
   id              String   @id @default(cuid())
   userId          String
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  incidentSummary String
+  startingAction  String? // "new" | "respond" | "improve" — null on rows created before this field existed, treated as "new"
+  incidentSummary String? // "new" mode: what happened / what needs to be said
+  receivedMessage String? // "respond" mode: the message being replied to
+  existingDraft   String? // "improve" mode: the teacher's own draft to polish
+  recipientType   String? // parent_caregiver | student | colleague | administrator
+  purpose         String? // see communicationOptions.ts MESSAGE_PURPOSES
+  format          String? // email | text | announcement | phone_call_followup
   tone            String
   draftText       String
+  title           String? // teacher-set rename; falls back to a derived summary when null
   saved           Boolean  @default(false)
   createdAt       DateTime @default(now())
 
@@ -124,29 +135,66 @@ model ParentMessage {
   conversation    Json?
 }
 
-// A conversation outside the classroom (parent, colleague, or
-// administrator). category is one of: hostile_response, phone_call,
-// boundary_setting, formal_meeting. source is "real" (an actual upcoming
-// conversation the teacher described) or "practice" (a generated
-// hypothetical, same real/hypothetical split as Debrief vs. Scenario).
+// Backs "Practice a Conversation" (source: "practice") and "Review My
+// Communication" (source: "review", renamed from "real" — see the
+// migration that renames existing rows). category holds the practice
+// challenge type (see communicationOptions.ts CHALLENGE_TYPES) and is
+// unused/null for review rows, which no longer have a category picker.
 model ConversationPrep {
-  id            String   @id @default(cuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category      String
-  source        String   @default("real")
-  gradeBand     String? // "K-5" | "6-8" | "9-12", same bands as Scenario
-  situationText String
-  responseText  String
-  feedback      String?
-  modelResponse String?
-  rating        Int? // same private growth-tracking rating as ScenarioAttempt/Debrief
-  saved         Boolean  @default(false)
-  shareToken    String?  @unique
-  createdAt     DateTime @default(now())
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category       String? // practice challenge type; null for review rows
+  personType     String? // practice only: parent_caregiver | student | colleague | administrator
+  difficulty     String? // practice only: supportive | concerned | resistant | highly_escalated
+  reviewMode     String? // review only: feedback_only | rewrite_only | both
+  source         String   @default("review") // "practice" | "review" (was "practice" | "real")
+  gradeBand      String? // "K-5" | "6-8" | "9-12", same bands as Scenario
+  situationText  String
+  responseText   String
+  feedback       String?
+  modelResponse  String?
+  rating         Int? // same private growth-tracking rating as ScenarioAttempt/Debrief
+  // Practice's 6-dimension coaching report: { clarity: {rating,feedback}, empathy: {...},
+  // evidence: {...}, boundaries: {...}, collaboration: {...}, resolution: {...},
+  // didWell, priority, strongerPhrase, nextStep }. Null for review rows and pre-redesign
+  // practice rows (which used feedback/modelResponse instead).
+  coachingReport Json?
+  title          String? // teacher-set rename; falls back to a derived summary when null
+  saved          Boolean  @default(false)
+  shareToken     String?  @unique
+  createdAt      DateTime @default(now())
 
   // Same convention as ScenarioAttempt.conversation.
-  conversation  Json?
+  conversation   Json?
+}
+
+// Backs "Prepare for a Conversation" — a structured, multi-section plan
+// for a real upcoming conversation, distinct from ConversationPrep's
+// single feedback+model-response shape. planContent holds the generated
+// plan sections as plain text blocks (dash-prefixed lines for list-shaped
+// sections, same convention used everywhere else in this app):
+// { opening, mainConcern, facts, questions, reactions, recommendedResponses,
+//   phrasesToAvoid, boundaries, closing, nextSteps, adminInvolvement }
+model ConversationPlan {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipientType  String?
+  situationText  String
+  desiredOutcome String?
+  concerns       String?
+  background     String?
+  meetingFormat  String?
+  planContent    Json?
+  title          String?
+  saved          Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  // Same convention as ScenarioAttempt.conversation — each chat turn here
+  // also revises planContent in place, same "chat reply IS the deliverable"
+  // behavior as ParentMessage, since a plan is one evolving deliverable.
+  conversation   Json?
 }
 
 // mode is "feedback" (teacher submits their own plan in planText, gets

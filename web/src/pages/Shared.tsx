@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { categoryLabel } from '../lib/categories'
-import { conversationPrepCategoryLabel } from '../lib/conversationPrepCategories'
+import { challengeLabel } from '../lib/communicationOptions'
 import {
   getSharedAttempt,
   getSharedConversationPrep,
@@ -154,9 +154,11 @@ export default function Shared() {
           </div>
         ) : (
           <div className="mt-6 rounded-2xl border border-border bg-surface p-6">
-            <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600">
-              {conversationPrepCategoryLabel(content.category)}
-            </span>
+            {content.category && (
+              <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600">
+                {challengeLabel(content.category)}
+              </span>
+            )}
             <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-ink-soft">Situation</p>
             <p className="mt-1 text-sm text-ink">{content.situationText}</p>
 

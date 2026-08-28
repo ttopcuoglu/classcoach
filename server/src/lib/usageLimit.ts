@@ -19,6 +19,8 @@ export type UsageAction =
   | 'conversation_prep_chat'
   | 'parent_message_chat'
   | 'lesson_plan_chat'
+  | 'conversation_plan_feedback'
+  | 'conversation_plan_chat'
 
 // Counts today's Claude-costing calls for this user and logs this one if
 // they're still under the daily cap. One shared API key funds every

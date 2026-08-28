@@ -5,7 +5,7 @@ export default function ShareButton({
   type,
   onShare,
 }: {
-  type: 'attempt' | 'debrief'
+  type: 'attempt' | 'debrief' | 'conversation-prep'
   onShare: () => Promise<{ shareToken: string }>
 }) {
   const [url, setUrl] = useState<string | null>(null)
