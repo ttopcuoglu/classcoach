@@ -180,6 +180,7 @@ export type CoachingReport = {
   didWell: string
   priority: string
   strongerPhrase: string
+  modelResponse: string
   nextStep: string
 }
 

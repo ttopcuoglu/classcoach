@@ -84,7 +84,7 @@ ${guidance}
 
 Write in plain text only — no markdown (no **bold**, no # headings). Use a blank line between paragraphs and a leading "-" for list items.
 
-Respond with exactly these ten sections and nothing outside them, rating each of the first six as one of: Strong, Developing, or Needs Work.
+Respond with exactly these eleven sections and nothing outside them, rating each of the first six as one of: Strong, Developing, or Needs Work.
 
 <clarity_rating>
 </clarity_rating>
@@ -125,6 +125,9 @@ The single highest-priority thing to improve.
 <stronger_phrase>
 One specific stronger phrase the teacher could have used instead.
 </stronger_phrase>
+<model_response>
+A complete, natural example of what the teacher could have said instead, start to finish — grounded in the specific situation, not a generic script.
+</model_response>
 <next_step>
 A concrete suggested next step.
 </next_step>`
@@ -182,6 +185,7 @@ type CoachingReport = {
   didWell: string
   priority: string
   strongerPhrase: string
+  modelResponse: string
   nextStep: string
 }
 
@@ -199,6 +203,7 @@ function parseCoachingReport(text: string): CoachingReport | null {
     resolution: dim('resolution'),
     didWell: extractTag(text, 'did_well') ?? '',
     priority: extractTag(text, 'priority') ?? '',
+    modelResponse: extractTag(text, 'model_response') ?? '',
     strongerPhrase: extractTag(text, 'stronger_phrase') ?? '',
     nextStep: extractTag(text, 'next_step') ?? '',
   }

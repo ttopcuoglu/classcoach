@@ -348,6 +348,12 @@ export default function PracticeConversation() {
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">A stronger phrase</p>
               <p className="mt-1.5 text-sm text-ink">{report.strongerPhrase}</p>
             </div>
+            {report.modelResponse && (
+              <div className="rounded-xl border border-border bg-brand-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">A model response</p>
+                <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{report.modelResponse}</p>
+              </div>
+            )}
             <div className="rounded-xl border border-border bg-canvas p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Suggested next step</p>
               <p className="mt-1.5 text-sm text-ink">{report.nextStep}</p>
