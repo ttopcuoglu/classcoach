@@ -12,7 +12,7 @@ import {
   type ConversationPlan,
 } from '../lib/api'
 
-const PLAN_SECTIONS: { key: keyof NonNullable<ConversationPlan['planContent']>; label: string }[] = [
+const PLAN_SECTIONS_BEFORE_MODEL: { key: keyof NonNullable<ConversationPlan['planContent']>; label: string }[] = [
   { key: 'opening', label: 'Suggested opening' },
   { key: 'mainConcern', label: 'Main concern' },
   { key: 'facts', label: 'Important facts to present' },
@@ -22,9 +22,21 @@ const PLAN_SECTIONS: { key: keyof NonNullable<ConversationPlan['planContent']>; 
   { key: 'phrasesToAvoid', label: 'Phrases to avoid' },
   { key: 'boundaries', label: 'Boundaries to maintain' },
   { key: 'closing', label: 'Suggested closing' },
+]
+
+const PLAN_SECTIONS_AFTER_MODEL: { key: keyof NonNullable<ConversationPlan['planContent']>; label: string }[] = [
   { key: 'nextSteps', label: 'Next steps' },
   { key: 'adminInvolvement', label: 'When to involve an administrator' },
 ]
+
+function PlanSectionCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-canvas p-4 print:border-ink/20">
+      <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
+      <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{value}</p>
+    </div>
+  )
+}
 
 export default function PrepareConversation() {
   const navigate = useNavigate()
@@ -253,15 +265,24 @@ export default function PrepareConversation() {
 
             <div className="grid gap-3">
               {plan.planContent &&
-                PLAN_SECTIONS.map(({ key, label }) => {
+                PLAN_SECTIONS_BEFORE_MODEL.map(({ key, label }) => {
                   const value = plan.planContent?.[key]
                   if (!value) return null
-                  return (
-                    <div key={key} className="rounded-xl border border-border bg-canvas p-4 print:border-ink/20">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
-                      <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{value}</p>
-                    </div>
-                  )
+                  return <PlanSectionCard key={key} label={label} value={value} />
+                })}
+
+              {plan.planContent?.modelResponse && (
+                <div className="rounded-xl border border-border bg-brand-50 p-4 print:border-ink/20">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">A model response</p>
+                  <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{plan.planContent.modelResponse}</p>
+                </div>
+              )}
+
+              {plan.planContent &&
+                PLAN_SECTIONS_AFTER_MODEL.map(({ key, label }) => {
+                  const value = plan.planContent?.[key]
+                  if (!value) return null
+                  return <PlanSectionCard key={key} label={label} value={value} />
                 })}
             </div>
 

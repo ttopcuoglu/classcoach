@@ -225,6 +225,7 @@ export type ConversationPlanContent = {
   phrasesToAvoid: string
   boundaries: string
   closing: string
+  modelResponse: string
   nextSteps: string
   adminInvolvement: string
 }

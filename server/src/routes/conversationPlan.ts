@@ -26,7 +26,7 @@ const PLAN_SYSTEM_PROMPT = `You are a warm, practical communication coach helpin
 
 Write in plain text only — no markdown (no **bold**, no # headings). Use a leading "-" for list items, one per line.
 
-Respond with exactly these eleven sections and nothing outside them:
+Respond with exactly these twelve sections and nothing outside them:
 
 <opening>
 A suggested opening line or two to start the conversation.
@@ -55,6 +55,9 @@ Boundaries the teacher should maintain during the conversation.
 <closing>
 A suggested way to close the conversation.
 </closing>
+<model_response>
+A complete, natural example of what the teacher could actually say, start to finish — combining the opening, the main concern, and the closing into one cohesive, ready-to-use response. Not a list, a real spoken example.
+</model_response>
 <next_steps>
 Agreed-upon next steps to propose.
 </next_steps>
@@ -74,6 +77,7 @@ type PlanContent = {
   phrasesToAvoid: string
   boundaries: string
   closing: string
+  modelResponse: string
   nextSteps: string
   adminInvolvement: string
 }
@@ -89,6 +93,7 @@ function parsePlan(text: string): PlanContent | null {
     phrasesToAvoid: extractTag(text, 'phrases_to_avoid') ?? '',
     boundaries: extractTag(text, 'boundaries') ?? '',
     closing: extractTag(text, 'closing') ?? '',
+    modelResponse: extractTag(text, 'model_response') ?? '',
     nextSteps: extractTag(text, 'next_steps') ?? '',
     adminInvolvement: extractTag(text, 'admin_involvement') ?? '',
   }
