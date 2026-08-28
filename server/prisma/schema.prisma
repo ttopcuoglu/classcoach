@@ -29,7 +29,6 @@ model User {
   attempts          ScenarioAttempt[]
   debriefs          Debrief[]
   parentMessages    ParentMessage[]
-  qaExchanges       QAExchange[]
   usageLogs         UsageLog[]
   audioSessions     AudioSession[]
   lessonPlans       LessonPlan[]
@@ -84,19 +83,12 @@ model ScenarioAttempt {
   conversation   Json?
 }
 
-model QAExchange {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  question  String
-  answer    String
-  starred   Boolean  @default(false)
-  createdAt DateTime @default(now())
-}
-
-// A teacher reflecting on something that already happened, as opposed to
-// ScenarioAttempt's hypothetical practice. category is optional and
-// user-picked (not inferred) from the same 6 categories as Scenario.
+// Backs the "Ask" tab — a teacher either reflecting on something that
+// already happened, or asking a general classroom-management question, as
+// opposed to ScenarioAttempt's hypothetical practice. category is inferred
+// by Claude from the free-text input (one of the same 6 categories as
+// Scenario, or null when nothing fits — e.g. a general question), not
+// user-picked.
 model Debrief {
   id           String   @id @default(cuid())
   userId       String

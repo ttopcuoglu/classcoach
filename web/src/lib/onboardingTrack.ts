@@ -47,10 +47,9 @@ export const ONBOARDING_TRACK: OnboardingStep[] = [
   },
   {
     id: 'first-debrief',
-    title: 'Debrief your first real moment',
-    description:
-      'Once something real happens, use the "Debrief a Real Moment" tab in Coach Chat\'s Practice tab to reflect on it.',
-    linkTo: '/coach-chat',
+    title: 'Ask about your first real moment',
+    description: 'Once something real happens, use the Ask tab in Coach Chat to reflect on it.',
+    linkTo: '/coach-chat?tab=ask',
     linkLabel: 'Go to Coach Chat',
   },
   {

@@ -7,7 +7,6 @@ export type UsageAction =
   | 'attempt_feedback'
   | 'debrief_feedback'
   | 'parent_message'
-  | 'qa_ask'
   | 'audio_session_notes'
   | 'lesson_plan_feedback'
   | 'lesson_plan_generate'

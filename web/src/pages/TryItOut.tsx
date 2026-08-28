@@ -1,22 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import CoachingChat from '../components/CoachingChat'
-import { ArrowUpIcon, MicIcon, ShareIcon, StarIcon } from '../components/icons'
+import ShareButton from '../components/ShareButton'
+import { ArrowUpIcon, MicIcon, StarIcon } from '../components/icons'
+import { useSpeechToText } from '../hooks/useSpeechToText'
 import { CATEGORIES, categoryLabel } from '../lib/categories'
 import { GRADE_BANDS } from '../lib/gradeBands'
 import {
   generateScenario,
   getAttempts,
-  getDebriefs,
   getProfile,
   sendAttemptChat,
-  sendDebriefChat,
   setAttemptSaved,
-  setDebriefSaved,
   shareAttempt,
-  shareDebrief,
   submitAttempt,
-  submitDebrief,
-  type Debrief,
   type ScenarioAttempt,
 } from '../lib/api'
 
@@ -29,57 +25,11 @@ const DIFFICULTIES: { label: string; value?: string }[] = [
 
 const SESSION_LENGTH = 3
 
-type SpeechRecognitionLike = {
-  continuous: boolean
-  interimResults: boolean
-  onresult: ((event: any) => void) | null
-  onend: (() => void) | null
-  onerror: (() => void) | null
-  start: () => void
-  stop: () => void
-}
-
-const SpeechRecognitionCtor: (new () => SpeechRecognitionLike) | undefined =
-  typeof window !== 'undefined'
-    ? ((window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition)
-    : undefined
-
 function difficultyLabel(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
 export default function TryItOut() {
-  const [tab, setTab] = useState<'practice' | 'debrief'>('practice')
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => setTab('practice')}
-          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-            tab === 'practice' ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:text-ink'
-          }`}
-        >
-          Practice
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('debrief')}
-          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-            tab === 'debrief' ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:text-ink'
-          }`}
-        >
-          Debrief a Real Moment
-        </button>
-      </div>
-
-      {tab === 'practice' ? <PracticePanel /> : <DebriefPanel />}
-    </div>
-  )
-}
-
-function PracticePanel() {
   const [category, setCategory] = useState<string | undefined>(undefined)
   const [gradeBand, setGradeBand] = useState<(typeof GRADE_BANDS)[number]>('6-8')
   const [difficulty, setDifficulty] = useState<string | undefined>(undefined)
@@ -90,8 +40,9 @@ function PracticePanel() {
   const [generating, setGenerating] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [listening, setListening] = useState(false)
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const { supported: speechSupported, listening, toggleListening } = useSpeechToText((text) =>
+    setResponseText((prev) => (prev ? `${prev} ${text}` : text)),
+  )
 
   const [sessionState, setSessionState] = useState<{ index: number; total: number; done: boolean } | null>(
     null,
@@ -254,31 +205,6 @@ function PracticePanel() {
     }
   }
 
-  function toggleListening() {
-    if (!SpeechRecognitionCtor) return
-    if (listening) {
-      recognitionRef.current?.stop()
-      return
-    }
-    const recognition = new SpeechRecognitionCtor()
-    recognition.continuous = true
-    recognition.interimResults = true
-    recognition.onresult = (event: any) => {
-      let finalTranscript = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript
-      }
-      if (finalTranscript.trim()) {
-        setResponseText((prev) => (prev ? `${prev} ${finalTranscript.trim()}` : finalTranscript.trim()))
-      }
-    }
-    recognition.onend = () => setListening(false)
-    recognition.onerror = () => setListening(false)
-    recognitionRef.current = recognition
-    recognition.start()
-    setListening(true)
-  }
-
   const hasFeedback = attempt && (attempt.feedback || attempt.modelResponse)
   const filtersLocked = !!sessionState && !sessionState.done
 
@@ -406,7 +332,7 @@ function PracticePanel() {
                     className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
                   />
                 </label>
-                {SpeechRecognitionCtor && (
+                {speechSupported && (
                   <button
                     type="button"
                     onClick={toggleListening}
@@ -541,48 +467,6 @@ function PracticePanel() {
   )
 }
 
-function ShareButton({
-  type,
-  onShare,
-}: {
-  type: 'attempt' | 'debrief'
-  onShare: () => Promise<{ shareToken: string }>
-}) {
-  const [url, setUrl] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-  const [busy, setBusy] = useState(false)
-
-  async function handleClick() {
-    if (url) {
-      await navigator.clipboard.writeText(url).catch(() => {})
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-      return
-    }
-    setBusy(true)
-    try {
-      const { shareToken } = await onShare()
-      setUrl(`${window.location.origin}/shared/${type}/${shareToken}`)
-    } catch {
-      // silently ignore — share is a nice-to-have, not a critical path
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={busy}
-      className="flex items-center gap-1.5 text-sm font-medium text-ink-soft hover:text-brand-600 disabled:opacity-60"
-    >
-      <ShareIcon className="h-4 w-4" />
-      {copied ? 'Link copied' : url ? 'Copy link' : busy ? 'Sharing...' : 'Share'}
-    </button>
-  )
-}
-
 function SavedAttemptCard({ attempt }: { attempt: ScenarioAttempt }) {
   const [expanded, setExpanded] = useState(false)
   return (
@@ -621,250 +505,6 @@ function SavedAttemptCard({ attempt }: { attempt: ScenarioAttempt }) {
             </div>
           )}
           <ShareButton type="attempt" onShare={() => shareAttempt(attempt.id)} />
-        </div>
-      )}
-    </div>
-  )
-}
-
-function DebriefPanel() {
-  const [category, setCategory] = useState<string | undefined>(undefined)
-  const [incidentText, setIncidentText] = useState('')
-  const [debrief, setDebrief] = useState<Debrief | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const [allDebriefs, setAllDebriefs] = useState<Debrief[]>([])
-  const [historyLoading, setHistoryLoading] = useState(true)
-
-  const [chatDraft, setChatDraft] = useState('')
-  const [chatSending, setChatSending] = useState(false)
-  const [chatError, setChatError] = useState<string | null>(null)
-
-  useEffect(() => {
-    getDebriefs()
-      .then(setAllDebriefs)
-      .catch(() => {})
-      .finally(() => setHistoryLoading(false))
-  }, [])
-
-  const savedDebriefs = allDebriefs.filter((d) => d.saved)
-
-  async function handleSubmit() {
-    if (!incidentText.trim() || submitting) return
-    setSubmitting(true)
-    setError(null)
-    try {
-      const result = await submitDebrief(incidentText.trim(), category)
-      setDebrief(result)
-      setAllDebriefs((prev) => [result, ...prev])
-    } catch {
-      setError('Could not get coaching feedback. Please try again.')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  function handleNewDebrief() {
-    setDebrief(null)
-    setIncidentText('')
-    setError(null)
-    setChatDraft('')
-    setChatError(null)
-  }
-
-  async function handleSendChat() {
-    const trimmed = chatDraft.trim()
-    if (!debrief || !trimmed || chatSending) return
-    setChatSending(true)
-    setChatError(null)
-    setChatDraft('')
-    try {
-      const updated = await sendDebriefChat(debrief.id, trimmed)
-      setDebrief(updated)
-    } catch (err) {
-      setChatError((err as Error).message || 'Could not reach your coach. Please try again.')
-      setChatDraft(trimmed)
-    } finally {
-      setChatSending(false)
-    }
-  }
-
-  async function handleToggleSaved(target: Debrief) {
-    const nextSaved = !target.saved
-    setAllDebriefs((prev) => prev.map((d) => (d.id === target.id ? { ...d, saved: nextSaved } : d)))
-    if (debrief?.id === target.id) setDebrief((prev) => (prev ? { ...prev, saved: nextSaved } : prev))
-    try {
-      await setDebriefSaved(target.id, nextSaved)
-    } catch {
-      setAllDebriefs((prev) => prev.map((d) => (d.id === target.id ? { ...d, saved: !nextSaved } : d)))
-      if (debrief?.id === target.id) setDebrief((prev) => (prev ? { ...prev, saved: !nextSaved } : prev))
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="rounded-2xl border border-border bg-surface p-6">
-        {!debrief ? (
-          <div className="flex flex-col gap-3">
-            <p className="text-sm text-ink-soft">
-              Describe something that actually happened in your classroom today — get the same kind of
-              coaching the Practice tab gives hypotheticals, but reflective and forward-looking.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIES.filter((c) => c.value).map(({ label, value }) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => setCategory(category === value ? undefined : value)}
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
-                    category === value
-                      ? 'border-brand-500 bg-brand-50 text-brand-600'
-                      : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-ink">What happened?</span>
-              <textarea
-                value={incidentText}
-                onChange={(e) => setIncidentText(e.target.value)}
-                disabled={submitting}
-                rows={5}
-                placeholder="Describe the incident and how you handled it..."
-                className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={submitting || !incidentText.trim()}
-              className="self-end rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-            >
-              {submitting ? 'Getting feedback...' : 'Get Feedback'}
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            <div>
-              {debrief.category && (
-                <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600">
-                  {categoryLabel(debrief.category)}
-                </span>
-              )}
-              <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                What happened
-              </p>
-              <p className="mt-1 text-sm text-ink">{debrief.incidentText}</p>
-            </div>
-
-            {debrief.feedback && (
-              <div className="rounded-xl border border-border bg-warm-100/60 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-warm-500">Coaching</p>
-                <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink">{debrief.feedback}</p>
-              </div>
-            )}
-
-            {debrief.followUp && (
-              <div className="rounded-xl border border-border bg-brand-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
-                  Following up
-                </p>
-                <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink">{debrief.followUp}</p>
-              </div>
-            )}
-
-            <CoachingChat
-              messages={debrief.conversation.slice(2)}
-              sending={chatSending}
-              error={chatError}
-              draft={chatDraft}
-              onDraftChange={setChatDraft}
-              onSend={handleSendChat}
-              placeholder="Ask a follow-up about this feedback..."
-            />
-
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => handleToggleSaved(debrief)}
-                className={`flex items-center gap-1.5 text-sm font-medium ${
-                  debrief.saved ? 'text-warm-500' : 'text-ink-soft hover:text-warm-500'
-                }`}
-              >
-                <StarIcon className="h-4 w-4" filled={debrief.saved} />
-                {debrief.saved ? 'Saved' : 'Save for later'}
-              </button>
-              <button
-                type="button"
-                onClick={handleNewDebrief}
-                className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
-              >
-                Debrief Another Moment
-              </button>
-            </div>
-          </div>
-        )}
-        {error && <p className="mt-4 text-center text-sm text-warm-500">{error}</p>}
-      </div>
-
-      <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Saved debriefs</h2>
-        {historyLoading ? (
-          <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
-        ) : savedDebriefs.length === 0 ? (
-          <div className="mt-3 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
-            Debriefs you save will show up here.
-          </div>
-        ) : (
-          <div className="mt-3 flex flex-col gap-3">
-            {savedDebriefs.map((d) => (
-              <SavedDebriefCard key={d.id} debrief={d} />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function SavedDebriefCard({ debrief }: { debrief: Debrief }) {
-  const [expanded, setExpanded] = useState(false)
-  return (
-    <div className="rounded-xl border border-border bg-surface p-4">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-start justify-between gap-4 text-left"
-      >
-        <div>
-          {debrief.category && (
-            <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-600">
-              {categoryLabel(debrief.category)}
-            </span>
-          )}
-          <p className="mt-1.5 text-sm text-ink">{debrief.incidentText}</p>
-        </div>
-        <span className="shrink-0 text-xs font-medium text-ink-soft">{expanded ? 'Hide' : 'Show'}</span>
-      </button>
-      {expanded && (
-        <div className="mt-3 flex flex-col gap-3 border-t border-border pt-3">
-          {debrief.feedback && (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-warm-500">Coaching</p>
-              <p className="mt-1 text-sm whitespace-pre-wrap text-ink">{debrief.feedback}</p>
-            </div>
-          )}
-          {debrief.followUp && (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Following up</p>
-              <p className="mt-1 text-sm whitespace-pre-wrap text-ink">{debrief.followUp}</p>
-            </div>
-          )}
-          <ShareButton type="debrief" onShare={() => shareDebrief(debrief.id)} />
         </div>
       )}
     </div>

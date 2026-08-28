@@ -3,14 +3,6 @@
 // turns. Same shape as Audio Coaching's AudioReflectMessage.
 export type ChatMessage = { role: 'user' | 'assistant'; text: string; createdAt: string }
 
-export type QAExchange = {
-  id: string
-  question: string
-  answer: string
-  starred: boolean
-  createdAt: string
-}
-
 export type Scenario = {
   id: string
   text: string
@@ -305,18 +297,6 @@ export function getAdminOverview(): Promise<AdminOverview> {
   return request('/api/admin/overview')
 }
 
-export function getQAHistory(starred?: boolean): Promise<QAExchange[]> {
-  return request(`/api/qa${starred ? '?starred=true' : ''}`)
-}
-
-export function askExpert(question: string): Promise<QAExchange> {
-  return request('/api/qa/ask', { method: 'POST', body: JSON.stringify({ question }) })
-}
-
-export function setQAStarred(id: string, starred: boolean): Promise<QAExchange> {
-  return request(`/api/qa/${id}`, { method: 'PATCH', body: JSON.stringify({ starred }) })
-}
-
 export function generateScenario(
   category?: string,
   gradeBand?: string,
@@ -374,8 +354,8 @@ export function getDebriefs(params?: { saved?: boolean }): Promise<Debrief[]> {
   return request(`/api/debriefs${query}`)
 }
 
-export function submitDebrief(incidentText: string, category?: string): Promise<Debrief> {
-  return request('/api/debriefs', { method: 'POST', body: JSON.stringify({ incidentText, category }) })
+export function submitDebrief(incidentText: string): Promise<Debrief> {
+  return request('/api/debriefs', { method: 'POST', body: JSON.stringify({ incidentText }) })
 }
 
 export function sendDebriefChat(id: string, message: string): Promise<Debrief> {

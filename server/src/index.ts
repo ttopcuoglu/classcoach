@@ -11,7 +11,6 @@ import { debriefRouter } from './routes/debrief.ts'
 import { lessonPlansRouter } from './routes/lessonPlans.ts'
 import { parentMessageRouter } from './routes/parentMessage.ts'
 import { profileRouter } from './routes/profile.ts'
-import { qaRouter } from './routes/qa.ts'
 import { scenariosRouter } from './routes/scenarios.ts'
 import { shareRouter } from './routes/share.ts'
 import { requireAuth } from './lib/auth.ts'
@@ -38,7 +37,6 @@ app.use('/api/share', shareRouter)
 // Everything else requires a signed-in user.
 app.use('/api/scenarios', requireAuth, scenariosRouter)
 app.use('/api/attempts', requireAuth, attemptsRouter)
-app.use('/api/qa', requireAuth, qaRouter)
 app.use('/api/profile', requireAuth, profileRouter)
 app.use('/api/debriefs', requireAuth, debriefRouter)
 app.use('/api/parent-messages', requireAuth, parentMessageRouter)

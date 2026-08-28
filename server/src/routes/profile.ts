@@ -57,7 +57,6 @@ profileRouter.post('/reset', async (req, res) => {
   await prisma.scenarioAttempt.deleteMany({ where: { userId } })
   await prisma.debrief.deleteMany({ where: { userId } })
   await prisma.parentMessage.deleteMany({ where: { userId } })
-  await prisma.qAExchange.deleteMany({ where: { userId } })
   await prisma.audioSession.deleteMany({ where: { userId } })
   await prisma.user.update({
     where: { id: userId },

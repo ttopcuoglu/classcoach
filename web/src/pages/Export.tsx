@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { categoryLabel } from '../lib/categories'
-import { getAttempts, getQAHistory, type QAExchange, type ScenarioAttempt } from '../lib/api'
+import { getAttempts, getDebriefs, type Debrief, type ScenarioAttempt } from '../lib/api'
 
 export default function Export() {
   const [attempts, setAttempts] = useState<ScenarioAttempt[]>([])
-  const [exchanges, setExchanges] = useState<QAExchange[]>([])
+  const [debriefs, setDebriefs] = useState<Debrief[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([getAttempts({ saved: true }), getQAHistory()])
-      .then(([savedAttempts, qaHistory]) => {
+    Promise.all([getAttempts({ saved: true }), getDebriefs({ saved: true })])
+      .then(([savedAttempts, savedDebriefs]) => {
         setAttempts(savedAttempts)
-        setExchanges(qaHistory.filter((e) => e.starred))
+        setDebriefs(savedDebriefs)
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -35,7 +35,7 @@ export default function Export() {
         </div>
 
         <h1 className="text-2xl font-semibold text-ink">Wivoza — Your Playbook</h1>
-        <p className="mt-1 text-sm text-ink-soft">Saved scenarios and starred Q&A, exported for offline reference.</p>
+        <p className="mt-1 text-sm text-ink-soft">Saved scenarios and saved Ask answers, exported for offline reference.</p>
 
         {loading ? (
           <p className="mt-8 text-sm text-ink-soft">Loading...</p>
@@ -80,15 +80,20 @@ export default function Export() {
             </section>
 
             <section className="mt-8">
-              <h2 className="text-lg font-semibold text-ink">Playbook (starred Q&A)</h2>
-              {exchanges.length === 0 ? (
-                <p className="mt-2 text-sm text-ink-soft">No starred answers yet.</p>
+              <h2 className="text-lg font-semibold text-ink">Saved from Ask</h2>
+              {debriefs.length === 0 ? (
+                <p className="mt-2 text-sm text-ink-soft">Nothing saved yet.</p>
               ) : (
                 <div className="mt-3 flex flex-col gap-4">
-                  {exchanges.map((e) => (
-                    <article key={e.id} className="break-inside-avoid rounded-xl border border-border p-4">
-                      <p className="text-sm font-semibold text-ink">{e.question}</p>
-                      <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink-soft">{e.answer}</p>
+                  {debriefs.map((d) => (
+                    <article key={d.id} className="break-inside-avoid rounded-xl border border-border p-4">
+                      <p className="text-sm font-semibold text-ink">{d.incidentText}</p>
+                      {d.feedback && (
+                        <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink-soft">{d.feedback}</p>
+                      )}
+                      {d.followUp && (
+                        <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink-soft">{d.followUp}</p>
+                      )}
                     </article>
                   ))}
                 </div>

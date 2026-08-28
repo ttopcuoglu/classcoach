@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChatBubbleIcon, ChecklistIcon, ScenarioIcon, StarIcon } from '../components/icons'
-import { getAttempts, getProfile, getQAHistory, type QAExchange, type ScenarioAttempt } from '../lib/api'
+import { getAttempts, getDebriefs, getProfile, type Debrief, type ScenarioAttempt } from '../lib/api'
 import { pickDailyTip, type Mood } from '../lib/dailyTips'
 
 type Activity =
   | { type: 'scenario'; id: string; createdAt: string; attempt: ScenarioAttempt }
-  | { type: 'qa'; id: string; createdAt: string; exchange: QAExchange }
+  | { type: 'ask'; id: string; createdAt: string; debrief: Debrief }
 
 const MOODS: { label: string; value: Mood }[] = [
   { label: 'Good', value: 'good' },
@@ -34,11 +34,11 @@ export default function Home() {
       })
       .catch(() => {})
 
-    Promise.all([getAttempts(), getQAHistory()])
-      .then(([attempts, exchanges]) => {
+    Promise.all([getAttempts(), getDebriefs()])
+      .then(([attempts, debriefs]) => {
         const combined: Activity[] = [
           ...attempts.map((a): Activity => ({ type: 'scenario', id: a.id, createdAt: a.createdAt, attempt: a })),
-          ...exchanges.map((e): Activity => ({ type: 'qa', id: e.id, createdAt: e.createdAt, exchange: e })),
+          ...debriefs.map((d): Activity => ({ type: 'ask', id: d.id, createdAt: d.createdAt, debrief: d })),
         ]
         combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         setActivity(combined.slice(0, 4))
@@ -175,7 +175,7 @@ export default function Home() {
                   <ChatBubbleIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
                 )}
                 <p className="line-clamp-2 text-sm text-ink">
-                  {item.type === 'scenario' ? item.attempt.scenario.text : item.exchange.question}
+                  {item.type === 'scenario' ? item.attempt.scenario.text : item.debrief.incidentText}
                 </p>
               </Link>
             ))}

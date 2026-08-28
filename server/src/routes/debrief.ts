@@ -9,23 +9,29 @@ import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const debriefRouter = Router()
 
-const DEBRIEF_SYSTEM_PROMPT = `You are a warm, practical classroom management coach for grades 6-12 teachers. A teacher is debriefing something that ALREADY HAPPENED in their classroom today — this is a real incident, not a hypothetical to solve. Respond with reflective, forward-looking coaching: help them make sense of what happened and plan for next time. Coach, don't grade.
+const ASK_SYSTEM_PROMPT = `You are a warm, practical classroom management coach for grades 6-12 teachers. A teacher has written in — figure out which of these two situations it is before responding:
 
-Write in plain text only — no markdown (no **bold**, no # headings). Use a blank line between paragraphs and a leading "-" for list items.
+- A real incident that ALREADY HAPPENED in their classroom (a specific moment, not a hypothetical). Respond with reflective, forward-looking coaching: help them make sense of what happened and plan for next time.
+- A general classroom-management question, not tied to a specific incident (e.g. "what's a good way to set expectations on day one?"). Respond with a direct, concrete answer plus actionable steps.
 
-Respond with exactly these three sections and nothing outside them:
+Coach, don't grade, either way. Write in plain text only — no markdown (no **bold**, no # headings). Use a blank line between paragraphs and a leading "-" for list items.
+
+Respond with exactly these four sections and nothing outside them:
 
 <feedback>
-Reflective feedback on how they handled it in the moment: what worked, what to consider differently, grounded in classroom management best practice (clear/consistent expectations, de-escalation, restorative practices). Keep it skimmable, encouraging, and practical.
+For a real incident: reflective feedback on how they handled it in the moment — what worked, what to consider differently, grounded in classroom management best practice (clear/consistent expectations, de-escalation, restorative practices). For a general question: a direct, concrete answer. Either way, keep it skimmable, encouraging, and practical.
 </feedback>
 <follow_up>
-A concrete next step — how to follow up with the student(s) involved, repair the relationship if needed, or handle it differently if it happens again. Written as practical guidance for what to actually do next, not a script for a moment that's already passed.
+For a real incident: a concrete next step — how to follow up with the student(s) involved, repair the relationship if needed, or handle it differently if it happens again. For a general question: a natural extension, like a related consideration or an offer to help them practice/draft something. Never leave this empty.
 </follow_up>
+<category>
+If this describes a real incident that clearly fits one of these categories, output its exact value: defiance, disengagement, peer_conflict, disruption, transitions, technology_misuse. Otherwise (a general question, or an incident that doesn't clearly fit one of those), output the literal word none. Output only the value, nothing else.
+</category>
 <rating>
-A single integer 1-5 rating your honest private assessment of how effectively this was handled, per classroom management best practice. This is never shown to the teacher — it's used only to track their growth over time — so rate honestly rather than generously. Output only the digit, nothing else.
+For a real incident: a single integer 1-5, your honest private assessment of how effectively it was handled, per classroom management best practice. This is never shown to the teacher — it's used only to track their growth over time — so rate honestly rather than generously. For a general question, there's nothing to rate — output 0. Output only the digit, nothing else.
 </rating>`
 
-const DEBRIEF_CHAT_SYSTEM_PROMPT = `You are a warm, practical classroom management coach for grades 6-12 teachers, continuing a conversation about a real incident you already gave reflective feedback on. Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says: if they push back, ask a follow-up, or want to think through a different angle, engage with that directly rather than repeating your first assessment. Stay grounded in what they've told you; never invent details.`
+const ASK_CHAT_SYSTEM_PROMPT = `You are a warm, practical classroom management coach for grades 6-12 teachers, continuing a conversation you already gave coaching feedback in. Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says: if they push back, ask a follow-up, or want to think through a different angle, engage with that directly rather than repeating your first assessment. Stay grounded in what they've told you; never invent details.`
 
 function isValidCategory(value: unknown): value is string {
   return typeof value === 'string' && (SCENARIO_CATEGORIES as readonly string[]).includes(value)
@@ -45,13 +51,9 @@ debriefRouter.get('/', async (req, res) => {
 })
 
 debriefRouter.post('/', async (req, res) => {
-  const { incidentText, category } = req.body ?? {}
+  const { incidentText } = req.body ?? {}
   if (typeof incidentText !== 'string' || incidentText.trim().length === 0) {
     res.status(400).json({ error: 'incidentText is required' })
-    return
-  }
-  if (category !== undefined && !isValidCategory(category)) {
-    res.status(400).json({ error: 'category must be one of the known scenario categories' })
     return
   }
 
@@ -66,7 +68,8 @@ debriefRouter.post('/', async (req, res) => {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 1024,
-      system: DEBRIEF_SYSTEM_PROMPT,
+      thinking: { type: 'disabled' },
+      system: ASK_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: context }],
     })
 
@@ -77,6 +80,8 @@ debriefRouter.post('/', async (req, res) => {
 
     const feedback = extractTag(text, 'feedback') ?? text.trim()
     const followUp = extractTag(text, 'follow_up')
+    const categoryTag = extractTag(text, 'category')
+    const category = categoryTag && isValidCategory(categoryTag) ? categoryTag : null
     const ratingText = extractTag(text, 'rating')
     const parsedRating = ratingText ? Number.parseInt(ratingText, 10) : NaN
     const rating = parsedRating >= 1 && parsedRating <= 5 ? parsedRating : null
@@ -85,7 +90,7 @@ debriefRouter.post('/', async (req, res) => {
     const conversation = appendTurn([], context, seedReply)
 
     const debrief = await prisma.debrief.create({
-      data: { userId: req.user!.userId, incidentText, category: category ?? null, feedback, followUp, rating, conversation },
+      data: { userId: req.user!.userId, incidentText, category, feedback, followUp, rating, conversation },
     })
     res.status(201).json(debrief)
   } catch (error) {
@@ -126,7 +131,8 @@ debriefRouter.post('/:id/chat', async (req, res) => {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 300,
-      system: DEBRIEF_CHAT_SYSTEM_PROMPT,
+      thinking: { type: 'disabled' },
+      system: ASK_CHAT_SYSTEM_PROMPT,
       messages: toClaudeMessages(existing, trimmed),
     })
     const reply = response.content
