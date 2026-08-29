@@ -31,7 +31,17 @@ export type ScenarioAttempt = {
   conversation: ChatMessage[]
 }
 
-export type FocusMetric = 'talkRatio' | 'higherOrderPct' | 'avgWaitTime' | 'cfuCount'
+export type FocusMetric =
+  | 'talkRatio'
+  | 'higherOrderPct'
+  | 'avgWaitTime'
+  | 'cfuCount'
+  | 'followUpQuestionCount'
+  | 'redirectionCount'
+  | 'toneRatio'
+  | 'directiveCount'
+  | 'nameMentionCount'
+  | 'feedbackSpecificity'
 
 export type UserProfile = {
   id: string

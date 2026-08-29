@@ -12,7 +12,18 @@ profileRouter.get('/', async (req, res) => {
   res.json(user)
 })
 
-const FOCUS_METRICS = new Set(['talkRatio', 'higherOrderPct', 'avgWaitTime', 'cfuCount'])
+const FOCUS_METRICS = new Set([
+  'talkRatio',
+  'higherOrderPct',
+  'avgWaitTime',
+  'cfuCount',
+  'followUpQuestionCount',
+  'redirectionCount',
+  'toneRatio',
+  'directiveCount',
+  'nameMentionCount',
+  'feedbackSpecificity',
+])
 
 profileRouter.put('/', async (req, res) => {
   const { name, gradeLevels, subjects, onboardingProgress, audioRetentionDays, focusMetric } = req.body ?? {}
@@ -37,7 +48,7 @@ profileRouter.put('/', async (req, res) => {
     return
   }
   if (focusMetric !== undefined && focusMetric !== null && !FOCUS_METRICS.has(focusMetric)) {
-    res.status(400).json({ error: 'focusMetric must be one of talkRatio, higherOrderPct, avgWaitTime, cfuCount, or null' })
+    res.status(400).json({ error: 'focusMetric must be one of the supported focus metrics, or null' })
     return
   }
 

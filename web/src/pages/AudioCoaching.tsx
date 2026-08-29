@@ -528,7 +528,24 @@ const FOCUS_METRIC_LABELS: Record<FocusMetric, string> = {
   higherOrderPct: 'Higher-order questions',
   avgWaitTime: 'Avg. wait time',
   cfuCount: 'Checks for understanding',
+  followUpQuestionCount: 'Follow-up questions',
+  redirectionCount: 'Redirection language',
+  toneRatio: 'Positive vs. corrective tone',
+  directiveCount: 'Clear directions given',
+  nameMentionCount: 'Student names used',
+  feedbackSpecificity: 'Feedback specificity',
 }
+
+// Reuses this report's own existing category names (CategorySection /
+// ClimateRoutinesTab) so the dropdown reads consistently with the rest of
+// the app, rather than inventing a parallel taxonomy.
+const FOCUS_METRIC_GROUPS: { category: string; metrics: FocusMetric[] }[] = [
+  { category: 'Talk & Participation', metrics: ['talkRatio'] },
+  { category: 'Questioning & Thinking', metrics: ['higherOrderPct', 'avgWaitTime', 'followUpQuestionCount'] },
+  { category: 'Checking Understanding', metrics: ['cfuCount', 'feedbackSpecificity'] },
+  { category: 'Climate & Tone', metrics: ['redirectionCount', 'toneRatio', 'nameMentionCount'] },
+  { category: 'Routines', metrics: ['directiveCount'] },
+]
 
 function TabBar({ tab, onSelect }: { tab: ReportTab; onSelect: (t: ReportTab) => void }) {
   return (
@@ -1698,25 +1715,61 @@ function FocusSelector({
   focusMetric: FocusMetric | null
   onChange: (metric: FocusMetric | null) => void
 }) {
-  const options = Object.keys(FOCUS_METRIC_LABELS) as FocusMetric[]
+  const [open, setOpen] = useState(false)
+
+  function handleSelect(metric: FocusMetric | null) {
+    onChange(metric)
+    setOpen(false)
+  }
+
   return (
     <div className="flex flex-col gap-2">
       <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">My focus</span>
-      <div className="flex flex-wrap gap-2">
-        {options.map((key) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => onChange(focusMetric === key ? null : key)}
-            className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-              focusMetric === key
-                ? 'border-brand-500 bg-brand-50 text-brand-600'
-                : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
-            }`}
-          >
-            {FOCUS_METRIC_LABELS[key]}
-          </button>
-        ))}
+      <div className="relative self-start">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className={`flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+            focusMetric
+              ? 'border-brand-500 bg-brand-50 text-brand-600'
+              : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+          }`}
+        >
+          {focusMetric ? FOCUS_METRIC_LABELS[focusMetric] : 'Choose a focus metric'}
+          <span aria-hidden="true">{open ? '▴' : '▾'}</span>
+        </button>
+        {open && (
+          <div className="absolute z-10 mt-1 w-72 rounded-lg border border-border bg-surface p-1.5 shadow-lg">
+            <button
+              type="button"
+              onClick={() => handleSelect(null)}
+              className={`w-full rounded-lg px-3 py-1.5 text-left text-sm ${
+                focusMetric == null ? 'font-semibold text-brand-600' : 'text-ink-soft hover:bg-canvas'
+              }`}
+            >
+              No focus
+            </button>
+            {FOCUS_METRIC_GROUPS.map((group) => (
+              <div key={group.category} className="mt-1">
+                <p className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
+                  {group.category}
+                </p>
+                {group.metrics.map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => handleSelect(key)}
+                    className={`w-full rounded-lg px-3 py-1.5 text-left text-sm ${
+                      focusMetric === key ? 'bg-brand-50 font-semibold text-brand-600' : 'text-ink hover:bg-canvas'
+                    }`}
+                  >
+                    {FOCUS_METRIC_LABELS[key]}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -1768,6 +1821,33 @@ function MyGrowthTab({
   const excludedCfuCount = cfuFrequency.filter((v) => v == null).length
   const cfuMax = Math.max(4, ...cfuFrequency.filter((v): v is number => v != null)) * 1.2
 
+  // Plain per-10-minute frequency for phrase-matched counts — none of these
+  // have an established minimum-duration detection floor elsewhere in the
+  // app (unlike CFUs), so no exclusion beyond having a real duration.
+  const followUpFrequency = analyzed.map((s) => perTenMin(s, metricsNum(s, 'followUpQuestionCount')))
+  const redirectionFrequency = analyzed.map((s) => perTenMin(s, metricsNum(s, 'redirectionCount')))
+  const directiveFrequency = analyzed.map((s) => perTenMin(s, metricsNum(s, 'directiveCount')))
+  const nameMentionFrequency = analyzed.map((s) => perTenMin(s, metricsNum(s, 'nameMentionCount')))
+  const followUpMax = frequencyMax(followUpFrequency)
+  const redirectionMax = frequencyMax(redirectionFrequency)
+  const directiveMax = frequencyMax(directiveFrequency)
+  const nameMentionMax = frequencyMax(nameMentionFrequency)
+
+  // Same MIN_N_FOR_PERCENT gate higherOrder already uses above — a ratio off
+  // too few moments reads as more precise than it is.
+  const toneRatio = analyzed.map((s) => {
+    const positive = metricsNum(s, 'positivePhraseCount')
+    const corrective = metricsNum(s, 'correctivePhraseCount')
+    if (positive == null || corrective == null || positive + corrective < MIN_N_FOR_PERCENT) return null
+    return Math.round((positive / (positive + corrective)) * 100)
+  })
+  const feedbackSpecificity = analyzed.map((s) => {
+    const generic = metricsNum(s, 'genericFeedbackCount')
+    const specific = metricsNum(s, 'specificFeedbackCount')
+    if (generic == null || specific == null || generic + specific < MIN_N_FOR_PERCENT) return null
+    return Math.round((specific / (generic + specific)) * 100)
+  })
+
   const insight = buildTrendInsight(analyzed)
 
   const charts: { key: FocusMetric; node: React.ReactNode }[] = [
@@ -1783,6 +1863,7 @@ function MyGrowthTab({
             { label: 'You', colorVar: '--color-brand-500', values: teacherTalk },
             { label: 'Students', colorVar: '--color-warm-400', values: studentTalk },
           ]}
+          emptyMessage="Not enough sessions with a measured talk split yet to trend this."
         />
       ),
     },
@@ -1808,6 +1889,7 @@ function MyGrowthTab({
           maxValue={waitTimeMax}
           labels={labels}
           series={[{ label: 'Your avg. wait time', colorVar: '--color-brand-500', values: avgWaitTime }]}
+          emptyMessage="Not enough sessions with a measured average wait time yet to trend this."
         />
       ),
     },
@@ -1821,6 +1903,7 @@ function MyGrowthTab({
             maxValue={cfuMax}
             labels={labels}
             series={[{ label: 'CFUs per 10 min', colorVar: '--color-brand-500', values: cfuFrequency }]}
+            emptyMessage="Not enough sessions long enough to reliably detect checks for understanding yet."
           />
           {excludedCfuCount > 0 && (
             <p className="mt-2 text-xs text-ink-soft">
@@ -1830,6 +1913,84 @@ function MyGrowthTab({
             </p>
           )}
         </>
+      ),
+    },
+    {
+      key: 'followUpQuestionCount',
+      node: (
+        <TrendChart
+          title="Follow-up Questions"
+          unit="/10min"
+          maxValue={followUpMax}
+          labels={labels}
+          series={[{ label: 'Follow-ups per 10 min', colorVar: '--color-brand-500', values: followUpFrequency }]}
+          emptyMessage="Not enough follow-up questions recorded yet to trend this."
+        />
+      ),
+    },
+    {
+      key: 'redirectionCount',
+      node: (
+        <TrendChart
+          title="Redirection Language"
+          unit="/10min"
+          maxValue={redirectionMax}
+          labels={labels}
+          series={[{ label: 'Redirections per 10 min', colorVar: '--color-brand-500', values: redirectionFrequency }]}
+          emptyMessage="Not enough redirection language detected yet to trend this."
+        />
+      ),
+    },
+    {
+      key: 'toneRatio',
+      node: (
+        <TrendChart
+          title="Positive vs. Corrective Tone"
+          unit="%"
+          maxValue={100}
+          labels={labels}
+          series={[{ label: 'Share positive', colorVar: '--color-brand-500', values: toneRatio }]}
+          emptyMessage="Not enough tone-language moments in any single session yet to trend this reliably."
+        />
+      ),
+    },
+    {
+      key: 'directiveCount',
+      node: (
+        <TrendChart
+          title="Clear Directions Given"
+          unit="/10min"
+          maxValue={directiveMax}
+          labels={labels}
+          series={[{ label: 'Directions per 10 min', colorVar: '--color-brand-500', values: directiveFrequency }]}
+          emptyMessage="Not enough directive language detected yet to trend this."
+        />
+      ),
+    },
+    {
+      key: 'nameMentionCount',
+      node: (
+        <TrendChart
+          title="Student Names Used"
+          unit="/10min"
+          maxValue={nameMentionMax}
+          labels={labels}
+          series={[{ label: 'Name mentions per 10 min', colorVar: '--color-brand-500', values: nameMentionFrequency }]}
+          emptyMessage="Not enough student-name mentions detected yet to trend this."
+        />
+      ),
+    },
+    {
+      key: 'feedbackSpecificity',
+      node: (
+        <TrendChart
+          title="Feedback Specificity"
+          unit="%"
+          maxValue={100}
+          labels={labels}
+          series={[{ label: 'Share specific', colorVar: '--color-brand-500', values: feedbackSpecificity }]}
+          emptyMessage="Not enough feedback-after-response moments in any single session yet to trend this reliably."
+        />
       ),
     },
   ]
@@ -2745,6 +2906,21 @@ function SessionCard({
 }
 
 const MAX_TREND_SESSIONS = 20
+
+function metricsNum(s: AudioSession, key: string): number | null {
+  const v = s.metricsDetail?.[key]
+  return typeof v === 'number' ? v : null
+}
+
+function perTenMin(s: AudioSession, count: number | null): number | null {
+  const duration = s.durationSec ?? 0
+  return count == null || duration <= 0 ? null : Math.round((count / (duration / 600)) * 10) / 10
+}
+
+function frequencyMax(values: (number | null)[]): number {
+  const nums = values.filter((v): v is number => v != null)
+  return Math.max(4, ...nums) * 1.2
+}
 
 function buildTrendInsight(sessions: AudioSession[]): string | null {
   if (sessions.length < 3) return null
