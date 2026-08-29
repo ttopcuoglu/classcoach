@@ -19,8 +19,7 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [termsAccepted, setTermsAccepted] = useState(false)
-  const [ageConfirmed, setAgeConfirmed] = useState(false)
+  const [agreed, setAgreed] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -30,7 +29,7 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
     setSubmitting(true)
     try {
       if (mode === 'signup') {
-        await signUp({ email, password, name, termsAccepted, ageConfirmed })
+        await signUp({ email, password, name, termsAccepted: agreed, ageConfirmed: agreed })
       } else {
         await logIn({ email, password })
       }
@@ -110,36 +109,26 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
           required
         />
         {mode === 'signup' && (
-          <>
-            <label className="flex items-start gap-2 text-xs text-ink-soft">
-              <input
-                type="checkbox"
-                checked={termsAccepted}
-                onChange={(e) => setTermsAccepted(e.target.checked)}
-                className="mt-0.5"
-              />
-              <span>
-                I agree to Wivoza's{' '}
-                <Link to="/terms" className="underline hover:text-brand-600">
-                  Terms
-                </Link>
-              </span>
-            </label>
-            <label className="flex items-start gap-2 text-xs text-ink-soft">
-              <input
-                type="checkbox"
-                checked={ageConfirmed}
-                onChange={(e) => setAgeConfirmed(e.target.checked)}
-                className="mt-0.5"
-              />
-              <span>I confirm I am 13 years of age or older.</span>
-            </label>
-          </>
+          <label className="flex items-start gap-2 text-xs text-ink-soft">
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={(e) => setAgreed(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              I agree to Wivoza's{' '}
+              <Link to="/terms" className="underline hover:text-brand-600">
+                terms and conditions
+              </Link>{' '}
+              and I am 13 years of age or older.
+            </span>
+          </label>
         )}
         {error && <p className="text-sm text-warm-500">{error}</p>}
         <button
           type="submit"
-          disabled={submitting || (mode === 'signup' && (!termsAccepted || !ageConfirmed))}
+          disabled={submitting || (mode === 'signup' && !agreed)}
           className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
         >
           {submitting ? 'Please wait...' : mode === 'signup' ? 'Create account' : 'Log in'}
