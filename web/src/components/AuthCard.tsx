@@ -120,7 +120,7 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
               />
               <span>
                 I agree to Wivoza's{' '}
-                <Link to="/terms" target="_blank" className="underline hover:text-brand-600">
+                <Link to="/terms" className="underline hover:text-brand-600">
                   Terms
                 </Link>
               </span>
