@@ -1,5 +1,6 @@
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google'
 import { useState } from 'react'
+import AuthCard from '../components/AuthCard'
 import {
   ArrowUpIcon,
   ChatBubbleIcon,
@@ -175,15 +176,8 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               next time.
             </p>
 
-            <div className="mt-8 flex flex-col items-start gap-3">
-              <div className="rounded-xl bg-canvas p-2 shadow-sm">
-                <GoogleLogin
-                  onSuccess={handleSuccess}
-                  onError={() => setError('Sign-in failed. Please try again.')}
-                />
-              </div>
-              <p className="text-xs text-night-soft">Free to use — just sign in with Google.</p>
-              {error && <p className="text-sm text-warm-400">{error}</p>}
+            <div className="mt-8">
+              <AuthCard onSignedIn={onSignedIn} />
             </div>
           </div>
 
@@ -331,7 +325,10 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                 onError={() => setError('Sign-in failed. Please try again.')}
               />
             </div>
-            <span className="text-xs text-night-soft">Free to use &middot; fair daily practice limit</span>
+            {error && <p className="text-sm text-warm-400">{error}</p>}
+            <a href="#get-started" className="text-xs text-night-soft underline underline-offset-2">
+              New here? Create a free account ↑
+            </a>
           </div>
         </div>
       </section>

@@ -1,6 +1,6 @@
 import { GoogleOAuthProvider } from '@react-oauth/google'
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Layout from './components/Layout'
 import Home from './pages/Home'
 import CoachChat from './pages/CoachChat'
@@ -17,6 +17,8 @@ import LessonPlanning from './pages/LessonPlanning'
 import LessonPlanExport from './pages/LessonPlanExport'
 import TalkToMe from './pages/TalkToMe'
 import Landing from './pages/Landing'
+import Onboarding from './pages/Onboarding'
+import Terms from './pages/Terms'
 import { getMe, type UserProfile } from './lib/api'
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string
@@ -32,8 +34,12 @@ function RequireAuth({
   onSignedIn: () => void
   children: React.ReactNode
 }) {
+  const location = useLocation()
   if (loading) return null
   if (!user) return <Landing onSignedIn={onSignedIn} />
+  if (user.onboardingCompletedAt == null && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />
+  }
   return <>{children}</>
 }
 
@@ -43,7 +49,7 @@ export default function App() {
 
   function refreshUser() {
     setLoading(true)
-    getMe()
+    return getMe()
       .then(setUser)
       .catch(() => setUser(null))
       .finally(() => setLoading(false))
@@ -62,6 +68,15 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="shared/:type/:token" element={<Shared />} />
+          <Route path="terms" element={<Terms />} />
+          <Route
+            path="onboarding"
+            element={
+              <RequireAuth user={user} loading={loading} onSignedIn={refreshUser}>
+                <Onboarding onDone={refreshUser} />
+              </RequireAuth>
+            }
+          />
           <Route
             path="export"
             element={

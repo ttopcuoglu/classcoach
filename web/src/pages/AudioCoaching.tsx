@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, MicIcon, WarningIcon } from '../components/icons'
 import { setAskPrefill } from '../lib/communicationsPrefill'
+import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import {
   createAudioSession,
   deleteAudioSession,
@@ -521,30 +522,6 @@ const REPORT_TABS: { key: ReportTab; label: string }[] = [
   { key: 'lesson', label: 'Lesson Content' },
   { key: 'climate', label: 'Climate & Routines' },
   { key: 'discourse', label: 'Discourse Details' },
-]
-
-const FOCUS_METRIC_LABELS: Record<FocusMetric, string> = {
-  talkRatio: 'Talk ratio',
-  higherOrderPct: 'Higher-order questions',
-  avgWaitTime: 'Avg. wait time',
-  cfuCount: 'Checks for understanding',
-  followUpQuestionCount: 'Follow-up questions',
-  redirectionCount: 'Redirection language',
-  toneRatio: 'Positive vs. corrective tone',
-  directiveCount: 'Clear directions given',
-  nameMentionCount: 'Student names used',
-  feedbackSpecificity: 'Feedback specificity',
-}
-
-// Reuses this report's own existing category names (CategorySection /
-// ClimateRoutinesTab) so the dropdown reads consistently with the rest of
-// the app, rather than inventing a parallel taxonomy.
-const FOCUS_METRIC_GROUPS: { category: string; metrics: FocusMetric[] }[] = [
-  { category: 'Talk & Participation', metrics: ['talkRatio'] },
-  { category: 'Questioning & Thinking', metrics: ['higherOrderPct', 'avgWaitTime', 'followUpQuestionCount'] },
-  { category: 'Checking Understanding', metrics: ['cfuCount', 'feedbackSpecificity'] },
-  { category: 'Climate & Tone', metrics: ['redirectionCount', 'toneRatio', 'nameMentionCount'] },
-  { category: 'Routines', metrics: ['directiveCount'] },
 ]
 
 function TabBar({ tab, onSelect }: { tab: ReportTab; onSelect: (t: ReportTab) => void }) {

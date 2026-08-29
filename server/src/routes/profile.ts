@@ -1,10 +1,11 @@
 import { Router } from 'express'
+import { SAFE_USER_OMIT } from '../lib/auth.ts'
 import { prisma } from '../lib/prisma.ts'
 
 export const profileRouter = Router()
 
 profileRouter.get('/', async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.user!.userId } })
+  const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, omit: SAFE_USER_OMIT })
   if (!user) {
     res.status(401).json({ error: 'Not signed in' })
     return
@@ -26,7 +27,18 @@ const FOCUS_METRICS = new Set([
 ])
 
 profileRouter.put('/', async (req, res) => {
-  const { name, gradeLevels, subjects, onboardingProgress, audioRetentionDays, focusMetric } = req.body ?? {}
+  const {
+    name,
+    gradeLevels,
+    subjects,
+    onboardingProgress,
+    audioRetentionDays,
+    focusMetric,
+    jobTitle,
+    schoolName,
+    teachingGoal,
+    completeOnboarding,
+  } = req.body ?? {}
   if (name !== undefined && typeof name !== 'string') {
     res.status(400).json({ error: 'name must be a string' })
     return
@@ -51,10 +63,35 @@ profileRouter.put('/', async (req, res) => {
     res.status(400).json({ error: 'focusMetric must be one of the supported focus metrics, or null' })
     return
   }
+  if (jobTitle !== undefined && jobTitle !== null && typeof jobTitle !== 'string') {
+    res.status(400).json({ error: 'jobTitle must be a string or null' })
+    return
+  }
+  if (schoolName !== undefined && typeof schoolName !== 'string') {
+    res.status(400).json({ error: 'schoolName must be a string' })
+    return
+  }
+  if (teachingGoal !== undefined && typeof teachingGoal !== 'string') {
+    res.status(400).json({ error: 'teachingGoal must be a string' })
+    return
+  }
 
   const updated = await prisma.user.update({
     where: { id: req.user!.userId },
-    data: { name, gradeLevels, subjects, onboardingProgress, audioRetentionDays, focusMetric },
+    data: {
+      name,
+      gradeLevels,
+      subjects,
+      onboardingProgress,
+      audioRetentionDays,
+      focusMetric,
+      jobTitle,
+      schoolName,
+      teachingGoal,
+      // Never trust a client-supplied date — the server owns this signal.
+      ...(completeOnboarding === true ? { onboardingCompletedAt: new Date() } : {}),
+    },
+    omit: SAFE_USER_OMIT,
   })
   res.json(updated)
 })
@@ -72,6 +109,7 @@ profileRouter.post('/reset', async (req, res) => {
   await prisma.user.update({
     where: { id: userId },
     data: { name: null, gradeLevels: null, subjects: null, onboardingProgress: null, focusMetric: null },
+    omit: SAFE_USER_OMIT,
   })
   res.json({ status: 'ok' })
 })

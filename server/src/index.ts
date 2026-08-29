@@ -10,6 +10,7 @@ import { conversationPlanRouter } from './routes/conversationPlan.ts'
 import { conversationPrepRouter } from './routes/conversationPrep.ts'
 import { debriefRouter } from './routes/debrief.ts'
 import { lessonPlansRouter } from './routes/lessonPlans.ts'
+import { onboardingRouter } from './routes/onboarding.ts'
 import { parentMessageRouter } from './routes/parentMessage.ts'
 import { profileRouter } from './routes/profile.ts'
 import { scenariosRouter } from './routes/scenarios.ts'
@@ -48,6 +49,7 @@ app.use('/api/lesson-plans', requireAuth, lessonPlansRouter)
 app.use('/api/conversation-prep', requireAuth, conversationPrepRouter)
 app.use('/api/conversation-plans', requireAuth, conversationPlanRouter)
 app.use('/api/tts', requireAuth, ttsRouter)
+app.use('/api/onboarding', requireAuth, onboardingRouter)
 
 const port = Number(process.env.PORT) || 3001
 app.listen(port, () => {

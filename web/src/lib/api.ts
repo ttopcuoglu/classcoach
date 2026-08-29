@@ -43,14 +43,27 @@ export type FocusMetric =
   | 'nameMentionCount'
   | 'feedbackSpecificity'
 
+export type JobTitle =
+  | 'Teacher'
+  | 'Instructional Coach'
+  | 'Assistant Principal'
+  | 'Principal'
+  | 'District Leader'
+  | 'Other'
+
 export type UserProfile = {
   id: string
   email: string
   name: string | null
   role: 'teacher' | 'admin'
+  jobTitle: JobTitle | null
+  schoolName: string | null
+  teachingGoal: string | null
   gradeLevels: string | null
   subjects: string | null
   onboardingProgress: string | null
+  onboardingCompletedAt: string | null
+  termsAcceptedAt: string | null
   audioRetentionDays: number | null
   focusMetric: FocusMetric | null
   createdAt: string
@@ -366,6 +379,14 @@ export function signInWithGoogle(credential: string): Promise<UserProfile> {
   return request('/api/auth/google', { method: 'POST', body: JSON.stringify({ credential }) })
 }
 
+export function signUp(data: { email: string; password: string; name: string; termsAccepted: boolean }): Promise<UserProfile> {
+  return request('/api/auth/signup', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function logIn(data: { email: string; password: string }): Promise<UserProfile> {
+  return request('/api/auth/login', { method: 'POST', body: JSON.stringify(data) })
+}
+
 export function getMe(): Promise<UserProfile> {
   return request('/api/auth/me')
 }
@@ -422,12 +443,36 @@ export function updateProfile(data: {
   onboardingProgress?: string
   audioRetentionDays?: number | null
   focusMetric?: FocusMetric | null
+  jobTitle?: JobTitle | null
+  schoolName?: string
+  teachingGoal?: string
+  completeOnboarding?: true
 }): Promise<UserProfile> {
   return request('/api/profile', { method: 'PUT', body: JSON.stringify(data) })
 }
 
 export function resetData(): Promise<{ status: string }> {
   return request('/api/profile/reset', { method: 'POST' })
+}
+
+// Onboarding's live "read this aloud" demo — same multipart pattern as
+// transcribeAudioSession. Purely ephemeral: nothing here is persisted.
+export type DemoAnalysisTag = 'higher_order_question' | 'positive_language'
+export type DemoAnalysisResult = { transcript: string; highlightedText: string | null; tag: DemoAnalysisTag | null }
+
+export async function analyzeDemoClip(audioBlob: Blob): Promise<DemoAnalysisResult> {
+  const formData = new FormData()
+  formData.append('audio', audioBlob, 'demo-audio')
+  const res = await fetch(`${API_BASE_URL}/api/onboarding/demo-analysis`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error ?? `Request failed with status ${res.status}`)
+  }
+  return res.json()
 }
 
 export function getDebriefs(params?: { saved?: boolean; source?: DebriefSource }): Promise<Debrief[]> {

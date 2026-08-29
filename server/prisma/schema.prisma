@@ -10,21 +10,30 @@ datasource db {
   provider = "postgresql"
 }
 
-// role is "teacher" (default) | "admin". Signed in via Google — googleId is
-// the Google account's stable "sub" claim. No passwords are stored anywhere.
+// role is "teacher" (default) | "admin" — auth/authorization only, never
+// shown or settable in any UI. Users sign in with Google OAuth and/or an
+// email+password: googleId is the Google account's stable "sub" claim
+// (null for password-only signups); passwordHash is a bcrypt hash (null
+// for Google-only accounts that never set a password).
 model User {
-  id                 String   @id @default(cuid())
-  googleId           String   @unique
-  email              String   @unique
-  name               String?
-  role               String   @default("teacher")
-  gradeLevels        String? // comma-separated, e.g. "7th,8th"
-  subjects           String? // comma-separated, e.g. "Math,Science"
-  onboardingProgress String? // comma-separated completed First-30-Days step ids
-  audioRetentionDays Int? // null = keep audio-coaching transcripts/reports indefinitely
-  focusMetric        String? // 'talkRatio' | 'higherOrderPct' | 'avgWaitTime' | 'cfuCount' — the teacher's chosen My Growth focus, null = none set
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                    String    @id @default(cuid())
+  googleId              String?   @unique
+  passwordHash          String?
+  email                 String    @unique
+  name                  String?
+  role                  String    @default("teacher")
+  jobTitle              String? // self-described: Teacher, Instructional Coach, Assistant Principal, Principal, District Leader, Other — distinct from `role`
+  schoolName            String? // free text, no directory/verification
+  teachingGoal          String? // "I'd like my students to ___", set during onboarding
+  gradeLevels           String? // comma-separated, e.g. "7th,8th"
+  subjects              String? // comma-separated, e.g. "Math,Science"
+  onboardingProgress    String? // comma-separated completed First-30-Days step ids
+  onboardingCompletedAt DateTime? // server-set only, when the onboarding wizard finishes or is skipped
+  termsAcceptedAt       DateTime?
+  audioRetentionDays    Int? // null = keep audio-coaching transcripts/reports indefinitely
+  focusMetric           String? // the teacher's chosen My Growth focus — see FocusMetric in web/src/lib/focusMetrics.ts, null = none set
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   attempts          ScenarioAttempt[]
   debriefs          Debrief[]

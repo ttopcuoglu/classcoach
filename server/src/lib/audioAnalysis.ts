@@ -318,6 +318,26 @@ function classifyQuestion(sentence: string): 'higher_order' | 'recall' | null {
   return null
 }
 
+// Onboarding's live "read this aloud" demo — reuses the exact same
+// sentence-splitting/classification/phrase-matching this file already uses
+// for real session reports, so the detection is genuine, not staged.
+export type DemoAnalysisTag = 'higher_order_question' | 'positive_language'
+
+export function analyzeDemoClip(transcript: string): { highlightedText: string | null; tag: DemoAnalysisTag | null } {
+  const sentences = splitSentences(transcript)
+  for (const { sentence } of sentences) {
+    if (classifyQuestion(sentence) === 'higher_order') {
+      return { highlightedText: sentence, tag: 'higher_order_question' }
+    }
+  }
+  for (const { sentence } of sentences) {
+    if (findMatchedPhrase(sentence, POSITIVE_PHRASES)) {
+      return { highlightedText: sentence, tag: 'positive_language' }
+    }
+  }
+  return { highlightedText: null, tag: null }
+}
+
 function round(value: number, digits = 1): number {
   const factor = 10 ** digits
   return Math.round(value * factor) / factor

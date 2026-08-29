@@ -9,6 +9,29 @@ if (!JWT_SECRET) {
 
 export const SESSION_COOKIE = 'session'
 
+// Pass to any Prisma User query/mutation that ends in res.json(user) — the
+// hash must never reach the browser.
+export const SAFE_USER_OMIT = { passwordHash: true } as const
+
+// Minimal login/signup attempt throttle. In-memory only — resets on every
+// deploy/restart and won't coordinate across multiple instances if this app
+// ever scales horizontally. A durable version would need Redis or a DB
+// table; not worth that cost until this app has real attack traffic.
+const LOGIN_ATTEMPT_WINDOW_MS = 15 * 60 * 1000
+const LOGIN_ATTEMPT_LIMIT = 10
+const loginAttempts = new Map<string, { count: number; windowStart: number }>()
+
+export function checkLoginRateLimit(key: string): boolean {
+  const now = Date.now()
+  const entry = loginAttempts.get(key)
+  if (!entry || now - entry.windowStart > LOGIN_ATTEMPT_WINDOW_MS) {
+    loginAttempts.set(key, { count: 1, windowStart: now })
+    return true
+  }
+  entry.count++
+  return entry.count <= LOGIN_ATTEMPT_LIMIT
+}
+
 export type SessionPayload = {
   userId: string
   role: string

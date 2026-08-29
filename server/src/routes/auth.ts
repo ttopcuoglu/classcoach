@@ -1,7 +1,13 @@
+import bcrypt from 'bcryptjs'
 import { OAuth2Client } from 'google-auth-library'
 import { Router } from 'express'
-import { requireAuth, SESSION_COOKIE, signSession } from '../lib/auth.ts'
+import { checkLoginRateLimit, requireAuth, SAFE_USER_OMIT, SESSION_COOKIE, signSession } from '../lib/auth.ts'
 import { prisma } from '../lib/prisma.ts'
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const MIN_PASSWORD_LENGTH = 8
+const PASSWORD_SALT_ROUNDS = 10
+const GENERIC_LOGIN_ERROR = 'Invalid email or password.'
 
 export const authRouter = Router()
 
@@ -47,11 +53,39 @@ authRouter.post('/google', async (req, res) => {
 
     const role = ADMIN_EMAILS.has(payload.email.toLowerCase()) ? 'admin' : 'teacher'
 
-    const user = await prisma.user.upsert({
-      where: { googleId: payload.sub },
-      update: { email: payload.email, name: payload.name ?? null, role },
-      create: { googleId: payload.sub, email: payload.email, name: payload.name ?? null, role },
-    })
+    // Find by googleId first; if this Google account has never signed in
+    // here, check whether a password account already owns this email and
+    // link Google onto it instead of trying to create a second row with the
+    // same @unique email (which would otherwise throw once password
+    // accounts exist).
+    let user = await prisma.user.findUnique({ where: { googleId: payload.sub }, omit: SAFE_USER_OMIT })
+    if (!user) {
+      const byEmail = await prisma.user.findUnique({ where: { email: payload.email }, omit: SAFE_USER_OMIT })
+      if (byEmail) {
+        user = await prisma.user.update({
+          where: { id: byEmail.id },
+          data: { googleId: payload.sub, name: byEmail.name ?? payload.name ?? null, role },
+          omit: SAFE_USER_OMIT,
+        })
+      } else {
+        user = await prisma.user.create({
+          data: {
+            googleId: payload.sub,
+            email: payload.email,
+            name: payload.name ?? null,
+            role,
+            termsAcceptedAt: new Date(),
+          },
+          omit: SAFE_USER_OMIT,
+        })
+      }
+    } else {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { email: payload.email, name: payload.name ?? null, role },
+        omit: SAFE_USER_OMIT,
+      })
+    }
 
     const token = signSession({ userId: user.id, role: user.role })
     res.cookie(SESSION_COOKIE, token, COOKIE_OPTIONS)
@@ -62,8 +96,85 @@ authRouter.post('/google', async (req, res) => {
   }
 })
 
+authRouter.post('/signup', async (req, res) => {
+  const { email, password, name, termsAccepted } = req.body ?? {}
+
+  if (typeof email !== 'string' || !EMAIL_PATTERN.test(email)) {
+    res.status(400).json({ error: 'Please enter a valid email address.' })
+    return
+  }
+  if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) {
+    res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` })
+    return
+  }
+  if (typeof name !== 'string' || !name.trim()) {
+    res.status(400).json({ error: 'Name is required.' })
+    return
+  }
+  if (termsAccepted !== true) {
+    res.status(400).json({ error: 'You must accept the terms to create an account.' })
+    return
+  }
+
+  const ip = req.ip ?? 'unknown'
+  if (!checkLoginRateLimit(`signup:${ip}`)) {
+    res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' })
+    return
+  }
+
+  const normalizedEmail = email.toLowerCase()
+  const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } })
+  if (existing) {
+    res.status(409).json({
+      error: existing.passwordHash
+        ? 'An account with this email already exists. Log in instead.'
+        : 'This email is already registered with Google sign-in — log in with Google instead.',
+    })
+    return
+  }
+
+  const passwordHash = await bcrypt.hash(password, PASSWORD_SALT_ROUNDS)
+  const role = ADMIN_EMAILS.has(normalizedEmail) ? 'admin' : 'teacher'
+
+  const user = await prisma.user.create({
+    data: { email: normalizedEmail, passwordHash, name: name.trim(), role, termsAcceptedAt: new Date() },
+    omit: SAFE_USER_OMIT,
+  })
+
+  const token = signSession({ userId: user.id, role: user.role })
+  res.cookie(SESSION_COOKIE, token, COOKIE_OPTIONS)
+  res.status(201).json(user)
+})
+
+authRouter.post('/login', async (req, res) => {
+  const { email, password } = req.body ?? {}
+  if (typeof email !== 'string' || typeof password !== 'string') {
+    res.status(400).json({ error: 'email and password are required' })
+    return
+  }
+
+  const ip = req.ip ?? 'unknown'
+  if (!checkLoginRateLimit(`login:${ip}:${email.toLowerCase()}`)) {
+    res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' })
+    return
+  }
+
+  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })
+  // Same generic message whether the account doesn't exist, has no password
+  // (Google-only), or the password is wrong — never leak which case fired.
+  if (!user || !user.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) {
+    res.status(401).json({ error: GENERIC_LOGIN_ERROR })
+    return
+  }
+
+  const token = signSession({ userId: user.id, role: user.role })
+  res.cookie(SESSION_COOKIE, token, COOKIE_OPTIONS)
+  const { passwordHash: _passwordHash, ...safeUser } = user
+  res.json(safeUser)
+})
+
 authRouter.get('/me', requireAuth, async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.user!.userId } })
+  const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, omit: SAFE_USER_OMIT })
   if (!user) {
     res.status(401).json({ error: 'Not signed in' })
     return
