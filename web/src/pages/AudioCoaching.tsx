@@ -22,6 +22,7 @@ import {
   type AudioReflectMessage,
   type AudioSession,
   type AudioSessionWithSegments,
+  type AudioTopicTerm,
   type FocusMetric,
   type ReflectChatErrorKind,
   type SpeakerSample,
@@ -1520,6 +1521,7 @@ function ReportPanel({
 
       {tab === 'lesson' && (
         <LessonContentTab
+          session={session}
           lessonContent={lessonContent}
           contentNotes={session.contentNotes}
           isShort={coverage.isShort}
@@ -2129,7 +2131,34 @@ const CONTENT_NOTE_LABEL_STYLES: Record<string, string> = {
   'Worth double-checking': 'bg-warm-100 text-warm-500',
 }
 
+function WordCloud({ words, colorClassName }: { words: AudioTopicTerm[]; colorClassName: string }) {
+  if (words.length === 0) return null
+  const counts = words.map((w) => w.count)
+  const max = Math.max(...counts)
+  const min = Math.min(...counts)
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
+      {words.map((w) => {
+        const ratio = max === min ? 1 : (w.count - min) / (max - min)
+        const fontSize = 0.75 + ratio * 1.1
+        const opacity = 0.55 + ratio * 0.45
+        return (
+          <span
+            key={w.term}
+            title={`${w.count} mentions`}
+            className={`font-semibold leading-none ${colorClassName}`}
+            style={{ fontSize: `${fontSize}rem`, opacity }}
+          >
+            {w.term}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
 function LessonContentTab({
+  session,
   lessonContent,
   contentNotes,
   isShort,
@@ -2137,6 +2166,7 @@ function LessonContentTab({
   error,
   onGenerate,
 }: {
+  session: AudioSession
   lessonContent: AudioLessonContent | null
   contentNotes: AudioContentNotes | null
   isShort: boolean
@@ -2147,6 +2177,10 @@ function LessonContentTab({
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const subject = lessonContent?.subject ?? null
   const visibleNotes = contentNotes?.notes.filter((n) => !dismissed.has(n.id)) ?? []
+  // Matches the spec's two named conditions exactly (0% or not measured) —
+  // deliberately narrower than judgeTalkBalance's broader "thin" bucket,
+  // since a small-but-real amount of student talk still earns its own cloud.
+  const showStudentCloud = session.studentTalkPct != null && session.studentTalkPct !== 0
 
   return (
     <div className="flex flex-col gap-3">
@@ -2154,16 +2188,52 @@ function LessonContentTab({
       <div className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Topic terms detected</p>
-          {lessonContent && lessonContent.topicTerms.length > 0 ? (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {lessonContent.topicTerms.map((term) => (
-                <span key={term} className="rounded-full border border-border bg-canvas px-3 py-1 text-xs text-ink">
-                  {term}
-                </span>
-              ))}
-            </div>
-          ) : (
+          {!lessonContent ? (
             <p className="mt-1 text-sm text-ink-soft">No recurring subject-specific terms detected.</p>
+          ) : Array.isArray(lessonContent.topicTerms) ? (
+            lessonContent.topicTerms.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {lessonContent.topicTerms.map((term) => (
+                  <span key={term} className="rounded-full border border-border bg-canvas px-3 py-1 text-xs text-ink">
+                    {term}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1 text-sm text-ink-soft">No recurring subject-specific terms detected.</p>
+            )
+          ) : (
+            <>
+              <div className={`mt-2 ${showStudentCloud ? 'grid grid-cols-1 gap-6 sm:grid-cols-2' : ''}`}>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-600">Teacher</p>
+                  {lessonContent.topicTerms.teacher.length > 0 ? (
+                    <div className="mt-1.5">
+                      <WordCloud words={lessonContent.topicTerms.teacher} colorClassName="text-brand-600" />
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-sm text-ink-soft">No recurring terms detected.</p>
+                  )}
+                </div>
+                {showStudentCloud && (
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-warm-500">Student</p>
+                    {lessonContent.topicTerms.student.length > 0 ? (
+                      <div className="mt-1.5">
+                        <WordCloud words={lessonContent.topicTerms.student} colorClassName="text-warm-500" />
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-sm text-ink-soft">No recurring terms detected.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+              {!showStudentCloud && (
+                <p className="mt-2 text-xs text-ink-soft">
+                  Student language couldn't be analyzed this session (little or no separately-detected student talk).
+                </p>
+              )}
+            </>
           )}
         </div>
 

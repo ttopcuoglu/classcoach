@@ -110,10 +110,13 @@ export const CORRECTIVE_PHRASES = [
 const MIN_PHASE_DURATION_SEC = 30
 const MAX_CONNECTION_QUOTES = 3
 const MAX_VOCABULARY_QUOTES = 5
-const MAX_TOPIC_TERMS = 6
+// A cloud reads better fuller than the old flat chip list's cap did.
+const MAX_TOPIC_TERMS_PER_SPEAKER = 20
+
+export type TopicTerm = { term: string; count: number }
 
 export type LessonContentResult = {
-  topicTerms: string[]
+  topicTerms: { teacher: TopicTerm[]; student: TopicTerm[] }
   statedObjective: { found: boolean | null; quote: string | null; timestampSec: number | null }
   connections: { quote: string; timestampSec: number }[]
   vocabulary: { quote: string; timestampSec: number }[]
@@ -145,9 +148,14 @@ const TOPIC_TERM_STOPWORDS = new Set([
   'these', 'those', 'very', 'will', 'yeah', 'gonna', 'kind', 'sure', 'here',
 ])
 
-function extractTopicTerms(segments: Segment[]): string[] {
+function extractTopicTerms(
+  segments: Segment[],
+  speakerLabel: 'Teacher' | 'Student',
+  max = MAX_TOPIC_TERMS_PER_SPEAKER,
+): TopicTerm[] {
   const counts = new Map<string, { count: number; display: string }>()
   for (const segment of segments) {
+    if (segment.speakerLabel !== speakerLabel) continue
     const words = segment.text.match(/[A-Za-z][A-Za-z'-]{3,}/g) ?? []
     for (const raw of words) {
       const lower = raw.toLowerCase()
@@ -160,8 +168,8 @@ function extractTopicTerms(segments: Segment[]): string[] {
   return Array.from(counts.values())
     .filter((v) => v.count >= 2)
     .sort((a, b) => b.count - a.count)
-    .slice(0, MAX_TOPIC_TERMS)
-    .map((v) => v.display)
+    .slice(0, max)
+    .map((v) => ({ term: v.display, count: v.count }))
 }
 
 function detectStatedObjective(segments: Segment[], phases: Phase[]): LessonContentResult['statedObjective'] {
@@ -269,7 +277,10 @@ export function buildContentExhibits(segments: Segment[]): { text: string; times
 export function detectLessonContent(segments: Segment[], phases: Phase[]): LessonContentResult {
   const ordered = [...segments].sort((a, b) => a.startSec - b.startSec)
   return {
-    topicTerms: extractTopicTerms(ordered),
+    topicTerms: {
+      teacher: extractTopicTerms(ordered, 'Teacher'),
+      student: extractTopicTerms(ordered, 'Student'),
+    },
     statedObjective: detectStatedObjective(ordered, phases),
     connections: detectPhraseQuotes(ordered, CONNECTION_PHRASES, MAX_CONNECTION_QUOTES),
     vocabulary: detectPhraseQuotes(ordered, VOCABULARY_PHRASES, MAX_VOCABULARY_QUOTES, VOCABULARY_PATTERN),

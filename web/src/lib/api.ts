@@ -273,8 +273,11 @@ export type AudioQuestionLogEntry = {
 export type AudioReflectMessage = { role: 'user' | 'assistant'; text: string; createdAt: string }
 
 // Keyword/phrase-matched flags and quotes only — never scored.
+export type AudioTopicTerm = { term: string; count: number }
 export type AudioLessonContent = {
-  topicTerms: string[]
+  // string[] is the shape stored by sessions analyzed before speaker-split
+  // word clouds shipped — rendered as the old flat chip list, never crashes.
+  topicTerms: string[] | { teacher: AudioTopicTerm[]; student: AudioTopicTerm[] }
   statedObjective: { found: boolean | null; quote: string | null; timestampSec: number | null }
   connections: AudioQuote[]
   vocabulary: AudioQuote[]

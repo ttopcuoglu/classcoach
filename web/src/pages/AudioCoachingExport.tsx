@@ -168,9 +168,26 @@ export default function AudioCoachingExport() {
                 <div className="mt-2 flex flex-col gap-2 text-sm text-ink">
                   <p>
                     <span className="text-xs font-semibold text-ink-soft">Topic terms: </span>
-                    {session.lessonContent.topicTerms.length > 0
-                      ? session.lessonContent.topicTerms.join(', ')
-                      : 'None detected.'}
+                    {Array.isArray(session.lessonContent.topicTerms) ? (
+                      session.lessonContent.topicTerms.length > 0 ? (
+                        session.lessonContent.topicTerms.join(', ')
+                      ) : (
+                        'None detected.'
+                      )
+                    ) : (
+                      <>
+                        Teacher:{' '}
+                        {session.lessonContent.topicTerms.teacher.length > 0
+                          ? session.lessonContent.topicTerms.teacher.map((t) => t.term).join(', ')
+                          : 'None detected.'}
+                        {session.lessonContent.topicTerms.student.length > 0 && (
+                          <>
+                            {' '}
+                            · Student: {session.lessonContent.topicTerms.student.map((t) => t.term).join(', ')}
+                          </>
+                        )}
+                      </>
+                    )}
                   </p>
                   <p>
                     <span className="text-xs font-semibold text-ink-soft">Stated objective: </span>
