@@ -97,7 +97,7 @@ authRouter.post('/google', async (req, res) => {
 })
 
 authRouter.post('/signup', async (req, res) => {
-  const { email, password, name, termsAccepted } = req.body ?? {}
+  const { email, password, name, termsAccepted, ageConfirmed } = req.body ?? {}
 
   if (typeof email !== 'string' || !EMAIL_PATTERN.test(email)) {
     res.status(400).json({ error: 'Please enter a valid email address.' })
@@ -113,6 +113,10 @@ authRouter.post('/signup', async (req, res) => {
   }
   if (termsAccepted !== true) {
     res.status(400).json({ error: 'You must accept the terms to create an account.' })
+    return
+  }
+  if (ageConfirmed !== true) {
+    res.status(400).json({ error: 'You must confirm you are at least 13 years old to create an account.' })
     return
   }
 
@@ -137,7 +141,14 @@ authRouter.post('/signup', async (req, res) => {
   const role = ADMIN_EMAILS.has(normalizedEmail) ? 'admin' : 'teacher'
 
   const user = await prisma.user.create({
-    data: { email: normalizedEmail, passwordHash, name: name.trim(), role, termsAcceptedAt: new Date() },
+    data: {
+      email: normalizedEmail,
+      passwordHash,
+      name: name.trim(),
+      role,
+      termsAcceptedAt: new Date(),
+      ageConfirmedAt: new Date(),
+    },
     omit: SAFE_USER_OMIT,
   })
 

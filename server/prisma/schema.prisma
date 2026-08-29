@@ -30,6 +30,7 @@ model User {
   onboardingProgress    String? // comma-separated completed First-30-Days step ids
   onboardingCompletedAt DateTime? // server-set only, when the onboarding wizard finishes or is skipped
   termsAcceptedAt       DateTime?
+  ageConfirmedAt        DateTime? // teacher self-attested they're 13+ at signup — no verification, matches termsAcceptedAt's pattern
   audioRetentionDays    Int? // null = keep audio-coaching transcripts/reports indefinitely
   focusMetric           String? // the teacher's chosen My Growth focus — see FocusMetric in web/src/lib/focusMetrics.ts, null = none set
   createdAt             DateTime  @default(now())

@@ -64,6 +64,7 @@ export type UserProfile = {
   onboardingProgress: string | null
   onboardingCompletedAt: string | null
   termsAcceptedAt: string | null
+  ageConfirmedAt: string | null
   audioRetentionDays: number | null
   focusMetric: FocusMetric | null
   createdAt: string
@@ -379,7 +380,13 @@ export function signInWithGoogle(credential: string): Promise<UserProfile> {
   return request('/api/auth/google', { method: 'POST', body: JSON.stringify({ credential }) })
 }
 
-export function signUp(data: { email: string; password: string; name: string; termsAccepted: boolean }): Promise<UserProfile> {
+export function signUp(data: {
+  email: string
+  password: string
+  name: string
+  termsAccepted: boolean
+  ageConfirmed: boolean
+}): Promise<UserProfile> {
   return request('/api/auth/signup', { method: 'POST', body: JSON.stringify(data) })
 }
 
