@@ -6,11 +6,13 @@ import { logIn, signInWithGoogle, signUp } from '../lib/api'
 type AuthMode = 'signup' | 'login'
 
 const inputClass =
-  'rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-60'
+  'rounded-xl border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60'
 
 function pillClass(active: boolean) {
-  return `flex-1 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-    active ? 'border-brand-500 bg-brand-50 text-brand-600' : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+  return `flex-1 rounded-full border px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+    active
+      ? 'border-mint-tint bg-mint-tint text-forest'
+      : 'border-hairline bg-cream-card text-ink-soft hover:border-forest/30 hover:text-forest'
   }`
 }
 
@@ -55,7 +57,7 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
   }
 
   return (
-    <div id="get-started" className="w-full max-w-sm rounded-2xl bg-canvas p-5 shadow-sm">
+    <div className="w-full max-w-sm rounded-2xl border border-hairline bg-cream-card p-6 shadow-lg">
       <div className="flex gap-2">
         <button type="button" onClick={() => setMode('signup')} className={pillClass(mode === 'signup')}>
           Sign up
@@ -76,9 +78,9 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
       </div>
 
       <div className="my-4 flex items-center gap-3 text-xs text-ink-soft">
-        <span className="h-px flex-1 bg-border" />
+        <span className="h-px flex-1 bg-hairline" />
         or {mode === 'signup' ? 'sign up' : 'log in'} with email
-        <span className="h-px flex-1 bg-border" />
+        <span className="h-px flex-1 bg-hairline" />
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
@@ -118,18 +120,18 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
             />
             <span>
               I agree to Wivoza's{' '}
-              <Link to="/terms" className="underline hover:text-brand-600">
+              <Link to="/terms" className="underline hover:text-forest">
                 terms and conditions
               </Link>{' '}
               and I am 13 years of age or older.
             </span>
           </label>
         )}
-        {error && <p className="text-sm text-warm-500">{error}</p>}
+        {error && <p className="text-sm text-terracotta-600">{error}</p>}
         <button
           type="submit"
           disabled={submitting || (mode === 'signup' && !agreed)}
-          className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+          className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {submitting ? 'Please wait...' : mode === 'signup' ? 'Create account' : 'Log in'}
         </button>

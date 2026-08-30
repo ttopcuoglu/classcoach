@@ -23,6 +23,24 @@
   /* Chalkboard-dark ground, used only for the landing page's hero/footer. */
   --color-night: #16231f;
   --color-night-soft: #cfd8d2;
+
+  /* New visual system (2026 redesign) — additive, alongside the tokens
+     above, while the rewrite rolls out screen by screen. Once every screen
+     has migrated, the tokens above this comment can be retired. */
+  --font-heading: "Baloo 2", "Inter", system-ui, sans-serif;
+
+  --color-forest: #1b2e28;
+  --color-forest-soft: #2a4239;
+  --color-cream: #f7f3ea;
+  --color-cream-card: #ffffff;
+  --color-terracotta: #c96a45;
+  --color-terracotta-600: #b35a38;
+  --color-gold: #e4b84a;
+  --color-mint-tint: #dce7df;
+  --color-peach-tint: #f5dbc8;
+  --color-gold-tint: #f5e7c4;
+  --color-lavender-tint: #e5e0ef;
+  --color-hairline: #e7e0d3;
 }
 
 html,

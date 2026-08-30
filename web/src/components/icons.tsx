@@ -134,3 +134,126 @@ export function WaveformIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+// --- New visual system (2026 redesign) icons ---
+
+export function SparkleIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 3.5c.6 3 2 4.4 5 5-3 .6-4.4 2-5 5-.6-3-2-4.4-5-5 3-.6 4.4-2 5-5Z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 15c.3 1.4.9 2 2.3 2.3-1.4.3-2 .9-2.3 2.3-.3-1.4-.9-2-2.3-2.3 1.4-.3 2-.9 2.3-2.3Z" />
+    </svg>
+  )
+}
+
+export function HeadsetIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 13v-1a7.5 7.5 0 0 1 15 0v1" />
+      <rect x="3" y="13" width="4" height="6" rx="1.5" />
+      <rect x="17" y="13" width="4" height="6" rx="1.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 19v1a2 2 0 0 1-2 2h-3.5" />
+    </svg>
+  )
+}
+
+export function BrainIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9.5 4.5a2.5 2.5 0 0 0-2.5 2.5v.3A2.7 2.7 0 0 0 5 9.9v1.2a2.7 2.7 0 0 0 1 2.1v1.3A2.5 2.5 0 0 0 8.5 17H9.5V4.5Z"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M14.5 4.5a2.5 2.5 0 0 1 2.5 2.5v.3a2.7 2.7 0 0 1 2 2.6v1.2a2.7 2.7 0 0 1-1 2.1v1.3a2.5 2.5 0 0 1-2.5 2.5H14.5V4.5Z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 4.5h5M9.5 17h5" />
+    </svg>
+  )
+}
+
+export function TargetIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="4.5" />
+      <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+export function ChartBarIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 19V10M12 19V5M19 19v-6" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 19h17" />
+    </svg>
+  )
+}
+
+export function BookIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11a1.5 1.5 0 0 1 1.5 1.5V20A1.5 1.5 0 0 0 11 18.5H4V5.5Z"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13a1.5 1.5 0 0 0-1.5 1.5V20a1.5 1.5 0 0 1 1.5-1.5h7V5.5Z"
+      />
+    </svg>
+  )
+}
+
+export function ArrowRightIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 12h16M14 6l6 6-6 6" />
+    </svg>
+  )
+}
+
+export function CheckIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.5l5 5L19.5 7" />
+    </svg>
+  )
+}
+
+export function LockIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <rect x="5.5" y="11" width="13" height="9" rx="2" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7.5a4 4 0 0 1 8 0V11" />
+    </svg>
+  )
+}
+
+export function PlayIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 8.5l6 3.5-6 3.5v-7Z" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+export function QuoteIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M9.5 6C6 6.8 3.8 9.6 3.8 13.2c0 2.6 1.7 4.3 3.8 4.3 1.9 0 3.3-1.4 3.3-3.2 0-1.7-1.2-3-2.8-3-.3 0-.6 0-.8.1.3-2 1.9-3.6 3.7-4.1L9.5 6Z" />
+      <path d="M18.7 6c-3.5.8-5.7 3.6-5.7 7.2 0 2.6 1.7 4.3 3.8 4.3 1.9 0 3.3-1.4 3.3-3.2 0-1.7-1.2-3-2.8-3-.3 0-.6 0-.8.1.3-2 1.9-3.6 3.7-4.1L18.7 6Z" />
+    </svg>
+  )
+}
