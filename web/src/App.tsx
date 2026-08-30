@@ -124,7 +124,7 @@ export default function App() {
             <Route path="profile" element={<Profile />} />
             <Route path="cheat-sheet" element={<CheatSheet />} />
             <Route path="first-30-days" element={<FirstThirtyDays />} />
-            {user?.role === 'admin' && <Route path="admin" element={<AdminDashboard />} />}
+            {user != null && user.role !== 'teacher' && <Route path="admin" element={<AdminDashboard />} />}
           </Route>
         </Routes>
       </BrowserRouter>

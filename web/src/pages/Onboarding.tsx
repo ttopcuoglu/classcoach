@@ -47,6 +47,7 @@ export default function Onboarding({ onDone }: { onDone: () => Promise<unknown> 
   const [lastName, setLastName] = useState('')
   const [jobTitle, setJobTitle] = useState<JobTitle | null>(null)
   const [schoolName, setSchoolName] = useState('')
+  const [joinCode, setJoinCode] = useState('')
   const [gradeLevels, setGradeLevels] = useState('')
   const [subjects, setSubjects] = useState('')
   const [teachingGoal, setTeachingGoal] = useState('')
@@ -89,10 +90,10 @@ export default function Onboarding({ onDone }: { onDone: () => Promise<unknown> 
     setSaving(true)
     setError(null)
     try {
-      await updateProfile({ schoolName, gradeLevels, subjects })
+      await updateProfile({ schoolName, gradeLevels, subjects, ...(joinCode.trim() ? { joinCode } : {}) })
       goTo('mic-check')
-    } catch {
-      setError('Could not save. Please try again.')
+    } catch (err) {
+      setError((err as Error).message || 'Could not save. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -193,6 +194,12 @@ export default function Onboarding({ onDone }: { onDone: () => Promise<unknown> 
                 value={schoolName}
                 onChange={(e) => setSchoolName(e.target.value)}
                 placeholder="What school do you work at? (optional)"
+                className={inputClass}
+              />
+              <input
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value)}
+                placeholder="School code, if your district gave you one (optional)"
                 className={inputClass}
               />
               <input

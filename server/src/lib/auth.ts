@@ -13,6 +13,10 @@ export const SESSION_COOKIE = 'session'
 // hash must never reach the browser.
 export const SAFE_USER_OMIT = { passwordHash: true } as const
 
+// Pair with SAFE_USER_OMIT so the client can show which org (if any) a user
+// belongs to, without exposing anything beyond the org's name.
+export const USER_INCLUDE_ORG = { organization: { select: { name: true } } } as const
+
 // Minimal login/signup attempt throttle. In-memory only — resets on every
 // deploy/restart and won't coordinate across multiple instances if this app
 // ever scales horizontally. A durable version would need Redis or a DB
@@ -69,9 +73,20 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   next()
 }
 
+// Passes for either admin tier — org_admin (scoped to their own
+// organization) or superadmin (sees the whole platform) — only a plain
+// teacher is rejected.
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (req.user?.role !== 'admin') {
+  if (req.user?.role === 'teacher' || !req.user?.role) {
     res.status(403).json({ error: 'Admin access required' })
+    return
+  }
+  next()
+}
+
+export function requireSuperadmin(req: Request, res: Response, next: NextFunction) {
+  if (req.user?.role !== 'superadmin') {
+    res.status(403).json({ error: 'Superadmin access required' })
     return
   }
   next()

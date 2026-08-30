@@ -8,10 +8,15 @@ export default function Profile() {
   const [gradeLevels, setGradeLevels] = useState('')
   const [subjects, setSubjects] = useState('')
   const [audioRetentionDays, setAudioRetentionDays] = useState<string>('')
+  const [organizationName, setOrganizationName] = useState<string | null>(null)
 
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+
+  const [joinCode, setJoinCode] = useState('')
+  const [joining, setJoining] = useState(false)
+  const [joinError, setJoinError] = useState<string | null>(null)
 
   const [resetting, setResetting] = useState(false)
   const [resetError, setResetError] = useState<string | null>(null)
@@ -24,6 +29,7 @@ export default function Profile() {
         setGradeLevels(profile.gradeLevels ?? '')
         setSubjects(profile.subjects ?? '')
         setAudioRetentionDays(profile.audioRetentionDays != null ? String(profile.audioRetentionDays) : '')
+        setOrganizationName(profile.organization?.name ?? null)
       })
       .catch(() => setSaveError('Could not load your profile.'))
       .finally(() => setLoading(false))
@@ -46,6 +52,21 @@ export default function Profile() {
       setSaveError('Could not save your changes. Please try again.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleJoin(e: React.FormEvent) {
+    e.preventDefault()
+    setJoining(true)
+    setJoinError(null)
+    try {
+      const updated = await updateProfile({ joinCode })
+      setOrganizationName(updated.organization?.name ?? null)
+      setJoinCode('')
+    } catch (err) {
+      setJoinError((err as Error).message || 'Could not join. Please try again.')
+    } finally {
+      setJoining(false)
     }
   }
 
@@ -136,6 +157,38 @@ export default function Profile() {
           {saveError && <span className="text-sm text-warm-500">{saveError}</span>}
         </div>
       </form>
+
+      <div className="rounded-2xl border border-border bg-surface p-6">
+        <h2 className="text-sm font-semibold text-ink">School</h2>
+        {organizationName ? (
+          <p className="mt-2 text-sm text-ink">
+            Part of: <span className="font-semibold">{organizationName}</span>
+          </p>
+        ) : (
+          <>
+            <p className="mt-1 text-sm text-ink-soft">
+              If your school or district has a Wivoza agreement, enter its code to join.
+            </p>
+            <form onSubmit={handleJoin} className="mt-3 flex flex-wrap items-center gap-3">
+              <input
+                type="text"
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value)}
+                placeholder="School code"
+                className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={joining || !joinCode.trim()}
+                className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+              >
+                {joining ? 'Joining...' : 'Join'}
+              </button>
+            </form>
+            {joinError && <p className="mt-2 text-sm text-warm-500">{joinError}</p>}
+          </>
+        )}
+      </div>
 
       <div className="rounded-2xl border border-border bg-surface p-6">
         <h2 className="text-sm font-semibold text-ink">More</h2>

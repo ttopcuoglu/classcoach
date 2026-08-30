@@ -55,7 +55,7 @@ export type UserProfile = {
   id: string
   email: string
   name: string | null
-  role: 'teacher' | 'admin'
+  role: 'teacher' | 'org_admin' | 'superadmin'
   jobTitle: JobTitle | null
   schoolName: string | null
   teachingGoal: string | null
@@ -67,11 +67,23 @@ export type UserProfile = {
   ageConfirmedAt: string | null
   audioRetentionDays: number | null
   focusMetric: FocusMetric | null
+  organizationId: string | null
+  organization: { name: string } | null
   createdAt: string
   updatedAt: string
 }
 
+export type Organization = {
+  id: string
+  name: string
+  joinCode: string
+  adminEmails: string | null
+  teacherCount: number
+}
+
 export type AdminOverview = {
+  scope: 'platform' | 'organization'
+  organizationName: string | null
   totalTeachers: number
   activeThisWeek: number
   categoryTally: Record<string, number>
@@ -402,8 +414,27 @@ export function logout(): Promise<{ status: string }> {
   return request('/api/auth/logout', { method: 'POST' })
 }
 
-export function getAdminOverview(): Promise<AdminOverview> {
-  return request('/api/admin/overview')
+export function getAdminOverview(organizationId?: string): Promise<AdminOverview> {
+  return request(`/api/admin/overview${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`)
+}
+
+export function getOrganizations(): Promise<Organization[]> {
+  return request('/api/admin/organizations')
+}
+
+export function createOrganization(data: { name: string; joinCode?: string; adminEmails?: string }): Promise<Organization> {
+  return request('/api/admin/organizations', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function updateOrganization(
+  id: string,
+  data: { name?: string; joinCode?: string; adminEmails?: string | null },
+): Promise<Organization> {
+  return request(`/api/admin/organizations/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+}
+
+export function deleteOrganization(id: string): Promise<{ status: string }> {
+  return request(`/api/admin/organizations/${id}`, { method: 'DELETE' })
 }
 
 export function generateScenario(
@@ -454,6 +485,7 @@ export function updateProfile(data: {
   schoolName?: string
   teachingGoal?: string
   completeOnboarding?: true
+  joinCode?: string
 }): Promise<UserProfile> {
   return request('/api/profile', { method: 'PUT', body: JSON.stringify(data) })
 }

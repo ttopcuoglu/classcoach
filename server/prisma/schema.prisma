@@ -10,9 +10,11 @@ datasource db {
   provider = "postgresql"
 }
 
-// role is "teacher" (default) | "admin" — auth/authorization only, never
-// shown or settable in any UI. Users sign in with Google OAuth and/or an
-// email+password: googleId is the Google account's stable "sub" claim
+// role is "teacher" (default) | "org_admin" (scoped to their own
+// organizationId, see Organization below) | "superadmin" (sees the whole
+// platform, granted via the ADMIN_EMAILS env var) — auth/authorization only,
+// never shown or settable in any UI. Users sign in with Google OAuth and/or
+// an email+password: googleId is the Google account's stable "sub" claim
 // (null for password-only signups); passwordHash is a bcrypt hash (null
 // for Google-only accounts that never set a password).
 model User {
@@ -23,7 +25,7 @@ model User {
   name                  String?
   role                  String    @default("teacher")
   jobTitle              String? // self-described: Teacher, Instructional Coach, Assistant Principal, Principal, District Leader, Other — distinct from `role`
-  schoolName            String? // free text, no directory/verification
+  schoolName            String? // free text, no directory/verification — separate from the real organizationId relation below
   teachingGoal          String? // "I'd like my students to ___", set during onboarding
   gradeLevels           String? // comma-separated, e.g. "7th,8th"
   subjects              String? // comma-separated, e.g. "Math,Science"
@@ -33,6 +35,8 @@ model User {
   ageConfirmedAt        DateTime? // teacher self-attested they're 13+ at signup — no verification, matches termsAcceptedAt's pattern
   audioRetentionDays    Int? // null = keep audio-coaching transcripts/reports indefinitely
   focusMetric           String? // the teacher's chosen My Growth focus — see FocusMetric in web/src/lib/focusMetrics.ts, null = none set
+  organizationId        String? // null = independent teacher, not part of any district
+  organization          Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -44,6 +48,20 @@ model User {
   lessonPlans       LessonPlan[]
   conversationPreps ConversationPrep[]
   conversationPlans ConversationPlan[]
+}
+
+// A school/district that's signed an agreement. joinCode is what its
+// teachers enter (at onboarding or later from Profile) to land in this org;
+// adminEmails is a comma-separated allowlist — whoever signs up (or already
+// has an account) with one of these emails becomes this org's org_admin,
+// same mechanism as the platform-wide ADMIN_EMAILS env var, just scoped.
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  joinCode    String   @unique
+  adminEmails String?
+  createdAt   DateTime @default(now())
+  users       User[]
 }
 
 // One row per Claude-costing call, used to enforce a per-user daily limit

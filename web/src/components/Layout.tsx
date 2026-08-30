@@ -113,7 +113,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
           ))}
         </nav>
 
-        {user?.role === 'admin' && (
+        {user != null && user.role !== 'teacher' && (
           <div className="border-t border-border px-3 py-3">
             <NavLink to="/admin" className={({ isActive }) => navLinkClasses(isActive)}>
               <ChecklistIcon className="h-5 w-5 shrink-0" />

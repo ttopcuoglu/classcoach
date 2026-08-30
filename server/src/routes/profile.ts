@@ -1,11 +1,16 @@
 import { Router } from 'express'
-import { SAFE_USER_OMIT } from '../lib/auth.ts'
+import { SAFE_USER_OMIT, USER_INCLUDE_ORG } from '../lib/auth.ts'
+import { resolveJoinCode } from '../lib/organization.ts'
 import { prisma } from '../lib/prisma.ts'
 
 export const profileRouter = Router()
 
 profileRouter.get('/', async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, omit: SAFE_USER_OMIT })
+  const user = await prisma.user.findUnique({
+    where: { id: req.user!.userId },
+    omit: SAFE_USER_OMIT,
+    include: USER_INCLUDE_ORG,
+  })
   if (!user) {
     res.status(401).json({ error: 'Not signed in' })
     return
@@ -38,6 +43,7 @@ profileRouter.put('/', async (req, res) => {
     schoolName,
     teachingGoal,
     completeOnboarding,
+    joinCode,
   } = req.body ?? {}
   if (name !== undefined && typeof name !== 'string') {
     res.status(400).json({ error: 'name must be a string' })
@@ -75,6 +81,31 @@ profileRouter.put('/', async (req, res) => {
     res.status(400).json({ error: 'teachingGoal must be a string' })
     return
   }
+  if (joinCode !== undefined && (typeof joinCode !== 'string' || !joinCode.trim())) {
+    res.status(400).json({ error: 'joinCode must be a non-empty string' })
+    return
+  }
+
+  // Resolve the join code before writing anything else, so a bad code 400s
+  // the whole request cleanly rather than partially saving other fields.
+  let orgFields: { organizationId?: string; role?: string } = {}
+  if (joinCode) {
+    const currentUser = await prisma.user.findUnique({ where: { id: req.user!.userId } })
+    if (!currentUser) {
+      res.status(401).json({ error: 'Not signed in' })
+      return
+    }
+    if (currentUser.role === 'superadmin') {
+      res.status(400).json({ error: "Platform admins aren't assigned to a school." })
+      return
+    }
+    const resolution = await resolveJoinCode(currentUser.email, joinCode)
+    if ('error' in resolution) {
+      res.status(400).json({ error: resolution.error })
+      return
+    }
+    orgFields = resolution
+  }
 
   const updated = await prisma.user.update({
     where: { id: req.user!.userId },
@@ -88,10 +119,12 @@ profileRouter.put('/', async (req, res) => {
       jobTitle,
       schoolName,
       teachingGoal,
+      ...orgFields,
       // Never trust a client-supplied date — the server owns this signal.
       ...(completeOnboarding === true ? { onboardingCompletedAt: new Date() } : {}),
     },
     omit: SAFE_USER_OMIT,
+    include: USER_INCLUDE_ORG,
   })
   res.json(updated)
 })

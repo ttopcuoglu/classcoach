@@ -1,7 +1,14 @@
 import bcrypt from 'bcryptjs'
 import { OAuth2Client } from 'google-auth-library'
 import { Router } from 'express'
-import { checkLoginRateLimit, requireAuth, SAFE_USER_OMIT, SESSION_COOKIE, signSession } from '../lib/auth.ts'
+import {
+  checkLoginRateLimit,
+  requireAuth,
+  SAFE_USER_OMIT,
+  SESSION_COOKIE,
+  signSession,
+  USER_INCLUDE_ORG,
+} from '../lib/auth.ts'
 import { prisma } from '../lib/prisma.ts'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -51,21 +58,30 @@ authRouter.post('/google', async (req, res) => {
       return
     }
 
-    const role = ADMIN_EMAILS.has(payload.email.toLowerCase()) ? 'admin' : 'teacher'
+    const role = ADMIN_EMAILS.has(payload.email.toLowerCase()) ? 'superadmin' : 'teacher'
 
     // Find by googleId first; if this Google account has never signed in
     // here, check whether a password account already owns this email and
     // link Google onto it instead of trying to create a second row with the
     // same @unique email (which would otherwise throw once password
     // accounts exist).
-    let user = await prisma.user.findUnique({ where: { googleId: payload.sub }, omit: SAFE_USER_OMIT })
+    let user = await prisma.user.findUnique({
+      where: { googleId: payload.sub },
+      omit: SAFE_USER_OMIT,
+      include: USER_INCLUDE_ORG,
+    })
     if (!user) {
-      const byEmail = await prisma.user.findUnique({ where: { email: payload.email }, omit: SAFE_USER_OMIT })
+      const byEmail = await prisma.user.findUnique({
+        where: { email: payload.email },
+        omit: SAFE_USER_OMIT,
+        include: USER_INCLUDE_ORG,
+      })
       if (byEmail) {
         user = await prisma.user.update({
           where: { id: byEmail.id },
           data: { googleId: payload.sub, name: byEmail.name ?? payload.name ?? null, role },
           omit: SAFE_USER_OMIT,
+          include: USER_INCLUDE_ORG,
         })
       } else {
         user = await prisma.user.create({
@@ -77,6 +93,7 @@ authRouter.post('/google', async (req, res) => {
             termsAcceptedAt: new Date(),
           },
           omit: SAFE_USER_OMIT,
+          include: USER_INCLUDE_ORG,
         })
       }
     } else {
@@ -84,6 +101,7 @@ authRouter.post('/google', async (req, res) => {
         where: { id: user.id },
         data: { email: payload.email, name: payload.name ?? null, role },
         omit: SAFE_USER_OMIT,
+        include: USER_INCLUDE_ORG,
       })
     }
 
@@ -138,7 +156,7 @@ authRouter.post('/signup', async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(password, PASSWORD_SALT_ROUNDS)
-  const role = ADMIN_EMAILS.has(normalizedEmail) ? 'admin' : 'teacher'
+  const role = ADMIN_EMAILS.has(normalizedEmail) ? 'superadmin' : 'teacher'
 
   const user = await prisma.user.create({
     data: {
@@ -150,6 +168,7 @@ authRouter.post('/signup', async (req, res) => {
       ageConfirmedAt: new Date(),
     },
     omit: SAFE_USER_OMIT,
+    include: USER_INCLUDE_ORG,
   })
 
   const token = signSession({ userId: user.id, role: user.role })
@@ -170,7 +189,7 @@ authRouter.post('/login', async (req, res) => {
     return
   }
 
-  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })
+  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() }, include: USER_INCLUDE_ORG })
   // Same generic message whether the account doesn't exist, has no password
   // (Google-only), or the password is wrong — never leak which case fired.
   if (!user || !user.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) {
@@ -185,7 +204,11 @@ authRouter.post('/login', async (req, res) => {
 })
 
 authRouter.get('/me', requireAuth, async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, omit: SAFE_USER_OMIT })
+  const user = await prisma.user.findUnique({
+    where: { id: req.user!.userId },
+    omit: SAFE_USER_OMIT,
+    include: USER_INCLUDE_ORG,
+  })
   if (!user) {
     res.status(401).json({ error: 'Not signed in' })
     return
