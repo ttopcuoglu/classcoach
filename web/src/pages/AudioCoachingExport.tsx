@@ -66,7 +66,7 @@ export default function AudioCoachingExport() {
           <p className="mt-8 text-sm text-ink-soft">Session not found.</p>
         ) : (
           <>
-            <h1 className="text-2xl font-semibold text-ink">Wivoza — Audio Coaching Report</h1>
+            <h1 className="text-2xl font-semibold text-ink">Wivoza — Lesson Debrief Report</h1>
             <p className="mt-1 text-sm text-ink-soft">
               {session.teacherName ? `${session.teacherName} · ` : ''}
               {session.classSubject || 'New Recording'}

@@ -124,7 +124,7 @@ export default function PracticeConversation() {
   return (
     <div className="flex flex-col gap-6">
       <Link to="/communications" className="text-sm font-medium text-ink-soft hover:text-ink">
-        ← Communications
+        ← Messages
       </Link>
 
       <div className="rounded-2xl border border-border bg-surface p-6">

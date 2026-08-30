@@ -13,7 +13,7 @@ export default function CoachChat() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Coach Chat</h1>
+        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Ask & Practice</h1>
         <p className="text-ink-soft">Ask a question or describe what happened, or practice a scenario.</p>
       </div>
 

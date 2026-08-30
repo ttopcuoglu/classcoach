@@ -162,7 +162,7 @@ export default function Profile() {
         </p>
 
         <label className="mt-4 flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-ink">Audio Coaching retention</span>
+          <span className="text-sm font-medium text-ink">Lesson Debrief retention</span>
           <select
             value={audioRetentionDays}
             onChange={(e) => {
@@ -177,7 +177,7 @@ export default function Profile() {
             <option value="90">Delete after 90 days</option>
           </select>
           <span className="text-xs text-ink-soft">
-            Applies to new Audio Coaching transcripts and reports. Use "Save changes" above to apply this.
+            Applies to new Lesson Debrief transcripts and reports. Use "Save changes" above to apply this.
           </span>
         </label>
 

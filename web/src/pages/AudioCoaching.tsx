@@ -147,7 +147,7 @@ export default function AudioCoaching() {
     <div className="flex flex-col gap-6">
       {!active && (
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold text-ink md:text-3xl">Audio Coaching</h1>
+          <h1 className="text-2xl font-semibold text-ink md:text-3xl">Lesson Debrief</h1>
           <p className="text-ink-soft">
             Record a class period, get a transcript, and see a coaching report. Audio is never saved — only
             the text.

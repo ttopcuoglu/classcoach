@@ -53,7 +53,7 @@ export default function Communications() {
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Communications</h1>
+        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Messages</h1>
         <p className="text-ink-soft">Write, prepare, practice, or review — pick what you need right now.</p>
       </div>
 

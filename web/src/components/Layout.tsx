@@ -10,41 +10,32 @@ import {
   LessonPlanIcon,
   MailIcon,
   MicIcon,
-  ScenarioIcon,
   StarIcon,
   UserIcon,
   WaveformIcon,
 } from './icons'
 
 type IconComponent = (props: { className?: string }) => React.ReactElement
-type NavItem = { to: string; label: string; icon: IconComponent }
+type NavItem = { to: string; label: string; icon: IconComponent; subtitle?: string }
 type NavGroup = { label: string; icon: IconComponent; items: NavItem[] }
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    label: 'Talk',
-    icon: WaveformIcon,
-    items: [{ to: '/talk-to-me', label: 'Talk to Me', icon: WaveformIcon }],
-  },
-  {
-    label: 'Coach',
+    label: 'Coaching',
     icon: MicIcon,
-    items: [{ to: '/audio-coaching', label: 'Audio Coaching', icon: MicIcon }],
+    items: [
+      { to: '/talk-to-me', label: 'Talk It Through', icon: WaveformIcon, subtitle: 'live voice check-in' },
+      { to: '/audio-coaching', label: 'Lesson Debrief', icon: MicIcon, subtitle: 'recorded-lesson report' },
+      { to: '/coach-chat', label: 'Ask & Practice', icon: ChatBubbleIcon, subtitle: 'chat with your coach' },
+    ],
   },
   {
     label: 'Plan',
     icon: LessonPlanIcon,
-    items: [{ to: '/lesson-planning', label: 'Lesson Planning', icon: LessonPlanIcon }],
-  },
-  {
-    label: 'Connect',
-    icon: MailIcon,
-    items: [{ to: '/communications', label: 'Communications', icon: MailIcon }],
-  },
-  {
-    label: 'Manage',
-    icon: ScenarioIcon,
-    items: [{ to: '/coach-chat', label: 'Coach Chat', icon: ChatBubbleIcon }],
+    items: [
+      { to: '/lesson-planning', label: 'Lesson Planning', icon: LessonPlanIcon },
+      { to: '/communications', label: 'Messages', icon: MailIcon },
+    ],
   },
   {
     label: 'Grow',
@@ -108,23 +99,29 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
                 {group.label}
               </p>
               <div className="mt-1.5 flex flex-col gap-1">
-                {group.items.map(({ to, label, icon: Icon }) => (
+                {group.items.map(({ to, label, icon: Icon, subtitle }) => (
                   <NavLink key={to} to={to} className={({ isActive }) => navLinkClasses(isActive)}>
-                    <Icon className="h-5 w-5" />
-                    {label}
+                    <Icon className="h-5 w-5 shrink-0" />
+                    <span className="flex flex-col leading-tight">
+                      <span>{label}</span>
+                      {subtitle && <span className="text-xs font-normal text-ink-soft">{subtitle}</span>}
+                    </span>
                   </NavLink>
                 ))}
               </div>
             </div>
           ))}
+        </nav>
 
-          {user?.role === 'admin' && (
+        {user?.role === 'admin' && (
+          <div className="border-t border-border px-3 py-3">
             <NavLink to="/admin" className={({ isActive }) => navLinkClasses(isActive)}>
-              <ChecklistIcon className="h-5 w-5" />
+              <ChecklistIcon className="h-5 w-5 shrink-0" />
               Admin
             </NavLink>
-          )}
-        </nav>
+          </div>
+        )}
+
         <div className="border-t border-border px-6 py-4">
           {user?.email && <p className="truncate text-xs text-ink-soft">{user.email}</p>}
           <button
@@ -152,10 +149,10 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
           </div>
         </main>
 
-        {/* Mobile bottom nav — Home plus one button per category. Categories
-            with a single tool link straight to it; categories with several
-            (Manage, Grow) pop a small menu open above the button instead of
-            picking one page for the user. */}
+        {/* Mobile bottom nav — Home plus one button per category. A category
+            with a single tool links straight to it; one with several
+            (Coaching, Plan, Grow) pops a small menu open above the button
+            instead of picking one page for the user. */}
         <nav className="fixed inset-x-0 bottom-0 z-10 flex items-center justify-around border-t border-border bg-surface py-2 md:hidden">
           <NavLink to="/" end className={({ isActive }) => mobileNavClasses(isActive)}>
             <HomeIcon className="h-5 w-5" />
@@ -187,14 +184,17 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
                 </button>
                 {open && (
                   <div className="absolute bottom-full right-1/2 mb-2 w-44 translate-x-1/2 rounded-xl border border-border bg-surface p-1.5 shadow-lg">
-                    {group.items.map(({ to, label, icon: SubIcon }) => (
+                    {group.items.map(({ to, label, icon: SubIcon, subtitle }) => (
                       <Link
                         key={to}
                         to={to}
                         className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-ink hover:bg-canvas"
                       >
-                        <SubIcon className="h-4 w-4" />
-                        {label}
+                        <SubIcon className="h-4 w-4 shrink-0" />
+                        <span className="flex flex-col leading-tight">
+                          <span>{label}</span>
+                          {subtitle && <span className="text-[11px] font-normal text-ink-soft">{subtitle}</span>}
+                        </span>
                       </Link>
                     ))}
                   </div>
