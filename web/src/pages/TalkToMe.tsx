@@ -10,6 +10,40 @@ const AUTO_START_ON_OPEN = true
 
 type Phase = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
 
+// What the orb actually shows. Distinct from Phase: the STT wait (the
+// `transcribing` window, which happens while `phase` is still 'listening')
+// and the Claude-reply wait (`phase === 'thinking'`) both read as one
+// continuous "Coach is thinking" moment from the teacher's side — she
+// doesn't know or care that the first part is transcription and the
+// second is the model call. Deriving one VisualState up front (see
+// `visualState` below) means the orb, the dot, and the caption can never
+// disagree about which state is showing, unlike before, when the icon and
+// the caption text were computed by separate, inconsistent conditions.
+type VisualState = 'idle' | 'error' | 'listening' | 'thinking' | 'speaking'
+
+const STATE_STYLES: Record<VisualState, { glow: string; orb: string; pill: string; dot: string }> = {
+  listening: { glow: 'bg-mint-tint', orb: 'border-mint-tint bg-mint-tint/80', pill: 'bg-mint-tint text-forest', dot: 'bg-forest' },
+  thinking: { glow: 'bg-gold-tint', orb: 'border-gold-tint bg-gold-tint/80', pill: 'bg-gold-tint text-terracotta-600', dot: 'bg-terracotta-600' },
+  speaking: { glow: 'bg-peach-tint', orb: 'border-peach-tint bg-peach-tint/80', pill: 'bg-peach-tint text-terracotta', dot: 'bg-terracotta' },
+  idle: { glow: 'bg-cream-card', orb: 'border-hairline bg-cream-card', pill: 'border border-hairline bg-cream-card text-ink-soft', dot: 'bg-ink-soft' },
+  error: { glow: 'bg-warm-100', orb: 'border-warm-100 bg-warm-100', pill: 'bg-warm-100 text-warm-500', dot: 'bg-warm-500' },
+}
+
+function statusLabel(state: VisualState, level: number): string {
+  switch (state) {
+    case 'listening':
+      return level > 8 ? 'Listening…' : "I'm listening — go ahead"
+    case 'thinking':
+      return 'Coach is thinking…'
+    case 'speaking':
+      return 'Coach is speaking'
+    case 'idle':
+      return 'Paused'
+    case 'error':
+      return 'Something went wrong'
+  }
+}
+
 function splitIntoSentences(text: string): string[] {
   return text
     .split(/(?<=[.!?])\s+/)
@@ -58,6 +92,9 @@ export default function TalkToMe() {
   const startedRef = useRef(false)
 
   const { supported, level, fatalError, transcribing, start, close } = useVoiceTurn(handleTurnComplete)
+
+  const visualState: VisualState =
+    phase === 'error' ? 'error' : phase === 'idle' ? 'idle' : transcribing || phase === 'thinking' ? 'thinking' : phase === 'speaking' ? 'speaking' : 'listening'
 
   useEffect(() => {
     if (AUTO_START_ON_OPEN && supported && !startedRef.current) {
@@ -172,15 +209,15 @@ export default function TalkToMe() {
   const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
 
   return (
-    <div className="flex min-h-screen flex-col bg-canvas text-ink">
+    <div className="flex min-h-screen flex-col bg-cream text-ink">
       {/* crossOrigin is required for the session cookie to ride along with
           this cross-subdomain GET (frontend/backend are on different
           origins) — without it, /api/tts's requireAuth would reject the
           audio element's own request. */}
       <audio ref={audioRef} crossOrigin="use-credentials" className="hidden" />
 
-      <header className="flex items-center justify-between border-b border-border bg-surface px-4 py-3">
-        <p className="text-base font-semibold text-ink">Talk to Coach</p>
+      <header className="flex items-center justify-between border-b border-hairline bg-cream-card px-4 py-3">
+        <p className="font-heading text-base font-bold text-forest">Talk to Coach</p>
         <button type="button" onClick={handleClose} className="text-sm font-medium text-ink-soft hover:text-ink">
           Close
         </button>
@@ -196,73 +233,68 @@ export default function TalkToMe() {
           </div>
         ) : (
           <>
-            <div className="flex flex-col items-center gap-3">
-              <div
-                className={`flex h-24 w-24 items-center justify-center rounded-full transition-colors ${
-                  phase === 'listening'
-                    ? 'bg-brand-100'
-                    : phase === 'thinking'
-                      ? 'bg-canvas'
-                      : phase === 'speaking'
-                        ? 'bg-brand-50'
-                        : 'bg-canvas'
-                }`}
-              >
-                {phase === 'listening' && (
-                  <span className="relative flex h-16 w-16 items-center justify-center">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-400 opacity-40" />
-                    <MicIcon className="relative h-9 w-9 text-brand-600" />
-                  </span>
+            <div className="flex flex-col items-center gap-4">
+              <div className="relative flex h-36 w-36 items-center justify-center">
+                <span
+                  aria-hidden="true"
+                  className={`absolute inset-3 rounded-full blur-2xl transition-colors duration-500 ${STATE_STYLES[visualState].glow}`}
+                />
+                {visualState === 'listening' && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute h-28 w-28 rounded-full border-2 border-forest/30 transition-transform duration-150 ease-out"
+                    style={{ transform: `scale(${1 + Math.min(level, 100) / 130})` }}
+                  />
                 )}
-                {phase === 'thinking' && (
-                  <span className="flex flex-col items-center gap-2.5">
-                    <BrainIcon className="h-9 w-9 animate-pulse text-ink-soft" />
-                    <span className="flex items-center gap-1" aria-hidden="true">
-                      {[0, 150, 300].map((delay) => (
+                <div
+                  className={`relative flex h-28 w-28 items-center justify-center rounded-full border shadow-sm transition-colors duration-500 ${STATE_STYLES[visualState].orb}`}
+                >
+                  {visualState === 'listening' && <MicIcon className="h-10 w-10 text-forest" />}
+                  {visualState === 'thinking' && (
+                    <span className="flex flex-col items-center gap-2.5">
+                      <BrainIcon className="h-9 w-9 animate-pulse text-terracotta-600" />
+                      <span className="flex items-center gap-1" aria-hidden="true">
+                        {[0, 150, 300].map((delay) => (
+                          <span
+                            key={delay}
+                            className="h-1.5 w-1.5 animate-bounce rounded-full bg-terracotta-600/70"
+                            style={{ animationDelay: `${delay}ms` }}
+                          />
+                        ))}
+                      </span>
+                    </span>
+                  )}
+                  {visualState === 'speaking' && (
+                    <span className="flex h-9 items-end gap-1" aria-hidden="true">
+                      {[10, 22, 14, 28, 16].map((barHeight, i) => (
                         <span
-                          key={delay}
-                          className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft"
-                          style={{ animationDelay: `${delay}ms` }}
+                          key={barHeight}
+                          className="w-1.5 animate-pulse rounded-full bg-terracotta"
+                          style={{ height: `${barHeight}px`, animationDelay: `${i * 120}ms` }}
                         />
                       ))}
                     </span>
-                  </span>
-                )}
-                {phase === 'speaking' && (
-                  <span className="flex h-9 items-end gap-1" aria-hidden="true">
-                    {[10, 22, 14, 26, 16].map((barHeight, i) => (
-                      <span
-                        key={barHeight}
-                        className="w-1.5 animate-pulse rounded-full bg-brand-500"
-                        style={{ height: `${barHeight}px`, animationDelay: `${i * 120}ms` }}
-                      />
-                    ))}
-                  </span>
-                )}
-                {(phase === 'idle' || phase === 'error') && <MicIcon className="h-9 w-9 text-ink-soft" />}
+                  )}
+                  {visualState === 'idle' && <MicIcon className="h-10 w-10 text-ink-soft" />}
+                  {visualState === 'error' && <WarningIcon className="h-10 w-10 text-warm-500" />}
+                </div>
               </div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                {transcribing && 'Transcribing...'}
-                {!transcribing && phase === 'listening' && (level > 8 ? 'Listening...' : "I'm listening — go ahead")}
-                {!transcribing && phase === 'thinking' && 'Thinking...'}
-                {!transcribing && phase === 'speaking' && 'Coach is speaking'}
-                {!transcribing && phase === 'idle' && 'Paused'}
-                {!transcribing && phase === 'error' && 'Something went wrong'}
-              </p>
+              <div
+                className={`flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors duration-500 ${STATE_STYLES[visualState].pill}`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${STATE_STYLES[visualState].dot} ${
+                    visualState === 'thinking' || visualState === 'speaking' ? 'animate-pulse' : ''
+                  }`}
+                />
+                {statusLabel(visualState, level)}
+              </div>
             </div>
 
             <div className="flex w-full max-w-md flex-col gap-3">
-              {phase === 'listening' && (
-                <div className="h-2 w-full overflow-hidden rounded-full bg-canvas">
-                  <div
-                    className="h-full rounded-full bg-brand-500 transition-[width]"
-                    style={{ width: `${level}%` }}
-                  />
-                </div>
-              )}
               {lastAssistant && (
-                <div className="rounded-2xl border border-border bg-surface p-4 text-left">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Coach</p>
+                <div className="rounded-2xl border border-hairline bg-cream-card p-4 text-left">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coach</p>
                   <p className="mt-1.5 text-sm text-ink">{lastAssistant.text}</p>
                 </div>
               )}
@@ -274,7 +306,7 @@ export default function TalkToMe() {
                 <button
                   type="button"
                   onClick={beginListening}
-                  className="flex items-center gap-2 rounded-full bg-brand-500 px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                  className="flex items-center gap-2 rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
                 >
                   <MicIcon className="h-4 w-4" />
                   {phase === 'error' ? 'Try Again' : 'Start Talking'}
@@ -283,7 +315,7 @@ export default function TalkToMe() {
                 <button
                   type="button"
                   onClick={handleStop}
-                  className="rounded-full bg-ink px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                  className="rounded-full bg-forest px-6 py-3 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
                 >
                   Stop
                 </button>
@@ -294,7 +326,7 @@ export default function TalkToMe() {
                 className={`rounded-full border-2 px-5 py-3 text-sm font-semibold transition-colors ${
                   muted
                     ? 'border-warm-500 bg-warm-100 text-warm-500'
-                    : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                    : 'border-hairline bg-cream-card text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                 }`}
               >
                 {muted ? 'Unmute' : 'Mute'}
