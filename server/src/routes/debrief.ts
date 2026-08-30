@@ -1,6 +1,8 @@
 import { Router } from 'express'
+import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
+import { transcribeAudio } from '../lib/deepgram.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
 import { SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
@@ -8,6 +10,33 @@ import { generateShareToken } from '../lib/shareToken.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const debriefRouter = Router()
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } })
+
+// Talk It Through records audio client-side (MediaRecorder) and transcribes
+// it here rather than relying on the browser's Web Speech API, which iOS
+// Safari never implements — same transcription pipeline as onboarding's
+// live demo and Audio Coaching. Not usage-capped: the real cost (the Claude
+// call in /talk and /:id/chat below) is already gated.
+debriefRouter.post('/transcribe', upload.single('audio'), async (req, res) => {
+  if (!req.file) {
+    res.status(400).json({ error: 'No audio file received' })
+    return
+  }
+  try {
+    const utterances = await transcribeAudio(req.file.buffer, req.file.mimetype)
+    const transcript = utterances
+      .slice()
+      .sort((a, b) => a.start - b.start)
+      .map((u) => u.transcript)
+      .join(' ')
+      .trim()
+    res.json({ transcript })
+  } catch (error) {
+    console.error('[debrief] transcription failed:', error)
+    res.status(502).json({ error: 'Could not transcribe the recording. Please try again.' })
+  }
+})
 
 const ASK_SYSTEM_PROMPT = `You are a warm, practical classroom management coach for grades 6-12 teachers. A teacher has written in — figure out which of these two situations it is before responding:
 

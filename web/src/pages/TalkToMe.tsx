@@ -24,7 +24,7 @@ export default function TalkToMe() {
   debriefRef.current = debrief
   const startedRef = useRef(false)
 
-  const { supported, interimText, fatalError, start, stop } = useVoiceTurn(handleTurnComplete)
+  const { supported, level, fatalError, start, stop } = useVoiceTurn(handleTurnComplete)
 
   useEffect(() => {
     if (AUTO_START_ON_OPEN && supported && !startedRef.current) {
@@ -129,7 +129,7 @@ export default function TalkToMe() {
           <div className="flex flex-col items-center gap-3">
             <WarningIcon className="h-8 w-8 text-warm-500" />
             <p className="max-w-sm text-sm text-ink-soft">
-              Voice conversation needs a browser that supports speech recognition — try Chrome on this device.
+              Voice conversation isn't available in this browser. Try a different browser or device.
             </p>
           </div>
         ) : (
@@ -157,7 +157,7 @@ export default function TalkToMe() {
                 {(phase === 'idle' || phase === 'error') && <MicIcon className="h-9 w-9 text-ink-soft" />}
               </div>
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                {phase === 'listening' && (interimText ? 'Listening...' : "I'm listening — go ahead")}
+                {phase === 'listening' && (level > 8 ? 'Listening...' : "I'm listening — go ahead")}
                 {phase === 'thinking' && 'Thinking...'}
                 {phase === 'speaking' && 'Coach is speaking'}
                 {phase === 'idle' && 'Paused'}
@@ -166,8 +166,13 @@ export default function TalkToMe() {
             </div>
 
             <div className="flex w-full max-w-md flex-col gap-3">
-              {(interimText || phase === 'listening') && (
-                <p className="min-h-[1.5rem] text-sm text-ink-soft">{interimText}</p>
+              {phase === 'listening' && (
+                <div className="h-2 w-full overflow-hidden rounded-full bg-canvas">
+                  <div
+                    className="h-full rounded-full bg-brand-500 transition-[width]"
+                    style={{ width: `${level}%` }}
+                  />
+                </div>
               )}
               {lastAssistant && (
                 <div className="rounded-2xl border border-border bg-surface p-4 text-left">

@@ -534,6 +534,24 @@ export function startTalkToMe(message: string): Promise<Debrief> {
   return request('/api/debriefs/talk', { method: 'POST', body: JSON.stringify({ message }) })
 }
 
+// Same multipart pattern as analyzeDemoClip — records audio client-side via
+// MediaRecorder and transcribes it server-side, since iOS Safari never
+// implements the Web Speech API this used to rely on.
+export async function transcribeTalkToMeAudio(audioBlob: Blob): Promise<{ transcript: string }> {
+  const formData = new FormData()
+  formData.append('audio', audioBlob, 'talk-audio')
+  const res = await fetch(`${API_BASE_URL}/api/debriefs/transcribe`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error ?? `Request failed with status ${res.status}`)
+  }
+  return res.json()
+}
+
 // Returns raw audio, not JSON — uses fetch directly rather than the
 // JSON-only request() helper, same pattern as other binary/non-JSON calls
 // in this file.

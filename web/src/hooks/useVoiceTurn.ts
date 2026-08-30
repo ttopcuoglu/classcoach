@@ -1,107 +1,131 @@
 import { useRef, useState } from 'react'
+import { transcribeTalkToMeAudio } from '../lib/api'
 
-type SpeechRecognitionLike = {
-  continuous: boolean
-  interimResults: boolean
-  onresult: ((event: any) => void) | null
-  onend: (() => void) | null
-  onerror: ((event: any) => void) | null
-  start: () => void
-  stop: () => void
-}
+const MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
 
-const SpeechRecognitionCtor: (new () => SpeechRecognitionLike) | undefined =
-  typeof window !== 'undefined'
-    ? ((window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition)
-    : undefined
-
-// Errors the teacher needs to actually see and act on (grant mic
-// permission, plug in a mic) — auto-retrying these would either spam a
-// permission prompt or silently fail forever. Anything else (e.g.
-// "no-speech" when the silence timer fires before anyone talks) is
-// benign and safe to silently restart from.
-const FATAL_ERROR_CODES = new Set(['not-allowed', 'audio-capture', 'service-not-allowed'])
+// Same "signal detected" threshold MicLevelMeter.tsx already uses.
+const SPEECH_LEVEL_THRESHOLD = 8
 
 const FATAL_ERROR_MESSAGES: Record<string, string> = {
-  'not-allowed': 'Microphone access was denied. Check your browser/device settings and try again.',
-  'audio-capture': 'No microphone was found. Check your device and try again.',
-  'service-not-allowed': 'Microphone access was denied. Check your browser/device settings and try again.',
+  NotAllowedError: 'Microphone access was denied. Check your browser/device settings and try again.',
+  SecurityError: 'Microphone access was denied. Check your browser/device settings and try again.',
+  NotFoundError: 'No microphone was found. Check your device and try again.',
+  OverconstrainedError: 'No microphone was found. Check your device and try again.',
 }
 
-// A dedicated, separate hook from useSpeechToText — that one fires per
-// browser-"final" chunk with no silence-accumulation, which is right for
-// "type into a box, submit yourself" dictation but wrong for a hands-free
-// voice loop: fragmenting one longer thought into an early auto-submit
-// would cut the teacher off mid-sentence. This hook accumulates interim +
-// final chunks and only ends the turn after a real pause in speech, not
-// per-fragment.
+// Records audio with MediaRecorder and transcribes it server-side (Deepgram,
+// via transcribeTalkToMeAudio) instead of relying on the browser's Web
+// Speech API — iOS Safari never implements SpeechRecognition for web
+// content, in any browser, so that approach was silently unusable on
+// iPhone/iPad. Turn-boundary detection (knowing the teacher stopped
+// talking) moves to a live volume reading via Web Audio's AnalyserNode,
+// the same RMS technique MicLevelMeter.tsx already uses — a silence timer
+// arms the moment listening starts and resets every time the level crosses
+// the speech threshold, ending the turn on the first uninterrupted
+// silenceMs stretch, whether the teacher never spoke at all or spoke and
+// then paused.
 export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs = 1400) {
   const [listening, setListening] = useState(false)
-  const [interimText, setInterimText] = useState('')
+  const [level, setLevel] = useState(0)
   const [fatalError, setFatalError] = useState<string | null>(null)
-  const accumulatedRef = useRef('')
+
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const chunksRef = useRef<Blob[]>([])
+  const mimeTypeRef = useRef('')
   const timerRef = useRef<number | null>(null)
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
-  const lastErrorCodeRef = useRef<string | null>(null)
+  const rafIdRef = useRef<number | null>(null)
 
   function scheduleEnd() {
     if (timerRef.current) window.clearTimeout(timerRef.current)
     timerRef.current = window.setTimeout(() => {
-      recognitionRef.current?.stop()
+      recorderRef.current?.stop()
     }, silenceMs)
   }
 
-  function start() {
-    if (!SpeechRecognitionCtor || recognitionRef.current) return
+  function cleanup() {
+    if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current)
+    rafIdRef.current = null
+    if (timerRef.current) window.clearTimeout(timerRef.current)
+    timerRef.current = null
+    streamRef.current?.getTracks().forEach((t) => t.stop())
+    streamRef.current = null
+    audioCtxRef.current?.close()
+    audioCtxRef.current = null
+    recorderRef.current = null
+    setLevel(0)
+  }
+
+  async function start() {
+    if (recorderRef.current) return
     setFatalError(null)
-    accumulatedRef.current = ''
-    lastErrorCodeRef.current = null
-    setInterimText('')
-    const recognition = new SpeechRecognitionCtor()
-    recognition.continuous = true
-    recognition.interimResults = true
-    recognition.onresult = (event: any) => {
-      let interim = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const chunk: string = event.results[i][0].transcript
-        if (event.results[i].isFinal) {
-          accumulatedRef.current = (accumulatedRef.current ? `${accumulatedRef.current} ` : '') + chunk.trim()
-        } else {
-          interim += chunk
-        }
-      }
-      setInterimText(interim)
-      scheduleEnd()
+    chunksRef.current = []
+
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    } catch (err) {
+      const name = (err as DOMException)?.name
+      setFatalError(FATAL_ERROR_MESSAGES[name] ?? 'Could not access your microphone. Check your device and try again.')
+      return
     }
-    // The spec has onerror fire, then onend fire right after it for the
-    // same failure — onerror only records what happened; onend is the
-    // single place that ever calls onTurnComplete, so a failure can never
-    // trigger it twice.
-    recognition.onend = () => {
+    streamRef.current = stream
+
+    const audioCtx = new AudioContext()
+    audioCtxRef.current = audioCtx
+    const source = audioCtx.createMediaStreamSource(stream)
+    const analyser = audioCtx.createAnalyser()
+    analyser.fftSize = 256
+    source.connect(analyser)
+    const data = new Uint8Array(analyser.frequencyBinCount)
+
+    const supportedMime = MIME_CANDIDATES.find((t) => MediaRecorder.isTypeSupported(t))
+    mimeTypeRef.current = supportedMime ?? ''
+    const recorder = supportedMime ? new MediaRecorder(stream, { mimeType: supportedMime }) : new MediaRecorder(stream)
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunksRef.current.push(e.data)
+    }
+    recorder.onstop = async () => {
+      cleanup()
       setListening(false)
-      recognitionRef.current = null
-      if (timerRef.current) window.clearTimeout(timerRef.current)
-      const text = accumulatedRef.current.trim()
-      setInterimText('')
-      const wasFatal = FATAL_ERROR_CODES.has(lastErrorCodeRef.current ?? '')
-      if (!wasFatal) onTurnComplete(text)
-    }
-    recognition.onerror = (event: any) => {
-      const code = typeof event?.error === 'string' ? event.error : 'unknown'
-      lastErrorCodeRef.current = code
-      if (FATAL_ERROR_CODES.has(code)) {
-        setFatalError(FATAL_ERROR_MESSAGES[code] ?? 'Something went wrong with the microphone.')
+      const blob = new Blob(chunksRef.current, { type: mimeTypeRef.current || 'audio/webm' })
+      try {
+        const { transcript } = await transcribeTalkToMeAudio(blob)
+        onTurnComplete(transcript.trim())
+      } catch {
+        // A transcription hiccup for one turn shouldn't end the
+        // conversation — treat it the same as "nothing was said."
+        onTurnComplete('')
       }
     }
-    recognitionRef.current = recognition
-    recognition.start()
+    recorderRef.current = recorder
+
+    const tick = () => {
+      analyser.getByteTimeDomainData(data)
+      let sumSquares = 0
+      for (let i = 0; i < data.length; i++) {
+        const normalized = (data[i] - 128) / 128
+        sumSquares += normalized * normalized
+      }
+      const pct = Math.min(100, Math.round(Math.sqrt(sumSquares / data.length) * 300))
+      setLevel(pct)
+      if (pct > SPEECH_LEVEL_THRESHOLD) scheduleEnd()
+      rafIdRef.current = requestAnimationFrame(tick)
+    }
+
+    recorder.start()
     setListening(true)
     scheduleEnd()
+    tick()
   }
 
   function stop() {
-    recognitionRef.current?.stop()
+    recorderRef.current?.stop()
   }
 
-  return { supported: !!SpeechRecognitionCtor, listening, interimText, fatalError, start, stop }
+  const supported =
+    typeof MediaRecorder !== 'undefined' && typeof navigator?.mediaDevices?.getUserMedia === 'function'
+
+  return { supported, listening, level, fatalError, start, stop }
 }
