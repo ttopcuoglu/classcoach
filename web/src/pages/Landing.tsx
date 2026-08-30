@@ -154,7 +154,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             </a>
           </nav>
           <div className="flex items-center gap-5">
-            <a href="#get-started" className="hidden text-sm font-medium text-ink-soft hover:text-ink sm:inline">
+            <a href="#get-started" className="text-sm font-medium text-ink-soft hover:text-ink">
               Log in
             </a>
             <a
