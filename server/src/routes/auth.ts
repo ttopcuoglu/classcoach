@@ -105,6 +105,11 @@ authRouter.post('/google', async (req, res) => {
       })
     }
 
+    if (user.suspendedAt) {
+      res.status(403).json({ error: 'This account has been suspended. Contact your administrator.' })
+      return
+    }
+
     const token = signSession({ userId: user.id, role: user.role })
     res.cookie(SESSION_COOKIE, token, COOKIE_OPTIONS)
     res.json(user)
@@ -194,6 +199,10 @@ authRouter.post('/login', async (req, res) => {
   // (Google-only), or the password is wrong — never leak which case fired.
   if (!user || !user.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) {
     res.status(401).json({ error: GENERIC_LOGIN_ERROR })
+    return
+  }
+  if (user.suspendedAt) {
+    res.status(403).json({ error: 'This account has been suspended. Contact your administrator.' })
     return
   }
 

@@ -33,6 +33,7 @@ model User {
   onboardingCompletedAt DateTime? // server-set only, when the onboarding wizard finishes or is skipped
   termsAcceptedAt       DateTime?
   ageConfirmedAt        DateTime? // teacher self-attested they're 13+ at signup — no verification, matches termsAcceptedAt's pattern
+  suspendedAt           DateTime? // superadmin-set only; blocks future sign-in, doesn't kill an already-active session
   audioRetentionDays    Int? // null = keep audio-coaching transcripts/reports indefinitely
   focusMetric           String? // the teacher's chosen My Growth focus — see FocusMetric in web/src/lib/focusMetrics.ts, null = none set
   organizationId        String? // null = independent teacher, not part of any district

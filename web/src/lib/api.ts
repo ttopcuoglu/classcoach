@@ -105,6 +105,17 @@ export type OrgMember = {
   email: string
   jobTitle: JobTitle | null
   role: 'teacher' | 'org_admin' | 'superadmin'
+  suspendedAt: string | null
+  createdAt: string
+}
+
+export type AdminUser = {
+  id: string
+  name: string | null
+  email: string
+  role: 'teacher' | 'org_admin' | 'superadmin'
+  organizationName: string | null
+  suspendedAt: string | null
   createdAt: string
 }
 
@@ -439,6 +450,25 @@ export function getAdminOverview(params?: { organizationId?: string; weekOffset?
 
 export function getOrganizationMembers(organizationId?: string): Promise<OrgMember[]> {
   return request(`/api/admin/members${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`)
+}
+
+// Removes a teacher from their org (org_admin's own scoped power, or a
+// superadmin acting within a selected org) — un-enrolls them, no data lost.
+export function removeMember(id: string): Promise<{ status: string }> {
+  return request(`/api/admin/members/${id}`, { method: 'DELETE' })
+}
+
+// The remaining three are superadmin-only.
+export function getAdminUsers(): Promise<AdminUser[]> {
+  return request('/api/admin/users')
+}
+
+export function suspendUser(id: string, suspended: boolean): Promise<AdminUser> {
+  return request(`/api/admin/users/${id}/suspend`, { method: 'POST', body: JSON.stringify({ suspended }) })
+}
+
+export function deleteUser(id: string): Promise<{ status: string }> {
+  return request(`/api/admin/users/${id}`, { method: 'DELETE' })
 }
 
 export function getOrganizations(): Promise<Organization[]> {

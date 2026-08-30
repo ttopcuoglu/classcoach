@@ -2,12 +2,17 @@ import { useEffect, useState } from 'react'
 import {
   createOrganization,
   deleteOrganization,
+  deleteUser,
   getAdminOverview,
+  getAdminUsers,
   getMe,
   getOrganizationMembers,
   getOrganizations,
+  removeMember,
+  suspendUser,
   updateOrganization,
   type AdminOverview,
+  type AdminUser,
   type Organization,
   type OrgMember,
   type UserProfile,
@@ -32,7 +37,7 @@ function pillClass(active: boolean) {
   }`
 }
 
-type Tab = 'overview' | 'organizations'
+type Tab = 'overview' | 'organizations' | 'users'
 
 export default function AdminDashboard() {
   const [me, setMe] = useState<UserProfile | null>(null)
@@ -63,10 +68,15 @@ export default function AdminDashboard() {
           <button type="button" onClick={() => setTab('organizations')} className={pillClass(tab === 'organizations')}>
             Organizations
           </button>
+          <button type="button" onClick={() => setTab('users')} className={pillClass(tab === 'users')}>
+            Users
+          </button>
         </div>
       )}
 
-      {tab === 'overview' ? <OverviewPanel isSuperadmin={isSuperadmin} /> : <OrganizationsPanel />}
+      {tab === 'overview' && <OverviewPanel isSuperadmin={isSuperadmin} />}
+      {tab === 'organizations' && <OrganizationsPanel />}
+      {tab === 'users' && <UsersPanel />}
     </div>
   )
 }
@@ -109,16 +119,21 @@ function WeeklyActivityChart({ data }: { data: { weekStart: string; activeCount:
   )
 }
 
-function MembersList({ organizationId }: { organizationId?: string }) {
+function MembersList({ organizationId, isSuperadmin }: { organizationId?: string; isSuperadmin: boolean }) {
   const [members, setMembers] = useState<OrgMember[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    setMembers(null)
+  function refresh() {
     setError(null)
     getOrganizationMembers(organizationId)
       .then(setMembers)
       .catch(() => setError('Could not load members.'))
+  }
+
+  useEffect(() => {
+    setMembers(null)
+    refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId])
 
   return (
@@ -132,36 +147,130 @@ function MembersList({ organizationId }: { organizationId?: string }) {
       ) : (
         <div className="mt-3 flex flex-col gap-2">
           {members.map((m) => (
-            <div
-              key={m.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface p-3.5"
-            >
-              <div>
-                <p className="text-sm font-semibold text-ink">{m.name ?? m.email}</p>
-                <p className="text-xs text-ink-soft">
-                  {m.email}
-                  {m.jobTitle ? ` · ${m.jobTitle}` : ''}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {m.role === 'org_admin' && (
-                  <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
-                    Admin
-                  </span>
-                )}
-                <span className="text-xs text-ink-soft">
-                  Joined{' '}
-                  {new Date(m.createdAt).toLocaleDateString(undefined, {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
-                </span>
-              </div>
-            </div>
+            <MemberRow key={m.id} member={m} isSuperadmin={isSuperadmin} onChanged={refresh} />
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+function MemberRow({
+  member,
+  isSuperadmin,
+  onChanged,
+}: {
+  member: OrgMember
+  isSuperadmin: boolean
+  onChanged: () => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleRemove() {
+    if (!window.confirm(`Remove ${member.name ?? member.email} from this organization? They become independent — no data is lost.`)) {
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      await removeMember(member.id)
+      onChanged()
+    } catch (err) {
+      setError((err as Error).message)
+      setBusy(false)
+    }
+  }
+
+  async function handleSuspendToggle() {
+    setBusy(true)
+    setError(null)
+    try {
+      await suspendUser(member.id, !member.suspendedAt)
+      onChanged()
+    } catch (err) {
+      setError((err as Error).message)
+      setBusy(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (
+      !window.confirm(
+        `Permanently delete ${member.name ?? member.email}'s account and all their data? This cannot be undone.`,
+      )
+    ) {
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      await deleteUser(member.id)
+      onChanged()
+    } catch (err) {
+      setError((err as Error).message)
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-surface p-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-ink">{member.name ?? member.email}</p>
+          <p className="text-xs text-ink-soft">
+            {member.email}
+            {member.jobTitle ? ` · ${member.jobTitle}` : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {member.role === 'org_admin' && (
+            <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
+              Admin
+            </span>
+          )}
+          {member.suspendedAt && (
+            <span className="rounded-full bg-warm-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warm-500">
+              Suspended
+            </span>
+          )}
+          <span className="text-xs text-ink-soft">
+            Joined{' '}
+            {new Date(member.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+          </span>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={handleRemove}
+          disabled={busy}
+          className="text-xs font-medium text-ink-soft hover:text-ink disabled:opacity-50"
+        >
+          Remove from org
+        </button>
+        {isSuperadmin && (
+          <>
+            <button
+              type="button"
+              onClick={handleSuspendToggle}
+              disabled={busy}
+              className="text-xs font-medium text-ink-soft hover:text-ink disabled:opacity-50"
+            >
+              {member.suspendedAt ? 'Unsuspend' : 'Suspend'}
+            </button>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={busy}
+              className="text-xs font-medium text-warm-500 hover:text-warm-600 disabled:opacity-50"
+            >
+              Delete account
+            </button>
+          </>
+        )}
+        {error && <span className="text-xs text-warm-500">{error}</span>}
+      </div>
     </div>
   )
 }
@@ -314,7 +423,9 @@ function OverviewPanel({ isSuperadmin }: { isSuperadmin: boolean }) {
             </div>
           </div>
 
-          {overview.scope === 'organization' && <MembersList organizationId={selectedOrgId || undefined} />}
+          {overview.scope === 'organization' && (
+            <MembersList organizationId={selectedOrgId || undefined} isSuperadmin={isSuperadmin} />
+          )}
         </>
       )}
     </>
@@ -496,6 +607,117 @@ function OrganizationRow({ org, onChanged }: { org: Organization; onChanged: () 
         <button type="button" onClick={handleDelete} className="text-xs font-medium text-ink-soft hover:text-warm-500">
           Delete
         </button>
+      </div>
+    </div>
+  )
+}
+
+// Superadmin-only, platform-wide — the one place to find an independent
+// teacher who isn't in any org (and so never appears in a Members list).
+function UsersPanel() {
+  const [users, setUsers] = useState<AdminUser[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  function refresh() {
+    setError(null)
+    getAdminUsers()
+      .then(setUsers)
+      .catch(() => setError('Could not load users.'))
+  }
+
+  useEffect(() => {
+    refresh()
+  }, [])
+
+  return (
+    <div>
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">All users</h2>
+      {error && <p className="mt-2 text-sm text-warm-500">{error}</p>}
+      {!users ? (
+        <p className="mt-3 text-sm text-ink-soft">Loading...</p>
+      ) : users.length === 0 ? (
+        <p className="mt-3 text-sm text-ink-soft">No users yet.</p>
+      ) : (
+        <div className="mt-3 flex flex-col gap-2">
+          {users.map((u) => (
+            <UserRow key={u.id} user={u} onChanged={refresh} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function UserRow({ user, onChanged }: { user: AdminUser; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSuspendToggle() {
+    setBusy(true)
+    setError(null)
+    try {
+      await suspendUser(user.id, !user.suspendedAt)
+      onChanged()
+    } catch (err) {
+      setError((err as Error).message)
+      setBusy(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (
+      !window.confirm(`Permanently delete ${user.name ?? user.email}'s account and all their data? This cannot be undone.`)
+    ) {
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      await deleteUser(user.id)
+      onChanged()
+    } catch (err) {
+      setError((err as Error).message)
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-surface p-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-ink">{user.name ?? user.email}</p>
+          <p className="text-xs text-ink-soft">{user.email}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-soft">
+            {user.role === 'superadmin' ? 'Superadmin' : user.role === 'org_admin' ? 'Org admin' : 'Teacher'}
+          </span>
+          <span className="text-xs text-ink-soft">{user.organizationName ?? 'Independent'}</span>
+          {user.suspendedAt && (
+            <span className="rounded-full bg-warm-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warm-500">
+              Suspended
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={handleSuspendToggle}
+          disabled={busy}
+          className="text-xs font-medium text-ink-soft hover:text-ink disabled:opacity-50"
+        >
+          {user.suspendedAt ? 'Unsuspend' : 'Suspend'}
+        </button>
+        <button
+          type="button"
+          onClick={handleDelete}
+          disabled={busy}
+          className="text-xs font-medium text-warm-500 hover:text-warm-600 disabled:opacity-50"
+        >
+          Delete account
+        </button>
+        {error && <span className="text-xs text-warm-500">{error}</span>}
       </div>
     </div>
   )

@@ -163,10 +163,36 @@ adminRouter.get('/members', async (req, res) => {
 
   const members = await prisma.user.findMany({
     where: { organizationId },
-    select: { id: true, name: true, email: true, jobTitle: true, role: true, createdAt: true },
+    select: { id: true, name: true, email: true, jobTitle: true, role: true, suspendedAt: true, createdAt: true },
     orderBy: { createdAt: 'asc' },
   })
   res.json(members)
+})
+
+// Un-enrolls a teacher from their org (org_admin's real, scoped power —
+// no data is touched, they simply become independent again and could
+// rejoin later with the join code). An org_admin can only reach members of
+// their own org; a superadmin must have that org selected first — both
+// enforced by comparing the target's organizationId against resolveScope's
+// result, not just trusting the :id in the URL.
+adminRouter.delete('/members/:id', async (req, res) => {
+  const resolved = await resolveScope(req, res)
+  if (!resolved) return
+  const { organizationId } = resolved
+  if (!organizationId) {
+    res.status(400).json({ error: 'Select an organization first.' })
+    return
+  }
+
+  const targetId = req.params.id as string
+  const target = await prisma.user.findUnique({ where: { id: targetId } })
+  if (!target || target.organizationId !== organizationId) {
+    res.status(404).json({ error: 'Member not found in this organization.' })
+    return
+  }
+
+  await prisma.user.update({ where: { id: targetId }, data: { organizationId: null, role: 'teacher' } })
+  res.json({ status: 'ok' })
 })
 
 // Everything below is superadmin-only — creating/editing/deleting
@@ -319,5 +345,98 @@ adminRouter.delete('/organizations/:id', requireSuperadmin, async (req, res) => 
     return
   }
   await prisma.organization.delete({ where: { id } })
+  res.json({ status: 'ok' })
+})
+
+// Platform-wide roster — the one place a superadmin can find any account,
+// including an independent teacher who isn't in any org and so never shows
+// up in a /members list. /members deliberately never allows this
+// unscoped view for anyone else.
+adminRouter.get('/users', requireSuperadmin, async (_req, res) => {
+  const users = await prisma.user.findMany({
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      suspendedAt: true,
+      createdAt: true,
+      organization: { select: { name: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+  res.json(
+    users.map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      organizationName: u.organization?.name ?? null,
+      suspendedAt: u.suspendedAt,
+      createdAt: u.createdAt,
+    })),
+  )
+})
+
+adminRouter.post('/users/:id/suspend', requireSuperadmin, async (req, res) => {
+  const id = req.params.id as string
+  const { suspended } = req.body ?? {}
+  if (typeof suspended !== 'boolean') {
+    res.status(400).json({ error: 'suspended must be a boolean' })
+    return
+  }
+  if (id === req.user!.userId) {
+    res.status(400).json({ error: "You can't suspend your own account." })
+    return
+  }
+
+  const existing = await prisma.user.findUnique({ where: { id } })
+  if (!existing) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+
+  const updated = await prisma.user.update({
+    where: { id },
+    data: { suspendedAt: suspended ? new Date() : null },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      suspendedAt: true,
+      createdAt: true,
+      organization: { select: { name: true } },
+    },
+  })
+  res.json({
+    id: updated.id,
+    name: updated.name,
+    email: updated.email,
+    role: updated.role,
+    organizationName: updated.organization?.name ?? null,
+    suspendedAt: updated.suspendedAt,
+    createdAt: updated.createdAt,
+  })
+})
+
+// Cascades to every model owned by this user (ScenarioAttempt, Debrief,
+// ParentMessage, UsageLog, AudioSession -> TranscriptSegment, LessonPlan,
+// ConversationPrep, ConversationPlan) — all already onDelete: Cascade in
+// the schema, so this one call cleanly removes everything.
+adminRouter.delete('/users/:id', requireSuperadmin, async (req, res) => {
+  const id = req.params.id as string
+  if (id === req.user!.userId) {
+    res.status(400).json({ error: "You can't delete your own account." })
+    return
+  }
+
+  const existing = await prisma.user.findUnique({ where: { id } })
+  if (!existing) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+
+  await prisma.user.delete({ where: { id } })
   res.json({ status: 'ok' })
 })
