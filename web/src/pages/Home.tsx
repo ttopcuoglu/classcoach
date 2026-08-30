@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChatBubbleIcon, ChecklistIcon, ScenarioIcon, StarIcon } from '../components/icons'
+import { ChatBubbleIcon, ChecklistIcon, MicIcon, ScenarioIcon, StarIcon, WaveformIcon } from '../components/icons'
 import { getAttempts, getDebriefs, getProfile, type Debrief, type ScenarioAttempt } from '../lib/api'
 import { pickDailyTip, type Mood } from '../lib/dailyTips'
 
@@ -62,6 +62,34 @@ export default function Home() {
         <p className="mt-1 text-ink-soft">
           Here's a quick way back into your practice and your questions.
         </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Link
+          to="/talk-to-me"
+          className="group flex items-center gap-4 rounded-2xl border border-brand-200 bg-brand-50 p-5 transition-shadow hover:shadow-md"
+        >
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-500 text-white">
+            <WaveformIcon className="h-6 w-6" />
+          </span>
+          <div>
+            <h2 className="text-base font-semibold text-ink">Talk It Through</h2>
+            <p className="text-xs text-ink-soft">Live voice check-in with Coach</p>
+          </div>
+        </Link>
+
+        <Link
+          to="/audio-coaching"
+          className="group flex items-center gap-4 rounded-2xl border border-brand-200 bg-brand-50 p-5 transition-shadow hover:shadow-md"
+        >
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-500 text-white">
+            <MicIcon className="h-6 w-6" />
+          </span>
+          <div>
+            <h2 className="text-base font-semibold text-ink">Lesson Debrief</h2>
+            <p className="text-xs text-ink-soft">Record a class, get a coaching report</p>
+          </div>
+        </Link>
       </div>
 
       {needsOnboarding && (
