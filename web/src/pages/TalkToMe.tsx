@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MicIcon, WarningIcon } from '../components/icons'
+import { BrainIcon, MicIcon, WarningIcon } from '../components/icons'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import { buildSpeechUrl, sendDebriefChat, startTalkToMe, type ChatMessage, type Debrief } from '../lib/api'
 
@@ -214,8 +214,31 @@ export default function TalkToMe() {
                     <MicIcon className="relative h-9 w-9 text-brand-600" />
                   </span>
                 )}
-                {phase === 'thinking' && <MicIcon className="h-9 w-9 animate-pulse text-ink-soft" />}
-                {phase === 'speaking' && <MicIcon className="h-9 w-9 text-brand-500" />}
+                {phase === 'thinking' && (
+                  <span className="flex flex-col items-center gap-2.5">
+                    <BrainIcon className="h-9 w-9 animate-pulse text-ink-soft" />
+                    <span className="flex items-center gap-1" aria-hidden="true">
+                      {[0, 150, 300].map((delay) => (
+                        <span
+                          key={delay}
+                          className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft"
+                          style={{ animationDelay: `${delay}ms` }}
+                        />
+                      ))}
+                    </span>
+                  </span>
+                )}
+                {phase === 'speaking' && (
+                  <span className="flex h-9 items-end gap-1" aria-hidden="true">
+                    {[10, 22, 14, 26, 16].map((barHeight, i) => (
+                      <span
+                        key={barHeight}
+                        className="w-1.5 animate-pulse rounded-full bg-brand-500"
+                        style={{ height: `${barHeight}px`, animationDelay: `${i * 120}ms` }}
+                      />
+                    ))}
+                  </span>
+                )}
                 {(phase === 'idle' || phase === 'error') && <MicIcon className="h-9 w-9 text-ink-soft" />}
               </div>
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
