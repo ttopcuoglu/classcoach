@@ -86,11 +86,26 @@ export type AdminOverview = {
   organizationName: string | null
   totalTeachers: number
   activeThisWeek: number
+  weekOffset: number
+  weekStart: string
+  weekEnd: string
   categoryTally: Record<string, number>
   growth: {
-    recentStrongShare: number | null
-    priorStrongShare: number | null
+    recentStrong: number
+    recentTotal: number
+    priorStrong: number
+    priorTotal: number
   }
+  weeklyActivity: { weekStart: string; activeCount: number }[]
+}
+
+export type OrgMember = {
+  id: string
+  name: string | null
+  email: string
+  jobTitle: JobTitle | null
+  role: 'teacher' | 'org_admin' | 'superadmin'
+  createdAt: string
 }
 
 export type DebriefSource = 'ask_tab' | 'talk_to_me'
@@ -414,8 +429,16 @@ export function logout(): Promise<{ status: string }> {
   return request('/api/auth/logout', { method: 'POST' })
 }
 
-export function getAdminOverview(organizationId?: string): Promise<AdminOverview> {
-  return request(`/api/admin/overview${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`)
+export function getAdminOverview(params?: { organizationId?: string; weekOffset?: number }): Promise<AdminOverview> {
+  const query = new URLSearchParams()
+  if (params?.organizationId) query.set('organizationId', params.organizationId)
+  if (params?.weekOffset) query.set('weekOffset', String(params.weekOffset))
+  const queryString = query.toString()
+  return request(`/api/admin/overview${queryString ? `?${queryString}` : ''}`)
+}
+
+export function getOrganizationMembers(organizationId?: string): Promise<OrgMember[]> {
+  return request(`/api/admin/members${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`)
 }
 
 export function getOrganizations(): Promise<Organization[]> {

@@ -4,17 +4,18 @@ import {
   deleteOrganization,
   getAdminOverview,
   getMe,
+  getOrganizationMembers,
   getOrganizations,
   updateOrganization,
   type AdminOverview,
   type Organization,
+  type OrgMember,
   type UserProfile,
 } from '../lib/api'
 import { categoryLabel } from '../lib/categories'
 
-function formatShare(share: number | null): string {
-  if (share == null) return '—'
-  return `${Math.round(share * 100)}%`
+function formatShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 const inputClass =
@@ -47,11 +48,11 @@ export default function AdminDashboard() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold text-ink md:text-3xl">Admin Overview</h1>
-        <p className="text-ink-soft">
-          Aggregate, staff-wide trends only — no individual teacher's attempts or ratings are ever shown here.
-        </p>
+        <span className="inline-flex w-fit items-center rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-600">
+          Aggregate, staff-wide trends only — no individual teacher's attempts or ratings are ever shown here
+        </span>
       </div>
 
       {isSuperadmin && (
@@ -70,11 +71,107 @@ export default function AdminDashboard() {
   )
 }
 
+function WeeklyActivityChart({ data }: { data: { weekStart: string; activeCount: number }[] }) {
+  const width = 600
+  const height = 110
+  const padX = 8
+  const padY = 14
+  const usableW = width - padX * 2
+  const usableH = height - padY * 2
+  const maxCount = Math.max(1, ...data.map((d) => d.activeCount))
+  const n = data.length
+
+  const points = data.map((d, i) => ({
+    x: n > 1 ? padX + (i / (n - 1)) * usableW : padX + usableW / 2,
+    y: padY + usableH - (d.activeCount / maxCount) * usableH,
+    count: d.activeCount,
+  }))
+  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-ink">Weekly activity</h3>
+      <p className="text-xs text-ink-soft">Active teachers per week, last {n} weeks</p>
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} preserveAspectRatio="none" className="mt-3">
+        <path d={path} fill="none" stroke="var(--color-brand-500)" strokeWidth={2} strokeLinecap="round" />
+        {points.map((p, i) => (
+          <g key={i}>
+            <circle cx={p.x} cy={p.y} r={3} fill="var(--color-brand-500)" />
+            <title>{p.count}</title>
+          </g>
+        ))}
+      </svg>
+      <div className="mt-1 flex justify-between text-[11px] text-ink-soft">
+        <span>{formatShortDate(data[0]?.weekStart)}</span>
+        <span>Now</span>
+      </div>
+    </div>
+  )
+}
+
+function MembersList({ organizationId }: { organizationId?: string }) {
+  const [members, setMembers] = useState<OrgMember[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setMembers(null)
+    setError(null)
+    getOrganizationMembers(organizationId)
+      .then(setMembers)
+      .catch(() => setError('Could not load members.'))
+  }, [organizationId])
+
+  return (
+    <div>
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Members</h2>
+      {error && <p className="mt-2 text-sm text-warm-500">{error}</p>}
+      {!members ? (
+        <p className="mt-3 text-sm text-ink-soft">Loading...</p>
+      ) : members.length === 0 ? (
+        <p className="mt-3 text-sm text-ink-soft">No members yet.</p>
+      ) : (
+        <div className="mt-3 flex flex-col gap-2">
+          {members.map((m) => (
+            <div
+              key={m.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface p-3.5"
+            >
+              <div>
+                <p className="text-sm font-semibold text-ink">{m.name ?? m.email}</p>
+                <p className="text-xs text-ink-soft">
+                  {m.email}
+                  {m.jobTitle ? ` · ${m.jobTitle}` : ''}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {m.role === 'org_admin' && (
+                  <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
+                    Admin
+                  </span>
+                )}
+                <span className="text-xs text-ink-soft">
+                  Joined{' '}
+                  {new Date(m.createdAt).toLocaleDateString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function OverviewPanel({ isSuperadmin }: { isSuperadmin: boolean }) {
   const [overview, setOverview] = useState<AdminOverview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [orgs, setOrgs] = useState<Organization[]>([])
   const [selectedOrgId, setSelectedOrgId] = useState('')
+  const [weekOffset, setWeekOffset] = useState(0)
 
   useEffect(() => {
     if (isSuperadmin) {
@@ -87,15 +184,20 @@ function OverviewPanel({ isSuperadmin }: { isSuperadmin: boolean }) {
   useEffect(() => {
     setOverview(null)
     setError(null)
-    getAdminOverview(selectedOrgId || undefined)
+    getAdminOverview({ organizationId: selectedOrgId || undefined, weekOffset })
       .then(setOverview)
       .catch(() => setError('Could not load the admin overview.'))
-  }, [selectedOrgId])
+  }, [selectedOrgId, weekOffset])
+
+  function handleOrgChange(id: string) {
+    setSelectedOrgId(id)
+    setWeekOffset(0)
+  }
 
   const sortedCategories = overview
     ? Object.entries(overview.categoryTally).sort((a, b) => b[1] - a[1])
     : []
-  const maxCount = sortedCategories.length > 0 ? sortedCategories[0][1] : 1
+  const maxCount = Math.max(1, ...sortedCategories.map(([, c]) => c))
 
   return (
     <>
@@ -107,7 +209,7 @@ function OverviewPanel({ isSuperadmin }: { isSuperadmin: boolean }) {
           <select
             id="org-select"
             value={selectedOrgId}
-            onChange={(e) => setSelectedOrgId(e.target.value)}
+            onChange={(e) => handleOrgChange(e.target.value)}
             className="rounded-lg border border-border bg-canvas px-3 py-1.5 text-sm text-ink focus:border-brand-400 focus:outline-none"
           >
             <option value="">Platform-wide</option>
@@ -130,6 +232,32 @@ function OverviewPanel({ isSuperadmin }: { isSuperadmin: boolean }) {
         <p className="text-sm text-ink-soft">Loading...</p>
       ) : (
         <>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setWeekOffset((w) => w + 1)}
+              className="rounded-lg border border-border px-2.5 py-1.5 text-sm text-ink-soft hover:border-brand-400 hover:text-brand-600"
+              aria-label="Previous week"
+            >
+              ‹
+            </button>
+            <p className="text-sm font-semibold text-ink">
+              {weekOffset === 0 ? 'This Week' : weekOffset === 1 ? 'Last Week' : `${weekOffset} weeks ago`}
+              <span className="ml-1.5 font-normal text-ink-soft">
+                · {formatShortDate(overview.weekStart)} – {formatShortDate(overview.weekEnd)}
+              </span>
+            </p>
+            <button
+              type="button"
+              onClick={() => setWeekOffset((w) => Math.max(0, w - 1))}
+              disabled={weekOffset === 0}
+              className="rounded-lg border border-border px-2.5 py-1.5 text-sm text-ink-soft hover:border-brand-400 hover:text-brand-600 disabled:opacity-40"
+              aria-label="Next week"
+            >
+              ›
+            </button>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-2xl border border-border bg-surface p-5">
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Total teachers</p>
@@ -144,38 +272,49 @@ function OverviewPanel({ isSuperadmin }: { isSuperadmin: boolean }) {
           </div>
 
           <div className="rounded-2xl border border-border bg-surface p-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-              Staff-wide growth signal
-            </p>
-            <p className="mt-1 text-sm text-ink">
-              {formatShare(overview.growth.recentStrongShare)} of rated practice this week showed strong
-              technique, vs. {formatShare(overview.growth.priorStrongShare)} the week before.
-            </p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Staff-wide growth signal</p>
+            {overview.growth.recentTotal === 0 ? (
+              <p className="mt-1 text-sm text-ink-soft">No rated practice this week yet.</p>
+            ) : (
+              <p className="mt-1 text-sm text-ink">
+                <span className="text-lg font-semibold text-ink">
+                  {overview.growth.recentStrong} of {overview.growth.recentTotal}
+                </span>{' '}
+                rated practice this week showed strong technique
+                {overview.growth.priorTotal > 0
+                  ? `, vs. ${overview.growth.priorStrong} of ${overview.growth.priorTotal} the week before.`
+                  : '.'}
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-border bg-surface p-5">
+            <WeeklyActivityChart data={overview.weeklyActivity} />
           </div>
 
           <div>
             <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">
               Practice by category ({overview.organizationName ?? 'all teachers'})
             </h2>
-            {sortedCategories.length === 0 ? (
-              <p className="mt-3 text-sm text-ink-soft">No practice activity yet.</p>
-            ) : (
-              <div className="mt-3 flex flex-col gap-2">
-                {sortedCategories.map(([category, count]) => (
-                  <div key={category} className="flex items-center gap-3">
-                    <span className="w-40 shrink-0 text-sm text-ink">{categoryLabel(category)}</span>
-                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-canvas">
-                      <div
-                        className="h-full rounded-full bg-brand-500"
-                        style={{ width: `${(count / maxCount) * 100}%` }}
-                      />
-                    </div>
-                    <span className="w-8 shrink-0 text-right text-sm text-ink-soft">{count}</span>
+            <div className="mt-3 flex flex-col gap-2">
+              {sortedCategories.map(([category, count]) => (
+                <div key={category} className="flex items-center gap-3">
+                  <span className="w-40 shrink-0 text-sm text-ink">{categoryLabel(category)}</span>
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-canvas">
+                    <div
+                      className="h-full rounded-full bg-brand-500"
+                      style={{ width: `${(count / maxCount) * 100}%` }}
+                    />
                   </div>
-                ))}
-              </div>
-            )}
+                  <span className="w-24 shrink-0 text-right text-sm text-ink-soft">
+                    {count === 0 ? 'no activity yet' : count}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
+
+          {overview.scope === 'organization' && <MembersList organizationId={selectedOrgId || undefined} />}
         </>
       )}
     </>

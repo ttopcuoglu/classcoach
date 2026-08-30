@@ -1,22 +1,26 @@
 import { Router } from 'express'
+import type { Request, Response } from 'express'
 import { requireAdmin, requireSuperadmin } from '../lib/auth.ts'
 import { generateUniqueJoinCode, normalizeJoinCode, parseAdminEmails, syncOrganizationRoles } from '../lib/organization.ts'
 import { prisma } from '../lib/prisma.ts'
+import { SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
 
 export const adminRouter = Router()
 
 adminRouter.use(requireAdmin)
 
-// Aggregate, staff-wide numbers only — deliberately no route exists that
-// returns one teacher's individual attempts, responses, or ratings. That's
-// the whole point of the "aggregate trends only" admin visibility choice,
-// unchanged whether the requester sees the whole platform or just their own
-// organization.
-adminRouter.get('/overview', async (req, res) => {
+const DAY_MS = 24 * 60 * 60 * 1000
+const WEEKLY_TREND_WEEKS = 6
+
+// Shared by /overview and /members — resolves which organization (if any)
+// the requester is allowed to see: an org_admin always sees their own,
+// unset for everyone else unless a superadmin explicitly selects one via
+// ?organizationId=. Never lets an org_admin view another org's data.
+async function resolveScope(req: Request, res: Response) {
   const requester = await prisma.user.findUnique({ where: { id: req.user!.userId } })
   if (!requester) {
     res.status(401).json({ error: 'Not signed in' })
-    return
+    return null
   }
 
   let organizationId: string | null = null
@@ -33,46 +37,69 @@ adminRouter.get('/overview', async (req, res) => {
     }
   } else {
     res.status(403).json({ error: 'Admin access required' })
-    return
+    return null
   }
 
   let organizationName: string | null = null
   if (scope === 'organization') {
     if (!organizationId) {
       res.status(400).json({ error: 'This account is not assigned to an organization yet.' })
-      return
+      return null
     }
     const org = await prisma.organization.findUnique({ where: { id: organizationId } })
     if (!org) {
       res.status(404).json({ error: 'Organization not found' })
-      return
+      return null
     }
     organizationName = org.name
   }
 
+  return { scope, organizationId, organizationName }
+}
+
+// Aggregate, staff-wide numbers only — deliberately no route exists that
+// returns one teacher's individual attempts, responses, or ratings. That's
+// the whole point of the "aggregate trends only" admin visibility choice,
+// unchanged whether the requester sees the whole platform or just their own
+// organization.
+adminRouter.get('/overview', async (req, res) => {
+  const resolved = await resolveScope(req, res)
+  if (!resolved) return
+  const { scope, organizationId, organizationName } = resolved
+
   const userScope = organizationId ? { organizationId } : {}
   const relatedUserScope = organizationId ? { user: { organizationId } } : {}
 
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
+  // A week navigator — weekOffset=0 is the current week, 1 is the week
+  // before, etc. Only affects the stat cards below, not the 6-week trend
+  // (that always shows the most recent 6 weeks ending now).
+  const weekOffsetRaw = typeof req.query.weekOffset === 'string' ? parseInt(req.query.weekOffset, 10) : 0
+  const weekOffset = Number.isFinite(weekOffsetRaw) && weekOffsetRaw >= 0 ? weekOffsetRaw : 0
+  const weekEnd = new Date(Date.now() - weekOffset * 7 * DAY_MS)
+  const weekStart = new Date(weekEnd.getTime() - 7 * DAY_MS)
+  const priorWeekStart = new Date(weekStart.getTime() - 7 * DAY_MS)
 
   const totalTeachers = await prisma.user.count({ where: { role: 'teacher', ...userScope } })
 
   const activeUserIds = await prisma.usageLog.findMany({
-    where: { createdAt: { gte: sevenDaysAgo }, ...relatedUserScope },
+    where: { createdAt: { gte: weekStart, lt: weekEnd }, ...relatedUserScope },
     select: { userId: true },
     distinct: ['userId'],
   })
 
   // Category lives on the related Scenario, which Prisma can't group by
-  // directly, so pull rows and tally by category in JS instead.
+  // directly, so pull rows and tally by category in JS instead. All-time,
+  // cumulative — not scoped to the selected week.
   const attempts = await prisma.scenarioAttempt.findMany({
     where: { ...relatedUserScope },
     include: { scenario: true },
   })
   const debriefs = await prisma.debrief.findMany({ where: { category: { not: null }, ...relatedUserScope } })
 
-  const categoryTally = new Map<string, number>()
+  // Every category is always present, even at zero — a category with no
+  // tallied attempts is a confirmed zero (a complete count, not a sample),
+  // never rendered as "unavailable" on the client.
+  const categoryTally = new Map<string, number>(SCENARIO_CATEGORIES.map((c) => [c, 0]))
   for (const a of attempts) {
     categoryTally.set(a.scenario.category, (categoryTally.get(a.scenario.category) ?? 0) + 1)
   }
@@ -81,24 +108,65 @@ adminRouter.get('/overview', async (req, res) => {
     categoryTally.set(d.category, (categoryTally.get(d.category) ?? 0) + 1)
   }
 
-  const recentRated = attempts.filter((a) => a.rating != null && a.createdAt >= sevenDaysAgo)
+  const recentRated = attempts.filter((a) => a.rating != null && a.createdAt >= weekStart && a.createdAt < weekEnd)
   const priorRated = attempts.filter(
-    (a) => a.rating != null && a.createdAt >= fourteenDaysAgo && a.createdAt < sevenDaysAgo,
+    (a) => a.rating != null && a.createdAt >= priorWeekStart && a.createdAt < weekStart,
   )
-  const goodShare = (rows: typeof attempts) =>
-    rows.length === 0 ? null : rows.filter((a) => (a.rating ?? 0) >= 4).length / rows.length
+  const strongCount = (rows: typeof attempts) => rows.filter((a) => (a.rating ?? 0) >= 4).length
+
+  // Weekly activity trend — the 6 most recent weeks ending now, independent
+  // of the navigator above. Every week always resolves to a real count
+  // (possibly 0), since it's a complete tally of UsageLog rows, not a
+  // sample — no "unavailable" state applies here.
+  const weeklyActivity: { weekStart: string; activeCount: number }[] = []
+  for (let i = WEEKLY_TREND_WEEKS - 1; i >= 0; i--) {
+    const end = new Date(Date.now() - i * 7 * DAY_MS)
+    const start = new Date(end.getTime() - 7 * DAY_MS)
+    const ids = await prisma.usageLog.findMany({
+      where: { createdAt: { gte: start, lt: end }, ...relatedUserScope },
+      select: { userId: true },
+      distinct: ['userId'],
+    })
+    weeklyActivity.push({ weekStart: start.toISOString(), activeCount: ids.length })
+  }
 
   res.json({
     scope,
     organizationName,
     totalTeachers,
     activeThisWeek: activeUserIds.length,
+    weekOffset,
+    weekStart: weekStart.toISOString(),
+    weekEnd: weekEnd.toISOString(),
     categoryTally: Object.fromEntries(categoryTally),
     growth: {
-      recentStrongShare: goodShare(recentRated),
-      priorStrongShare: goodShare(priorRated),
+      recentStrong: strongCount(recentRated),
+      recentTotal: recentRated.length,
+      priorStrong: strongCount(priorRated),
+      priorTotal: priorRated.length,
     },
+    weeklyActivity,
   })
+})
+
+// Names/emails only — no attempts, ratings, or any practice content. Only
+// visible when a concrete organization is in view (an org_admin's own org,
+// or a superadmin's selected one) — never a platform-wide roster.
+adminRouter.get('/members', async (req, res) => {
+  const resolved = await resolveScope(req, res)
+  if (!resolved) return
+  const { organizationId } = resolved
+  if (!organizationId) {
+    res.status(400).json({ error: 'Select an organization to view its members.' })
+    return
+  }
+
+  const members = await prisma.user.findMany({
+    where: { organizationId },
+    select: { id: true, name: true, email: true, jobTitle: true, role: true, createdAt: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  res.json(members)
 })
 
 // Everything below is superadmin-only — creating/editing/deleting
