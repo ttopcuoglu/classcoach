@@ -29,9 +29,14 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs =
   const [level, setLevel] = useState(0)
   const [fatalError, setFatalError] = useState<string | null>(null)
 
-  const recorderRef = useRef<MediaRecorder | null>(null)
+  // The stream/AudioContext/analyser persist across turns within one
+  // conversation — re-requesting getUserMedia every turn made the browser
+  // re-show its "microphone access" indicator on every single turn instead
+  // of once per conversation.
   const streamRef = useRef<MediaStream | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const mimeTypeRef = useRef('')
   const timerRef = useRef<number | null>(null)
@@ -44,17 +49,27 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs =
     }, silenceMs)
   }
 
-  function cleanup() {
+  // Ends the current turn's level/silence-detection loop only — the
+  // underlying stream stays open for the next turn.
+  function stopTurnLoop() {
     if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current)
     rafIdRef.current = null
     if (timerRef.current) window.clearTimeout(timerRef.current)
     timerRef.current = null
+    recorderRef.current = null
+    setLevel(0)
+  }
+
+  // Fully releases the microphone. Call when leaving Talk It Through
+  // entirely (closing/stopping the conversation), not between turns.
+  function close() {
+    stopTurnLoop()
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
     audioCtxRef.current?.close()
     audioCtxRef.current = null
-    recorderRef.current = null
-    setLevel(0)
+    analyserRef.current = null
+    setListening(false)
   }
 
   async function start() {
@@ -62,32 +77,38 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs =
     setFatalError(null)
     chunksRef.current = []
 
-    let stream: MediaStream
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    } catch (err) {
-      const name = (err as DOMException)?.name
-      setFatalError(FATAL_ERROR_MESSAGES[name] ?? 'Could not access your microphone. Check your device and try again.')
-      return
-    }
-    streamRef.current = stream
+    let stream = streamRef.current
+    const streamIsLive = stream != null && stream.getTracks().some((t) => t.readyState === 'live')
+    if (!streamIsLive) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      } catch (err) {
+        const name = (err as DOMException)?.name
+        setFatalError(FATAL_ERROR_MESSAGES[name] ?? 'Could not access your microphone. Check your device and try again.')
+        return
+      }
+      streamRef.current = stream
 
-    const audioCtx = new AudioContext()
-    audioCtxRef.current = audioCtx
-    const source = audioCtx.createMediaStreamSource(stream)
-    const analyser = audioCtx.createAnalyser()
-    analyser.fftSize = 256
-    source.connect(analyser)
+      const audioCtx = new AudioContext()
+      audioCtxRef.current = audioCtx
+      const source = audioCtx.createMediaStreamSource(stream)
+      const analyser = audioCtx.createAnalyser()
+      analyser.fftSize = 256
+      source.connect(analyser)
+      analyserRef.current = analyser
+    }
+
+    const analyser = analyserRef.current!
     const data = new Uint8Array(analyser.frequencyBinCount)
 
     const supportedMime = MIME_CANDIDATES.find((t) => MediaRecorder.isTypeSupported(t))
     mimeTypeRef.current = supportedMime ?? ''
-    const recorder = supportedMime ? new MediaRecorder(stream, { mimeType: supportedMime }) : new MediaRecorder(stream)
+    const recorder = supportedMime ? new MediaRecorder(stream!, { mimeType: supportedMime }) : new MediaRecorder(stream!)
     recorder.ondataavailable = (e) => {
       if (e.data.size > 0) chunksRef.current.push(e.data)
     }
     recorder.onstop = async () => {
-      cleanup()
+      stopTurnLoop()
       setListening(false)
       const blob = new Blob(chunksRef.current, { type: mimeTypeRef.current || 'audio/webm' })
       try {
@@ -127,5 +148,5 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs =
   const supported =
     typeof MediaRecorder !== 'undefined' && typeof navigator?.mediaDevices?.getUserMedia === 'function'
 
-  return { supported, listening, level, fatalError, start, stop }
+  return { supported, listening, level, fatalError, start, stop, close }
 }

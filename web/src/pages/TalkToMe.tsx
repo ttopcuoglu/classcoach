@@ -24,7 +24,7 @@ export default function TalkToMe() {
   debriefRef.current = debrief
   const startedRef = useRef(false)
 
-  const { supported, level, fatalError, start, stop } = useVoiceTurn(handleTurnComplete)
+  const { supported, level, fatalError, start, close } = useVoiceTurn(handleTurnComplete)
 
   useEffect(() => {
     if (AUTO_START_ON_OPEN && supported && !startedRef.current) {
@@ -33,6 +33,13 @@ export default function TalkToMe() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supported])
+
+  // Release the microphone if the teacher navigates away (back button, tab
+  // close) without using the in-app Close button. Empty deps deliberately —
+  // close() only reads refs, so this closure never goes stale, and this
+  // must run only on unmount, not on every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => close, [])
 
   useEffect(() => {
     if (fatalError) {
@@ -99,13 +106,13 @@ export default function TalkToMe() {
   }
 
   function handleStop() {
-    stop()
+    close()
     audioRef.current?.pause()
     setPhase('idle')
   }
 
   function handleClose() {
-    stop()
+    close()
     audioRef.current?.pause()
     navigate('/')
   }
