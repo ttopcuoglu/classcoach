@@ -1,13 +1,18 @@
 import { Router } from 'express'
-import { synthesizeSpeech } from '../lib/deepgram.ts'
+import { Readable } from 'node:stream'
+import { synthesizeSpeechStream } from '../lib/deepgram.ts'
 
 export const ttsRouter = Router()
 
 const MAX_TEXT_LENGTH = 2000
 
-ttsRouter.post('/', async (req, res) => {
-  const { text } = req.body ?? {}
-  if (typeof text !== 'string' || !text.trim()) {
+// GET, not POST — an <audio src="..."> element can only stream natively
+// from a plain GET it points directly at, which is what lets the browser
+// start playback from Deepgram's first byte instead of waiting for the
+// whole clip to download.
+ttsRouter.get('/', async (req, res) => {
+  const text = typeof req.query.text === 'string' ? req.query.text : ''
+  if (!text.trim()) {
     res.status(400).json({ error: 'text is required' })
     return
   }
@@ -17,9 +22,13 @@ ttsRouter.post('/', async (req, res) => {
   }
 
   try {
-    const audio = await synthesizeSpeech(text.trim())
+    const upstream = await synthesizeSpeechStream(text.trim())
     res.setHeader('Content-Type', 'audio/mpeg')
-    res.send(audio)
+    if (!upstream.body) {
+      res.status(502).json({ error: 'Could not generate speech. Please try again.' })
+      return
+    }
+    Readable.fromWeb(upstream.body as import('stream/web').ReadableStream).pipe(res)
   } catch (error) {
     console.error('[tts] synthesis failed:', error)
     res.status(502).json({ error: 'Could not generate speech. Please try again.' })

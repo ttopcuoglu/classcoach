@@ -2,13 +2,41 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MicIcon, WarningIcon } from '../components/icons'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
-import { sendDebriefChat, startTalkToMe, synthesizeSpeech, type ChatMessage, type Debrief } from '../lib/api'
+import { buildSpeechUrl, sendDebriefChat, startTalkToMe, type ChatMessage, type Debrief } from '../lib/api'
 
 // Flip to false if auto-starting the mic on open turns out to be too
 // aggressive/error-prone in practice — no other code changes needed.
 const AUTO_START_ON_OPEN = true
 
 type Phase = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
+
+function splitIntoSentences(text: string): string[] {
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+// Plays a queue of audio clips back to back. Each clip streams natively
+// from its own first byte (see buildSpeechUrl/api/tts), and every clip's
+// request already started loading before this function was ever called
+// (they're all created up front in speak()), so a later sentence's audio
+// is generating concurrently with an earlier one's playback instead of
+// only starting once the previous one finishes.
+function playQueue(clips: HTMLAudioElement[], index: number, currentAudioRef: React.RefObject<HTMLAudioElement | null>): Promise<void> {
+  return new Promise((resolve) => {
+    if (index >= clips.length) {
+      resolve()
+      return
+    }
+    const clip = clips[index]
+    currentAudioRef.current = clip
+    const advance = () => resolve(playQueue(clips, index + 1, currentAudioRef))
+    clip.onended = advance
+    clip.onerror = advance // a bad segment is skipped, not fatal to the turn
+    clip.play().catch(advance)
+  })
+}
 
 export default function TalkToMe() {
   const navigate = useNavigate()
@@ -17,14 +45,14 @@ export default function TalkToMe() {
   const [error, setError] = useState<string | null>(null)
   const [muted, setMuted] = useState(false)
 
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null)
   const mutedRef = useRef(muted)
   mutedRef.current = muted
   const debriefRef = useRef<Debrief | null>(null)
   debriefRef.current = debrief
   const startedRef = useRef(false)
 
-  const { supported, level, fatalError, start, close } = useVoiceTurn(handleTurnComplete)
+  const { supported, level, fatalError, transcribing, start, close } = useVoiceTurn(handleTurnComplete)
 
   useEffect(() => {
     if (AUTO_START_ON_OPEN && supported && !startedRef.current) {
@@ -81,24 +109,21 @@ export default function TalkToMe() {
       resumeListening()
       return
     }
-    try {
-      const blob = await synthesizeSpeech(text)
-      const url = URL.createObjectURL(blob)
-      const audio = audioRef.current
-      if (!audio) {
-        resumeListening()
-        return
-      }
-      audio.src = url
-      audio.onended = () => {
-        URL.revokeObjectURL(url)
-        resumeListening()
-      }
-      await audio.play().catch(() => resumeListening())
-    } catch {
-      // TTS failed — the reply text is already visible, just keep going without audio
+    const sentences = splitIntoSentences(text)
+    if (sentences.length === 0) {
       resumeListening()
+      return
     }
+    // Created up front (not one at a time) so every sentence's audio
+    // starts streaming from Deepgram concurrently — the second sentence is
+    // already generating while the first one plays, not queued behind it.
+    const clips = sentences.map((s) => {
+      const audio = new Audio(buildSpeechUrl(s))
+      audio.crossOrigin = 'use-credentials'
+      return audio
+    })
+    await playQueue(clips, 0, currentAudioRef)
+    resumeListening()
   }
 
   function resumeListening() {
@@ -107,13 +132,13 @@ export default function TalkToMe() {
 
   function handleStop() {
     close()
-    audioRef.current?.pause()
+    currentAudioRef.current?.pause()
     setPhase('idle')
   }
 
   function handleClose() {
     close()
-    audioRef.current?.pause()
+    currentAudioRef.current?.pause()
     navigate('/')
   }
 
@@ -122,8 +147,6 @@ export default function TalkToMe() {
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas text-ink">
-      <audio ref={audioRef} className="hidden" />
-
       <header className="flex items-center justify-between border-b border-border bg-surface px-4 py-3">
         <p className="text-base font-semibold text-ink">Talk to Coach</p>
         <button type="button" onClick={handleClose} className="text-sm font-medium text-ink-soft hover:text-ink">
@@ -164,11 +187,12 @@ export default function TalkToMe() {
                 {(phase === 'idle' || phase === 'error') && <MicIcon className="h-9 w-9 text-ink-soft" />}
               </div>
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                {phase === 'listening' && (level > 8 ? 'Listening...' : "I'm listening — go ahead")}
-                {phase === 'thinking' && 'Thinking...'}
-                {phase === 'speaking' && 'Coach is speaking'}
-                {phase === 'idle' && 'Paused'}
-                {phase === 'error' && 'Something went wrong'}
+                {transcribing && 'Transcribing...'}
+                {!transcribing && phase === 'listening' && (level > 8 ? 'Listening...' : "I'm listening — go ahead")}
+                {!transcribing && phase === 'thinking' && 'Thinking...'}
+                {!transcribing && phase === 'speaking' && 'Coach is speaking'}
+                {!transcribing && phase === 'idle' && 'Paused'}
+                {!transcribing && phase === 'error' && 'Something went wrong'}
               </p>
             </div>
 

@@ -605,21 +605,12 @@ export async function transcribeTalkToMeAudio(audioBlob: Blob): Promise<{ transc
   return res.json()
 }
 
-// Returns raw audio, not JSON — uses fetch directly rather than the
-// JSON-only request() helper, same pattern as other binary/non-JSON calls
-// in this file.
-export async function synthesizeSpeech(text: string): Promise<Blob> {
-  const res = await fetch(`${API_BASE_URL}/api/tts`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => null)
-    throw new Error(body?.error ?? `Request failed with status ${res.status}`)
-  }
-  return res.blob()
+// A URL, not a fetch call — pointing an <audio> element's src directly at
+// this lets the browser stream Deepgram's response natively (playback can
+// start from the first byte) instead of buffering the whole clip via
+// fetch().blob() first.
+export function buildSpeechUrl(text: string): string {
+  return `${API_BASE_URL}/api/tts?text=${encodeURIComponent(text)}`
 }
 
 export function setDebriefSaved(id: string, saved: boolean): Promise<Debrief> {

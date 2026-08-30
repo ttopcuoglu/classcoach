@@ -28,6 +28,7 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs =
   const [listening, setListening] = useState(false)
   const [level, setLevel] = useState(0)
   const [fatalError, setFatalError] = useState<string | null>(null)
+  const [transcribing, setTranscribing] = useState(false)
 
   // The stream/AudioContext/analyser persist across turns within one
   // conversation — re-requesting getUserMedia every turn made the browser
@@ -110,13 +111,16 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs =
     recorder.onstop = async () => {
       stopTurnLoop()
       setListening(false)
+      setTranscribing(true)
       const blob = new Blob(chunksRef.current, { type: mimeTypeRef.current || 'audio/webm' })
       try {
         const { transcript } = await transcribeTalkToMeAudio(blob)
+        setTranscribing(false)
         onTurnComplete(transcript.trim())
       } catch {
         // A transcription hiccup for one turn shouldn't end the
         // conversation — treat it the same as "nothing was said."
+        setTranscribing(false)
         onTurnComplete('')
       }
     }
@@ -148,5 +152,5 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs =
   const supported =
     typeof MediaRecorder !== 'undefined' && typeof navigator?.mediaDevices?.getUserMedia === 'function'
 
-  return { supported, listening, level, fatalError, start, stop, close }
+  return { supported, listening, level, fatalError, transcribing, start, stop, close }
 }
