@@ -17,24 +17,29 @@ function splitIntoSentences(text: string): string[] {
     .filter(Boolean)
 }
 
-// Plays a queue of audio clips back to back. Each clip streams natively
-// from its own first byte (see buildSpeechUrl/api/tts), and every clip's
-// request already started loading before this function was ever called
-// (they're all created up front in speak()), so a later sentence's audio
-// is generating concurrently with an earlier one's playback instead of
-// only starting once the previous one finishes.
-function playQueue(clips: HTMLAudioElement[], index: number, currentAudioRef: React.RefObject<HTMLAudioElement | null>): Promise<void> {
+// Plays a queue of sentences back to back on ONE persistent <audio>
+// element, reused for the whole conversation. This has to be the same
+// element every time: mobile Safari only allows script-triggered
+// playback on a media element that was previously played successfully
+// from a real user gesture — a brand-new Audio() object created deep
+// inside an async chain (as every earlier version of this function did)
+// gets its play() silently rejected there, which .catch() then swallowed
+// as if the clip had simply finished, producing total silence with no
+// visible error. The cost of reusing one element is that a later
+// sentence's audio can no longer start loading while an earlier one is
+// still playing (only one <audio> can have one active source) — worth it
+// for audio that actually plays on a real phone.
+function playQueue(audio: HTMLAudioElement, sentences: string[], index: number): Promise<void> {
   return new Promise((resolve) => {
-    if (index >= clips.length) {
+    if (index >= sentences.length) {
       resolve()
       return
     }
-    const clip = clips[index]
-    currentAudioRef.current = clip
-    const advance = () => resolve(playQueue(clips, index + 1, currentAudioRef))
-    clip.onended = advance
-    clip.onerror = advance // a bad segment is skipped, not fatal to the turn
-    clip.play().catch(advance)
+    const advance = () => resolve(playQueue(audio, sentences, index + 1))
+    audio.onended = advance
+    audio.onerror = advance // a bad segment is skipped, not fatal to the turn
+    audio.src = buildSpeechUrl(sentences[index])
+    audio.play().catch(advance)
   })
 }
 
@@ -45,7 +50,7 @@ export default function TalkToMe() {
   const [error, setError] = useState<string | null>(null)
   const [muted, setMuted] = useState(false)
 
-  const currentAudioRef = useRef<HTMLAudioElement | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
   const mutedRef = useRef(muted)
   mutedRef.current = muted
   const debriefRef = useRef<Debrief | null>(null)
@@ -68,6 +73,35 @@ export default function TalkToMe() {
   // must run only on unmount, not on every render.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => close, [])
+
+  // Mobile browsers only allow script-triggered playback on a media
+  // element that has previously played successfully from a direct user
+  // gesture. The mic auto-starts on open (no tap involved), and a reply's
+  // first play() call happens well after any tap anyway (deep in an async
+  // record -> transcribe -> reply chain) — so without this, the very first
+  // reply of a session could still fail to play even on the same
+  // persistent <audio> element. Priming (a silent, immediately-paused
+  // play) on the first tap anywhere on the page "unlocks" that element for
+  // every later programmatic play() in this session.
+  useEffect(() => {
+    function primeAudio() {
+      const audio = audioRef.current
+      if (!audio) return
+      audio.muted = true
+      audio
+        .play()
+        .then(() => {
+          audio.pause()
+          audio.currentTime = 0
+          audio.muted = false
+        })
+        .catch(() => {
+          audio.muted = false
+        })
+    }
+    document.addEventListener('pointerdown', primeAudio, { once: true })
+    return () => document.removeEventListener('pointerdown', primeAudio)
+  }, [])
 
   useEffect(() => {
     if (fatalError) {
@@ -110,19 +144,11 @@ export default function TalkToMe() {
       return
     }
     const sentences = splitIntoSentences(text)
-    if (sentences.length === 0) {
+    if (sentences.length === 0 || !audioRef.current) {
       resumeListening()
       return
     }
-    // Created up front (not one at a time) so every sentence's audio
-    // starts streaming from Deepgram concurrently — the second sentence is
-    // already generating while the first one plays, not queued behind it.
-    const clips = sentences.map((s) => {
-      const audio = new Audio(buildSpeechUrl(s))
-      audio.crossOrigin = 'use-credentials'
-      return audio
-    })
-    await playQueue(clips, 0, currentAudioRef)
+    await playQueue(audioRef.current, sentences, 0)
     resumeListening()
   }
 
@@ -132,13 +158,13 @@ export default function TalkToMe() {
 
   function handleStop() {
     close()
-    currentAudioRef.current?.pause()
+    audioRef.current?.pause()
     setPhase('idle')
   }
 
   function handleClose() {
     close()
-    currentAudioRef.current?.pause()
+    audioRef.current?.pause()
     navigate('/')
   }
 
@@ -147,6 +173,12 @@ export default function TalkToMe() {
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas text-ink">
+      {/* crossOrigin is required for the session cookie to ride along with
+          this cross-subdomain GET (frontend/backend are on different
+          origins) — without it, /api/tts's requireAuth would reject the
+          audio element's own request. */}
+      <audio ref={audioRef} crossOrigin="use-credentials" className="hidden" />
+
       <header className="flex items-center justify-between border-b border-border bg-surface px-4 py-3">
         <p className="text-base font-semibold text-ink">Talk to Coach</p>
         <button type="button" onClick={handleClose} className="text-sm font-medium text-ink-soft hover:text-ink">
