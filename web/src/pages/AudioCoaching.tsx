@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, MicIcon, WarningIcon } from '../components/icons'
+import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
 import { setAskPrefill } from '../lib/communicationsPrefill'
+import { HATCH_STYLE } from '../lib/chartPatterns'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import {
   createAudioSession,
@@ -27,6 +29,7 @@ import {
   type FocusMetric,
   type ReflectChatErrorKind,
   type SpeakerSample,
+  type TranscriptSegment,
 } from '../lib/api'
 import {
   buildEvidenceQualityLine,
@@ -42,6 +45,7 @@ import {
   MIN_N_FOR_PERCENT,
   SHORT_SESSION_THRESHOLD_SEC,
   type ConfidentMetric,
+  type MetricState,
   type TalkBalanceJudgment,
 } from '../lib/reportConfidence'
 
@@ -1119,11 +1123,46 @@ function VoiceBalanceBar({
   )
 }
 
+// Chart #1 — Talk-Time Balance Bar: a single 2-segment stacked bar (you vs.
+// students), replacing two separate rows so the split reads as one whole
+// rather than two independently-scaled numbers. Never renders a 0/0 or empty
+// bar for missing data — the whole bar hatches when teacher talk itself is
+// unavailable; just the student segment hatches when only that side is.
+function TalkTimeBalanceBar({ teacherPct, studentPct }: { teacherPct: number | null; studentPct: number | null }) {
+  if (teacherPct == null) {
+    return <HatchedBar label="Talk balance unavailable this session" className="h-4" />
+  }
+  const remainder = Math.max(0, 100 - teacherPct - (studentPct ?? 0))
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex h-4 w-full overflow-hidden rounded-full bg-canvas">
+        <div className="h-full bg-brand-500" style={{ width: `${teacherPct}%` }} />
+        {studentPct != null ? (
+          <div className="h-full bg-brand-500/45" style={{ width: `${studentPct}%` }} />
+        ) : (
+          <div className="h-full" style={{ width: `${remainder}%`, ...HATCH_STYLE }} />
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-soft">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-brand-500" /> You — {teacherPct}%
+        </span>
+        <span className="flex items-center gap-1.5">
+          {studentPct != null ? (
+            <span className="h-2 w-2 rounded-full bg-brand-500/45" />
+          ) : (
+            <HatchedSwatch className="h-2 w-2" />
+          )}
+          Students — {studentPct != null ? `${studentPct}%` : 'unavailable'}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 function ClassroomVoiceBalance({
   teacherPct,
-  teacherSec,
   studentPct,
-  studentSec,
   groupPct,
   groupSec,
   silencePct,
@@ -1131,9 +1170,7 @@ function ClassroomVoiceBalance({
   caption,
 }: {
   teacherPct: number | null
-  teacherSec: number | null
   studentPct: number | null
-  studentSec: number | null
   groupPct: number | null
   groupSec: number | null
   silencePct: number | null
@@ -1143,11 +1180,12 @@ function ClassroomVoiceBalance({
   return (
     <div className="rounded-2xl border border-border bg-surface p-6">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Classroom voice balance</h2>
-      <div className="mt-3 flex flex-col gap-3">
-        <VoiceBalanceBar label="You" pct={teacherPct} sec={teacherSec} barClassName="bg-brand-500" />
-        <VoiceBalanceBar label="Students" pct={studentPct} sec={studentSec} barClassName="bg-brand-500/60" />
-        <VoiceBalanceBar label="Group work" pct={groupPct} sec={groupSec} barClassName="bg-brand-500/35" />
-        <VoiceBalanceBar label="Silence / other" pct={silencePct} sec={silenceSec} barClassName="bg-ink-soft/40" />
+      <div className="mt-3 flex flex-col gap-4">
+        <TalkTimeBalanceBar teacherPct={teacherPct} studentPct={studentPct} />
+        <div className="flex flex-col gap-3">
+          <VoiceBalanceBar label="Group work" pct={groupPct} sec={groupSec} barClassName="bg-brand-500/35" />
+          <VoiceBalanceBar label="Silence / other" pct={silencePct} sec={silenceSec} barClassName="bg-ink-soft/40" />
+        </div>
       </div>
       {caption && <p className="mt-3 text-sm text-ink-soft">{caption}</p>}
     </div>
@@ -1373,8 +1411,9 @@ function ReportPanel({
 
   // Questioning & Thinking
   const questionsMetric = getCountMetric({ count: session.questionCount, recordedSec })
+  const higherOrderCount = num('higherOrderQuestionCount')
   const higherOrderRatio =
-    session.questionCount != null ? formatRatio(num('higherOrderQuestionCount') ?? 0, session.questionCount) : null
+    session.questionCount != null ? formatRatio(higherOrderCount ?? 0, session.questionCount) : null
   const followUpMetric = getCountMetric({ count: num('followUpQuestionCount'), recordedSec })
   const waitTimeMetric = getPresenceMetric(session.avgWaitTimeSec)
 
@@ -1551,6 +1590,7 @@ function ReportPanel({
           studentSegmentsMetric={studentSegmentsMetric}
           questionsMetric={questionsMetric}
           higherOrderRatio={higherOrderRatio}
+          higherOrderCount={higherOrderCount}
           followUpMetric={followUpMetric}
           waitTimeMetric={waitTimeMetric}
           cfuMetric={cfuMetric}
@@ -2569,6 +2609,128 @@ function ClimateRoutinesTab({
   )
 }
 
+// Chart #2 — Pacing & Rhythm Timeline: buckets the session's already-fetched
+// per-utterance segments (session.segments, sent with every getAudioSession
+// call) into equal-duration bins spanning the full recording, and colors
+// each by whether teacher or student speech dominated it. A bin with no
+// segment overlap at all (a real coverage gap) hatches rather than being
+// skipped — the timeline always spans the full lesson duration.
+const PACING_TIMELINE_BINS = 24
+
+type PacingBin = 'teacher' | 'student' | 'unavailable'
+
+function buildPacingTimeline(segments: TranscriptSegment[], durationSec: number): PacingBin[] {
+  const binSec = durationSec / PACING_TIMELINE_BINS
+  const bins: PacingBin[] = []
+  for (let i = 0; i < PACING_TIMELINE_BINS; i++) {
+    const binStart = i * binSec
+    const binEnd = binStart + binSec
+    let teacherSec = 0
+    let studentSec = 0
+    for (const seg of segments) {
+      const overlap = Math.min(seg.endSec, binEnd) - Math.max(seg.startSec, binStart)
+      if (overlap <= 0) continue
+      if (seg.speakerLabel === 'Teacher') teacherSec += overlap
+      else if (seg.speakerLabel === 'Student') studentSec += overlap
+    }
+    bins.push(teacherSec === 0 && studentSec === 0 ? 'unavailable' : teacherSec >= studentSec ? 'teacher' : 'student')
+  }
+  return bins
+}
+
+function PacingTimeline({ segments, durationSec }: { segments: TranscriptSegment[]; durationSec: number | null }) {
+  if (durationSec == null || durationSec <= 0 || segments.length === 0) {
+    return (
+      <div className="rounded-2xl border border-border bg-surface p-6">
+        <h3 className="text-sm font-semibold text-ink">Pacing &amp; rhythm</h3>
+        <div className="mt-3">
+          <HatchedBar label="Pacing timeline unavailable this session." className="h-6 rounded-lg" />
+        </div>
+      </div>
+    )
+  }
+  const bins = buildPacingTimeline(segments, durationSec)
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-6">
+      <h3 className="text-sm font-semibold text-ink">Pacing &amp; rhythm</h3>
+      <div className="mt-3 flex h-6 w-full overflow-hidden rounded-lg">
+        {bins.map((bin, i) =>
+          bin === 'unavailable' ? (
+            <div key={i} className="h-full flex-1" style={HATCH_STYLE} />
+          ) : (
+            <div key={i} className={`h-full flex-1 ${bin === 'teacher' ? 'bg-brand-500' : 'bg-warm-400'}`} />
+          ),
+        )}
+      </div>
+      <div className="mt-1.5 flex justify-between text-[11px] text-ink-soft">
+        <span>0:00</span>
+        <span>{formatTime(durationSec)}</span>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-soft">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-brand-500" /> Teacher-heavy
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-warm-400" /> Student-heavy
+        </span>
+        <span className="flex items-center gap-1.5">
+          <HatchedSwatch /> Unavailable
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// Chart #3 — Questioning & Thinking Mix: the only two question types this
+// app actually detects are recall and higher-order (see questionLog/
+// higherOrderQuestionCount in audioAnalysis.ts) — shown as fractions, matching
+// this report's existing small-N convention, never a percentage.
+function QuestioningMixChart({
+  higherOrderCount,
+  totalCount,
+  state,
+}: {
+  higherOrderCount: number | null
+  totalCount: number | null
+  state: MetricState
+}) {
+  const unavailable = isMissingState(state) || totalCount == null || higherOrderCount == null
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-ink">Questioning mix</h3>
+      {unavailable ? (
+        <div className="mt-2">
+          <HatchedBar label="Question-type mix unavailable this session." />
+        </div>
+      ) : (
+        <div className="mt-2 flex flex-col gap-2.5">
+          {(
+            [
+              { label: 'Recall', count: totalCount - higherOrderCount },
+              { label: 'Higher-order', count: higherOrderCount },
+            ] as const
+          ).map((row) => (
+            <div key={row.label} className="flex flex-col gap-1">
+              <div className="flex items-baseline justify-between text-xs font-medium text-ink-soft">
+                <span>{row.label}</span>
+                <span>
+                  {row.count} of {totalCount}
+                </span>
+              </div>
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-canvas">
+                <div
+                  className="h-full rounded-full bg-brand-500"
+                  style={{ width: `${totalCount > 0 ? (row.count / totalCount) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function DiscourseDetailsTab({
   questionCount,
   questionLog,
@@ -2580,6 +2742,7 @@ function DiscourseDetailsTab({
   studentSegmentsMetric,
   questionsMetric,
   higherOrderRatio,
+  higherOrderCount,
   followUpMetric,
   waitTimeMetric,
   cfuMetric,
@@ -2599,6 +2762,7 @@ function DiscourseDetailsTab({
   studentSegmentsMetric: ReturnType<typeof getCountMetric>
   questionsMetric: ReturnType<typeof getCountMetric>
   higherOrderRatio: ReturnType<typeof formatRatio> | null
+  higherOrderCount: number | null
   followUpMetric: ReturnType<typeof getCountMetric>
   waitTimeMetric: ReturnType<typeof getPresenceMetric>
   cfuMetric: ReturnType<typeof getCountMetric>
@@ -2617,6 +2781,8 @@ function DiscourseDetailsTab({
           ? `You asked ${questionCount} question${questionCount === 1 ? '' : 's'} this session.`
           : 'No question data for this session.'}
       </p>
+
+      <PacingTimeline segments={session.segments} durationSec={session.durationSec} />
 
       <CategorySection
         title="Talk & Participation"
@@ -2683,6 +2849,11 @@ function DiscourseDetailsTab({
         </div>
       </CategorySection>
       <CoachNote text={questioningInsight} />
+      <QuestioningMixChart
+        higherOrderCount={higherOrderCount}
+        totalCount={questionCount}
+        state={higherOrderRatio?.state ?? 'not_measurable'}
+      />
 
       <CategorySection title="Checking Understanding" coverage={categoryCoverage([cfuMetric, feedbackRatio])}>
         <div id="stat-cfu">
@@ -2980,7 +3151,7 @@ function TrendChart({
             preserveAspectRatio="none"
             className="mt-3"
           >
-            {series.map((s) => {
+            {series.map((s, seriesIndex) => {
               const coords = s.values.map((v, i) => ({
                 x: n > 1 ? padX + (i / (n - 1)) * usableW : padX + usableW / 2,
                 y: v == null ? null : padY + usableH - (Math.min(v, maxValue) / maxValue) * usableH,
@@ -3010,8 +3181,30 @@ function TrendChart({
                     />
                   ))}
                   {coords.map((c, i) =>
-                    c.y == null ? null : <circle key={i} cx={c.x} cy={c.y} r={3} fill={`var(${s.colorVar})`} />,
+                    c.y == null ? null : (
+                      <circle key={i} cx={c.x} cy={c.y} r={3} fill={`var(${s.colorVar})`} />
+                    ),
                   )}
+                  {/* Chart #4 — sessions with no measured value for this metric never
+                      dip the line to zero: the path above already breaks into a gap
+                      (see the segment-building loop), and a dashed hollow marker
+                      fills that gap so it reads as "not measured," not "measured
+                      zero." A native <title> carries the "no data" label without
+                      permanently cluttering a dense multi-session chart. */}
+                  {coords.map((c, i) => {
+                    if (c.y != null) return null
+                    // Multiple series share the same x-axis — stagger gap markers
+                    // vertically by series so simultaneous gaps don't sit exactly
+                    // on top of one another.
+                    const midY = padY + usableH / 2 + (seriesIndex - (series.length - 1) / 2) * 9
+                    return (
+                      <g key={`gap-${i}`}>
+                        <title>no data</title>
+                        <DashedLinePoint cx={c.x} cy={midY} colorVar={s.colorVar} />
+                        {series.length === 1 && <NoDataLabel x={c.x} y={midY + 11} />}
+                      </g>
+                    )
+                  })}
                 </g>
               )
             })}
