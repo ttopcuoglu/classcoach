@@ -543,6 +543,9 @@ export default function Guide() {
             <Link to="/guide" className="hover:text-ink">
               Guide
             </Link>
+            <Link to="/faq" className="hover:text-ink">
+              FAQ
+            </Link>
             <a href="/terms" className="hover:text-ink">
               Privacy
             </a>

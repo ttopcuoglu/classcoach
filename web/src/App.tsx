@@ -27,6 +27,7 @@ const TalkToMe = lazy(() => import('./pages/TalkToMe'))
 const Onboarding = lazy(() => import('./pages/Onboarding'))
 const Terms = lazy(() => import('./pages/Terms'))
 const Guide = lazy(() => import('./pages/Guide'))
+const Faq = lazy(() => import('./pages/Faq'))
 
 function RouteFallback() {
   return (
@@ -86,6 +87,7 @@ export default function App() {
             <Route path="shared/:type/:token" element={<Shared />} />
             <Route path="terms" element={<Terms />} />
             <Route path="guide" element={<Guide />} />
+            <Route path="faq" element={<Faq />} />
             <Route
               path="onboarding"
               element={

@@ -156,6 +156,9 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             <Link to="/guide" className="hover:text-ink">
               Guide
             </Link>
+            <Link to="/faq" className="hover:text-ink">
+              FAQ
+            </Link>
           </nav>
           <div className="flex items-center gap-5">
             <a href="#get-started" className="text-sm font-medium text-ink-soft hover:text-ink">
@@ -420,6 +423,9 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
           <div className="flex items-center gap-5">
             <Link to="/guide" className="hover:text-ink">
               Guide
+            </Link>
+            <Link to="/faq" className="hover:text-ink">
+              FAQ
             </Link>
             <a href="/terms" className="hover:text-ink">
               Privacy
