@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import AuthCard from '../components/AuthCard'
 import {
@@ -7,8 +8,10 @@ import {
   ChartBarIcon,
   CheckIcon,
   ChatBubbleIcon,
+  CloseIcon,
   HeadsetIcon,
   LockIcon,
+  MenuIcon,
   MicIcon,
   PlayIcon,
   QuoteIcon,
@@ -132,6 +135,7 @@ function DeviceMockup() {
 }
 
 export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   return (
     <div className="min-h-screen bg-cream text-ink">
       {/* Nav */}
@@ -160,19 +164,73 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               FAQ
             </Link>
           </nav>
-          <div className="flex items-center gap-5">
-            <a href="#get-started" className="text-sm font-medium text-ink-soft hover:text-ink">
+          <div className="flex items-center gap-2 sm:gap-5">
+            <a href="#get-started" className="hidden text-sm font-medium text-ink-soft hover:text-ink sm:inline">
               Log in
             </a>
             <a
               href="#get-started"
-              className="flex items-center gap-1.5 rounded-full bg-forest px-4 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
+              className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-forest px-3.5 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90 sm:px-4"
             >
               Try Wivoza
-              <ArrowRightIcon className="h-4 w-4" />
+              <ArrowRightIcon className="h-4 w-4 shrink-0" />
             </a>
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen((open) => !open)}
+              aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-hairline text-forest md:hidden"
+            >
+              {mobileNavOpen ? <CloseIcon className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
+            </button>
           </div>
         </div>
+        {mobileNavOpen && (
+          <nav className="flex flex-col gap-1 border-t border-hairline bg-cream-card px-6 py-3 md:hidden">
+            <a
+              href="#get-started"
+              onClick={() => setMobileNavOpen(false)}
+              className="rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-cream hover:text-ink sm:hidden"
+            >
+              Log in
+            </a>
+            <a
+              href="#how-it-works"
+              onClick={() => setMobileNavOpen(false)}
+              className="rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-cream hover:text-ink"
+            >
+              How it works
+            </a>
+            <a
+              href="#what-you-can-do"
+              onClick={() => setMobileNavOpen(false)}
+              className="rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-cream hover:text-ink"
+            >
+              What you can do
+            </a>
+            <a
+              href="#why-wivoza"
+              onClick={() => setMobileNavOpen(false)}
+              className="rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-cream hover:text-ink"
+            >
+              Why Wivoza
+            </a>
+            <Link
+              to="/guide"
+              onClick={() => setMobileNavOpen(false)}
+              className="rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-cream hover:text-ink"
+            >
+              Guide
+            </Link>
+            <Link
+              to="/faq"
+              onClick={() => setMobileNavOpen(false)}
+              className="rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-cream hover:text-ink"
+            >
+              FAQ
+            </Link>
+          </nav>
+        )}
       </header>
 
       {/* Hero */}
