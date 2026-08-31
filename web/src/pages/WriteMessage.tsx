@@ -28,8 +28,24 @@ const QUICK_ACTIONS: { label: string; instruction: string }[] = [
   { label: 'Make firmer', instruction: 'Make this firmer and more direct, without sounding rude.' },
   { label: 'Shorten', instruction: 'Shorten this significantly while keeping the key points.' },
   { label: 'Simplify language', instruction: 'Simplify the language so it reads at an easier level.' },
-  { label: 'Translate', instruction: 'Translate this into Spanish, keeping the same tone.' },
   { label: 'Create another version', instruction: 'Write a different version of this message — different phrasing, same tone and information.' },
+]
+
+// Common languages across US K-12 EL populations, plus a free-text escape
+// hatch for anything not listed — deliberately not exhaustive, this isn't
+// meant to be a full locale list.
+const TRANSLATE_LANGUAGES = [
+  'Spanish',
+  'Chinese (Simplified)',
+  'Vietnamese',
+  'Arabic',
+  'Haitian Creole',
+  'Portuguese',
+  'Russian',
+  'Tagalog',
+  'Korean',
+  'French',
+  'Somali',
 ]
 
 export default function WriteMessage() {
@@ -60,6 +76,9 @@ export default function WriteMessage() {
   const [chatDraft, setChatDraft] = useState('')
   const [chatSending, setChatSending] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
+
+  const [translateOpen, setTranslateOpen] = useState(false)
+  const [customLanguage, setCustomLanguage] = useState('')
 
   const activeFieldSetter =
     startingAction === 'respond' ? setReceivedMessage : startingAction === 'improve' ? setExistingDraft : setIncidentSummary
@@ -108,6 +127,14 @@ export default function WriteMessage() {
     } finally {
       setChatSending(false)
     }
+  }
+
+  function handleTranslate(language: string) {
+    const trimmed = language.trim()
+    if (!trimmed) return
+    setTranslateOpen(false)
+    setCustomLanguage('')
+    sendChatMessage(`Translate this into ${trimmed}, keeping the same tone.`)
   }
 
   async function handleSendChat() {
@@ -373,6 +400,54 @@ export default function WriteMessage() {
                   {action.label}
                 </button>
               ))}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setTranslateOpen((open) => !open)}
+                  disabled={chatSending}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ${
+                    translateOpen
+                      ? 'border-brand-500 bg-brand-50 text-brand-600'
+                      : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                  }`}
+                >
+                  Translate
+                </button>
+                {translateOpen && (
+                  <div className="absolute left-0 top-full z-10 mt-2 w-56 rounded-lg border border-border bg-surface p-1.5 shadow-lg">
+                    {TRANSLATE_LANGUAGES.map((language) => (
+                      <button
+                        key={language}
+                        type="button"
+                        onClick={() => handleTranslate(language)}
+                        className="block w-full rounded-md px-3 py-1.5 text-left text-sm text-ink hover:bg-canvas"
+                      >
+                        {language}
+                      </button>
+                    ))}
+                    <div className="mt-1 flex items-center gap-1.5 border-t border-border px-1 pt-1.5">
+                      <input
+                        type="text"
+                        value={customLanguage}
+                        onChange={(e) => setCustomLanguage(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleTranslate(customLanguage)
+                        }}
+                        placeholder="Other language..."
+                        className="min-w-0 flex-1 rounded-md border border-border bg-canvas px-2 py-1 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleTranslate(customLanguage)}
+                        disabled={!customLanguage.trim()}
+                        className="rounded-md bg-brand-500 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                      >
+                        Go
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <CoachingChat
