@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import AuthCard from '../components/AuthCard'
 import {
   ArrowRightIcon,
@@ -152,6 +153,9 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             <a href="#why-wivoza" className="hover:text-ink">
               Why Wivoza
             </a>
+            <Link to="/guide" className="hover:text-ink">
+              Guide
+            </Link>
           </nav>
           <div className="flex items-center gap-5">
             <a href="#get-started" className="text-sm font-medium text-ink-soft hover:text-ink">
@@ -414,6 +418,9 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             <span className="hidden sm:inline">Practice. Reflect. Grow.</span>
           </div>
           <div className="flex items-center gap-5">
+            <Link to="/guide" className="hover:text-ink">
+              Guide
+            </Link>
             <a href="/terms" className="hover:text-ink">
               Privacy
             </a>

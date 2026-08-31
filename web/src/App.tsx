@@ -19,6 +19,7 @@ import TalkToMe from './pages/TalkToMe'
 import Landing from './pages/Landing'
 import Onboarding from './pages/Onboarding'
 import Terms from './pages/Terms'
+import Guide from './pages/Guide'
 import { getMe, type UserProfile } from './lib/api'
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string
@@ -69,6 +70,7 @@ export default function App() {
         <Routes>
           <Route path="shared/:type/:token" element={<Shared />} />
           <Route path="terms" element={<Terms />} />
+          <Route path="guide" element={<Guide />} />
           <Route
             path="onboarding"
             element={
