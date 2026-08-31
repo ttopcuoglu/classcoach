@@ -56,3 +56,11 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+
+/* Without this, browsers drop background colors/tints when printing or
+   exporting to PDF — flattening every icon chip, callout, and section
+   band to plain white. */
+* {
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
