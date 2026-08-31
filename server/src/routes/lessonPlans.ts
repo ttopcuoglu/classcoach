@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
+import { CORE_COACHING_RULES, INSTRUCTION_PRIORITY_NOTICE } from '../lib/coachPersona.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
@@ -25,7 +26,8 @@ Specific, practical coaching on this lesson plan — what's working, what to adj
 </feedback>
 <rating>
 A single integer 1-5 rating of your honest private assessment of how well this plan is built. This is never shown to the teacher — it's used only to track their growth over time — so rate honestly rather than generously. Output only the digit, nothing else.
-</rating>`
+</rating>
+${CORE_COACHING_RULES}`
 
 const LESSON_PLAN_CHAT_SYSTEM_PROMPT = `You are a warm, practical instructional coach for K-12 teachers, continuing a conversation about a lesson plan you already gave feedback on. Build on what the teacher says: if they push back, ask a follow-up, or want to think through a change, engage with that directly rather than repeating your first assessment. Keep in mind whether the plan is a single lesson or a multi-day/weekly plan, as established earlier in the conversation. Stay grounded in what's already been discussed; never invent details about the plan that weren't given to you.
 
@@ -43,7 +45,8 @@ If — and only if — the teacher is asking for a concrete change to the plan i
 The full plan, reproduced in its entirety with the requested change incorporated. Not a diff or a summary of the change — the whole plan, ready to replace the original.
 </revised_plan>
 
-Omit <revised_plan> entirely when the teacher is just asking a question, reflecting, or hasn't asked for an edit.`
+Omit <revised_plan> entirely when the teacher is just asking a question, reflecting, or hasn't asked for an edit.
+${CORE_COACHING_RULES}`
 
 const GENERATE_SYSTEM_PROMPT = `You write sample single-day lesson plans for K-12 teachers, modeled on a standard gradual-release template, to give a teacher ideas — this is inspiration, not a plan they're required to follow.
 
@@ -78,7 +81,8 @@ The higher-order question(s) and where students engage with them.
 </hots>
 <homework>
 The homework suggestion, or "None".
-</homework>`
+</homework>
+${INSTRUCTION_PRIORITY_NOTICE}`
 
 lessonPlansRouter.get('/', async (req, res) => {
   const { saved, mode } = req.query

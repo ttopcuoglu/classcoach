@@ -3,6 +3,8 @@ import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { applyMemoryUpdate, buildMemoryContextBlock, MEMORY_UPDATE_INSTRUCTION } from '../lib/coachMemory.ts'
 import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
+import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
+import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
 import { transcribeAudio } from '../lib/deepgram.ts'
 import { extractTag, stripTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
@@ -59,14 +61,17 @@ If this describes a real incident that clearly fits one of these categories, out
 </category>
 <rating>
 For a real incident: a single integer 1-5, your honest private assessment of how effectively it was handled, per classroom management best practice. This is never shown to the teacher — it's used only to track their growth over time — so rate honestly rather than generously. For a general question, there's nothing to rate — output 0. Output only the digit, nothing else.
-</rating>`
+</rating>
+${CORE_COACHING_RULES}`
 
-const ASK_CHAT_SYSTEM_PROMPT = `You are a warm, practical classroom management coach for grades 6-12 teachers, continuing a conversation you already gave coaching feedback in. Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says: if they push back, ask a follow-up, or want to think through a different angle, engage with that directly rather than repeating your first assessment. Stay grounded in what they've told you; never invent details.`
+const ASK_CHAT_SYSTEM_PROMPT = `You are a warm, practical classroom management coach for grades 6-12 teachers, continuing a conversation you already gave coaching feedback in. Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says: if they push back, ask a follow-up, or want to think through a different angle, engage with that directly rather than repeating your first assessment. Stay grounded in what they've told you; never invent details.
+${CORE_COACHING_RULES}`
 
 // Used for both the first "Talk to Me" turn and every follow-up — same
 // persona/pacing throughout a live spoken conversation, unlike Ask's
 // separate "first response" vs. "chat" prompts.
-const TALK_SYSTEM_PROMPT = `You are Coach, a warm, practical classroom management coach for K-12 teachers, having a live SPOKEN conversation — the teacher is talking to you out loud and your reply will be read aloud back to them. Keep every reply to 1-2 short sentences, plain conversational language. No lists, no markdown, no parenthetical asides, nothing that reads awkwardly out loud. Ask at most one question at a time. Stay grounded in what the teacher has actually said; never invent details.`
+const TALK_SYSTEM_PROMPT = `You are Coach, a warm, practical classroom management coach for K-12 teachers, having a live SPOKEN conversation — the teacher is talking to you out loud and your reply will be read aloud back to them. Keep every reply to 1-2 short sentences, plain conversational language. No lists, no markdown, no parenthetical asides, nothing that reads awkwardly out loud. Ask at most one question at a time. Stay grounded in what the teacher has actually said; never invent details.
+${CORE_COACHING_RULES}`
 
 function isValidCategory(value: unknown): value is string {
   return typeof value === 'string' && (SCENARIO_CATEGORIES as readonly string[]).includes(value)
@@ -121,6 +126,7 @@ debriefRouter.post('/', async (req, res) => {
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('\n')
+    flagIfUnsafe(text, 'debrief.ask')
 
     const feedback = extractTag(text, 'feedback') ?? text.trim()
     const followUp = extractTag(text, 'follow_up')
@@ -185,6 +191,7 @@ debriefRouter.post('/talk', async (req, res) => {
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('\n')
+    flagIfUnsafe(text, 'debrief.talk')
     const reply = stripTag(text, 'memory_update')
 
     if (!reply) {
@@ -261,6 +268,7 @@ debriefRouter.post('/:id/chat', async (req, res) => {
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('\n')
+    flagIfUnsafe(text, isTalk ? 'debrief.talk.chat' : 'debrief.ask.chat')
     const reply = stripTag(text, 'memory_update')
 
     if (!reply) {

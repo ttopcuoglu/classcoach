@@ -8,6 +8,7 @@ import {
   isValidStartingAction,
 } from '../lib/communicationOptions.ts'
 import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
+import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { prisma } from '../lib/prisma.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
@@ -54,7 +55,8 @@ Rules:
 - Never include real, identifiable people's full names — use "your student"/"you" as appropriate or a first-name placeholder like "[Student's name]".
 - Match the requested tone, recipient, purpose, and format exactly.
 - When responding to a received message, address what it actually said. When improving a draft, preserve the teacher's intended meaning and specific details — polish it, don't replace it with something generic.
-- Output ONLY the message text (with the optional "Subject:" line as described above). No preamble or explanation.`
+- Output ONLY the message text (with the optional "Subject:" line as described above). No preamble or explanation.
+${CORE_COACHING_RULES}`
 
 const MESSAGE_CHAT_SYSTEM_PROMPT = `You help K-12 teachers revise a draft message, based on what the teacher asks for (e.g. "make it warmer," "shorter," "translate to Spanish"). This is a live revision, not a discussion — your job each turn is to produce the updated message, not to comment on it.
 
@@ -62,7 +64,8 @@ Rules:
 - Output ONLY the revised message text (including a "Subject:" line if the original had one). No preamble, no explanation of what you changed.
 - Keep it ready-to-send, factual and specific, never accusatory.
 - Never include real, identifiable people's full names — use "your student"/"you" or a first-name placeholder like "[Student's name]".
-- Apply the teacher's requested change to the most recent version of the message, keeping everything else about it intact unless asked to change it too.`
+- Apply the teacher's requested change to the most recent version of the message, keeping everything else about it intact unless asked to change it too.
+${CORE_COACHING_RULES}`
 
 function buildContext(body: Record<string, unknown>): { context: string; error: string | null } {
   const startingAction = isValidStartingAction(body.startingAction) ? body.startingAction : 'new'

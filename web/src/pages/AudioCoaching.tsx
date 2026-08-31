@@ -556,8 +556,16 @@ function buildReflectContext(
   cfuMetric: { state: string },
   redirectionMetric: { state: string },
   directiveMetric: { state: string },
+  coverage: { isShort: boolean; recordedSec: number },
 ): string[] {
   const context: string[] = []
+
+  // Told to Claude plainly rather than left implicit — a short recording
+  // should read as a snapshot, not a full lesson, in every reply, not just
+  // when a sparse highlight list happens to make that obvious.
+  if (coverage.isShort) {
+    context.push(`This was a short recording (${formatTime(coverage.recordedSec)}) — a snapshot, not the whole lesson.`)
+  }
 
   ;(session.highlights ?? []).forEach((h) => {
     context.push(
@@ -1444,7 +1452,7 @@ function ReportPanel({
       ? formatRatio(positiveCount, positiveCount + correctiveCount)
       : { state: 'not_measurable' as const, display: '—', reason: 'No positive or corrective phrases detected.' }
 
-  const reflectContext = buildReflectContext(session, cfuMetric, redirectionMetric, directiveMetric)
+  const reflectContext = buildReflectContext(session, cfuMetric, redirectionMetric, directiveMetric, coverage)
 
   const talkInsight = buildTalkInsight(session)
   const questioningInsight = buildQuestioningInsight(session, higherOrderRatio)

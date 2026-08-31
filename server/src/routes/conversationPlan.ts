@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { isValidMeetingFormat, isValidRecipientType } from '../lib/communicationOptions.ts'
 import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
+import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
@@ -63,9 +64,11 @@ Agreed-upon next steps to propose.
 </next_steps>
 <admin_involvement>
 When (if at all) an administrator should be involved — say plainly if this seems necessary, but never state a definitive legal conclusion, only a suggestion to loop someone in. Leave this section brief ("Not likely necessary for this conversation.") when it doesn't apply.
-</admin_involvement>`
+</admin_involvement>
+${CORE_COACHING_RULES}`
 
-const PLAN_CHAT_SYSTEM_PROMPT = `You are a warm, practical communication coach continuing to help a K-12 teacher prepare for a real, upcoming conversation you already built a plan for. This is a live revision/discussion — if the teacher asks a specific question (e.g. "what if they deny it?"), answer it directly and practically in 2-4 sentences. If they ask you to change the plan (e.g. "give me a stronger opening"), revise the plan and say so briefly. Stay grounded in what they've told you; never invent details.`
+const PLAN_CHAT_SYSTEM_PROMPT = `You are a warm, practical communication coach continuing to help a K-12 teacher prepare for a real, upcoming conversation you already built a plan for. This is a live revision/discussion — if the teacher asks a specific question (e.g. "what if they deny it?"), answer it directly and practically in 2-4 sentences. If they ask you to change the plan (e.g. "give me a stronger opening"), revise the plan and say so briefly. Stay grounded in what they've told you; never invent details.
+${CORE_COACHING_RULES}`
 
 type PlanContent = {
   opening: string

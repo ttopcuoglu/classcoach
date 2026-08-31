@@ -2,6 +2,8 @@ import { Router } from 'express'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { analyzeTranscript, buildContentExhibits, detectLessonContent, type Segment } from '../lib/audioAnalysis.ts'
+import { CORE_COACHING_RULES, TRANSCRIPT_RELIABILITY_NOTICE } from '../lib/coachPersona.ts'
+import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
 import { transcribeAudio } from '../lib/deepgram.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
@@ -29,7 +31,8 @@ Respond with exactly these three sections and nothing outside them:
 </growth_areas>
 <next_step>
 One concrete, small next step the teacher landed on or that fits what they said.
-</next_step>`
+</next_step>
+${CORE_COACHING_RULES}`
 
 const REFLECT_TURN_CAP = 8
 const REFLECT_START_MESSAGE = 'Start our reflection conversation.'
@@ -63,7 +66,8 @@ Respond with exactly this block, repeated 2 to 4 times, and nothing else:
 <text>1-2 sentences of warm, constructive feedback</text>
 </note>
 
-Reserve "Worth double-checking" strictly for a concrete, plainly-stated factual claim — never for opinions, interpretations, or open-ended discussion — and always phrase it as a question, e.g. "Worth double-checking: ... — was that the intended framing?" Use it rarely, and only include it at all if something genuinely fits.`
+Reserve "Worth double-checking" strictly for a concrete, plainly-stated factual claim — never for opinions, interpretations, or open-ended discussion — and always phrase it as a question, e.g. "Worth double-checking: ... — was that the intended framing?" Use it rarely, and only include it at all if something genuinely fits.
+${CORE_COACHING_RULES}`
 }
 
 function parseContentNotes(text: string, exhibits: { text: string; timestampSec: number }[]): ContentNote[] {
@@ -97,6 +101,11 @@ back-and-forth chat. Keep every reply to 2-4 sentences, conversational, and grou
 below and in what the teacher has said so far. Never invent a detail — a number, a quote, a moment —
 that isn't given to you.
 
+You're in Reflect mode: help the teacher notice and interpret what happened, don't prescribe a fix, and
+end with one genuine, open question. When you offer an interpretation rather than a plain fact, label it
+as one — "One possibility is...", "This may suggest...", "This coincided with..." — rather than stating
+it as settled. Don't say one moment caused another unless the facts below clearly show that.
+
 Ask one open, specific question at a time rather than several. Build on what the teacher just said
 instead of listing unrelated observations. Coach, don't grade — there's no right answer you're steering
 them toward.
@@ -108,7 +117,9 @@ nothing here is a guess):
 ${context.map((line) => `- ${line}`).join('\n')}
 
 If the teacher asks about something not covered above, say plainly that the data doesn't cover it rather
-than guessing.`
+than guessing.
+${TRANSCRIPT_RELIABILITY_NOTICE}
+${CORE_COACHING_RULES}`
 }
 
 function isValidStatus(value: unknown): value is string {
@@ -382,11 +393,12 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
       system: buildReflectSystemPrompt(safeContext),
       messages,
     })
-    const reply = response.content
+    const text = response.content
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('\n')
-      .trim()
+    flagIfUnsafe(text, 'audioSessions.reflectChat')
+    const reply = text.trim()
 
     const now = new Date().toISOString()
     const newTurns: ReflectMessage[] = isStart
@@ -447,6 +459,7 @@ audioSessionsRouter.post('/:id/reflect-summary', async (req, res) => {
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('\n')
+    flagIfUnsafe(text, 'audioSessions.reflectSummary')
 
     res.json({
       strengths: extractTag(text, 'strengths'),
@@ -509,6 +522,7 @@ audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('\n')
+    flagIfUnsafe(text, 'audioSessions.contentNotes')
 
     const notes = parseContentNotes(text, exhibits)
     if (notes.length === 0) {

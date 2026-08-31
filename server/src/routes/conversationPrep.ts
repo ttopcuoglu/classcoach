@@ -7,6 +7,7 @@ import {
   isValidReviewMode,
 } from '../lib/communicationOptions.ts'
 import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
+import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
 import { pickGradeBand } from '../lib/scenarioCategories.ts'
@@ -130,14 +131,16 @@ A complete, natural example of what the teacher could have said instead, start t
 </model_response>
 <next_step>
 A concrete suggested next step.
-</next_step>`
+</next_step>
+${CORE_COACHING_RULES}`
 }
 
 function buildPracticeChatSystemPrompt(category: string | null): string {
   const guidance = category ? CHALLENGE_GUIDANCE[category] ?? '' : ''
   return `You are a warm, practical communication coach for K-12 teachers, continuing a conversation about a practice difficult-conversation exchange you already gave feedback on. ${guidance}
 
-Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says; stay grounded in their specific situation; never invent details.`
+Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says; stay grounded in their specific situation; never invent details.
+${CORE_COACHING_RULES}`
 }
 
 const REVIEW_SYSTEM_PROMPT = `You are a warm, practical communication coach for K-12 teachers reviewing a message they received and a response they're planning to send. Coach, don't grade.
@@ -163,7 +166,8 @@ Specific, actionable changes to make.
 {{REVISED_RESPONSE_SECTION}}
 <escalation_guidance>
 Only include real guidance here if the situation may warrant administrator/staff involvement, phrased as a suggestion to loop someone in, never a legal conclusion. Leave this section empty if nothing applies.
-</escalation_guidance>`
+</escalation_guidance>
+${CORE_COACHING_RULES}`
 
 function buildReviewSystemPrompt(reviewMode: string | null): string {
   const wantsRewrite = reviewMode === 'rewrite_only' || reviewMode === 'both'
@@ -173,7 +177,8 @@ function buildReviewSystemPrompt(reviewMode: string | null): string {
   return REVIEW_SYSTEM_PROMPT.replace('{{REVISED_RESPONSE_SECTION}}', section)
 }
 
-const REVIEW_CHAT_SYSTEM_PROMPT = `You are a warm, practical communication coach for K-12 teachers, continuing a discussion about a message they received and their planned response, which you already reviewed. Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Refer back to the original message and response throughout; never invent details. If asked to rewrite part of the response, you may include the specific revised wording in your reply.`
+const REVIEW_CHAT_SYSTEM_PROMPT = `You are a warm, practical communication coach for K-12 teachers, continuing a discussion about a message they received and their planned response, which you already reviewed. Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Refer back to the original message and response throughout; never invent details. If asked to rewrite part of the response, you may include the specific revised wording in your reply.
+${CORE_COACHING_RULES}`
 
 type CoachingReport = {
   clarity: { rating: string; feedback: string }
