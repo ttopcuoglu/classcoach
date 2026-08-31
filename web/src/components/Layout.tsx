@@ -132,7 +132,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             {focusMetric ? FOCUS_METRIC_LABELS[focusMetric] : 'Not set yet'}
           </p>
           <Link to="/audio-coaching" className="mt-2.5 inline-block text-xs font-semibold text-gold hover:underline">
-            View your trends &rarr;
+            View your trends →
           </Link>
         </div>
 

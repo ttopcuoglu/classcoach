@@ -202,7 +202,7 @@ export default function Home() {
             <p className="relative mt-4 text-xs font-semibold uppercase tracking-wide text-terracotta">{tag}</p>
             <h2 className="relative mt-1.5 font-heading text-lg font-bold text-forest">{title}</h2>
             <p className="relative mt-1.5 text-sm text-ink-soft">{description}</p>
-            <p className={`relative mt-4 text-sm font-semibold ${linkClass}`}>{linkLabel} &nearr;</p>
+            <p className={`relative mt-4 text-sm font-semibold ${linkClass}`}>{linkLabel} ↗</p>
           </Link>
         ))}
       </div>

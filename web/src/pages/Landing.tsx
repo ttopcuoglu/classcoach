@@ -364,7 +364,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               </div>
               <p className="mt-6 font-heading text-5xl font-extrabold">3.1s</p>
               <p className="mt-1 text-sm text-cream/70">
-                average wait time <span className="text-gold">&uarr; 1.7s</span>
+                average wait time <span className="text-gold">↑ 1.7s</span>
               </p>
               <div className="mt-7 flex items-end gap-3" aria-hidden="true">
                 {[36, 52, 68, 84].map((h, i) => (
