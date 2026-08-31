@@ -44,6 +44,8 @@ profileRouter.put('/', async (req, res) => {
     teachingGoal,
     completeOnboarding,
     joinCode,
+    coachMemoryEnabled,
+    clearCoachMemory,
   } = req.body ?? {}
   if (name !== undefined && typeof name !== 'string') {
     res.status(400).json({ error: 'name must be a string' })
@@ -85,6 +87,14 @@ profileRouter.put('/', async (req, res) => {
     res.status(400).json({ error: 'joinCode must be a non-empty string' })
     return
   }
+  if (coachMemoryEnabled !== undefined && typeof coachMemoryEnabled !== 'boolean') {
+    res.status(400).json({ error: 'coachMemoryEnabled must be a boolean' })
+    return
+  }
+  if (clearCoachMemory !== undefined && clearCoachMemory !== true) {
+    res.status(400).json({ error: 'clearCoachMemory must be true if present' })
+    return
+  }
 
   // Resolve the join code before writing anything else, so a bad code 400s
   // the whole request cleanly rather than partially saving other fields.
@@ -119,9 +129,11 @@ profileRouter.put('/', async (req, res) => {
       jobTitle,
       schoolName,
       teachingGoal,
+      coachMemoryEnabled,
       ...orgFields,
       // Never trust a client-supplied date — the server owns this signal.
       ...(completeOnboarding === true ? { onboardingCompletedAt: new Date() } : {}),
+      ...(clearCoachMemory === true ? { coachMemory: null } : {}),
     },
     omit: SAFE_USER_OMIT,
     include: USER_INCLUDE_ORG,
@@ -141,7 +153,15 @@ profileRouter.post('/reset', async (req, res) => {
   await prisma.audioSession.deleteMany({ where: { userId } })
   await prisma.user.update({
     where: { id: userId },
-    data: { name: null, gradeLevels: null, subjects: null, onboardingProgress: null, focusMetric: null },
+    data: {
+      name: null,
+      gradeLevels: null,
+      subjects: null,
+      onboardingProgress: null,
+      focusMetric: null,
+      coachMemory: null,
+      coachMemoryEnabled: true,
+    },
     omit: SAFE_USER_OMIT,
   })
   res.json({ status: 'ok' })

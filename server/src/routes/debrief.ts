@@ -1,9 +1,10 @@
 import { Router } from 'express'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
+import { applyMemoryUpdate, buildMemoryContextBlock, MEMORY_UPDATE_INSTRUCTION } from '../lib/coachMemory.ts'
 import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { transcribeAudio } from '../lib/deepgram.ts'
-import { extractTag } from '../lib/extractTag.ts'
+import { extractTag, stripTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
 import { SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
@@ -45,7 +46,7 @@ const ASK_SYSTEM_PROMPT = `You are a warm, practical classroom management coach 
 
 Coach, don't grade, either way. Write in plain text only — no markdown (no **bold**, no # headings). Use a blank line between paragraphs and a leading "-" for list items.
 
-Respond with exactly these four sections and nothing outside them:
+Respond with exactly these sections and nothing outside them:
 
 <feedback>
 For a real incident: reflective feedback on how they handled it in the moment — what worked, what to consider differently, grounded in classroom management best practice (clear/consistent expectations, de-escalation, restorative practices). For a general question: a direct, concrete answer. Either way, keep it skimmable, encouraging, and practical.
@@ -99,12 +100,20 @@ debriefRouter.post('/', async (req, res) => {
   }
 
   try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { coachMemory: true, coachMemoryEnabled: true },
+    })
+    const memoryOn = user?.coachMemoryEnabled ?? false
+
     const context = `What happened: ${incidentText}`
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 1024,
       thinking: { type: 'disabled' },
-      system: ASK_SYSTEM_PROMPT,
+      system: memoryOn
+        ? `${ASK_SYSTEM_PROMPT}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+        : ASK_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: context }],
     })
 
@@ -127,6 +136,14 @@ debriefRouter.post('/', async (req, res) => {
     const debrief = await prisma.debrief.create({
       data: { userId: req.user!.userId, incidentText, category, feedback, followUp, rating, conversation },
     })
+
+    if (memoryOn) {
+      const memoryUpdate = applyMemoryUpdate(extractTag(text, 'memory_update'), user!.coachMemory)
+      if (memoryUpdate !== user!.coachMemory) {
+        await prisma.user.update({ where: { id: req.user!.userId }, data: { coachMemory: memoryUpdate } })
+      }
+    }
+
     res.status(201).json(debrief)
   } catch (error) {
     console.error('[debrief] feedback generation failed:', error)
@@ -149,18 +166,26 @@ debriefRouter.post('/talk', async (req, res) => {
 
   const trimmed = message.trim()
   try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { coachMemory: true, coachMemoryEnabled: true },
+    })
+    const memoryOn = user?.coachMemoryEnabled ?? false
+
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 150,
       thinking: { type: 'disabled' },
-      system: TALK_SYSTEM_PROMPT,
+      system: memoryOn
+        ? `${TALK_SYSTEM_PROMPT}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+        : TALK_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: trimmed }],
     })
-    const reply = response.content
+    const text = response.content
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('\n')
-      .trim()
+    const reply = stripTag(text, 'memory_update')
 
     if (!reply) {
       res.status(502).json({ error: 'Could not reach Coach. Please try again.' })
@@ -171,6 +196,14 @@ debriefRouter.post('/talk', async (req, res) => {
     const debrief = await prisma.debrief.create({
       data: { userId: req.user!.userId, incidentText: trimmed, source: 'talk_to_me', conversation },
     })
+
+    if (memoryOn) {
+      const memoryUpdate = applyMemoryUpdate(extractTag(text, 'memory_update'), user!.coachMemory)
+      if (memoryUpdate !== user!.coachMemory) {
+        await prisma.user.update({ where: { id: req.user!.userId }, data: { coachMemory: memoryUpdate } })
+      }
+    }
+
     res.status(201).json(debrief)
   } catch (error) {
     console.error('[debrief] talk-to-me start failed:', error)
@@ -208,18 +241,27 @@ debriefRouter.post('/:id/chat', async (req, res) => {
 
   const trimmed = message.trim()
   try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { coachMemory: true, coachMemoryEnabled: true },
+    })
+    const memoryOn = user?.coachMemoryEnabled ?? false
+
+    const basePrompt = isTalk ? TALK_SYSTEM_PROMPT : ASK_CHAT_SYSTEM_PROMPT
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: isTalk ? 150 : 300,
       thinking: { type: 'disabled' },
-      system: isTalk ? TALK_SYSTEM_PROMPT : ASK_CHAT_SYSTEM_PROMPT,
+      system: memoryOn
+        ? `${basePrompt}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+        : basePrompt,
       messages: toClaudeMessages(existing, trimmed),
     })
-    const reply = response.content
+    const text = response.content
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('\n')
-      .trim()
+    const reply = stripTag(text, 'memory_update')
 
     if (!reply) {
       res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
@@ -230,6 +272,14 @@ debriefRouter.post('/:id/chat', async (req, res) => {
       where: { id: debrief.id },
       data: { conversation: appendTurn(existing, trimmed, reply) },
     })
+
+    if (memoryOn) {
+      const memoryUpdate = applyMemoryUpdate(extractTag(text, 'memory_update'), user!.coachMemory)
+      if (memoryUpdate !== user!.coachMemory) {
+        await prisma.user.update({ where: { id: req.user!.userId }, data: { coachMemory: memoryUpdate } })
+      }
+    }
+
     res.json(updated)
   } catch (error) {
     console.error('[debrief] chat failed:', error)

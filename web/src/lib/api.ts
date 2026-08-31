@@ -67,6 +67,8 @@ export type UserProfile = {
   ageConfirmedAt: string | null
   audioRetentionDays: number | null
   focusMetric: FocusMetric | null
+  coachMemory: string | null
+  coachMemoryEnabled: boolean
   organizationId: string | null
   organization: { name: string } | null
   createdAt: string
@@ -539,6 +541,8 @@ export function updateProfile(data: {
   teachingGoal?: string
   completeOnboarding?: true
   joinCode?: string
+  coachMemoryEnabled?: boolean
+  clearCoachMemory?: true
 }): Promise<UserProfile> {
   return request('/api/profile', { method: 'PUT', body: JSON.stringify(data) })
 }

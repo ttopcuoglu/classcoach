@@ -36,6 +36,16 @@ model User {
   suspendedAt           DateTime? // superadmin-set only; blocks future sign-in, doesn't kill an already-active session
   audioRetentionDays    Int? // null = keep audio-coaching transcripts/reports indefinitely
   focusMetric           String? // the teacher's chosen My Growth focus — see FocusMetric in web/src/lib/focusMetrics.ts, null = none set
+  // A running, Coach-maintained free-text profile: recurring strengths and
+  // growth areas, plus "open situations" (an ongoing class or student
+  // challenge spanning multiple conversations, described by role/period —
+  // never a name). Refreshed by Claude itself after each Ask/Talk It
+  // Through turn (see server/src/lib/coachMemory.ts); capped at
+  // MAX_COACH_MEMORY_CHARS. Null = no memory built yet.
+  coachMemory           String?
+  // Teacher-controlled opt-out (Profile). When false, memory is neither
+  // read nor updated — the prompt reverts to exactly today's behavior.
+  coachMemoryEnabled    Boolean   @default(true)
   organizationId        String? // null = independent teacher, not part of any district
   organization          Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   createdAt             DateTime  @default(now())

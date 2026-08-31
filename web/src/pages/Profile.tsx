@@ -9,10 +9,15 @@ export default function Profile() {
   const [subjects, setSubjects] = useState('')
   const [audioRetentionDays, setAudioRetentionDays] = useState<string>('')
   const [organizationName, setOrganizationName] = useState<string | null>(null)
+  const [coachMemory, setCoachMemory] = useState<string | null>(null)
+  const [coachMemoryEnabled, setCoachMemoryEnabled] = useState(true)
 
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+
+  const [clearingMemory, setClearingMemory] = useState(false)
+  const [clearMemoryError, setClearMemoryError] = useState<string | null>(null)
 
   const [joinCode, setJoinCode] = useState('')
   const [joining, setJoining] = useState(false)
@@ -30,6 +35,8 @@ export default function Profile() {
         setSubjects(profile.subjects ?? '')
         setAudioRetentionDays(profile.audioRetentionDays != null ? String(profile.audioRetentionDays) : '')
         setOrganizationName(profile.organization?.name ?? null)
+        setCoachMemory(profile.coachMemory)
+        setCoachMemoryEnabled(profile.coachMemoryEnabled)
       })
       .catch(() => setSaveError('Could not load your profile.'))
       .finally(() => setLoading(false))
@@ -46,6 +53,7 @@ export default function Profile() {
         gradeLevels,
         subjects,
         audioRetentionDays: audioRetentionDays ? Number(audioRetentionDays) : null,
+        coachMemoryEnabled,
       })
       setSaved(true)
     } catch {
@@ -88,6 +96,24 @@ export default function Profile() {
       setResetError('Could not reset your data. Please try again.')
     } finally {
       setResetting(false)
+    }
+  }
+
+  async function handleClearMemory() {
+    const confirmed = window.confirm(
+      'This clears everything Coach has noted about your recurring strengths and any ongoing challenges. Continue?',
+    )
+    if (!confirmed) return
+
+    setClearingMemory(true)
+    setClearMemoryError(null)
+    try {
+      const updated = await updateProfile({ clearCoachMemory: true })
+      setCoachMemory(updated.coachMemory)
+    } catch {
+      setClearMemoryError('Could not clear this. Please try again.')
+    } finally {
+      setClearingMemory(false)
     }
   }
 
@@ -157,6 +183,48 @@ export default function Profile() {
           {saveError && <span className="text-sm text-warm-500">{saveError}</span>}
         </div>
       </form>
+
+      <div className="rounded-2xl border border-border bg-surface p-6">
+        <h2 className="text-sm font-semibold text-ink">What Coach remembers</h2>
+        <p className="mt-1 text-sm text-ink-soft">
+          Coach keeps a short, running note about your recurring strengths and any ongoing challenges, built from
+          your Ask and Talk It Through conversations. It's never shown to anyone else.
+        </p>
+
+        {coachMemory ? (
+          <p className="mt-3 rounded-lg border border-border bg-canvas p-4 text-sm text-ink-soft">{coachMemory}</p>
+        ) : (
+          <p className="mt-3 text-sm text-ink-soft">Nothing yet — this builds up as you use Ask and Talk It Through.</p>
+        )}
+
+        <label className="mt-4 flex items-center gap-2.5 text-sm font-medium text-ink">
+          <input
+            type="checkbox"
+            checked={coachMemoryEnabled}
+            onChange={(e) => {
+              setCoachMemoryEnabled(e.target.checked)
+              setSaved(false)
+            }}
+            className="h-4 w-4 rounded border-border text-brand-500 focus:ring-brand-400"
+          />
+          Let Coach remember things between conversations
+        </label>
+        <p className="mt-1 text-xs text-ink-soft">Use "Save changes" above to apply this.</p>
+
+        {coachMemory && (
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={handleClearMemory}
+              disabled={clearingMemory}
+              className="rounded-lg border border-warm-500 px-4 py-2 text-sm font-semibold text-warm-500 transition-colors hover:bg-warm-100 disabled:opacity-60"
+            >
+              {clearingMemory ? 'Clearing...' : 'Clear what Coach remembers'}
+            </button>
+          </div>
+        )}
+        {clearMemoryError && <p className="mt-2 text-sm text-warm-500">{clearMemoryError}</p>}
+      </div>
 
       <div className="rounded-2xl border border-border bg-surface p-6">
         <h2 className="text-sm font-semibold text-ink">School</h2>
