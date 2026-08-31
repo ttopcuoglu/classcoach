@@ -48,12 +48,30 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
       setError('Google did not return a credential. Please try again.')
       return
     }
+    setError(null)
+    setSubmitting(true)
     try {
       await signInWithGoogle(response.credential)
       onSignedIn()
     } catch {
       setError('Could not sign you in. Please try again.')
+      setSubmitting(false)
     }
+  }
+
+  // A dedicated loading view, not just a disabled form — the Google flow in
+  // particular has no per-field state to disable (GoogleLogin renders its
+  // own button), so without this, a slow sign-in looks identical to the
+  // form just sitting there doing nothing.
+  if (submitting) {
+    return (
+      <div className="flex w-full max-w-sm flex-col items-center gap-3 rounded-2xl border border-hairline bg-cream-card p-6 py-14 text-center shadow-lg">
+        <span className="h-8 w-8 animate-spin rounded-full border-2 border-terracotta border-t-transparent" />
+        <p className="text-sm font-medium text-ink-soft">
+          {mode === 'signup' ? 'Creating your account...' : 'Signing you in...'}
+        </p>
+      </div>
+    )
   }
 
   return (

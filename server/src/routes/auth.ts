@@ -25,6 +25,16 @@ if (!GOOGLE_CLIENT_ID) {
 
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID)
 
+// verifyIdToken() needs Google's public signing certs and caches them
+// in-process once fetched — otherwise the very first real sign-in after
+// each server (re)start pays for that network round-trip itself, which can
+// be slow. Fetch them proactively at startup so they're already warm.
+if (GOOGLE_CLIENT_ID) {
+  googleClient.getFederatedSignonCertsAsync().catch((err) => {
+    console.warn('[auth] failed to pre-warm Google sign-on certs:', err)
+  })
+}
+
 const ADMIN_EMAILS = new Set(
   (process.env.ADMIN_EMAILS ?? '')
     .split(',')
