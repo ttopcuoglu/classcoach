@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom'
 import {
   ArrowRightIcon,
   ArrowUpIcon,
-  BookIcon,
   BrainIcon,
   ChartBarIcon,
   ChatBubbleIcon,
@@ -15,7 +14,6 @@ import {
   MailIcon,
   MicIcon,
   ScenarioIcon,
-  ShareIcon,
   SparkleIcon,
   StarIcon,
   TargetIcon,
@@ -24,174 +22,291 @@ import {
 } from '../components/icons'
 
 type IconComponent = (props: { className?: string }) => React.ReactElement
-type GuideItem = { id: string; icon: IconComponent; tint: string; nav: string; title: string; body: string }
-type GuideChapter = { id: string; label: string; kicker: string; tint: string; intro: string; items: GuideItem[] }
+type SpecItem = { label: string; body: string }
+type Feature = {
+  id: string
+  icon: IconComponent
+  tint: string
+  nav: string
+  title: string
+  intro: string
+  specs: SpecItem[]
+}
+type Chapter = { id: string; label: string; tint: string; intro: string; features: Feature[] }
 
-const CHAPTERS: GuideChapter[] = [
-  {
-    id: 'getting-started',
-    label: 'Getting started',
-    kicker: 'Getting started',
-    tint: 'bg-gold-tint text-terracotta-600',
-    intro: "Everything between opening wivoza.com and landing on your own dashboard.",
-    items: [
-      {
-        id: 'signup',
-        icon: LockIcon,
-        tint: 'bg-gold-tint text-terracotta-600',
-        nav: 'wivoza.com',
-        title: 'Signing up',
-        body: 'One click with Google, or an email and password (8 characters minimum). Either way you land in the same place — there\'s no separate "teacher" vs "admin" signup.',
-      },
-      {
-        id: 'onboarding',
-        icon: ChecklistIcon,
-        tint: 'bg-gold-tint text-terracotta-600',
-        nav: 'First sign-in',
-        title: 'A six-step welcome',
-        body: 'About you, your classroom, a mic check, a live demo of Coach in action, your goal, and an initial focus metric. Every step can be skipped, and whatever you\'ve already filled in is saved as you go.',
-      },
-      {
-        id: 'home-nav',
-        icon: HomeIcon,
-        tint: 'bg-gold-tint text-terracotta-600',
-        nav: 'Home',
-        title: 'Your dashboard',
-        body: 'Three big buttons to your most-used tools, a classroom-pulse chart built from your real recordings, a daily tip, and a feed of your recent work — nothing generic, all of it yours.',
-      },
-    ],
-  },
-  {
-    id: 'coaching',
-    label: 'Coaching',
-    kicker: 'Coaching',
-    tint: 'bg-mint-tint text-forest',
-    intro: 'Three ways to get real coaching, from a thirty-second check-in to a full recorded lesson.',
-    items: [
-      {
-        id: 'talk-it-through',
-        icon: WaveformIcon,
-        tint: 'bg-mint-tint text-forest',
-        nav: 'Coaching → Talk It Through',
-        title: 'Talk It Through',
-        body: 'A live, spoken conversation with Coach. Just start talking — Coach listens, thinks, and replies out loud, back and forth, like a real conversation. Nothing about your voice is ever saved, only the resulting text.',
-      },
-      {
-        id: 'lesson-debrief',
-        icon: MicIcon,
-        tint: 'bg-mint-tint text-forest',
-        nav: 'Coaching → Lesson Debrief',
-        title: 'Lesson Debrief',
-        body: 'Record a real class period and get back an honest, evidence-only report across six tabs: Overview, My Growth, Reflect, Lesson Content, Climate & Routines, and Discourse Details. No audio is ever kept — only the transcript and what it shows.',
-      },
-      {
-        id: 'ask-practice',
-        icon: ChatBubbleIcon,
-        tint: 'bg-mint-tint text-forest',
-        nav: 'Coaching → Ask & Practice',
-        title: 'Ask & Practice',
-        body: 'Ask a real question about something that happened, or Practice a hypothetical scenario before you face the real thing. Every answer comes with a follow-up chat to go deeper.',
-      },
-    ],
-  },
-  {
-    id: 'plan',
-    label: 'Plan',
-    kicker: 'Plan',
-    tint: 'bg-peach-tint text-terracotta',
-    intro: 'Get ready for what\'s ahead — a lesson to teach, or a conversation to have.',
-    items: [
-      {
-        id: 'lesson-planning',
-        icon: LessonPlanIcon,
-        tint: 'bg-peach-tint text-terracotta',
-        nav: 'Plan → Lesson Planning',
-        title: 'Lesson Planning',
-        body: 'Generate a sample lesson from just an objective, or paste your own plan and get real coaching on it — with a proposed revision you can accept or dismiss, never applied automatically.',
-      },
-      {
-        id: 'messages',
-        icon: MailIcon,
-        tint: 'bg-peach-tint text-terracotta',
-        nav: 'Plan → Messages',
-        title: 'Messages',
-        body: 'Four tools in one place: Write a Message, Prepare for a Conversation, Practice a Conversation, and Review My Communication — for everything from a quick parent email to a hard, high-stakes meeting.',
-      },
-    ],
-  },
-  {
-    id: 'grow',
-    label: 'Grow',
-    kicker: 'Grow',
-    tint: 'bg-lavender-tint text-[#6B5FA0]',
-    intro: 'The tools that build on everything else you\'ve done in Wivoza.',
-    items: [
-      {
-        id: 'profile',
-        icon: UserIcon,
-        tint: 'bg-lavender-tint text-[#6B5FA0]',
-        nav: 'Grow → Profile & Settings',
-        title: 'Profile & Settings',
-        body: 'Your info, what Coach remembers about you, your school, data-retention preferences, and a full export or reset of your data — all in one place.',
-      },
-      {
-        id: 'cheat-sheet',
-        icon: StarIcon,
-        tint: 'bg-lavender-tint text-[#6B5FA0]',
-        nav: 'Grow → Cheat Sheet',
-        title: 'Cheat Sheet',
-        body: 'A personal reference built automatically from what you\'ve saved — model responses and follow-up guidance, grouped by category. Nothing shows up until you save something.',
-      },
-      {
-        id: 'first-30-days',
-        icon: ArrowUpIcon,
-        tint: 'bg-lavender-tint text-[#6B5FA0]',
-        nav: 'Grow → First 30 Days',
-        title: 'First 30 Days',
-        body: 'A simple checklist for getting the most out of Wivoza early on, with several items linking straight into the right tool so checking one off is one click.',
-      },
-    ],
-  },
-]
-
-const REPORT_TABS = [
-  { name: 'Overview', body: 'A 60-second summary — one strength, one priority, your talk balance, and a next step.' },
-  { name: 'My Growth', body: 'Ten metrics trended across every session, with one you pick as your active focus.' },
-  { name: 'Reflect', body: 'A live coaching chat grounded only in this session\'s real evidence.' },
-  { name: 'Lesson Content', body: 'Detected objective, vocabulary, and topic word clouds split by speaker.' },
-  { name: 'Climate & Routines', body: 'Transitions and tone, framed as patterns — never a behavior score.' },
-  { name: 'Discourse Details', body: 'The full question-by-question breakdown, for anyone who wants to go deep.' },
-]
-
-const MESSAGE_TOOLS = [
-  { icon: MailIcon, title: 'Write a Message', body: 'Start new, respond, or improve a draft — pick a recipient, purpose, tone, and format, and get a ready-to-send message. Quick actions revise it instantly: warmer, firmer, shorter, simpler, or translated into another language.' },
-  { icon: TargetIcon, title: 'Prepare for a Conversation', body: 'A full plan for a real upcoming conversation — an opening line, the facts to bring, likely reactions, phrases to avoid, and a complete model response.' },
-  { icon: ScenarioIcon, title: 'Practice a Conversation', body: 'Rehearse a hard conversation before you have it, rated across six dimensions with a stronger phrase to try.' },
-  { icon: CheckIcon, title: 'Review My Communication', body: 'Get an honest read on a message and your planned response — what works, what might land badly, and a revised version.' },
-]
-
-const PRIVACY_POINTS = [
-  { title: 'Your voice is never kept', body: 'Talk It Through and Lesson Debrief both discard audio right after transcription — only text and metrics remain.' },
-  { title: 'Names stay out of it', body: 'Coach refers to people by role — "a student," "the class" — even if you use a name yourself, and avoids quoting anything that could indirectly identify someone.' },
-  { title: 'You\'re never scored', body: "Wivoza never grades, ranks, or evaluates you. A few private internal self-assessments power your own growth trends and are never shown to anyone as a number." },
-]
-
-function GuideCard({ item }: { item: GuideItem }) {
-  const Icon = item.icon
+function SpecList({ items }: { items: SpecItem[] }) {
   return (
-    <div id={item.id} className="scroll-mt-24 rounded-2xl border border-hairline bg-cream-card p-6 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${item.tint}`}>
-          <Icon className="h-5 w-5" />
-        </span>
+    <ul className="mt-4 flex flex-col gap-2.5">
+      {items.map((item) => (
+        <li key={item.label} className="flex items-start gap-2.5 text-sm">
+          <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
+          <span className="text-ink-soft">
+            <strong className="font-semibold text-forest">{item.label}</strong> — {item.body}
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function FeatureBlock({ feature }: { feature: Feature }) {
+  const Icon = feature.icon
+  return (
+    <div id={feature.id} className="scroll-mt-24 rounded-2xl border border-hairline bg-cream-card p-7">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-center gap-3.5">
+          <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${feature.tint}`}>
+            <Icon className="h-5 w-5" />
+          </span>
+          <h3 className="font-heading text-xl font-bold text-forest">{feature.title}</h3>
+        </div>
         <span className="rounded-full border border-hairline bg-cream px-2.5 py-1 text-[11px] font-medium text-ink-soft">
-          {item.nav}
+          {feature.nav}
         </span>
       </div>
-      <h3 className="mt-4 font-heading text-lg font-bold text-forest">{item.title}</h3>
-      <p className="mt-1.5 text-sm leading-relaxed text-ink-soft">{item.body}</p>
+      <p className="mt-4 text-sm leading-relaxed text-ink-soft">{feature.intro}</p>
+      <SpecList items={feature.specs} />
     </div>
   )
+}
+
+const GETTING_STARTED: Chapter = {
+  id: 'getting-started',
+  label: 'Getting started',
+  tint: 'bg-gold-tint text-terracotta-600',
+  intro: 'Everything between opening wivoza.com and landing on your own dashboard.',
+  features: [
+    {
+      id: 'signup',
+      icon: LockIcon,
+      tint: 'bg-gold-tint text-terracotta-600',
+      nav: 'wivoza.com',
+      title: 'Signing up',
+      intro: 'Two ways in, same destination either way.',
+      specs: [
+        { label: 'Google', body: 'one click, no password to create, no separate terms step — signing in counts as agreeing to Wivoza\'s terms.' },
+        { label: 'Email & password', body: 'name, email, an 8-character-minimum password, and one checkbox confirming you\'re 13+ and agree to the terms — the button stays disabled until it\'s checked.' },
+        { label: 'Already have an account?', body: 'the same card toggles between Sign up and Log in, no separate page.' },
+      ],
+    },
+    {
+      id: 'onboarding',
+      icon: ChecklistIcon,
+      tint: 'bg-gold-tint text-terracotta-600',
+      nav: 'First sign-in',
+      title: 'The onboarding walkthrough',
+      intro: 'A six-step wizard that runs once. Every step has a "Skip for now" link, and whatever you\'ve filled in before skipping is saved as you go.',
+      specs: [
+        { label: '1. About you', body: 'your name, and your role — Teacher, Instructional Coach, Assistant Principal, Principal, District Leader, or Other.' },
+        { label: '2. Classroom', body: 'school name, an optional school/district join code, grade levels, and subjects.' },
+        { label: '3. Mic check', body: 'a live level meter — the confirm button only unlocks once it actually detects sound.' },
+        { label: '4. Live demo', body: 'read one line aloud to see real coaching detection work on your own voice.' },
+        { label: '5. Your goal', body: 'finish "I\'d like my students to ___," typed yourself or from a suggested chip.' },
+        { label: '6. Initial focus', body: 'pick one metric, from grouped categories, for My Growth to track first — changeable anytime.' },
+      ],
+    },
+    {
+      id: 'home',
+      icon: HomeIcon,
+      tint: 'bg-gold-tint text-terracotta-600',
+      nav: 'Home',
+      title: 'Home',
+      intro: 'Your dashboard — built entirely from your own activity, never a generic template.',
+      specs: [
+        { label: 'Quick actions', body: 'three large one-tap buttons to Talk It Through, Lesson Debrief, and Ask & Practice.' },
+        { label: 'Your coaching path', body: 'a static Notice → Practice → Try → Reflect explainer, with a "Practice now" shortcut.' },
+        { label: 'Classroom pulse', body: 'a donut chart of your latest lesson\'s student-talk %, plus a sparkline once you have a few sessions.' },
+        { label: 'Mood check-in', body: 'tap Good / Okay / Stressed / Overwhelmed and Wivoza quietly suggests a relevant practice category.' },
+        { label: 'Daily tip, quick links, and recent work', body: 'a tip box, shortcuts to Cheat Sheet and First 30 Days, and a feed of your last few sessions.' },
+      ],
+    },
+  ],
+}
+
+const TALK_IT_THROUGH: Feature = {
+  id: 'talk-it-through',
+  icon: WaveformIcon,
+  tint: 'bg-mint-tint text-forest',
+  nav: 'Coaching → Talk It Through',
+  title: 'Talk It Through',
+  intro: 'A live, spoken back-and-forth with Coach — the mic arms itself the moment you open it, no typing at all.',
+  specs: [
+    { label: 'Listening', body: 'a mic icon with a ring that visibly pulses in real time with your actual volume.' },
+    { label: 'Thinking', body: 'a pulsing brain icon with bouncing dots — covers both transcribing what you said and Coach composing its reply, shown as one continuous state rather than two confusing ones.' },
+    { label: 'Speaking', body: 'an animated equalizer plays while Coach\'s reply is read aloud.' },
+    { label: 'Mute', body: 'silences Coach\'s voice without ending the conversation — replies still appear as text.' },
+    { label: 'Stop / Close', body: 'end the session at any point; the mic releases immediately.' },
+    { label: 'Continuity', body: 'if Coach\'s memory is on, it can reference real patterns from your past Ask and Talk It Through conversations.' },
+    { label: 'Privacy', body: 'your voice itself is never saved — only the resulting conversation text.' },
+  ],
+}
+
+const REPORT_TABS: SpecItem[] = [
+  { label: 'Overview', body: 'an evidence-quality banner (flags a short or partial recording up front), a deterministic "What Wivoza noticed" narrative, one ranked Strength card, one ranked Coaching Priority card, a Classroom Voice Balance chart (teacher / student / silence time), a "Try this next" suggested action, and a persistent "Ask Wivoza Coach" shortcut.' },
+  { label: 'My Growth', body: 'ten metrics trended across every session — talk ratio, higher-order-question %, average wait time, checks-for-understanding, follow-up questions, redirection language, positive-vs-corrective tone, clear directions given, student names used, and feedback specificity. Pick one as your active focus and it\'s badge-highlighted here and on Overview.' },
+  { label: 'Reflect', body: 'a compact reference list of the session\'s detected highlights, a live coaching chat about them (grounded only in real evidence — it won\'t invent a number or a quote), your own editable Strengths / Growth Areas / Next Step / Follow-up Date notes, an optional AI-drafted summary of the chat you can pull into those notes, and a Lock button that makes the whole report read-only.' },
+  { label: 'Lesson Content', body: 'a detected stated objective (with the exact quote it came from), connections to prior knowledge, key vocabulary moments, a teacher-talk and a student-talk word cloud sized by frequency, and on-demand "content specialist" notes from a subject-area lens (math, ELA, science, social studies, or arts).' },
+  { label: 'Climate & Routines', body: 'transitions between activities, redirection/behavior language, positive-vs-corrective tone balance, and clear task directions given — each shown as a plain count with a coach-voice note, never a behavior score.' },
+  { label: 'Discourse Details', body: 'the full question-by-question log — each one tagged recall or higher-order, its wait time, and any follow-up questions that built on it.' },
+]
+
+const LESSON_DEBRIEF: Feature = {
+  id: 'lesson-debrief',
+  icon: MicIcon,
+  tint: 'bg-mint-tint text-forest',
+  nav: 'Coaching → Lesson Debrief',
+  title: 'Lesson Debrief',
+  intro: 'Record a real class period; Wivoza transcribes and analyzes it into a six-tab report — no audio is ever kept, only the text and what it shows.',
+  specs: [
+    { label: 'Before recording', body: 'class/subject, period, grade level, and session date are all optional — but you must explicitly confirm recording consent before it starts.' },
+    { label: 'While recording', body: 'start, pause, resume, and stop controls, running entirely in your browser.' },
+    { label: 'Managing sessions', body: 'set a retention period in Profile (7 / 30 / 90 days, or indefinite), lock a report to make it permanently read-only, share it as a link, export a printable copy, or delete it outright.' },
+  ],
+}
+
+const ASK_PRACTICE: Feature = {
+  id: 'ask-practice',
+  icon: ChatBubbleIcon,
+  tint: 'bg-mint-tint text-forest',
+  nav: 'Coaching → Ask & Practice',
+  title: 'Ask & Practice',
+  intro: 'Two tools, one nav item — one for something real, one for rehearsal.',
+  specs: [
+    { label: 'Ask — starters', body: 'four suggested prompts for when you\'re not sure where to begin.' },
+    { label: 'Ask — input', body: 'describe something that already happened, or ask a general question, by typing or speaking; Wivoza figures out which kind of request it is and answers accordingly, inferring a category automatically (or leaving it uncategorized for general questions).' },
+    { label: 'Ask — after your answer', body: 'a "following up" section, plus an open-ended coaching chat to push back or go deeper.' },
+    { label: 'Practice — filters', body: 'category, grade band, and difficulty — any or all of them optional.' },
+    { label: 'Practice — getting a scenario', body: '"New Scenario" one at a time, or a "Quick Session" of three back to back; respond by typing or speaking.' },
+    { label: 'Practice — feedback', body: 'written coaching plus a model response, and a private growth rating that powers a "you\'re improving in this category" callout over time.' },
+    { label: 'Both tools', body: 'save anything worth keeping, share a saved item as a link, and revisit your full saved history.' },
+  ],
+}
+
+const LESSON_PLANNING: Feature = {
+  id: 'lesson-planning',
+  icon: LessonPlanIcon,
+  tint: 'bg-peach-tint text-terracotta',
+  nav: 'Plan → Lesson Planning',
+  title: 'Lesson Planning',
+  intro: 'Two modes, depending on whether you\'re starting from a blank page or already have something written.',
+  specs: [
+    { label: 'Generate Ideas — input', body: 'an objective is the only required field; subject, grade level, standard, unit name, and essential question are all optional extras.' },
+    { label: 'Generate Ideas — output', body: 'a sample single day: Do Now, an I Do / We Do / You Do agenda, Closure, a higher-order-thinking component, and Homework — explicitly framed as a starting point to adapt, not a script.' },
+    { label: 'Get Feedback — input', body: 'paste or write your own plan (single lesson or a full week).' },
+    { label: 'Get Feedback — output', body: 'coaching through a chat thread and a private growth rating; Coach can propose a full "Suggested Revision," shown separately with "Use this version" or "Dismiss" — never applied automatically.' },
+    { label: 'Either mode', body: 'save it, share it as a read-only link, or download it.' },
+  ],
+}
+
+const MESSAGE_TOOLS: Feature[] = [
+  {
+    id: 'write-a-message',
+    icon: MailIcon,
+    tint: 'bg-peach-tint text-terracotta',
+    nav: 'Plan → Messages → Write a Message',
+    title: 'Write a Message',
+    intro: 'Draft a ready-to-send message from scratch, a reply, or a rough draft you already have.',
+    specs: [
+      { label: 'Starting point', body: 'Start new, Respond to a message you received, or Improve my draft.' },
+      { label: 'Recipient', body: 'parent/caregiver, student, colleague, or administrator.' },
+      { label: 'Purpose', body: 'academic concern, behavior concern, attendance concern, positive update, meeting request, follow-up, general information, or other.' },
+      { label: 'Tone', body: 'warm and supportive, professional and neutral, firm and direct, or urgent.' },
+      { label: 'Format', body: 'email, text message, class announcement, or a written phone-call follow-up.' },
+      { label: 'Quick actions on the draft', body: 'Make warmer, Make firmer, Shorten, Simplify language, Translate (pick from common languages or type your own), Create another version.' },
+      { label: 'Finishing up', body: 'copy to clipboard, or save it for later.' },
+    ],
+  },
+  {
+    id: 'prepare-conversation',
+    icon: TargetIcon,
+    tint: 'bg-peach-tint text-terracotta',
+    nav: 'Plan → Messages → Prepare for a Conversation',
+    title: 'Prepare for a Conversation',
+    intro: 'A full plan for a real, upcoming conversation.',
+    specs: [
+      { label: 'Input', body: 'recipient type, what happened (the only required field), desired outcome, concerns, background, and the meeting format — in person, phone, video, or a formal meeting.' },
+      { label: 'Output — eleven parts', body: 'an opening line, the main concern stated objectively, facts to bring, questions to ask, likely reactions and how to respond to each, phrases to avoid, boundaries to hold, a complete model response, next steps, and honest guidance on whether to involve an administrator.' },
+      { label: 'After the plan', body: '"Convert to a message" hands the situation straight to Write a Message pre-filled; a follow-up chat, save, and print are all available.' },
+    ],
+  },
+  {
+    id: 'practice-conversation',
+    icon: ScenarioIcon,
+    tint: 'bg-peach-tint text-terracotta',
+    nav: 'Plan → Messages → Practice a Conversation',
+    title: 'Practice a Conversation',
+    intro: 'Rehearse a hard conversation before you have it.',
+    specs: [
+      { label: 'Setup', body: 'who you\'re talking to, the challenge type, grade band (when the other person is a student), and difficulty.' },
+      { label: 'Your turn', body: 'generate a scenario or write your own, then respond by typing or speaking.' },
+      { label: 'Feedback — six rated dimensions', body: 'clarity, empathy, use of evidence, professional boundaries, collaboration, and resolution — each rated strong / developing / needs work with specific feedback.' },
+      { label: 'Also included', body: 'what you did well, your single top priority, a stronger phrase to try, and a full model response.' },
+      { label: 'Next', body: '"Practice Again" resets with a fresh scenario.' },
+    ],
+  },
+  {
+    id: 'review-communication',
+    icon: CheckIcon,
+    tint: 'bg-peach-tint text-terracotta',
+    nav: 'Plan → Messages → Review My Communication',
+    title: 'Review My Communication',
+    intro: 'An honest second read on a message and your planned response before you send it.',
+    specs: [
+      { label: 'Input', body: 'the message you received, your planned response, and a review mode — feedback only, rewrite only, or both.' },
+      { label: 'Output', body: 'an overall assessment, what\'s working, what might land badly, specific recommended changes, a revised response (when requested), and — only when it genuinely applies — honest guidance on looping in an administrator.' },
+      { label: 'After the review', body: 'quick actions (Make warmer / Make firmer / Shorten), a full follow-up chat, save, and share.' },
+    ],
+  },
+]
+
+const GROW: Chapter = {
+  id: 'grow',
+  label: 'Grow',
+  tint: 'bg-lavender-tint text-[#6B5FA0]',
+  intro: 'The tools that build on everything else you\'ve done in Wivoza.',
+  features: [
+    {
+      id: 'profile',
+      icon: UserIcon,
+      tint: 'bg-lavender-tint text-[#6B5FA0]',
+      nav: 'Grow → Profile & Settings',
+      title: 'Profile & Settings',
+      intro: 'Everything about your account and your data, in one place.',
+      specs: [
+        { label: 'Basic info', body: 'your name, grade levels, and subjects taught.' },
+        { label: 'What Coach remembers', body: 'read the running profile Coach keeps about you, turn it off, or clear it entirely.' },
+        { label: 'School', body: 'join with a code, or see the school/district you\'re already part of.' },
+        { label: 'Lesson Debrief retention', body: 'keep transcripts and reports indefinitely, or auto-delete after 7, 30, or 90 days.' },
+        { label: 'Export playbook', body: 'a printable page of everything you\'ve saved.' },
+        { label: 'Reset & clear data', body: 'a permanent, confirmation-gated wipe of your saved scenarios, answers, messages, and Lesson Debrief sessions.' },
+      ],
+    },
+    {
+      id: 'cheat-sheet',
+      icon: StarIcon,
+      tint: 'bg-lavender-tint text-[#6B5FA0]',
+      nav: 'Grow → Cheat Sheet',
+      title: 'Cheat Sheet',
+      intro: 'A personal reference built automatically — nothing shows up until you\'ve saved something, on purpose.',
+      specs: [
+        { label: 'Model responses', body: 'pulled from every Practice attempt you\'ve saved, grouped by category.' },
+        { label: 'Follow-up guidance', body: 'pulled from every Ask answer you\'ve saved.' },
+        { label: 'General tips', body: 'saved Ask answers with no specific category land here instead.' },
+      ],
+    },
+    {
+      id: 'first-30-days',
+      icon: ArrowUpIcon,
+      tint: 'bg-lavender-tint text-[#6B5FA0]',
+      nav: 'Grow → First 30 Days',
+      title: 'First 30 Days',
+      intro: 'A fixed checklist for getting the most out of Wivoza early on.',
+      specs: [
+        { label: 'Progress', body: 'a running complete/incomplete count across every item.' },
+        { label: 'Shortcuts', body: 'several items link straight into the relevant tool, sometimes pre-filled, so checking one off is one click.' },
+      ],
+    },
+  ],
 }
 
 export default function Guide() {
@@ -227,163 +342,121 @@ export default function Guide() {
           The complete Wivoza guide
         </span>
         <h1 className="mt-6 font-heading text-4xl font-extrabold leading-[1.1] tracking-tight text-forest sm:text-5xl">
-          Every feature, start to finish.
+          Every feature, in full.
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-lg text-ink-soft">
-          Wivoza is a private self-coaching companion for teachers — a place to talk through a hard moment,
-          understand a real lesson, prepare for a difficult conversation, and get feedback that's honest
-          without ever grading you. Here's what's inside, from your first sign-in to the tools you'll use most.
+          Not a highlight reel — every field, tab, and button in every Wivoza tool, organized the same way
+          you'll find them in the app.
         </p>
       </section>
 
       {/* Quick nav */}
       <nav className="border-y border-hairline bg-cream-card">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap justify-center gap-2 px-6 py-4">
-          {CHAPTERS.map((c) => (
+          {['Getting started', 'Coaching', 'Plan', 'Grow', 'Across the app', 'Privacy', 'For schools'].map((label) => (
             <a
-              key={c.id}
-              href={`#${c.id}`}
+              key={label}
+              href={`#${label.toLowerCase().replace(/\s+/g, '-')}`}
               className="rounded-full border border-hairline bg-cream px-3.5 py-1.5 text-sm font-medium text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
             >
-              {c.label}
+              {label}
             </a>
           ))}
-          <a
-            href="#privacy"
-            className="rounded-full border border-hairline bg-cream px-3.5 py-1.5 text-sm font-medium text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
-          >
-            Privacy
-          </a>
-          <a
-            href="#admin"
-            className="rounded-full border border-hairline bg-cream px-3.5 py-1.5 text-sm font-medium text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
-          >
-            For schools
-          </a>
         </div>
       </nav>
 
-      <div className="mx-auto w-full max-w-6xl px-6 py-16">
-        {/* Standard chapters */}
-        {CHAPTERS.map((chapter) => (
-          <section key={chapter.id} id={chapter.id} className="scroll-mt-20 border-b border-hairline pb-16 pt-16 first:pt-0">
-            <div className="mb-8 flex items-center gap-2">
-              <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${chapter.tint}`}>
-                {chapter.kicker}
-              </span>
-            </div>
-            <p className="max-w-xl text-lg text-ink-soft">{chapter.intro}</p>
-            <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {chapter.items.map((item) => (
-                <GuideCard key={item.id} item={item} />
-              ))}
+      <div className="mx-auto w-full max-w-5xl px-6 py-16">
+        {/* Getting started */}
+        <section id={GETTING_STARTED.id} className="scroll-mt-20 border-b border-hairline pb-16">
+          <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${GETTING_STARTED.tint}`}>
+            {GETTING_STARTED.label}
+          </span>
+          <p className="mt-4 max-w-xl text-lg text-ink-soft">{GETTING_STARTED.intro}</p>
+          <div className="mt-8 flex flex-col gap-5">
+            {GETTING_STARTED.features.map((f) => (
+              <FeatureBlock key={f.id} feature={f} />
+            ))}
+          </div>
+        </section>
+
+        {/* Coaching */}
+        <section id="coaching" className="scroll-mt-20 border-b border-hairline py-16">
+          <span className="rounded-full bg-mint-tint px-3 py-1 text-xs font-bold uppercase tracking-wide text-forest">
+            Coaching
+          </span>
+          <p className="mt-4 max-w-xl text-lg text-ink-soft">
+            Three ways to get real coaching, from a thirty-second check-in to a full recorded lesson.
+          </p>
+          <div className="mt-8 flex flex-col gap-5">
+            <FeatureBlock feature={TALK_IT_THROUGH} />
+            <FeatureBlock feature={LESSON_DEBRIEF} />
+
+            <div className="rounded-2xl border border-hairline bg-cream-card p-7">
+              <h4 className="font-heading text-lg font-bold text-forest">Inside a Lesson Debrief report — all six tabs</h4>
+              <SpecList items={REPORT_TABS} />
+              <div className="mt-5 flex items-start gap-3 rounded-xl border-l-4 border-mint-text bg-mint-tint/40 p-4">
+                <BrainIcon className="mt-0.5 h-5 w-5 shrink-0 text-forest" />
+                <p className="text-sm text-forest">
+                  Every number is honest about its own confidence — something Wivoza couldn't reliably
+                  measure shows as unavailable, never as a hidden zero, and a real confirmed zero always
+                  shows as a plain, full-strength zero. The two never look the same, on purpose.
+                </p>
+              </div>
             </div>
 
-            {/* Extra detail blocks woven into the relevant chapter */}
-            {chapter.id === 'coaching' && (
-              <div className="mt-10 rounded-2xl border border-hairline bg-cream-card p-7">
-                <h4 className="font-heading text-lg font-bold text-forest">
-                  Inside a Lesson Debrief report — six tabs
-                </h4>
-                <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {REPORT_TABS.map((tab) => (
-                    <div key={tab.name} className="rounded-xl bg-cream p-4">
-                      <p className="font-heading text-sm font-bold text-forest">{tab.name}</p>
-                      <p className="mt-1 text-sm text-ink-soft">{tab.body}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-5 flex items-start gap-3 rounded-xl border-l-4 border-mint-text bg-mint-tint/40 p-4">
-                  <BrainIcon className="mt-0.5 h-5 w-5 shrink-0 text-forest" />
-                  <p className="text-sm text-forest">
-                    Every number is honest about its own confidence — a metric Wivoza couldn't reliably
-                    measure shows as unavailable, never as a hidden zero, and a real confirmed zero always
-                    shows as a plain, full-strength zero. The two never look the same, on purpose.
-                  </p>
-                </div>
-              </div>
-            )}
+            <FeatureBlock feature={ASK_PRACTICE} />
+          </div>
+        </section>
 
-            {chapter.id === 'plan' && (
-              <div className="mt-10 rounded-2xl border border-hairline bg-cream-card p-7">
-                <h4 className="font-heading text-lg font-bold text-forest">The four Messages tools</h4>
-                <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                  {MESSAGE_TOOLS.map(({ icon: Icon, title, body }) => (
-                    <div key={title} className="flex items-start gap-3.5">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-peach-tint text-terracotta">
-                        <Icon className="h-4 w-4" />
-                      </span>
-                      <div>
-                        <p className="font-heading text-sm font-bold text-forest">{title}</p>
-                        <p className="mt-0.5 text-sm text-ink-soft">{body}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
-        ))}
+        {/* Plan */}
+        <section id="plan" className="scroll-mt-20 border-b border-hairline py-16">
+          <span className="rounded-full bg-peach-tint px-3 py-1 text-xs font-bold uppercase tracking-wide text-terracotta">
+            Plan
+          </span>
+          <p className="mt-4 max-w-xl text-lg text-ink-soft">Get ready for what's ahead — a lesson to teach, or a conversation to have.</p>
+          <div className="mt-8 flex flex-col gap-5">
+            <FeatureBlock feature={LESSON_PLANNING} />
+            {MESSAGE_TOOLS.map((f) => (
+              <FeatureBlock key={f.id} feature={f} />
+            ))}
+          </div>
+        </section>
+
+        {/* Grow */}
+        <section id={GROW.id} className="scroll-mt-20 border-b border-hairline py-16">
+          <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${GROW.tint}`}>{GROW.label}</span>
+          <p className="mt-4 max-w-xl text-lg text-ink-soft">{GROW.intro}</p>
+          <div className="mt-8 flex flex-col gap-5">
+            {GROW.features.map((f) => (
+              <FeatureBlock key={f.id} feature={f} />
+            ))}
+          </div>
+        </section>
 
         {/* Across the app */}
-        <section id="across-the-app" className="scroll-mt-20 border-b border-hairline pb-16 pt-16">
-          <div className="mb-8 flex items-center gap-2">
-            <span className="rounded-full bg-gold-tint px-3 py-1 text-xs font-bold uppercase tracking-wide text-terracotta-600">
-              Across the app
-            </span>
-          </div>
-          <p className="max-w-xl text-lg text-ink-soft">
-            Three things that work the same way almost everywhere in Wivoza.
-          </p>
-          <div className="mt-8 grid gap-5 sm:grid-cols-3">
-            <div className="rounded-2xl border border-hairline bg-cream-card p-6">
-              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold-tint text-terracotta-600">
-                <StarIcon className="h-5 w-5" />
-              </span>
-              <p className="mt-3 font-heading text-base font-bold text-forest">Save</p>
-              <p className="mt-1 text-sm text-ink-soft">
-                A star toggle on practice attempts, answers, messages, and plans keeps the good ones out of
-                the noise and into your Cheat Sheet.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-hairline bg-cream-card p-6">
-              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold-tint text-terracotta-600">
-                <ShareIcon className="h-5 w-5" />
-              </span>
-              <p className="mt-3 font-heading text-base font-bold text-forest">Share</p>
-              <p className="mt-1 text-sm text-ink-soft">
-                A private, read-only link — no account needed to view it, and the recipient sees only that
-                one item, nothing else in your account.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-hairline bg-cream-card p-6">
-              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold-tint text-terracotta-600">
-                <BookIcon className="h-5 w-5" />
-              </span>
-              <p className="mt-3 font-heading text-base font-bold text-forest">Export</p>
-              <p className="mt-1 text-sm text-ink-soft">
-                One printable "Wivoza — Your Playbook" page of everything you've saved, ready to print or
-                save as a PDF.
-              </p>
-            </div>
+        <section id="across-the-app" className="scroll-mt-20 border-b border-hairline py-16">
+          <span className="rounded-full bg-gold-tint px-3 py-1 text-xs font-bold uppercase tracking-wide text-terracotta-600">
+            Across the app
+          </span>
+          <p className="mt-4 max-w-xl text-lg text-ink-soft">Three things that work the same way almost everywhere in Wivoza.</p>
+          <div className="mt-8 rounded-2xl border border-hairline bg-cream-card p-7">
+            <SpecList
+              items={[
+                { label: 'Save', body: 'a star toggle on practice attempts, answers, messages, and plans — keeps the good ones out of the noise and feeds your Cheat Sheet.' },
+                { label: 'Share', body: 'a private, read-only link. No account is needed to view it, and the recipient sees only that one item — nothing else in your account.' },
+                { label: 'Export', body: 'one printable "Wivoza — Your Playbook" page of everything you\'ve saved, ready to print or save as a PDF.' },
+              ]}
+            />
           </div>
         </section>
 
         {/* Privacy */}
-        <section id="privacy" className="scroll-mt-20 border-b border-hairline pb-16 pt-16">
-          <div className="mb-8 flex items-center gap-2">
-            <span className="rounded-full bg-mint-tint px-3 py-1 text-xs font-bold uppercase tracking-wide text-forest">
-              Privacy
-            </span>
-          </div>
-          <h2 className="font-heading text-2xl font-extrabold text-forest sm:text-3xl">
-            Privacy & what Coach remembers
-          </h2>
+        <section id="privacy" className="scroll-mt-20 border-b border-hairline py-16">
+          <span className="rounded-full bg-mint-tint px-3 py-1 text-xs font-bold uppercase tracking-wide text-forest">Privacy</span>
+          <h2 className="mt-4 font-heading text-2xl font-extrabold text-forest sm:text-3xl">Privacy & what Coach remembers</h2>
           <p className="mt-3 max-w-2xl text-lg text-ink-soft">
-            Wivoza is built to be honest with you about evidence, and careful with what it keeps about you
-            and your students.
+            Wivoza is built to be honest with you about evidence, and careful with what it keeps about you and your students.
           </p>
-
           <div className="mt-8 grid gap-8 lg:grid-cols-2">
             <div className="rounded-2xl border border-hairline bg-cream-card p-7">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-mint-tint text-forest">
@@ -391,80 +464,48 @@ export default function Guide() {
               </span>
               <h3 className="mt-4 font-heading text-lg font-bold text-forest">Coach's memory</h3>
               <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-                To make coaching feel less like starting over every time, Coach keeps a short, running note
-                about your recurring strengths and any ongoing challenges — built only from your real Ask
-                and Talk It Through conversations, never from Practice rehearsals. It's on by default, but
-                entirely yours: read it, turn it off, or clear it anytime from Profile & Settings.
+                A short, running note about your recurring strengths and any ongoing challenges — built only
+                from your real Ask and Talk It Through conversations, never from Practice rehearsals. On by
+                default, but entirely yours: read it, turn it off, or clear it anytime.
               </p>
             </div>
-            <div className="flex flex-col gap-4">
-              {PRIVACY_POINTS.map((p) => (
-                <div key={p.title} className="flex items-start gap-3.5 rounded-2xl border border-hairline bg-cream-card p-5">
-                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-mint-tint text-forest">
-                    <LockIcon className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className="font-heading text-sm font-bold text-forest">{p.title}</p>
-                    <p className="mt-0.5 text-sm text-ink-soft">{p.body}</p>
-                  </div>
-                </div>
-              ))}
+            <div className="rounded-2xl border border-hairline bg-cream-card p-7">
+              <SpecList
+                items={[
+                  { label: 'Your voice is never kept', body: 'audio is discarded right after transcription — only text and metrics remain.' },
+                  { label: 'Names stay out of it', body: 'Coach refers to people by role — "a student," "the class" — even if you use a name yourself.' },
+                  { label: "You're never scored", body: 'no grade, rank, or evaluation is ever shown to you. A few private internal ratings power your own growth trends and are never shown to anyone as a number.' },
+                ]}
+              />
             </div>
           </div>
         </section>
 
         {/* For schools */}
-        <section id="admin" className="scroll-mt-20 pt-16">
-          <div className="mb-8 flex items-center gap-2">
-            <span className="rounded-full bg-peach-tint px-3 py-1 text-xs font-bold uppercase tracking-wide text-terracotta">
-              For schools & districts
-            </span>
-          </div>
-          <h2 className="font-heading text-2xl font-extrabold text-forest sm:text-3xl">Admin dashboard</h2>
+        <section id="for-schools" className="scroll-mt-20 pt-16">
+          <span className="rounded-full bg-peach-tint px-3 py-1 text-xs font-bold uppercase tracking-wide text-terracotta">
+            For schools & districts
+          </span>
+          <h2 className="mt-4 font-heading text-2xl font-extrabold text-forest sm:text-3xl">Admin dashboard</h2>
           <p className="mt-3 max-w-2xl text-lg text-ink-soft">
-            Visible only to school and district admins — built around aggregate trends, never an individual
-            teacher's attempts or ratings.
+            Visible only to school and district admins — built around aggregate trends, never an individual teacher's attempts or ratings.
           </p>
-
-          <div className="mt-8 overflow-x-auto rounded-2xl border border-hairline bg-cream-card">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-hairline text-xs font-bold uppercase tracking-wide text-ink-soft">
-                  <th className="px-6 py-4">View</th>
-                  <th className="px-6 py-4">What it shows</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-hairline">
-                <tr>
-                  <td className="px-6 py-4 font-heading font-bold text-forest">Overview</td>
-                  <td className="px-6 py-4 text-ink-soft">
-                    Teacher counts, a staff-wide growth signal, weekly activity, and a member list with
-                    remove/suspend/delete controls. Every admin sees this.
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-6 py-4 font-heading font-bold text-forest">Organizations</td>
-                  <td className="px-6 py-4 text-ink-soft">
-                    Platform admins only — create, edit, or remove school and district accounts.
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-6 py-4 font-heading font-bold text-forest">Users</td>
-                  <td className="px-6 py-4 text-ink-soft">
-                    Platform admins only — every account across Wivoza, including independent teachers.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div className="mt-6 flex items-start gap-3 rounded-2xl border-l-4 border-terracotta bg-peach-tint/40 p-5">
-            <HeadsetIcon className="mt-0.5 h-5 w-5 shrink-0 text-terracotta" />
-            <p className="text-sm text-forest">
-              A banner on every admin view says it plainly: only aggregate trends are ever shown here —
-              never one teacher's individual attempts, answers, or ratings. Joining a school is as simple as
-              entering a short code, either during onboarding or later from Profile & Settings.
-            </p>
+          <div className="mt-8 rounded-2xl border border-hairline bg-cream-card p-7">
+            <SpecList
+              items={[
+                { label: 'Overview', body: 'total and active-this-week teacher counts, a staff-wide growth signal, a weekly activity chart, practice-by-category breakdown, and a member list — each row with Remove from org, Suspend, and (for platform admins) Delete. Every admin sees this.' },
+                { label: 'Organizations', body: 'platform admins only — create, edit, or remove school and district accounts, including their join code and admin emails.' },
+                { label: 'Users', body: 'platform admins only — every account across Wivoza, including independent teachers who aren\'t part of any school.' },
+                { label: 'Joining a school', body: 'a teacher enters a short code during onboarding or later from Profile & Settings; whoever\'s email is listed as that school\'s admin becomes its admin automatically.' },
+              ]}
+            />
+            <div className="mt-5 flex items-start gap-3 rounded-xl border-l-4 border-terracotta bg-peach-tint/40 p-4">
+              <HeadsetIcon className="mt-0.5 h-5 w-5 shrink-0 text-terracotta" />
+              <p className="text-sm text-forest">
+                A banner on every admin view says it plainly: only aggregate trends are ever shown here —
+                never one teacher's individual attempts, answers, or ratings.
+              </p>
+            </div>
           </div>
         </section>
       </div>
@@ -478,9 +519,7 @@ export default function Guide() {
           <h2 className="font-heading text-3xl font-extrabold leading-tight text-cream sm:text-4xl">
             Ready to see it for yourself?
           </h2>
-          <p className="max-w-md text-cream/70">
-            Every feature in this guide is free to start exploring today.
-          </p>
+          <p className="max-w-md text-cream/70">Every feature in this guide is free to start exploring today.</p>
           <Link
             to="/#get-started"
             className="flex items-center gap-2 rounded-full bg-terracotta px-6 py-3.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
@@ -504,12 +543,12 @@ export default function Guide() {
             <Link to="/guide" className="hover:text-ink">
               Guide
             </Link>
-            <Link to="/terms" className="hover:text-ink">
+            <a href="/terms" className="hover:text-ink">
               Privacy
-            </Link>
-            <Link to="/terms" className="hover:text-ink">
+            </a>
+            <a href="/terms" className="hover:text-ink">
               Terms
-            </Link>
+            </a>
             <span>&copy; 2026 Wivoza. All rights reserved.</span>
           </div>
         </div>
