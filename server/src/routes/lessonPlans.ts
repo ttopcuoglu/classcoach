@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
+import { checkFeatureAccess, countUsageLogActionsThisMonth } from '../lib/billing.ts'
 import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES, INSTRUCTION_PRIORITY_NOTICE } from '../lib/coachPersona.ts'
 import { extractTag } from '../lib/extractTag.ts'
@@ -8,6 +9,8 @@ import { generateShareToken } from '../lib/shareToken.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const lessonPlansRouter = Router()
+
+const LESSON_PLANNING_ACTIONS = ['lesson_plan_feedback', 'lesson_plan_generate', 'lesson_plan_chat']
 
 const FEEDBACK_SYSTEM_PROMPT = `You are a warm, practical instructional coach for K-12 teachers, reviewing a lesson plan the teacher wrote themselves. Coach, don't grade.
 
@@ -203,6 +206,14 @@ lessonPlansRouter.post('/feedback', async (req, res) => {
     return
   }
 
+  const access = await checkFeatureAccess(req.user!.userId, 'lesson_planning', () =>
+    countUsageLogActionsThisMonth(req.user!.userId, LESSON_PLANNING_ACTIONS),
+  )
+  if (!access.allowed) {
+    res.status(403).json({ error: access.upgradeMessage })
+    return
+  }
+
   const allowed = await checkAndLogUsage(req.user!.userId, 'lesson_plan_feedback')
   if (!allowed) {
     res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
@@ -303,6 +314,14 @@ lessonPlansRouter.post('/generate', async (req, res) => {
 
   if (!context.objective) {
     res.status(400).json({ error: 'objective is required' })
+    return
+  }
+
+  const access = await checkFeatureAccess(req.user!.userId, 'lesson_planning', () =>
+    countUsageLogActionsThisMonth(req.user!.userId, LESSON_PLANNING_ACTIONS),
+  )
+  if (!access.allowed) {
+    res.status(403).json({ error: access.upgradeMessage })
     return
   }
 

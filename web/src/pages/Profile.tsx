@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getProfile, resetData, updateProfile } from '../lib/api'
+import { createBillingPortalSession, createCheckoutSession, getProfile, resetData, updateProfile } from '../lib/api'
 
 export default function Profile() {
   const [loading, setLoading] = useState(true)
@@ -11,6 +11,10 @@ export default function Profile() {
   const [organizationName, setOrganizationName] = useState<string | null>(null)
   const [coachMemory, setCoachMemory] = useState<string | null>(null)
   const [coachMemoryEnabled, setCoachMemoryEnabled] = useState(true)
+  const [plan, setPlan] = useState<'free' | 'plus'>('free')
+
+  const [billingLoading, setBillingLoading] = useState(false)
+  const [billingError, setBillingError] = useState<string | null>(null)
 
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -37,6 +41,7 @@ export default function Profile() {
         setOrganizationName(profile.organization?.name ?? null)
         setCoachMemory(profile.coachMemory)
         setCoachMemoryEnabled(profile.coachMemoryEnabled)
+        setPlan(profile.plan)
       })
       .catch(() => setSaveError('Could not load your profile.'))
       .finally(() => setLoading(false))
@@ -117,6 +122,30 @@ export default function Profile() {
     }
   }
 
+  async function handleUpgrade() {
+    setBillingLoading(true)
+    setBillingError(null)
+    try {
+      const { url } = await createCheckoutSession()
+      window.location.href = url
+    } catch {
+      setBillingError('Could not start checkout. Please try again.')
+      setBillingLoading(false)
+    }
+  }
+
+  async function handleManageBilling() {
+    setBillingLoading(true)
+    setBillingError(null)
+    try {
+      const { url } = await createBillingPortalSession()
+      window.location.href = url
+    } catch {
+      setBillingError('Could not open billing management. Please try again.')
+      setBillingLoading(false)
+    }
+  }
+
   if (loading) {
     return <p className="p-8 text-center text-sm text-ink-soft">Loading your profile...</p>
   }
@@ -126,6 +155,39 @@ export default function Profile() {
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold text-ink md:text-3xl">Profile & Settings</h1>
         <p className="text-ink-soft">Tell us about your classroom so coaching can be more relevant.</p>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-surface p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-ink">Plan</h2>
+            <p className="mt-1 text-sm text-ink-soft">
+              {plan === 'plus'
+                ? "You're on Wivoza Plus — unlimited Lesson Debrief, Lesson Planning, Messages, and Coach's memory."
+                : 'Free plan — unlimited Talk It Through and Ask & Practice, 3 Lesson Debrief recordings a month.'}
+            </p>
+          </div>
+          {plan === 'plus' ? (
+            <button
+              type="button"
+              onClick={handleManageBilling}
+              disabled={billingLoading}
+              className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
+            >
+              {billingLoading ? 'Opening...' : 'Manage subscription'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleUpgrade}
+              disabled={billingLoading}
+              className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+            >
+              {billingLoading ? 'Please wait...' : 'Upgrade to Wivoza Plus — $9/month'}
+            </button>
+          )}
+        </div>
+        {billingError && <p className="mt-2 text-sm text-warm-500">{billingError}</p>}
       </div>
 
       <form onSubmit={handleSave} className="flex flex-col gap-5 rounded-2xl border border-border bg-surface p-6">

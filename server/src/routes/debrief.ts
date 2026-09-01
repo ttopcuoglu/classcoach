@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
+import { hasActivePlan } from '../lib/billing.ts'
 import { applyMemoryUpdate, buildMemoryContextBlock, MEMORY_UPDATE_INSTRUCTION } from '../lib/coachMemory.ts'
 import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
@@ -109,7 +110,7 @@ debriefRouter.post('/', async (req, res) => {
       where: { id: req.user!.userId },
       select: { coachMemory: true, coachMemoryEnabled: true },
     })
-    const memoryOn = user?.coachMemoryEnabled ?? false
+    const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
 
     const context = `What happened: ${incidentText}`
     const response = await anthropic.messages.create({
@@ -176,7 +177,7 @@ debriefRouter.post('/talk', async (req, res) => {
       where: { id: req.user!.userId },
       select: { coachMemory: true, coachMemoryEnabled: true },
     })
-    const memoryOn = user?.coachMemoryEnabled ?? false
+    const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -252,7 +253,7 @@ debriefRouter.post('/:id/chat', async (req, res) => {
       where: { id: req.user!.userId },
       select: { coachMemory: true, coachMemoryEnabled: true },
     })
-    const memoryOn = user?.coachMemoryEnabled ?? false
+    const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
 
     const basePrompt = isTalk ? TALK_SYSTEM_PROMPT : ASK_CHAT_SYSTEM_PROMPT
     const response = await anthropic.messages.create({

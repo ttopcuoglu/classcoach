@@ -48,6 +48,14 @@ model User {
   coachMemoryEnabled    Boolean   @default(true)
   organizationId        String? // null = independent teacher, not part of any district
   organization          Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  // "free" | "plus" — individual self-serve billing. Independent of
+  // Organization.plan below; a teacher can be "free" here while still
+  // getting Plus-equivalent access through a district (see hasActivePlan
+  // in server/src/lib/billing.ts).
+  plan                  String    @default("free")
+  planStatus            String? // "active" | "canceled" | "past_due" — null if never subscribed
+  planRenewsAt          DateTime? // current Stripe billing-period end
+  stripeCustomerId      String?   @unique
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -67,12 +75,20 @@ model User {
 // has an account) with one of these emails becomes this org's org_admin,
 // same mechanism as the platform-wide ADMIN_EMAILS env var, just scoped.
 model Organization {
-  id          String   @id @default(cuid())
-  name        String
-  joinCode    String   @unique
-  adminEmails String?
-  createdAt   DateTime @default(now())
-  users       User[]
+  id               String    @id @default(cuid())
+  name             String
+  joinCode         String    @unique
+  adminEmails      String?
+  // "free" | "district" — set once a district's invoice is actually paid
+  // (see the Stripe webhook's invoice.paid handler).
+  plan             String    @default("free")
+  // Whole-building free pilot window (uncapped teacher count, by design —
+  // maximizes reach more than a small capped subset). The org acts as
+  // fully paid while this is in the future, even with plan="free".
+  pilotEndsAt      DateTime?
+  stripeCustomerId String?   @unique // separate id-space from individual User customers, used for invoicing
+  createdAt        DateTime  @default(now())
+  users            User[]
 }
 
 // One row per Claude-costing call, used to enforce a per-user daily limit

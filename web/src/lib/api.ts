@@ -69,6 +69,8 @@ export type UserProfile = {
   focusMetric: FocusMetric | null
   coachMemory: string | null
   coachMemoryEnabled: boolean
+  plan: 'free' | 'plus'
+  planStatus: string | null
   organizationId: string | null
   organization: { name: string } | null
   createdAt: string
@@ -549,6 +551,14 @@ export function updateProfile(data: {
 
 export function resetData(): Promise<{ status: string }> {
   return request('/api/profile/reset', { method: 'POST' })
+}
+
+export function createCheckoutSession(): Promise<{ url: string }> {
+  return request('/api/billing/checkout', { method: 'POST' })
+}
+
+export function createBillingPortalSession(): Promise<{ url: string }> {
+  return request('/api/billing/portal', { method: 'POST' })
 }
 
 // Onboarding's live "read this aloud" demo — same multipart pattern as

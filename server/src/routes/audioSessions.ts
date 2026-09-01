@@ -2,6 +2,7 @@ import { Router } from 'express'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { analyzeTranscript, buildContentExhibits, detectLessonContent, type Segment } from '../lib/audioAnalysis.ts'
+import { checkFeatureAccess, startOfCurrentMonth } from '../lib/billing.ts'
 import { CORE_COACHING_RULES, TRANSCRIPT_RELIABILITY_NOTICE } from '../lib/coachPersona.ts'
 import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
 import { transcribeAudio } from '../lib/deepgram.ts'
@@ -167,6 +168,14 @@ audioSessionsRouter.post('/', async (req, res) => {
     user?.audioRetentionDays != null
       ? new Date(Date.now() + user.audioRetentionDays * 24 * 60 * 60 * 1000)
       : null
+
+  const access = await checkFeatureAccess(req.user!.userId, 'lesson_debrief', () =>
+    prisma.audioSession.count({ where: { userId: req.user!.userId, createdAt: { gte: startOfCurrentMonth() } } }),
+  )
+  if (!access.allowed) {
+    res.status(403).json({ error: access.upgradeMessage })
+    return
+  }
 
   const session = await prisma.audioSession.create({
     data: {

@@ -6,6 +6,8 @@ import { adminRouter } from './routes/admin.ts'
 import { attemptsRouter } from './routes/attempts.ts'
 import { audioSessionsRouter } from './routes/audioSessions.ts'
 import { authRouter } from './routes/auth.ts'
+import { billingRouter } from './routes/billing.ts'
+import { billingWebhookRouter } from './routes/billingWebhook.ts'
 import { conversationPlanRouter } from './routes/conversationPlan.ts'
 import { conversationPrepRouter } from './routes/conversationPrep.ts'
 import { debriefRouter } from './routes/debrief.ts'
@@ -26,6 +28,12 @@ const FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGINS ?? 'http://localhost:5180
   .filter(Boolean)
 
 app.use(cors({ origin: FRONTEND_ORIGINS, credentials: true }))
+
+// Stripe's signature check needs the exact raw request body, so this must
+// be registered with express.raw() before the global express.json() below
+// ever gets a chance to parse (and thereby discard) it.
+app.use('/api/billing/webhook', express.raw({ type: 'application/json' }), billingWebhookRouter)
+
 app.use(express.json())
 app.use(cookieParser())
 
@@ -44,6 +52,7 @@ app.use('/api/profile', requireAuth, profileRouter)
 app.use('/api/debriefs', requireAuth, debriefRouter)
 app.use('/api/parent-messages', requireAuth, parentMessageRouter)
 app.use('/api/admin', requireAuth, adminRouter)
+app.use('/api/billing', requireAuth, billingRouter)
 app.use('/api/audio-sessions', requireAuth, audioSessionsRouter)
 app.use('/api/lesson-plans', requireAuth, lessonPlansRouter)
 app.use('/api/conversation-prep', requireAuth, conversationPrepRouter)

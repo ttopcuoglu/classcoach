@@ -4,6 +4,7 @@ import { requireAdmin, requireSuperadmin } from '../lib/auth.ts'
 import { generateUniqueJoinCode, normalizeJoinCode, parseAdminEmails, syncOrganizationRoles } from '../lib/organization.ts'
 import { prisma } from '../lib/prisma.ts'
 import { SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
+import { stripe } from '../lib/stripe.ts'
 
 export const adminRouter = Router()
 
@@ -346,6 +347,82 @@ adminRouter.delete('/organizations/:id', requireSuperadmin, async (req, res) => 
   }
   await prisma.organization.delete({ where: { id } })
   res.json({ status: 'ok' })
+})
+
+// Deliberately manual, not automated per-teacher-count billing — real
+// district deals are individually negotiated, so the superadmin computes
+// the agreed amount (e.g. teacherCount * $200) themselves. Stripe's
+// hosted invoice page natively accepts both ACH and card, so this is the
+// only "district payment" flow needed — no separate checkout to build.
+adminRouter.post('/organizations/:id/invoice', requireSuperadmin, async (req, res) => {
+  const id = req.params.id as string
+  const { amountCents, description } = req.body ?? {}
+  if (typeof amountCents !== 'number' || !Number.isInteger(amountCents) || amountCents <= 0) {
+    res.status(400).json({ error: 'amountCents must be a positive integer' })
+    return
+  }
+  if (typeof description !== 'string' || !description.trim()) {
+    res.status(400).json({ error: 'description is required' })
+    return
+  }
+
+  const organization = await prisma.organization.findUnique({ where: { id } })
+  if (!organization) {
+    res.status(404).json({ error: 'Organization not found' })
+    return
+  }
+  const billingEmail = (organization.adminEmails ?? '').split(',').map((e) => e.trim()).filter(Boolean)[0]
+  if (!billingEmail) {
+    res.status(400).json({ error: 'This organization has no admin email on file to send the invoice to.' })
+    return
+  }
+
+  try {
+    let customerId = organization.stripeCustomerId
+    if (!customerId) {
+      const customer = await stripe.customers.create({ name: organization.name, email: billingEmail })
+      customerId = customer.id
+      await prisma.organization.update({ where: { id }, data: { stripeCustomerId: customerId } })
+    }
+
+    const invoice = await stripe.invoices.create({
+      customer: customerId,
+      collection_method: 'send_invoice',
+      days_until_due: 30,
+      auto_advance: true,
+    })
+    await stripe.invoiceItems.create({
+      customer: customerId,
+      invoice: invoice.id,
+      amount: amountCents,
+      currency: 'usd',
+      description: description.trim(),
+    })
+    const finalized = await stripe.invoices.finalizeInvoice(invoice.id!)
+    await stripe.invoices.sendInvoice(invoice.id!)
+
+    res.json({ invoiceUrl: finalized.hosted_invoice_url })
+  } catch (error) {
+    console.error('[admin] district invoice creation failed:', error)
+    res.status(502).json({ error: 'Could not create the invoice. Please try again.' })
+  }
+})
+
+// Whole-building free pilot — deliberately uncapped teacher count (more
+// reach than a small capped subset) and superadmin-activated after a
+// sales conversation, matching the existing "ask for a quote" model. No
+// self-serve district signup.
+adminRouter.post('/organizations/:id/start-pilot', requireSuperadmin, async (req, res) => {
+  const id = req.params.id as string
+  const organization = await prisma.organization.findUnique({ where: { id } })
+  if (!organization) {
+    res.status(404).json({ error: 'Organization not found' })
+    return
+  }
+  const pilotEndsAt = new Date()
+  pilotEndsAt.setMonth(pilotEndsAt.getMonth() + 4, pilotEndsAt.getDate() + 15) // ~one semester
+  const updated = await prisma.organization.update({ where: { id }, data: { pilotEndsAt } })
+  res.json(updated)
 })
 
 // Platform-wide roster — the one place a superadmin can find any account,

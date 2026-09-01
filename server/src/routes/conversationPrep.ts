@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
+import { checkFeatureAccess, COMMUNICATIONS_ACTIONS, countUsageLogActionsThisMonth } from '../lib/billing.ts'
 import {
   isValidChallengeType,
   isValidConversationDifficulty,
@@ -241,6 +242,14 @@ conversationPrepRouter.post('/generate-scenario', async (req, res) => {
   const resolvedPersonType = isValidRecipientType(personType) ? personType : null
   const resolvedDifficulty = isValidConversationDifficulty(difficulty) ? difficulty : null
 
+  const access = await checkFeatureAccess(req.user!.userId, 'communications', () =>
+    countUsageLogActionsThisMonth(req.user!.userId, COMMUNICATIONS_ACTIONS),
+  )
+  if (!access.allowed) {
+    res.status(403).json({ error: access.upgradeMessage })
+    return
+  }
+
   const allowed = await checkAndLogUsage(req.user!.userId, 'conversation_prep_generate')
   if (!allowed) {
     res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
@@ -299,6 +308,14 @@ conversationPrepRouter.post('/', async (req, res) => {
   const resolvedDifficulty = isValidConversationDifficulty(difficulty) ? difficulty : null
   const resolvedReviewMode = isValidReviewMode(reviewMode) ? reviewMode : 'both'
   const resolvedCategory = resolvedSource === 'practice' && isValidChallengeType(category) ? category : null
+
+  const access = await checkFeatureAccess(req.user!.userId, 'communications', () =>
+    countUsageLogActionsThisMonth(req.user!.userId, COMMUNICATIONS_ACTIONS),
+  )
+  if (!access.allowed) {
+    res.status(403).json({ error: access.upgradeMessage })
+    return
+  }
 
   const allowed = await checkAndLogUsage(req.user!.userId, 'conversation_prep_feedback')
   if (!allowed) {

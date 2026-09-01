@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
+import { checkFeatureAccess, COMMUNICATIONS_ACTIONS, countUsageLogActionsThisMonth } from '../lib/billing.ts'
 import { isValidMeetingFormat, isValidRecipientType } from '../lib/communicationOptions.ts'
 import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
@@ -140,6 +141,14 @@ conversationPlanRouter.post('/', async (req, res) => {
   const { context, error: contextError } = buildContext(body)
   if (contextError) {
     res.status(400).json({ error: contextError })
+    return
+  }
+
+  const access = await checkFeatureAccess(req.user!.userId, 'communications', () =>
+    countUsageLogActionsThisMonth(req.user!.userId, COMMUNICATIONS_ACTIONS),
+  )
+  if (!access.allowed) {
+    res.status(403).json({ error: access.upgradeMessage })
     return
   }
 
