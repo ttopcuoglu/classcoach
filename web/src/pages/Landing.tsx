@@ -141,12 +141,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       {/* Nav */}
       <header className="bg-cream">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gold text-forest">
-              <ChartBarIcon className="h-5 w-5" />
-            </span>
-            <p className="font-heading text-lg font-bold text-forest">Wivoza</p>
-          </div>
+          <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-8 w-auto" />
           <nav className="hidden items-center gap-8 text-sm font-medium text-ink-soft md:flex">
             <a href="#how-it-works" className="hover:text-ink">
               How it works
@@ -584,10 +579,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       <footer className="bg-cream py-10">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-6 text-sm text-ink-soft sm:flex-row">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gold text-forest">
-              <ChartBarIcon className="h-3.5 w-3.5" />
-            </span>
-            <p className="font-heading font-bold text-forest">Wivoza</p>
+            <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-6 w-auto" />
             <span className="hidden sm:inline">Practice. Reflect. Grow.</span>
           </div>
           <div className="flex items-center gap-5">

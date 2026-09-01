@@ -5,7 +5,6 @@ import type { UserProfile } from '../lib/api'
 import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import {
   ArrowUpIcon,
-  ChartBarIcon,
   ChatBubbleIcon,
   ChecklistIcon,
   HomeIcon,
@@ -88,14 +87,9 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
     <div className="flex min-h-screen bg-cream text-ink">
       {/* Desktop sidebar */}
       <aside className="hidden w-64 shrink-0 bg-forest md:flex md:flex-col">
-        <div className="flex items-center gap-2.5 px-6 py-6">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold text-forest">
-            <ChartBarIcon className="h-5 w-5" />
-          </span>
-          <div>
-            <p className="font-heading text-base font-bold text-cream">Wivoza</p>
-            <p className="text-[11px] text-cream/50">Practice. Reflect. Grow.</p>
-          </div>
+        <div className="flex flex-col gap-1 px-6 py-6">
+          <img src="/logo/wivoza-lockup-dark.png" alt="Wivoza" className="h-8 w-auto" />
+          <p className="text-[11px] text-cream/50">Practice. Reflect. Grow.</p>
         </div>
         <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 pb-4">
           <NavLink to="/" end className={({ isActive }) => navLinkClasses(isActive)}>
@@ -176,12 +170,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
       <div className="flex min-h-screen flex-1 flex-col">
         {/* Mobile top bar */}
         <header className="flex items-center justify-between border-b border-hairline bg-cream-card px-4 py-3 md:hidden">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gold text-forest">
-              <ChartBarIcon className="h-4 w-4" />
-            </span>
-            <p className="font-heading text-base font-bold text-forest">Wivoza</p>
-          </div>
+          <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-6 w-auto" />
           <button type="button" onClick={handleLogout} className="text-sm font-medium text-ink-soft">
             Log out
           </button>
