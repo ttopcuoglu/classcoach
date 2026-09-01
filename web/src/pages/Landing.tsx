@@ -157,6 +157,9 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             <a href="#why-wivoza" className="hover:text-ink">
               Why Wivoza
             </a>
+            <a href="#pricing" className="hover:text-ink">
+              Pricing
+            </a>
             <Link to="/guide" className="hover:text-ink">
               Guide
             </Link>
@@ -214,6 +217,13 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               className="rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-cream hover:text-ink"
             >
               Why Wivoza
+            </a>
+            <a
+              href="#pricing"
+              onClick={() => setMobileNavOpen(false)}
+              className="rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-cream hover:text-ink"
+            >
+              Pricing
             </a>
             <Link
               to="/guide"
@@ -443,6 +453,108 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                 </p>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section id="pricing" className="bg-mint-tint/50 py-20">
+        <div className="mx-auto w-full max-w-6xl px-6">
+          <div className="mx-auto mb-14 max-w-2xl text-center">
+            <span className="text-xs font-semibold uppercase tracking-wide text-terracotta">
+              Simple, honest pricing
+            </span>
+            <h2 className="mt-3 font-heading text-3xl font-extrabold text-forest sm:text-4xl">
+              Start free. Upgrade when you&rsquo;re ready.
+            </h2>
+            <p className="mt-4 text-ink-soft">No credit card to sign up, no surprise fees.</p>
+          </div>
+
+          <div className="mx-auto grid max-w-3xl gap-6 sm:grid-cols-2">
+            <div className="rounded-2xl border border-hairline bg-cream-card p-8 shadow-sm">
+              <h3 className="font-heading text-xl font-bold text-forest">Free</h3>
+              <p className="mt-1 text-sm text-ink-soft">For getting started</p>
+              <p className="mt-6 font-heading text-4xl font-extrabold text-forest">$0</p>
+              <ul className="mt-6 space-y-3 text-sm text-ink-soft">
+                <li className="flex items-start gap-2.5">
+                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-forest" />
+                  Unlimited Talk It Through
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-forest" />
+                  Unlimited Ask &amp; Practice
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-forest" />
+                  3 Lesson Debrief recordings/month
+                </li>
+              </ul>
+              <a
+                href="#get-started"
+                className="mt-8 block rounded-full border border-forest px-5 py-3 text-center text-sm font-semibold text-forest transition-opacity hover:opacity-80"
+              >
+                Start free
+              </a>
+            </div>
+
+            <div className="relative rounded-2xl border-2 border-terracotta bg-cream-card p-8 shadow-md">
+              <span className="absolute -top-3 left-8 rounded-full bg-terracotta px-3 py-1 text-xs font-semibold text-white">
+                Most popular
+              </span>
+              <h3 className="font-heading text-xl font-bold text-forest">Wivoza Plus</h3>
+              <p className="mt-1 text-sm text-ink-soft">For teachers who want it all</p>
+              <p className="mt-6 flex items-baseline gap-1">
+                <span className="font-heading text-4xl font-extrabold text-forest">$9</span>
+                <span className="text-sm text-ink-soft">/month</span>
+              </p>
+              <ul className="mt-6 space-y-3 text-sm text-ink-soft">
+                <li className="flex items-start gap-2.5">
+                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
+                  Everything in Free
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
+                  Unlimited Lesson Debrief
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
+                  Lesson Planning
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
+                  Full Messages suite
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
+                  Coach&rsquo;s memory across conversations
+                </li>
+              </ul>
+              <a
+                href="#get-started"
+                className="mt-8 block rounded-full bg-terracotta px-5 py-3 text-center text-sm font-semibold text-white transition-opacity hover:opacity-90"
+              >
+                Start free, upgrade anytime
+              </a>
+            </div>
+          </div>
+
+          <div className="mx-auto mt-8 flex max-w-3xl flex-col items-center justify-between gap-6 rounded-2xl bg-forest p-8 text-center sm:flex-row sm:text-left">
+            <div>
+              <h3 className="font-heading text-lg font-bold text-cream">
+                Bringing Wivoza to your school or district?
+              </h3>
+              <p className="mt-1.5 text-sm text-cream/70">
+                District licensing gives every teacher Plus-level access, with support built for
+                your rollout.
+              </p>
+            </div>
+            <a
+              href="mailto:hello@wivoza.com?subject=Wivoza%20for%20our%20district"
+              className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-gold px-5 py-3 text-sm font-semibold text-forest transition-opacity hover:opacity-90"
+            >
+              Request a quote
+              <ArrowRightIcon className="h-4 w-4" />
+            </a>
           </div>
         </div>
       </section>

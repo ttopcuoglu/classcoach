@@ -85,7 +85,7 @@ const CATEGORIES: Category[] = [
     items: [
       {
         q: 'Is Wivoza free?',
-        a: 'Yes, Wivoza is free to start today. Pricing for individuals and for school districts is still being finalized as the product grows.',
+        a: 'Yes — Talk It Through and Ask & Practice are free for everyone, always, plus 3 Lesson Debrief recordings a month. Wivoza Plus is $9/month for unlimited Lesson Debrief, Lesson Planning, Messages, and Coach’s memory. Districts get Plus-level access for every teacher through a licensing agreement — email hello@wivoza.com for a quote.',
       },
       {
         q: 'How long does it take to get started?',
