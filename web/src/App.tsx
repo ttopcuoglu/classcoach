@@ -51,7 +51,7 @@ function RequireAuth({
   children: React.ReactNode
 }) {
   const location = useLocation()
-  if (loading) return null
+  if (loading) return <RouteFallback />
   if (!user) return <Landing onSignedIn={onSignedIn} />
   if (user.onboardingCompletedAt == null && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />
@@ -63,16 +63,30 @@ export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
 
-  function refreshUser() {
+  function refreshUser(retriesLeft = 0): Promise<void> {
     setLoading(true)
     return getMe()
-      .then(setUser)
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false))
+      .then((profile) => {
+        setUser(profile)
+        setLoading(false)
+      })
+      .catch(async () => {
+        // Right after bouncing back from an external redirect (e.g. Stripe
+        // Checkout), some browsers briefly withhold the session cookie from
+        // this first cross-origin request — retry a couple of times before
+        // concluding the user is actually signed out.
+        if (retriesLeft > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 700))
+          return refreshUser(retriesLeft - 1)
+        }
+        setUser(null)
+        setLoading(false)
+      })
   }
 
   useEffect(() => {
-    refreshUser()
+    const cameFromCheckout = new URLSearchParams(window.location.search).get('upgraded') === 'true'
+    refreshUser(cameFromCheckout ? 3 : 0)
   }, [])
 
   function handleLogout() {
