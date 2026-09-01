@@ -8,13 +8,6 @@ export default function Terms() {
           ← Back
         </Link>
 
-        <div className="rounded-xl border-2 border-warm-500 bg-warm-100 p-4">
-          <p className="text-sm font-semibold text-warm-500">
-            Draft — pending legal review. This page proposes terms and privacy commitments and has not yet been
-            reviewed by a lawyer.
-          </p>
-        </div>
-
         <h1 className="font-display text-3xl italic text-ink">Wivoza Terms of Use</h1>
         <p className="-mt-4 text-xs text-ink-soft">Effective as of the date first published on this page.</p>
 
