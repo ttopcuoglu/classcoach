@@ -136,6 +136,21 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
           </Link>
         </div>
 
+        {user != null && user.plan !== 'plus' && (
+          <div className="mx-3 mb-3 rounded-2xl bg-gold-tint p-4">
+            <p className="text-sm font-semibold text-terracotta-600">Wivoza Plus</p>
+            <p className="mt-1 text-xs text-forest/70">
+              Unlimited Lesson Debrief, Lesson Planning, Messages, and Coach's memory.
+            </p>
+            <Link
+              to="/profile"
+              className="mt-2.5 inline-block rounded-lg bg-terracotta-600 px-3 py-1.5 text-xs font-semibold text-cream hover:bg-terracotta"
+            >
+              Upgrade — $9/month
+            </Link>
+          </div>
+        )}
+
         {user != null && user.role !== 'teacher' && (
           <div className="border-t border-cream/10 px-3 py-3">
             <NavLink to="/admin" className={({ isActive }) => navLinkClasses(isActive)}>
@@ -171,6 +186,15 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             Log out
           </button>
         </header>
+
+        {user != null && user.plan !== 'plus' && (
+          <Link
+            to="/profile"
+            className="block bg-gold-tint px-4 py-2 text-center text-xs font-semibold text-terracotta-600 md:hidden"
+          >
+            Unlock unlimited coaching — Upgrade to Wivoza Plus →
+          </Link>
+        )}
 
         <main className="flex-1 px-4 py-6 pb-24 md:px-10 md:py-10 md:pb-10">
           <div className="mx-auto w-full max-w-4xl">

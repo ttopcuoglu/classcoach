@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import CoachingChat from '../components/CoachingChat'
 import ShareButton from '../components/ShareButton'
+import { UpgradeMessage } from '../components/UpgradeMessage'
 import { StarIcon } from '../components/icons'
 import SafetyAdvisoryBanner, { PrivacyReminder } from '../components/SafetyAdvisoryBanner'
 import { REVIEW_MODES, type ReviewMode } from '../lib/communicationOptions'
@@ -232,7 +233,11 @@ export default function ReviewCommunication() {
             </div>
           </div>
         )}
-        {error && <p className="mt-4 text-center text-sm text-warm-500">{error}</p>}
+        {error && (
+          <p className="mt-4 text-center text-sm text-warm-500">
+            <UpgradeMessage text={error} />
+          </p>
+        )}
       </div>
     </div>
   )

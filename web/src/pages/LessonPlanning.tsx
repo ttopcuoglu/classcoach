@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ShareIcon, StarIcon } from '../components/icons'
 import CoachingChat from '../components/CoachingChat'
+import { UpgradeMessage } from '../components/UpgradeMessage'
 import {
   applyLessonPlanRevision,
   generateLessonPlan,
@@ -381,8 +382,8 @@ function GeneratePanel() {
       const result = await generateLessonPlan(toApiContext(context))
       setPlan(result)
       setAllPlans((prev) => [result, ...prev])
-    } catch {
-      setError('Could not generate a sample plan. Please try again.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not generate a sample plan. Please try again.')
     } finally {
       setGenerating(false)
     }
@@ -457,7 +458,11 @@ function GeneratePanel() {
             </div>
           </div>
         )}
-        {error && <p className="mt-4 text-center text-sm text-warm-500">{error}</p>}
+        {error && (
+          <p className="mt-4 text-center text-sm text-warm-500">
+            <UpgradeMessage text={error} />
+          </p>
+        )}
       </div>
 
       <HistoryList title="Saved sample plans" loading={historyLoading} plans={savedPlans} />
@@ -657,7 +662,11 @@ function FeedbackPanel() {
             </div>
           </div>
         )}
-        {error && <p className="mt-4 text-center text-sm text-warm-500">{error}</p>}
+        {error && (
+          <p className="mt-4 text-center text-sm text-warm-500">
+            <UpgradeMessage text={error} />
+          </p>
+        )}
       </div>
 
       <HistoryList title="Saved feedback" loading={historyLoading} plans={savedPlans} />

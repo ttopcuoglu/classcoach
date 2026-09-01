@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { MicIcon } from '../components/icons'
 import SafetyAdvisoryBanner, { PrivacyReminder } from '../components/SafetyAdvisoryBanner'
+import { UpgradeMessage } from '../components/UpgradeMessage'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import {
   CHALLENGE_TYPES,
@@ -370,7 +371,11 @@ export default function PracticeConversation() {
             </button>
           </div>
         ) : null}
-        {error && <p className="mt-4 text-center text-sm text-warm-500">{error}</p>}
+        {error && (
+          <p className="mt-4 text-center text-sm text-warm-500">
+            <UpgradeMessage text={error} />
+          </p>
+        )}
       </div>
     </div>
   )

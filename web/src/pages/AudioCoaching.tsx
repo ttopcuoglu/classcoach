@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, MicIcon, WarningIcon } from '../components/icons'
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
+import { UpgradeMessage } from '../components/UpgradeMessage'
 import { setAskPrefill } from '../lib/communicationsPrefill'
 import { HATCH_STYLE } from '../lib/chartPatterns'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
@@ -274,15 +275,20 @@ function RecordingPanel({
 
   async function handleRecord() {
     setError(null)
-    try {
-      if (!session) {
+    if (!session) {
+      try {
         const created = await createAudioSession({
           teacherName: teacherName || undefined,
           sessionDate: new Date().toISOString(),
           consentConfirmed: true,
         })
         onUpdate({ ...created, segments: [] })
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not start a new session. Please try again.')
+        return
       }
+    }
+    try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
       const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
@@ -445,7 +451,11 @@ function RecordingPanel({
           </div>
         </div>
 
-        {error && <p className="mt-4 text-center text-sm text-warm-500">{error}</p>}
+        {error && (
+          <p className="mt-4 text-center text-sm text-warm-500">
+            <UpgradeMessage text={error} />
+          </p>
+        )}
       </div>
 
       <p className="text-xs text-ink-soft">

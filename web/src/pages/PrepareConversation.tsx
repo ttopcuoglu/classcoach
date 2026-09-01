@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import CoachingChat from '../components/CoachingChat'
 import { StarIcon } from '../components/icons'
+import { UpgradeMessage } from '../components/UpgradeMessage'
 import SafetyAdvisoryBanner, { PrivacyReminder } from '../components/SafetyAdvisoryBanner'
 import { MEETING_FORMATS, RECIPIENT_TYPES, type MeetingFormat, type RecipientType } from '../lib/communicationOptions'
 import { setWritePrefill, takePreparePrefill } from '../lib/communicationsPrefill'
@@ -321,7 +322,11 @@ export default function PrepareConversation() {
             </div>
           </div>
         )}
-        {error && <p className="mt-4 text-center text-sm text-warm-500 print:hidden">{error}</p>}
+        {error && (
+          <p className="mt-4 text-center text-sm text-warm-500 print:hidden">
+            <UpgradeMessage text={error} />
+          </p>
+        )}
       </div>
     </div>
   )
