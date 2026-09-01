@@ -1,5 +1,11 @@
 export const MAX_COACH_MEMORY_CHARS = 2000
 
+// Headroom to add to a reply's own max_tokens whenever MEMORY_UPDATE_INSTRUCTION
+// is appended to the prompt, so the up-to-150-word <memory_update> block always
+// has room to finish and close — an unclosed tag can't be stripped and leaks
+// straight into what the teacher sees (and, for Talk It Through, hears).
+export const MEMORY_UPDATE_TOKEN_BUFFER = 300
+
 export function buildMemoryContextBlock(memory: string | null): string {
   if (!memory) return ''
   return `\n\nWhat you know about this teacher so far, from earlier conversations:\n${memory}\n`

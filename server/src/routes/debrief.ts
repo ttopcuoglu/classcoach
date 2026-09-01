@@ -2,7 +2,12 @@ import { Router } from 'express'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { hasActivePlan } from '../lib/billing.ts'
-import { applyMemoryUpdate, buildMemoryContextBlock, MEMORY_UPDATE_INSTRUCTION } from '../lib/coachMemory.ts'
+import {
+  applyMemoryUpdate,
+  buildMemoryContextBlock,
+  MEMORY_UPDATE_INSTRUCTION,
+  MEMORY_UPDATE_TOKEN_BUFFER,
+} from '../lib/coachMemory.ts'
 import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
@@ -181,7 +186,7 @@ debriefRouter.post('/talk', async (req, res) => {
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 150,
+      max_tokens: memoryOn ? 150 + MEMORY_UPDATE_TOKEN_BUFFER : 150,
       thinking: { type: 'disabled' },
       system: memoryOn
         ? `${TALK_SYSTEM_PROMPT}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
@@ -256,9 +261,10 @@ debriefRouter.post('/:id/chat', async (req, res) => {
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
 
     const basePrompt = isTalk ? TALK_SYSTEM_PROMPT : ASK_CHAT_SYSTEM_PROMPT
+    const baseMaxTokens = isTalk ? 150 : 300
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: isTalk ? 150 : 300,
+      max_tokens: memoryOn ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
       thinking: { type: 'disabled' },
       system: memoryOn
         ? `${basePrompt}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
