@@ -23,6 +23,15 @@ if (!GOOGLE_CLIENT_ID) {
   console.warn('[auth] GOOGLE_CLIENT_ID is not set — Google sign-in will fail. Add it to server/.env')
 }
 
+// A Google ID token's `aud` claim is always the client ID it was issued
+// for — the iOS app's own OAuth client, not the web app's. verifyIdToken
+// rejects the token unless its `aud` is in the accepted list, so both
+// client IDs have to be accepted here for one backend to serve both apps.
+const GOOGLE_IOS_CLIENT_ID = process.env.GOOGLE_IOS_CLIENT_ID
+const GOOGLE_AUDIENCE = [GOOGLE_CLIENT_ID, GOOGLE_IOS_CLIENT_ID].filter(
+  (id): id is string => typeof id === 'string' && id.length > 0,
+)
+
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID)
 
 // verifyIdToken() needs Google's public signing certs and caches them
@@ -61,7 +70,7 @@ authRouter.post('/google', async (req, res) => {
   }
 
   try {
-    const ticket = await googleClient.verifyIdToken({ idToken: credential, audience: GOOGLE_CLIENT_ID })
+    const ticket = await googleClient.verifyIdToken({ idToken: credential, audience: GOOGLE_AUDIENCE })
     const payload = ticket.getPayload()
     if (!payload?.sub || !payload.email) {
       res.status(401).json({ error: 'Invalid Google credential' })
@@ -122,7 +131,7 @@ authRouter.post('/google', async (req, res) => {
 
     const token = signSession({ userId: user.id, role: user.role })
     res.cookie(SESSION_COOKIE, token, COOKIE_OPTIONS)
-    res.json(user)
+    res.json({ ...user, token })
   } catch (error) {
     console.error('[auth] Google sign-in failed:', error)
     res.status(401).json({ error: 'Could not verify Google credential' })
@@ -188,7 +197,7 @@ authRouter.post('/signup', async (req, res) => {
 
   const token = signSession({ userId: user.id, role: user.role })
   res.cookie(SESSION_COOKIE, token, COOKIE_OPTIONS)
-  res.status(201).json(user)
+  res.status(201).json({ ...user, token })
 })
 
 authRouter.post('/login', async (req, res) => {
@@ -219,7 +228,7 @@ authRouter.post('/login', async (req, res) => {
   const token = signSession({ userId: user.id, role: user.role })
   res.cookie(SESSION_COOKIE, token, COOKIE_OPTIONS)
   const { passwordHash: _passwordHash, ...safeUser } = user
-  res.json(safeUser)
+  res.json({ ...safeUser, token })
 })
 
 authRouter.get('/me', requireAuth, async (req, res) => {

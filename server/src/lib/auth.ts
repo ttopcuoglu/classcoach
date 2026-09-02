@@ -62,9 +62,20 @@ declare global {
   }
 }
 
+// Browsers authenticate via the httpOnly session cookie above. Native
+// clients (the iOS app) that don't share that cookie jar instead send the
+// same signed token as `Authorization: Bearer <token>` — checked here as a
+// fallback so the cookie-based web flow is completely unaffected.
+function bearerToken(req: Request): string | null {
+  const header = req.headers.authorization
+  if (typeof header !== 'string' || !header.startsWith('Bearer ')) return null
+  return header.slice('Bearer '.length).trim() || null
+}
+
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const token = req.cookies?.[SESSION_COOKIE]
-  const session = typeof token === 'string' ? verifySession(token) : null
+  const cookieToken = req.cookies?.[SESSION_COOKIE]
+  const token = typeof cookieToken === 'string' ? cookieToken : bearerToken(req)
+  const session = token ? verifySession(token) : null
   if (!session) {
     res.status(401).json({ error: 'Not signed in' })
     return

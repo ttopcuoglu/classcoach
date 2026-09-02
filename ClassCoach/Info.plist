@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>GIDClientID</key>
+	<string>998364891076-c5dea8qji8kujo4paevmhf2k1ns6ljfg.apps.googleusercontent.com</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Wivoza records your class period to generate a transcript-based coaching report. Audio itself is never saved — only the text transcript.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.998364891076-c5dea8qji8kujo4paevmhf2k1ns6ljfg</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
