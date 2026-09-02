@@ -8,6 +8,7 @@ private enum Phase {
 /// conversation: record a turn → transcribe → send to the coach → speak
 /// the reply → listen again, looping until the teacher stops.
 struct TalkToMeView: View {
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var recorder = VoiceTurnRecorder()
     @StateObject private var player = SpeechPlayer()
 
@@ -16,6 +17,14 @@ struct TalkToMeView: View {
     @State private var errorMessage: String?
     @State private var muted = false
     @State private var started = false
+    // Guards against the turn loop resuming after Stop: handleTurnComplete
+    // and speak() both end by calling beginListening() to keep the
+    // conversation going, but that call is already in flight (record ->
+    // transcribe -> reply -> speak is all async) by the time a mid-turn tap
+    // on Stop happens. Without this flag, handleStop() sets phase = .idle
+    // but the in-flight call finishes moments later and flips it right
+    // back to .listening, undoing the tap entirely.
+    @State private var sessionActive = false
 
     private var lastAssistantMessage: String? {
         debrief?.conversation.last { $0.role == "assistant" }?.text
@@ -58,6 +67,14 @@ struct TalkToMeView: View {
             .background(AppTheme.background)
             .navigationTitle("Talk It Through")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Close") {
+                        handleStop()
+                        dismiss()
+                    }
+                }
+            }
             .onAppear {
                 recorder.configure(onTurnComplete: { text in Task { await handleTurnComplete(text) } })
                 if !started {
@@ -66,6 +83,7 @@ struct TalkToMeView: View {
                 }
             }
             .onDisappear {
+                sessionActive = false
                 recorder.close()
                 player.stop()
                 phase = .idle
@@ -169,20 +187,29 @@ struct TalkToMeView: View {
     // MARK: - Turn loop
 
     private func beginListening() {
+        sessionActive = true
         errorMessage = nil
         phase = .listening
         Task { await recorder.start() }
     }
 
     private func handleStop() {
+        sessionActive = false
         recorder.close()
         player.stop()
         phase = .idle
     }
 
+    /// Only resumes listening if Stop wasn't tapped while this turn's
+    /// record -> transcribe -> reply -> speak chain was already in flight.
+    private func resumeListeningIfActive() {
+        guard sessionActive else { return }
+        beginListening()
+    }
+
     private func handleTurnComplete(_ text: String) async {
         guard !text.isEmpty else {
-            beginListening()
+            resumeListeningIfActive()
             return
         }
         phase = .thinking
@@ -197,24 +224,26 @@ struct TalkToMeView: View {
             let reply = result.conversation.last?.text ?? ""
             await speak(reply)
         } catch {
+            guard sessionActive else { return }
             errorMessage = error.localizedDescription
             phase = .error
         }
     }
 
     private func speak(_ text: String) async {
+        guard sessionActive else { return }
         phase = .speaking
         guard !muted, !text.isEmpty else {
-            beginListening()
+            resumeListeningIfActive()
             return
         }
         let sentences = splitIntoSentences(text)
         guard !sentences.isEmpty else {
-            beginListening()
+            resumeListeningIfActive()
             return
         }
         await player.playQueue(sentences)
-        beginListening()
+        resumeListeningIfActive()
     }
 }
 
