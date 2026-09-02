@@ -83,20 +83,22 @@ async function fetchSentenceAudio(sentence: string): Promise<string | null> {
 //
 // TTS synthesis takes real time per sentence, so naively fetching each
 // one only after the last finished playing left an audible gap between
-// every sentence. Fixed by keeping exactly one fetch "in flight" ahead
-// of playback: while sentence N plays, sentence N+1's audio is already
-// downloading, so it's normally ready the instant N ends. This doesn't
-// fight the single-<audio>-element constraint above — prefetching is
-// just a network request; only the actual assigned `src`/`play()` needs
-// to be the one persistent, gesture-unlocked element.
+// every sentence. A first attempt at fixing this only started fetching
+// sentence N+1 once sentence N's audio arrived — giving it a head start
+// equal to sentence N's playback duration, which usually isn't enough,
+// since synthesizing one sentence typically takes about as long (or
+// longer) than *speaking* one. Fixed properly by firing off every
+// sentence's fetch in parallel up front, the moment the full reply is
+// known, so all of them are synthesizing concurrently while the first
+// one plays. This doesn't fight the single-<audio>-element constraint
+// above — prefetching is just a network request; only the actual
+// assigned `src`/`play()` needs to be the one persistent, gesture-
+// unlocked element.
 async function playQueue(audio: HTMLAudioElement, sentences: string[]): Promise<void> {
   if (sentences.length === 0) return
-  let nextAudioPromise = fetchSentenceAudio(sentences[0])
+  const audioUrls = sentences.map(fetchSentenceAudio)
   for (let i = 0; i < sentences.length; i++) {
-    const url = await nextAudioPromise
-    if (i + 1 < sentences.length) {
-      nextAudioPromise = fetchSentenceAudio(sentences[i + 1])
-    }
+    const url = await audioUrls[i]
     if (!url) continue // this segment failed to fetch — skip it, not fatal to the turn
     await new Promise<void>((resolve) => {
       audio.onended = () => resolve()

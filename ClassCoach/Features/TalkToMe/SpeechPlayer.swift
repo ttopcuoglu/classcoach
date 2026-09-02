@@ -12,17 +12,20 @@ final class SpeechPlayer: NSObject, ObservableObject {
 
     // TTS synthesis takes real time per sentence — fetching each one only
     // after the last finished playing left an audible gap between every
-    // sentence. Fixed by keeping one fetch in flight ahead of playback:
-    // while sentence N plays, sentence N+1's audio is already downloading
-    // in a background Task, so it's normally ready the instant N ends.
+    // sentence. A first attempt only started fetching sentence N+1 once
+    // sentence N's audio arrived, giving it a head start equal to N's
+    // playback duration — usually not enough, since synthesizing one
+    // sentence typically takes about as long (or longer) than speaking
+    // one. Fixed properly by firing off every sentence's fetch in
+    // parallel up front, the moment the full reply is known, so all of
+    // them are synthesizing concurrently while the first one plays.
     func playQueue(_ sentences: [String]) async {
         guard !sentences.isEmpty else { return }
-        var nextFetch = Task { try? await TalkToMeService.fetchSpeech(text: sentences[0]) }
-        for index in sentences.indices {
-            guard let data = await nextFetch.value else { continue }
-            if index + 1 < sentences.count {
-                nextFetch = Task { try? await TalkToMeService.fetchSpeech(text: sentences[index + 1]) }
-            }
+        let fetches = sentences.map { sentence in
+            Task { try? await TalkToMeService.fetchSpeech(text: sentence) }
+        }
+        for fetch in fetches {
+            guard let data = await fetch.value else { continue }
             await playOne(data: data)
         }
     }
