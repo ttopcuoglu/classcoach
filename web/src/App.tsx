@@ -30,9 +30,23 @@ const Guide = lazy(() => import('./pages/Guide'))
 const Faq = lazy(() => import('./pages/Faq'))
 
 function RouteFallback() {
+  // The backend can take up to ~30s to respond on its very first request
+  // after a period of inactivity (the Render instance spinning back up) —
+  // a bare, unchanging "Loading..." during that wait reads as broken and
+  // risks a teacher giving up. Swap to a more specific, reassuring message
+  // once it's clearly not just a normal fast load.
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setSlow(true), 4000)
+    return () => clearTimeout(timer)
+  }, [])
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-cream">
-      <p className="text-sm text-ink-soft">Loading...</p>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-cream">
+      <span className="h-6 w-6 animate-spin rounded-full border-2 border-terracotta border-t-transparent" aria-hidden="true" />
+      <p className="max-w-xs text-center text-sm text-ink-soft">
+        {slow ? "Still on it — this can take up to 30 seconds if the server's been idle." : 'Loading...'}
+      </p>
     </div>
   )
 }

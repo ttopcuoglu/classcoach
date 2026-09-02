@@ -10,14 +10,24 @@ final class SpeechPlayer: NSObject, ObservableObject {
     private var player: AVAudioPlayer?
     private var continuation: CheckedContinuation<Void, Never>?
 
+    // TTS synthesis takes real time per sentence — fetching each one only
+    // after the last finished playing left an audible gap between every
+    // sentence. Fixed by keeping one fetch in flight ahead of playback:
+    // while sentence N plays, sentence N+1's audio is already downloading
+    // in a background Task, so it's normally ready the instant N ends.
     func playQueue(_ sentences: [String]) async {
-        for sentence in sentences {
-            await playOne(sentence)
+        guard !sentences.isEmpty else { return }
+        var nextFetch = Task { try? await TalkToMeService.fetchSpeech(text: sentences[0]) }
+        for index in sentences.indices {
+            guard let data = await nextFetch.value else { continue }
+            if index + 1 < sentences.count {
+                nextFetch = Task { try? await TalkToMeService.fetchSpeech(text: sentences[index + 1]) }
+            }
+            await playOne(data: data)
         }
     }
 
-    private func playOne(_ text: String) async {
-        guard let data = try? await TalkToMeService.fetchSpeech(text: text) else { return }
+    private func playOne(data: Data) async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             self.continuation = continuation
             do {

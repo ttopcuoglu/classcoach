@@ -55,30 +55,57 @@ function splitIntoSentences(text: string): string[] {
     .filter(Boolean)
 }
 
+// Fetches one sentence's TTS audio as a blob URL rather than handing the
+// live /api/tts URL straight to the <audio> element — a plain fetch()
+// isn't subject to mobile Safari's playback-gesture rules the way
+// audio.play() is, so this can safely run in the background regardless
+// of whose "turn" it is to play. Returns null (rather than throwing) on
+// failure so a single bad segment doesn't take down the whole reply.
+async function fetchSentenceAudio(sentence: string): Promise<string | null> {
+  try {
+    const res = await fetch(buildSpeechUrl(sentence), { credentials: 'include' })
+    if (!res.ok) return null
+    const blob = await res.blob()
+    return URL.createObjectURL(blob)
+  } catch {
+    return null
+  }
+}
+
 // Plays a queue of sentences back to back on ONE persistent <audio>
 // element, reused for the whole conversation. This has to be the same
 // element every time: mobile Safari only allows script-triggered
 // playback on a media element that was previously played successfully
 // from a real user gesture — a brand-new Audio() object created deep
-// inside an async chain (as every earlier version of this function did)
-// gets its play() silently rejected there, which .catch() then swallowed
-// as if the clip had simply finished, producing total silence with no
-// visible error. The cost of reusing one element is that a later
-// sentence's audio can no longer start loading while an earlier one is
-// still playing (only one <audio> can have one active source) — worth it
-// for audio that actually plays on a real phone.
-function playQueue(audio: HTMLAudioElement, sentences: string[], index: number): Promise<void> {
-  return new Promise((resolve) => {
-    if (index >= sentences.length) {
-      resolve()
-      return
+// inside an async chain gets its play() silently rejected there, which
+// .catch() then swallows as if the clip had simply finished, producing
+// total silence with no visible error.
+//
+// TTS synthesis takes real time per sentence, so naively fetching each
+// one only after the last finished playing left an audible gap between
+// every sentence. Fixed by keeping exactly one fetch "in flight" ahead
+// of playback: while sentence N plays, sentence N+1's audio is already
+// downloading, so it's normally ready the instant N ends. This doesn't
+// fight the single-<audio>-element constraint above — prefetching is
+// just a network request; only the actual assigned `src`/`play()` needs
+// to be the one persistent, gesture-unlocked element.
+async function playQueue(audio: HTMLAudioElement, sentences: string[]): Promise<void> {
+  if (sentences.length === 0) return
+  let nextAudioPromise = fetchSentenceAudio(sentences[0])
+  for (let i = 0; i < sentences.length; i++) {
+    const url = await nextAudioPromise
+    if (i + 1 < sentences.length) {
+      nextAudioPromise = fetchSentenceAudio(sentences[i + 1])
     }
-    const advance = () => resolve(playQueue(audio, sentences, index + 1))
-    audio.onended = advance
-    audio.onerror = advance // a bad segment is skipped, not fatal to the turn
-    audio.src = buildSpeechUrl(sentences[index])
-    audio.play().catch(advance)
-  })
+    if (!url) continue // this segment failed to fetch — skip it, not fatal to the turn
+    await new Promise<void>((resolve) => {
+      audio.onended = () => resolve()
+      audio.onerror = () => resolve()
+      audio.src = url
+      audio.play().catch(() => resolve())
+    })
+    URL.revokeObjectURL(url)
+  }
 }
 
 export default function TalkToMe() {
@@ -206,7 +233,7 @@ export default function TalkToMe() {
       resumeListeningIfActive()
       return
     }
-    await playQueue(audioRef.current, sentences, 0)
+    await playQueue(audioRef.current, sentences)
     resumeListeningIfActive()
   }
 
