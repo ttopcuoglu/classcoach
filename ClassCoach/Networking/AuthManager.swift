@@ -51,6 +51,53 @@ final class AuthManager: ObservableObject {
         currentUser = response.user
     }
 
+    func signInWithApple(identityToken: String) async throws {
+        let response: AuthResponse = try await APIClient.shared.request(
+            "/api/auth/apple",
+            method: "POST",
+            body: ["credential": identityToken]
+        )
+        token = response.token
+        currentUser = response.user
+    }
+
+    /// Apple Guideline 4.8: an app offering a third-party login (Google)
+    /// must also offer an equivalent option that limits data collection —
+    /// email/password satisfies that, and the server already supports it
+    /// for the web app (see server/src/routes/auth.ts's `/signup`/`/login`).
+    struct SignUpBody: Encodable {
+        let email: String
+        let password: String
+        let name: String
+        let termsAccepted: Bool
+        let ageConfirmed: Bool
+    }
+
+    struct LogInBody: Encodable {
+        let email: String
+        let password: String
+    }
+
+    func signUp(email: String, password: String, name: String) async throws {
+        let response: AuthResponse = try await APIClient.shared.request(
+            "/api/auth/signup",
+            method: "POST",
+            body: SignUpBody(email: email, password: password, name: name, termsAccepted: true, ageConfirmed: true)
+        )
+        token = response.token
+        currentUser = response.user
+    }
+
+    func logIn(email: String, password: String) async throws {
+        let response: AuthResponse = try await APIClient.shared.request(
+            "/api/auth/login",
+            method: "POST",
+            body: LogInBody(email: email, password: password)
+        )
+        token = response.token
+        currentUser = response.user
+    }
+
     func signOut() {
         token = nil
         currentUser = nil
@@ -67,7 +114,7 @@ final class AuthManager: ObservableObject {
 /// Minimal Keychain read/write/delete for a single string value — no
 /// third-party dependency needed for one item.
 private enum Keychain {
-    private static let account = "org.hampdencharter.classcoach.session-token"
+    private static let account = "com.wivoza.app.session-token"
 
     static func save(_ value: String) {
         let data = Data(value.utf8)

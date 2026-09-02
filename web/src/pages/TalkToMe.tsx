@@ -4,9 +4,13 @@ import { BrainIcon, MicIcon, WarningIcon } from '../components/icons'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import { buildSpeechUrl, sendDebriefChat, startTalkToMe, type ChatMessage, type Debrief } from '../lib/api'
 
-// Flip to false if auto-starting the mic on open turns out to be too
-// aggressive/error-prone in practice — no other code changes needed.
-const AUTO_START_ON_OPEN = true
+// Flipped to false: auto-starting the mic on open meant a teacher could
+// go through an entire hands-free conversation without ever tapping the
+// screen, so the audio-unlock `pointerdown` listener below never fired —
+// mobile Safari then silently rejects every `play()` call for the whole
+// session (see playQueue's comment). Requiring one tap on "Start Talking"
+// guarantees that unlock happens before the first reply tries to play.
+const AUTO_START_ON_OPEN = false
 
 type Phase = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
 

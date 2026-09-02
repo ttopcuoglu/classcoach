@@ -9,6 +9,7 @@ import {
   signSession,
   USER_INCLUDE_ORG,
 } from '../lib/auth.ts'
+import { verifyAppleIdentityToken } from '../lib/appleAuth.ts'
 import { prisma } from '../lib/prisma.ts'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -43,6 +44,11 @@ if (GOOGLE_CLIENT_ID) {
     console.warn('[auth] failed to pre-warm Google sign-on certs:', err)
   })
 }
+
+// The native app is Sign in with Apple's "client" directly (no separate
+// Services ID the way a web flow needs) — Apple's identity token's `aud`
+// claim is just the app's own Bundle ID.
+const APPLE_BUNDLE_ID = process.env.APPLE_BUNDLE_ID || 'com.wivoza.app'
 
 const ADMIN_EMAILS = new Set(
   (process.env.ADMIN_EMAILS ?? '')
@@ -135,6 +141,57 @@ authRouter.post('/google', async (req, res) => {
   } catch (error) {
     console.error('[auth] Google sign-in failed:', error)
     res.status(401).json({ error: 'Could not verify Google credential' })
+  }
+})
+
+authRouter.post('/apple', async (req, res) => {
+  const { credential } = req.body ?? {}
+  if (typeof credential !== 'string') {
+    res.status(400).json({ error: 'credential is required' })
+    return
+  }
+
+  try {
+    const payload = await verifyAppleIdentityToken(credential, APPLE_BUNDLE_ID)
+    if (!payload.sub || !payload.email) {
+      res.status(401).json({ error: 'Invalid Apple credential' })
+      return
+    }
+
+    const email = (payload.email as string).toLowerCase()
+    const role = ADMIN_EMAILS.has(email) ? 'superadmin' : 'teacher'
+
+    // No stable Apple-account column exists (unlike googleId) — matching
+    // by email keeps this migration-free, same tradeoff the Google route
+    // already accepts for its own email-based linking fallback above.
+    let user = await prisma.user.findUnique({
+      where: { email },
+      omit: SAFE_USER_OMIT,
+      include: USER_INCLUDE_ORG,
+    })
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email,
+          role,
+          termsAcceptedAt: new Date(),
+        },
+        omit: SAFE_USER_OMIT,
+        include: USER_INCLUDE_ORG,
+      })
+    }
+
+    if (user.suspendedAt) {
+      res.status(403).json({ error: 'This account has been suspended. Contact your administrator.' })
+      return
+    }
+
+    const token = signSession({ userId: user.id, role: user.role })
+    res.cookie(SESSION_COOKIE, token, COOKIE_OPTIONS)
+    res.json({ ...user, token })
+  } catch (error) {
+    console.error('[auth] Apple sign-in failed:', error)
+    res.status(401).json({ error: 'Could not verify Apple credential' })
   }
 })
 

@@ -24,14 +24,11 @@ enum APIError: Error, LocalizedError {
 final class APIClient {
     static let shared = APIClient()
 
-    /// TODO: replace with the real deployed backend URL once Wivoza is
-    /// live (see server/.env's FRONTEND_ORIGINS / Render dashboard) — no
-    /// production URL has been committed anywhere in this repo yet.
     private let baseURL: URL = {
         #if DEBUG
         return URL(string: "http://localhost:3001")!
         #else
-        return URL(string: "https://wivoza-api.onrender.com")!
+        return URL(string: "https://classcoach.onrender.com")!
         #endif
     }()
 
