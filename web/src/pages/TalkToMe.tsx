@@ -116,6 +116,7 @@ export default function TalkToMe() {
   const [debrief, setDebrief] = useState<Debrief | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [muted, setMuted] = useState(false)
+  const [thinkingProgress, setThinkingProgress] = useState(0)
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const mutedRef = useRef(muted)
@@ -179,6 +180,24 @@ export default function TalkToMe() {
     document.addEventListener('pointerdown', primeAudio, { once: true })
     return () => document.removeEventListener('pointerdown', primeAudio)
   }, [])
+
+  // There's no real signal from the reply request for "% done generating"
+  // — this is a simulated estimate, not a measurement. It climbs quickly
+  // at first and eases off, asymptotically approaching (but never
+  // reaching) 92% on its own; the bar only ever hits 100% implicitly, by
+  // disappearing the instant the real reply arrives and phase moves on.
+  useEffect(() => {
+    if (phase !== 'thinking') {
+      setThinkingProgress(0)
+      return
+    }
+    const start = Date.now()
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - start
+      setThinkingProgress(92 * (1 - Math.exp(-elapsed / 1800)))
+    }, 100)
+    return () => clearInterval(interval)
+  }, [phase])
 
   useEffect(() => {
     if (fatalError) {
@@ -255,6 +274,7 @@ export default function TalkToMe() {
 
   const messages: ChatMessage[] = debrief?.conversation ?? []
   const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
+  const lastUser = [...messages].reverse().find((m) => m.role === 'user')
 
   return (
     <div className="flex min-h-screen flex-col bg-cream text-ink">
@@ -337,9 +357,28 @@ export default function TalkToMe() {
                 />
                 {statusLabel(visualState, level)}
               </div>
+              {visualState === 'thinking' && (
+                // Simulated, not measured — see the thinkingProgress effect's
+                // comment. Disappears the instant the real reply arrives.
+                <div className="flex w-40 flex-col items-center gap-1">
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-gold-tint/50">
+                    <div
+                      className="h-full rounded-full bg-terracotta-600 transition-[width] duration-150 ease-out"
+                      style={{ width: `${thinkingProgress}%` }}
+                    />
+                  </div>
+                  <span className="text-[11px] font-medium text-terracotta-600">{Math.round(thinkingProgress)}%</span>
+                </div>
+              )}
             </div>
 
             <div className="flex w-full max-w-md flex-col gap-3">
+              {lastUser && (
+                <div className="rounded-2xl border border-hairline bg-mint-tint/20 p-4 text-left">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-forest">You</p>
+                  <p className="mt-1.5 text-sm text-ink">{lastUser.text}</p>
+                </div>
+              )}
               {lastAssistant && (
                 <div className="rounded-2xl border border-hairline bg-cream-card p-4 text-left">
                   <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coach</p>
