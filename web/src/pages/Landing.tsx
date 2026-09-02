@@ -141,7 +141,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       {/* Nav */}
       <header className="bg-cream">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5">
-          <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-9 w-auto" />
+          <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-11 w-auto" />
           <nav className="hidden items-center gap-8 text-sm font-medium text-ink-soft md:flex">
             <a href="#how-it-works" className="hover:text-ink">
               How it works

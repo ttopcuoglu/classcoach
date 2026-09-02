@@ -87,7 +87,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
     <div className="flex min-h-screen bg-cream text-ink">
       {/* Desktop sidebar */}
       <aside className="hidden w-64 shrink-0 bg-forest md:flex md:flex-col">
-        <div className="flex flex-col gap-1 px-6 py-6">
+        <div className="flex flex-col items-start gap-1 px-6 py-6">
           <img src="/logo/wivoza-lockup-dark.png" alt="Wivoza" className="h-10 w-auto" />
           <p className="text-[11px] text-cream/50">Practice. Reflect. Grow.</p>
         </div>

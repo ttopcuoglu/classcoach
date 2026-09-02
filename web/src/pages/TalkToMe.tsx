@@ -94,6 +94,13 @@ export default function TalkToMe() {
   const debriefRef = useRef<Debrief | null>(null)
   debriefRef.current = debrief
   const startedRef = useRef(false)
+  // Guards against the turn loop resuming after Stop/Close: the record ->
+  // transcribe -> reply -> speak chain is all async, so a tap on Stop
+  // mid-turn doesn't cancel the in-flight chain — without this, it
+  // finishes moments later and calls resumeListening() anyway, undoing
+  // the tap. A ref (not state) so the current value is visible inside
+  // async callbacks without waiting on a re-render.
+  const sessionActiveRef = useRef(false)
 
   const { supported, level, fatalError, transcribing, start, close } = useVoiceTurn(handleTurnComplete)
 
@@ -152,16 +159,24 @@ export default function TalkToMe() {
   }, [fatalError])
 
   function beginListening() {
+    sessionActiveRef.current = true
     setError(null)
     setPhase('listening')
     start()
+  }
+
+  // Only resumes if Stop/Close wasn't triggered while this turn's
+  // record -> transcribe -> reply -> speak chain was already in flight.
+  function resumeListeningIfActive() {
+    if (!sessionActiveRef.current) return
+    beginListening()
   }
 
   async function handleTurnComplete(text: string) {
     if (!text) {
       // Silence timer fired with nothing said (or a benign recognition
       // hiccup) — just listen again rather than bothering the backend.
-      beginListening()
+      resumeListeningIfActive()
       return
     }
     setPhase('thinking')
@@ -173,37 +188,37 @@ export default function TalkToMe() {
       const reply = conv[conv.length - 1]?.text ?? ''
       await speak(reply)
     } catch (err) {
+      if (!sessionActiveRef.current) return
       setError((err as Error).message || 'Could not reach Coach. Please try again.')
       setPhase('error')
     }
   }
 
   async function speak(text: string) {
+    if (!sessionActiveRef.current) return
     setPhase('speaking')
     if (mutedRef.current || !text) {
-      resumeListening()
+      resumeListeningIfActive()
       return
     }
     const sentences = splitIntoSentences(text)
     if (sentences.length === 0 || !audioRef.current) {
-      resumeListening()
+      resumeListeningIfActive()
       return
     }
     await playQueue(audioRef.current, sentences, 0)
-    resumeListening()
-  }
-
-  function resumeListening() {
-    beginListening()
+    resumeListeningIfActive()
   }
 
   function handleStop() {
+    sessionActiveRef.current = false
     close()
     audioRef.current?.pause()
     setPhase('idle')
   }
 
   function handleClose() {
+    sessionActiveRef.current = false
     close()
     audioRef.current?.pause()
     navigate('/')
