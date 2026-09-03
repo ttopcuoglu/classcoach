@@ -136,6 +136,55 @@ struct AudioSession: Decodable, Identifiable {
     let followUpDate: String?
     let createdAt: String
     let updatedAt: String
+
+    private enum CodingKeys: String, CodingKey {
+        case id, teacherName, classSubject, period, gradeLevel, sessionDate, consentConfirmed, status,
+             durationSec, teacherTalkPct, studentTalkPct, questionCount, higherOrderPct, avgWaitTimeSec,
+             cfuCount, metricsDetail, highlights, phases, questionLog, reflectConversation, lessonContent,
+             contentNotes, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        teacherName = try container.decodeIfPresent(String.self, forKey: .teacherName)
+        classSubject = try container.decodeIfPresent(String.self, forKey: .classSubject)
+        period = try container.decodeIfPresent(String.self, forKey: .period)
+        gradeLevel = try container.decodeIfPresent(String.self, forKey: .gradeLevel)
+        sessionDate = try container.decode(String.self, forKey: .sessionDate)
+        consentConfirmed = try container.decode(Bool.self, forKey: .consentConfirmed)
+        status = try container.decode(String.self, forKey: .status)
+        durationSec = try container.decodeIfPresent(Double.self, forKey: .durationSec)
+        teacherTalkPct = try container.decodeIfPresent(Double.self, forKey: .teacherTalkPct)
+        studentTalkPct = try container.decodeIfPresent(Double.self, forKey: .studentTalkPct)
+        questionCount = try container.decodeIfPresent(Int.self, forKey: .questionCount)
+        higherOrderPct = try container.decodeIfPresent(Double.self, forKey: .higherOrderPct)
+        avgWaitTimeSec = try container.decodeIfPresent(Double.self, forKey: .avgWaitTimeSec)
+        cfuCount = try container.decodeIfPresent(Int.self, forKey: .cfuCount)
+        // The server's metricsDetail is `Record<string, number | null>` —
+        // e.g. positiveToCorrectiveRatio is null whenever there's no
+        // positive/corrective language to compute a ratio from, a normal,
+        // common case (see server/src/lib/audioAnalysis.ts). Decoding
+        // straight to [String: Double] throws on the first null value,
+        // which silently dropped that session — and every other session in
+        // the same list response — from the UI with no visible error.
+        // Decoding as [String: Double?] and dropping null entries matches
+        // how every call site already treats a missing key.
+        let rawMetrics = try container.decodeIfPresent([String: Double?].self, forKey: .metricsDetail)
+        metricsDetail = rawMetrics?.compactMapValues { $0 }
+        highlights = try container.decodeIfPresent([AudioHighlight].self, forKey: .highlights)
+        phases = try container.decodeIfPresent([AudioPhase].self, forKey: .phases)
+        questionLog = try container.decodeIfPresent([AudioQuestionLogEntry].self, forKey: .questionLog)
+        reflectConversation = try container.decodeIfPresent([AudioReflectMessage].self, forKey: .reflectConversation)
+        lessonContent = try container.decodeIfPresent(AudioLessonContent.self, forKey: .lessonContent)
+        contentNotes = try container.decodeIfPresent(AudioContentNotes.self, forKey: .contentNotes)
+        strengths = try container.decodeIfPresent(String.self, forKey: .strengths)
+        growthAreas = try container.decodeIfPresent(String.self, forKey: .growthAreas)
+        nextStep = try container.decodeIfPresent(String.self, forKey: .nextStep)
+        followUpDate = try container.decodeIfPresent(String.self, forKey: .followUpDate)
+        createdAt = try container.decode(String.self, forKey: .createdAt)
+        updatedAt = try container.decode(String.self, forKey: .updatedAt)
+    }
 }
 
 struct TranscriptSegment: Decodable, Identifiable {
