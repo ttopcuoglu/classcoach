@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { ArrowUpIcon, ChatBubbleIcon, MicIcon, WarningIcon } from '../components/icons'
+import { Link } from 'react-router-dom'
+import { ArrowUpIcon, ChatBubbleIcon, MicIcon } from '../components/icons'
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
-import { setAskPrefill } from '../lib/communicationsPrefill'
 import { HATCH_STYLE } from '../lib/chartPatterns'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import {
@@ -527,16 +526,39 @@ function TagSpeakersPanel({
   )
 }
 
-type ReportTab = 'overview' | 'growth' | 'reflect' | 'lesson' | 'climate' | 'discourse'
+type ReportTab = 'summary' | 'insights' | 'reflect' | 'growth'
+type InsightsSection = 'lesson' | 'climate' | 'discourse'
 
 const REPORT_TABS: { key: ReportTab; label: string }[] = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'growth', label: 'My Growth' },
+  { key: 'summary', label: 'Summary' },
+  { key: 'insights', label: 'Insights' },
   { key: 'reflect', label: 'Reflect' },
+  { key: 'growth', label: 'My Growth' },
+]
+
+const INSIGHTS_SECTIONS: { key: InsightsSection; label: string }[] = [
   { key: 'lesson', label: 'Lesson Content' },
   { key: 'climate', label: 'Climate & Routines' },
   { key: 'discourse', label: 'Discourse Details' },
 ]
+
+function insightsNavButtonClass(active: boolean) {
+  return `rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
+    active ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:bg-canvas hover:text-ink'
+  }`
+}
+
+function InsightsNav({ section, onSelect }: { section: InsightsSection; onSelect: (s: InsightsSection) => void }) {
+  return (
+    <nav className="flex shrink-0 flex-col gap-0.5 lg:w-52">
+      {INSIGHTS_SECTIONS.map(({ key, label }) => (
+        <button key={key} type="button" onClick={() => onSelect(key)} className={insightsNavButtonClass(section === key)}>
+          {label}
+        </button>
+      ))}
+    </nav>
+  )
+}
 
 function TabBar({ tab, onSelect }: { tab: ReportTab; onSelect: (t: ReportTab) => void }) {
   return (
@@ -711,21 +733,11 @@ function CoachNote({ text }: { text: string | null }) {
   )
 }
 
-function EvidenceQualityLine({ text, tone }: { text: string; tone: 'good' | 'warn' }) {
-  if (tone === 'warn') {
-    return (
-      <div className="flex items-start gap-3 rounded-xl border-2 border-warm-500 bg-warm-100 p-4">
-        <WarningIcon className="mt-0.5 h-5 w-5 shrink-0 text-warm-500" />
-        <p className="text-sm font-semibold text-warm-500">{text}</p>
-      </div>
-    )
-  }
-  return <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{text}</p>
-}
-
 // Stitches the existing per-category coach notes into one short narrative —
 // no new Claude call, since these sentences are already grounded in
-// measured/zero data and following the app's no-overclaiming rules.
+// measured/zero data and following the app's no-overclaiming rules. Folded
+// directly into SummaryTab's combined snapshot card rather than rendered as
+// its own card.
 function buildWivozaNoticedSummary(
   talkInsight: string | null,
   questioningInsight: string | null,
@@ -733,16 +745,6 @@ function buildWivozaNoticedSummary(
 ): string | null {
   const sentences = [talkInsight, questioningInsight, cfuInsight].filter((s): s is string => s != null)
   return sentences.length > 0 ? sentences.join(' ') : null
-}
-
-function WivozaNoticedCard({ text }: { text: string | null }) {
-  if (!text) return null
-  return (
-    <div className="rounded-2xl border border-border bg-surface p-6">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">What Wivoza noticed</h2>
-      <p className="mt-2 text-sm text-ink">{text}</p>
-    </div>
-  )
 }
 
 // A single candidate for "the one strength" or "the one coaching priority" —
@@ -1035,26 +1037,52 @@ function formatCandidateHeadline(candidate: NoticeCandidate): string {
   return candidate.observation
 }
 
-function StrengthCard({
-  candidate,
+// Replaces the old separate Strength + Coaching Priority cards with one
+// consolidated "Moments worth revisiting" list — the proposal's own
+// critique was that the report led with two always-present cards (plus a
+// raw highlights list) saying similar things; one ranked list of up to 2
+// moments, each labeled by which kind it is, says the same thing once.
+function MomentsCard({
+  strength,
+  priority,
+  coverage,
   onViewDiscourse,
 }: {
-  candidate: NoticeCandidate | null
+  strength: NoticeCandidate | null
+  priority: NoticeCandidate | null
+  coverage: ReturnType<typeof getCoverage>
   onViewDiscourse: () => void
 }) {
+  const moments = [
+    strength && { kind: 'Strength' as const, candidate: strength },
+    priority && { kind: 'Coaching priority' as const, candidate: priority },
+  ].filter((m): m is { kind: 'Strength' | 'Coaching priority'; candidate: NoticeCandidate } => m != null)
+
   return (
     <div className="rounded-2xl border border-border bg-surface p-6">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-600">Strength</h2>
-      {candidate ? (
-        <div className="mt-2 flex flex-col gap-1.5">
-          <p className="text-sm font-semibold text-ink">{formatCandidateHeadline(candidate)}</p>
-          {candidate.excerpt && <p className="text-sm text-ink-soft">"{candidate.excerpt}"</p>}
-          <p className="text-sm text-ink-soft">{candidate.whyItMatters}</p>
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Moments worth revisiting</h2>
+      {moments.length > 0 ? (
+        <div className="mt-3 flex flex-col gap-4">
+          {moments.map(({ kind, candidate }) => (
+            <div key={kind} className="flex flex-col gap-1.5">
+              <span
+                className={`text-xs font-semibold uppercase tracking-wide ${
+                  kind === 'Strength' ? 'text-brand-600' : 'text-warm-500'
+                }`}
+              >
+                {kind}
+              </span>
+              <p className="text-sm font-semibold text-ink">{formatCandidateHeadline(candidate)}</p>
+              {candidate.excerpt && <p className="text-sm text-ink-soft">"{candidate.excerpt}"</p>}
+              <p className="text-sm text-ink-soft">{candidate.whyItMatters}</p>
+            </div>
+          ))}
         </div>
       ) : (
         <div className="mt-2 flex flex-col gap-2">
           <p className="text-sm text-ink-soft">
-            Not enough measured evidence yet for a stand-out strength this session.
+            This recording was {formatTime(coverage.recordedSec)} — not enough measured evidence yet for a
+            stand-out moment this session.
           </p>
           <button
             type="button"
@@ -1064,32 +1092,6 @@ function StrengthCard({
             See the full breakdown in Discourse Details →
           </button>
         </div>
-      )}
-    </div>
-  )
-}
-
-function CoachingPriorityCard({
-  candidate,
-  coverage,
-}: {
-  candidate: NoticeCandidate | null
-  coverage: ReturnType<typeof getCoverage>
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-surface p-6">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-warm-500">Coaching priority</h2>
-      {candidate ? (
-        <div className="mt-2 flex flex-col gap-1.5">
-          <p className="text-sm font-semibold text-ink">{formatCandidateHeadline(candidate)}</p>
-          {candidate.excerpt && <p className="text-sm text-ink-soft">"{candidate.excerpt}"</p>}
-          <p className="text-sm text-ink-soft">{candidate.whyItMatters}</p>
-        </div>
-      ) : (
-        <p className="mt-2 text-sm text-ink-soft">
-          This recording was {formatTime(coverage.recordedSec)} — coaching-priority signals need more length to
-          surface reliably. Aim for at least {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes next time.
-        </p>
       )}
     </div>
   )
@@ -1210,76 +1212,47 @@ function ClassroomVoiceBalance({
   )
 }
 
-function TryThisNext({
+// One next step: "Set as my focus" when the top priority maps to a
+// trended My Growth metric, plus the single "Reflect with Wivoza" CTA —
+// replaces the old TryThisNext (3 buttons) + AskWivozaCoachButton (a
+// second, separate coaching entry point) with the one action the
+// proposal asks for.
+function NextStepCard({
   priority,
   onSetFocus,
   onGoReflect,
-  onAskCoach,
 }: {
   priority: NoticeCandidate | null
   onSetFocus: (metric: FocusMetric) => void
   onGoReflect: () => void
-  onAskCoach: () => void
 }) {
   return (
     <div className="rounded-2xl border border-border bg-surface p-6">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Try this next</h2>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {priority?.focusMetric && (
+      {priority?.focusMetric ? (
+        <>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">One next step</h2>
+          <p className="mt-1 text-sm text-ink-soft">{priority.whyItMatters}</p>
           <button
             type="button"
             onClick={() => onSetFocus(priority.focusMetric as FocusMetric)}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+            className="mt-3 rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
           >
             Set as my focus → My Growth
           </button>
-        )}
-        <button
-          type="button"
-          onClick={onGoReflect}
-          className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
-        >
-          Reflect on this →
-        </button>
-        <button
-          type="button"
-          onClick={onAskCoach}
-          className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
-        >
-          Ask Wivoza Coach →
-        </button>
-      </div>
+        </>
+      ) : null}
+      <button
+        type="button"
+        onClick={onGoReflect}
+        className={`flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-600 ${
+          priority?.focusMetric ? 'mt-4' : ''
+        }`}
+      >
+        <ChatBubbleIcon className="h-4 w-4" />
+        Reflect with Wivoza
+      </button>
     </div>
   )
-}
-
-function AskWivozaCoachButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex items-center justify-center gap-2 rounded-2xl border-2 border-brand-200 bg-brand-50 px-6 py-4 text-sm font-semibold text-brand-600 transition-colors hover:border-brand-400"
-    >
-      <ChatBubbleIcon className="h-4 w-4" />
-      Ask Wivoza Coach about this session
-    </button>
-  )
-}
-
-// The one place structured session facts are turned into Claude-safe plain
-// text for a fresh Ask conversation, reusing buildReflectContext's output —
-// prefilled via sessionStorage, reviewed and editable, never auto-submitted.
-function composeAskIncidentText(session: AudioSessionWithSegments, contextLines: string[], focusNote?: string): string {
-  const header = `Session context (${session.classSubject || 'class'}, ${formatSessionDateTime(session.sessionDate)}):`
-  const body = contextLines.length
-    ? contextLines.map((l) => `- ${l}`).join('\n')
-    : '- No confidently measured session facts available yet.'
-  return `${header}\n${body}\n\nWhat I'd like to talk through: ${focusNote ?? ''}`
-}
-
-function goToAskCoach(navigate: ReturnType<typeof useNavigate>, incidentText: string) {
-  setAskPrefill({ incidentText })
-  navigate('/coach-chat?tab=ask')
 }
 
 function ReportPanel({
@@ -1297,7 +1270,8 @@ function ReportPanel({
   focusMetric: FocusMetric | null
   onFocusMetricChange: (metric: FocusMetric | null) => void
 }) {
-  const [tab, setTab] = useState<ReportTab>('overview')
+  const [tab, setTab] = useState<ReportTab>('summary')
+  const [insightsSection, setInsightsSection] = useState<InsightsSection>('lesson')
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null)
   const locked = session.status === 'locked'
   const [strengths, setStrengths] = useState(session.strengths ?? '')
@@ -1472,8 +1446,9 @@ function ReportPanel({
   const routinesInsight = buildRoutinesInsight(directiveMetric, hasRepeatedInstructionHighlight)
   const climateInsight = buildClimateInsight(redirectionMetric, positiveCount, correctiveCount)
 
-  function handleViewSource(sourceTab: ReportTab, sourceId: string) {
+  function handleViewSource(sourceTab: ReportTab, sourceId: string, section?: InsightsSection) {
     setTab(sourceTab)
+    if (section) setInsightsSection(section)
     setPendingScrollId(sourceId)
   }
 
@@ -1484,7 +1459,7 @@ function ReportPanel({
       setPendingScrollId(null)
     }, 50)
     return () => clearTimeout(timeout)
-  }, [tab, pendingScrollId])
+  }, [tab, insightsSection, pendingScrollId])
 
   return (
     <div className="flex flex-col gap-6">
@@ -1499,8 +1474,8 @@ function ReportPanel({
 
       <TabBar tab={tab} onSelect={setTab} />
 
-      {tab === 'overview' && (
-        <OverviewTab
+      {tab === 'summary' && (
+        <SummaryTab
           session={session}
           coverage={coverage}
           teacherTalkMetric={teacherTalkMetric}
@@ -1518,9 +1493,8 @@ function ReportPanel({
           talkInsight={talkInsight}
           questioningInsight={questioningInsight}
           cfuInsight={cfuInsight}
-          reflectContext={reflectContext}
           onGoReflect={() => setTab('reflect')}
-          onViewDiscourse={() => handleViewSource('discourse', '')}
+          onViewDiscourse={() => handleViewSource('insights', '', 'discourse')}
         />
       )}
 
@@ -1571,55 +1545,62 @@ function ReportPanel({
         />
       )}
 
-      {tab === 'lesson' && (
-        <LessonContentTab
-          session={session}
-          lessonContent={lessonContent}
-          contentNotes={session.contentNotes}
-          isShort={coverage.isShort}
-          sending={contentNotesSending}
-          error={contentNotesError}
-          onGenerate={handleGenerateContentNotes}
-        />
-      )}
+      {tab === 'insights' && (
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+          <InsightsNav section={insightsSection} onSelect={setInsightsSection} />
+          <div className="min-w-0 flex-1">
+            {insightsSection === 'lesson' && (
+              <LessonContentTab
+                session={session}
+                lessonContent={lessonContent}
+                contentNotes={session.contentNotes}
+                isShort={coverage.isShort}
+                sending={contentNotesSending}
+                error={contentNotesError}
+                onGenerate={handleGenerateContentNotes}
+              />
+            )}
 
-      {tab === 'climate' && (
-        <ClimateRoutinesTab
-          transitionMetric={transitionMetric}
-          directiveMetric={directiveMetric}
-          phasesCount={session.phases?.length ?? 0}
-          onViewPhases={() => handleViewSource('discourse', 'session-phases')}
-          nameMentionMetric={nameMentionMetric}
-          uniqueNameCount={uniqueNameCount}
-          toneRatio={toneRatio}
-          redirectionMetric={redirectionMetric}
-          routinesInsight={routinesInsight}
-          climateInsight={climateInsight}
-        />
-      )}
+            {insightsSection === 'climate' && (
+              <ClimateRoutinesTab
+                transitionMetric={transitionMetric}
+                directiveMetric={directiveMetric}
+                phasesCount={session.phases?.length ?? 0}
+                onViewPhases={() => handleViewSource('insights', 'session-phases', 'discourse')}
+                nameMentionMetric={nameMentionMetric}
+                uniqueNameCount={uniqueNameCount}
+                toneRatio={toneRatio}
+                redirectionMetric={redirectionMetric}
+                routinesInsight={routinesInsight}
+                climateInsight={climateInsight}
+              />
+            )}
 
-      {tab === 'discourse' && (
-        <DiscourseDetailsTab
-          questionCount={session.questionCount}
-          questionLog={session.questionLog}
-          session={session}
-          teacherTalkMetric={teacherTalkMetric}
-          studentTalkMetric={studentTalkMetric}
-          silencePct={silencePct}
-          silenceMetric={silenceMetric}
-          studentSegmentsMetric={studentSegmentsMetric}
-          questionsMetric={questionsMetric}
-          higherOrderRatio={higherOrderRatio}
-          higherOrderCount={higherOrderCount}
-          followUpMetric={followUpMetric}
-          waitTimeMetric={waitTimeMetric}
-          cfuMetric={cfuMetric}
-          feedbackRatio={feedbackRatio}
-          focusMetric={focusMetric}
-          talkInsight={talkInsight}
-          questioningInsight={questioningInsight}
-          cfuInsight={cfuInsight}
-        />
+            {insightsSection === 'discourse' && (
+              <DiscourseDetailsTab
+                questionCount={session.questionCount}
+                questionLog={session.questionLog}
+                session={session}
+                teacherTalkMetric={teacherTalkMetric}
+                studentTalkMetric={studentTalkMetric}
+                silencePct={silencePct}
+                silenceMetric={silenceMetric}
+                studentSegmentsMetric={studentSegmentsMetric}
+                questionsMetric={questionsMetric}
+                higherOrderRatio={higherOrderRatio}
+                higherOrderCount={higherOrderCount}
+                followUpMetric={followUpMetric}
+                waitTimeMetric={waitTimeMetric}
+                cfuMetric={cfuMetric}
+                feedbackRatio={feedbackRatio}
+                focusMetric={focusMetric}
+                talkInsight={talkInsight}
+                questioningInsight={questioningInsight}
+                cfuInsight={cfuInsight}
+              />
+            )}
+          </div>
+        </div>
       )}
 
       <div className="rounded-xl border border-dashed border-border p-4 text-xs text-ink-soft">
@@ -1638,7 +1619,12 @@ function ReportPanel({
   )
 }
 
-function OverviewTab({
+// Summary: a genuine 60-second read, not a scroll of every card the full
+// report can produce. Exactly the proposal's five elements — a two-sentence
+// snapshot (folding in what Wivoza noticed and the evidence-quality read,
+// rather than three separate cards saying related things), one chart, 2-3
+// moments worth revisiting, one next step, one coaching CTA.
+function SummaryTab({
   session,
   coverage,
   teacherTalkMetric,
@@ -1656,7 +1642,6 @@ function OverviewTab({
   talkInsight,
   questioningInsight,
   cfuInsight,
-  reflectContext,
   onGoReflect,
   onViewDiscourse,
 }: {
@@ -1677,12 +1662,9 @@ function OverviewTab({
   talkInsight: string | null
   questioningInsight: string | null
   cfuInsight: string | null
-  reflectContext: string[]
   onGoReflect: () => void
   onViewDiscourse: () => void
 }) {
-  const navigate = useNavigate()
-
   const strength = pickTop(buildStrengthCandidates(session, cfuMetric, feedbackRatio, higherOrderRatio))
   const priority = pickTop(buildPriorityCandidates(session, cfuMetric, feedbackRatio, higherOrderRatio))
   const voiceBalance = computeVoiceBalance(session, silencePct)
@@ -1698,49 +1680,37 @@ function OverviewTab({
     cfuMetric,
     feedbackRatio,
   ])
+  const noticedText = buildWivozaNoticedSummary(talkInsight, questioningInsight, cfuInsight)
+  const warn = evidenceQuality.tone === 'warn'
 
   return (
     <div className="flex flex-col gap-6">
-      {/* 1. Lesson snapshot */}
-      <div className="rounded-2xl border border-border bg-surface p-6">
-        <h1 className="text-xl font-semibold text-ink">
+      {/* 1. Two-sentence snapshot — identity, what Wivoza noticed, and the
+          evidence-quality read all in one card instead of three. */}
+      <div className={`rounded-2xl p-6 ${warn ? 'border-2 border-warm-500 bg-warm-100' : 'border border-border bg-surface'}`}>
+        <h1 className={`text-xl font-semibold ${warn ? 'text-warm-500' : 'text-ink'}`}>
           {session.classSubject || 'New Recording'} {session.period ? `· ${session.period}` : ''}
         </h1>
-        <p className="mt-1 text-sm text-ink-soft">
+        <p className={`mt-1 text-sm ${warn ? 'text-warm-500' : 'text-ink-soft'}`}>
           {session.teacherName ? `${session.teacherName} · ` : ''}
           {formatSessionDateTime(session.sessionDate)}
           {session.gradeLevel ? ` · ${session.gradeLevel}` : ''}
           {session.durationSec ? ` · ${formatTime(session.durationSec)}` : ''}
         </p>
+        {noticedText && (
+          <p className={`mt-3 text-sm ${warn ? 'font-semibold text-warm-500' : 'text-ink'}`}>{noticedText}</p>
+        )}
+        <p className={`mt-3 text-xs ${warn ? 'text-warm-500' : 'text-ink-soft'}`}>{evidenceQuality.text}</p>
       </div>
 
-      {/* 2. Evidence quality */}
-      <EvidenceQualityLine text={evidenceQuality.text} tone={evidenceQuality.tone} />
-
-      {/* 3. What Wivoza noticed */}
-      <WivozaNoticedCard text={buildWivozaNoticedSummary(talkInsight, questioningInsight, cfuInsight)} />
-
-      {/* 4. Ranked strength (or insufficient-evidence fallback) */}
-      <StrengthCard candidate={strength} onViewDiscourse={onViewDiscourse} />
-
-      {/* 5. Ranked coaching priority (or recording-length fallback) */}
-      <CoachingPriorityCard candidate={priority} coverage={coverage} />
-
-      {/* 6. Classroom voice balance */}
+      {/* 2. One chart — usually talk distribution. */}
       <ClassroomVoiceBalance {...voiceBalance} caption={buildVoiceBalanceCaption(balanceJudgment)} />
 
-      {/* 7. Try this next — tied to the coaching priority */}
-      <TryThisNext
-        priority={priority}
-        onSetFocus={(metric) => onFocusMetricChange(metric)}
-        onGoReflect={onGoReflect}
-        onAskCoach={() =>
-          goToAskCoach(navigate, composeAskIncidentText(session, reflectContext, priority?.observation))
-        }
-      />
+      {/* 3. Two or three moments linked to the recording. */}
+      <MomentsCard strength={strength} priority={priority} coverage={coverage} onViewDiscourse={onViewDiscourse} />
 
-      {/* 8. Persistent Ask Wivoza Coach entry point */}
-      <AskWivozaCoachButton onClick={() => goToAskCoach(navigate, composeAskIncidentText(session, reflectContext))} />
+      {/* 4-5. One suggested next step + one Reflect with Wivoza button. */}
+      <NextStepCard priority={priority} onSetFocus={onFocusMetricChange} onGoReflect={onGoReflect} />
     </div>
   )
 }
