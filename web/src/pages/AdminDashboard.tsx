@@ -27,6 +27,20 @@ function formatShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
+function toDateInputValue(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
+function defaultEndDate(): string {
+  return toDateInputValue(new Date())
+}
+
+function defaultStartDate(): string {
+  const d = new Date()
+  d.setDate(d.getDate() - 6)
+  return toDateInputValue(d)
+}
+
 const inputClass =
   'rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-60'
 
@@ -61,7 +75,8 @@ export default function AdminDashboard() {
   const [overviewError, setOverviewError] = useState<string | null>(null)
   const [orgs, setOrgs] = useState<Organization[]>([])
   const [selectedOrgId, setSelectedOrgId] = useState('')
-  const [weekOffset, setWeekOffset] = useState(0)
+  const [startDate, setStartDate] = useState(defaultStartDate)
+  const [endDate, setEndDate] = useState(defaultEndDate)
 
   useEffect(() => {
     getMe()
@@ -82,14 +97,20 @@ export default function AdminDashboard() {
   useEffect(() => {
     setOverview(null)
     setOverviewError(null)
-    getAdminOverview({ organizationId: selectedOrgId || undefined, weekOffset })
+    getAdminOverview({ organizationId: selectedOrgId || undefined, startDate, endDate })
       .then(setOverview)
       .catch(() => setOverviewError('Could not load the admin overview.'))
-  }, [selectedOrgId, weekOffset])
+  }, [selectedOrgId, startDate, endDate])
 
   function handleOrgChange(id: string) {
     setSelectedOrgId(id)
-    setWeekOffset(0)
+    setStartDate(defaultStartDate())
+    setEndDate(defaultEndDate())
+  }
+
+  function handleResetToThisWeek() {
+    setStartDate(defaultStartDate())
+    setEndDate(defaultEndDate())
   }
 
   const isReportingTab = tab === 'overview' || tab === 'engagement' || tab === 'themes'
@@ -139,8 +160,11 @@ export default function AdminDashboard() {
             orgs={orgs}
             selectedOrgId={selectedOrgId}
             onOrgChange={handleOrgChange}
-            weekOffset={weekOffset}
-            onWeekOffsetChange={setWeekOffset}
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={setStartDate}
+            onEndDateChange={setEndDate}
+            onResetToThisWeek={handleResetToThisWeek}
             isSuperadmin={isSuperadmin}
           />
         )}
@@ -167,8 +191,11 @@ function ReportingHeader({
   orgs,
   selectedOrgId,
   onOrgChange,
-  weekOffset,
-  onWeekOffsetChange,
+  startDate,
+  endDate,
+  onStartDateChange,
+  onEndDateChange,
+  onResetToThisWeek,
   isSuperadmin,
 }: {
   tab: ReportingTab
@@ -176,8 +203,11 @@ function ReportingHeader({
   orgs: Organization[]
   selectedOrgId: string
   onOrgChange: (id: string) => void
-  weekOffset: number
-  onWeekOffsetChange: (updater: (w: number) => number) => void
+  startDate: string
+  endDate: string
+  onStartDateChange: (d: string) => void
+  onEndDateChange: (d: string) => void
+  onResetToThisWeek: () => void
   isSuperadmin: boolean
 }) {
   const meta = TAB_META[tab]
@@ -209,31 +239,34 @@ function ReportingHeader({
               ))}
             </select>
           )}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <label className="flex items-center gap-1.5 text-sm text-ink-soft">
+              From
+              <input
+                type="date"
+                value={startDate}
+                max={endDate}
+                onChange={(e) => onStartDateChange(e.target.value)}
+                className="rounded-lg border border-border bg-canvas px-2.5 py-1.5 text-sm text-ink focus:border-brand-400 focus:outline-none"
+              />
+            </label>
+            <label className="flex items-center gap-1.5 text-sm text-ink-soft">
+              to
+              <input
+                type="date"
+                value={endDate}
+                min={startDate}
+                max={defaultEndDate()}
+                onChange={(e) => onEndDateChange(e.target.value)}
+                className="rounded-lg border border-border bg-canvas px-2.5 py-1.5 text-sm text-ink focus:border-brand-400 focus:outline-none"
+              />
+            </label>
             <button
               type="button"
-              onClick={() => onWeekOffsetChange((w) => w + 1)}
-              className="rounded-lg border border-border px-2.5 py-1.5 text-sm text-ink-soft hover:border-brand-400 hover:text-brand-600"
-              aria-label="Previous week"
+              onClick={onResetToThisWeek}
+              className="text-sm font-medium text-brand-600 hover:text-brand-500"
             >
-              ‹
-            </button>
-            <p className="text-sm font-medium text-ink">
-              {weekOffset === 0 ? 'This week' : weekOffset === 1 ? 'Last week' : `${weekOffset} weeks ago`}
-              {overview && (
-                <span className="ml-1.5 font-normal text-ink-soft">
-                  · {formatShortDate(overview.weekStart)} – {formatShortDate(overview.weekEnd)}
-                </span>
-              )}
-            </p>
-            <button
-              type="button"
-              onClick={() => onWeekOffsetChange((w) => Math.max(0, w - 1))}
-              disabled={weekOffset === 0}
-              className="rounded-lg border border-border px-2.5 py-1.5 text-sm text-ink-soft hover:border-brand-400 hover:text-brand-600 disabled:opacity-40"
-              aria-label="Next week"
-            >
-              ›
+              This week
             </button>
           </div>
         </div>
@@ -365,6 +398,13 @@ function MembersList({ organizationId, isSuperadmin }: { organizationId?: string
   )
 }
 
+const INACTIVE_THRESHOLD_DAYS = 14
+
+function daysSince(iso: string | null): number | null {
+  if (!iso) return null
+  return Math.floor((Date.now() - new Date(iso).getTime()) / (24 * 60 * 60 * 1000))
+}
+
 function MemberRow({
   member,
   isSuperadmin,
@@ -444,8 +484,17 @@ function MemberRow({
               Suspended
             </span>
           )}
+          {!member.suspendedAt &&
+            (daysSince(member.lastActiveAt) == null || daysSince(member.lastActiveAt)! > INACTIVE_THRESHOLD_DAYS) && (
+              <span className="rounded-full bg-warm-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warm-500">
+                {member.lastActiveAt ? 'Inactive' : 'Never active'}
+              </span>
+            )}
           <span className="text-xs text-ink-soft">
-            Joined{' '}
+            {member.lastActiveAt
+              ? `Active ${new Date(member.lastActiveAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+              : 'Never active'}
+            {' · Joined '}
             {new Date(member.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
           </span>
         </div>
@@ -647,6 +696,34 @@ function OverviewPanel({ overview, onNavigateThemes }: { overview: AdminOverview
   )
 }
 
+function FeatureAdoptionCard({ data, totalTeachers }: { data: AdminOverview['featureAdoption']; totalTeachers: number }) {
+  const entries = (Object.entries(data) as [keyof typeof data, number][]).sort((a, b) => b[1] - a[1])
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-5">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Feature adoption</h2>
+      <p className="text-xs text-ink-soft">Share of teachers who have tried each feature at least once, ever</p>
+      <div className="mt-3 flex flex-col gap-3">
+        {entries.map(([key, teacherCount]) => {
+          const pct = totalTeachers > 0 ? Math.round((teacherCount / totalTeachers) * 100) : 0
+          return (
+            <div key={key}>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-sm font-medium text-ink">{FEATURE_ACTIVITY_META[key].label}</span>
+                <span className="text-sm font-semibold text-ink">
+                  {pct}% · {teacherCount} of {totalTeachers}
+                </span>
+              </div>
+              <div className="mt-1 h-2 overflow-hidden rounded-full bg-canvas">
+                <div className="h-full rounded-full bg-brand-500" style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function EngagementPanel({
   overview,
   selectedOrgId,
@@ -674,6 +751,8 @@ function EngagementPanel({
           </p>
         )}
       </div>
+
+      <FeatureAdoptionCard data={overview.featureAdoption} totalTeachers={overview.totalTeachers} />
 
       {overview.scope === 'organization' && (
         <MembersList organizationId={selectedOrgId || undefined} isSuperadmin={isSuperadmin} />

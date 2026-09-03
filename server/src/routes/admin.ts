@@ -98,26 +98,45 @@ adminRouter.get('/overview', async (req, res) => {
   const userScope = organizationId ? { organizationId } : {}
   const relatedUserScope = organizationId ? { user: { organizationId } } : {}
 
-  // A week navigator — weekOffset=0 is the current week, 1 is the week
-  // before, etc. Only affects the stat cards below, not the 6-week trend
-  // (that always shows the most recent 6 weeks ending now).
-  const weekOffsetRaw = typeof req.query.weekOffset === 'string' ? parseInt(req.query.weekOffset, 10) : 0
-  const weekOffset = Number.isFinite(weekOffsetRaw) && weekOffsetRaw >= 0 ? weekOffsetRaw : 0
-  const weekEnd = new Date(Date.now() - weekOffset * 7 * DAY_MS)
-  const weekStart = new Date(weekEnd.getTime() - 7 * DAY_MS)
-  const priorWeekStart = new Date(weekStart.getTime() - 7 * DAY_MS)
+  // The analysis window for the stat cards below — either an explicit
+  // ?startDate=&endDate= range (a custom period an admin picked), or the
+  // default week-navigator (?weekOffset=, 0 = the current week, 1 = the
+  // week before, etc.) when no explicit range is given. Neither affects
+  // the 6-week trend, which always shows the most recent 6 weeks ending
+  // now. endDate is treated as inclusive (a date picker's "end date" means
+  // through the end of that day), so it's pushed one day forward to make
+  // an exclusive upper bound for the query.
+  const startDateParam = typeof req.query.startDate === 'string' ? req.query.startDate : null
+  const endDateParam = typeof req.query.endDate === 'string' ? req.query.endDate : null
+  const parsedStart = startDateParam ? new Date(startDateParam) : null
+  const parsedEnd = endDateParam ? new Date(endDateParam) : null
+  const hasCustomRange =
+    parsedStart != null && parsedEnd != null && !Number.isNaN(parsedStart.getTime()) && !Number.isNaN(parsedEnd.getTime())
+
+  let periodStart: Date
+  let periodEnd: Date
+  if (hasCustomRange) {
+    periodStart = parsedStart!
+    periodEnd = new Date(parsedEnd!.getTime() + DAY_MS)
+  } else {
+    const weekOffsetRaw = typeof req.query.weekOffset === 'string' ? parseInt(req.query.weekOffset, 10) : 0
+    const weekOffset = Number.isFinite(weekOffsetRaw) && weekOffsetRaw >= 0 ? weekOffsetRaw : 0
+    periodEnd = new Date(Date.now() - weekOffset * 7 * DAY_MS)
+    periodStart = new Date(periodEnd.getTime() - 7 * DAY_MS)
+  }
+  const priorPeriodStart = new Date(periodStart.getTime() - (periodEnd.getTime() - periodStart.getTime()))
 
   const totalTeachers = await prisma.user.count({ where: { role: 'teacher', ...userScope } })
 
   const activitiesThisWeek = await prisma.usageLog.count({
-    where: { createdAt: { gte: weekStart, lt: weekEnd }, ...relatedUserScope },
+    where: { createdAt: { gte: periodStart, lt: periodEnd }, ...relatedUserScope },
   })
   const activitiesPriorWeek = await prisma.usageLog.count({
-    where: { createdAt: { gte: priorWeekStart, lt: weekStart }, ...relatedUserScope },
+    where: { createdAt: { gte: priorPeriodStart, lt: periodStart }, ...relatedUserScope },
   })
 
   const activeUserIds = await prisma.usageLog.findMany({
-    where: { createdAt: { gte: weekStart, lt: weekEnd }, ...relatedUserScope },
+    where: { createdAt: { gte: periodStart, lt: periodEnd }, ...relatedUserScope },
     select: { userId: true },
     distinct: ['userId'],
   })
@@ -195,21 +214,32 @@ adminRouter.get('/overview', async (req, res) => {
   }
 
   // All-time cumulative activity per feature area — same "not scoped to the
-  // selected week" convention as the tallies above, for the Overview tab's
-  // feature breakdown.
-  const [lessonPlanningCount, conversationPrepCount, parentMessageCount, conversationPlanCount, debriefTotalCount] =
+  // selected period" convention as the tallies above, for the Overview
+  // tab's feature breakdown. Fetched as userId lists rather than plain
+  // counts so the same query also powers Engagement's adoption-breadth
+  // stat (how many distinct teachers have tried each feature at least
+  // once) with no extra round trips.
+  const [lessonPlanUsers, conversationPrepUsers, parentMessageUsers, conversationPlanUsers, debriefAllUsers] =
     await Promise.all([
-      prisma.lessonPlan.count({ where: relatedUserScope }),
-      prisma.conversationPrep.count({ where: relatedUserScope }),
-      prisma.parentMessage.count({ where: relatedUserScope }),
-      prisma.conversationPlan.count({ where: relatedUserScope }),
-      prisma.debrief.count({ where: relatedUserScope }),
+      prisma.lessonPlan.findMany({ where: relatedUserScope, select: { userId: true } }),
+      prisma.conversationPrep.findMany({ where: relatedUserScope, select: { userId: true } }),
+      prisma.parentMessage.findMany({ where: relatedUserScope, select: { userId: true } }),
+      prisma.conversationPlan.findMany({ where: relatedUserScope, select: { userId: true } }),
+      prisma.debrief.findMany({ where: relatedUserScope, select: { userId: true } }),
     ])
   const featureActivity = {
     lessonDebrief: audioSessions.length,
-    lessonPlanning: lessonPlanningCount,
-    communications: conversationPrepCount + parentMessageCount + conversationPlanCount,
-    practiceReflect: attempts.length + debriefTotalCount,
+    lessonPlanning: lessonPlanUsers.length,
+    communications: conversationPrepUsers.length + parentMessageUsers.length + conversationPlanUsers.length,
+    practiceReflect: attempts.length + debriefAllUsers.length,
+  }
+
+  const distinctTeacherCount = (rows: { userId: string }[]): number => new Set(rows.map((r) => r.userId)).size
+  const featureAdoption = {
+    lessonDebrief: distinctTeacherCount(audioSessions),
+    lessonPlanning: distinctTeacherCount(lessonPlanUsers),
+    communications: distinctTeacherCount([...conversationPrepUsers, ...parentMessageUsers, ...conversationPlanUsers]),
+    practiceReflect: distinctTeacherCount([...attempts, ...debriefAllUsers]),
   }
 
   // Staff-wide averages for the same underlying numbers each session's own
@@ -292,9 +322,9 @@ adminRouter.get('/overview', async (req, res) => {
     }
   }
 
-  const recentRated = attempts.filter((a) => a.rating != null && a.createdAt >= weekStart && a.createdAt < weekEnd)
+  const recentRated = attempts.filter((a) => a.rating != null && a.createdAt >= periodStart && a.createdAt < periodEnd)
   const priorRated = attempts.filter(
-    (a) => a.rating != null && a.createdAt >= priorWeekStart && a.createdAt < weekStart,
+    (a) => a.rating != null && a.createdAt >= priorPeriodStart && a.createdAt < periodStart,
   )
   const strongCount = (rows: typeof attempts) => rows.filter((a) => (a.rating ?? 0) >= 4).length
 
@@ -321,10 +351,10 @@ adminRouter.get('/overview', async (req, res) => {
     activeThisWeek: activeUserIds.length,
     activitiesThisWeek,
     activitiesPriorWeek,
-    weekOffset,
-    weekStart: weekStart.toISOString(),
-    weekEnd: weekEnd.toISOString(),
+    periodStart: periodStart.toISOString(),
+    periodEnd: new Date(periodEnd.getTime() - 1).toISOString(),
     featureActivity,
+    featureAdoption,
     categoryTally: categoryTally.toJSON(),
     challengeTally: challengeTally.toJSON(),
     messagePurposeTally: messagePurposeTally.toJSON(),
@@ -358,7 +388,19 @@ adminRouter.get('/members', async (req, res) => {
     select: { id: true, name: true, email: true, jobTitle: true, role: true, suspendedAt: true, createdAt: true },
     orderBy: { createdAt: 'asc' },
   })
-  res.json(members)
+
+  // One grouped query for everyone's most recent activity, rather than a
+  // separate query per member — account-level metadata (when did they last
+  // use the app), not any coaching content, so it's consistent with what
+  // this list already shows (join date, role, suspended status).
+  const lastActive = await prisma.usageLog.groupBy({
+    by: ['userId'],
+    where: { userId: { in: members.map((m) => m.id) } },
+    _max: { createdAt: true },
+  })
+  const lastActiveByUser = new Map(lastActive.map((row) => [row.userId, row._max.createdAt?.toISOString() ?? null]))
+
+  res.json(members.map((m) => ({ ...m, lastActiveAt: lastActiveByUser.get(m.id) ?? null })))
 })
 
 // Un-enrolls a teacher from their org (org_admin's real, scoped power —

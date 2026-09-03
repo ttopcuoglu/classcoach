@@ -111,10 +111,15 @@ export type AdminOverview = {
   activeThisWeek: number
   activitiesThisWeek: number
   activitiesPriorWeek: number
-  weekOffset: number
-  weekStart: string
-  weekEnd: string
+  periodStart: string
+  periodEnd: string
   featureActivity: {
+    lessonDebrief: number
+    lessonPlanning: number
+    communications: number
+    practiceReflect: number
+  }
+  featureAdoption: {
     lessonDebrief: number
     lessonPlanning: number
     communications: number
@@ -143,6 +148,7 @@ export type OrgMember = {
   role: 'teacher' | 'org_admin' | 'superadmin'
   suspendedAt: string | null
   createdAt: string
+  lastActiveAt: string | null
 }
 
 export type AdminUser = {
@@ -476,10 +482,15 @@ export function logout(): Promise<{ status: string }> {
   return request('/api/auth/logout', { method: 'POST' })
 }
 
-export function getAdminOverview(params?: { organizationId?: string; weekOffset?: number }): Promise<AdminOverview> {
+export function getAdminOverview(params?: {
+  organizationId?: string
+  startDate?: string
+  endDate?: string
+}): Promise<AdminOverview> {
   const query = new URLSearchParams()
   if (params?.organizationId) query.set('organizationId', params.organizationId)
-  if (params?.weekOffset) query.set('weekOffset', String(params.weekOffset))
+  if (params?.startDate) query.set('startDate', params.startDate)
+  if (params?.endDate) query.set('endDate', params.endDate)
   const queryString = query.toString()
   return request(`/api/admin/overview${queryString ? `?${queryString}` : ''}`)
 }
