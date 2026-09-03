@@ -13,6 +13,7 @@ import {
   updateOrganization,
   type AdminOverview,
   type AdminUser,
+  type InstructionalAverages,
   type Organization,
   type OrgMember,
   type TallyEntry,
@@ -285,6 +286,68 @@ const PRIORITY_LABELS: Record<string, string> = {
   feedback: 'Specific feedback',
 }
 
+function StatRow({ label, value, sampleNote }: { label: string; value: string; sampleNote: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-2 last:border-0">
+      <span className="text-sm text-ink">{label}</span>
+      <div className="text-right">
+        <span className="text-sm font-semibold text-ink">{value}</span>
+        <p className="text-xs text-ink-soft">{sampleNote}</p>
+      </div>
+    </div>
+  )
+}
+
+function InstructionalAveragesCard({ data }: { data: InstructionalAverages }) {
+  const sampleOr = (n: number, unit: string) => (n > 0 ? `based on ${n} ${unit}` : 'not enough data yet')
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-5">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Instructional practice averages</h2>
+      <div className="mt-2 flex flex-col">
+        <StatRow
+          label="Average wait time after a question"
+          value={data.avgWaitTimeSec != null ? `${data.avgWaitTimeSec.toFixed(1)}s` : '—'}
+          sampleNote={sampleOr(data.waitTimeSampleSize, 'sessions')}
+        />
+        <StatRow
+          label="Teacher talk vs. student talk"
+          value={
+            data.avgTeacherTalkPct != null && data.avgStudentTalkPct != null
+              ? `${Math.round(data.avgTeacherTalkPct)}% teacher · ${Math.round(data.avgStudentTalkPct)}% student`
+              : '—'
+          }
+          sampleNote={sampleOr(data.talkSampleSize, 'sessions')}
+        />
+        <StatRow
+          label="Higher-order questions"
+          value={data.higherOrderPct != null ? `${data.higherOrderPct}%` : '—'}
+          sampleNote={sampleOr(data.higherOrderSampleSize, 'questions')}
+        />
+        <StatRow
+          label="Sessions with a real-life example or connection"
+          value={data.realLifeConnectionRatePct != null ? `${data.realLifeConnectionRatePct}%` : '—'}
+          sampleNote={sampleOr(data.realLifeConnectionSampleSize, 'sessions')}
+        />
+        <StatRow
+          label="Follow-up questions"
+          value={data.avgFollowUpPer10Min != null ? `${data.avgFollowUpPer10Min.toFixed(1)} per 10 min` : '—'}
+          sampleNote={sampleOr(data.followUpSampleSize, 'sessions')}
+        />
+        <StatRow
+          label="Sessions with a check for understanding"
+          value={data.cfuRatePct != null ? `${data.cfuRatePct}%` : '—'}
+          sampleNote={sampleOr(data.cfuSampleSize, 'sessions long enough to detect')}
+        />
+      </div>
+      <p className="mt-3 text-xs text-ink-soft">
+        Averaged across {data.totalAnalyzedSessions} analyzed Lesson Debrief session
+        {data.totalAnalyzedSessions === 1 ? '' : 's'} — each stat only counts sessions with real evidence for it,
+        never padded with sessions where it wasn&rsquo;t measured.
+      </p>
+    </div>
+  )
+}
+
 function TallyBarList({
   title,
   tally,
@@ -473,6 +536,15 @@ function OverviewPanel({ isSuperadmin }: { isSuperadmin: boolean }) {
               the number of sessions recorded.
             </p>
           </div>
+
+          <InstructionalAveragesCard data={overview.instructionalAverages} />
+
+          <TallyBarList
+            title={`Content specialist notes, by theme (${overview.organizationName ?? 'all teachers'})`}
+            tally={overview.contentNoteTally}
+            labelFor={(v) => v}
+            totalTeachers={overview.totalTeachers}
+          />
 
           {overview.scope === 'organization' && (
             <MembersList organizationId={selectedOrgId || undefined} isSuperadmin={isSuperadmin} />

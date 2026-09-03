@@ -87,6 +87,23 @@ export type Organization = {
 
 export type TallyEntry = { count: number; teachers: number }
 
+export type InstructionalAverages = {
+  totalAnalyzedSessions: number
+  avgWaitTimeSec: number | null
+  waitTimeSampleSize: number
+  avgTeacherTalkPct: number | null
+  avgStudentTalkPct: number | null
+  talkSampleSize: number
+  higherOrderPct: number | null
+  higherOrderSampleSize: number
+  realLifeConnectionRatePct: number | null
+  realLifeConnectionSampleSize: number
+  avgFollowUpPer10Min: number | null
+  followUpSampleSize: number
+  cfuRatePct: number | null
+  cfuSampleSize: number
+}
+
 export type AdminOverview = {
   scope: 'platform' | 'organization'
   organizationName: string | null
@@ -99,6 +116,8 @@ export type AdminOverview = {
   challengeTally: Record<string, TallyEntry>
   messagePurposeTally: Record<string, TallyEntry>
   priorityTally: Record<string, TallyEntry>
+  instructionalAverages: InstructionalAverages
+  contentNoteTally: Record<string, TallyEntry>
   growth: {
     recentStrong: number
     recentTotal: number

@@ -12,7 +12,7 @@
 // a reasonable follow-up but out of scope for this first pass.
 
 const MIN_N_FOR_PERCENT = 10
-const MIN_DURATION_FOR_CFU_DETECTION_SEC = 3 * 60
+export const MIN_DURATION_FOR_CFU_DETECTION_SEC = 3 * 60
 
 export const PRIORITY_LABELS = ['talk-balance', 'questioning', 'wait-time', 'cfu', 'feedback'] as const
 export type PriorityLabel = (typeof PRIORITY_LABELS)[number]

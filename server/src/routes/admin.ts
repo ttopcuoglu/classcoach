@@ -2,7 +2,7 @@ import { Router } from 'express'
 import type { Request, Response } from 'express'
 import { requireAdmin, requireSuperadmin } from '../lib/auth.ts'
 import { CHALLENGE_TYPES, MESSAGE_PURPOSES } from '../lib/communicationOptions.ts'
-import { PRIORITY_LABELS, topPriorityForSession } from '../lib/coachingPriority.ts'
+import { MIN_DURATION_FOR_CFU_DETECTION_SEC, PRIORITY_LABELS, topPriorityForSession } from '../lib/coachingPriority.ts'
 import { generateUniqueJoinCode, normalizeJoinCode, parseAdminEmails, syncOrganizationRoles } from '../lib/organization.ts'
 import { prisma } from '../lib/prisma.ts'
 import { SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
@@ -177,12 +177,94 @@ adminRouter.get('/overview', async (req, res) => {
       cfuCount: true,
       durationSec: true,
       metricsDetail: true,
+      lessonContent: true,
+      contentNotes: true,
     },
   })
   const priorityTally = createTally(PRIORITY_LABELS)
   for (const s of audioSessions) {
     const top = topPriorityForSession(s)
     if (top) priorityTally.record(top, s.userId)
+  }
+
+  // Staff-wide averages for the same underlying numbers each session's own
+  // report already shows — rolled up instead of per-teacher. Every stat
+  // only counts sessions with real evidence for it (a session missing a
+  // field never counts as a zero) and reports its own sample size, the
+  // same "never show a number with false precision" discipline the report
+  // itself applies via reportConfidence.ts.
+  const average = (values: number[]): number | null =>
+    values.length ? values.reduce((a, b) => a + b, 0) / values.length : null
+
+  const metricsOf = (s: (typeof audioSessions)[number]) => (s.metricsDetail ?? {}) as Record<string, unknown>
+  const numDetail = (s: (typeof audioSessions)[number], key: string): number | null => {
+    const v = metricsOf(s)[key]
+    return typeof v === 'number' ? v : null
+  }
+
+  const waitTimes = audioSessions.map((s) => s.avgWaitTimeSec).filter((v): v is number => v != null)
+  const teacherTalkPcts = audioSessions.map((s) => s.teacherTalkPct).filter((v): v is number => v != null)
+  const studentTalkPcts = audioSessions.map((s) => s.studentTalkPct).filter((v): v is number => v != null)
+
+  let higherOrderNumerator = 0
+  let higherOrderDenominator = 0
+  for (const s of audioSessions) {
+    if (s.questionCount == null || s.questionCount <= 0) continue
+    higherOrderNumerator += numDetail(s, 'higherOrderQuestionCount') ?? 0
+    higherOrderDenominator += s.questionCount
+  }
+
+  const sessionsWithLessonContent = audioSessions.filter((s) => s.lessonContent != null)
+  const sessionsWithConnections = sessionsWithLessonContent.filter((s) => {
+    const lc = s.lessonContent as { connections?: unknown[] } | null
+    return Array.isArray(lc?.connections) && lc.connections.length > 0
+  })
+
+  const followUpFrequencies: number[] = []
+  for (const s of audioSessions) {
+    if (!s.durationSec || s.durationSec <= 0) continue
+    const count = numDetail(s, 'followUpQuestionCount')
+    if (count == null) continue
+    followUpFrequencies.push(count / (s.durationSec / 600))
+  }
+
+  const cfuEligible = audioSessions.filter((s) => (s.durationSec ?? 0) >= MIN_DURATION_FOR_CFU_DETECTION_SEC)
+  const cfuSessionsWithCheck = cfuEligible.filter((s) => (s.cfuCount ?? 0) > 0)
+
+  const instructionalAverages = {
+    totalAnalyzedSessions: audioSessions.length,
+    avgWaitTimeSec: average(waitTimes),
+    waitTimeSampleSize: waitTimes.length,
+    avgTeacherTalkPct: average(teacherTalkPcts),
+    avgStudentTalkPct: average(studentTalkPcts),
+    talkSampleSize: Math.min(teacherTalkPcts.length, studentTalkPcts.length),
+    higherOrderPct:
+      higherOrderDenominator > 0 ? Math.round((higherOrderNumerator / higherOrderDenominator) * 100) : null,
+    higherOrderSampleSize: higherOrderDenominator,
+    realLifeConnectionRatePct:
+      sessionsWithLessonContent.length > 0
+        ? Math.round((sessionsWithConnections.length / sessionsWithLessonContent.length) * 100)
+        : null,
+    realLifeConnectionSampleSize: sessionsWithLessonContent.length,
+    avgFollowUpPer10Min: average(followUpFrequencies),
+    followUpSampleSize: followUpFrequencies.length,
+    cfuRatePct: cfuEligible.length > 0 ? Math.round((cfuSessionsWithCheck.length / cfuEligible.length) * 100) : null,
+    cfuSampleSize: cfuEligible.length,
+  }
+
+  // Content Specialist Notes: which theme (Clarity, Vocabulary, Engagement
+  // with content, Worth double-checking) comes up most often across every
+  // generated note — same aggregate-only, distinct-teacher-aware tally as
+  // everything else here.
+  const CONTENT_NOTE_LABELS = ['Clarity', 'Vocabulary', 'Engagement with content', 'Worth double-checking'] as const
+  const contentNoteTally = createTally(CONTENT_NOTE_LABELS)
+  for (const s of audioSessions) {
+    const cn = s.contentNotes as { notes?: { label?: string }[] } | null
+    if (!cn?.notes) continue
+    for (const note of cn.notes) {
+      if (!note.label) continue
+      contentNoteTally.record(note.label, s.userId)
+    }
   }
 
   const recentRated = attempts.filter((a) => a.rating != null && a.createdAt >= weekStart && a.createdAt < weekEnd)
@@ -219,6 +301,8 @@ adminRouter.get('/overview', async (req, res) => {
     challengeTally: challengeTally.toJSON(),
     messagePurposeTally: messagePurposeTally.toJSON(),
     priorityTally: priorityTally.toJSON(),
+    instructionalAverages,
+    contentNoteTally: contentNoteTally.toJSON(),
     growth: {
       recentStrong: strongCount(recentRated),
       recentTotal: recentRated.length,
