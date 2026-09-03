@@ -85,6 +85,8 @@ export type Organization = {
   teacherCount: number
 }
 
+export type TallyEntry = { count: number; teachers: number }
+
 export type AdminOverview = {
   scope: 'platform' | 'organization'
   organizationName: string | null
@@ -93,10 +95,10 @@ export type AdminOverview = {
   weekOffset: number
   weekStart: string
   weekEnd: string
-  categoryTally: Record<string, number>
-  challengeTally: Record<string, number>
-  messagePurposeTally: Record<string, number>
-  priorityTally: Record<string, number>
+  categoryTally: Record<string, TallyEntry>
+  challengeTally: Record<string, TallyEntry>
+  messagePurposeTally: Record<string, TallyEntry>
+  priorityTally: Record<string, TallyEntry>
   growth: {
     recentStrong: number
     recentTotal: number

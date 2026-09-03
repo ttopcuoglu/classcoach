@@ -15,6 +15,31 @@ adminRouter.use(requireAdmin)
 const DAY_MS = 24 * 60 * 60 * 1000
 const WEEKLY_TREND_WEEKS = 6
 
+// A tally that also tracks how many *distinct* teachers contributed to each
+// bucket, not just a raw occurrence count — the number that actually tells
+// an admin whether something is broad enough across staff to justify a PD
+// session, versus concentrated in a couple of teachers who'd benefit more
+// from direct coaching. Every key is always present, even at zero, same
+// convention as the plain tallies this replaces.
+type TallyEntry = { count: number; teachers: number }
+
+function createTally(keys: readonly string[]) {
+  const map = new Map<string, { count: number; teacherIds: Set<string> }>(
+    keys.map((k) => [k, { count: 0, teacherIds: new Set<string>() }]),
+  )
+  return {
+    record(key: string, userId: string) {
+      const entry = map.get(key) ?? { count: 0, teacherIds: new Set<string>() }
+      entry.count += 1
+      entry.teacherIds.add(userId)
+      map.set(key, entry)
+    },
+    toJSON(): Record<string, TallyEntry> {
+      return Object.fromEntries([...map.entries()].map(([k, v]) => [k, { count: v.count, teachers: v.teacherIds.size }]))
+    },
+  }
+}
+
 // Shared by /overview and /members — resolves which organization (if any)
 // the requester is allowed to see: an org_admin always sees their own,
 // unset for everyone else unless a superadmin explicitly selects one via
@@ -102,13 +127,13 @@ adminRouter.get('/overview', async (req, res) => {
   // Every category is always present, even at zero — a category with no
   // tallied attempts is a confirmed zero (a complete count, not a sample),
   // never rendered as "unavailable" on the client.
-  const categoryTally = new Map<string, number>(SCENARIO_CATEGORIES.map((c) => [c, 0]))
+  const categoryTally = createTally(SCENARIO_CATEGORIES)
   for (const a of attempts) {
-    categoryTally.set(a.scenario.category, (categoryTally.get(a.scenario.category) ?? 0) + 1)
+    categoryTally.record(a.scenario.category, a.userId)
   }
   for (const d of debriefs) {
     if (!d.category) continue
-    categoryTally.set(d.category, (categoryTally.get(d.category) ?? 0) + 1)
+    categoryTally.record(d.category, d.userId)
   }
 
   // Same aggregate-only tally, applied to Communications: what kind of hard
@@ -117,22 +142,22 @@ adminRouter.get('/overview', async (req, res) => {
   // 'practice' rows (Review a Communication has no category at all).
   const conversationPreps = await prisma.conversationPrep.findMany({
     where: { source: 'practice', category: { not: null }, ...relatedUserScope },
-    select: { category: true },
+    select: { category: true, userId: true },
   })
-  const challengeTally = new Map<string, number>(CHALLENGE_TYPES.map((c) => [c, 0]))
+  const challengeTally = createTally(CHALLENGE_TYPES)
   for (const p of conversationPreps) {
     if (!p.category) continue
-    challengeTally.set(p.category, (challengeTally.get(p.category) ?? 0) + 1)
+    challengeTally.record(p.category, p.userId)
   }
 
   const parentMessages = await prisma.parentMessage.findMany({
     where: { purpose: { not: null }, ...relatedUserScope },
-    select: { purpose: true },
+    select: { purpose: true, userId: true },
   })
-  const messagePurposeTally = new Map<string, number>(MESSAGE_PURPOSES.map((p) => [p, 0]))
+  const messagePurposeTally = createTally(MESSAGE_PURPOSES)
   for (const m of parentMessages) {
     if (!m.purpose) continue
-    messagePurposeTally.set(m.purpose, (messagePurposeTally.get(m.purpose) ?? 0) + 1)
+    messagePurposeTally.record(m.purpose, m.userId)
   }
 
   // Lesson Debrief: which single coaching-priority theme each analyzed
@@ -143,6 +168,7 @@ adminRouter.get('/overview', async (req, res) => {
   const audioSessions = await prisma.audioSession.findMany({
     where: { status: { in: ['analyzed', 'locked'] }, ...relatedUserScope },
     select: {
+      userId: true,
       teacherTalkPct: true,
       studentTalkPct: true,
       questionCount: true,
@@ -153,10 +179,10 @@ adminRouter.get('/overview', async (req, res) => {
       metricsDetail: true,
     },
   })
-  const priorityTally = new Map<string, number>(PRIORITY_LABELS.map((p) => [p, 0]))
+  const priorityTally = createTally(PRIORITY_LABELS)
   for (const s of audioSessions) {
     const top = topPriorityForSession(s)
-    if (top) priorityTally.set(top, (priorityTally.get(top) ?? 0) + 1)
+    if (top) priorityTally.record(top, s.userId)
   }
 
   const recentRated = attempts.filter((a) => a.rating != null && a.createdAt >= weekStart && a.createdAt < weekEnd)
@@ -189,10 +215,10 @@ adminRouter.get('/overview', async (req, res) => {
     weekOffset,
     weekStart: weekStart.toISOString(),
     weekEnd: weekEnd.toISOString(),
-    categoryTally: Object.fromEntries(categoryTally),
-    challengeTally: Object.fromEntries(challengeTally),
-    messagePurposeTally: Object.fromEntries(messagePurposeTally),
-    priorityTally: Object.fromEntries(priorityTally),
+    categoryTally: categoryTally.toJSON(),
+    challengeTally: challengeTally.toJSON(),
+    messagePurposeTally: messagePurposeTally.toJSON(),
+    priorityTally: priorityTally.toJSON(),
     growth: {
       recentStrong: strongCount(recentRated),
       recentTotal: recentRated.length,

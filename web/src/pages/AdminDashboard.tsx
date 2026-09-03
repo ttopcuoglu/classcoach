@@ -15,6 +15,7 @@ import {
   type AdminUser,
   type Organization,
   type OrgMember,
+  type TallyEntry,
   type UserProfile,
 } from '../lib/api'
 import { categoryLabel } from '../lib/categories'
@@ -288,25 +289,27 @@ function TallyBarList({
   title,
   tally,
   labelFor,
+  totalTeachers,
 }: {
   title: string
-  tally: Record<string, number>
+  tally: Record<string, TallyEntry>
   labelFor: (value: string) => string
+  totalTeachers: number
 }) {
-  const sorted = Object.entries(tally).sort((a, b) => b[1] - a[1])
-  const maxCount = Math.max(1, ...sorted.map(([, c]) => c))
+  const sorted = Object.entries(tally).sort((a, b) => b[1].count - a[1].count)
+  const maxCount = Math.max(1, ...sorted.map(([, v]) => v.count))
   return (
     <div>
       <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">{title}</h2>
       <div className="mt-3 flex flex-col gap-2">
-        {sorted.map(([value, count]) => (
+        {sorted.map(([value, { count, teachers }]) => (
           <div key={value} className="flex items-center gap-3">
             <span className="w-40 shrink-0 text-sm text-ink">{labelFor(value)}</span>
             <div className="h-2 flex-1 overflow-hidden rounded-full bg-canvas">
               <div className="h-full rounded-full bg-brand-500" style={{ width: `${(count / maxCount) * 100}%` }} />
             </div>
-            <span className="w-24 shrink-0 text-right text-sm text-ink-soft">
-              {count === 0 ? 'no activity yet' : count}
+            <span className="w-44 shrink-0 text-right text-sm text-ink-soft">
+              {count === 0 ? 'no activity yet' : `${count} · ${teachers} of ${totalTeachers} teachers`}
             </span>
           </div>
         ))}
@@ -440,18 +443,21 @@ function OverviewPanel({ isSuperadmin }: { isSuperadmin: boolean }) {
             title={`Practice by category (${overview.organizationName ?? 'all teachers'})`}
             tally={overview.categoryTally}
             labelFor={categoryLabel}
+            totalTeachers={overview.totalTeachers}
           />
 
           <TallyBarList
             title={`Conversations practiced, by challenge (${overview.organizationName ?? 'all teachers'})`}
             tally={overview.challengeTally}
             labelFor={(v) => challengeLabel(v) ?? v}
+            totalTeachers={overview.totalTeachers}
           />
 
           <TallyBarList
             title={`Messages written, by purpose (${overview.organizationName ?? 'all teachers'})`}
             tally={overview.messagePurposeTally}
             labelFor={(v) => purposeLabel(v) ?? v}
+            totalTeachers={overview.totalTeachers}
           />
 
           <div>
@@ -459,6 +465,7 @@ function OverviewPanel({ isSuperadmin }: { isSuperadmin: boolean }) {
               title={`Lesson Debrief: most common coaching priority (${overview.organizationName ?? 'all teachers'})`}
               tally={overview.priorityTally}
               labelFor={(v) => PRIORITY_LABELS[v] ?? v}
+              totalTeachers={overview.totalTeachers}
             />
             <p className="mt-2 text-xs text-ink-soft">
               Based on each analyzed session's own measured numbers — a short recording or one with too little
