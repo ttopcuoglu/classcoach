@@ -545,7 +545,7 @@ const INSIGHTS_SECTIONS: { key: InsightsSection; label: string }[] = [
   { key: 'questions', label: 'Questions & Thinking' },
   { key: 'understanding', label: 'Understanding & Feedback' },
   { key: 'content', label: 'Content & Explanations' },
-  { key: 'routines', label: 'Language & Routines' },
+  { key: 'routines', label: 'Climate & Management' },
 ]
 
 function insightsNavButtonClass(active: boolean) {
