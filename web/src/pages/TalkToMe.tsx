@@ -208,8 +208,19 @@ export default function TalkToMe() {
           audio.muted = false
         })
     }
+    // pointerdown alone missed one real path: submitting "Type instead" by
+    // pressing Enter in the text field fires no pointerdown at all (it's a
+    // keyboard-only form submit), so that could be a teacher's very first
+    // interaction with the page and the audio element would never unlock —
+    // every reply for the rest of the session would then play silently.
+    // keydown as a second trigger covers that; each listener removes itself
+    // independently once fired, so firing both is harmless.
     document.addEventListener('pointerdown', primeAudio, { once: true })
-    return () => document.removeEventListener('pointerdown', primeAudio)
+    document.addEventListener('keydown', primeAudio, { once: true })
+    return () => {
+      document.removeEventListener('pointerdown', primeAudio)
+      document.removeEventListener('keydown', primeAudio)
+    }
   }, [])
 
   // There's no real signal from the reply request for "% done generating"
