@@ -177,6 +177,8 @@ export type AdminUser = {
 
 export type DebriefSource = 'ask_tab' | 'talk_to_me'
 
+export type TalkTakeaway = { explored: string; tryNext: string; notice: string }
+
 export type Debrief = {
   id: string
   incidentText: string
@@ -189,6 +191,7 @@ export type Debrief = {
   shareToken: string | null
   createdAt: string
   conversation: ChatMessage[]
+  talkTakeaway: TalkTakeaway | null
 }
 
 // tone values changed with the Communications redesign — old rows may have
@@ -657,6 +660,10 @@ export function sendDebriefChat(id: string, message: string): Promise<Debrief> {
 
 export function startTalkToMe(message: string): Promise<Debrief> {
   return request('/api/debriefs/talk', { method: 'POST', body: JSON.stringify({ message }) })
+}
+
+export function generateTalkTakeaway(id: string): Promise<Debrief> {
+  return request(`/api/debriefs/${id}/takeaway`, { method: 'POST' })
 }
 
 // Same multipart pattern as analyzeDemoClip — records audio client-side via

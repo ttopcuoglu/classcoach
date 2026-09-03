@@ -164,6 +164,11 @@ model Debrief {
 
   // Same convention as ScenarioAttempt.conversation.
   conversation Json?
+
+  // { explored, tryNext, notice } — Talk It Through only (source ===
+  // 'talk_to_me'). Generated once, manually, when the teacher taps
+  // "Finish session"; null until then. Ask's rows never use this field.
+  talkTakeaway Json?
 }
 
 // Backs "Write a Message". tone is one of: warm, professional, firm, urgent

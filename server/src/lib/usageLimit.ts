@@ -23,6 +23,7 @@ export type UsageAction =
   | 'conversation_plan_chat'
   | 'talk_to_me'
   | 'talk_to_me_chat'
+  | 'talk_to_me_takeaway'
   | 'class_summary'
 
 // Counts today's Claude-costing calls for this user and logs this one if

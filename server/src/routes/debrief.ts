@@ -79,6 +79,25 @@ ${CORE_COACHING_RULES}`
 const TALK_SYSTEM_PROMPT = `You are Coach, a warm, practical classroom management coach for K-12 teachers, having a live SPOKEN conversation — the teacher is talking to you out loud and your reply will be read aloud back to them. Keep every reply to 1-2 short sentences, plain conversational language. No lists, no markdown, no parenthetical asides, nothing that reads awkwardly out loud. Ask at most one question at a time. Stay grounded in what the teacher has actually said; never invent details.
 ${CORE_COACHING_RULES}`
 
+// Manually triggered once, when the teacher taps "Finish session" — not a
+// turn in the live conversation, so no memory plumbing and no spoken-
+// pacing constraint the way TALK_SYSTEM_PROMPT has.
+const TALK_TAKEAWAY_SYSTEM_PROMPT = `You are Coach, wrapping up a short spoken coaching conversation with a teacher. Summarize it into a brief, honest takeaway the teacher can glance at afterward — ground every claim only in what was actually said, never invent a detail that wasn't discussed.
+
+Write in plain text only — no markdown.
+
+Respond with exactly these three sections and nothing else:
+<explored>
+1-2 sentences on what the conversation was actually about.
+</explored>
+<try_next>
+One concrete, small next step that came out of the conversation, or that clearly fits what the teacher described.
+</try_next>
+<notice>
+One specific thing worth paying attention to next time, tied to what was discussed.
+</notice>
+${CORE_COACHING_RULES}`
+
 function isValidCategory(value: unknown): value is string {
   return typeof value === 'string' && (SCENARIO_CATEGORIES as readonly string[]).includes(value)
 }
@@ -299,6 +318,64 @@ debriefRouter.post('/:id/chat', async (req, res) => {
   } catch (error) {
     console.error('[debrief] chat failed:', error)
     res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
+  }
+})
+
+debriefRouter.post('/:id/takeaway', async (req, res) => {
+  const debrief = await prisma.debrief.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+  })
+  if (!debrief) {
+    res.status(404).json({ error: 'Debrief not found' })
+    return
+  }
+  if (debrief.source !== 'talk_to_me') {
+    res.status(400).json({ error: 'Not a Talk It Through conversation.' })
+    return
+  }
+
+  const existing = (debrief.conversation as unknown as ChatMessage[] | null) ?? []
+  if (existing.length === 0) {
+    res.status(400).json({ error: 'Nothing to summarize yet.' })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'talk_to_me_takeaway')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  try {
+    const transcript = existing.map((m) => `${m.role === 'assistant' ? 'Coach' : 'Teacher'}: ${m.text}`).join('\n')
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 300,
+      system: TALK_TAKEAWAY_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: transcript }],
+    })
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+    flagIfUnsafe(text, 'debrief.talk.takeaway')
+
+    const explored = extractTag(text, 'explored')
+    const tryNext = extractTag(text, 'try_next')
+    const notice = extractTag(text, 'notice')
+    if (!explored || !tryNext || !notice) {
+      res.status(502).json({ error: 'Could not summarize this conversation. Please try again.' })
+      return
+    }
+
+    const updated = await prisma.debrief.update({
+      where: { id: debrief.id },
+      data: { talkTakeaway: { explored, tryNext, notice } },
+    })
+    res.json(updated)
+  } catch (error) {
+    console.error('[debrief] takeaway failed:', error)
+    res.status(502).json({ error: 'Could not summarize this conversation. Please try again.' })
   }
 })
 

@@ -2,7 +2,24 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BrainIcon, MicIcon, WarningIcon } from '../components/icons'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
-import { buildSpeechUrl, sendDebriefChat, startTalkToMe, type ChatMessage, type Debrief } from '../lib/api'
+import {
+  buildSpeechUrl,
+  generateTalkTakeaway,
+  sendDebriefChat,
+  startTalkToMe,
+  type ChatMessage,
+  type Debrief,
+  type TalkTakeaway,
+} from '../lib/api'
+
+// First-person, concrete — things a teacher could plausibly say out loud,
+// not generic placeholders. Tapping one starts a real conversation
+// immediately via the exact same path a spoken or typed turn uses.
+const EXAMPLE_PROMPTS = [
+  'My class talks over directions.',
+  'I want to reflect on today’s lesson.',
+  'A parent email is stressing me out.',
+]
 
 // Flipped to false: auto-starting the mic on open meant a teacher could
 // go through an entire hands-free conversation without ever tapping the
@@ -33,7 +50,7 @@ const STATE_STYLES: Record<VisualState, { glow: string; orb: string; pill: strin
   error: { glow: 'bg-warm-100', orb: 'border-warm-100 bg-warm-100', pill: 'bg-warm-100 text-warm-500', dot: 'bg-warm-500' },
 }
 
-function statusLabel(state: VisualState, level: number): string {
+function statusLabel(state: VisualState, level: number, hasConversation: boolean): string {
   switch (state) {
     case 'listening':
       return level > 8 ? 'Listening…' : "I'm listening — go ahead"
@@ -42,7 +59,10 @@ function statusLabel(state: VisualState, level: number): string {
     case 'speaking':
       return 'Coach is speaking'
     case 'idle':
-      return 'Paused'
+      // Distinguishes "nothing has happened yet" from a genuine
+      // mid-conversation pause — both used to read as the same bare
+      // "Paused," which was confusing before any turn had happened.
+      return hasConversation ? 'Paused' : 'Ready when you are'
     case 'error':
       return 'Something went wrong'
   }
@@ -123,6 +143,11 @@ export default function TalkToMe() {
   // meant your own words appeared at the same moment as the coach's
   // reply, not right after you actually finished talking.
   const [userTranscript, setUserTranscript] = useState<string | null>(null)
+  const [showTypeInput, setShowTypeInput] = useState(false)
+  const [typedDraft, setTypedDraft] = useState('')
+  const [takeaway, setTakeaway] = useState<TalkTakeaway | null>(null)
+  const [takeawayLoading, setTakeawayLoading] = useState(false)
+  const [takeawayError, setTakeawayError] = useState<string | null>(null)
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const mutedRef = useRef(muted)
@@ -279,8 +304,56 @@ export default function TalkToMe() {
     navigate('/')
   }
 
+  // Shared entry point for both an example-prompt tap and a typed
+  // submission — exactly the same path a real transcribed turn already
+  // uses, so sendDebriefChat/startTalkToMe and speak() need no changes.
+  function submitText(text: string) {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    sessionActiveRef.current = true
+    setError(null)
+    setShowTypeInput(false)
+    setTypedDraft('')
+    handleTurnComplete(trimmed)
+  }
+
+  function handleOpenTypeInput() {
+    // Typing is just another way of ending the current mic turn — release
+    // it first so an in-flight recording can't also fire a turn and race
+    // the typed one.
+    if (phase === 'listening') {
+      sessionActiveRef.current = false
+      close()
+      setPhase('idle')
+    }
+    setShowTypeInput(true)
+  }
+
+  async function handleFinishSession() {
+    sessionActiveRef.current = false
+    close()
+    audioRef.current?.pause()
+    setShowTypeInput(false)
+    if (!debrief) {
+      navigate('/')
+      return
+    }
+    setTakeawayLoading(true)
+    setTakeawayError(null)
+    try {
+      const updated = await generateTalkTakeaway(debrief.id)
+      setDebrief(updated)
+      setTakeaway(updated.talkTakeaway)
+    } catch (err) {
+      setTakeawayError((err as Error).message || 'Could not summarize this conversation. Please try again.')
+    } finally {
+      setTakeawayLoading(false)
+    }
+  }
+
   const messages: ChatMessage[] = debrief?.conversation ?? []
   const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
+  const finishing = takeawayLoading || takeaway != null || takeawayError != null
 
   return (
     <div className="flex min-h-screen flex-col bg-cream text-ink">
@@ -292,8 +365,10 @@ export default function TalkToMe() {
 
       <header className="flex items-center justify-between border-b border-hairline bg-cream-card px-4 py-3">
         <p className="font-heading text-base font-bold text-forest">Talk to Coach</p>
+        {/* A fast, no-questions-asked way out — deliberately distinct from
+            "Finish session" below: this skips the takeaway entirely. */}
         <button type="button" onClick={handleClose} className="text-sm font-medium text-ink-soft hover:text-ink">
-          Close
+          Exit
         </button>
       </header>
 
@@ -304,6 +379,45 @@ export default function TalkToMe() {
             <p className="max-w-sm text-sm text-ink-soft">
               Voice conversation isn't available in this browser. Try a different browser or device.
             </p>
+          </div>
+        ) : finishing ? (
+          <div className="flex w-full max-w-md flex-col gap-5 text-left">
+            {takeawayLoading ? (
+              <div className="flex flex-col items-center gap-3 text-center">
+                <BrainIcon className="h-9 w-9 animate-pulse text-terracotta-600" />
+                <p className="text-sm text-ink-soft">Wrapping up…</p>
+              </div>
+            ) : takeawayError ? (
+              <div className="flex flex-col items-center gap-3 text-center">
+                <WarningIcon className="h-8 w-8 text-warm-500" />
+                <p className="text-sm text-warm-500">{takeawayError}</p>
+              </div>
+            ) : takeaway ? (
+              <>
+                <h1 className="font-heading text-xl font-bold text-forest">Here's your takeaway</h1>
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-forest">What we explored</p>
+                    <p className="mt-1 text-sm text-ink">{takeaway.explored}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">What I'll try</p>
+                    <p className="mt-1 text-sm text-ink">{takeaway.tryNext}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">What I'll notice</p>
+                    <p className="mt-1 text-sm text-ink">{takeaway.notice}</p>
+                  </div>
+                </div>
+              </>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="self-center rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
+            >
+              Done
+            </button>
           </div>
         ) : (
           <>
@@ -361,7 +475,7 @@ export default function TalkToMe() {
                     visualState === 'thinking' || visualState === 'speaking' ? 'animate-pulse' : ''
                   }`}
                 />
-                {statusLabel(visualState, level)}
+                {statusLabel(visualState, level, debrief != null)}
               </div>
               {visualState === 'thinking' && (
                 // Simulated, not measured — see the thinkingProgress effect's
@@ -378,53 +492,128 @@ export default function TalkToMe() {
               )}
             </div>
 
-            <div className="flex w-full max-w-md flex-col gap-3">
-              {userTranscript && (
-                <div className="rounded-2xl border border-hairline bg-mint-tint/20 p-4 text-left">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-forest">You</p>
-                  <p className="mt-1.5 text-sm text-ink">{userTranscript}</p>
+            {!debrief && phase === 'idle' && !showTypeInput ? (
+              <div className="flex w-full max-w-md flex-col gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                    A moment for your teaching
+                  </p>
+                  <h1 className="mt-1 font-heading text-2xl font-bold text-forest">What's on your mind today?</h1>
+                  <p className="mt-1.5 text-sm text-ink-soft">
+                    Talk through a challenge, find the right words, or reflect on your day.
+                  </p>
                 </div>
-              )}
-              {lastAssistant && (
-                <div className="rounded-2xl border border-hairline bg-cream-card p-4 text-left">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coach</p>
-                  <p className="mt-1.5 text-sm text-ink">{lastAssistant.text}</p>
+                <div className="flex flex-col gap-2">
+                  {EXAMPLE_PROMPTS.map((prompt) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      onClick={() => submitText(prompt)}
+                      className="rounded-xl border border-hairline bg-cream-card px-4 py-3 text-left text-sm text-ink-soft transition-colors hover:border-terracotta/40 hover:text-ink"
+                    >
+                      "{prompt}"
+                    </button>
+                  ))}
                 </div>
-              )}
-              {error && <p className="text-sm text-warm-500">{error}</p>}
-            </div>
+              </div>
+            ) : (
+              <div className="flex w-full max-w-md flex-col gap-3">
+                {userTranscript && (
+                  <div className="rounded-2xl border border-hairline bg-mint-tint/20 p-4 text-left">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-forest">You</p>
+                    <p className="mt-1.5 text-sm text-ink">{userTranscript}</p>
+                  </div>
+                )}
+                {lastAssistant && (
+                  <div className="rounded-2xl border border-hairline bg-cream-card p-4 text-left">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coach</p>
+                    <p className="mt-1.5 text-sm text-ink">{lastAssistant.text}</p>
+                  </div>
+                )}
+                {error && <p className="text-sm text-warm-500">{error}</p>}
+              </div>
+            )}
 
-            <div className="flex items-center gap-3">
-              {phase === 'idle' || phase === 'error' ? (
-                <button
-                  type="button"
-                  onClick={beginListening}
-                  className="flex items-center gap-2 rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
-                >
-                  <MicIcon className="h-4 w-4" />
-                  {phase === 'error' ? 'Try Again' : 'Start Talking'}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleStop}
-                  className="rounded-full bg-forest px-6 py-3 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
-                >
-                  Stop
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setMuted((m) => !m)}
-                className={`rounded-full border-2 px-5 py-3 text-sm font-semibold transition-colors ${
-                  muted
-                    ? 'border-warm-500 bg-warm-100 text-warm-500'
-                    : 'border-hairline bg-cream-card text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
-                }`}
+            {showTypeInput ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  submitText(typedDraft)
+                }}
+                className="flex w-full max-w-md items-center gap-2"
               >
-                {muted ? 'Unmute' : 'Mute'}
-              </button>
-            </div>
+                <input
+                  type="text"
+                  autoFocus
+                  value={typedDraft}
+                  onChange={(e) => setTypedDraft(e.target.value)}
+                  placeholder="Type what's on your mind…"
+                  className="flex-1 rounded-full border border-hairline bg-cream-card px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta/40 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={!typedDraft.trim()}
+                  className="rounded-full bg-terracotta px-5 py-3 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  Send
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowTypeInput(false)}
+                  className="text-sm font-medium text-ink-soft hover:text-ink"
+                >
+                  Cancel
+                </button>
+              </form>
+            ) : (
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                {phase === 'idle' || phase === 'error' ? (
+                  <button
+                    type="button"
+                    onClick={beginListening}
+                    className="flex items-center gap-2 rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
+                  >
+                    <MicIcon className="h-4 w-4" />
+                    {phase === 'error' ? 'Try Again' : debrief ? 'Resume' : 'Start Talking'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleStop}
+                    className="rounded-full bg-forest px-6 py-3 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
+                  >
+                    Pause mic
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setMuted((m) => !m)}
+                  className={`rounded-full border-2 px-5 py-3 text-sm font-semibold transition-colors ${
+                    muted
+                      ? 'border-warm-500 bg-warm-100 text-warm-500'
+                      : 'border-hairline bg-cream-card text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
+                  }`}
+                >
+                  {muted ? 'Unmute coach' : 'Mute coach'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenTypeInput}
+                  className="rounded-full border-2 border-hairline bg-cream-card px-5 py-3 text-sm font-semibold text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
+                >
+                  Type instead
+                </button>
+                {debrief && (
+                  <button
+                    type="button"
+                    onClick={handleFinishSession}
+                    className="rounded-full border-2 border-hairline bg-cream-card px-5 py-3 text-sm font-semibold text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
+                  >
+                    Finish session
+                  </button>
+                )}
+              </div>
+            )}
           </>
         )}
       </main>
