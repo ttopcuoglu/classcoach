@@ -86,10 +86,15 @@ function splitIntoSentences(text: string): string[] {
 async function fetchSentenceAudio(sentence: string): Promise<string | null> {
   try {
     const res = await fetch(buildSpeechUrl(sentence), { credentials: 'include' })
-    if (!res.ok) return null
+    if (!res.ok) {
+      console.warn('[TalkToMe] TTS fetch failed', res.status, await res.text().catch(() => ''))
+      return null
+    }
     const blob = await res.blob()
+    if (blob.size === 0) console.warn('[TalkToMe] TTS fetch returned an empty audio blob')
     return URL.createObjectURL(blob)
-  } catch {
+  } catch (err) {
+    console.warn('[TalkToMe] TTS fetch threw', err)
     return null
   }
 }
@@ -124,9 +129,15 @@ async function playQueue(audio: HTMLAudioElement, sentences: string[]): Promise<
     if (!url) continue // this segment failed to fetch — skip it, not fatal to the turn
     await new Promise<void>((resolve) => {
       audio.onended = () => resolve()
-      audio.onerror = () => resolve()
+      audio.onerror = () => {
+        console.warn('[TalkToMe] <audio> element error', audio.error?.code, audio.error?.message)
+        resolve()
+      }
       audio.src = url
-      audio.play().catch(() => resolve())
+      audio.play().catch((err) => {
+        console.warn('[TalkToMe] audio.play() rejected', err?.name, err?.message)
+        resolve()
+      })
     })
     URL.revokeObjectURL(url)
   }
@@ -207,7 +218,8 @@ export default function TalkToMe() {
           audio.currentTime = 0
           audio.muted = false
         })
-        .catch(() => {
+        .catch((err) => {
+          console.warn('[TalkToMe] audio unlock (priming) rejected', err?.name, err?.message)
           audio.muted = false
         })
     }
