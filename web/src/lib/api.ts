@@ -104,6 +104,19 @@ export type InstructionalAverages = {
   cfuSampleSize: number
 }
 
+export type ClimateAverages = {
+  avgRedirectionPer10Min: number | null
+  redirectionFrequencySampleSize: number
+  zeroRedirectionRatePct: number | null
+  redirectionMeasuredSampleSize: number
+  avgTransitionPer10Min: number | null
+  transitionSampleSize: number
+  clearDirectivesRatePct: number | null
+  directiveSampleSize: number
+  positiveTonePct: number | null
+  toneSampleSize: number
+}
+
 export type AdminOverview = {
   scope: 'platform' | 'organization'
   organizationName: string | null
@@ -130,6 +143,7 @@ export type AdminOverview = {
   messagePurposeTally: Record<string, TallyEntry>
   priorityTally: Record<string, TallyEntry>
   instructionalAverages: InstructionalAverages
+  climateAverages: ClimateAverages
   contentNoteTally: Record<string, TallyEntry>
   growth: {
     recentStrong: number

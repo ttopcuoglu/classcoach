@@ -307,6 +307,58 @@ adminRouter.get('/overview', async (req, res) => {
     cfuSampleSize: cfuEligible.length,
   }
 
+  // Classroom climate and management — the same redirection/transition/
+  // directive/tone signals the report's own Climate & Routines tab shows
+  // per session, rolled up staff-wide. Same evidence-only discipline as
+  // the instructional averages above: a session with no measured value
+  // for a field never contributes to that field's average or rate.
+  const redirectionFrequencies: number[] = []
+  const redirectionMeasuredSessions: number[] = []
+  const transitionFrequencies: number[] = []
+  const directiveMeasuredSessions: number[] = []
+  let toneNumerator = 0
+  let toneDenominator = 0
+  for (const s of audioSessions) {
+    const redirectionCount = numDetail(s, 'redirectionCount')
+    if (redirectionCount != null) {
+      redirectionMeasuredSessions.push(redirectionCount)
+      if (s.durationSec) redirectionFrequencies.push(redirectionCount / (s.durationSec / 600))
+    }
+    const transitionCount = numDetail(s, 'transitionCount')
+    if (transitionCount != null && s.durationSec) {
+      transitionFrequencies.push(transitionCount / (s.durationSec / 600))
+    }
+    const directiveCount = numDetail(s, 'directiveCount')
+    if (directiveCount != null) directiveMeasuredSessions.push(directiveCount)
+
+    const positiveCount = numDetail(s, 'positivePhraseCount')
+    const correctiveCount = numDetail(s, 'correctivePhraseCount')
+    if (positiveCount != null && correctiveCount != null && positiveCount + correctiveCount > 0) {
+      toneNumerator += positiveCount
+      toneDenominator += positiveCount + correctiveCount
+    }
+  }
+  const climateAverages = {
+    avgRedirectionPer10Min: average(redirectionFrequencies),
+    redirectionFrequencySampleSize: redirectionFrequencies.length,
+    zeroRedirectionRatePct:
+      redirectionMeasuredSessions.length > 0
+        ? Math.round(
+            (redirectionMeasuredSessions.filter((c) => c === 0).length / redirectionMeasuredSessions.length) * 100,
+          )
+        : null,
+    redirectionMeasuredSampleSize: redirectionMeasuredSessions.length,
+    avgTransitionPer10Min: average(transitionFrequencies),
+    transitionSampleSize: transitionFrequencies.length,
+    clearDirectivesRatePct:
+      directiveMeasuredSessions.length > 0
+        ? Math.round((directiveMeasuredSessions.filter((c) => c > 0).length / directiveMeasuredSessions.length) * 100)
+        : null,
+    directiveSampleSize: directiveMeasuredSessions.length,
+    positiveTonePct: toneDenominator > 0 ? Math.round((toneNumerator / toneDenominator) * 100) : null,
+    toneSampleSize: toneDenominator,
+  }
+
   // Content Specialist Notes: which theme (Clarity, Vocabulary, Engagement
   // with content, Worth double-checking) comes up most often across every
   // generated note — same aggregate-only, distinct-teacher-aware tally as
@@ -360,6 +412,7 @@ adminRouter.get('/overview', async (req, res) => {
     messagePurposeTally: messagePurposeTally.toJSON(),
     priorityTally: priorityTally.toJSON(),
     instructionalAverages,
+    climateAverages,
     contentNoteTally: contentNoteTally.toJSON(),
     growth: {
       recentStrong: strongCount(recentRated),

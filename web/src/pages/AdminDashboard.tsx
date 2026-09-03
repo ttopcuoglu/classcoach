@@ -13,6 +13,7 @@ import {
   updateOrganization,
   type AdminOverview,
   type AdminUser,
+  type ClimateAverages,
   type InstructionalAverages,
   type Organization,
   type OrgMember,
@@ -604,6 +605,48 @@ function InstructionalAveragesCard({ data }: { data: InstructionalAverages }) {
   )
 }
 
+function ClimateAveragesCard({ data }: { data: ClimateAverages }) {
+  const sampleOr = (n: number, unit: string) => (n > 0 ? `based on ${n} ${unit}` : 'not enough data yet')
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-5">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+        Classroom climate &amp; management
+      </h2>
+      <div className="mt-2 flex flex-col">
+        <StatRow
+          label="Redirection language"
+          value={data.avgRedirectionPer10Min != null ? `${data.avgRedirectionPer10Min.toFixed(1)} per 10 min` : '—'}
+          sampleNote={sampleOr(data.redirectionFrequencySampleSize, 'sessions')}
+        />
+        <StatRow
+          label="Sessions with no redirection language detected"
+          value={data.zeroRedirectionRatePct != null ? `${data.zeroRedirectionRatePct}%` : '—'}
+          sampleNote={sampleOr(data.redirectionMeasuredSampleSize, 'sessions')}
+        />
+        <StatRow
+          label="Transition language"
+          value={data.avgTransitionPer10Min != null ? `${data.avgTransitionPer10Min.toFixed(1)} per 10 min` : '—'}
+          sampleNote={sampleOr(data.transitionSampleSize, 'sessions')}
+        />
+        <StatRow
+          label="Sessions with clear directive language detected"
+          value={data.clearDirectivesRatePct != null ? `${data.clearDirectivesRatePct}%` : '—'}
+          sampleNote={sampleOr(data.directiveSampleSize, 'sessions')}
+        />
+        <StatRow
+          label="Positive vs. corrective tone"
+          value={data.positiveTonePct != null ? `${data.positiveTonePct}% positive` : '—'}
+          sampleNote={sampleOr(data.toneSampleSize, 'tone-language moments')}
+        />
+      </div>
+      <p className="mt-3 text-xs text-ink-soft">
+        Keyword/phrase-matched counts only — clarity and effectiveness aren&rsquo;t judged automatically. Each stat
+        only counts sessions with real evidence for it.
+      </p>
+    </div>
+  )
+}
+
 function TallyBarList({
   title,
   tally,
@@ -800,6 +843,8 @@ function CoachingThemesPanel({ overview }: { overview: AdminOverview }) {
       </div>
 
       <InstructionalAveragesCard data={overview.instructionalAverages} />
+
+      <ClimateAveragesCard data={overview.climateAverages} />
 
       <TallyBarList
         title="Content specialist notes, by theme"
