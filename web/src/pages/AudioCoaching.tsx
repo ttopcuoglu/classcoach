@@ -2713,6 +2713,11 @@ function QuestioningMixChart({
   state: MetricState
 }) {
   const unavailable = isMissingState(state) || totalCount == null || higherOrderCount == null
+  // A distribution bar reads as a stable rate even at the smallest sample —
+  // "1 of 1 higher-order" fills the whole bar exactly like "18 of 18" would.
+  // Below the same MIN_N_FOR_PERCENT floor the rest of this report already
+  // uses for a percentage, show the plain count instead of the chart.
+  const tooFewToCharacterize = !unavailable && state === 'possible_detection'
   return (
     <div>
       <h3 className="text-sm font-semibold text-ink">Questioning mix</h3>
@@ -2720,6 +2725,11 @@ function QuestioningMixChart({
         <div className="mt-2">
           <HatchedBar label="Question-type mix unavailable this session." />
         </div>
+      ) : tooFewToCharacterize ? (
+        <p className="mt-2 text-sm text-ink-soft">
+          {totalCount} question{totalCount === 1 ? '' : 's'} detected ({higherOrderCount} higher-order) — too few to
+          characterize the mix as a pattern.
+        </p>
       ) : (
         <div className="mt-2 flex flex-col gap-2.5">
           {(

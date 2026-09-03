@@ -146,6 +146,12 @@ const TOPIC_TERM_STOPWORDS = new Set([
   'okay', 'right', 'just', 'like', 'want', 'know', 'think', 'good', 'time', 'today',
   'were', 'been', 'does', 'each', 'some', 'into', 'only', 'over', 'then', 'them',
   'these', 'those', 'very', 'will', 'yeah', 'gonna', 'kind', 'sure', 'here',
+  // Contractions — conversational filler, not academic vocabulary, but the
+  // extraction regex allows apostrophes so these otherwise slip through.
+  "let's", "i'll", "i'm", "i've", "i'd", "we're", "we'll", "we've", "you're",
+  "you'll", "you've", "they're", "they'll", "they've", "that's", "it's",
+  "there's", "don't", "didn't", "doesn't", "isn't", "aren't", "wasn't",
+  "weren't", "can't", "won't", "couldn't", "wouldn't", "shouldn't", "what's",
 ])
 
 function extractTopicTerms(
