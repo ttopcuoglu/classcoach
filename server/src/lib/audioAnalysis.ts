@@ -288,7 +288,54 @@ export function detectLessonContent(segments: Segment[], phases: Phase[]): Lesso
   }
 }
 
-const NAME_MENTION_PATTERN = /\b[A-Z][a-z]+\b/g
+// Common capitalized discourse markers, days, and subjects that a naive
+// "any capitalized word" scan would otherwise miscount as a student's
+// name — see countNameMentions below for why this list matters more once
+// sentence-initial words are back in play.
+const NAME_MENTION_STOPWORDS = new Set([
+  'okay', 'ok', 'so', 'now', 'well', 'great', 'good', 'alright', 'first',
+  'next', 'then', 'today', 'yes', 'no', 'yeah', 'yep', 'nope', 'actually',
+  'basically', 'obviously', 'remember', 'also', 'again', 'ready', 'here',
+  'there', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday',
+  'saturday', 'sunday', 'january', 'february', 'march', 'april', 'may',
+  'june', 'july', 'august', 'september', 'october', 'november', 'december',
+  'math', 'science', 'english', 'history', 'reading', 'writing', 'spelling',
+])
+
+// A plain "any capitalized word" regex badly over-counts on its own: every
+// sentence's first word is capitalized regardless of content, and common
+// capitalized interjections ("Okay", "Great", "Now") show up constantly in
+// classroom talk — on a real transcript this alone can produce a count
+// like "20" for a 90-second clip with zero actual names said. Genuine
+// names are capitalized wherever they land in a sentence, while ordinary
+// words are (almost) only capitalized by sentence position, so mid-
+// sentence capitalization plus a known non-name stopword list rules out
+// most of that noise. But a sentence's first word can't just be skipped
+// outright either — "Sarah, can you..." (direct address) is one of the
+// most common ways a teacher actually says a student's name, and it's
+// always the sentence's first word. The distinguishing signal kept here:
+// a sentence-initial capitalized word only counts if it's immediately
+// followed by a comma (the vocative-address pattern) — an ordinary
+// sentence-starter like "Now, let's..." or "Okay, everyone..." has that
+// same comma shape, which is exactly why the stopword list still applies
+// to it too. Still a heuristic, not verified against a roster — like
+// every other count in this file, it's a suggestion for the coach to
+// confirm, not a fact.
+function countNameMentions(text: string): number {
+  let count = 0
+  for (const { sentence } of splitSentences(text)) {
+    const words = sentence.split(/\s+/)
+    for (let i = 0; i < words.length; i++) {
+      const raw = words[i]
+      const cleaned = raw.replace(/[^A-Za-z]/g, '')
+      if (!/^[A-Z][a-z]+$/.test(cleaned)) continue
+      if (NAME_MENTION_STOPWORDS.has(cleaned.toLowerCase())) continue
+      if (i === 0 && !raw.endsWith(',')) continue
+      count++
+    }
+  }
+  return count
+}
 
 function countPhraseMatches(text: string, phrases: string[]): number {
   const lowerText = text.toLowerCase()
@@ -497,8 +544,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       prevTeacherAskedFollowingStudent = askedQuestionThisSegment && precedingWasStudent
       if (askedQuestionThisSegment) lastTeacherQuestionEndSec = segment.endSec
 
-      const nameMentions = segment.text.match(NAME_MENTION_PATTERN)
-      if (nameMentions) nameMentionCount += nameMentions.length
+      nameMentionCount += countNameMentions(segment.text)
     } else {
       prevTeacherAskedFollowingStudent = false
     }
