@@ -2,6 +2,7 @@ import { Router } from 'express'
 import type { Request, Response } from 'express'
 import { requireAdmin, requireSuperadmin } from '../lib/auth.ts'
 import { CHALLENGE_TYPES, MESSAGE_PURPOSES } from '../lib/communicationOptions.ts'
+import { PRIORITY_LABELS, topPriorityForSession } from '../lib/coachingPriority.ts'
 import { generateUniqueJoinCode, normalizeJoinCode, parseAdminEmails, syncOrganizationRoles } from '../lib/organization.ts'
 import { prisma } from '../lib/prisma.ts'
 import { SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
@@ -134,6 +135,30 @@ adminRouter.get('/overview', async (req, res) => {
     messagePurposeTally.set(m.purpose, (messagePurposeTally.get(m.purpose) ?? 0) + 1)
   }
 
+  // Lesson Debrief: which single coaching-priority theme each analyzed
+  // session's own numbers point to, tallied the same way as the report
+  // itself would rank it (see coachingPriority.ts) — never a session's
+  // actual recording, transcript, or notes, only which of five fixed
+  // themes its measured metrics land on.
+  const audioSessions = await prisma.audioSession.findMany({
+    where: { status: { in: ['analyzed', 'locked'] }, ...relatedUserScope },
+    select: {
+      teacherTalkPct: true,
+      studentTalkPct: true,
+      questionCount: true,
+      higherOrderPct: true,
+      avgWaitTimeSec: true,
+      cfuCount: true,
+      durationSec: true,
+      metricsDetail: true,
+    },
+  })
+  const priorityTally = new Map<string, number>(PRIORITY_LABELS.map((p) => [p, 0]))
+  for (const s of audioSessions) {
+    const top = topPriorityForSession(s)
+    if (top) priorityTally.set(top, (priorityTally.get(top) ?? 0) + 1)
+  }
+
   const recentRated = attempts.filter((a) => a.rating != null && a.createdAt >= weekStart && a.createdAt < weekEnd)
   const priorRated = attempts.filter(
     (a) => a.rating != null && a.createdAt >= priorWeekStart && a.createdAt < weekStart,
@@ -167,6 +192,7 @@ adminRouter.get('/overview', async (req, res) => {
     categoryTally: Object.fromEntries(categoryTally),
     challengeTally: Object.fromEntries(challengeTally),
     messagePurposeTally: Object.fromEntries(messagePurposeTally),
+    priorityTally: Object.fromEntries(priorityTally),
     growth: {
       recentStrong: strongCount(recentRated),
       recentTotal: recentRated.length,

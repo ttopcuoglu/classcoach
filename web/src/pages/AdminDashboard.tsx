@@ -276,6 +276,14 @@ function MemberRow({
   )
 }
 
+const PRIORITY_LABELS: Record<string, string> = {
+  'talk-balance': 'Talk time balance',
+  questioning: 'Higher-order questioning',
+  'wait-time': 'Wait time after questions',
+  cfu: 'Checking for understanding',
+  feedback: 'Specific feedback',
+}
+
 function TallyBarList({
   title,
   tally,
@@ -445,6 +453,19 @@ function OverviewPanel({ isSuperadmin }: { isSuperadmin: boolean }) {
             tally={overview.messagePurposeTally}
             labelFor={(v) => purposeLabel(v) ?? v}
           />
+
+          <div>
+            <TallyBarList
+              title={`Lesson Debrief: most common coaching priority (${overview.organizationName ?? 'all teachers'})`}
+              tally={overview.priorityTally}
+              labelFor={(v) => PRIORITY_LABELS[v] ?? v}
+            />
+            <p className="mt-2 text-xs text-ink-soft">
+              Based on each analyzed session's own measured numbers — a short recording or one with too little
+              evidence on a given metric doesn&rsquo;t count toward any priority, so totals here can be lower than
+              the number of sessions recorded.
+            </p>
+          </div>
 
           {overview.scope === 'organization' && (
             <MembersList organizationId={selectedOrgId || undefined} isSuperadmin={isSuperadmin} />
