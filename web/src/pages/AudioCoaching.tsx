@@ -2165,26 +2165,39 @@ function ReflectTab({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
   }, [conversation, sending])
 
-  return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">What stood out this session</h2>
-        {!highlights || highlights.length === 0 ? (
-          <p className="mt-3 text-sm text-ink-soft">Nothing stood out enough this session to flag here.</p>
-        ) : (
-          <div className="mt-3 flex flex-col gap-2">
-            {highlights.map((h, i) => (
-              <div key={i} className="rounded-xl border border-border bg-surface p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
-                  {formatHighlightHeadline(h)}
-                </p>
-                <p className="mt-1.5 text-sm text-ink">"{h.excerpt}"</p>
-              </div>
-            ))}
+  const highlightsList =
+    !highlights || highlights.length === 0 ? (
+      <p className="mt-3 text-sm text-ink-soft">Nothing stood out enough this session to flag here.</p>
+    ) : (
+      <div className="mt-3 flex flex-col gap-2">
+        {highlights.map((h, i) => (
+          <div key={i} className="rounded-xl border border-border bg-surface p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+              {formatHighlightHeadline(h)}
+            </p>
+            <p className="mt-1.5 text-sm text-ink">"{h.excerpt}"</p>
           </div>
-        )}
+        ))}
       </div>
+    )
 
+  return (
+    <div className="flex flex-col gap-6 md:flex-row md:items-start md:gap-8">
+      {/* Evidence, in its own narrow column on desktop; collapsed into a
+          disclosure above the chat on mobile, so it's reachable without
+          eating the screen the chat needs. */}
+      <div className="hidden md:block md:w-64 md:shrink-0">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">What stood out this session</h2>
+        {highlightsList}
+      </div>
+      <details className="rounded-2xl border border-border bg-surface p-4 md:hidden">
+        <summary className="cursor-pointer text-sm font-semibold uppercase tracking-wide text-ink-soft">
+          What stood out this session
+        </summary>
+        {highlightsList}
+      </details>
+
+      <div className="flex min-w-0 flex-1 flex-col gap-6">
       <div className="flex flex-col rounded-2xl border border-border bg-surface">
         <div ref={scrollRef} className="flex max-h-96 min-h-[10rem] flex-col gap-3 overflow-y-auto p-4">
           {!started ? (
@@ -2264,26 +2277,27 @@ function ReflectTab({
             ) : null}
           </form>
         )}
-      </div>
 
-      <div className="rounded-2xl border border-border bg-surface p-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-ink">Your reflection</h2>
-          {started && !locked && (
+        {started && !locked && (
+          <div className="border-t border-border p-4">
             <button
               type="button"
               onClick={onSummarize}
               disabled={summarizing}
-              className="text-xs font-medium text-brand-600 hover:text-brand-700 disabled:opacity-60"
+              className="w-full rounded-lg border border-brand-300 bg-brand-50 px-4 py-2.5 text-sm font-semibold text-brand-600 transition-colors hover:border-brand-400 hover:bg-brand-100 disabled:opacity-60"
             >
-              {summarizing ? 'Summarizing...' : 'Fill in from our conversation'}
+              {summarizing ? 'Turning this into notes...' : 'Turn this into notes when you’re ready'}
             </button>
-          )}
-        </div>
-        {summarizeError && <p className="mt-1 text-xs text-warm-500">{summarizeError}</p>}
+            {summarizeError && <p className="mt-2 text-xs text-warm-500">{summarizeError}</p>}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-border bg-surface p-6">
+        <h2 className="text-sm font-semibold text-ink">Your reflection</h2>
         <div className="mt-4 flex flex-col gap-4">
           <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-ink">What went well</span>
+            <span className="text-sm font-medium text-ink">What I noticed</span>
             <textarea
               value={strengths}
               onChange={(e) => onStrengthsChange(e.target.value)}
@@ -2293,7 +2307,7 @@ function ReflectTab({
             />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-ink">What you want to work on</span>
+            <span className="text-sm font-medium text-ink">What I want to explore</span>
             <textarea
               value={growthAreas}
               onChange={(e) => onGrowthAreasChange(e.target.value)}
@@ -2303,7 +2317,7 @@ function ReflectTab({
             />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-ink">One thing to try next time</span>
+            <span className="text-sm font-medium text-ink">My next step</span>
             <textarea
               value={nextStep}
               onChange={(e) => onNextStepChange(e.target.value)}
@@ -2346,6 +2360,7 @@ function ReflectTab({
           </div>
         )}
         {error && <p className="mt-3 text-sm text-warm-500">{error}</p>}
+      </div>
       </div>
     </div>
   )

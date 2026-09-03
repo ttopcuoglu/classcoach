@@ -24,12 +24,12 @@ Write in plain text only — no markdown (no **bold**, no # headings).
 
 Respond with exactly these three sections and nothing outside them:
 
-<strengths>
-1-2 specific strengths that came up in the conversation.
-</strengths>
-<growth_areas>
-1-2 growth areas that came up — at most two, don't overwhelm.
-</growth_areas>
+<noticed>
+1-2 specific things the teacher noticed or that came up as going well in the conversation.
+</noticed>
+<want_to_explore>
+1-2 things the teacher wants to explore or work on — at most two, don't overwhelm.
+</want_to_explore>
 <next_step>
 One concrete, small next step the teacher landed on or that fits what they said.
 </next_step>
@@ -471,8 +471,8 @@ audioSessionsRouter.post('/:id/reflect-summary', async (req, res) => {
     flagIfUnsafe(text, 'audioSessions.reflectSummary')
 
     res.json({
-      strengths: extractTag(text, 'strengths'),
-      growthAreas: extractTag(text, 'growth_areas'),
+      strengths: extractTag(text, 'noticed'),
+      growthAreas: extractTag(text, 'want_to_explore'),
       nextStep: extractTag(text, 'next_step'),
     })
   } catch (error) {
