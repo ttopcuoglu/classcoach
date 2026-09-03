@@ -434,6 +434,7 @@ export type AudioSession = {
   reflectConversation: AudioReflectMessage[] | null
   lessonContent: AudioLessonContent | null
   contentNotes: AudioContentNotes | null
+  classSummary: string | null
   strengths: string | null
   growthAreas: string | null
   nextStep: string | null
@@ -975,4 +976,8 @@ export function summarizeReflectConversation(
 
 export function generateContentNotes(id: string): Promise<AudioSession> {
   return request(`/api/audio-sessions/${id}/content-notes`, { method: 'POST' })
+}
+
+export function generateClassSummary(id: string): Promise<AudioSession> {
+  return request(`/api/audio-sessions/${id}/class-summary`, { method: 'POST' })
 }

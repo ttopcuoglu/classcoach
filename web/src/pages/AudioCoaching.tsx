@@ -8,6 +8,7 @@ import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import {
   createAudioSession,
   deleteAudioSession,
+  generateClassSummary,
   generateContentNotes,
   getAudioSession,
   getAudioSessions,
@@ -738,27 +739,6 @@ function CoachNote({ text }: { text: string | null }) {
   )
 }
 
-// Stitches the existing per-category coach notes into one short narrative —
-// no new Claude call, since these sentences are already grounded in
-// measured/zero data and following the app's no-overclaiming rules. Folded
-// directly into SummaryTab's combined snapshot card rather than rendered as
-// its own card.
-// A recording this short doesn't support the full report's five elements
-// with more caveats bolted on — one honest paragraph, built the same
-// deterministic-template way as every other coach note in this file (no
-// new Claude call), replaces the snapshot/evidence-quality/noticed trio.
-function buildTinyRecordingSnapshot(session: AudioSessionWithSegments, coverage: ReturnType<typeof getCoverage>): string {
-  const parts: string[] = [`This is a short excerpt (${formatTime(coverage.recordedSec)}), not a full lesson.`]
-  if (session.questionCount != null && session.questionCount > 0) {
-    parts.push(`It includes ${session.questionCount} detected question${session.questionCount === 1 ? '' : 's'}.`)
-  }
-  if (session.studentTalkPct == null || session.studentTalkPct === 0) {
-    parts.push('Student voice was not separately identified in this clip.')
-  }
-  parts.push("Review the moments below and add your own classroom context before drawing any broader conclusions.")
-  return parts.join(' ')
-}
-
 // Summary's "spotlight" card — one themed headline + the existing coach
 // note as its body, picking a single topic rather than stitching all
 // three insights into one paragraph. Deterministic (no new Claude call),
@@ -1340,6 +1320,8 @@ function ReportPanel({
   const [summarizeError, setSummarizeError] = useState<string | null>(null)
   const [contentNotesSending, setContentNotesSending] = useState(false)
   const [contentNotesError, setContentNotesError] = useState<string | null>(null)
+  const [classSummarySending, setClassSummarySending] = useState(false)
+  const hasAttemptedClassSummaryRef = useRef(false)
 
   async function handleSaveNotes() {
     setSaving(true)
@@ -1435,6 +1417,20 @@ function ReportPanel({
       setContentNotesSending(false)
     }
   }
+
+  // Auto-generates the class content summary once, the first time the
+  // teacher lands on Summary — no button, but capped at one attempt per
+  // mount (via the ref) so a Claude/API hiccup doesn't retry in a loop,
+  // and skipped for locked sessions since they can never accept the write.
+  useEffect(() => {
+    if (tab !== 'summary' || locked || session.classSummary != null || hasAttemptedClassSummaryRef.current) return
+    hasAttemptedClassSummaryRef.current = true
+    setClassSummarySending(true)
+    generateClassSummary(session.id)
+      .then((updated) => onUpdate({ ...session, ...updated }))
+      .catch(() => {})
+      .finally(() => setClassSummarySending(false))
+  }, [tab, locked, session, onUpdate])
 
   const metrics = session.metricsDetail ?? {}
   const lessonContent = session.lessonContent
@@ -1579,6 +1575,8 @@ function ReportPanel({
           talkInsight={talkInsight}
           questioningInsight={questioningInsight}
           cfuInsight={cfuInsight}
+          classSummary={session.classSummary}
+          classSummarySending={classSummarySending}
           onGoReflect={() => setTab('reflect')}
           onNavigateInsights={(section) => handleViewSource('insights', '', section)}
         />
@@ -1736,6 +1734,8 @@ function SummaryTab({
   talkInsight,
   questioningInsight,
   cfuInsight,
+  classSummary,
+  classSummarySending,
   onGoReflect,
   onNavigateInsights,
 }: {
@@ -1751,58 +1751,61 @@ function SummaryTab({
   talkInsight: string | null
   questioningInsight: string | null
   cfuInsight: string | null
+  classSummary: string | null
+  classSummarySending: boolean
   onGoReflect: () => void
   onNavigateInsights: (section: InsightsSection) => void
 }) {
   const strength = pickTop(buildStrengthCandidates(session, cfuMetric, feedbackRatio, higherOrderRatio))
   const priority = pickTop(buildPriorityCandidates(session, cfuMetric, feedbackRatio, higherOrderRatio))
-
-  const grid = (
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-      <WhoWasHeardCard
-        teacherPct={session.teacherTalkPct}
-        studentPct={session.studentTalkPct}
-        silencePct={silencePct}
-        onExplore={() => onNavigateInsights('talk')}
-      />
-      <QuestionsOpenedCard
-        questionsMetric={questionsMetric}
-        followUpMetric={followUpMetric}
-        onExplore={() => onNavigateInsights('questions')}
-      />
-      <MomentsCard
-        strength={strength}
-        priority={priority}
-        coverage={coverage}
-        onViewDiscourse={() => onNavigateInsights('talk')}
-      />
-      <NextStepCard priority={priority} onSetFocus={onFocusMetricChange} onGoReflect={onGoReflect} />
-    </div>
-  )
-
-  if (coverage.isTinyRecording) {
-    return (
-      <div className="flex flex-col gap-6">
-        <div className="rounded-2xl border border-border bg-surface p-6">
-          <h2 className="text-lg font-semibold text-ink">A quick look at this excerpt</h2>
-          <p className="mt-2 text-sm text-ink-soft">{buildTinyRecordingSnapshot(session, coverage)}</p>
-        </div>
-        {grid}
-      </div>
-    )
-  }
-
+  // Tiny recordings omit Moments entirely when there's nothing real to
+  // rank, rather than showing its empty-state fallback card — everywhere
+  // else, MomentsCard's own fallback is fine.
+  const showMoments = !coverage.isTinyRecording || strength != null || priority != null
   const spotlight = buildSpotlight(talkInsight, questioningInsight, cfuInsight)
 
   return (
     <div className="flex flex-col gap-6">
-      {spotlight && (
+      {classSummary ? (
         <div className="rounded-2xl border border-border bg-surface p-6">
-          <h2 className="text-lg font-semibold text-ink">{spotlight.headline}</h2>
-          <p className="mt-2 text-sm text-ink-soft">{spotlight.body}</p>
+          <h2 className="text-lg font-semibold text-ink">This lesson</h2>
+          <p className="mt-2 text-sm text-ink-soft">{classSummary}</p>
         </div>
+      ) : classSummarySending ? (
+        <div className="rounded-2xl border border-border bg-surface p-6">
+          <p className="text-sm text-ink-soft">Putting together a summary of this lesson...</p>
+        </div>
+      ) : (
+        spotlight && (
+          <div className="rounded-2xl border border-border bg-surface p-6">
+            <h2 className="text-lg font-semibold text-ink">{spotlight.headline}</h2>
+            <p className="mt-2 text-sm text-ink-soft">{spotlight.body}</p>
+          </div>
+        )
       )}
-      {grid}
+
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <WhoWasHeardCard
+          teacherPct={session.teacherTalkPct}
+          studentPct={session.studentTalkPct}
+          silencePct={silencePct}
+          onExplore={() => onNavigateInsights('talk')}
+        />
+        <QuestionsOpenedCard
+          questionsMetric={questionsMetric}
+          followUpMetric={followUpMetric}
+          onExplore={() => onNavigateInsights('questions')}
+        />
+        {showMoments && (
+          <MomentsCard
+            strength={strength}
+            priority={priority}
+            coverage={coverage}
+            onViewDiscourse={() => onNavigateInsights('talk')}
+          />
+        )}
+        <NextStepCard priority={priority} onSetFocus={onFocusMetricChange} onGoReflect={onGoReflect} />
+      </div>
     </div>
   )
 }

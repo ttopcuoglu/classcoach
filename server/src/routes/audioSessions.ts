@@ -551,6 +551,105 @@ audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
   }
 })
 
+function buildClassSummarySystemPrompt(exhibits: { text: string; timestampSec: number }[], recordedSec: number): string {
+  const durationGuidance =
+    recordedSec < 120
+      ? "This is a very short clip — at this length, write exactly one plain, honest sentence about what little was captured. Do not invent a strength if none is clearly evidenced here; it's fine, and expected, to say there isn't much to go on yet."
+      : recordedSec < 600
+        ? 'This is a short excerpt, not a full lesson — keep the summary modest (1-2 sentences), clearly scoped to what\'s shown below, and avoid sweeping claims.'
+        : 'This is a substantial recording — write 2-3 sentences covering both what the class was working on and one genuine strength.'
+
+  return `You are a warm, encouraging instructional coach writing a short summary of a teacher's own recorded lesson, for the teacher to read about their own class. Two things this must do: describe, in plain general terms, what the class was actually discussing or working on, and name one genuine strength you can see real evidence of below. Be encouraging, but realistic — never manufacture praise that isn't backed by the excerpts below, and never claim more confidence than how much (or how little) was actually captured supports.
+
+${durationGuidance}
+
+Below are numbered excerpts of what the teacher said, in order. Paraphrase only — do not quote them directly or use quotation marks, and never state a specific number, name, or fact that isn't evidenced below.
+
+${exhibits.map((e, i) => `[${i + 1}] ${e.text}`).join('\n')}
+
+Write in plain text only, no markdown.
+
+Respond with exactly this block and nothing else:
+<class_summary>
+Your 1-3 sentence summary here.
+</class_summary>
+${CORE_COACHING_RULES}
+${TRANSCRIPT_RELIABILITY_NOTICE}`
+}
+
+audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
+  const session = await prisma.audioSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+    include: { segments: true },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  if (session.status === 'locked') {
+    res.status(403).json({ error: 'This report is locked and can no longer be edited.' })
+    return
+  }
+
+  const segments: Segment[] = session.segments.map((s) => ({
+    speakerLabel: s.speakerLabel,
+    startSec: s.startSec,
+    endSec: s.endSec,
+    text: s.text,
+  }))
+  const exhibits = buildContentExhibits(segments)
+
+  // Genuinely nothing to summarize — say so plainly, no Claude call, and
+  // cache that answer so this session never re-attempts. This is the
+  // literal "don't sugarcoat" case: a recording too brief or too unclear
+  // to summarize gets told that, not a manufactured paragraph.
+  if (exhibits.length === 0) {
+    const updated = await prisma.audioSession.update({
+      where: { id: session.id },
+      data: { classSummary: "This recording didn't capture enough clear speech to summarize what the class covered." },
+      include: { segments: { orderBy: { startSec: 'asc' } } },
+    })
+    res.json(updated)
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'class_summary')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 300,
+      system: buildClassSummarySystemPrompt(exhibits, session.durationSec ?? 0),
+      messages: [{ role: 'user', content: 'Write the summary now.' }],
+    })
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+    flagIfUnsafe(text, 'audioSessions.classSummary')
+
+    const classSummary = extractTag(text, 'class_summary')
+    if (!classSummary) {
+      res.status(502).json({ error: 'Could not generate a class summary. Please try again.' })
+      return
+    }
+
+    const updated = await prisma.audioSession.update({
+      where: { id: session.id },
+      data: { classSummary },
+      include: { segments: { orderBy: { startSec: 'asc' } } },
+    })
+    res.json(updated)
+  } catch (error) {
+    console.error('[audio-sessions] class summary failed:', error)
+    res.status(502).json({ error: 'Could not generate a class summary. Please try again.' })
+  }
+})
+
 audioSessionsRouter.delete('/:id', async (req, res) => {
   const { count } = await prisma.audioSession.deleteMany({
     where: { id: req.params.id, userId: req.user!.userId },

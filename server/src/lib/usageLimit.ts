@@ -23,6 +23,7 @@ export type UsageAction =
   | 'conversation_plan_chat'
   | 'talk_to_me'
   | 'talk_to_me_chat'
+  | 'class_summary'
 
 // Counts today's Claude-costing calls for this user and logs this one if
 // they're still under the daily cap. One shared API key funds every

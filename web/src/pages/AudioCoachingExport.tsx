@@ -119,6 +119,12 @@ export default function AudioCoachingExport() {
 
               return (
                 <>
+                  {session.classSummary && (
+                    <div className="mt-4 break-inside-avoid rounded-xl border border-border bg-surface p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">This lesson</p>
+                      <p className="mt-1.5 text-sm text-ink">{session.classSummary}</p>
+                    </div>
+                  )}
                   <p className="mt-4 break-inside-avoid text-xs font-semibold uppercase tracking-wide text-ink-soft">
                     Coverage: {formatTime(coverage.recordedSec)} recorded of {formatTime(coverage.totalSec)}
                     {coverage.uncapturedPhases.length > 0 && (

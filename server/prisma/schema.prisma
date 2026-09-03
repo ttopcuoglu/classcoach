@@ -353,6 +353,12 @@ model AudioSession {
   // until the teacher explicitly generates it (Lesson Content tab).
   contentNotes     Json?
 
+  // Claude-generated summary of what the class covered + a genuine
+  // strength, auto-generated once on the teacher's first Summary view and
+  // cached forever after. Null = not yet attempted, or the one retryable
+  // failure mode (a Claude/API error) — see the /:id/class-summary route.
+  classSummary     String?
+
   strengths        String?
   growthAreas      String?
   nextStep         String?
