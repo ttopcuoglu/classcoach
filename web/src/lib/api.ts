@@ -109,9 +109,17 @@ export type AdminOverview = {
   organizationName: string | null
   totalTeachers: number
   activeThisWeek: number
+  activitiesThisWeek: number
+  activitiesPriorWeek: number
   weekOffset: number
   weekStart: string
   weekEnd: string
+  featureActivity: {
+    lessonDebrief: number
+    lessonPlanning: number
+    communications: number
+    practiceReflect: number
+  }
   categoryTally: Record<string, TallyEntry>
   challengeTally: Record<string, TallyEntry>
   messagePurposeTally: Record<string, TallyEntry>

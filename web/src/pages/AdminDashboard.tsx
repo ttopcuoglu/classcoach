@@ -21,6 +21,7 @@ import {
 } from '../lib/api'
 import { categoryLabel } from '../lib/categories'
 import { challengeLabel, purposeLabel } from '../lib/communicationOptions'
+import { LockIcon } from '../components/icons'
 
 function formatShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
@@ -32,19 +33,35 @@ const inputClass =
 const primaryButtonClass =
   'rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50'
 
-function pillClass(active: boolean) {
-  return `rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-    active
-      ? 'border-brand-500 bg-brand-50 text-brand-600'
-      : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
-  }`
+type ReportingTab = 'overview' | 'engagement' | 'themes'
+type Tab = ReportingTab | 'organizations' | 'users'
+
+const REPORTING_NAV: { id: ReportingTab; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'engagement', label: 'Engagement' },
+  { id: 'themes', label: 'Coaching themes' },
+]
+
+const TAB_META: Record<ReportingTab, { title: string; subtitle: string }> = {
+  overview: { title: 'Overview', subtitle: 'A clear picture of participation and coaching activity.' },
+  engagement: { title: 'Engagement', subtitle: 'How consistently your staff is using Wivoza.' },
+  themes: { title: 'Coaching themes', subtitle: 'Common challenges and practice patterns across your staff.' },
 }
 
-type Tab = 'overview' | 'organizations' | 'users'
+function navButtonClass(active: boolean) {
+  return `rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
+    active ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:bg-canvas hover:text-ink'
+  }`
+}
 
 export default function AdminDashboard() {
   const [me, setMe] = useState<UserProfile | null>(null)
   const [tab, setTab] = useState<Tab>('overview')
+  const [overview, setOverview] = useState<AdminOverview | null>(null)
+  const [overviewError, setOverviewError] = useState<string | null>(null)
+  const [orgs, setOrgs] = useState<Organization[]>([])
+  const [selectedOrgId, setSelectedOrgId] = useState('')
+  const [weekOffset, setWeekOffset] = useState(0)
 
   useEffect(() => {
     getMe()
@@ -54,32 +71,180 @@ export default function AdminDashboard() {
 
   const isSuperadmin = me?.role === 'superadmin'
 
+  useEffect(() => {
+    if (isSuperadmin) {
+      getOrganizations()
+        .then(setOrgs)
+        .catch(() => {})
+    }
+  }, [isSuperadmin])
+
+  useEffect(() => {
+    setOverview(null)
+    setOverviewError(null)
+    getAdminOverview({ organizationId: selectedOrgId || undefined, weekOffset })
+      .then(setOverview)
+      .catch(() => setOverviewError('Could not load the admin overview.'))
+  }, [selectedOrgId, weekOffset])
+
+  function handleOrgChange(id: string) {
+    setSelectedOrgId(id)
+    setWeekOffset(0)
+  }
+
+  const isReportingTab = tab === 'overview' || tab === 'engagement' || tab === 'themes'
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Admin Overview</h1>
-        <span className="inline-flex w-fit items-center rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-600">
-          Aggregate, staff-wide trends only — no individual teacher's attempts or ratings are ever shown here
-        </span>
+    <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+      <nav className="flex shrink-0 flex-col gap-6 lg:w-52">
+        <div>
+          <p className="px-3 text-xs font-semibold uppercase tracking-wide text-ink-soft">Reporting</p>
+          <div className="mt-1 flex flex-col gap-0.5">
+            {REPORTING_NAV.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setTab(item.id)}
+                className={navButtonClass(tab === item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {isSuperadmin && (
+          <div>
+            <p className="px-3 text-xs font-semibold uppercase tracking-wide text-ink-soft">Administration</p>
+            <div className="mt-1 flex flex-col gap-0.5">
+              <button
+                type="button"
+                onClick={() => setTab('organizations')}
+                className={navButtonClass(tab === 'organizations')}
+              >
+                Organizations
+              </button>
+              <button type="button" onClick={() => setTab('users')} className={navButtonClass(tab === 'users')}>
+                Users &amp; access
+              </button>
+            </div>
+          </div>
+        )}
+      </nav>
+
+      <div className="flex min-w-0 flex-1 flex-col gap-6">
+        {isReportingTab && (
+          <ReportingHeader
+            tab={tab}
+            overview={overview}
+            orgs={orgs}
+            selectedOrgId={selectedOrgId}
+            onOrgChange={handleOrgChange}
+            weekOffset={weekOffset}
+            onWeekOffsetChange={setWeekOffset}
+            isSuperadmin={isSuperadmin}
+          />
+        )}
+
+        {overviewError && <p className="text-sm text-warm-500">{overviewError}</p>}
+
+        {isReportingTab && !overview && !overviewError && <p className="text-sm text-ink-soft">Loading...</p>}
+
+        {tab === 'overview' && overview && <OverviewPanel overview={overview} onNavigateThemes={() => setTab('themes')} />}
+        {tab === 'engagement' && overview && (
+          <EngagementPanel overview={overview} selectedOrgId={selectedOrgId} isSuperadmin={isSuperadmin} />
+        )}
+        {tab === 'themes' && overview && <CoachingThemesPanel overview={overview} />}
+        {tab === 'organizations' && <OrganizationsPanel />}
+        {tab === 'users' && <UsersPanel />}
+      </div>
+    </div>
+  )
+}
+
+function ReportingHeader({
+  tab,
+  overview,
+  orgs,
+  selectedOrgId,
+  onOrgChange,
+  weekOffset,
+  onWeekOffsetChange,
+  isSuperadmin,
+}: {
+  tab: ReportingTab
+  overview: AdminOverview | null
+  orgs: Organization[]
+  selectedOrgId: string
+  onOrgChange: (id: string) => void
+  weekOffset: number
+  onWeekOffsetChange: (updater: (w: number) => number) => void
+  isSuperadmin: boolean
+}) {
+  const meta = TAB_META[tab]
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          {overview?.organizationName ? (
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{overview.organizationName}</p>
+          ) : (
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Platform-wide</p>
+          )}
+          <h1 className="mt-0.5 text-2xl font-semibold text-ink md:text-3xl">{meta.title}</h1>
+          <p className="mt-1 text-sm text-ink-soft">{meta.subtitle}</p>
+        </div>
+
+        <div className="flex flex-col items-end gap-2">
+          {isSuperadmin && orgs.length > 0 && (
+            <select
+              value={selectedOrgId}
+              onChange={(e) => onOrgChange(e.target.value)}
+              className="rounded-lg border border-border bg-canvas px-3 py-1.5 text-sm text-ink focus:border-brand-400 focus:outline-none"
+            >
+              <option value="">Platform-wide</option>
+              {orgs.map((org) => (
+                <option key={org.id} value={org.id}>
+                  {org.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onWeekOffsetChange((w) => w + 1)}
+              className="rounded-lg border border-border px-2.5 py-1.5 text-sm text-ink-soft hover:border-brand-400 hover:text-brand-600"
+              aria-label="Previous week"
+            >
+              ‹
+            </button>
+            <p className="text-sm font-medium text-ink">
+              {weekOffset === 0 ? 'This week' : weekOffset === 1 ? 'Last week' : `${weekOffset} weeks ago`}
+              {overview && (
+                <span className="ml-1.5 font-normal text-ink-soft">
+                  · {formatShortDate(overview.weekStart)} – {formatShortDate(overview.weekEnd)}
+                </span>
+              )}
+            </p>
+            <button
+              type="button"
+              onClick={() => onWeekOffsetChange((w) => Math.max(0, w - 1))}
+              disabled={weekOffset === 0}
+              className="rounded-lg border border-border px-2.5 py-1.5 text-sm text-ink-soft hover:border-brand-400 hover:text-brand-600 disabled:opacity-40"
+              aria-label="Next week"
+            >
+              ›
+            </button>
+          </div>
+        </div>
       </div>
 
-      {isSuperadmin && (
-        <div className="flex gap-2">
-          <button type="button" onClick={() => setTab('overview')} className={pillClass(tab === 'overview')}>
-            Overview
-          </button>
-          <button type="button" onClick={() => setTab('organizations')} className={pillClass(tab === 'organizations')}>
-            Organizations
-          </button>
-          <button type="button" onClick={() => setTab('users')} className={pillClass(tab === 'users')}>
-            Users
-          </button>
+      {tab === 'overview' && (
+        <div className="flex items-center gap-2.5 rounded-xl border border-brand-100 bg-brand-50 px-4 py-2.5 text-sm text-brand-600">
+          <LockIcon className="h-4 w-4 shrink-0" />
+          Aggregate reporting · Individual coaching stays private
         </div>
       )}
-
-      {tab === 'overview' && <OverviewPanel isSuperadmin={isSuperadmin} />}
-      {tab === 'organizations' && <OrganizationsPanel />}
-      {tab === 'users' && <UsersPanel />}
     </div>
   )
 }
@@ -103,7 +268,7 @@ function WeeklyActivityChart({ data }: { data: { weekStart: string; activeCount:
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-ink">Weekly activity</h3>
+      <h3 className="text-sm font-semibold text-ink">Weekly participation</h3>
       <p className="text-xs text-ink-soft">Active teachers per week, last {n} weeks</p>
       <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} preserveAspectRatio="none" className="mt-3">
         <path d={path} fill="none" stroke="var(--color-brand-500)" strokeWidth={2} strokeLinecap="round" />
@@ -117,6 +282,48 @@ function WeeklyActivityChart({ data }: { data: { weekStart: string; activeCount:
       <div className="mt-1 flex justify-between text-[11px] text-ink-soft">
         <span>{formatShortDate(data[0]?.weekStart)}</span>
         <span>Now</span>
+      </div>
+    </div>
+  )
+}
+
+function StatCard({ label, value, sub }: { label: string; value: string; sub: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
+      <p className="mt-1 text-2xl font-semibold text-ink">{value}</p>
+      <p className="mt-1 text-xs text-ink-soft">{sub}</p>
+    </div>
+  )
+}
+
+const FEATURE_ACTIVITY_META: Record<keyof AdminOverview['featureActivity'], { label: string; sub: string }> = {
+  lessonDebrief: { label: 'Lesson Debrief', sub: 'Analyzed classroom recordings' },
+  lessonPlanning: { label: 'Lesson Planning', sub: 'Plans generated or reviewed' },
+  communications: { label: 'Communications', sub: 'Messages, prep, and practice conversations' },
+  practiceReflect: { label: 'Practice & Ask', sub: 'Scenario practice and reflections' },
+}
+
+function FeatureActivityCard({ data }: { data: AdminOverview['featureActivity'] }) {
+  const entries = (Object.entries(data) as [keyof typeof data, number][]).sort((a, b) => b[1] - a[1])
+  const max = Math.max(1, ...entries.map(([, v]) => v))
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-5">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Activity by feature</h2>
+      <p className="text-xs text-ink-soft">All-time completed activity, not limited to the selected week</p>
+      <div className="mt-3 flex flex-col gap-3">
+        {entries.map(([key, count]) => (
+          <div key={key}>
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-sm font-medium text-ink">{FEATURE_ACTIVITY_META[key].label}</span>
+              <span className="text-sm font-semibold text-ink">{count}</span>
+            </div>
+            <div className="mt-1 h-2 overflow-hidden rounded-full bg-canvas">
+              <div className="h-full rounded-full bg-brand-500" style={{ width: `${(count / max) * 100}%` }} />
+            </div>
+            <p className="mt-0.5 text-xs text-ink-soft">{FEATURE_ACTIVITY_META[key].sub}</p>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -362,8 +569,8 @@ function TallyBarList({
   const sorted = Object.entries(tally).sort((a, b) => b[1].count - a[1].count)
   const maxCount = Math.max(1, ...sorted.map(([, v]) => v.count))
   return (
-    <div>
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">{title}</h2>
+    <div className="rounded-2xl border border-border bg-surface p-5">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{title}</h2>
       <div className="mt-3 flex flex-col gap-2">
         {sorted.map(([value, { count, teachers }]) => (
           <div key={value} className="flex items-center gap-3">
@@ -381,177 +588,147 @@ function TallyBarList({
   )
 }
 
-function OverviewPanel({ isSuperadmin }: { isSuperadmin: boolean }) {
-  const [overview, setOverview] = useState<AdminOverview | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [orgs, setOrgs] = useState<Organization[]>([])
-  const [selectedOrgId, setSelectedOrgId] = useState('')
-  const [weekOffset, setWeekOffset] = useState(0)
+function OverviewPanel({ overview, onNavigateThemes }: { overview: AdminOverview; onNavigateThemes: () => void }) {
+  const participationPct =
+    overview.totalTeachers > 0 ? Math.round((overview.activeThisWeek / overview.totalTeachers) * 100) : 0
+  const priorActiveCount =
+    overview.weeklyActivity.length >= 2 ? overview.weeklyActivity[overview.weeklyActivity.length - 2].activeCount : null
+  const activeDelta = priorActiveCount != null ? overview.activeThisWeek - priorActiveCount : null
+  const activitiesDelta = overview.activitiesThisWeek - overview.activitiesPriorWeek
 
-  useEffect(() => {
-    if (isSuperadmin) {
-      getOrganizations()
-        .then(setOrgs)
-        .catch(() => {})
-    }
-  }, [isSuperadmin])
-
-  useEffect(() => {
-    setOverview(null)
-    setError(null)
-    getAdminOverview({ organizationId: selectedOrgId || undefined, weekOffset })
-      .then(setOverview)
-      .catch(() => setError('Could not load the admin overview.'))
-  }, [selectedOrgId, weekOffset])
-
-  function handleOrgChange(id: string) {
-    setSelectedOrgId(id)
-    setWeekOffset(0)
-  }
+  const deltaText = (delta: number | null) =>
+    delta == null ? 'This week' : `${delta >= 0 ? '+' : ''}${delta} vs. previous week`
 
   return (
-    <>
-      {isSuperadmin && orgs.length > 0 && (
-        <div className="flex items-center gap-2">
-          <label htmlFor="org-select" className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-            Viewing
-          </label>
-          <select
-            id="org-select"
-            value={selectedOrgId}
-            onChange={(e) => handleOrgChange(e.target.value)}
-            className="rounded-lg border border-border bg-canvas px-3 py-1.5 text-sm text-ink focus:border-brand-400 focus:outline-none"
-          >
-            <option value="">Platform-wide</option>
-            {orgs.map((org) => (
-              <option key={org.id} value={org.id}>
-                {org.name}
-              </option>
-            ))}
-          </select>
-        </div>
+    <div className="flex flex-col gap-6">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <StatCard label="Total teachers" value={String(overview.totalTeachers)} sub="Accounts with teacher access" />
+        <StatCard label="Active teachers" value={String(overview.activeThisWeek)} sub={deltaText(activeDelta)} />
+        <StatCard
+          label="Participation"
+          value={`${participationPct}%`}
+          sub={`${overview.activeThisWeek} of ${overview.totalTeachers} teachers`}
+        />
+        <StatCard
+          label="Activities completed"
+          value={String(overview.activitiesThisWeek)}
+          sub={deltaText(activitiesDelta)}
+        />
+      </div>
+
+      <div className="rounded-2xl border border-border bg-surface p-5">
+        <WeeklyActivityChart data={overview.weeklyActivity} />
+      </div>
+
+      <FeatureActivityCard data={overview.featureActivity} />
+
+      <TallyBarList
+        title="Popular coaching topics"
+        tally={overview.priorityTally}
+        labelFor={(v) => PRIORITY_LABELS[v] ?? v}
+        totalTeachers={overview.totalTeachers}
+      />
+
+      <div className="rounded-2xl bg-brand-600 p-6 text-white">
+        <p className="text-xs font-semibold uppercase tracking-wide text-brand-100">Professional learning</p>
+        <h3 className="mt-2 text-lg font-semibold">Start with what teachers are exploring.</h3>
+        <p className="mt-1 text-sm text-white/80">
+          Use shared coaching themes to plan an optional workshop or resource collection.
+        </p>
+        <button
+          type="button"
+          onClick={onNavigateThemes}
+          className="mt-4 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-brand-600 transition-opacity hover:opacity-90"
+        >
+          Explore coaching themes →
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function EngagementPanel({
+  overview,
+  selectedOrgId,
+  isSuperadmin,
+}: {
+  overview: AdminOverview
+  selectedOrgId: string
+  isSuperadmin: boolean
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="rounded-2xl border border-border bg-surface p-5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Staff-wide growth signal</p>
+        {overview.growth.recentTotal === 0 ? (
+          <p className="mt-1 text-sm text-ink-soft">No rated practice this week yet.</p>
+        ) : (
+          <p className="mt-1 text-sm text-ink">
+            <span className="text-lg font-semibold text-ink">
+              {overview.growth.recentStrong} of {overview.growth.recentTotal}
+            </span>{' '}
+            rated practice this week showed strong technique
+            {overview.growth.priorTotal > 0
+              ? `, vs. ${overview.growth.priorStrong} of ${overview.growth.priorTotal} the week before.`
+              : '.'}
+          </p>
+        )}
+      </div>
+
+      {overview.scope === 'organization' && (
+        <MembersList organizationId={selectedOrgId || undefined} isSuperadmin={isSuperadmin} />
       )}
+    </div>
+  )
+}
 
-      {!isSuperadmin && overview?.organizationName && (
-        <p className="text-sm font-semibold text-ink">Showing data for {overview.organizationName}</p>
-      )}
+function CoachingThemesPanel({ overview }: { overview: AdminOverview }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <TallyBarList
+        title="Practice by category"
+        tally={overview.categoryTally}
+        labelFor={categoryLabel}
+        totalTeachers={overview.totalTeachers}
+      />
 
-      {error && <p className="text-sm text-warm-500">{error}</p>}
+      <TallyBarList
+        title="Conversations practiced, by challenge"
+        tally={overview.challengeTally}
+        labelFor={(v) => challengeLabel(v) ?? v}
+        totalTeachers={overview.totalTeachers}
+      />
 
-      {!overview ? (
-        <p className="text-sm text-ink-soft">Loading...</p>
-      ) : (
-        <>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setWeekOffset((w) => w + 1)}
-              className="rounded-lg border border-border px-2.5 py-1.5 text-sm text-ink-soft hover:border-brand-400 hover:text-brand-600"
-              aria-label="Previous week"
-            >
-              ‹
-            </button>
-            <p className="text-sm font-semibold text-ink">
-              {weekOffset === 0 ? 'This Week' : weekOffset === 1 ? 'Last Week' : `${weekOffset} weeks ago`}
-              <span className="ml-1.5 font-normal text-ink-soft">
-                · {formatShortDate(overview.weekStart)} – {formatShortDate(overview.weekEnd)}
-              </span>
-            </p>
-            <button
-              type="button"
-              onClick={() => setWeekOffset((w) => Math.max(0, w - 1))}
-              disabled={weekOffset === 0}
-              className="rounded-lg border border-border px-2.5 py-1.5 text-sm text-ink-soft hover:border-brand-400 hover:text-brand-600 disabled:opacity-40"
-              aria-label="Next week"
-            >
-              ›
-            </button>
-          </div>
+      <TallyBarList
+        title="Messages written, by purpose"
+        tally={overview.messagePurposeTally}
+        labelFor={(v) => purposeLabel(v) ?? v}
+        totalTeachers={overview.totalTeachers}
+      />
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-2xl border border-border bg-surface p-5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Total teachers</p>
-              <p className="mt-1 text-2xl font-semibold text-ink">{overview.totalTeachers}</p>
-            </div>
-            <div className="rounded-2xl border border-border bg-surface p-5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Active this week</p>
-              <p className="mt-1 text-2xl font-semibold text-ink">
-                {overview.activeThisWeek} of {overview.totalTeachers}
-              </p>
-            </div>
-          </div>
+      <div>
+        <TallyBarList
+          title="Lesson Debrief: most common coaching priority"
+          tally={overview.priorityTally}
+          labelFor={(v) => PRIORITY_LABELS[v] ?? v}
+          totalTeachers={overview.totalTeachers}
+        />
+        <p className="mt-2 text-xs text-ink-soft">
+          Based on each analyzed session's own measured numbers — a short recording or one with too little evidence
+          on a given metric doesn&rsquo;t count toward any priority, so totals here can be lower than the number of
+          sessions recorded.
+        </p>
+      </div>
 
-          <div className="rounded-2xl border border-border bg-surface p-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Staff-wide growth signal</p>
-            {overview.growth.recentTotal === 0 ? (
-              <p className="mt-1 text-sm text-ink-soft">No rated practice this week yet.</p>
-            ) : (
-              <p className="mt-1 text-sm text-ink">
-                <span className="text-lg font-semibold text-ink">
-                  {overview.growth.recentStrong} of {overview.growth.recentTotal}
-                </span>{' '}
-                rated practice this week showed strong technique
-                {overview.growth.priorTotal > 0
-                  ? `, vs. ${overview.growth.priorStrong} of ${overview.growth.priorTotal} the week before.`
-                  : '.'}
-              </p>
-            )}
-          </div>
+      <InstructionalAveragesCard data={overview.instructionalAverages} />
 
-          <div className="rounded-2xl border border-border bg-surface p-5">
-            <WeeklyActivityChart data={overview.weeklyActivity} />
-          </div>
-
-          <TallyBarList
-            title={`Practice by category (${overview.organizationName ?? 'all teachers'})`}
-            tally={overview.categoryTally}
-            labelFor={categoryLabel}
-            totalTeachers={overview.totalTeachers}
-          />
-
-          <TallyBarList
-            title={`Conversations practiced, by challenge (${overview.organizationName ?? 'all teachers'})`}
-            tally={overview.challengeTally}
-            labelFor={(v) => challengeLabel(v) ?? v}
-            totalTeachers={overview.totalTeachers}
-          />
-
-          <TallyBarList
-            title={`Messages written, by purpose (${overview.organizationName ?? 'all teachers'})`}
-            tally={overview.messagePurposeTally}
-            labelFor={(v) => purposeLabel(v) ?? v}
-            totalTeachers={overview.totalTeachers}
-          />
-
-          <div>
-            <TallyBarList
-              title={`Lesson Debrief: most common coaching priority (${overview.organizationName ?? 'all teachers'})`}
-              tally={overview.priorityTally}
-              labelFor={(v) => PRIORITY_LABELS[v] ?? v}
-              totalTeachers={overview.totalTeachers}
-            />
-            <p className="mt-2 text-xs text-ink-soft">
-              Based on each analyzed session's own measured numbers — a short recording or one with too little
-              evidence on a given metric doesn&rsquo;t count toward any priority, so totals here can be lower than
-              the number of sessions recorded.
-            </p>
-          </div>
-
-          <InstructionalAveragesCard data={overview.instructionalAverages} />
-
-          <TallyBarList
-            title={`Content specialist notes, by theme (${overview.organizationName ?? 'all teachers'})`}
-            tally={overview.contentNoteTally}
-            labelFor={(v) => v}
-            totalTeachers={overview.totalTeachers}
-          />
-
-          {overview.scope === 'organization' && (
-            <MembersList organizationId={selectedOrgId || undefined} isSuperadmin={isSuperadmin} />
-          )}
-        </>
-      )}
-    </>
+      <TallyBarList
+        title="Content specialist notes, by theme"
+        tally={overview.contentNoteTally}
+        labelFor={(v) => v}
+        totalTeachers={overview.totalTeachers}
+      />
+    </div>
   )
 }
 

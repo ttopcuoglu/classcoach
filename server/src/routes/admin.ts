@@ -109,6 +109,13 @@ adminRouter.get('/overview', async (req, res) => {
 
   const totalTeachers = await prisma.user.count({ where: { role: 'teacher', ...userScope } })
 
+  const activitiesThisWeek = await prisma.usageLog.count({
+    where: { createdAt: { gte: weekStart, lt: weekEnd }, ...relatedUserScope },
+  })
+  const activitiesPriorWeek = await prisma.usageLog.count({
+    where: { createdAt: { gte: priorWeekStart, lt: weekStart }, ...relatedUserScope },
+  })
+
   const activeUserIds = await prisma.usageLog.findMany({
     where: { createdAt: { gte: weekStart, lt: weekEnd }, ...relatedUserScope },
     select: { userId: true },
@@ -185,6 +192,24 @@ adminRouter.get('/overview', async (req, res) => {
   for (const s of audioSessions) {
     const top = topPriorityForSession(s)
     if (top) priorityTally.record(top, s.userId)
+  }
+
+  // All-time cumulative activity per feature area — same "not scoped to the
+  // selected week" convention as the tallies above, for the Overview tab's
+  // feature breakdown.
+  const [lessonPlanningCount, conversationPrepCount, parentMessageCount, conversationPlanCount, debriefTotalCount] =
+    await Promise.all([
+      prisma.lessonPlan.count({ where: relatedUserScope }),
+      prisma.conversationPrep.count({ where: relatedUserScope }),
+      prisma.parentMessage.count({ where: relatedUserScope }),
+      prisma.conversationPlan.count({ where: relatedUserScope }),
+      prisma.debrief.count({ where: relatedUserScope }),
+    ])
+  const featureActivity = {
+    lessonDebrief: audioSessions.length,
+    lessonPlanning: lessonPlanningCount,
+    communications: conversationPrepCount + parentMessageCount + conversationPlanCount,
+    practiceReflect: attempts.length + debriefTotalCount,
   }
 
   // Staff-wide averages for the same underlying numbers each session's own
@@ -294,9 +319,12 @@ adminRouter.get('/overview', async (req, res) => {
     organizationName,
     totalTeachers,
     activeThisWeek: activeUserIds.length,
+    activitiesThisWeek,
+    activitiesPriorWeek,
     weekOffset,
     weekStart: weekStart.toISOString(),
     weekEnd: weekEnd.toISOString(),
+    featureActivity,
     categoryTally: categoryTally.toJSON(),
     challengeTally: challengeTally.toJSON(),
     messagePurposeTally: messagePurposeTally.toJSON(),
