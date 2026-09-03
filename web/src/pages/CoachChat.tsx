@@ -4,10 +4,10 @@ import TryItOut from './TryItOut'
 
 export default function CoachChat() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const tab = searchParams.get('tab') === 'ask' ? 'ask' : 'practice'
+  const tab = searchParams.get('tab') === 'practice' ? 'practice' : 'ask'
 
   function setTab(next: 'practice' | 'ask') {
-    setSearchParams(next === 'practice' ? {} : { tab: next })
+    setSearchParams(next === 'ask' ? {} : { tab: next })
   }
 
   return (

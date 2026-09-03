@@ -6,13 +6,13 @@ import SwiftUI
 /// `TryItOutView`/`AskExpertView` tabs keep working independently; this is
 /// just the same content reused behind a single combined entry point.
 struct AskAndPracticeView: View {
-    @State private var tab = "practice"
+    @State private var tab = "ask"
 
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
                 ChipRow(items: [("Ask", "ask"), ("Practice", "practice")], selection: tab) {
-                    tab = $0 ?? "practice"
+                    tab = $0 ?? "ask"
                 }
                 .padding(.horizontal)
                 .padding(.top, 12)
