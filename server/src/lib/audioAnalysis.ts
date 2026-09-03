@@ -47,6 +47,7 @@ export type AnalysisResult = {
     genericFeedbackCount: number
     specificFeedbackCount: number
     nameMentionCount: number
+    uniqueNameCount: number
   }
   highlights: Highlight[]
   phases: Phase[]
@@ -327,8 +328,12 @@ const NAME_MENTION_STOPWORDS = new Set([
 // to it too. Still a heuristic, not verified against a roster — like
 // every other count in this file, it's a suggestion for the coach to
 // confirm, not a fact.
-function countNameMentions(text: string): number {
-  let count = 0
+// Returns each detected name-like mention as its own entry (not just a
+// count) so a caller can tell "the same name said 20 times" apart from
+// "20 different names said once each" — a very different classroom signal
+// a bare count can't distinguish.
+function extractNameMentions(text: string): string[] {
+  const mentions: string[] = []
   for (const { sentence } of splitSentences(text)) {
     const words = sentence.split(/\s+/)
     for (let i = 0; i < words.length; i++) {
@@ -337,10 +342,10 @@ function countNameMentions(text: string): number {
       if (!/^[A-Z][a-z]+$/.test(cleaned)) continue
       if (NAME_MENTION_STOPWORDS.has(cleaned.toLowerCase())) continue
       if (i === 0 && !raw.endsWith(',')) continue
-      count++
+      mentions.push(cleaned)
     }
   }
-  return count
+  return mentions
 }
 
 function countPhraseMatches(text: string, phrases: string[]): number {
@@ -425,7 +430,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
   let correctivePhraseCount = 0
   let genericFeedbackCount = 0
   let specificFeedbackCount = 0
-  let nameMentionCount = 0
+  const nameMentions: string[] = []
 
   const waitTimes: number[] = []
   const highlights: Highlight[] = []
@@ -550,7 +555,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       prevTeacherAskedFollowingStudent = askedQuestionThisSegment && precedingWasStudent
       if (askedQuestionThisSegment) lastTeacherQuestionEndSec = segment.endSec
 
-      nameMentionCount += countNameMentions(segment.text)
+      nameMentions.push(...extractNameMentions(segment.text))
     } else {
       prevTeacherAskedFollowingStudent = false
     }
@@ -615,7 +620,8 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       positiveToCorrectiveRatio: correctivePhraseCount > 0 ? round(positivePhraseCount / correctivePhraseCount, 2) : null,
       genericFeedbackCount,
       specificFeedbackCount,
-      nameMentionCount,
+      nameMentionCount: nameMentions.length,
+      uniqueNameCount: new Set(nameMentions.map((n) => n.toLowerCase())).size,
     },
     highlights: highlights.slice(0, 5),
     phases,

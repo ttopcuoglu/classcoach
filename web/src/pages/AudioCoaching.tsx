@@ -1454,6 +1454,7 @@ function ReportPanel({
 
   // Climate & Tone
   const nameMentionMetric = getCountMetric({ count: num('nameMentionCount'), recordedSec })
+  const uniqueNameCount = num('uniqueNameCount')
   const redirectionMetric = getCountMetric({ count: num('redirectionCount'), recordedSec })
   const positiveCount = num('positivePhraseCount')
   const correctiveCount = num('correctivePhraseCount')
@@ -1589,6 +1590,7 @@ function ReportPanel({
           phasesCount={session.phases?.length ?? 0}
           onViewPhases={() => handleViewSource('discourse', 'session-phases')}
           nameMentionMetric={nameMentionMetric}
+          uniqueNameCount={uniqueNameCount}
           toneRatio={toneRatio}
           redirectionMetric={redirectionMetric}
           routinesInsight={routinesInsight}
@@ -2553,6 +2555,7 @@ function ClimateRoutinesTab({
   phasesCount,
   onViewPhases,
   nameMentionMetric,
+  uniqueNameCount,
   toneRatio,
   redirectionMetric,
   routinesInsight,
@@ -2563,6 +2566,7 @@ function ClimateRoutinesTab({
   phasesCount: number
   onViewPhases: () => void
   nameMentionMetric: ReturnType<typeof getCountMetric>
+  uniqueNameCount: number | null
   toneRatio: ConfidentMetric
   redirectionMetric: ReturnType<typeof getCountMetric>
   routinesInsight: string | null
@@ -2602,9 +2606,16 @@ function ClimateRoutinesTab({
       >
         <Stat
           label="Student names used"
-          value={nameMentionMetric.display}
+          value={
+            nameMentionMetric.state === 'measured' && uniqueNameCount != null
+              ? `${nameMentionMetric.display} mentions · ${uniqueNameCount} distinct`
+              : nameMentionMetric.display
+          }
           muted={isMissingState(nameMentionMetric.state)}
-          reason={nameMentionMetric.reason}
+          reason={
+            nameMentionMetric.reason ??
+            "Distinct names are a text-pattern guess, not a verified roster match — two students sharing a first name would count as one."
+          }
         />
         <Stat
           label="Your positive / corrective ratio"
