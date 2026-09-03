@@ -94,6 +94,8 @@ export type AdminOverview = {
   weekStart: string
   weekEnd: string
   categoryTally: Record<string, number>
+  challengeTally: Record<string, number>
+  messagePurposeTally: Record<string, number>
   growth: {
     recentStrong: number
     recentTotal: number

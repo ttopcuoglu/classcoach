@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import type { Request, Response } from 'express'
 import { requireAdmin, requireSuperadmin } from '../lib/auth.ts'
+import { CHALLENGE_TYPES, MESSAGE_PURPOSES } from '../lib/communicationOptions.ts'
 import { generateUniqueJoinCode, normalizeJoinCode, parseAdminEmails, syncOrganizationRoles } from '../lib/organization.ts'
 import { prisma } from '../lib/prisma.ts'
 import { SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
@@ -109,6 +110,30 @@ adminRouter.get('/overview', async (req, res) => {
     categoryTally.set(d.category, (categoryTally.get(d.category) ?? 0) + 1)
   }
 
+  // Same aggregate-only tally, applied to Communications: what kind of hard
+  // conversation teachers are practicing for, and what a written message is
+  // about. Practice a Conversation's category is only set for source:
+  // 'practice' rows (Review a Communication has no category at all).
+  const conversationPreps = await prisma.conversationPrep.findMany({
+    where: { source: 'practice', category: { not: null }, ...relatedUserScope },
+    select: { category: true },
+  })
+  const challengeTally = new Map<string, number>(CHALLENGE_TYPES.map((c) => [c, 0]))
+  for (const p of conversationPreps) {
+    if (!p.category) continue
+    challengeTally.set(p.category, (challengeTally.get(p.category) ?? 0) + 1)
+  }
+
+  const parentMessages = await prisma.parentMessage.findMany({
+    where: { purpose: { not: null }, ...relatedUserScope },
+    select: { purpose: true },
+  })
+  const messagePurposeTally = new Map<string, number>(MESSAGE_PURPOSES.map((p) => [p, 0]))
+  for (const m of parentMessages) {
+    if (!m.purpose) continue
+    messagePurposeTally.set(m.purpose, (messagePurposeTally.get(m.purpose) ?? 0) + 1)
+  }
+
   const recentRated = attempts.filter((a) => a.rating != null && a.createdAt >= weekStart && a.createdAt < weekEnd)
   const priorRated = attempts.filter(
     (a) => a.rating != null && a.createdAt >= priorWeekStart && a.createdAt < weekStart,
@@ -140,6 +165,8 @@ adminRouter.get('/overview', async (req, res) => {
     weekStart: weekStart.toISOString(),
     weekEnd: weekEnd.toISOString(),
     categoryTally: Object.fromEntries(categoryTally),
+    challengeTally: Object.fromEntries(challengeTally),
+    messagePurposeTally: Object.fromEntries(messagePurposeTally),
     growth: {
       recentStrong: strongCount(recentRated),
       recentTotal: recentRated.length,

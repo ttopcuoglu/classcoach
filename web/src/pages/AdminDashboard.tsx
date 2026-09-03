@@ -18,6 +18,7 @@ import {
   type UserProfile,
 } from '../lib/api'
 import { categoryLabel } from '../lib/categories'
+import { challengeLabel, purposeLabel } from '../lib/communicationOptions'
 
 function formatShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
@@ -275,6 +276,37 @@ function MemberRow({
   )
 }
 
+function TallyBarList({
+  title,
+  tally,
+  labelFor,
+}: {
+  title: string
+  tally: Record<string, number>
+  labelFor: (value: string) => string
+}) {
+  const sorted = Object.entries(tally).sort((a, b) => b[1] - a[1])
+  const maxCount = Math.max(1, ...sorted.map(([, c]) => c))
+  return (
+    <div>
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">{title}</h2>
+      <div className="mt-3 flex flex-col gap-2">
+        {sorted.map(([value, count]) => (
+          <div key={value} className="flex items-center gap-3">
+            <span className="w-40 shrink-0 text-sm text-ink">{labelFor(value)}</span>
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-canvas">
+              <div className="h-full rounded-full bg-brand-500" style={{ width: `${(count / maxCount) * 100}%` }} />
+            </div>
+            <span className="w-24 shrink-0 text-right text-sm text-ink-soft">
+              {count === 0 ? 'no activity yet' : count}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function OverviewPanel({ isSuperadmin }: { isSuperadmin: boolean }) {
   const [overview, setOverview] = useState<AdminOverview | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -302,11 +334,6 @@ function OverviewPanel({ isSuperadmin }: { isSuperadmin: boolean }) {
     setSelectedOrgId(id)
     setWeekOffset(0)
   }
-
-  const sortedCategories = overview
-    ? Object.entries(overview.categoryTally).sort((a, b) => b[1] - a[1])
-    : []
-  const maxCount = Math.max(1, ...sortedCategories.map(([, c]) => c))
 
   return (
     <>
@@ -401,27 +428,23 @@ function OverviewPanel({ isSuperadmin }: { isSuperadmin: boolean }) {
             <WeeklyActivityChart data={overview.weeklyActivity} />
           </div>
 
-          <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">
-              Practice by category ({overview.organizationName ?? 'all teachers'})
-            </h2>
-            <div className="mt-3 flex flex-col gap-2">
-              {sortedCategories.map(([category, count]) => (
-                <div key={category} className="flex items-center gap-3">
-                  <span className="w-40 shrink-0 text-sm text-ink">{categoryLabel(category)}</span>
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-canvas">
-                    <div
-                      className="h-full rounded-full bg-brand-500"
-                      style={{ width: `${(count / maxCount) * 100}%` }}
-                    />
-                  </div>
-                  <span className="w-24 shrink-0 text-right text-sm text-ink-soft">
-                    {count === 0 ? 'no activity yet' : count}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <TallyBarList
+            title={`Practice by category (${overview.organizationName ?? 'all teachers'})`}
+            tally={overview.categoryTally}
+            labelFor={categoryLabel}
+          />
+
+          <TallyBarList
+            title={`Conversations practiced, by challenge (${overview.organizationName ?? 'all teachers'})`}
+            tally={overview.challengeTally}
+            labelFor={(v) => challengeLabel(v) ?? v}
+          />
+
+          <TallyBarList
+            title={`Messages written, by purpose (${overview.organizationName ?? 'all teachers'})`}
+            tally={overview.messagePurposeTally}
+            labelFor={(v) => purposeLabel(v) ?? v}
+          />
 
           {overview.scope === 'organization' && (
             <MembersList organizationId={selectedOrgId || undefined} isSuperadmin={isSuperadmin} />
