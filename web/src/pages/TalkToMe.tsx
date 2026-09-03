@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BrainIcon, MicIcon, WarningIcon } from '../components/icons'
+import { BrainIcon, MicIcon, StarIcon, WarningIcon } from '../components/icons'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import {
   buildSpeechUrl,
   generateTalkTakeaway,
+  getDebriefs,
   sendDebriefChat,
+  setDebriefSaved,
   startTalkToMe,
   type ChatMessage,
   type Debrief,
@@ -148,6 +150,7 @@ export default function TalkToMe() {
   const [takeaway, setTakeaway] = useState<TalkTakeaway | null>(null)
   const [takeawayLoading, setTakeawayLoading] = useState(false)
   const [takeawayError, setTakeawayError] = useState<string | null>(null)
+  const [savedTalks, setSavedTalks] = useState<Debrief[]>([])
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const mutedRef = useRef(muted)
@@ -247,6 +250,14 @@ export default function TalkToMe() {
       setPhase('error')
     }
   }, [fatalError])
+
+  // Loaded once up front so a saved takeaway from a past session shows up
+  // on the starting screen without waiting on anything else.
+  useEffect(() => {
+    getDebriefs({ source: 'talk_to_me' })
+      .then((all) => setSavedTalks(all.filter((d) => d.saved)))
+      .catch(() => {})
+  }, [])
 
   function beginListening() {
     sessionActiveRef.current = true
@@ -362,6 +373,17 @@ export default function TalkToMe() {
     }
   }
 
+  async function handleToggleSaved() {
+    if (!debrief) return
+    const nextSaved = !debrief.saved
+    setDebrief((prev) => (prev ? { ...prev, saved: nextSaved } : prev))
+    try {
+      await setDebriefSaved(debrief.id, nextSaved)
+    } catch {
+      setDebrief((prev) => (prev ? { ...prev, saved: !nextSaved } : prev))
+    }
+  }
+
   const messages: ChatMessage[] = debrief?.conversation ?? []
   const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
   const finishing = takeawayLoading || takeaway != null || takeawayError != null
@@ -405,7 +427,21 @@ export default function TalkToMe() {
               </div>
             ) : takeaway ? (
               <>
-                <h1 className="font-heading text-xl font-bold text-forest">Here's your takeaway</h1>
+                <div className="flex items-start justify-between gap-3">
+                  <h1 className="font-heading text-xl font-bold text-forest">Here's your takeaway</h1>
+                  <button
+                    type="button"
+                    onClick={handleToggleSaved}
+                    className={`flex shrink-0 items-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      debrief?.saved
+                        ? 'border-warm-500 bg-warm-100 text-warm-500'
+                        : 'border-hairline bg-cream-card text-ink-soft hover:border-warm-500 hover:text-warm-500'
+                    }`}
+                  >
+                    <StarIcon className="h-3.5 w-3.5" filled={debrief?.saved} />
+                    {debrief?.saved ? 'Saved' : 'Save'}
+                  </button>
+                </div>
                 <div className="flex flex-col gap-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-forest">What we explored</p>
@@ -526,6 +562,19 @@ export default function TalkToMe() {
                     </button>
                   ))}
                 </div>
+
+                {savedTalks.length > 0 && (
+                  <div className="flex flex-col gap-2 text-left">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                      Past conversations
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      {savedTalks.map((d) => (
+                        <SavedTalkCard key={d.id} debrief={d} />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex w-full max-w-md flex-col gap-3">
@@ -632,6 +681,48 @@ export default function TalkToMe() {
       <p className="px-6 pb-6 text-center text-xs text-ink-soft">
         Your voice is never saved — only the conversation text.
       </p>
+    </div>
+  )
+}
+
+// A saved conversation only ever gets bookmarked from its takeaway screen
+// (see handleToggleSaved), so talkTakeaway is expected to be set here —
+// still guarded defensively in case that ever changes.
+function SavedTalkCard({ debrief }: { debrief: Debrief }) {
+  const [expanded, setExpanded] = useState(false)
+  const takeaway = debrief.talkTakeaway
+  return (
+    <div className="rounded-xl border border-hairline bg-cream-card p-4">
+      <button
+        type="button"
+        onClick={() => setExpanded((e) => !e)}
+        className="flex w-full items-start justify-between gap-3 text-left"
+      >
+        <p className="text-sm text-ink">{debrief.incidentText}</p>
+        <span className="shrink-0 text-xs font-medium text-ink-soft">{expanded ? 'Hide' : 'Show'}</span>
+      </button>
+      {expanded && (
+        <div className="mt-3 flex flex-col gap-3 border-t border-hairline pt-3 text-left">
+          {takeaway ? (
+            <>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-forest">What we explored</p>
+                <p className="mt-1 text-sm text-ink">{takeaway.explored}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">What I'll try</p>
+                <p className="mt-1 text-sm text-ink">{takeaway.tryNext}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">What I'll notice</p>
+                <p className="mt-1 text-sm text-ink">{takeaway.notice}</p>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-ink-soft">No takeaway was saved for this conversation.</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
