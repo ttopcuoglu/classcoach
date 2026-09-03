@@ -60,11 +60,22 @@ export const RECALL_STARTERS = [
   'who is', 'who was', 'when did', 'where is', 'how many', 'what does',
 ]
 
+// Distinctive multi-word phrases — safe to match anywhere in a sentence
+// (e.g. after a filler like "Okay, why do you think..."), since a phrase
+// this specific essentially never shows up mid-sentence in ordinary,
+// non-interrogative classroom speech.
 export const HIGHER_ORDER_STARTERS = [
-  'why', 'how would', 'how might', 'how does', 'explain', 'what would happen if',
-  'what if', 'why do you think', 'what evidence', 'compare', 'justify',
+  'how would', 'how might', 'how does', 'what would happen if',
+  'what if', 'why do you think', 'what evidence',
   'defend your', 'how could', 'what could',
 ]
+
+// Single, ambiguous words — trustworthy only when they open the sentence.
+// Matched anywhere mid-sentence, these produce real false positives: "while
+// I explain the next part" or "here's how we'll do this" aren't questions,
+// but each contains one of these words. RECALL_STARTERS already applies
+// this same sentence-initial-only rule; this list mirrors it.
+export const HIGHER_ORDER_STARTERS_STRICT = ['why', 'explain', 'compare', 'justify']
 
 export const CFU_PHRASES = [
   'thumbs up', 'thumbs down', 'turn and talk', 'on a scale of',
@@ -373,6 +384,7 @@ function splitSentences(text: string): { sentence: string; endedWithQuestion: bo
 function classifyQuestion(sentence: string): 'higher_order' | 'recall' | null {
   const s = sentence.toLowerCase()
   if (HIGHER_ORDER_STARTERS.some((p) => s.startsWith(p) || s.includes(` ${p}`))) return 'higher_order'
+  if (HIGHER_ORDER_STARTERS_STRICT.some((p) => s.startsWith(p))) return 'higher_order'
   if (RECALL_STARTERS.some((p) => s.startsWith(p))) return 'recall'
   return null
 }
@@ -440,7 +452,15 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
   const questionLog: QuestionLogEntry[] = []
 
   let lastTeacherQuestionEndSec: number | null = null
-  let prevTeacherAskedFollowingStudent = false
+  // A follow-up is a 3-turn pattern: teacher asks Q1, a student answers,
+  // teacher asks Q2 building on that answer. awaitingStudentAnswer marks
+  // "a teacher question just went out, no student has answered yet";
+  // readyForFollowUp marks "a student just answered one" and survives
+  // exactly through that one intervening student turn, so the *next*
+  // teacher question — not the student segment itself — is what gets
+  // checked and consumed.
+  let awaitingStudentAnswer = false
+  let readyForFollowUp = false
   const waitCandidates: { wait: number; segment: Segment }[] = []
   let redirectionHighlightTaken = false
   let probingHighlightTaken = false
@@ -538,7 +558,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
           followUps: [],
         }
 
-        if (precedingWasStudent && prevTeacherAskedFollowingStudent) {
+        if (precedingWasStudent && readyForFollowUp) {
           followUpQuestionCount++
           // Push the entry itself (not a copy) so a wait-time assigned to it
           // later actually sticks — followUps is typed narrower but the
@@ -555,12 +575,18 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
         lastQuestionEntryForWait = entry
       })
 
-      prevTeacherAskedFollowingStudent = askedQuestionThisSegment && precedingWasStudent
-      if (askedQuestionThisSegment) lastTeacherQuestionEndSec = segment.endSec
+      // Whether or not this teacher turn used the follow-up opportunity, it
+      // consumes it — the window is exactly one teacher turn wide.
+      readyForFollowUp = false
+      if (askedQuestionThisSegment) {
+        lastTeacherQuestionEndSec = segment.endSec
+        awaitingStudentAnswer = true
+      }
 
       nameMentions.push(...extractNameMentions(segment.text))
     } else {
-      prevTeacherAskedFollowingStudent = false
+      readyForFollowUp = awaitingStudentAnswer
+      awaitingStudentAnswer = false
     }
   })
 
