@@ -39,6 +39,7 @@ export type AnalysisResult = {
     higherOrderQuestionCount: number
     followUpQuestionCount: number
     redirectionCount: number
+    firstRedirectionTimestampSec: number | null
     transitionCount: number
     directiveCount: number
     positivePhraseCount: number
@@ -422,6 +423,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
   let cfuCount = 0
   let redirectionCount = 0
   let redirectionStreak = 0
+  let firstRedirectionTimestampSec: number | null = null
   let transitionCount = 0
   let directiveCount = 0
   const lastDirectiveSeenAt = new Map<string, number>()
@@ -483,6 +485,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       if (redirectionHits > 0) {
         redirectionCount += redirectionHits
         redirectionStreak++
+        if (firstRedirectionTimestampSec == null) firstRedirectionTimestampSec = segment.startSec
       } else {
         redirectionStreak = 0
       }
@@ -613,6 +616,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       higherOrderQuestionCount,
       followUpQuestionCount,
       redirectionCount,
+      firstRedirectionTimestampSec: firstRedirectionTimestampSec != null ? round(firstRedirectionTimestampSec, 1) : null,
       transitionCount,
       directiveCount,
       positivePhraseCount,

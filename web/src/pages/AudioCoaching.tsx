@@ -1490,6 +1490,8 @@ function ReportPanel({
   const questioningInsight = buildQuestioningInsight(session, higherOrderRatio)
   const cfuInsight = buildCfuInsight(cfuMetric)
   const hasRepeatedInstructionHighlight = (session.highlights ?? []).some((h) => h.label === 'Repeated instruction')
+  const hasRedirectionCluster = (session.highlights ?? []).some((h) => h.label === 'Redirection cluster')
+  const firstRedirectionTimestampSec = num('firstRedirectionTimestampSec')
   const routinesInsight = buildRoutinesInsight(directiveMetric, hasRepeatedInstructionHighlight)
   const climateInsight = buildClimateInsight(redirectionMetric, positiveCount, correctiveCount)
 
@@ -1693,6 +1695,9 @@ function ReportPanel({
                 uniqueNameCount={uniqueNameCount}
                 toneRatio={toneRatio}
                 redirectionMetric={redirectionMetric}
+                hasRedirectionCluster={hasRedirectionCluster}
+                hasRepeatedInstructionHighlight={hasRepeatedInstructionHighlight}
+                firstRedirectionTimestampSec={firstRedirectionTimestampSec}
                 routinesInsight={routinesInsight}
                 climateInsight={climateInsight}
               />
@@ -2644,6 +2649,9 @@ function ClimateRoutinesTab({
   uniqueNameCount,
   toneRatio,
   redirectionMetric,
+  hasRedirectionCluster,
+  hasRepeatedInstructionHighlight,
+  firstRedirectionTimestampSec,
   routinesInsight,
   climateInsight,
 }: {
@@ -2654,9 +2662,20 @@ function ClimateRoutinesTab({
   uniqueNameCount: number | null
   toneRatio: ConfidentMetric
   redirectionMetric: ReturnType<typeof getCountMetric>
+  hasRedirectionCluster: boolean
+  hasRepeatedInstructionHighlight: boolean
+  firstRedirectionTimestampSec: number | null
   routinesInsight: string | null
   climateInsight: string | null
 }) {
+  const firstRedirectionDisplay =
+    redirectionMetric.state === 'confirmed_none'
+      ? 'Not needed this session'
+      : firstRedirectionTimestampSec != null
+        ? formatTime(firstRedirectionTimestampSec)
+        : '—'
+  const firstRedirectionMuted = redirectionMetric.state === 'confirmed_none' ? false : firstRedirectionTimestampSec == null
+
   return (
     <div className="flex flex-col gap-6">
       <CategorySection title="Routines" coverage={categoryCoverage([transitionMetric, directiveMetric])}>
@@ -2671,6 +2690,16 @@ function ClimateRoutinesTab({
           value={directiveMetric.display}
           muted={isMissingState(directiveMetric.state)}
           reason={directiveMetric.reason ?? "Count only — clarity isn't judged automatically."}
+        />
+        <Stat
+          label="Repeated instruction"
+          value={isMissingState(directiveMetric.state) ? '—' : hasRepeatedInstructionHighlight ? 'Detected' : 'None detected'}
+          muted={isMissingState(directiveMetric.state)}
+          reason={
+            isMissingState(directiveMetric.state)
+              ? directiveMetric.reason
+              : 'Flags the same direction repeated within 90 seconds — a sign it may not have landed the first time.'
+          }
         />
       </CategorySection>
       <CoachNote text={routinesInsight} />
@@ -2740,6 +2769,26 @@ function ClimateRoutinesTab({
             reason={redirectionMetric.reason ?? 'Count only — tone isn\'t judged automatically.'}
           />
         </div>
+        <Stat
+          label="Redirection cluster"
+          value={isMissingState(redirectionMetric.state) ? '—' : hasRedirectionCluster ? 'Detected' : 'None detected'}
+          muted={isMissingState(redirectionMetric.state)}
+          reason={
+            isMissingState(redirectionMetric.state)
+              ? redirectionMetric.reason
+              : 'Flags back-to-back redirections close together — a possible sign the room needed a different routine in that moment.'
+          }
+        />
+        <Stat
+          label="Time to first redirection"
+          value={firstRedirectionDisplay}
+          muted={firstRedirectionMuted}
+          reason={
+            firstRedirectionMuted
+              ? (redirectionMetric.reason ?? 'Not available for this session — analyzed before this was tracked.')
+              : undefined
+          }
+        />
       </CategorySection>
       <CoachNote text={climateInsight} />
     </div>
