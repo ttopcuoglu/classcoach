@@ -117,6 +117,12 @@ export default function TalkToMe() {
   const [error, setError] = useState<string | null>(null)
   const [muted, setMuted] = useState(false)
   const [thinkingProgress, setThinkingProgress] = useState(0)
+  // Set the instant transcription finishes, independent of `debrief` —
+  // `debrief.conversation` only updates once the ENTIRE round trip
+  // (transcribe -> reply) finishes, so deriving "what you said" from it
+  // meant your own words appeared at the same moment as the coach's
+  // reply, not right after you actually finished talking.
+  const [userTranscript, setUserTranscript] = useState<string | null>(null)
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const mutedRef = useRef(muted)
@@ -227,6 +233,7 @@ export default function TalkToMe() {
       resumeListeningIfActive()
       return
     }
+    setUserTranscript(text)
     setPhase('thinking')
     try {
       const current = debriefRef.current
@@ -274,7 +281,6 @@ export default function TalkToMe() {
 
   const messages: ChatMessage[] = debrief?.conversation ?? []
   const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
-  const lastUser = [...messages].reverse().find((m) => m.role === 'user')
 
   return (
     <div className="flex min-h-screen flex-col bg-cream text-ink">
@@ -373,10 +379,10 @@ export default function TalkToMe() {
             </div>
 
             <div className="flex w-full max-w-md flex-col gap-3">
-              {lastUser && (
+              {userTranscript && (
                 <div className="rounded-2xl border border-hairline bg-mint-tint/20 p-4 text-left">
                   <p className="text-xs font-semibold uppercase tracking-wide text-forest">You</p>
-                  <p className="mt-1.5 text-sm text-ink">{lastUser.text}</p>
+                  <p className="mt-1.5 text-sm text-ink">{userTranscript}</p>
                 </div>
               )}
               {lastAssistant && (
