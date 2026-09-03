@@ -42,7 +42,9 @@ import {
   isMissingState,
   judgeTalkBalance,
   MIN_DURATION_FOR_CFU_DETECTION_SEC,
+  MIN_DURATION_FOR_TALK_BALANCE_CANDIDATE_SEC,
   MIN_N_FOR_PERCENT,
+  MIN_PHASE_DURATION_SEC,
   SHORT_SESSION_THRESHOLD_SEC,
   type ConfidentMetric,
   type MetricState,
@@ -738,6 +740,22 @@ function CoachNote({ text }: { text: string | null }) {
 // measured/zero data and following the app's no-overclaiming rules. Folded
 // directly into SummaryTab's combined snapshot card rather than rendered as
 // its own card.
+// A recording this short doesn't support the full report's five elements
+// with more caveats bolted on — one honest paragraph, built the same
+// deterministic-template way as every other coach note in this file (no
+// new Claude call), replaces the snapshot/evidence-quality/noticed trio.
+function buildTinyRecordingSnapshot(session: AudioSessionWithSegments, coverage: ReturnType<typeof getCoverage>): string {
+  const parts: string[] = [`This is a short excerpt (${formatTime(coverage.recordedSec)}), not a full lesson.`]
+  if (session.questionCount != null && session.questionCount > 0) {
+    parts.push(`It includes ${session.questionCount} detected question${session.questionCount === 1 ? '' : 's'}.`)
+  }
+  if (session.studentTalkPct == null || session.studentTalkPct === 0) {
+    parts.push('Student voice was not separately identified in this clip.')
+  }
+  parts.push("Review the moments below and add your own classroom context before drawing any broader conclusions.")
+  return parts.join(' ')
+}
+
 function buildWivozaNoticedSummary(
   talkInsight: string | null,
   questioningInsight: string | null,
@@ -825,8 +843,11 @@ function buildStrengthCandidates(
     ),
   )
 
+  const hasEnoughDurationForTalkBalance =
+    session.durationSec != null && session.durationSec >= MIN_DURATION_FOR_TALK_BALANCE_CANDIDATE_SEC
+
   const balance = judgeTalkBalance(session.teacherTalkPct, session.studentTalkPct)
-  if (balance?.kind === 'student-heavy') {
+  if (hasEnoughDurationForTalkBalance && balance?.kind === 'student-heavy') {
     candidates.push({
       id: 'talk-balance',
       observation: `Students had ${balance.studentPct}% of the talk time today`,
@@ -857,7 +878,7 @@ function buildStrengthCandidates(
     })
   }
 
-  if (session.avgWaitTimeSec != null && session.avgWaitTimeSec >= 3) {
+  if (hasEnoughDurationForTalkBalance && session.avgWaitTimeSec != null && session.avgWaitTimeSec >= 3) {
     candidates.push({
       id: 'wait-time',
       observation: `Your average wait time was ${session.avgWaitTimeSec}s`,
@@ -938,8 +959,11 @@ function buildPriorityCandidates(
     ),
   )
 
+  const hasEnoughDurationForTalkBalance =
+    session.durationSec != null && session.durationSec >= MIN_DURATION_FOR_TALK_BALANCE_CANDIDATE_SEC
+
   const balance = judgeTalkBalance(session.teacherTalkPct, session.studentTalkPct)
-  if (balance?.kind === 'teacher-heavy') {
+  if (hasEnoughDurationForTalkBalance && balance?.kind === 'teacher-heavy') {
     candidates.push({
       id: 'talk-balance',
       observation: `You talked ${balance.teacherPct}% of the time today`,
@@ -970,7 +994,7 @@ function buildPriorityCandidates(
     })
   }
 
-  if (session.avgWaitTimeSec != null && session.avgWaitTimeSec < 3) {
+  if (hasEnoughDurationForTalkBalance && session.avgWaitTimeSec != null && session.avgWaitTimeSec < 3) {
     candidates.push({
       id: 'wait-time',
       observation: `Your average wait time was ${session.avgWaitTimeSec}s`,
@@ -1682,6 +1706,41 @@ function SummaryTab({
   ])
   const noticedText = buildWivozaNoticedSummary(talkInsight, questioningInsight, cfuInsight)
   const warn = evidenceQuality.tone === 'warn'
+
+  if (coverage.isTinyRecording) {
+    return (
+      <div className="flex flex-col gap-6">
+        {/* A genuinely simplified snapshot — one honest paragraph and a
+            compact "Short excerpt" label, not the full loud warning banner. */}
+        <div className="rounded-2xl border border-border bg-surface p-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-semibold text-ink">
+              {session.classSubject || 'New Recording'} {session.period ? `· ${session.period}` : ''}
+            </h1>
+            <span className="rounded-full bg-warm-100 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-warm-500">
+              Short excerpt
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-ink-soft">
+            {session.teacherName ? `${session.teacherName} · ` : ''}
+            {formatSessionDateTime(session.sessionDate)}
+            {session.gradeLevel ? ` · ${session.gradeLevel}` : ''}
+          </p>
+          <p className="mt-3 text-sm text-ink">{buildTinyRecordingSnapshot(session, coverage)}</p>
+        </div>
+
+        <ClassroomVoiceBalance {...voiceBalance} caption={buildVoiceBalanceCaption(balanceJudgment)} />
+
+        {/* Omitted entirely rather than shown as an empty-feeling fallback
+            card when there's nothing real to rank at this length. */}
+        {(strength || priority) && (
+          <MomentsCard strength={strength} priority={priority} coverage={coverage} onViewDiscourse={onViewDiscourse} />
+        )}
+
+        <NextStepCard priority={priority} onSetFocus={onFocusMetricChange} onGoReflect={onGoReflect} />
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -2888,14 +2947,25 @@ function DiscourseDetailsTab({
         <div id="session-phases">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Session phases</h2>
           <div className="mt-3 flex flex-col gap-2">
-            {session.phases.map((p, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2.5">
-                <span className="w-28 shrink-0 text-sm font-medium text-ink">{p.label}</span>
-                <span className="text-sm text-ink-soft">
-                  {formatTime(p.startSec)} – {formatTime(p.endSec)}
-                </span>
-              </div>
-            ))}
+            {session.phases.map((p, i) => {
+              const isSliver = p.endSec - p.startSec < MIN_PHASE_DURATION_SEC
+              return (
+                <div
+                  key={i}
+                  className={`flex items-center gap-3 rounded-lg border px-4 py-2.5 ${
+                    isSliver ? 'border-dashed border-border/60 bg-canvas' : 'border-border bg-surface'
+                  }`}
+                >
+                  <span className={`w-28 shrink-0 text-sm font-medium ${isSliver ? 'text-ink-soft' : 'text-ink'}`}>
+                    {p.label}
+                  </span>
+                  <span className="text-sm text-ink-soft">
+                    {formatTime(p.startSec)} – {formatTime(p.endSec)}
+                    {isSliver && ' · too brief to treat as a real phase'}
+                  </span>
+                </div>
+              )
+            })}
           </div>
           <p className="mt-2 text-xs text-ink-soft">
             These boundaries are an automated estimate — treat them as a starting point.

@@ -10,6 +10,18 @@ import type { AudioPhase } from './api'
 // banner — short samples are real data, but not a full observation.
 export const SHORT_SESSION_THRESHOLD_SEC = 10 * 60
 
+// A recording this short is barely a snapshot — Summary renders a
+// materially simpler layout rather than the same five elements with more
+// caveats bolted on (see SummaryTab's isTinyRecording branch).
+export const TINY_RECORDING_THRESHOLD_SEC = 2 * 60
+
+// Talk-balance and wait-time candidates read from raw presence metrics
+// with no sample-size gate of their own (unlike CFU/higher-order/feedback,
+// which are gated via minDurationSec/MIN_N_FOR_PERCENT) — below this floor,
+// a single long utterance or pause can produce a fully-confident-looking
+// Strength/Priority claim from a single data point.
+export const MIN_DURATION_FOR_TALK_BALANCE_CANDIDATE_SEC = SHORT_SESSION_THRESHOLD_SEC
+
 // Below this many events in the denominator, a percentage reads as more
 // precise than it is ("25%" implies a stable rate; "1 of 4" doesn't).
 export const MIN_N_FOR_PERCENT = 10
@@ -64,6 +76,7 @@ export type CoverageInfo = {
   recordedSec: number
   totalSec: number
   isShort: boolean
+  isTinyRecording: boolean
   uncapturedPhases: string[]
 }
 
@@ -82,6 +95,7 @@ export function getCoverage(durationSec: number | null, phases: AudioPhase[] | n
     recordedSec,
     totalSec,
     isShort: recordedSec > 0 && recordedSec < SHORT_SESSION_THRESHOLD_SEC,
+    isTinyRecording: recordedSec > 0 && recordedSec < TINY_RECORDING_THRESHOLD_SEC,
     uncapturedPhases,
   }
 }

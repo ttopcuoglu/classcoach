@@ -24,6 +24,24 @@ function formatHighlightHeadline(h: { label: string; timestampSec: number; durat
   return `${h.label} · ${formatTime(h.timestampSec)}`
 }
 
+// Mirrors AudioCoaching.tsx's buildTinyRecordingSnapshot wording — this
+// export view is a fully independent render path with its own local
+// copies of every helper, so the two must be kept in sync by hand.
+function formatTinyRecordingSnapshot(
+  session: AudioSessionWithSegments,
+  coverage: ReturnType<typeof getCoverage>,
+): string {
+  const parts: string[] = [`This is a short excerpt (${formatTime(coverage.recordedSec)}), not a full lesson.`]
+  if (session.questionCount != null && session.questionCount > 0) {
+    parts.push(`It includes ${session.questionCount} detected question${session.questionCount === 1 ? '' : 's'}.`)
+  }
+  if (session.studentTalkPct == null || session.studentTalkPct === 0) {
+    parts.push('Student voice was not separately identified in this clip.')
+  }
+  parts.push('Review the moments below and add your own classroom context before drawing any broader conclusions.')
+  return parts.join(' ')
+}
+
 function formatSessionDateTime(iso: string): string {
   const d = new Date(iso)
   const date = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
@@ -107,14 +125,23 @@ export default function AudioCoachingExport() {
                       <> · Not meaningfully captured: {coverage.uncapturedPhases.join(', ')}</>
                     )}
                   </p>
-                  {coverage.isShort && (
-                    <div className="mt-2 flex items-start gap-3 break-inside-avoid rounded-xl border-2 border-warm-500 bg-warm-100 p-4">
-                      <WarningIcon className="mt-0.5 h-5 w-5 shrink-0 text-warm-500" />
-                      <p className="text-sm font-semibold text-warm-500">
-                        Session under {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes — treat metrics as
-                        indicative, not conclusive.
-                      </p>
+                  {coverage.isTinyRecording ? (
+                    <div className="mt-2 flex items-start gap-3 break-inside-avoid rounded-xl border border-border bg-surface p-4">
+                      <span className="mt-0.5 shrink-0 rounded-full bg-warm-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warm-500">
+                        Short excerpt
+                      </span>
+                      <p className="text-sm text-ink">{formatTinyRecordingSnapshot(session, coverage)}</p>
                     </div>
+                  ) : (
+                    coverage.isShort && (
+                      <div className="mt-2 flex items-start gap-3 break-inside-avoid rounded-xl border-2 border-warm-500 bg-warm-100 p-4">
+                        <WarningIcon className="mt-0.5 h-5 w-5 shrink-0 text-warm-500" />
+                        <p className="text-sm font-semibold text-warm-500">
+                          Session under {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes — treat metrics as
+                          indicative, not conclusive.
+                        </p>
+                      </div>
+                    )
                   )}
 
                   <section className="mt-6 break-inside-avoid rounded-xl border border-border p-4">
