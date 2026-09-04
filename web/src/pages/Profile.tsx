@@ -285,13 +285,13 @@ export default function Profile() {
         <h2 className="text-sm font-semibold text-ink">What Coach remembers</h2>
         <p className="mt-1 text-sm text-ink-soft">
           Coach keeps a short, running note about your recurring strengths and any ongoing challenges, built from
-          your Ask and Talk It Through conversations. It's never shown to anyone else.
+          your Ask, Talk It Through, and Lesson Debrief Reflect conversations. It's never shown to anyone else.
         </p>
 
         {coachMemory ? (
           <p className="mt-3 rounded-lg border border-border bg-canvas p-4 text-sm text-ink-soft">{coachMemory}</p>
         ) : (
-          <p className="mt-3 text-sm text-ink-soft">Nothing yet — this builds up as you use Ask and Talk It Through.</p>
+          <p className="mt-3 text-sm text-ink-soft">Nothing yet — this builds up as you use these features.</p>
         )}
 
         <label className="mt-4 flex items-center gap-2.5 text-sm font-medium text-ink">

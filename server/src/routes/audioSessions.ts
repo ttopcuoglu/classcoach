@@ -2,11 +2,17 @@ import { Router } from 'express'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { analyzeTranscript, buildContentExhibits, detectLessonContent, type Segment } from '../lib/audioAnalysis.ts'
-import { checkFeatureAccess, startOfCurrentMonth } from '../lib/billing.ts'
+import { checkFeatureAccess, hasActivePlan, startOfCurrentMonth } from '../lib/billing.ts'
+import {
+  applyMemoryUpdate,
+  buildMemoryContextBlock,
+  MEMORY_UPDATE_INSTRUCTION,
+  MEMORY_UPDATE_TOKEN_BUFFER,
+} from '../lib/coachMemory.ts'
 import { CORE_COACHING_RULES, TRANSCRIPT_RELIABILITY_NOTICE } from '../lib/coachPersona.ts'
 import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
 import { transcribeAudio } from '../lib/deepgram.ts'
-import { extractTag } from '../lib/extractTag.ts'
+import { extractTag, stripTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
@@ -391,6 +397,12 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
   const trimmedMessage = typeof message === 'string' ? message.trim() : ''
 
   try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { coachMemory: true, coachMemoryEnabled: true },
+    })
+    const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
+
     const messages = [
       ...existing.map((m) => ({ role: m.role, content: m.text })),
       { role: 'user' as const, content: isStart ? REFLECT_START_MESSAGE : trimmedMessage },
@@ -398,8 +410,10 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 300,
-      system: buildReflectSystemPrompt(safeContext),
+      max_tokens: memoryOn ? 300 + MEMORY_UPDATE_TOKEN_BUFFER : 300,
+      system: memoryOn
+        ? `${buildReflectSystemPrompt(safeContext)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+        : buildReflectSystemPrompt(safeContext),
       messages,
     })
     const text = response.content
@@ -407,7 +421,12 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
       .map((block) => block.text)
       .join('\n')
     flagIfUnsafe(text, 'audioSessions.reflectChat')
-    const reply = text.trim()
+    const reply = stripTag(text, 'memory_update')
+
+    if (!reply) {
+      res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
+      return
+    }
 
     const now = new Date().toISOString()
     const newTurns: ReflectMessage[] = isStart
@@ -421,6 +440,14 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
       where: { id: session.id },
       data: { reflectConversation: [...existing, ...newTurns] },
     })
+
+    if (memoryOn) {
+      const memoryUpdate = applyMemoryUpdate(extractTag(text, 'memory_update'), user!.coachMemory)
+      if (memoryUpdate !== user!.coachMemory) {
+        await prisma.user.update({ where: { id: req.user!.userId }, data: { coachMemory: memoryUpdate } })
+      }
+    }
+
     res.json(updated)
   } catch (error) {
     console.error('[audio-sessions] reflect chat failed:', error)
