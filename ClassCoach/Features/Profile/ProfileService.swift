@@ -42,4 +42,15 @@ enum ProfileService {
     static func resetData() async throws {
         let _: ResetResponse = try await APIClient.shared.request("/api/profile/reset", method: "POST")
     }
+
+    private struct DeleteAccountResponse: Decodable {
+        let status: String
+    }
+
+    /// Permanently deletes the signed-in user's account and everything
+    /// tied to it — required by Apple Guideline 5.1.1(v) for any app that
+    /// supports account creation.
+    static func deleteAccount() async throws {
+        let _: DeleteAccountResponse = try await APIClient.shared.request("/api/profile", method: "DELETE")
+    }
 }

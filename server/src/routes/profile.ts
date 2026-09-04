@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { SAFE_USER_OMIT, USER_INCLUDE_ORG } from '../lib/auth.ts'
+import { SAFE_USER_OMIT, SESSION_COOKIE, USER_INCLUDE_ORG } from '../lib/auth.ts'
 import { resolveJoinCode } from '../lib/organization.ts'
 import { prisma } from '../lib/prisma.ts'
 
@@ -16,6 +16,19 @@ profileRouter.get('/', async (req, res) => {
     return
   }
   res.json(user)
+})
+
+// Self-service account deletion — Apple Guideline 5.1.1(v) requires any
+// app that supports account creation to also support deleting that
+// account from within the app, not just deactivating it. Cascades to
+// every model owned by this user (ScenarioAttempt, Debrief,
+// ParentMessage, UsageLog, AudioSession -> TranscriptSegment, LessonPlan,
+// ConversationPrep, ConversationPlan) — all already onDelete: Cascade in
+// the schema, same as the superadmin equivalent in admin.ts.
+profileRouter.delete('/', async (req, res) => {
+  await prisma.user.delete({ where: { id: req.user!.userId } })
+  res.clearCookie(SESSION_COOKIE)
+  res.json({ status: 'ok' })
 })
 
 const FOCUS_METRICS = new Set([

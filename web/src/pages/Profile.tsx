@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { createBillingPortalSession, createCheckoutSession, getProfile, resetData, updateProfile } from '../lib/api'
+import { createBillingPortalSession, createCheckoutSession, deleteAccount, getProfile, resetData, updateProfile } from '../lib/api'
 
 export default function Profile() {
   const [loading, setLoading] = useState(true)
@@ -30,6 +30,9 @@ export default function Profile() {
   const [resetting, setResetting] = useState(false)
   const [resetError, setResetError] = useState<string | null>(null)
   const [resetDone, setResetDone] = useState(false)
+
+  const [deletingAccount, setDeletingAccount] = useState(false)
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null)
 
   useEffect(() => {
     getProfile()
@@ -101,6 +104,26 @@ export default function Profile() {
       setResetError('Could not reset your data. Please try again.')
     } finally {
       setResetting(false)
+    }
+  }
+
+  async function handleDeleteAccount() {
+    const confirmed = window.confirm(
+      'This permanently deletes your account and everything in it — profile, conversations, lesson recordings, and reports. This cannot be undone. Continue?',
+    )
+    if (!confirmed) return
+
+    setDeletingAccount(true)
+    setDeleteAccountError(null)
+    try {
+      await deleteAccount()
+      // The account (and its session) is gone server-side — a full
+      // reload is simpler and more reliable here than threading a logout
+      // callback down from App/Layout just for this one rare action.
+      window.location.href = '/'
+    } catch {
+      setDeleteAccountError('Could not delete your account. Please try again.')
+      setDeletingAccount(false)
     }
   }
 
@@ -379,9 +402,18 @@ export default function Profile() {
           >
             {resetting ? 'Resetting...' : 'Reset & clear data'}
           </button>
+          <button
+            type="button"
+            onClick={handleDeleteAccount}
+            disabled={deletingAccount}
+            className="rounded-lg bg-warm-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:opacity-90 disabled:opacity-60"
+          >
+            {deletingAccount ? 'Deleting...' : 'Delete account'}
+          </button>
         </div>
         {resetDone && <p className="mt-2 text-sm text-brand-600">Your data has been cleared.</p>}
         {resetError && <p className="mt-2 text-sm text-warm-500">{resetError}</p>}
+        {deleteAccountError && <p className="mt-2 text-sm text-warm-500">{deleteAccountError}</p>}
       </div>
     </div>
   )

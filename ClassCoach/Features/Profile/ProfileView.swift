@@ -16,6 +16,10 @@ struct ProfileView: View {
     @State private var showResetConfirm = false
     @State private var resetError: String?
 
+    @State private var deletingAccount = false
+    @State private var showDeleteAccountConfirm = false
+    @State private var deleteAccountError: String?
+
     private var isDirty: Bool {
         name != (authManager.currentUser?.name ?? "")
             || gradeLevels != (authManager.currentUser?.gradeLevels ?? "")
@@ -70,6 +74,19 @@ struct ProfileView: View {
                         authManager.signOut()
                     }
                 }
+
+                Section {
+                    Button("Delete Account", role: .destructive) {
+                        showDeleteAccountConfirm = true
+                    }
+                    .disabled(deletingAccount)
+
+                    if let deleteAccountError {
+                        Text(deleteAccountError).font(.footnote).foregroundStyle(.red)
+                    }
+                } footer: {
+                    Text("Permanently deletes your account and everything in it — profile, conversations, lesson recordings and reports. This can't be undone.")
+                }
             }
             .navigationTitle("Profile")
             .task { await load() }
@@ -80,6 +97,14 @@ struct ProfileView: View {
                 }
             } message: {
                 Text("This deletes your saved scenarios, attempts, and Q&A history, and clears your profile fields. This can't be undone.")
+            }
+            .alert("Delete your account?", isPresented: $showDeleteAccountConfirm) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete Account", role: .destructive) {
+                    Task { await deleteAccount() }
+                }
+            } message: {
+                Text("This permanently deletes your account and everything in it — profile, conversations, lesson recordings, and reports. This can't be undone.")
             }
         }
     }
@@ -130,6 +155,18 @@ struct ProfileView: View {
             resetError = error.localizedDescription
         }
         resetting = false
+    }
+
+    private func deleteAccount() async {
+        deletingAccount = true
+        deleteAccountError = nil
+        do {
+            try await ProfileService.deleteAccount()
+            authManager.signOut()
+        } catch {
+            deleteAccountError = error.localizedDescription
+        }
+        deletingAccount = false
     }
 }
 

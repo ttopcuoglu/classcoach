@@ -627,6 +627,13 @@ export function resetData(): Promise<{ status: string }> {
   return request('/api/profile/reset', { method: 'POST' })
 }
 
+// Permanently deletes the signed-in user's account and everything tied
+// to it — required by Apple Guideline 5.1.1(v) for any app that supports
+// account creation, and offered here on web too for consistency.
+export function deleteAccount(): Promise<{ status: string }> {
+  return request('/api/profile', { method: 'DELETE' })
+}
+
 export function createCheckoutSession(): Promise<{ url: string }> {
   return request('/api/billing/checkout', { method: 'POST' })
 }
