@@ -128,15 +128,34 @@ async function playQueue(audio: HTMLAudioElement, sentences: string[]): Promise<
     const url = await audioUrls[i]
     if (!url) continue // this segment failed to fetch — skip it, not fatal to the turn
     await new Promise<void>((resolve) => {
-      audio.onended = () => resolve()
+      // Chrome has a known quirk with streamed audio blobs (which is what
+      // this pipeline always produces) where `ended` can simply never
+      // fire, even though the file played and finished fine — Safari
+      // doesn't share this quirk, which is exactly the "works on Safari,
+      // gets stuck on Chrome" symptom this timeout exists to catch. A
+      // single sentence's TTS clip should never legitimately run anywhere
+      // near this long, so hitting it always means something's wrong,
+      // not that the reply is genuinely still speaking.
+      let settled = false
+      const settle = () => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(timeoutId)
+        resolve()
+      }
+      const timeoutId = window.setTimeout(() => {
+        console.warn('[TalkToMe] audio playback timed out waiting for "ended" — advancing anyway')
+        settle()
+      }, 20000)
+      audio.onended = () => settle()
       audio.onerror = () => {
         console.warn('[TalkToMe] <audio> element error', audio.error?.code, audio.error?.message)
-        resolve()
+        settle()
       }
       audio.src = url
       audio.play().catch((err) => {
         console.warn('[TalkToMe] audio.play() rejected', err?.name, err?.message)
-        resolve()
+        settle()
       })
     })
     URL.revokeObjectURL(url)
