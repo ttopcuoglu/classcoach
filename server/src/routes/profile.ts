@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { SAFE_USER_OMIT, SESSION_COOKIE, USER_INCLUDE_ORG } from '../lib/auth.ts'
 import { resolveJoinCode } from '../lib/organization.ts'
 import { prisma } from '../lib/prisma.ts'
+import { isValidTalkVoice } from '../lib/talkVoices.ts'
 
 export const profileRouter = Router()
 
@@ -52,6 +53,7 @@ profileRouter.put('/', async (req, res) => {
     onboardingProgress,
     audioRetentionDays,
     focusMetric,
+    talkVoice,
     jobTitle,
     schoolName,
     teachingGoal,
@@ -82,6 +84,10 @@ profileRouter.put('/', async (req, res) => {
   }
   if (focusMetric !== undefined && focusMetric !== null && !FOCUS_METRICS.has(focusMetric)) {
     res.status(400).json({ error: 'focusMetric must be one of the supported focus metrics, or null' })
+    return
+  }
+  if (talkVoice !== undefined && talkVoice !== null && !isValidTalkVoice(talkVoice)) {
+    res.status(400).json({ error: 'talkVoice must be one of the supported voices, or null' })
     return
   }
   if (jobTitle !== undefined && jobTitle !== null && typeof jobTitle !== 'string') {
@@ -139,6 +145,7 @@ profileRouter.put('/', async (req, res) => {
       onboardingProgress,
       audioRetentionDays,
       focusMetric,
+      talkVoice,
       jobTitle,
       schoolName,
       teachingGoal,
@@ -172,6 +179,7 @@ profileRouter.post('/reset', async (req, res) => {
       subjects: null,
       onboardingProgress: null,
       focusMetric: null,
+      talkVoice: null,
       coachMemory: null,
       coachMemoryEnabled: true,
     },

@@ -21,8 +21,10 @@ ttsRouter.get('/', async (req, res) => {
     return
   }
 
+  const voice = typeof req.query.voice === 'string' ? req.query.voice : undefined
+
   try {
-    const upstream = await synthesizeSpeechStream(text.trim())
+    const upstream = await synthesizeSpeechStream(text.trim(), voice)
     res.setHeader('Content-Type', 'audio/mpeg')
     if (!upstream.body) {
       res.status(502).json({ error: 'Could not generate speech. Please try again.' })

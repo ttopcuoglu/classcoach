@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { createBillingPortalSession, createCheckoutSession, deleteAccount, getProfile, resetData, updateProfile } from '../lib/api'
+import {
+  createBillingPortalSession,
+  createCheckoutSession,
+  deleteAccount,
+  getProfile,
+  resetData,
+  TALK_VOICES,
+  updateProfile,
+  type TalkVoice,
+} from '../lib/api'
 
 export default function Profile() {
   const [loading, setLoading] = useState(true)
@@ -11,6 +20,7 @@ export default function Profile() {
   const [organizationName, setOrganizationName] = useState<string | null>(null)
   const [coachMemory, setCoachMemory] = useState<string | null>(null)
   const [coachMemoryEnabled, setCoachMemoryEnabled] = useState(true)
+  const [talkVoice, setTalkVoice] = useState<TalkVoice | null>(null)
   const [plan, setPlan] = useState<'free' | 'plus'>('free')
 
   const [billingLoading, setBillingLoading] = useState(false)
@@ -44,6 +54,7 @@ export default function Profile() {
         setOrganizationName(profile.organization?.name ?? null)
         setCoachMemory(profile.coachMemory)
         setCoachMemoryEnabled(profile.coachMemoryEnabled)
+        setTalkVoice(profile.talkVoice)
         setPlan(profile.plan)
       })
       .catch(() => setSaveError('Could not load your profile.'))
@@ -62,6 +73,7 @@ export default function Profile() {
         subjects,
         audioRetentionDays: audioRetentionDays ? Number(audioRetentionDays) : null,
         coachMemoryEnabled,
+        talkVoice,
       })
       setSaved(true)
     } catch {
@@ -309,6 +321,32 @@ export default function Profile() {
           </div>
         )}
         {clearMemoryError && <p className="mt-2 text-sm text-warm-500">{clearMemoryError}</p>}
+      </div>
+
+      <div className="rounded-2xl border border-border bg-surface p-6">
+        <h2 className="text-sm font-semibold text-ink">Coach's voice</h2>
+        <p className="mt-1 text-sm text-ink-soft">Choose which voice Coach speaks with in Talk It Through.</p>
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {TALK_VOICES.map((v) => (
+            <button
+              key={v.value}
+              type="button"
+              onClick={() => {
+                setTalkVoice(v.value)
+                setSaved(false)
+              }}
+              className={`rounded-lg border px-3.5 py-2.5 text-left text-sm transition-colors ${
+                (talkVoice ?? 'thalia') === v.value
+                  ? 'border-brand-500 bg-brand-50 text-brand-600'
+                  : 'border-border text-ink hover:border-brand-400'
+              }`}
+            >
+              <span className="font-semibold">{v.label}</span>
+              <span className="block text-xs text-ink-soft">{v.description}</span>
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-ink-soft">Use "Save changes" above to apply this.</p>
       </div>
 
       <div className="rounded-2xl border border-border bg-surface p-6">

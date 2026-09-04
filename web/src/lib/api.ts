@@ -33,6 +33,20 @@ export type ScenarioAttempt = {
   reflectionNote: string | null
 }
 
+// Curated subset of Deepgram Aura-2's voice catalog for Talk It Through —
+// see server/src/lib/talkVoices.ts. Same flat per-character billing
+// regardless of voice, so this list is a UX choice, not a cost one.
+export type TalkVoice = 'thalia' | 'andromeda' | 'helena' | 'apollo' | 'arcas' | 'aries'
+
+export const TALK_VOICES: { value: TalkVoice; label: string; description: string }[] = [
+  { value: 'thalia', label: 'Thalia', description: 'Clear, confident, energetic (default)' },
+  { value: 'andromeda', label: 'Andromeda', description: 'Casual and expressive' },
+  { value: 'helena', label: 'Helena', description: 'Warm, caring, friendly' },
+  { value: 'apollo', label: 'Apollo', description: 'Calm and confident' },
+  { value: 'arcas', label: 'Arcas', description: 'Smooth and natural' },
+  { value: 'aries', label: 'Aries', description: 'Warm and energetic' },
+]
+
 export type FocusMetric =
   | 'talkRatio'
   | 'higherOrderPct'
@@ -68,6 +82,7 @@ export type UserProfile = {
   termsAcceptedAt: string | null
   ageConfirmedAt: string | null
   audioRetentionDays: number | null
+  talkVoice: TalkVoice | null
   focusMetric: FocusMetric | null
   coachMemory: string | null
   coachMemoryEnabled: boolean
@@ -612,6 +627,7 @@ export function updateProfile(data: {
   onboardingProgress?: string
   audioRetentionDays?: number | null
   focusMetric?: FocusMetric | null
+  talkVoice?: TalkVoice | null
   jobTitle?: JobTitle | null
   schoolName?: string
   teachingGoal?: string
@@ -708,8 +724,10 @@ export async function transcribeTalkToMeAudio(audioBlob: Blob): Promise<{ transc
 // this lets the browser stream Deepgram's response natively (playback can
 // start from the first byte) instead of buffering the whole clip via
 // fetch().blob() first.
-export function buildSpeechUrl(text: string): string {
-  return `${API_BASE_URL}/api/tts?text=${encodeURIComponent(text)}`
+export function buildSpeechUrl(text: string, voice?: TalkVoice | null): string {
+  const query = new URLSearchParams({ text })
+  if (voice) query.set('voice', voice)
+  return `${API_BASE_URL}/api/tts?${query.toString()}`
 }
 
 export function setDebriefSaved(id: string, saved: boolean): Promise<Debrief> {

@@ -36,6 +36,7 @@ model User {
   suspendedAt           DateTime? // superadmin-set only; blocks future sign-in, doesn't kill an already-active session
   audioRetentionDays    Int? // null = keep audio-coaching transcripts/reports indefinitely
   focusMetric           String? // the teacher's chosen My Growth focus — see FocusMetric in web/src/lib/focusMetrics.ts, null = none set
+  talkVoice             String? // Talk It Through's TTS voice — see TALK_VOICES in server/src/lib/talkVoices.ts, null = default (thalia)
   // A running, Coach-maintained free-text profile: recurring strengths and
   // growth areas, plus "open situations" (an ongoing class or student
   // challenge spanning multiple conversations, described by role/period —

@@ -6,12 +6,14 @@ import {
   buildSpeechUrl,
   generateTalkTakeaway,
   getDebriefs,
+  getProfile,
   sendDebriefChat,
   setDebriefSaved,
   startTalkToMe,
   type ChatMessage,
   type Debrief,
   type TalkTakeaway,
+  type TalkVoice,
 } from '../lib/api'
 
 // First-person, concrete — things a teacher could plausibly say out loud,
@@ -83,9 +85,9 @@ function splitIntoSentences(text: string): string[] {
 // audio.play() is, so this can safely run in the background regardless
 // of whose "turn" it is to play. Returns null (rather than throwing) on
 // failure so a single bad segment doesn't take down the whole reply.
-async function fetchSentenceAudio(sentence: string): Promise<string | null> {
+async function fetchSentenceAudio(sentence: string, voice: TalkVoice | null): Promise<string | null> {
   try {
-    const res = await fetch(buildSpeechUrl(sentence), { credentials: 'include' })
+    const res = await fetch(buildSpeechUrl(sentence, voice), { credentials: 'include' })
     if (!res.ok) {
       console.warn('[TalkToMe] TTS fetch failed', res.status, await res.text().catch(() => ''))
       return null
@@ -121,9 +123,9 @@ async function fetchSentenceAudio(sentence: string): Promise<string | null> {
 // above — prefetching is just a network request; only the actual
 // assigned `src`/`play()` needs to be the one persistent, gesture-
 // unlocked element.
-async function playQueue(audio: HTMLAudioElement, sentences: string[]): Promise<void> {
+async function playQueue(audio: HTMLAudioElement, sentences: string[], voice: TalkVoice | null): Promise<void> {
   if (sentences.length === 0) return
-  const audioUrls = sentences.map(fetchSentenceAudio)
+  const audioUrls = sentences.map((sentence) => fetchSentenceAudio(sentence, voice))
   for (let i = 0; i < sentences.length; i++) {
     const url = await audioUrls[i]
     if (!url) continue // this segment failed to fetch — skip it, not fatal to the turn
@@ -181,6 +183,9 @@ export default function TalkToMe() {
   const [takeawayLoading, setTakeawayLoading] = useState(false)
   const [takeawayError, setTakeawayError] = useState<string | null>(null)
   const [savedTalks, setSavedTalks] = useState<Debrief[]>([])
+  const [talkVoice, setTalkVoice] = useState<TalkVoice | null>(null)
+  const talkVoiceRef = useRef<TalkVoice | null>(null)
+  talkVoiceRef.current = talkVoice
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const mutedRef = useRef(muted)
@@ -290,6 +295,12 @@ export default function TalkToMe() {
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    getProfile()
+      .then((profile) => setTalkVoice(profile.talkVoice))
+      .catch(() => {})
+  }, [])
+
   function beginListening() {
     sessionActiveRef.current = true
     setError(null)
@@ -339,7 +350,7 @@ export default function TalkToMe() {
       resumeListeningIfActive()
       return
     }
-    await playQueue(audioRef.current, sentences)
+    await playQueue(audioRef.current, sentences, talkVoiceRef.current)
     resumeListeningIfActive()
   }
 

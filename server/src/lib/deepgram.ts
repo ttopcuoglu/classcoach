@@ -1,3 +1,5 @@
+import { DEFAULT_TALK_VOICE, isValidTalkVoice } from './talkVoices.ts'
+
 // One-shot (non-streaming) transcription against Deepgram's prerecorded
 // endpoint. The caller is responsible for never persisting `buffer` — this
 // function only ever holds it in memory long enough to make the request.
@@ -57,11 +59,12 @@ export async function transcribeAudio(buffer: Buffer, contentType: string): Prom
 // before the full clip is synthesized), so this returns the raw Response
 // for the caller to pipe straight through rather than buffering the whole
 // thing into memory first.
-export async function synthesizeSpeechStream(text: string): Promise<Response> {
+export async function synthesizeSpeechStream(text: string, voice?: string): Promise<Response> {
   const apiKey = process.env.DEEPGRAM_API_KEY
   if (!apiKey) throw new Error('DEEPGRAM_API_KEY is not set')
 
-  const response = await fetch('https://api.deepgram.com/v1/speak?model=aura-2-thalia-en', {
+  const safeVoice = isValidTalkVoice(voice) ? voice : DEFAULT_TALK_VOICE
+  const response = await fetch(`https://api.deepgram.com/v1/speak?model=aura-2-${safeVoice}-en`, {
     method: 'POST',
     headers: {
       Authorization: `Token ${apiKey}`,
