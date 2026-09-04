@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, MicIcon } from '../components/icons'
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
@@ -74,6 +74,11 @@ export default function AudioCoaching() {
   const [error, setError] = useState<string | null>(null)
   const [focusMetric, setFocusMetric] = useState<FocusMetric | null>(null)
   const [teacherName, setTeacherName] = useState<string | null>(null)
+  // Only used to decide whether to show the free-tier "X of 3 used this
+  // month" line below — an org member could have district/pilot access
+  // this client can't verify without a new API call, so the line is only
+  // ever shown when we're certain: plain "free" plan, no organization.
+  const [showFreeCapLine, setShowFreeCapLine] = useState(false)
 
   function refreshHistory() {
     getAudioSessions()
@@ -88,9 +93,17 @@ export default function AudioCoaching() {
       .then((p) => {
         setFocusMetric(p.focusMetric)
         setTeacherName(p.name)
+        setShowFreeCapLine(p.plan === 'free' && p.organizationId == null)
       })
       .catch(() => {})
   }, [])
+
+  const freeRecordingsUsedThisMonth = useMemo(() => {
+    const startOfMonth = new Date()
+    startOfMonth.setDate(1)
+    startOfMonth.setHours(0, 0, 0, 0)
+    return sessions.filter((s) => new Date(s.createdAt) >= startOfMonth).length
+  }, [sessions])
 
   async function handleFocusMetricChange(metric: FocusMetric | null) {
     setFocusMetric(metric)
@@ -165,6 +178,12 @@ export default function AudioCoaching() {
 
       {error && <p className="text-sm text-warm-500">{error}</p>}
 
+      {!active && showFreeCapLine && (
+        <p className="text-sm text-ink-soft">
+          {freeRecordingsUsedThisMonth} of 3 free Lesson Debrief recordings used this month.
+        </p>
+      )}
+
       <RecordingPanel
         session={active}
         teacherName={teacherName}
@@ -225,7 +244,7 @@ function SessionFlow({
     )
   }
   if (session.status === 'tagging') {
-    return <TagSpeakersPanel session={session} speakers={speakers} onUpdate={onUpdate} />
+    return <TagSpeakersPanel session={session} speakers={speakers} onUpdate={onUpdate} onExit={onExit} />
   }
   return (
     <ReportPanel
@@ -255,6 +274,7 @@ function RecordingPanel({
   const [phase, setPhase] = useState<'idle' | 'recording' | 'paused' | 'uploading'>('idle')
   const [elapsedSec, setElapsedSec] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [uploadProgress, setUploadProgress] = useState(0)
 
   const recorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -263,6 +283,12 @@ function RecordingPanel({
   const runStartRef = useRef<number | null>(null)
   const intervalRef = useRef<number | null>(null)
   const mimeTypeRef = useRef('audio/webm')
+  const uploadDurationRef = useRef(0)
+  // Tracks the id of a session this exact call to handleRecord just
+  // created, so a mic-permission failure right after can clean up that row
+  // instead of leaving a dead "setup" entry behind — never touches a
+  // session that already existed (e.g. re-opened from Past sessions).
+  const justCreatedSessionIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     return () => {
@@ -271,6 +297,27 @@ function RecordingPanel({
     }
   }, [])
 
+  // Deepgram's batch transcription endpoint has no progress/streaming
+  // signal to poll, so this is a simulated estimate, not a real
+  // measurement — scaled by how long the recording actually was, since a
+  // longer class period genuinely takes longer to transcribe. Same
+  // asymptotic-curve technique as TalkToMe.tsx's thinkingProgress: climbs
+  // quickly, eases toward ~92%, and only ever reaches 100% implicitly by
+  // disappearing the instant the real response arrives and phase moves on.
+  useEffect(() => {
+    if (phase !== 'uploading') {
+      setUploadProgress(0)
+      return
+    }
+    const estimatedMs = Math.max(3000, uploadDurationRef.current * 150)
+    const start = Date.now()
+    const interval = window.setInterval(() => {
+      const elapsed = Date.now() - start
+      setUploadProgress(92 * (1 - Math.exp(-elapsed / estimatedMs)))
+    }, 100)
+    return () => window.clearInterval(interval)
+  }, [phase])
+
   function tick() {
     if (runStartRef.current === null) return
     setElapsedSec(accumulatedSecRef.current + (Date.now() - runStartRef.current) / 1000)
@@ -278,6 +325,7 @@ function RecordingPanel({
 
   async function handleRecord() {
     setError(null)
+    justCreatedSessionIdRef.current = null
     if (!session) {
       try {
         const created = await createAudioSession({
@@ -285,6 +333,7 @@ function RecordingPanel({
           sessionDate: new Date().toISOString(),
           consentConfirmed: true,
         })
+        justCreatedSessionIdRef.current = created.id
         onUpdate({ ...created, segments: [] })
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Could not start a new session. Please try again.')
@@ -308,6 +357,15 @@ function RecordingPanel({
       intervalRef.current = window.setInterval(tick, 250)
       setPhase('recording')
     } catch {
+      // A session row was just created above but the mic never actually
+      // started — clean it up rather than leaving a dead "setup" entry
+      // sitting in Past sessions forever. Only ever deletes a session this
+      // exact call created, never one the teacher re-opened.
+      if (justCreatedSessionIdRef.current) {
+        const idToDelete = justCreatedSessionIdRef.current
+        deleteAudioSession(idToDelete).catch(() => {})
+        onExit()
+      }
       setError('Could not access the microphone. Check your browser permissions and try again.')
     }
   }
@@ -348,6 +406,7 @@ function RecordingPanel({
 
     const blob = new Blob(chunksRef.current, { type: mimeTypeRef.current || 'audio/webm' })
     chunksRef.current = []
+    uploadDurationRef.current = finalElapsed
     setPhase('uploading')
     setError(null)
     try {
@@ -449,7 +508,15 @@ function RecordingPanel({
               </>
             )}
             {phase === 'uploading' && (
-              <span className="text-sm text-ink-soft">This can take a minute for a full class period.</span>
+              <div className="flex w-48 flex-col items-center gap-1.5">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-canvas">
+                  <div
+                    className="h-full rounded-full bg-brand-500 transition-[width] duration-150 ease-out"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+                <span className="text-xs text-ink-soft">This can take a minute for a full class period.</span>
+              </div>
             )}
           </div>
         </div>
@@ -473,13 +540,16 @@ function TagSpeakersPanel({
   session,
   speakers,
   onUpdate,
+  onExit,
 }: {
   session: AudioSessionWithSegments
   speakers: SpeakerSample[]
   onUpdate: (s: AudioSessionWithSegments) => void
+  onExit: () => void
 }) {
   const [tagging, setTagging] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   async function handleTag(rawSpeakerTag: string) {
     setTagging(rawSpeakerTag)
@@ -493,6 +563,21 @@ function TagSpeakersPanel({
     }
   }
 
+  // Defense-in-depth only — the /transcribe route now gives every distinct
+  // raw speaker tag a card, so this should be unreachable in practice, but
+  // a dead end with no way forward is worse than an unlikely one, so it
+  // still gets a real escape hatch rather than a bare message.
+  async function handleDeleteAndRetry() {
+    setDeleting(true)
+    try {
+      await deleteAudioSession(session.id)
+      onExit()
+    } catch {
+      setError('Could not delete this session. Please try again.')
+      setDeleting(false)
+    }
+  }
+
   return (
     <div className="rounded-2xl border border-border bg-surface p-6">
       <h2 className="text-sm font-semibold text-ink">Which voice is the teacher?</h2>
@@ -502,7 +587,19 @@ function TagSpeakersPanel({
       </p>
       <div className="mt-4 flex flex-col gap-3">
         {speakers.length === 0 ? (
-          <p className="text-sm text-ink-soft">No distinct speakers were detected.</p>
+          <div className="flex flex-col items-start gap-3">
+            <p className="text-sm text-ink-soft">
+              This recording couldn't be split into distinct speakers, so there's no one to tag here.
+            </p>
+            <button
+              type="button"
+              onClick={handleDeleteAndRetry}
+              disabled={deleting}
+              className="rounded-lg border border-warm-500 px-4 py-2 text-sm font-semibold text-warm-500 transition-colors hover:bg-warm-100 disabled:opacity-60"
+            >
+              {deleting ? 'Deleting...' : 'Delete this session and try recording again'}
+            </button>
+          </div>
         ) : (
           speakers.map((s) => (
             <div
@@ -657,60 +754,103 @@ function buildVoiceBalanceCaption(judgment: TalkBalanceJudgment | null): string 
   }
 }
 
-function buildTalkInsight(session: AudioSessionWithSegments): string | null {
-  return buildVoiceBalanceCaption(judgeTalkBalance(session.teacherTalkPct, session.studentTalkPct))
+function buildTalkInsight(
+  session: AudioSessionWithSegments,
+  studentSegmentsMetric: ConfidentMetric,
+): string | null {
+  let sentence = buildVoiceBalanceCaption(judgeTalkBalance(session.teacherTalkPct, session.studentTalkPct))
+  if (studentSegmentsMetric.state === 'measured') {
+    const count = Number(studentSegmentsMetric.display)
+    if (Number.isFinite(count) && count > 0) {
+      sentence = `${sentence ?? ''} Students spoke up in ${count} separate moment${count === 1 ? '' : 's'} today — that's real back-and-forth, even beyond the raw talk-time split.`.trim()
+    }
+  } else if (studentSegmentsMetric.state === 'confirmed_none' && sentence) {
+    sentence += ' Students never separately spoke up this session.'
+  }
+  return sentence
 }
 
 function buildQuestioningInsight(
   session: AudioSessionWithSegments,
   higherOrderRatio: ConfidentMetric | null,
+  followUpMetric: ConfidentMetric,
+  waitTimeMetric: ConfidentMetric,
 ): string | null {
   if (!higherOrderRatio || isMissingState(higherOrderRatio.state)) return null
+  let sentence: string
   if (higherOrderRatio.state === 'possible_detection') {
-    return `Only ${session.questionCount} question${session.questionCount === 1 ? '' : 's'} came through today — too few to say whether they leaned recall or higher-order.`
+    sentence = `Only ${session.questionCount} question${session.questionCount === 1 ? '' : 's'} came through today — too few to say whether they leaned recall or higher-order.`
+  } else if (session.higherOrderPct != null && session.higherOrderPct >= 40) {
+    sentence = `A good chunk of today's questions pushed for real thinking (${session.higherOrderPct}% higher-order) — that's the harder kind of question to ask on the fly.`
+  } else {
+    sentence = "Most of today's questions were quick recall checks — a natural spot to slip in one 'why' or 'how' next time."
   }
-  if (session.higherOrderPct != null && session.higherOrderPct >= 40) {
-    return `A good chunk of today's questions pushed for real thinking (${session.higherOrderPct}% higher-order) — that's the harder kind of question to ask on the fly.`
+  if (followUpMetric.state === 'measured') {
+    sentence += ` You followed up on a question ${followUpMetric.display} time${followUpMetric.display === '1' ? '' : 's'} — that's a habit worth keeping.`
+  } else if (followUpMetric.state === 'confirmed_none') {
+    sentence += ' None of your questions got a follow-up today — a quick "say more about that" can go a long way.'
   }
-  return "Most of today's questions were quick recall checks — a natural spot to slip in one 'why' or 'how' next time."
+  if (waitTimeMetric.state === 'measured' && session.avgWaitTimeSec != null) {
+    sentence +=
+      session.avgWaitTimeSec >= 3
+        ? ` Your average wait time was ${session.avgWaitTimeSec.toFixed(1)}s — that's real thinking room.`
+        : ` Your average wait time was ${session.avgWaitTimeSec.toFixed(1)}s — waiting a beat longer can bring more students into a response.`
+  }
+  return sentence
 }
 
-function buildCfuInsight(cfuMetric: { state: string }): string | null {
+function buildCfuInsight(cfuMetric: { state: string }, feedbackRatio: ConfidentMetric): string | null {
+  let sentence: string | null = null
   if (cfuMetric.state === 'measured') {
-    return 'You checked for understanding today — a good habit for catching confusion before it compounds.'
+    sentence = 'You checked for understanding today — a good habit for catching confusion before it compounds.'
+  } else if (cfuMetric.state === 'confirmed_none') {
+    sentence = 'No explicit check for understanding was detected this session — even a quick thumbs-up check can catch confusion early.'
   }
-  if (cfuMetric.state === 'confirmed_none') {
-    return 'No explicit check for understanding was detected this session — even a quick thumbs-up check can catch confusion early.'
+  if (feedbackRatio.state === 'measured' && feedbackRatio.display.endsWith('%')) {
+    const pct = Number.parseInt(feedbackRatio.display, 10)
+    const clause =
+      pct >= 50
+        ? `Your feedback tended to be specific (${feedbackRatio.display}) rather than generic praise — that's what actually helps students improve.`
+        : `Your feedback leaned generic (only ${feedbackRatio.display} specific) — naming exactly what a student did well tends to stick better.`
+    sentence = sentence ? `${sentence} ${clause}` : clause
   }
-  return null
+  return sentence
 }
 
 function buildRoutinesInsight(
   directiveMetric: { state: string; display: string },
   hasRepeatedInstructionHighlight: boolean,
+  transitionMetric: ConfidentMetric,
 ): string | null {
+  let sentence: string | null = null
   if (directiveMetric.state === 'measured') {
     const base = `You gave clear, direct instructions ${directiveMetric.display} today — that kind of clarity helps routines run themselves.`
-    return hasRepeatedInstructionHighlight
+    sentence = hasRepeatedInstructionHighlight
       ? `${base} A couple needed repeating, though — worth double-checking they land the first time.`
       : base
+  } else if (directiveMetric.state === 'confirmed_none') {
+    sentence = "No task-instruction language was picked up today — if you gave directions, they may just have been phrased differently than what's detected here."
   }
-  if (directiveMetric.state === 'confirmed_none') {
-    return "No task-instruction language was picked up today — if you gave directions, they may just have been phrased differently than what's detected here."
+  if (transitionMetric.state === 'measured') {
+    const clause = `You used transition language ${transitionMetric.display} today, marking the shifts between activities.`
+    sentence = sentence ? `${sentence} ${clause}` : clause
   }
-  return null
+  return sentence
 }
 
 function buildClimateInsight(
   redirectionMetric: { state: string; display: string },
   positiveCount: number | null,
   correctiveCount: number | null,
+  nameMentionMetric: ConfidentMetric,
+  hasRedirectionCluster: boolean,
+  firstRedirectionTimestampSec: number | null,
 ): string | null {
+  let sentence: string | null = null
   if (redirectionMetric.state === 'confirmed_none') {
-    return 'No redirection language was detected this session.'
-  }
-  if (redirectionMetric.state === 'measured') {
-    let sentence = `You used redirection language ${redirectionMetric.display} today.`
+    sentence = 'No redirection language was detected this session.'
+  } else if (redirectionMetric.state === 'measured') {
+    sentence = `You used redirection language ${redirectionMetric.display} today.`
     if (positiveCount != null && correctiveCount != null) {
       const toneTotal = positiveCount + correctiveCount
       if (toneTotal >= MIN_N_FOR_PERCENT) {
@@ -724,9 +864,57 @@ function buildClimateInsight(
           ' Only a few tone-language moments came through today — too few to say whether positive or corrective language dominated.'
       }
     }
-    return sentence
+    if (hasRedirectionCluster) {
+      sentence += ' A few of those redirections clustered close together — worth a look at what led into that stretch.'
+    }
+    if (firstRedirectionTimestampSec != null && firstRedirectionTimestampSec < 120) {
+      sentence += ' The first one came quite early in the session — a rough start, or just day-one energy?'
+    }
   }
-  return null
+  if (nameMentionMetric.state === 'measured') {
+    const clause = `You used student names ${nameMentionMetric.display} today — a small thing that builds real relationship.`
+    sentence = sentence ? `${sentence} ${clause}` : clause
+  } else if (nameMentionMetric.state === 'confirmed_none' && sentence) {
+    sentence += ' No student names came through in the transcript today.'
+  }
+  return sentence
+}
+
+// Content & Explanations has no coach-voice sentence today — stitches
+// together whichever of stated-objective / a real-world connection /
+// defined vocabulary were actually detected into one warm sentence. Null
+// when lessonContent itself is null (session predates this field, or the
+// Opening phase wasn't captured) — never speaks from nothing, same
+// discipline as every other builder in this file.
+function buildContentInsight(lessonContent: AudioLessonContent | null): string | null {
+  if (!lessonContent) return null
+  const parts: string[] = []
+  if (lessonContent.statedObjective.found === true) parts.push('stated a clear objective at the start')
+  if (lessonContent.connections.length > 0) {
+    parts.push(
+      lessonContent.connections.length === 1
+        ? 'connected the lesson to something familiar'
+        : `connected the lesson to something familiar ${lessonContent.connections.length} times`,
+    )
+  }
+  if (lessonContent.vocabulary.length > 0) {
+    parts.push(
+      `defined ${lessonContent.vocabulary.length} key vocabulary term${lessonContent.vocabulary.length === 1 ? '' : 's'}`,
+    )
+  }
+  if (parts.length === 0) {
+    if (lessonContent.statedObjective.found === false) {
+      return 'No stated objective, real-world connection, or defined vocabulary term was detected today — even one of these can anchor a lesson for students.'
+    }
+    return null
+  }
+  const joined =
+    parts.length === 1
+      ? parts[0]
+      : parts.length === 2
+        ? `${parts[0]} and ${parts[1]}`
+        : `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`
+  return `Nice work today — you ${joined}.`
 }
 
 function CoachNote({ text }: { text: string | null }) {
@@ -1486,14 +1674,22 @@ function ReportPanel({
 
   const reflectContext = buildReflectContext(session, cfuMetric, redirectionMetric, directiveMetric, coverage)
 
-  const talkInsight = buildTalkInsight(session)
-  const questioningInsight = buildQuestioningInsight(session, higherOrderRatio)
-  const cfuInsight = buildCfuInsight(cfuMetric)
+  const talkInsight = buildTalkInsight(session, studentSegmentsMetric)
+  const questioningInsight = buildQuestioningInsight(session, higherOrderRatio, followUpMetric, waitTimeMetric)
+  const cfuInsight = buildCfuInsight(cfuMetric, feedbackRatio)
+  const contentInsight = buildContentInsight(lessonContent)
   const hasRepeatedInstructionHighlight = (session.highlights ?? []).some((h) => h.label === 'Repeated instruction')
   const hasRedirectionCluster = (session.highlights ?? []).some((h) => h.label === 'Redirection cluster')
   const firstRedirectionTimestampSec = num('firstRedirectionTimestampSec')
-  const routinesInsight = buildRoutinesInsight(directiveMetric, hasRepeatedInstructionHighlight)
-  const climateInsight = buildClimateInsight(redirectionMetric, positiveCount, correctiveCount)
+  const routinesInsight = buildRoutinesInsight(directiveMetric, hasRepeatedInstructionHighlight, transitionMetric)
+  const climateInsight = buildClimateInsight(
+    redirectionMetric,
+    positiveCount,
+    correctiveCount,
+    nameMentionMetric,
+    hasRedirectionCluster,
+    firstRedirectionTimestampSec,
+  )
 
   // Computed once here (not per-tab) so the shared header can show it on
   // every tab, not just Summary.
@@ -1678,6 +1874,7 @@ function ReportPanel({
               <LessonContentTab
                 session={session}
                 lessonContent={lessonContent}
+                contentInsight={contentInsight}
                 contentNotes={session.contentNotes}
                 isShort={coverage.isShort}
                 sending={contentNotesSending}
@@ -2450,6 +2647,7 @@ function WordCloud({ words, colorClassName }: { words: AudioTopicTerm[]; colorCl
 function LessonContentTab({
   session,
   lessonContent,
+  contentInsight,
   contentNotes,
   isShort,
   sending,
@@ -2458,6 +2656,7 @@ function LessonContentTab({
 }: {
   session: AudioSession
   lessonContent: AudioLessonContent | null
+  contentInsight: string | null
   contentNotes: AudioContentNotes | null
   isShort: boolean
   sending: boolean
@@ -2475,6 +2674,7 @@ function LessonContentTab({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs font-normal italic text-ink-soft">Flags & quotes only — not scored</p>
+      <CoachNote text={contentInsight} />
       <div className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Topic terms detected</p>

@@ -281,9 +281,16 @@ audioSessionsRouter.post('/:id/transcribe', upload.single('audio'), async (req, 
       data: { status: 'tagging', durationSec },
     })
 
+    // Every distinct raw speaker tag that has at least one segment gets a
+    // card, even if none of its utterances happened to have non-blank text
+    // — skipping a tag entirely here used to mean a session could reach
+    // TagSpeakersPanel with zero speaker cards and no way forward, even
+    // though diarization genuinely found distinct voices.
     const speakerSamples = new Map<string, string>()
     for (const segment of segments) {
-      if (!speakerSamples.has(segment.rawSpeakerTag) && segment.text.trim()) {
+      if (!speakerSamples.has(segment.rawSpeakerTag)) {
+        speakerSamples.set(segment.rawSpeakerTag, segment.text.trim() || '(no clear words captured)')
+      } else if (segment.text.trim() && speakerSamples.get(segment.rawSpeakerTag) === '(no clear words captured)') {
         speakerSamples.set(segment.rawSpeakerTag, segment.text)
       }
     }
