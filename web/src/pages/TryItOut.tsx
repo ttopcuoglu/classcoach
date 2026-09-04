@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import CoachingChat from '../components/CoachingChat'
+import ReflectionTimeline from '../components/ReflectionTimeline'
 import ShareButton from '../components/ShareButton'
 import { ArrowUpIcon, MicIcon, StarIcon } from '../components/icons'
 import { useSpeechToText } from '../hooks/useSpeechToText'
@@ -9,6 +10,8 @@ import {
   generateScenario,
   getAttempts,
   getProfile,
+  markAttemptTried,
+  saveAttemptReflection,
   sendAttemptChat,
   setAttemptSaved,
   shareAttempt,
@@ -18,9 +21,15 @@ import {
 
 const DIFFICULTIES: { label: string; value?: string }[] = [
   { label: 'Any difficulty' },
-  { label: 'Beginner', value: 'beginner' },
-  { label: 'Intermediate', value: 'intermediate' },
-  { label: 'Advanced', value: 'advanced' },
+  { label: 'Guided', value: 'beginner' },
+  { label: 'Independent', value: 'intermediate' },
+  { label: 'Challenge', value: 'advanced' },
+]
+
+const STARTER_SCENARIOS: { label: string; category: string }[] = [
+  { label: 'A student is checked out and not participating', category: 'disengagement' },
+  { label: 'A student pushes back when you ask them to do something', category: 'defiance' },
+  { label: 'The class is slow to settle into a routine', category: 'transitions' },
 ]
 
 const SESSION_LENGTH = 3
@@ -111,7 +120,7 @@ export default function TryItOut() {
     return best
   }, [allAttempts])
 
-  async function handleNewScenario() {
+  async function handleNewScenario(categoryOverride?: string) {
     setGenerating(true)
     setError(null)
     setAttempt(null)
@@ -119,7 +128,7 @@ export default function TryItOut() {
     setChatDraft('')
     setChatError(null)
     try {
-      const scenario = await generateScenario(category, gradeBand, difficulty, subject)
+      const scenario = await generateScenario(categoryOverride ?? category, gradeBand, difficulty, subject)
       setAttempt({
         id: `draft-${scenario.id}`,
         scenarioId: scenario.id,
@@ -131,6 +140,8 @@ export default function TryItOut() {
         createdAt: scenario.createdAt,
         scenario,
         conversation: [],
+        triedAt: null,
+        reflectionNote: null,
       })
     } catch {
       setError('Could not generate a scenario. Please try again.')
@@ -175,6 +186,27 @@ export default function TryItOut() {
     }
   }
 
+  function handleTryAgain() {
+    if (!attempt) return
+    setAttempt((prev) =>
+      prev
+        ? {
+            ...prev,
+            id: `draft-${prev.scenarioId}`,
+            responseText: '',
+            feedback: null,
+            modelResponse: null,
+            rating: null,
+            conversation: [],
+          }
+        : prev,
+    )
+    setResponseText('')
+    setChatDraft('')
+    setChatError(null)
+    setError(null)
+  }
+
   async function handleToggleSaved(target: ScenarioAttempt) {
     const nextSaved = !target.saved
     const applySaved = (a: ScenarioAttempt) => (a.id === target.id ? { ...a, saved: nextSaved } : a)
@@ -185,6 +217,24 @@ export default function TryItOut() {
     } catch {
       setAllAttempts((prev) => prev.map((a) => (a.id === target.id ? { ...a, saved: !nextSaved } : a)))
       if (attempt?.id === target.id) setAttempt((prev) => (prev ? { ...prev, saved: !nextSaved } : prev))
+    }
+  }
+
+  async function handleMarkTried(id: string) {
+    try {
+      const updated = await markAttemptTried(id)
+      setAllAttempts((prev) => prev.map((a) => (a.id === id ? updated : a)))
+    } catch {
+      // reflection timeline is a nice-to-have; a failed update just leaves the button as-is
+    }
+  }
+
+  async function handleSaveReflection(id: string, note: string) {
+    try {
+      const updated = await saveAttemptReflection(id, note)
+      setAllAttempts((prev) => prev.map((a) => (a.id === id ? updated : a)))
+    } catch {
+      // same as above — non-critical, silently ignored
     }
   }
 
@@ -279,11 +329,30 @@ export default function TryItOut() {
           </div>
         ) : !attempt ? (
           <div className="p-2 text-center">
-            <p className="text-sm text-ink-soft">No scenario loaded yet.</p>
+            <p className="text-sm text-ink-soft">Ready when you are — pick a scenario to start.</p>
+            <div className="mx-auto mt-4 grid max-w-xl grid-cols-1 gap-3 sm:grid-cols-3">
+              {STARTER_SCENARIOS.map((s) => (
+                <button
+                  key={s.label}
+                  type="button"
+                  onClick={() => {
+                    setCategory(s.category)
+                    handleNewScenario(s.category)
+                  }}
+                  disabled={generating}
+                  className="rounded-xl border border-border bg-canvas p-4 text-left text-sm text-ink transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
+                >
+                  <span className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+                    {categoryLabel(s.category)}
+                  </span>
+                  <p className="mt-1.5">{s.label}</p>
+                </button>
+              ))}
+            </div>
             <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
               <button
                 type="button"
-                onClick={handleNewScenario}
+                onClick={() => handleNewScenario()}
                 disabled={generating}
                 className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
               >
@@ -351,7 +420,7 @@ export default function TryItOut() {
                   {!sessionState && (
                     <button
                       type="button"
-                      onClick={handleNewScenario}
+                      onClick={() => handleNewScenario()}
                       disabled={generating}
                       className="text-sm font-medium text-ink-soft hover:text-ink"
                     >
@@ -414,20 +483,31 @@ export default function TryItOut() {
                     <StarIcon className="h-4 w-4" filled={attempt.saved} />
                     {attempt.saved ? 'Saved' : 'Save for later'}
                   </button>
-                  <button
-                    type="button"
-                    onClick={sessionState ? handleSessionAdvance : handleNewScenario}
-                    disabled={generating}
-                    className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
-                  >
-                    {generating
-                      ? 'Generating...'
-                      : sessionState
-                        ? sessionState.index < sessionState.total
-                          ? `Next (${sessionState.index + 1} of ${sessionState.total})`
-                          : 'Finish Session'
-                        : 'New Scenario'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {!sessionState && (
+                      <button
+                        type="button"
+                        onClick={handleTryAgain}
+                        className="rounded-lg border border-border px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+                      >
+                        Try again
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={sessionState ? handleSessionAdvance : () => handleNewScenario()}
+                      disabled={generating}
+                      className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+                    >
+                      {generating
+                        ? 'Generating...'
+                        : sessionState
+                          ? sessionState.index < sessionState.total
+                            ? `Next (${sessionState.index + 1} of ${sessionState.total})`
+                            : 'Finish Session'
+                          : 'New Scenario'}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -458,7 +538,7 @@ export default function TryItOut() {
         ) : (
           <div className="mt-3 flex flex-col gap-3">
             {savedAttempts.map((a) => (
-              <SavedAttemptCard key={a.id} attempt={a} />
+              <SavedAttemptCard key={a.id} attempt={a} onMarkTried={handleMarkTried} onSaveReflection={handleSaveReflection} />
             ))}
           </div>
         )}
@@ -467,7 +547,15 @@ export default function TryItOut() {
   )
 }
 
-function SavedAttemptCard({ attempt }: { attempt: ScenarioAttempt }) {
+function SavedAttemptCard({
+  attempt,
+  onMarkTried,
+  onSaveReflection,
+}: {
+  attempt: ScenarioAttempt
+  onMarkTried: (id: string) => void
+  onSaveReflection: (id: string, note: string) => void
+}) {
   const [expanded, setExpanded] = useState(false)
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
@@ -505,6 +593,12 @@ function SavedAttemptCard({ attempt }: { attempt: ScenarioAttempt }) {
             </div>
           )}
           <ShareButton type="attempt" onShare={() => shareAttempt(attempt.id)} />
+          <ReflectionTimeline
+            triedAt={attempt.triedAt}
+            reflectionNote={attempt.reflectionNote}
+            onMarkTried={() => onMarkTried(attempt.id)}
+            onSaveReflection={(note) => onSaveReflection(attempt.id, note)}
+          />
         </div>
       )}
     </div>

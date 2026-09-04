@@ -149,14 +149,30 @@ attemptsRouter.post('/:id/chat', async (req, res) => {
 })
 
 attemptsRouter.patch('/:id', async (req, res) => {
-  const { saved } = req.body ?? {}
-  if (typeof saved !== 'boolean') {
+  const { saved, markTried, reflectionNote } = req.body ?? {}
+  if (saved === undefined && markTried === undefined && reflectionNote === undefined) {
+    res.status(400).json({ error: 'Nothing to update' })
+    return
+  }
+  if (saved !== undefined && typeof saved !== 'boolean') {
     res.status(400).json({ error: 'saved must be a boolean' })
+    return
+  }
+  if (markTried !== undefined && markTried !== true) {
+    res.status(400).json({ error: 'markTried must be true' })
+    return
+  }
+  if (reflectionNote !== undefined && typeof reflectionNote !== 'string') {
+    res.status(400).json({ error: 'reflectionNote must be a string' })
     return
   }
   const { count } = await prisma.scenarioAttempt.updateMany({
     where: { id: req.params.id, userId: req.user!.userId },
-    data: { saved },
+    data: {
+      ...(saved !== undefined ? { saved } : {}),
+      ...(markTried === true ? { triedAt: new Date() } : {}),
+      ...(reflectionNote !== undefined ? { reflectionNote } : {}),
+    },
   })
   if (count === 0) {
     res.status(404).json({ error: 'Attempt not found' })

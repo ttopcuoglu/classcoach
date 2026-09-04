@@ -137,6 +137,10 @@ model ScenarioAttempt {
   // original submission + first feedback, grown by follow-up chat turns.
   // Same convention as AudioSession.reflectConversation.
   conversation   Json?
+
+  // Reflection timeline (Practiced -> Tried in class -> Reflected).
+  triedAt        DateTime?
+  reflectionNote String?
 }
 
 // Backs the "Ask" tab — a teacher either reflecting on something that
@@ -169,6 +173,13 @@ model Debrief {
   // 'talk_to_me'). Generated once, manually, when the teacher taps
   // "Finish session"; null until then. Ask's rows never use this field.
   talkTakeaway Json?
+
+  // Specific, adaptable language the teacher could try — Ask only.
+  wordsToTry String?
+
+  // Reflection timeline (Practiced -> Tried in class -> Reflected).
+  triedAt        DateTime?
+  reflectionNote String?
 }
 
 // Backs "Write a Message". tone is one of: warm, professional, firm, urgent

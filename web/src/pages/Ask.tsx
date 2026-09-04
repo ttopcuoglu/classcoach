@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import CoachingChat from '../components/CoachingChat'
+import ReflectionTimeline from '../components/ReflectionTimeline'
 import ShareButton from '../components/ShareButton'
 import { MicIcon, StarIcon } from '../components/icons'
 import { useSpeechToText } from '../hooks/useSpeechToText'
@@ -7,6 +9,8 @@ import { categoryLabel } from '../lib/categories'
 import { takeAskPrefill } from '../lib/communicationsPrefill'
 import {
   getDebriefs,
+  markDebriefTried,
+  saveDebriefReflection,
   sendDebriefChat,
   setDebriefSaved,
   shareDebrief,
@@ -21,8 +25,16 @@ const STARTER_QUESTIONS = [
   'How do I de-escalate two students arguing in class?',
 ]
 
+const STARTING_POINTS: { label: string; placeholder: string }[] = [
+  { label: 'Find the words', placeholder: 'Describe the moment — what would you like to say next time?' },
+  { label: 'Reflect on a moment', placeholder: 'What happened, and how do you feel about how it went?' },
+  { label: 'Build a routine', placeholder: 'What routine or expectation are you trying to set up?' },
+]
+
 export default function Ask() {
+  const navigate = useNavigate()
   const [incidentText, setIncidentText] = useState('')
+  const [placeholder, setPlaceholder] = useState('Describe what happened, or ask a question...')
   const [debrief, setDebrief] = useState<Debrief | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -105,6 +117,29 @@ export default function Ask() {
     }
   }
 
+  async function handleMarkTried(id: string) {
+    try {
+      const updated = await markDebriefTried(id)
+      setAllDebriefs((prev) => prev.map((d) => (d.id === id ? updated : d)))
+    } catch {
+      // reflection timeline is a nice-to-have; a failed update just leaves the button as-is
+    }
+  }
+
+  async function handleSaveReflection(id: string, note: string) {
+    try {
+      const updated = await saveDebriefReflection(id, note)
+      setAllDebriefs((prev) => prev.map((d) => (d.id === id ? updated : d)))
+    } catch {
+      // same as above — non-critical, silently ignored
+    }
+  }
+
+  function handlePracticeThis() {
+    if (debrief?.category) sessionStorage.setItem('classcoach.suggestedCategory', debrief.category)
+    navigate('/coach-chat?tab=practice')
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="rounded-2xl border border-border bg-surface p-6">
@@ -116,15 +151,15 @@ export default function Ask() {
             </p>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              {STARTER_QUESTIONS.map((starter) => (
+              {STARTING_POINTS.map((point) => (
                 <button
-                  key={starter}
+                  key={point.label}
                   type="button"
-                  onClick={() => handleSubmit(starter)}
+                  onClick={() => setPlaceholder(point.placeholder)}
                   disabled={submitting}
-                  className="rounded-full border border-border bg-canvas px-4 py-2 text-left text-sm text-ink transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
+                  className="rounded-full border border-border bg-canvas px-3.5 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
                 >
-                  {starter}
+                  {point.label}
                 </button>
               ))}
             </div>
@@ -136,7 +171,7 @@ export default function Ask() {
                 onChange={(e) => setIncidentText(e.target.value)}
                 disabled={submitting}
                 rows={5}
-                placeholder="Describe what happened, or ask a question..."
+                placeholder={placeholder}
                 className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
               />
             </label>
@@ -161,8 +196,22 @@ export default function Ask() {
               disabled={submitting || !incidentText.trim()}
               className="self-end rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
             >
-              {submitting ? 'Getting feedback...' : 'Get Feedback'}
+              {submitting ? 'Getting coaching...' : 'Get coaching'}
             </button>
+
+            <div className="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:flex-wrap">
+              {STARTER_QUESTIONS.map((starter) => (
+                <button
+                  key={starter}
+                  type="button"
+                  onClick={() => handleSubmit(starter)}
+                  disabled={submitting}
+                  className="rounded-full border border-border bg-canvas px-4 py-2 text-left text-sm text-ink transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
+                >
+                  {starter}
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-4">
@@ -180,15 +229,26 @@ export default function Ask() {
 
             {debrief.feedback && (
               <div className="rounded-xl border border-border bg-warm-100/60 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-warm-500">Coaching</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-warm-500">
+                  What may be happening
+                </p>
                 <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink">{debrief.feedback}</p>
+              </div>
+            )}
+
+            {debrief.wordsToTry && (
+              <div className="rounded-xl border border-border bg-surface p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                  Words to try
+                </p>
+                <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink">{debrief.wordsToTry}</p>
               </div>
             )}
 
             {debrief.followUp && (
               <div className="rounded-xl border border-border bg-brand-50 p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
-                  Following up
+                  One next step
                 </p>
                 <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink">{debrief.followUp}</p>
               </div>
@@ -204,7 +264,7 @@ export default function Ask() {
               placeholder="Ask a follow-up about this feedback..."
             />
 
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() => handleToggleSaved(debrief)}
@@ -215,13 +275,22 @@ export default function Ask() {
                 <StarIcon className="h-4 w-4" filled={debrief.saved} />
                 {debrief.saved ? 'Saved' : 'Save for later'}
               </button>
-              <button
-                type="button"
-                onClick={handleAskAnother}
-                className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
-              >
-                Ask Something Else
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePracticeThis}
+                  className="rounded-lg border border-border px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+                >
+                  Practice this
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAskAnother}
+                  className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+                >
+                  Ask Something Else
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -239,7 +308,7 @@ export default function Ask() {
         ) : (
           <div className="mt-3 flex flex-col gap-3">
             {savedDebriefs.map((d) => (
-              <SavedDebriefCard key={d.id} debrief={d} />
+              <SavedDebriefCard key={d.id} debrief={d} onMarkTried={handleMarkTried} onSaveReflection={handleSaveReflection} />
             ))}
           </div>
         )}
@@ -248,7 +317,15 @@ export default function Ask() {
   )
 }
 
-function SavedDebriefCard({ debrief }: { debrief: Debrief }) {
+function SavedDebriefCard({
+  debrief,
+  onMarkTried,
+  onSaveReflection,
+}: {
+  debrief: Debrief
+  onMarkTried: (id: string) => void
+  onSaveReflection: (id: string, note: string) => void
+}) {
   const [expanded, setExpanded] = useState(false)
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
@@ -271,13 +348,25 @@ function SavedDebriefCard({ debrief }: { debrief: Debrief }) {
               <p className="mt-1 text-sm whitespace-pre-wrap text-ink">{debrief.feedback}</p>
             </div>
           )}
+          {debrief.wordsToTry && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Words to try</p>
+              <p className="mt-1 text-sm whitespace-pre-wrap text-ink">{debrief.wordsToTry}</p>
+            </div>
+          )}
           {debrief.followUp && (
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Following up</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">One next step</p>
               <p className="mt-1 text-sm whitespace-pre-wrap text-ink">{debrief.followUp}</p>
             </div>
           )}
           <ShareButton type="debrief" onShare={() => shareDebrief(debrief.id)} />
+          <ReflectionTimeline
+            triedAt={debrief.triedAt}
+            reflectionNote={debrief.reflectionNote}
+            onMarkTried={() => onMarkTried(debrief.id)}
+            onSaveReflection={(note) => onSaveReflection(debrief.id, note)}
+          />
         </div>
       )}
     </div>

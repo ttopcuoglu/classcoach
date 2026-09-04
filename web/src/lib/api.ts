@@ -29,6 +29,8 @@ export type ScenarioAttempt = {
   createdAt: string
   scenario: Scenario
   conversation: ChatMessage[]
+  triedAt: string | null
+  reflectionNote: string | null
 }
 
 export type FocusMetric =
@@ -184,6 +186,7 @@ export type Debrief = {
   incidentText: string
   category: string | null
   feedback: string | null
+  wordsToTry: string | null
   followUp: string | null
   rating: number | null
   source: DebriefSource | null
@@ -192,6 +195,8 @@ export type Debrief = {
   createdAt: string
   conversation: ChatMessage[]
   talkTakeaway: TalkTakeaway | null
+  triedAt: string | null
+  reflectionNote: string | null
 }
 
 // tone values changed with the Communications redesign — old rows may have
@@ -584,6 +589,14 @@ export function setAttemptSaved(id: string, saved: boolean): Promise<ScenarioAtt
   return request(`/api/attempts/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) })
 }
 
+export function markAttemptTried(id: string): Promise<ScenarioAttempt> {
+  return request(`/api/attempts/${id}`, { method: 'PATCH', body: JSON.stringify({ markTried: true }) })
+}
+
+export function saveAttemptReflection(id: string, reflectionNote: string): Promise<ScenarioAttempt> {
+  return request(`/api/attempts/${id}`, { method: 'PATCH', body: JSON.stringify({ reflectionNote }) })
+}
+
 export function shareAttempt(id: string): Promise<{ shareToken: string }> {
   return request(`/api/attempts/${id}/share`, { method: 'POST' })
 }
@@ -694,6 +707,14 @@ export function buildSpeechUrl(text: string): string {
 
 export function setDebriefSaved(id: string, saved: boolean): Promise<Debrief> {
   return request(`/api/debriefs/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) })
+}
+
+export function markDebriefTried(id: string): Promise<Debrief> {
+  return request(`/api/debriefs/${id}`, { method: 'PATCH', body: JSON.stringify({ markTried: true }) })
+}
+
+export function saveDebriefReflection(id: string, reflectionNote: string): Promise<Debrief> {
+  return request(`/api/debriefs/${id}`, { method: 'PATCH', body: JSON.stringify({ reflectionNote }) })
 }
 
 export function shareDebrief(id: string): Promise<{ shareToken: string }> {

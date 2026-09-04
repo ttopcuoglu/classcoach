@@ -57,8 +57,11 @@ Coach, don't grade, either way. Write in plain text only — no markdown (no **b
 Respond with exactly these sections and nothing outside them:
 
 <feedback>
-For a real incident: reflective feedback on how they handled it in the moment — what worked, what to consider differently, grounded in classroom management best practice (clear/consistent expectations, de-escalation, restorative practices). For a general question: a direct, concrete answer. Either way, keep it skimmable, encouraging, and practical.
+For a real incident: a tentative, hedged read on what may be happening — use language like "one possibility is..." or "this may suggest...", never assert a student's motive as fact. Cover what worked and what to consider differently, grounded in classroom management best practice (clear/consistent expectations, de-escalation, restorative practices). For a general question: a direct, concrete answer. Either way, keep it skimmable, encouraging, and practical.
 </feedback>
+<words_to_try>
+1-2 short, specific lines of language the teacher could actually say in the moment — phrasing to adapt to their own voice, not a script to recite verbatim. For a general question, give a phrase or framing that applies.
+</words_to_try>
 <follow_up>
 For a real incident: a concrete next step — how to follow up with the student(s) involved, repair the relationship if needed, or handle it differently if it happens again. For a general question: a natural extension, like a related consideration or an offer to help them practice/draft something. Never leave this empty.
 </follow_up>
@@ -154,6 +157,7 @@ debriefRouter.post('/', async (req, res) => {
     flagIfUnsafe(text, 'debrief.ask')
 
     const feedback = extractTag(text, 'feedback') ?? text.trim()
+    const wordsToTry = extractTag(text, 'words_to_try')
     const followUp = extractTag(text, 'follow_up')
     const categoryTag = extractTag(text, 'category')
     const category = categoryTag && isValidCategory(categoryTag) ? categoryTag : null
@@ -165,7 +169,7 @@ debriefRouter.post('/', async (req, res) => {
     const conversation = appendTurn([], context, seedReply)
 
     const debrief = await prisma.debrief.create({
-      data: { userId: req.user!.userId, incidentText, category, feedback, followUp, rating, conversation },
+      data: { userId: req.user!.userId, incidentText, category, feedback, wordsToTry, followUp, rating, conversation },
     })
 
     if (memoryOn) {
@@ -380,14 +384,30 @@ debriefRouter.post('/:id/takeaway', async (req, res) => {
 })
 
 debriefRouter.patch('/:id', async (req, res) => {
-  const { saved } = req.body ?? {}
-  if (typeof saved !== 'boolean') {
+  const { saved, markTried, reflectionNote } = req.body ?? {}
+  if (saved === undefined && markTried === undefined && reflectionNote === undefined) {
+    res.status(400).json({ error: 'Nothing to update' })
+    return
+  }
+  if (saved !== undefined && typeof saved !== 'boolean') {
     res.status(400).json({ error: 'saved must be a boolean' })
+    return
+  }
+  if (markTried !== undefined && markTried !== true) {
+    res.status(400).json({ error: 'markTried must be true' })
+    return
+  }
+  if (reflectionNote !== undefined && typeof reflectionNote !== 'string') {
+    res.status(400).json({ error: 'reflectionNote must be a string' })
     return
   }
   const { count } = await prisma.debrief.updateMany({
     where: { id: req.params.id, userId: req.user!.userId },
-    data: { saved },
+    data: {
+      ...(saved !== undefined ? { saved } : {}),
+      ...(markTried === true ? { triedAt: new Date() } : {}),
+      ...(reflectionNote !== undefined ? { reflectionNote } : {}),
+    },
   })
   if (count === 0) {
     res.status(404).json({ error: 'Debrief not found' })
