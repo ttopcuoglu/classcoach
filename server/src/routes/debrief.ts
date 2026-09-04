@@ -20,6 +20,21 @@ import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const debriefRouter = Router()
 
+// A hard token cap can still cut a Talk It Through reply off mid-word if the
+// model runs longer than instructed — worse for a spoken reply than a
+// written one, since there's no visual "..." to signal it was cut short.
+// Rather than showing (and speaking) a broken fragment, fall back to the
+// last complete sentence. If there's no sentence-ending punctuation at all,
+// the whole fragment is kept as-is — an unpunctuated reply is still better
+// than an empty one.
+function trimIfTruncated(text: string, stopReason: string | null): string {
+  if (stopReason !== 'max_tokens') return text
+  const matches = [...text.matchAll(/[.!?](?:["')\]]?)(?:\s|$)/g)]
+  if (matches.length === 0) return text
+  const last = matches[matches.length - 1]
+  return text.slice(0, (last.index ?? 0) + last[0].length).trim()
+}
+
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } })
 
 // Talk It Through records audio client-side (MediaRecorder) and transcribes
@@ -79,7 +94,7 @@ ${CORE_COACHING_RULES}`
 // Used for both the first "Talk to Me" turn and every follow-up — same
 // persona/pacing throughout a live spoken conversation, unlike Ask's
 // separate "first response" vs. "chat" prompts.
-const TALK_SYSTEM_PROMPT = `You are Coach, a warm, practical classroom management coach for K-12 teachers, having a live SPOKEN conversation — the teacher is talking to you out loud and your reply will be read aloud back to them, so length itself costs them time. Default to ONE short, direct sentence. Use a second sentence only when it adds real, necessary content — never to soften, preface, or restate what they just said. Skip warm-up phrases like "That's a great question" or "I hear you" — start with the actual answer or the actual question. Give a concrete, specific answer or next step, not a general reflection. Ask at most one question, and only when you genuinely need more information to help. Plain conversational language, no lists, no markdown, no parenthetical asides. Stay grounded in what the teacher has actually said; never invent details.
+const TALK_SYSTEM_PROMPT = `You are Coach, a warm, practical classroom management coach for K-12 teachers, having a live SPOKEN conversation — the teacher is talking to you out loud and your reply will be read aloud back to them, so length itself costs them time. Default to ONE short, direct sentence. Use a second sentence only when it adds real, necessary content — never to soften, preface, or restate what they just said. Skip warm-up phrases like "That's a great question" or "I hear you" — start with the actual answer or the actual question. Give exactly ONE concrete idea, suggestion, or next step per reply — never a list, never "first... second..." or "one thing... another thing," even across two sentences. If you have more than one idea, say the single most useful one now and save the rest for a later turn if they want more. Ask at most one question, and only when you genuinely need more information to help. Plain conversational language, no lists, no markdown, no parenthetical asides. Stay grounded in what the teacher has actually said; never invent details.
 ${CORE_COACHING_RULES}`
 
 // Manually triggered once, when the teacher taps "Finish session" — not a
@@ -209,7 +224,7 @@ debriefRouter.post('/talk', async (req, res) => {
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: memoryOn ? 80 + MEMORY_UPDATE_TOKEN_BUFFER : 80,
+      max_tokens: memoryOn ? 110 + MEMORY_UPDATE_TOKEN_BUFFER : 110,
       thinking: { type: 'disabled' },
       system: memoryOn
         ? `${TALK_SYSTEM_PROMPT}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
@@ -221,7 +236,7 @@ debriefRouter.post('/talk', async (req, res) => {
       .map((block) => block.text)
       .join('\n')
     flagIfUnsafe(text, 'debrief.talk')
-    const reply = stripTag(text, 'memory_update')
+    const reply = trimIfTruncated(stripTag(text, 'memory_update'), response.stop_reason)
 
     if (!reply) {
       res.status(502).json({ error: 'Could not reach Coach. Please try again.' })
@@ -284,7 +299,7 @@ debriefRouter.post('/:id/chat', async (req, res) => {
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
 
     const basePrompt = isTalk ? TALK_SYSTEM_PROMPT : ASK_CHAT_SYSTEM_PROMPT
-    const baseMaxTokens = isTalk ? 80 : 300
+    const baseMaxTokens = isTalk ? 110 : 300
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: memoryOn ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
@@ -299,7 +314,8 @@ debriefRouter.post('/:id/chat', async (req, res) => {
       .map((block) => block.text)
       .join('\n')
     flagIfUnsafe(text, isTalk ? 'debrief.talk.chat' : 'debrief.ask.chat')
-    const reply = stripTag(text, 'memory_update')
+    const stripped = stripTag(text, 'memory_update')
+    const reply = isTalk ? trimIfTruncated(stripped, response.stop_reason) : stripped
 
     if (!reply) {
       res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
