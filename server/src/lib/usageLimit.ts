@@ -1,6 +1,15 @@
+import { hasActivePlan } from './billing.ts'
 import { prisma } from './prisma.ts'
 
 const DAILY_ACTION_LIMIT = Number(process.env.DAILY_ACTION_LIMIT) || 50
+// A Plus/District teacher already pays for (or is granted) unlimited access
+// to the per-feature areas billing.ts gates — this flat daily ceiling exists
+// purely as shared-API-key cost protection, not a monetization lever, so a
+// paid teacher gets a generous multiple of it rather than the same cap a
+// free teacher hits. Most real usage days are nowhere near either number;
+// this only matters on a genuinely hard day, which is exactly when it
+// shouldn't be the thing that gets in the way.
+const PAID_DAILY_ACTION_LIMIT = Number(process.env.PAID_DAILY_ACTION_LIMIT) || 150
 
 export type UsageAction =
   | 'scenario_generate'
@@ -37,7 +46,8 @@ export async function checkAndLogUsage(userId: string, action: UsageAction): Pro
     where: { userId, createdAt: { gte: startOfDay } },
   })
 
-  if (countToday >= DAILY_ACTION_LIMIT) return false
+  const limit = (await hasActivePlan(userId)) ? PAID_DAILY_ACTION_LIMIT : DAILY_ACTION_LIMIT
+  if (countToday >= limit) return false
 
   await prisma.usageLog.create({ data: { userId, action } })
   return true

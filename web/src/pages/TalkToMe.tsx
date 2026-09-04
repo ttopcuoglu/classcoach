@@ -23,6 +23,7 @@ const EXAMPLE_PROMPTS = [
   'My class talks over directions.',
   'I want to reflect on today’s lesson.',
   'A parent email is stressing me out.',
+  'I’m feeling overwhelmed this week.',
 ]
 
 // Flipped to false: auto-starting the mic on open meant a teacher could
