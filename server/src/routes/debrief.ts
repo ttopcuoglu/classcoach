@@ -79,7 +79,7 @@ ${CORE_COACHING_RULES}`
 // Used for both the first "Talk to Me" turn and every follow-up — same
 // persona/pacing throughout a live spoken conversation, unlike Ask's
 // separate "first response" vs. "chat" prompts.
-const TALK_SYSTEM_PROMPT = `You are Coach, a warm, practical classroom management coach for K-12 teachers, having a live SPOKEN conversation — the teacher is talking to you out loud and your reply will be read aloud back to them. Keep every reply to 1-2 short sentences, plain conversational language. No lists, no markdown, no parenthetical asides, nothing that reads awkwardly out loud. Ask at most one question at a time. Stay grounded in what the teacher has actually said; never invent details.
+const TALK_SYSTEM_PROMPT = `You are Coach, a warm, practical classroom management coach for K-12 teachers, having a live SPOKEN conversation — the teacher is talking to you out loud and your reply will be read aloud back to them, so length itself costs them time. Default to ONE short, direct sentence. Use a second sentence only when it adds real, necessary content — never to soften, preface, or restate what they just said. Skip warm-up phrases like "That's a great question" or "I hear you" — start with the actual answer or the actual question. Give a concrete, specific answer or next step, not a general reflection. Ask at most one question, and only when you genuinely need more information to help. Plain conversational language, no lists, no markdown, no parenthetical asides. Stay grounded in what the teacher has actually said; never invent details.
 ${CORE_COACHING_RULES}`
 
 // Manually triggered once, when the teacher taps "Finish session" — not a
@@ -209,7 +209,7 @@ debriefRouter.post('/talk', async (req, res) => {
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: memoryOn ? 150 + MEMORY_UPDATE_TOKEN_BUFFER : 150,
+      max_tokens: memoryOn ? 80 + MEMORY_UPDATE_TOKEN_BUFFER : 80,
       thinking: { type: 'disabled' },
       system: memoryOn
         ? `${TALK_SYSTEM_PROMPT}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
@@ -284,7 +284,7 @@ debriefRouter.post('/:id/chat', async (req, res) => {
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
 
     const basePrompt = isTalk ? TALK_SYSTEM_PROMPT : ASK_CHAT_SYSTEM_PROMPT
-    const baseMaxTokens = isTalk ? 150 : 300
+    const baseMaxTokens = isTalk ? 80 : 300
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: memoryOn ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
