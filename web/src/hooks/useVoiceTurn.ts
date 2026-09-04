@@ -99,6 +99,16 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs =
       analyserRef.current = analyser
     }
 
+    // The track gets disabled (not stopped — the stream itself stays open
+    // across turns, see the comment on streamRef above) the instant a turn
+    // finishes recording, and only re-enabled here. Chrome's default audio
+    // processing on a getUserMedia stream (echo cancellation etc., implied
+    // by the bare `{ audio: true }` constraint) can otherwise keep
+    // interfering with separate <audio> playback for as long as the track
+    // stays live and enabled, well past the point where anything is
+    // actually being recorded from it.
+    stream!.getAudioTracks().forEach((t) => (t.enabled = true))
+
     const analyser = analyserRef.current!
     const data = new Uint8Array(analyser.frequencyBinCount)
 
@@ -110,6 +120,11 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs =
     }
     recorder.onstop = async () => {
       stopTurnLoop()
+      // Disabling (not stopping) the track leaves the stream alive for the
+      // next turn — no re-prompt for mic permission — while removing
+      // whatever's keeping the mic "hot" for the entire transcribe/reply/
+      // speak stretch that follows, when nothing is actually listening.
+      streamRef.current?.getAudioTracks().forEach((t) => (t.enabled = false))
       setListening(false)
       setTranscribing(true)
       const blob = new Blob(chunksRef.current, { type: mimeTypeRef.current || 'audio/webm' })
