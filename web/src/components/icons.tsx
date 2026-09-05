@@ -273,3 +273,25 @@ export function CloseIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function HeartIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 20s-7-4.35-9.5-8.8C1 8.1 2.3 5 5.5 5c1.9 0 3.3 1.1 4 2.3.7-1.2 2.1-2.3 4-2.3 3.2 0 4.5 3.1 3 6.2C19 15.65 12 20 12 20Z"
+      />
+    </svg>
+  )
+}
+
+export function KebabIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <circle cx="12" cy="5.5" r="1.75" />
+      <circle cx="12" cy="12" r="1.75" />
+      <circle cx="12" cy="18.5" r="1.75" />
+    </svg>
+  )
+}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowUpIcon, ChatBubbleIcon, MicIcon } from '../components/icons'
+import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, MicIcon, PlayIcon } from '../components/icons'
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
@@ -638,6 +638,46 @@ function TagSpeakersPanel({
 
 type ReportTab = 'summary' | 'insights' | 'reflect' | 'growth'
 type InsightsSection = 'talk' | 'questions' | 'understanding' | 'content' | 'routines'
+type ReflectPath = 'full_report' | 'specific_moment' | 'how_it_felt' | 'ask_question'
+
+const REFLECT_PATH_CARDS: {
+  key: ReflectPath
+  icon: React.ReactNode
+  iconBg: string
+  title: string
+  description: string
+  recommended?: boolean
+}[] = [
+  {
+    key: 'full_report',
+    icon: <ChecklistIcon className="h-5 w-5 text-brand-600" />,
+    iconBg: 'bg-brand-50',
+    title: 'Walk me through the full report',
+    description: 'Review strengths, patterns, and opportunities',
+    recommended: true,
+  },
+  {
+    key: 'specific_moment',
+    icon: <PlayIcon className="h-5 w-5 text-terracotta" />,
+    iconBg: 'bg-peach-tint',
+    title: 'Explore a specific moment',
+    description: 'Discuss a timestamp or classroom interaction',
+  },
+  {
+    key: 'how_it_felt',
+    icon: <HeartIcon className="h-5 w-5 text-gold" />,
+    iconBg: 'bg-gold-tint',
+    title: 'Reflect on how the lesson felt',
+    description: 'Begin with your own experience',
+  },
+  {
+    key: 'ask_question',
+    icon: <ChatBubbleIcon className="h-5 w-5 text-brand-600" />,
+    iconBg: 'bg-mint-tint',
+    title: 'Ask the coach a question',
+    description: "Start with what's on your mind",
+  },
+]
 
 const REPORT_TABS: { key: ReportTab; label: string }[] = [
   { key: 'summary', label: 'Summary' },
@@ -684,7 +724,14 @@ function TabBar({ tab, onSelect }: { tab: ReportTab; onSelect: (t: ReportTab) =>
             tab === key ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:text-ink'
           }`}
         >
-          {label}
+          {label === 'My Growth' ? (
+            <>
+              <span className="hidden sm:inline">My Growth</span>
+              <span className="sm:hidden">Growth</span>
+            </>
+          ) : (
+            label
+          )}
         </button>
       ))}
     </div>
@@ -2485,9 +2532,37 @@ function ReflectTab({
   const lastAssistant = conversation ? [...conversation].reverse().find((m) => m.role === 'assistant') : null
 
   // A session that was already finished before (has saved notes) opens
-  // straight into the review screen; otherwise starts on the conversation.
+  // straight into the review screen; otherwise starts on the starting
+  // screen every time (even if a conversation is already in progress —
+  // that's what the three-dot "Continue previous debrief" menu is for).
   const [reviewingNotes, setReviewingNotes] = useState(() => Boolean(strengths || growthAreas || nextStep))
+  const [showStartScreen, setShowStartScreen] = useState(true)
   const [userTranscript, setUserTranscript] = useState<string | null>(null)
+
+  // Starting-screen path selection — picking a card only selects it
+  // (per spec, never immediately starts anything); "Start Talking"/"Type
+  // instead" below read the current selection to decide how the
+  // conversation opens.
+  const [selectedPath, setSelectedPath] = useState<ReflectPath>('full_report')
+  const [selectedMomentIndex, setSelectedMomentIndex] = useState(0)
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  // Active-session chrome: a lightweight elapsed timer and an explicit
+  // Pause (distinct from voice mode's own mic-level Pause/Resume, since
+  // typed conversations have no mic to pause) plus a confirmation step
+  // before Finish, matching the reference design's own dialog copy —
+  // a plain window.confirm can't carry custom button labels, so this is
+  // a small purpose-built dialog instead of this app's usual
+  // window.confirm pattern.
+  const [elapsedSec, setElapsedSec] = useState(0)
+  const [sessionPaused, setSessionPaused] = useState(false)
+  const [showFinishConfirm, setShowFinishConfirm] = useState(false)
+
+  useEffect(() => {
+    if (showStartScreen || reviewingNotes || sessionPaused) return
+    const interval = window.setInterval(() => setElapsedSec((s) => s + 1), 1000)
+    return () => window.clearInterval(interval)
+  }, [showStartScreen, reviewingNotes, sessionPaused])
 
   // Voice mode — talk to Coach live instead of typing, replies auto-play.
   // Same useVoiceTurn hook and voicePlayback helpers Talk It Through uses,
@@ -2572,15 +2647,39 @@ function ReflectTab({
       })
   }
 
-  function handleStartVoice(focus?: string) {
+  const starterPrompts = buildReflectStarterPrompts(highlights, cfuMetric, redirectionMetric)
+
+  // What the selected path tells Coach to open with — only meaningful the
+  // first time a conversation starts; resuming an existing one (below)
+  // never re-invokes this.
+  function focusForSelectedPath(): string | undefined {
+    switch (selectedPath) {
+      case 'full_report':
+        return undefined
+      case 'specific_moment':
+        return starterPrompts[selectedMomentIndex]?.focus ?? "a specific moment from today's lesson that stood out"
+      case 'how_it_felt':
+        return "how the lesson felt to the teacher, from their own perspective — invite them to share their own take on it before referencing any of the measured data"
+      case 'ask_question':
+        return "whatever's on the teacher's mind about this lesson — invite them to ask you anything, rather than leading with an observation yourself"
+    }
+  }
+
+  // A conversation already exists (the teacher picked a path here before,
+  // or resumed via the menu) — these buttons just resume it. The backend
+  // would otherwise reject a second "start" call on a non-empty
+  // conversation (it expects a real message once one exists).
+  function handleStartVoice() {
     primeAudio()
     setVoiceMode(true)
-    onStart(focus)
+    if (started) setShowStartScreen(false)
+    else onStart(focusForSelectedPath())
   }
 
   function handleStartTyped() {
     setVoiceMode(false)
-    onStart()
+    if (started) setShowStartScreen(false)
+    else onStart(focusForSelectedPath())
   }
 
   function handleSwitchToVoice() {
@@ -2594,9 +2693,20 @@ function ReflectTab({
     setVoiceMode(false)
   }
 
+  function handleTogglePause() {
+    if (sessionPaused) {
+      setSessionPaused(false)
+      if (voiceMode && !locked && !turnCapHit) start()
+    } else {
+      setSessionPaused(true)
+      if (voiceMode) close()
+    }
+  }
+
   function handleFinish() {
     close()
     audioRef.current?.pause()
+    setShowFinishConfirm(false)
     setReviewingNotes(true)
     onSummarize()
   }
@@ -2612,8 +2722,6 @@ function ReflectTab({
             ? 'Listening…'
             : "I'm listening — go ahead"
           : 'Paused'
-
-  const starterPrompts = buildReflectStarterPrompts(highlights, cfuMetric, redirectionMetric)
 
   return (
     <div className="flex flex-col gap-6">
@@ -2718,24 +2826,88 @@ function ReflectTab({
             </>
           )}
         </div>
-      ) : !started ? (
-        <div className="mx-auto flex w-full max-w-md flex-col items-center gap-5 rounded-2xl border border-border bg-surface p-8 text-center">
-          <div>
-            <h2 className="text-lg font-semibold text-ink">Let's talk through this lesson</h2>
-            <p className="mt-1.5 text-sm text-ink-soft">
-              Pick something to start with, or just start talking — one question at a time, at your pace.
-            </p>
+      ) : showStartScreen ? (
+        <div className="relative mx-auto w-full max-w-2xl rounded-2xl border border-border bg-surface p-6 sm:p-8">
+          {started && (
+            <div className="absolute right-5 top-5 sm:right-6 sm:top-6">
+              <button
+                type="button"
+                onClick={() => setMenuOpen((o) => !o)}
+                aria-label="Debrief options"
+                className="rounded-full p-1.5 text-ink-soft transition-colors hover:bg-canvas hover:text-ink"
+              >
+                <KebabIcon className="h-5 w-5" />
+              </button>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-xl border border-border bg-surface p-1.5 shadow-lg">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        setShowStartScreen(false)
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-ink transition-colors hover:bg-canvas"
+                    >
+                      <ChatBubbleIcon className="h-4 w-4 text-ink-soft" />
+                      Continue previous debrief
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          <span className="inline-block rounded-full bg-warm-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-warm-500">
+            Interactive Debrief
+          </span>
+          <h2 className="mt-3 text-xl font-semibold text-ink sm:text-2xl">Let's debrief your lesson</h2>
+          <p className="mt-1.5 max-w-lg text-sm text-ink-soft">
+            Your coach will use your report, ask one question at a time, and help you choose a practical next
+            step.
+          </p>
+
+          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {REFLECT_PATH_CARDS.map((path) => (
+              <button
+                key={path.key}
+                type="button"
+                onClick={() => setSelectedPath(path.key)}
+                className={`relative flex flex-col items-start gap-3 rounded-2xl border p-4 text-left transition-colors ${
+                  selectedPath === path.key
+                    ? 'border-brand-500 bg-brand-50/60'
+                    : 'border-border bg-canvas hover:border-brand-300'
+                }`}
+              >
+                {path.recommended && (
+                  <span className="absolute right-4 top-4 rounded-full bg-brand-600 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                    Recommended
+                  </span>
+                )}
+                <span className={`flex h-10 w-10 items-center justify-center rounded-full ${path.iconBg}`}>
+                  {path.icon}
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-ink">{path.title}</p>
+                  <p className="mt-0.5 text-xs text-ink-soft">{path.description}</p>
+                </div>
+              </button>
+            ))}
           </div>
 
-          {starterPrompts.length > 0 && (
-            <div className="flex w-full flex-col gap-2">
-              {starterPrompts.map((p) => (
+          {selectedPath === 'specific_moment' && starterPrompts.length > 0 && (
+            <div className="mt-3 flex flex-col gap-2">
+              {starterPrompts.map((p, i) => (
                 <button
                   key={p.label}
                   type="button"
-                  onClick={() => handleStartVoice(p.focus)}
-                  disabled={sending}
-                  className="rounded-xl border border-border bg-canvas px-4 py-3 text-left text-sm text-ink transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
+                  onClick={() => setSelectedMomentIndex(i)}
+                  className={`rounded-xl border px-4 py-2.5 text-left text-sm transition-colors ${
+                    selectedMomentIndex === i
+                      ? 'border-brand-500 bg-brand-50/60 text-brand-600'
+                      : 'border-border bg-canvas text-ink hover:border-brand-300'
+                  }`}
                 >
                   {p.label}
                 </button>
@@ -2744,12 +2916,12 @@ function ReflectTab({
           )}
 
           {!locked && (
-            <div className="flex w-full flex-col items-center gap-2">
+            <div className="mt-6 flex flex-col items-center gap-3">
               <button
                 type="button"
-                onClick={() => handleStartVoice()}
+                onClick={handleStartVoice}
                 disabled={sending}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
               >
                 <MicIcon className="h-4 w-4" />
                 {sending ? 'Starting...' : 'Start Talking'}
@@ -2762,12 +2934,45 @@ function ReflectTab({
               >
                 Type instead
               </button>
+              <p className="mt-1 text-xs text-ink-soft">Your debrief is private and saved automatically.</p>
             </div>
           )}
         </div>
       ) : (
         <div className="flex flex-col gap-4">
           <div className="rounded-2xl border border-border bg-surface p-6">
+            <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    locked || sessionPaused ? 'bg-ink-soft' : 'animate-pulse bg-brand-500'
+                  }`}
+                />
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                  {locked ? 'Read-only' : sessionPaused ? 'Paused' : 'In progress'}
+                </p>
+                <span className="text-xs text-ink-soft">· {formatTime(elapsedSec)}</span>
+              </div>
+              {!locked && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleTogglePause}
+                    className="rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600"
+                  >
+                    {sessionPaused ? 'Resume' : 'Pause'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowFinishConfirm(true)}
+                    className="rounded-full bg-brand-500 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-600"
+                  >
+                    Finish Debrief
+                  </button>
+                </div>
+              )}
+            </div>
+
             <div className="flex flex-col gap-3">
               {userTranscript && (
                 <div className="rounded-xl bg-brand-50 px-4 py-2.5 text-sm text-ink">
@@ -2796,18 +3001,9 @@ function ReflectTab({
                       isSpeaking || sending || transcribing ? 'animate-pulse bg-brand-500' : 'bg-ink-soft'
                     }`}
                   />
-                  <p className="text-sm text-ink-soft">{voiceStatus}</p>
+                  <p className="text-sm text-ink-soft">{sessionPaused ? 'Paused' : voiceStatus}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  {!locked && !turnCapHit && (
-                    <button
-                      type="button"
-                      onClick={listening ? () => close() : () => start()}
-                      className="rounded-full border border-border px-3.5 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600"
-                    >
-                      {listening ? 'Pause mic' : 'Resume'}
-                    </button>
-                  )}
                   <button
                     type="button"
                     onClick={() => setMuted((m) => !m)}
@@ -2826,15 +3022,6 @@ function ReflectTab({
                   >
                     Type instead
                   </button>
-                  {!locked && (
-                    <button
-                      type="button"
-                      onClick={handleFinish}
-                      className="ml-auto rounded-full bg-brand-500 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-600"
-                    >
-                      Finish
-                    </button>
-                  )}
                 </div>
                 {locked ? (
                   <p className="text-xs text-ink-soft">This report is locked — the conversation is read-only.</p>
@@ -2857,12 +3044,12 @@ function ReflectTab({
                       value={draft}
                       onChange={(e) => onDraftChange(e.target.value)}
                       placeholder="Say what's on your mind..."
-                      disabled={sending || locked || turnCapHit}
+                      disabled={sending || locked || turnCapHit || sessionPaused}
                       className="flex-1 rounded-lg border border-border bg-canvas px-4 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
                     />
                     <button
                       type="submit"
-                      disabled={sending || locked || turnCapHit || !draft.trim()}
+                      disabled={sending || locked || turnCapHit || sessionPaused || !draft.trim()}
                       className="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
                     >
                       Send
@@ -2880,15 +3067,6 @@ function ReflectTab({
                       Talk instead
                     </button>
                   )}
-                  {!locked && (
-                    <button
-                      type="button"
-                      onClick={handleFinish}
-                      className="ml-auto rounded-full border border-border px-4 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600"
-                    >
-                      Finish
-                    </button>
-                  )}
                 </div>
                 {locked ? (
                   <p className="mt-2 text-xs text-ink-soft">This report is locked — the conversation is read-only.</p>
@@ -2899,6 +3077,43 @@ function ReflectTab({
                 ) : null}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {showFinishConfirm && (
+        // A custom dialog rather than this app's usual window.confirm — the
+        // design calls for specific, non-default button labels
+        // ("Continue Debrief" / "Finish and Create Summary"), which a
+        // native confirm() can't provide.
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-4"
+          onClick={() => setShowFinishConfirm(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-surface p-6 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-ink">Finish this debrief?</h3>
+            <p className="mt-1.5 text-sm text-ink-soft">
+              Your coach will create a summary of your reflection and next step.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowFinishConfirm(false)}
+                className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+              >
+                Continue Debrief
+              </button>
+              <button
+                type="button"
+                onClick={handleFinish}
+                className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+              >
+                Finish and Create Summary
+              </button>
+            </div>
           </div>
         </div>
       )}
