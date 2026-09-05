@@ -3,10 +3,8 @@ import { Link } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, MicIcon } from '../components/icons'
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
-import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import { HATCH_STYLE } from '../lib/chartPatterns'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
-import { playQueue, splitIntoSentences } from '../lib/voicePlayback'
 import {
   createAudioSession,
   deleteAudioSession,
@@ -33,7 +31,6 @@ import {
   type FocusMetric,
   type ReflectChatErrorKind,
   type SpeakerSample,
-  type TalkVoice,
   type TranscriptSegment,
 } from '../lib/api'
 import {
@@ -77,7 +74,6 @@ export default function AudioCoaching() {
   const [error, setError] = useState<string | null>(null)
   const [focusMetric, setFocusMetric] = useState<FocusMetric | null>(null)
   const [teacherName, setTeacherName] = useState<string | null>(null)
-  const [talkVoice, setTalkVoice] = useState<TalkVoice | null>(null)
   // Only used to decide whether to show the free-tier "X of 3 used this
   // month" line below — an org member could have district/pilot access
   // this client can't verify without a new API call, so the line is only
@@ -97,7 +93,6 @@ export default function AudioCoaching() {
       .then((p) => {
         setFocusMetric(p.focusMetric)
         setTeacherName(p.name)
-        setTalkVoice(p.talkVoice)
         setShowFreeCapLine(p.plan === 'free' && p.organizationId == null)
       })
       .catch(() => {})
@@ -165,7 +160,6 @@ export default function AudioCoaching() {
         sessions={sessions}
         focusMetric={focusMetric}
         onFocusMetricChange={handleFocusMetricChange}
-        talkVoice={talkVoice}
       />
     )
   }
@@ -233,7 +227,6 @@ function SessionFlow({
   sessions,
   focusMetric,
   onFocusMetricChange,
-  talkVoice,
 }: {
   session: AudioSessionWithSegments
   speakers: SpeakerSample[]
@@ -242,7 +235,6 @@ function SessionFlow({
   sessions: AudioSession[]
   focusMetric: FocusMetric | null
   onFocusMetricChange: (metric: FocusMetric | null) => void
-  talkVoice: TalkVoice | null
 }) {
   if (session.status === 'transcribing') {
     return (
@@ -262,7 +254,6 @@ function SessionFlow({
       sessions={sessions}
       focusMetric={focusMetric}
       onFocusMetricChange={onFocusMetricChange}
-      talkVoice={talkVoice}
     />
   )
 }
@@ -636,16 +627,13 @@ function TagSpeakersPanel({
   )
 }
 
-// 'reflect' used to be a fourth tab here — it's now an always-mounted
-// panel beside/below whichever of these tabs is active (see ReportPanel),
-// so a live voice conversation there survives switching tabs instead of
-// being unmounted along with the old ReflectTab.
-type ReportTab = 'summary' | 'insights' | 'growth'
+type ReportTab = 'summary' | 'insights' | 'reflect' | 'growth'
 type InsightsSection = 'talk' | 'questions' | 'understanding' | 'content' | 'routines'
 
 const REPORT_TABS: { key: ReportTab; label: string }[] = [
   { key: 'summary', label: 'Summary' },
   { key: 'insights', label: 'Insights' },
+  { key: 'reflect', label: 'Reflect' },
   { key: 'growth', label: 'My Growth' },
 ]
 
@@ -1493,7 +1481,6 @@ function ReportPanel({
   sessions,
   focusMetric,
   onFocusMetricChange,
-  talkVoice,
 }: {
   session: AudioSessionWithSegments
   onUpdate: (s: AudioSessionWithSegments) => void
@@ -1501,7 +1488,6 @@ function ReportPanel({
   sessions: AudioSession[]
   focusMetric: FocusMetric | null
   onFocusMetricChange: (metric: FocusMetric | null) => void
-  talkVoice: TalkVoice | null
 }) {
   const [tab, setTab] = useState<ReportTab>('summary')
   const [insightsSection, setInsightsSection] = useState<InsightsSection>('talk')
@@ -1573,23 +1559,19 @@ function ReportPanel({
     }
   }
 
-  // overrideText lets voice mode submit a transcribed turn directly,
-  // bypassing reflectDraft entirely — same convention as Ask.tsx's and
-  // TalkToMe.tsx's own optional-override submit functions.
-  async function handleSendReflect(overrideText?: string) {
-    const usingOverride = overrideText != null
-    const trimmed = (overrideText ?? reflectDraft).trim()
+  async function handleSendReflect() {
+    const trimmed = reflectDraft.trim()
     if (!trimmed || reflectSending) return
     setReflectSending(true)
     setReflectError(null)
-    if (!usingOverride) setReflectDraft('')
+    setReflectDraft('')
     try {
       const updated = await sendReflectMessage(session.id, { message: trimmed, context: reflectContext })
       onUpdate({ ...session, ...updated })
     } catch (err) {
       const kind = (err as { kind?: ReflectChatErrorKind })?.kind ?? 'other'
       setReflectError({ kind, message: (err as Error).message })
-      if (!usingOverride) setReflectDraft(trimmed)
+      setReflectDraft(trimmed)
     } finally {
       setReflectSending(false)
     }
@@ -1777,9 +1759,6 @@ function ReportPanel({
 
       <TabBar tab={tab} onSelect={setTab} />
 
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
-      <div className="min-w-0 flex-1 flex flex-col gap-6">
-
       {tab === 'summary' && (
         <SummaryTab
           session={session}
@@ -1796,13 +1775,58 @@ function ReportPanel({
           cfuInsight={cfuInsight}
           classSummary={session.classSummary}
           classSummarySending={classSummarySending}
-          onGoReflect={() => setPendingScrollId('reflect-panel')}
+          onGoReflect={() => setTab('reflect')}
           onNavigateInsights={(section) => handleViewSource('insights', '', section)}
         />
       )}
 
       {tab === 'growth' && (
         <MyGrowthTab sessions={sessions} focusMetric={focusMetric} onFocusMetricChange={onFocusMetricChange} />
+      )}
+
+      {tab === 'reflect' && (
+        <ReflectTab
+          highlights={session.highlights}
+          conversation={session.reflectConversation}
+          sending={reflectSending}
+          reflectError={reflectError}
+          draft={reflectDraft}
+          onDraftChange={setReflectDraft}
+          onStart={handleStartReflect}
+          onSend={handleSendReflect}
+          locked={locked}
+          strengths={strengths}
+          growthAreas={growthAreas}
+          nextStep={nextStep}
+          followUpDate={followUpDate}
+          onStrengthsChange={(v) => {
+            setStrengths(v)
+            setSaved(false)
+          }}
+          onGrowthAreasChange={(v) => {
+            setGrowthAreas(v)
+            setSaved(false)
+          }}
+          onNextStepChange={(v) => {
+            setNextStep(v)
+            setSaved(false)
+          }}
+          onFollowUpDateChange={(v) => {
+            setFollowUpDate(v)
+            setSaved(false)
+          }}
+          saving={saving}
+          saved={saved}
+          locking={locking}
+          error={error}
+          onSave={handleSaveNotes}
+          onLock={handleLock}
+          onSummarize={handleSummarizeReflect}
+          summarizing={summarizing}
+          summarizeError={summarizeError}
+          focusMetric={focusMetric}
+          onFocusMetricChange={onFocusMetricChange}
+        />
       )}
 
       {tab === 'insights' && (
@@ -1878,56 +1902,6 @@ function ReportPanel({
           </div>
         </div>
       )}
-
-      </div>
-
-      <div id="reflect-panel" className="flex flex-col gap-6 lg:w-96 lg:shrink-0">
-        <ReflectPanel
-          highlights={session.highlights}
-          conversation={session.reflectConversation}
-          sending={reflectSending}
-          reflectError={reflectError}
-          draft={reflectDraft}
-          onDraftChange={setReflectDraft}
-          onStart={handleStartReflect}
-          onSend={handleSendReflect}
-          locked={locked}
-          talkVoice={talkVoice}
-          strengths={strengths}
-          growthAreas={growthAreas}
-          nextStep={nextStep}
-          followUpDate={followUpDate}
-          onStrengthsChange={(v) => {
-            setStrengths(v)
-            setSaved(false)
-          }}
-          onGrowthAreasChange={(v) => {
-            setGrowthAreas(v)
-            setSaved(false)
-          }}
-          onNextStepChange={(v) => {
-            setNextStep(v)
-            setSaved(false)
-          }}
-          onFollowUpDateChange={(v) => {
-            setFollowUpDate(v)
-            setSaved(false)
-          }}
-          saving={saving}
-          saved={saved}
-          locking={locking}
-          error={error}
-          onSave={handleSaveNotes}
-          onLock={handleLock}
-          onSummarize={handleSummarizeReflect}
-          summarizing={summarizing}
-          summarizeError={summarizeError}
-          focusMetric={focusMetric}
-          onFocusMetricChange={onFocusMetricChange}
-        />
-      </div>
-
-      </div>
 
       <div className="rounded-xl border border-dashed border-border p-4 text-xs text-ink-soft">
         This report reflects what could be heard in your recording — talk patterns, questioning, and classroom
@@ -2362,7 +2336,7 @@ function MyGrowthTab({
 
 const REFLECT_TURN_CAP = 8
 
-function ReflectPanel({
+function ReflectTab({
   highlights,
   conversation,
   sending,
@@ -2372,7 +2346,6 @@ function ReflectPanel({
   onStart,
   onSend,
   locked,
-  talkVoice,
   strengths,
   growthAreas,
   nextStep,
@@ -2400,9 +2373,8 @@ function ReflectPanel({
   draft: string
   onDraftChange: (v: string) => void
   onStart: () => void
-  onSend: (overrideText?: string) => void
+  onSend: () => void
   locked: boolean
-  talkVoice: TalkVoice | null
   strengths: string
   growthAreas: string
   nextStep: string
@@ -2428,117 +2400,9 @@ function ReflectPanel({
   const userTurnCount = conversation?.filter((m) => m.role === 'user').length ?? 0
   const turnCapHit = userTurnCount >= REFLECT_TURN_CAP
 
-  // Voice mode — talk to Coach live instead of typing, replies auto-play.
-  // Mirrors TalkToMe.tsx's own conversation loop, reusing the same
-  // useVoiceTurn hook and voicePlayback helpers rather than reinventing
-  // audio handling here.
-  const [voiceMode, setVoiceMode] = useState(false)
-  const [muted, setMuted] = useState(false)
-  const [isSpeaking, setIsSpeaking] = useState(false)
-  const audioRef = useRef<HTMLAudioElement>(null)
-  const spokenCountRef = useRef(0)
-  const voiceModeRef = useRef(false)
-  voiceModeRef.current = voiceMode
-  const mutedRef = useRef(false)
-  mutedRef.current = muted
-
-  function handleVoiceTurnComplete(text: string) {
-    if (!text) {
-      if (voiceModeRef.current && !locked && !turnCapHit) start()
-      return
-    }
-    onSend(text)
-  }
-
-  const {
-    supported: voiceSupported,
-    listening,
-    level,
-    fatalError: voiceFatalError,
-    transcribing,
-    start,
-    close,
-  } = useVoiceTurn(handleVoiceTurnComplete, 1400)
-
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
   }, [conversation, sending])
-
-  // A mic-permission failure (or similar) falls back to typing rather than
-  // leaving voice mode stuck in a broken state.
-  useEffect(() => {
-    if (voiceFatalError) setVoiceMode(false)
-  }, [voiceFatalError])
-
-  // Auto-play: the moment a new, not-yet-spoken assistant reply shows up
-  // while in voice mode, speak it (unless muted), then resume listening —
-  // same "record -> reply -> speak -> resume" loop TalkToMe.tsx already
-  // established, just triggered by a prop change here instead of an
-  // inline await.
-  useEffect(() => {
-    if (!voiceMode || !conversation) return
-    if (conversation.length <= spokenCountRef.current) return
-    const last = conversation[conversation.length - 1]
-    if (last.role !== 'assistant') return
-    spokenCountRef.current = conversation.length
-    if (mutedRef.current || !audioRef.current) {
-      if (!locked && !turnCapHit) start()
-      return
-    }
-    setIsSpeaking(true)
-    playQueue(audioRef.current, splitIntoSentences(last.text), talkVoice).then(() => {
-      setIsSpeaking(false)
-      if (voiceModeRef.current && !locked && !turnCapHit) start()
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversation, voiceMode])
-
-  // Releases the mic if the teacher navigates away entirely while voice
-  // mode was on — this panel now stays mounted for the life of the report
-  // view, so unmount only happens when leaving the session, the right
-  // time to let go of the stream.
-  useEffect(() => close, [close])
-
-  async function handleEnterVoiceMode() {
-    const audio = audioRef.current
-    if (audio) {
-      // Entering voice mode is always a genuine button click, so this
-      // muted-play-then-pause "unlock" trick (needed for mobile Safari to
-      // later allow a script-triggered play()) can run synchronously here
-      // — no global pointerdown/keydown listener needed, unlike Talk It
-      // Through's case.
-      audio.muted = true
-      try {
-        await audio.play()
-        audio.pause()
-        audio.currentTime = 0
-      } catch (err) {
-        console.warn('[ReflectPanel] audio unlock (priming) rejected', err)
-      }
-      audio.muted = false
-    }
-    setVoiceMode(true)
-    start()
-  }
-
-  function handleExitVoiceMode() {
-    close()
-    audioRef.current?.pause()
-    setIsSpeaking(false)
-    setVoiceMode(false)
-  }
-
-  const voiceStatus = transcribing
-    ? 'Transcribing…'
-    : sending
-      ? 'Thinking…'
-      : isSpeaking
-        ? 'Coach is speaking'
-        : listening
-          ? level > 8
-            ? 'Listening…'
-            : "I'm listening — go ahead"
-          : 'Paused'
 
   const highlightsList =
     !highlights || highlights.length === 0 ? (
@@ -2557,17 +2421,17 @@ function ReflectPanel({
     )
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Persistent, hidden element — playQueue always plays a locally
-          created blob: URL through it, never /api/tts directly. */}
-      <audio ref={audioRef} crossOrigin="use-credentials" className="hidden" />
-
-      <details className="rounded-2xl border border-border bg-surface p-4">
-        <summary className="cursor-pointer text-sm font-semibold uppercase tracking-wide text-ink-soft">
-          What stood out this session
-        </summary>
-        {highlightsList}
-      </details>
+    <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+      <div className="flex min-w-0 flex-1 flex-col gap-6">
+        {/* Evidence sits above the chat now (was its own column) — a
+            disclosure on every width, since the right column is reserved
+            for "My next step" and the notes form. */}
+        <details className="rounded-2xl border border-border bg-surface p-4">
+          <summary className="cursor-pointer text-sm font-semibold uppercase tracking-wide text-ink-soft">
+            What stood out this session
+          </summary>
+          {highlightsList}
+        </details>
 
       <div className="flex flex-col rounded-2xl border border-border bg-surface">
         <div ref={scrollRef} className="flex max-h-96 min-h-[10rem] flex-col gap-3 overflow-y-auto p-4">
@@ -2610,93 +2474,43 @@ function ReflectPanel({
           )}
         </div>
 
-        {(reflectError || voiceFatalError) && (
-          <p className="border-t border-border px-4 py-2 text-sm text-warm-500">
-            {reflectError?.message ?? voiceFatalError}
-          </p>
+        {reflectError && (
+          <p className="border-t border-border px-4 py-2 text-sm text-warm-500">{reflectError.message}</p>
         )}
 
-        {started && voiceMode ? (
-          <div className="border-t border-border p-4">
+        {started && (
+          <form
+            className="border-t border-border p-4"
+            onSubmit={(e) => {
+              e.preventDefault()
+              onSend()
+            }}
+          >
             <div className="flex items-center gap-2">
-              <span
-                className={`h-2 w-2 shrink-0 rounded-full ${
-                  isSpeaking || sending || transcribing ? 'animate-pulse bg-brand-500' : 'bg-ink-soft'
-                }`}
+              <input
+                type="text"
+                value={draft}
+                onChange={(e) => onDraftChange(e.target.value)}
+                placeholder="Say what's on your mind..."
+                disabled={sending || locked || turnCapHit}
+                className="flex-1 rounded-lg border border-border bg-canvas px-4 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
               />
-              <p className="text-sm text-ink-soft">{voiceStatus}</p>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
               <button
-                type="button"
-                onClick={() => setMuted((m) => !m)}
-                className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-                  muted
-                    ? 'border-warm-500 bg-warm-100 text-warm-500'
-                    : 'border-border text-ink-soft hover:border-brand-400 hover:text-brand-600'
-                }`}
+                type="submit"
+                disabled={sending || locked || turnCapHit || !draft.trim()}
+                className="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
-                {muted ? 'Unmute coach' : 'Mute coach'}
-              </button>
-              <button
-                type="button"
-                onClick={handleExitVoiceMode}
-                className="rounded-full border border-border px-3.5 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600"
-              >
-                Switch to typing
+                Send
               </button>
             </div>
             {locked ? (
               <p className="mt-2 text-xs text-ink-soft">This report is locked — the conversation is read-only.</p>
             ) : turnCapHit ? (
-              <p className="mt-2 text-xs text-ink-soft">You've reached today's reflection limit for this session.</p>
+              <p className="mt-2 text-xs text-ink-soft">
+                You've reached today's reflection limit for this session.
+              </p>
             ) : null}
-          </div>
-        ) : (
-          started && (
-            <form
-              className="border-t border-border p-4"
-              onSubmit={(e) => {
-                e.preventDefault()
-                onSend()
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={draft}
-                  onChange={(e) => onDraftChange(e.target.value)}
-                  placeholder="Say what's on your mind..."
-                  disabled={sending || locked || turnCapHit}
-                  className="flex-1 rounded-lg border border-border bg-canvas px-4 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
-                />
-                <button
-                  type="submit"
-                  disabled={sending || locked || turnCapHit || !draft.trim()}
-                  className="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-                >
-                  Send
-                </button>
-              </div>
-              {voiceSupported && !locked && !turnCapHit && (
-                <button
-                  type="button"
-                  onClick={handleEnterVoiceMode}
-                  className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:text-brand-700"
-                >
-                  <MicIcon className="h-3.5 w-3.5" />
-                  Talk instead
-                </button>
-              )}
-              {locked ? (
-                <p className="mt-2 text-xs text-ink-soft">This report is locked — the conversation is read-only.</p>
-              ) : turnCapHit ? (
-                <p className="mt-2 text-xs text-ink-soft">
-                  You've reached today's reflection limit for this session.
-                </p>
-              ) : null}
-            </form>
-          )
+          </form>
         )}
 
         {started && !locked && (
@@ -2713,7 +2527,9 @@ function ReflectPanel({
           </div>
         )}
       </div>
+      </div>
 
+      <div className="flex flex-col gap-6 lg:w-80 lg:shrink-0">
       <div className="rounded-2xl border border-border bg-surface p-6">
         <h2 className="text-sm font-semibold text-ink">My next step</h2>
         <p className="mt-1 text-sm text-ink-soft">Choose one focus for your next recording.</p>
@@ -2789,6 +2605,7 @@ function ReflectPanel({
           </div>
         )}
         {error && <p className="mt-3 text-sm text-warm-500">{error}</p>}
+      </div>
       </div>
     </div>
   )
