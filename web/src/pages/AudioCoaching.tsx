@@ -793,8 +793,8 @@ function buildReflectStarterPrompts(
   highlights: AudioHighlight[] | null,
   cfuMetric: { state: string },
   redirectionMetric: { state: string },
-): { label: string; focus: string }[] {
-  const prompts: { label: string; focus: string }[] = []
+): { label: string; focus: string; timestampSec: number | null }[] {
+  const prompts: { label: string; focus: string; timestampSec: number | null }[] = []
   const byLabel = (label: string) => (highlights ?? []).find((h) => h.label === label)
 
   const followUp = byLabel('Follow-up / probing question')
@@ -802,6 +802,7 @@ function buildReflectStarterPrompts(
     prompts.push({
       label: 'Talk about a question you followed up on',
       focus: `the moment at ${formatTime(followUp.timestampSec)} where you asked a follow-up question: "${followUp.excerpt}"`,
+      timestampSec: followUp.timestampSec,
     })
   }
 
@@ -810,6 +811,7 @@ function buildReflectStarterPrompts(
     prompts.push({
       label: 'Talk about that stretch of redirections',
       focus: `the cluster of redirections around ${formatTime(cluster.timestampSec)}`,
+      timestampSec: cluster.timestampSec,
     })
   }
 
@@ -818,6 +820,7 @@ function buildReflectStarterPrompts(
     prompts.push({
       label: 'Talk about that longer stretch of talking',
       focus: `the longest stretch of you talking, around ${formatTime(monologue.timestampSec)}`,
+      timestampSec: monologue.timestampSec,
     })
   }
 
@@ -825,16 +828,31 @@ function buildReflectStarterPrompts(
     prompts.push({
       label: 'Talk about checking for understanding',
       focus: 'why no explicit check for understanding came through this session, and what that might look like next time',
+      timestampSec: null,
     })
   }
   if (prompts.length < 3 && redirectionMetric.state === 'confirmed_none') {
     prompts.push({
       label: 'Talk about how the room felt today',
       focus: 'how the classroom climate felt today, since no redirection language was detected',
+      timestampSec: null,
     })
   }
 
   return prompts.slice(0, 3)
+}
+
+// Real transcript text around a moment's timestamp — the "show me the
+// evidence" reveal. A plain data lookup, no chat turn/network call: the
+// transcript is already loaded with the session.
+function buildTranscriptWindow(
+  segments: TranscriptSegment[],
+  timestampSec: number,
+  windowSec = 15,
+): TranscriptSegment[] {
+  return segments
+    .filter((s) => s.startSec >= timestampSec - windowSec && s.startSec <= timestampSec + windowSec)
+    .sort((a, b) => a.startSec - b.startSec)
 }
 
 // Coach-voice interpretations of the category stats — deterministic
@@ -1358,11 +1376,13 @@ function MomentsCard({
   priority,
   coverage,
   onViewDiscourse,
+  onDiscuss,
 }: {
   strength: NoticeCandidate | null
   priority: NoticeCandidate | null
   coverage: ReturnType<typeof getCoverage>
   onViewDiscourse: () => void
+  onDiscuss: (candidate: NoticeCandidate) => void
 }) {
   const moments = [
     strength && { kind: 'Strength' as const, candidate: strength },
@@ -1386,6 +1406,13 @@ function MomentsCard({
               <p className="text-sm font-semibold text-ink">{formatCandidateHeadline(candidate)}</p>
               {candidate.excerpt && <p className="text-sm text-ink-soft">"{candidate.excerpt}"</p>}
               <p className="text-sm text-ink-soft">{candidate.whyItMatters}</p>
+              <button
+                type="button"
+                onClick={() => onDiscuss(candidate)}
+                className="self-start text-sm font-medium text-brand-600 hover:text-brand-700"
+              >
+                Discuss this →
+              </button>
             </div>
           ))}
         </div>
@@ -1622,6 +1649,11 @@ function ReportPanel({
   const [contentNotesError, setContentNotesError] = useState<string | null>(null)
   const [classSummarySending, setClassSummarySending] = useState(false)
   const hasAttemptedClassSummaryRef = useRef(false)
+  const [externalFocus, setExternalFocus] = useState<{
+    label: string
+    focus: string
+    timestampSec: number | null
+  } | null>(null)
 
   async function handleSaveNotes() {
     setSaving(true)
@@ -1833,6 +1865,21 @@ function ReportPanel({
     setPendingScrollId(sourceId)
   }
 
+  function handleDiscussWithCoach(candidate: NoticeCandidate) {
+    setTab('reflect')
+    setExternalFocus({
+      label: candidate.observation,
+      focus: [
+        `this moment: ${candidate.observation}`,
+        candidate.excerpt ? `("${candidate.excerpt}")` : null,
+        candidate.timestampSec != null ? `around ${formatTime(candidate.timestampSec)}` : null,
+      ]
+        .filter(Boolean)
+        .join(' '),
+      timestampSec: candidate.timestampSec,
+    })
+  }
+
   useEffect(() => {
     if (!pendingScrollId) return
     const timeout = setTimeout(() => {
@@ -1899,6 +1946,7 @@ function ReportPanel({
           classSummarySending={classSummarySending}
           onGoReflect={() => setTab('reflect')}
           onNavigateInsights={(section) => handleViewSource('insights', '', section)}
+          onDiscussWithCoach={handleDiscussWithCoach}
         />
       )}
 
@@ -1951,6 +1999,10 @@ function ReportPanel({
           summarizeError={summarizeError}
           focusMetric={focusMetric}
           onFocusMetricChange={onFocusMetricChange}
+          segments={session.segments}
+          externalFocus={externalFocus}
+          onExternalFocusHandled={() => setExternalFocus(null)}
+          onReturnToReport={() => setTab('summary')}
         />
       )}
 
@@ -2065,6 +2117,7 @@ function SummaryTab({
   classSummarySending,
   onGoReflect,
   onNavigateInsights,
+  onDiscussWithCoach,
 }: {
   session: AudioSessionWithSegments
   coverage: ReturnType<typeof getCoverage>
@@ -2082,6 +2135,7 @@ function SummaryTab({
   classSummarySending: boolean
   onGoReflect: () => void
   onNavigateInsights: (section: InsightsSection) => void
+  onDiscussWithCoach: (candidate: NoticeCandidate) => void
 }) {
   const strength = pickTop(buildStrengthCandidates(session, cfuMetric, feedbackRatio, higherOrderRatio))
   const priority = pickTop(buildPriorityCandidates(session, cfuMetric, feedbackRatio, higherOrderRatio))
@@ -2129,6 +2183,7 @@ function SummaryTab({
             priority={priority}
             coverage={coverage}
             onViewDiscourse={() => onNavigateInsights('talk')}
+            onDiscuss={onDiscussWithCoach}
           />
         )}
         <NextStepCard priority={priority} onSetFocus={onFocusMetricChange} onGoReflect={onGoReflect} />
@@ -2493,6 +2548,10 @@ function ReflectTab({
   summarizeError,
   focusMetric,
   onFocusMetricChange,
+  segments,
+  externalFocus,
+  onExternalFocusHandled,
+  onReturnToReport,
 }: {
   highlights: AudioHighlight[] | null
   cfuMetric: { state: string }
@@ -2525,6 +2584,10 @@ function ReflectTab({
   summarizeError: string | null
   focusMetric: FocusMetric | null
   onFocusMetricChange: (metric: FocusMetric | null) => void
+  segments: TranscriptSegment[]
+  externalFocus: { label: string; focus: string; timestampSec: number | null } | null
+  onExternalFocusHandled: () => void
+  onReturnToReport: () => void
 }) {
   const started = conversation != null && conversation.length > 0
   const userTurnCount = conversation?.filter((m) => m.role === 'user').length ?? 0
@@ -2546,6 +2609,12 @@ function ReflectTab({
   const [selectedPath, setSelectedPath] = useState<ReflectPath>('full_report')
   const [selectedMomentIndex, setSelectedMomentIndex] = useState(0)
   const [menuOpen, setMenuOpen] = useState(false)
+
+  // Which moment (if any) the current stretch of conversation is anchored
+  // to — drives "Show me the evidence" (only offered once a real
+  // timestamp is known) and the transcript-window reveal below it.
+  const [currentTimestampSec, setCurrentTimestampSec] = useState<number | null>(null)
+  const [showTranscriptWindow, setShowTranscriptWindow] = useState(false)
 
   // Active-session chrome: a lightweight elapsed timer and an explicit
   // Pause (distinct from voice mode's own mic-level Pause/Resume, since
@@ -2651,17 +2720,32 @@ function ReflectTab({
 
   // What the selected path tells Coach to open with — only meaningful the
   // first time a conversation starts; resuming an existing one (below)
-  // never re-invokes this.
-  function focusForSelectedPath(): string | undefined {
+  // never re-invokes this. Also yields the moment's timestamp, when the
+  // path is anchored to one, so "Show me the evidence" is available from
+  // the very first reply of that conversation.
+  function resolveSelectedPath(): { focus: string | undefined; timestampSec: number | null } {
     switch (selectedPath) {
       case 'full_report':
-        return undefined
-      case 'specific_moment':
-        return starterPrompts[selectedMomentIndex]?.focus ?? "a specific moment from today's lesson that stood out"
+        return { focus: undefined, timestampSec: null }
+      case 'specific_moment': {
+        const prompt = starterPrompts[selectedMomentIndex]
+        return {
+          focus: prompt?.focus ?? "a specific moment from today's lesson that stood out",
+          timestampSec: prompt?.timestampSec ?? null,
+        }
+      }
       case 'how_it_felt':
-        return "how the lesson felt to the teacher, from their own perspective — invite them to share their own take on it before referencing any of the measured data"
+        return {
+          focus:
+            "how the lesson felt to the teacher, from their own perspective — invite them to share their own take on it before referencing any of the measured data",
+          timestampSec: null,
+        }
       case 'ask_question':
-        return "whatever's on the teacher's mind about this lesson — invite them to ask you anything, rather than leading with an observation yourself"
+        return {
+          focus:
+            "whatever's on the teacher's mind about this lesson — invite them to ask you anything, rather than leading with an observation yourself",
+          timestampSec: null,
+        }
     }
   }
 
@@ -2673,14 +2757,46 @@ function ReflectTab({
     primeAudio()
     setVoiceMode(true)
     if (started) setShowStartScreen(false)
-    else onStart(focusForSelectedPath())
+    else {
+      const { focus, timestampSec } = resolveSelectedPath()
+      setCurrentTimestampSec(timestampSec)
+      onStart(focus)
+    }
   }
 
   function handleStartTyped() {
     setVoiceMode(false)
     if (started) setShowStartScreen(false)
-    else onStart(focusForSelectedPath())
+    else {
+      const { focus, timestampSec } = resolveSelectedPath()
+      setCurrentTimestampSec(timestampSec)
+      onStart(focus)
+    }
   }
+
+  // A change-topic / "Let's discuss another moment" action returns to the
+  // path-selection screen without touching the conversation itself —
+  // exactly the existing "Continue previous debrief" menu item's own
+  // resume mechanism, run in reverse.
+  function handleChangeTopic() {
+    setShowStartScreen(true)
+    setShowTranscriptWindow(false)
+  }
+
+  // Consumes a "Discuss this" click from Summary's Moments card. If a
+  // conversation is already running, this becomes a real, visible turn;
+  // otherwise it seeds the opening question exactly like a starting-screen
+  // path does.
+  useEffect(() => {
+    if (!externalFocus) return
+    setShowStartScreen(false)
+    setShowTranscriptWindow(false)
+    setCurrentTimestampSec(externalFocus.timestampSec)
+    if (started) onSend(`Let's discuss this: ${externalFocus.label}`)
+    else onStart(externalFocus.focus)
+    onExternalFocusHandled()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalFocus])
 
   function handleSwitchToVoice() {
     primeAudio()
@@ -2973,6 +3089,25 @@ function ReflectTab({
               )}
             </div>
 
+            <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+              {!locked && (
+                <button
+                  type="button"
+                  onClick={handleChangeTopic}
+                  className="text-xs font-semibold text-ink-soft hover:text-ink"
+                >
+                  Change topic
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onReturnToReport}
+                className="text-xs font-semibold text-ink-soft hover:text-ink"
+              >
+                Return to the report
+              </button>
+            </div>
+
             <div className="flex flex-col gap-3">
               {userTranscript && (
                 <div className="rounded-xl bg-brand-50 px-4 py-2.5 text-sm text-ink">
@@ -2987,6 +3122,59 @@ function ReflectTab({
                 </div>
               )}
               {sending && <p className="text-sm text-ink-soft">Thinking...</p>}
+
+              {lastAssistant && !sending && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onSend('Tell me more about that.')}
+                    disabled={locked || turnCapHit}
+                    className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-50"
+                  >
+                    Tell me more
+                  </button>
+                  {currentTimestampSec != null && (
+                    <button
+                      type="button"
+                      onClick={() => setShowTranscriptWindow((v) => !v)}
+                      className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600"
+                    >
+                      {showTranscriptWindow ? 'Hide the evidence' : 'Show me the evidence'}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onSend('How could I improve this?')}
+                    disabled={locked || turnCapHit}
+                    className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-50"
+                  >
+                    Help me improve this
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleChangeTopic}
+                    disabled={locked}
+                    className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-50"
+                  >
+                    Let's discuss another moment
+                  </button>
+                </div>
+              )}
+
+              {showTranscriptWindow && currentTimestampSec != null && (
+                <div className="rounded-xl border border-border bg-canvas p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                    Transcript around {formatTime(currentTimestampSec)}
+                  </p>
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    {buildTranscriptWindow(segments, currentTimestampSec).map((s) => (
+                      <p key={s.id} className="text-sm text-ink-soft">
+                        <span className="font-semibold text-ink">{s.speakerLabel}:</span> {s.text}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {(reflectError || voiceFatalError) && (
