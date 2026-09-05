@@ -50,11 +50,19 @@ const NOT_ENOUGH_CONTENT_ERROR = 'Not enough subject-specific content detected t
 
 type ContentNote = { id: string; label: string; text: string; timestampSec: number; excerpt: string }
 
-function buildContentNotesSystemPrompt(subject: string, exhibits: { text: string; timestampSec: number }[]): string {
+function buildContentNotesSystemPrompt(
+  subject: string,
+  exhibits: { text: string; timestampSec: number }[],
+  durationSec: number,
+): string {
   const subjectLabel = subject.replace('_', ' ')
+  const shortRecordingNotice =
+    durationSec > 0 && durationSec < 180
+      ? `\n\nThis excerpt is quite short, and automatic transcription can occasionally mishear a word as another that sounds similar (e.g. mishearing one technical term for another that sounds alike). Given the length here, keep every note more tentative than usual, and if a specific term or claim seems slightly inconsistent with the rest of the excerpt, treat that as a possible mishearing worth a gentle double-check rather than building a note on it with confidence.`
+      : ''
   return `You are a supportive ${subjectLabel} content-area specialist reviewing a brief excerpt from a classroom. Your tone is warm, collegial, and constructive — like a helpful colleague, never a critic. Assume good intent and strong subject knowledge on the teacher's part.
 
-You are working from a short audio transcript excerpt only. You have not seen the full lesson, materials, board work, or planning documents, and audio transcription may contain errors. Do not state or imply factual corrections with confidence — frame anything content-related as a question, a suggestion to double-check, or an observation, never as an assertion that something is wrong.
+You are working from a short audio transcript excerpt only. You have not seen the full lesson, materials, board work, or planning documents, and audio transcription may contain errors. Do not state or imply factual corrections with confidence — frame anything content-related as a question, a suggestion to double-check, or an observation, never as an assertion that something is wrong.${shortRecordingNotice}
 
 Focus primarily on things you can reasonably assess from spoken language alone: clarity of explanation, whether key vocabulary was defined, whether examples helped build understanding, whether the content connects to what students likely already know. Avoid commenting on strict factual accuracy unless a claim is unambiguous and verifiably incorrect independent of context — and even then, phrase it as a gentle check, not a correction.
 
@@ -571,7 +579,7 @@ audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 600,
-      system: buildContentNotesSystemPrompt(subject, exhibits),
+      system: buildContentNotesSystemPrompt(subject, exhibits, session.durationSec ?? 0),
       messages: [{ role: 'user', content: 'Write the notes now.' }],
     })
     const text = response.content

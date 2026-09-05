@@ -159,6 +159,23 @@ export function getPresenceMetric(value: number | null | undefined): ConfidentMe
     : { state: 'measured', display: String(value) }
 }
 
+// A coarser, teacher-facing 3-tier read on a metric's confidence, for
+// surfaces (like Summary's "My Focus" card) that want a plain status pill
+// rather than the full 7-state model above.
+export type EvidenceTier = 'pattern' | 'moment' | 'insufficient'
+
+export function evidenceTier(state: MetricState): EvidenceTier {
+  if (state === 'measured' || state === 'confirmed_none') return 'pattern'
+  if (state === 'possible_detection') return 'moment'
+  return 'insufficient'
+}
+
+export const EVIDENCE_TIER_LABELS: Record<EvidenceTier, string> = {
+  pattern: 'Pattern detected',
+  moment: 'Moment captured',
+  insufficient: 'Not enough evidence',
+}
+
 // "N of M measured" for a category's header — counts any confident state
 // (a confident zero, or a small-sample detection, still counts as data).
 export function categoryCoverage(entries: { state: MetricState }[]): string {

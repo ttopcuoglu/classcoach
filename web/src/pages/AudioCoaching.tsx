@@ -39,6 +39,8 @@ import {
 import {
   buildEvidenceQualityLine,
   categoryCoverage,
+  evidenceTier,
+  EVIDENCE_TIER_LABELS,
   formatRatio,
   getCoverage,
   getCountMetric,
@@ -690,8 +692,8 @@ const INSIGHTS_SECTIONS: { key: InsightsSection; label: string }[] = [
   { key: 'talk', label: 'Talk & Participation' },
   { key: 'questions', label: 'Questions & Thinking' },
   { key: 'understanding', label: 'Understanding & Feedback' },
-  { key: 'content', label: 'Content & Explanations' },
-  { key: 'routines', label: 'Climate & Management' },
+  { key: 'content', label: 'Clarity & Content' },
+  { key: 'routines', label: 'Climate & Routines' },
 ]
 
 function insightsNavButtonClass(active: boolean) {
@@ -893,7 +895,7 @@ function buildTalkInsight(
       sentence = `${sentence ?? ''} Students spoke up in ${count} separate moment${count === 1 ? '' : 's'} today — that's real back-and-forth, even beyond the raw talk-time split.`.trim()
     }
   } else if (studentSegmentsMetric.state === 'confirmed_none' && sentence) {
-    sentence += ' Students never separately spoke up this session.'
+    sentence += ' No separately identifiable student voice was captured this session.'
   }
   return sentence
 }
@@ -1070,6 +1072,52 @@ function buildSpotlight(
   return null
 }
 
+// One generic, always-safe coaching nudge per focus metric — deliberately
+// static (not derived from this session's own data), so it's never wrong
+// to show regardless of how the session actually went.
+const FOCUS_METRIC_TRY_NEXT: Record<FocusMetric, string> = {
+  talkRatio: 'Look for one moment to hand the floor to students — even a 30-second turn-and-talk shifts the balance.',
+  higherOrderPct: "Turn one factual question into a 'why' or 'how' question.",
+  avgWaitTime: 'After you ask a question, count silently to five before calling on anyone.',
+  cfuCount: 'Build in one quick check for understanding — a thumbs-up, a whiteboard hold-up, a quick poll.',
+  followUpQuestionCount: "When a student answers, try one follow-up: \"Say more about that\" or \"What makes you think so?\"",
+  redirectionCount: 'If you do need to redirect, a brief 1:1 aside can land more privately than a whole-class call-out.',
+  toneRatio: 'After a correction, look for one genuine positive to name in the same stretch.',
+  directiveCount: 'Pair a spoken direction with a visual or written cue for students who need a second channel.',
+  nameMentionCount: "Using a student's name when you call on them makes the invitation feel personal.",
+  feedbackSpecificity: 'After a student responds, name what was effective and offer one next step.',
+}
+
+type FocusSnapshot = {
+  label: string
+  tier: ReturnType<typeof evidenceTier>
+  statusLine: string | null
+  capturedLine: string
+  tryNextTip: string
+}
+
+// Summary's "My Focus" card — a plain, always-honest snapshot of where the
+// teacher's chosen focus stands this session. Reuses the same coach-voice
+// insight sentence already computed for the matching Insights category
+// (never invents new copy) and the metric's own ConfidentMetric display/
+// reason for the literal "what was captured" line.
+function buildFocusSnapshot(
+  focusMetric: FocusMetric | null,
+  metric: ConfidentMetric,
+  statusLine: string | null,
+): FocusSnapshot | null {
+  if (!focusMetric) return null
+  return {
+    label: FOCUS_METRIC_LABELS[focusMetric],
+    tier: evidenceTier(metric.state),
+    statusLine,
+    capturedLine: isConfidentState(metric.state)
+      ? `What was captured: ${metric.display}`
+      : `What was captured: ${metric.reason ?? 'not enough usable evidence'}`,
+    tryNextTip: FOCUS_METRIC_TRY_NEXT[focusMetric],
+  }
+}
+
 // A single candidate for "the one strength" or "the one coaching priority" —
 // either a real moment (highlight, with a timestamp/excerpt) or an
 // aggregate-metric observation (timestamp/excerpt null).
@@ -1097,11 +1145,16 @@ const CANDIDATE_ORDER = [
   'feedback',
 ]
 
-function pickTop(candidates: NoticeCandidate[]): NoticeCandidate | null {
+function pickTop(candidates: NoticeCandidate[], preferredFocusMetric?: FocusMetric | null): NoticeCandidate | null {
   if (!candidates.length) return null
-  return [...candidates].sort(
+  const sorted = [...candidates].sort(
     (a, b) => b.weight - a.weight || CANDIDATE_ORDER.indexOf(a.id) - CANDIDATE_ORDER.indexOf(b.id),
-  )[0]
+  )
+  if (preferredFocusMetric) {
+    const focused = sorted.find((c) => c.focusMetric === preferredFocusMetric)
+    if (focused) return focused
+  }
+  return sorted[0]
 }
 
 function highlightCandidates(
@@ -1220,7 +1273,7 @@ function buildStrengthCandidates(
         excerpt: null,
         durationSec: null,
         weight: 1,
-        focusMetric: null,
+        focusMetric: 'feedbackSpecificity',
       })
     }
   }
@@ -1336,7 +1389,7 @@ function buildPriorityCandidates(
         excerpt: null,
         durationSec: null,
         weight: 1,
-        focusMetric: null,
+        focusMetric: 'feedbackSpecificity',
       })
     }
   }
@@ -1373,21 +1426,21 @@ function formatCandidateHeadline(candidate: NoticeCandidate): string {
 // moments, each labeled by which kind it is, says the same thing once.
 function MomentsCard({
   strength,
-  priority,
+  momentToRevisit,
   coverage,
   onViewDiscourse,
   onDiscuss,
 }: {
   strength: NoticeCandidate | null
-  priority: NoticeCandidate | null
+  momentToRevisit: NoticeCandidate | null
   coverage: ReturnType<typeof getCoverage>
   onViewDiscourse: () => void
   onDiscuss: (candidate: NoticeCandidate) => void
 }) {
   const moments = [
-    strength && { kind: 'Strength' as const, candidate: strength },
-    priority && { kind: 'Coaching priority' as const, candidate: priority },
-  ].filter((m): m is { kind: 'Strength' | 'Coaching priority'; candidate: NoticeCandidate } => m != null)
+    strength && { kind: 'A move to keep' as const, candidate: strength },
+    momentToRevisit && { kind: 'A moment to revisit' as const, candidate: momentToRevisit },
+  ].filter((m): m is { kind: 'A move to keep' | 'A moment to revisit'; candidate: NoticeCandidate } => m != null)
 
   return (
     <div className="rounded-2xl border border-border bg-surface p-6">
@@ -1398,7 +1451,7 @@ function MomentsCard({
             <div key={kind} className="flex flex-col gap-1.5">
               <span
                 className={`text-xs font-semibold uppercase tracking-wide ${
-                  kind === 'Strength' ? 'text-brand-600' : 'text-warm-500'
+                  kind === 'A move to keep' ? 'text-brand-600' : 'text-warm-500'
                 }`}
               >
                 {kind}
@@ -1845,6 +1898,39 @@ function ReportPanel({
     firstRedirectionTimestampSec,
   )
 
+  // Summary's "My Focus" card — maps the teacher's chosen focus to its
+  // backing metric and the matching already-computed coach-voice sentence.
+  const focusSnapshot: FocusSnapshot | null = (() => {
+    switch (focusMetric) {
+      case 'talkRatio':
+        return buildFocusSnapshot(focusMetric, teacherTalkMetric, talkInsight)
+      case 'higherOrderPct':
+        return buildFocusSnapshot(
+          focusMetric,
+          higherOrderRatio ?? { state: 'not_measurable', display: '—', reason: 'No questions were detected to classify.' },
+          questioningInsight,
+        )
+      case 'avgWaitTime':
+        return buildFocusSnapshot(focusMetric, waitTimeMetric, questioningInsight)
+      case 'followUpQuestionCount':
+        return buildFocusSnapshot(focusMetric, followUpMetric, questioningInsight)
+      case 'cfuCount':
+        return buildFocusSnapshot(focusMetric, cfuMetric, cfuInsight)
+      case 'feedbackSpecificity':
+        return buildFocusSnapshot(focusMetric, feedbackRatio, cfuInsight)
+      case 'redirectionCount':
+        return buildFocusSnapshot(focusMetric, redirectionMetric, climateInsight)
+      case 'toneRatio':
+        return buildFocusSnapshot(focusMetric, toneRatio, climateInsight)
+      case 'nameMentionCount':
+        return buildFocusSnapshot(focusMetric, nameMentionMetric, climateInsight)
+      case 'directiveCount':
+        return buildFocusSnapshot(focusMetric, directiveMetric, routinesInsight)
+      default:
+        return null
+    }
+  })()
+
   // Computed once here (not per-tab) so the shared header can show it on
   // every tab, not just Summary.
   const evidenceQuality = buildEvidenceQualityLine(coverage, [
@@ -1947,6 +2033,8 @@ function ReportPanel({
           onGoReflect={() => setTab('reflect')}
           onNavigateInsights={(section) => handleViewSource('insights', '', section)}
           onDiscussWithCoach={handleDiscussWithCoach}
+          focusMetric={focusMetric}
+          focusSnapshot={focusSnapshot}
         />
       )}
 
@@ -2074,6 +2162,7 @@ function ReportPanel({
                 firstRedirectionTimestampSec={firstRedirectionTimestampSec}
                 routinesInsight={routinesInsight}
                 climateInsight={climateInsight}
+                focusMetric={focusMetric}
               />
             )}
           </div>
@@ -2118,6 +2207,8 @@ function SummaryTab({
   onGoReflect,
   onNavigateInsights,
   onDiscussWithCoach,
+  focusMetric,
+  focusSnapshot,
 }: {
   session: AudioSessionWithSegments
   coverage: ReturnType<typeof getCoverage>
@@ -2136,13 +2227,21 @@ function SummaryTab({
   onGoReflect: () => void
   onNavigateInsights: (section: InsightsSection) => void
   onDiscussWithCoach: (candidate: NoticeCandidate) => void
+  focusMetric: FocusMetric | null
+  focusSnapshot: FocusSnapshot | null
 }) {
-  const strength = pickTop(buildStrengthCandidates(session, cfuMetric, feedbackRatio, higherOrderRatio))
-  const priority = pickTop(buildPriorityCandidates(session, cfuMetric, feedbackRatio, higherOrderRatio))
+  const strengthCandidates = buildStrengthCandidates(session, cfuMetric, feedbackRatio, higherOrderRatio)
+  const priorityCandidates = buildPriorityCandidates(session, cfuMetric, feedbackRatio, higherOrderRatio)
+  const strength = pickTop(strengthCandidates)
+  const priority = pickTop(priorityCandidates, focusMetric)
+  // "A moment to revisit" must never repeat whatever's already showing as
+  // the focus-aware "One Next Step" pick — best REMAINING priority
+  // candidate instead of the same one twice.
+  const momentToRevisit = pickTop(priorityCandidates.filter((c) => c.id !== priority?.id))
   // Tiny recordings omit Moments entirely when there's nothing real to
   // rank, rather than showing its empty-state fallback card — everywhere
   // else, MomentsCard's own fallback is fine.
-  const showMoments = !coverage.isTinyRecording || strength != null || priority != null
+  const showMoments = !coverage.isTinyRecording || strength != null || momentToRevisit != null
   const spotlight = buildSpotlight(talkInsight, questioningInsight, cfuInsight)
 
   return (
@@ -2165,6 +2264,40 @@ function SummaryTab({
         )
       )}
 
+      {focusSnapshot && (
+        <div className="rounded-2xl border border-brand-100 bg-brand-50/40 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-600">
+              My focus · {focusSnapshot.label}
+            </h2>
+            <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-brand-600">
+              {EVIDENCE_TIER_LABELS[focusSnapshot.tier]}
+            </span>
+          </div>
+          {focusSnapshot.statusLine && <p className="mt-2 text-sm text-ink">{focusSnapshot.statusLine}</p>}
+          <p className="mt-2 text-sm text-ink-soft">{focusSnapshot.capturedLine}</p>
+          <p className="mt-1 text-sm text-ink-soft">Try next time: {focusSnapshot.tryNextTip}</p>
+          <button
+            type="button"
+            onClick={() =>
+              onDiscussWithCoach({
+                id: 'focus-metric',
+                observation: `${focusSnapshot.label} — your current focus`,
+                whyItMatters: focusSnapshot.statusLine ?? focusSnapshot.tryNextTip,
+                timestampSec: null,
+                excerpt: null,
+                durationSec: null,
+                weight: 0,
+                focusMetric,
+              })
+            }
+            className="mt-3 text-sm font-medium text-brand-600 hover:text-brand-700"
+          >
+            Reflect with Wivoza →
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <WhoWasHeardCard
           teacherPct={session.teacherTalkPct}
@@ -2180,7 +2313,7 @@ function SummaryTab({
         {showMoments && (
           <MomentsCard
             strength={strength}
-            priority={priority}
+            momentToRevisit={momentToRevisit}
             coverage={coverage}
             onViewDiscourse={() => onNavigateInsights('talk')}
             onDiscuss={onDiscussWithCoach}
@@ -3552,6 +3685,7 @@ function ClimateRoutinesTab({
   firstRedirectionTimestampSec,
   routinesInsight,
   climateInsight,
+  focusMetric,
 }: {
   transitionMetric: ReturnType<typeof getCountMetric>
   directiveMetric: ReturnType<typeof getCountMetric>
@@ -3565,10 +3699,11 @@ function ClimateRoutinesTab({
   firstRedirectionTimestampSec: number | null
   routinesInsight: string | null
   climateInsight: string | null
+  focusMetric: FocusMetric | null
 }) {
   const firstRedirectionDisplay =
     redirectionMetric.state === 'confirmed_none'
-      ? 'Not needed this session'
+      ? 'None detected'
       : firstRedirectionTimestampSec != null
         ? formatTime(firstRedirectionTimestampSec)
         : '—'
@@ -3588,6 +3723,7 @@ function ClimateRoutinesTab({
           value={directiveMetric.display}
           muted={isMissingState(directiveMetric.state)}
           reason={directiveMetric.reason ?? "Count only — clarity isn't judged automatically."}
+          focused={focusMetric === 'directiveCount'}
         />
         <Stat
           label="Repeated instruction"
@@ -3651,6 +3787,7 @@ function ClimateRoutinesTab({
             nameMentionMetric.reason ??
             "Distinct names are a text-pattern guess, not a verified roster match — two students sharing a first name would count as one."
           }
+          focused={focusMetric === 'nameMentionCount'}
         />
         <Stat
           label="Your positive / corrective ratio"
@@ -3658,6 +3795,7 @@ function ClimateRoutinesTab({
           muted={isMissingState(toneRatio.state)}
           reason={toneRatio.reason}
           sub={isConfidentState(toneRatio.state) ? 'share positive' : undefined}
+          focused={focusMetric === 'toneRatio'}
         />
         <div id="stat-redirection">
           <Stat
@@ -3665,6 +3803,7 @@ function ClimateRoutinesTab({
             value={redirectionMetric.display}
             muted={isMissingState(redirectionMetric.state)}
             reason={redirectionMetric.reason ?? 'Count only — tone isn\'t judged automatically.'}
+            focused={focusMetric === 'redirectionCount'}
           />
         </div>
         <Stat
@@ -3987,6 +4126,7 @@ function QuestionsThinkingTab({
           value={followUpMetric.display}
           muted={isMissingState(followUpMetric.state)}
           reason={followUpMetric.reason}
+          focused={focusMetric === 'followUpQuestionCount'}
         />
         <div id="stat-avgWaitTime">
           <Stat
@@ -4096,6 +4236,7 @@ function UnderstandingFeedbackTab({
           muted={isMissingState(feedbackRatio.state)}
           reason={feedbackRatio.reason}
           sub={isConfidentState(feedbackRatio.state) ? 'specific of total feedback moments' : undefined}
+          focused={focusMetric === 'feedbackSpecificity'}
         />
       </CategorySection>
       <CoachNote text={cfuInsight} />
