@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, MicIcon } from '../components/icons'
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
+import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import { HATCH_STYLE } from '../lib/chartPatterns'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
+import { playQueue, splitIntoSentences } from '../lib/voicePlayback'
 import {
   createAudioSession,
   deleteAudioSession,
@@ -31,6 +33,7 @@ import {
   type FocusMetric,
   type ReflectChatErrorKind,
   type SpeakerSample,
+  type TalkVoice,
   type TranscriptSegment,
 } from '../lib/api'
 import {
@@ -74,6 +77,7 @@ export default function AudioCoaching() {
   const [error, setError] = useState<string | null>(null)
   const [focusMetric, setFocusMetric] = useState<FocusMetric | null>(null)
   const [teacherName, setTeacherName] = useState<string | null>(null)
+  const [talkVoice, setTalkVoice] = useState<TalkVoice | null>(null)
   // Only used to decide whether to show the free-tier "X of 3 used this
   // month" line below — an org member could have district/pilot access
   // this client can't verify without a new API call, so the line is only
@@ -93,6 +97,7 @@ export default function AudioCoaching() {
       .then((p) => {
         setFocusMetric(p.focusMetric)
         setTeacherName(p.name)
+        setTalkVoice(p.talkVoice)
         setShowFreeCapLine(p.plan === 'free' && p.organizationId == null)
       })
       .catch(() => {})
@@ -160,6 +165,7 @@ export default function AudioCoaching() {
         sessions={sessions}
         focusMetric={focusMetric}
         onFocusMetricChange={handleFocusMetricChange}
+        talkVoice={talkVoice}
       />
     )
   }
@@ -227,6 +233,7 @@ function SessionFlow({
   sessions,
   focusMetric,
   onFocusMetricChange,
+  talkVoice,
 }: {
   session: AudioSessionWithSegments
   speakers: SpeakerSample[]
@@ -235,6 +242,7 @@ function SessionFlow({
   sessions: AudioSession[]
   focusMetric: FocusMetric | null
   onFocusMetricChange: (metric: FocusMetric | null) => void
+  talkVoice: TalkVoice | null
 }) {
   if (session.status === 'transcribing') {
     return (
@@ -254,6 +262,7 @@ function SessionFlow({
       sessions={sessions}
       focusMetric={focusMetric}
       onFocusMetricChange={onFocusMetricChange}
+      talkVoice={talkVoice}
     />
   )
 }
@@ -725,6 +734,60 @@ function buildReflectContext(
   }
 
   return context.slice(0, 8)
+}
+
+// Grounded starting points for Reflect's conversation — real
+// highlights/confirmed-zero metrics turned into a tappable invitation,
+// rather than the one generic "Start reflecting" button. Same discipline
+// as every other builder in this file: only ever built from real signal,
+// capped at 3, empty when there's nothing to ground a question in (the
+// always-present generic starting point covers that case).
+function buildReflectStarterPrompts(
+  highlights: AudioHighlight[] | null,
+  cfuMetric: { state: string },
+  redirectionMetric: { state: string },
+): { label: string; focus: string }[] {
+  const prompts: { label: string; focus: string }[] = []
+  const byLabel = (label: string) => (highlights ?? []).find((h) => h.label === label)
+
+  const followUp = byLabel('Follow-up / probing question')
+  if (followUp) {
+    prompts.push({
+      label: 'Talk about a question you followed up on',
+      focus: `the moment at ${formatTime(followUp.timestampSec)} where you asked a follow-up question: "${followUp.excerpt}"`,
+    })
+  }
+
+  const cluster = byLabel('Redirection cluster')
+  if (cluster) {
+    prompts.push({
+      label: 'Talk about that stretch of redirections',
+      focus: `the cluster of redirections around ${formatTime(cluster.timestampSec)}`,
+    })
+  }
+
+  const monologue = byLabel('Longest uninterrupted teacher monologue')
+  if (monologue) {
+    prompts.push({
+      label: 'Talk about that longer stretch of talking',
+      focus: `the longest stretch of you talking, around ${formatTime(monologue.timestampSec)}`,
+    })
+  }
+
+  if (prompts.length < 3 && cfuMetric.state === 'confirmed_none') {
+    prompts.push({
+      label: 'Talk about checking for understanding',
+      focus: 'why no explicit check for understanding came through this session, and what that might look like next time',
+    })
+  }
+  if (prompts.length < 3 && redirectionMetric.state === 'confirmed_none') {
+    prompts.push({
+      label: 'Talk about how the room felt today',
+      focus: 'how the classroom climate felt today, since no redirection language was detected',
+    })
+  }
+
+  return prompts.slice(0, 3)
 }
 
 // Coach-voice interpretations of the category stats — deterministic
@@ -1481,6 +1544,7 @@ function ReportPanel({
   sessions,
   focusMetric,
   onFocusMetricChange,
+  talkVoice,
 }: {
   session: AudioSessionWithSegments
   onUpdate: (s: AudioSessionWithSegments) => void
@@ -1488,6 +1552,7 @@ function ReportPanel({
   sessions: AudioSession[]
   focusMetric: FocusMetric | null
   onFocusMetricChange: (metric: FocusMetric | null) => void
+  talkVoice: TalkVoice | null
 }) {
   const [tab, setTab] = useState<ReportTab>('summary')
   const [insightsSection, setInsightsSection] = useState<InsightsSection>('talk')
@@ -1545,11 +1610,17 @@ function ReportPanel({
     }
   }
 
-  async function handleStartReflect() {
+  // focus, when passed, is a specific highlight/metric to open with (from
+  // one of Reflect's grounded starting-point chips) — prepended as one
+  // more plain-fact line ahead of the same context array, so Claude's own
+  // generated opening question naturally leads with it. No backend change
+  // needed: the route already accepts an arbitrary context: string[].
+  async function handleStartReflect(focus?: string) {
     setReflectSending(true)
     setReflectError(null)
     try {
-      const updated = await sendReflectMessage(session.id, { context: reflectContext })
+      const context = focus ? [`Start the conversation by asking about ${focus}.`, ...reflectContext] : reflectContext
+      const updated = await sendReflectMessage(session.id, { context })
       onUpdate({ ...session, ...updated })
     } catch (err) {
       const kind = (err as { kind?: ReflectChatErrorKind })?.kind ?? 'other'
@@ -1559,19 +1630,23 @@ function ReportPanel({
     }
   }
 
-  async function handleSendReflect() {
-    const trimmed = reflectDraft.trim()
+  // overrideText lets voice mode submit a transcribed turn directly,
+  // bypassing reflectDraft entirely — same convention as Ask.tsx's and
+  // TalkToMe.tsx's own optional-override submit functions.
+  async function handleSendReflect(overrideText?: string) {
+    const usingOverride = overrideText != null
+    const trimmed = (overrideText ?? reflectDraft).trim()
     if (!trimmed || reflectSending) return
     setReflectSending(true)
     setReflectError(null)
-    setReflectDraft('')
+    if (!usingOverride) setReflectDraft('')
     try {
       const updated = await sendReflectMessage(session.id, { message: trimmed, context: reflectContext })
       onUpdate({ ...session, ...updated })
     } catch (err) {
       const kind = (err as { kind?: ReflectChatErrorKind })?.kind ?? 'other'
       setReflectError({ kind, message: (err as Error).message })
-      setReflectDraft(trimmed)
+      if (!usingOverride) setReflectDraft(trimmed)
     } finally {
       setReflectSending(false)
     }
@@ -1787,6 +1862,8 @@ function ReportPanel({
       {tab === 'reflect' && (
         <ReflectTab
           highlights={session.highlights}
+          cfuMetric={cfuMetric}
+          redirectionMetric={redirectionMetric}
           conversation={session.reflectConversation}
           sending={reflectSending}
           reflectError={reflectError}
@@ -1795,6 +1872,7 @@ function ReportPanel({
           onStart={handleStartReflect}
           onSend={handleSendReflect}
           locked={locked}
+          talkVoice={talkVoice}
           strengths={strengths}
           growthAreas={growthAreas}
           nextStep={nextStep}
@@ -2338,6 +2416,8 @@ const REFLECT_TURN_CAP = 8
 
 function ReflectTab({
   highlights,
+  cfuMetric,
+  redirectionMetric,
   conversation,
   sending,
   reflectError,
@@ -2346,6 +2426,7 @@ function ReflectTab({
   onStart,
   onSend,
   locked,
+  talkVoice,
   strengths,
   growthAreas,
   nextStep,
@@ -2367,14 +2448,17 @@ function ReflectTab({
   onFocusMetricChange,
 }: {
   highlights: AudioHighlight[] | null
+  cfuMetric: { state: string }
+  redirectionMetric: { state: string }
   conversation: AudioReflectMessage[] | null
   sending: boolean
   reflectError: { kind: ReflectChatErrorKind; message: string } | null
   draft: string
   onDraftChange: (v: string) => void
-  onStart: () => void
-  onSend: () => void
+  onStart: (focus?: string) => void
+  onSend: (overrideText?: string) => void
   locked: boolean
+  talkVoice: TalkVoice | null
   strengths: string
   growthAreas: string
   nextStep: string
@@ -2395,218 +2479,422 @@ function ReflectTab({
   focusMetric: FocusMetric | null
   onFocusMetricChange: (metric: FocusMetric | null) => void
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null)
   const started = conversation != null && conversation.length > 0
   const userTurnCount = conversation?.filter((m) => m.role === 'user').length ?? 0
   const turnCapHit = userTurnCount >= REFLECT_TURN_CAP
+  const lastAssistant = conversation ? [...conversation].reverse().find((m) => m.role === 'assistant') : null
+
+  // A session that was already finished before (has saved notes) opens
+  // straight into the review screen; otherwise starts on the conversation.
+  const [reviewingNotes, setReviewingNotes] = useState(() => Boolean(strengths || growthAreas || nextStep))
+  const [userTranscript, setUserTranscript] = useState<string | null>(null)
+
+  // Voice mode — talk to Coach live instead of typing, replies auto-play.
+  // Same useVoiceTurn hook and voicePlayback helpers Talk It Through uses,
+  // just recolored to this report's own brand/warm/ink tokens instead of
+  // Talk It Through's distinct cream/forest theme.
+  const [voiceMode, setVoiceMode] = useState(false)
+  const [muted, setMuted] = useState(false)
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const spokenCountRef = useRef(0)
+  const voiceModeRef = useRef(false)
+  voiceModeRef.current = voiceMode
+  const mutedRef = useRef(false)
+  mutedRef.current = muted
+
+  function handleVoiceTurnComplete(text: string) {
+    if (!text) {
+      if (voiceModeRef.current && !locked && !turnCapHit) start()
+      return
+    }
+    setUserTranscript(text)
+    onSend(text)
+  }
+
+  const {
+    supported: voiceSupported,
+    listening,
+    level,
+    fatalError: voiceFatalError,
+    transcribing,
+    start,
+    close,
+  } = useVoiceTurn(handleVoiceTurnComplete, 1400)
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
-  }, [conversation, sending])
+    if (voiceFatalError) setVoiceMode(false)
+  }, [voiceFatalError])
 
-  const highlightsList =
-    !highlights || highlights.length === 0 ? (
-      <p className="mt-3 text-sm text-ink-soft">Nothing stood out enough this session to flag here.</p>
-    ) : (
-      <div className="mt-3 flex flex-col gap-2">
-        {highlights.map((h, i) => (
-          <div key={i} className="rounded-xl border border-border bg-surface p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
-              {formatHighlightHeadline(h)}
-            </p>
-            <p className="mt-1.5 text-sm text-ink">"{h.excerpt}"</p>
-          </div>
-        ))}
-      </div>
-    )
+  // Auto-play: the moment a new, not-yet-spoken assistant reply shows up
+  // while in voice mode, speak it (unless muted), then resume listening —
+  // same "record -> reply -> speak -> resume" loop Talk It Through uses.
+  useEffect(() => {
+    if (!voiceMode || !conversation) return
+    if (conversation.length <= spokenCountRef.current) return
+    const last = conversation[conversation.length - 1]
+    if (last.role !== 'assistant') return
+    spokenCountRef.current = conversation.length
+    if (mutedRef.current || !audioRef.current) {
+      if (!locked && !turnCapHit) start()
+      return
+    }
+    setIsSpeaking(true)
+    playQueue(audioRef.current, splitIntoSentences(last.text), talkVoice).then(() => {
+      setIsSpeaking(false)
+      if (voiceModeRef.current && !locked && !turnCapHit) start()
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversation, voiceMode])
+
+  // Releases the mic on unmount (e.g. leaving this tab or the report).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => close, [])
+
+  async function primeAudio() {
+    const audio = audioRef.current
+    if (!audio) return
+    audio.muted = true
+    try {
+      await audio.play()
+      audio.pause()
+      audio.currentTime = 0
+    } catch (err) {
+      console.warn('[ReflectTab] audio unlock (priming) rejected', err)
+    }
+    audio.muted = false
+  }
+
+  async function handleStartVoice(focus?: string) {
+    await primeAudio()
+    setVoiceMode(true)
+    onStart(focus)
+  }
+
+  function handleStartTyped() {
+    setVoiceMode(false)
+    onStart()
+  }
+
+  async function handleSwitchToVoice() {
+    await primeAudio()
+    setVoiceMode(true)
+    if (!locked && !turnCapHit) start()
+  }
+
+  function handleSwitchToTyping() {
+    close()
+    setVoiceMode(false)
+  }
+
+  function handleFinish() {
+    close()
+    audioRef.current?.pause()
+    setReviewingNotes(true)
+    onSummarize()
+  }
+
+  const voiceStatus = transcribing
+    ? 'Transcribing…'
+    : sending
+      ? 'Thinking…'
+      : isSpeaking
+        ? 'Coach is speaking'
+        : listening
+          ? level > 8
+            ? 'Listening…'
+            : "I'm listening — go ahead"
+          : 'Paused'
+
+  const starterPrompts = buildReflectStarterPrompts(highlights, cfuMetric, redirectionMetric)
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
-      <div className="flex min-w-0 flex-1 flex-col gap-6">
-        {/* Evidence sits above the chat now (was its own column) — a
-            disclosure on every width, since the right column is reserved
-            for "My next step" and the notes form. */}
-        <details className="rounded-2xl border border-border bg-surface p-4">
-          <summary className="cursor-pointer text-sm font-semibold uppercase tracking-wide text-ink-soft">
-            What stood out this session
-          </summary>
-          {highlightsList}
-        </details>
+    <div className="flex flex-col gap-6">
+      {/* Persistent, hidden element — playQueue always plays a locally
+          created blob: URL through it, never /api/tts directly. */}
+      <audio ref={audioRef} crossOrigin="use-credentials" className="hidden" />
 
-      <div className="flex flex-col rounded-2xl border border-border bg-surface">
-        <div ref={scrollRef} className="flex max-h-96 min-h-[10rem] flex-col gap-3 overflow-y-auto p-4">
-          {!started ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-              <p className="text-sm text-ink-soft">
-                Talk through this session with your coach — one question at a time, at your pace.
-              </p>
-              {!locked && (
-                <button
-                  type="button"
-                  onClick={onStart}
-                  disabled={sending}
-                  className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
-                >
-                  {sending ? 'Starting...' : 'Start reflecting'}
-                </button>
-              )}
+      {reviewingNotes ? (
+        <div className="flex flex-col gap-6">
+          <button
+            type="button"
+            onClick={() => setReviewingNotes(false)}
+            className="self-start text-sm font-medium text-ink-soft hover:text-ink"
+          >
+            ← Back to conversation
+          </button>
+
+          {summarizing ? (
+            <div className="rounded-2xl border border-border bg-surface p-8 text-center">
+              <p className="text-sm text-ink-soft">Wrapping up your reflection…</p>
             </div>
           ) : (
             <>
-              {conversation!.map((m, i) => (
-                <div
-                  key={i}
-                  className={
-                    m.role === 'user'
-                      ? 'ml-auto max-w-[85%] rounded-2xl rounded-br-sm bg-brand-500 px-4 py-2.5 text-sm text-white'
-                      : 'max-w-[85%] rounded-2xl rounded-bl-sm border border-border bg-canvas px-4 py-2.5 text-sm whitespace-pre-wrap text-ink'
-                  }
-                >
-                  {m.text}
+              {summarizeError && <p className="text-sm text-warm-500">{summarizeError}</p>}
+
+              <div className="rounded-2xl border border-border bg-surface p-6">
+                <h2 className="text-sm font-semibold text-ink">My next step</h2>
+                <p className="mt-1 text-sm text-ink-soft">Choose one focus for your next recording.</p>
+                <div className="mt-3">
+                  <FocusSelector focusMetric={focusMetric} onChange={onFocusMetricChange} />
                 </div>
-              ))}
-              {sending && (
-                <div className="max-w-[85%] rounded-2xl rounded-bl-sm border border-border bg-canvas px-4 py-2.5 text-sm text-ink-soft">
-                  Thinking...
+              </div>
+
+              <div className="rounded-2xl border border-border bg-surface p-6">
+                <h2 className="text-sm font-semibold text-ink">Your reflection</h2>
+                <div className="mt-4 flex flex-col gap-4">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-ink">What I noticed</span>
+                    <textarea
+                      value={strengths}
+                      onChange={(e) => onStrengthsChange(e.target.value)}
+                      disabled={locked}
+                      rows={3}
+                      className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-ink">What I want to explore</span>
+                    <textarea
+                      value={growthAreas}
+                      onChange={(e) => onGrowthAreasChange(e.target.value)}
+                      disabled={locked}
+                      rows={3}
+                      className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-ink">My next step</span>
+                    <textarea
+                      value={nextStep}
+                      onChange={(e) => onNextStepChange(e.target.value)}
+                      disabled={locked}
+                      rows={2}
+                      className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-ink">Follow-up date</span>
+                    <input
+                      type="date"
+                      value={followUpDate}
+                      onChange={(e) => onFollowUpDateChange(e.target.value)}
+                      disabled={locked}
+                      className="w-fit rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
+                    />
+                  </label>
                 </div>
-              )}
+
+                {!locked && (
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={onSave}
+                      disabled={saving}
+                      className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+                    >
+                      {saving ? 'Saving...' : 'Save notes'}
+                    </button>
+                    {saved && <span className="text-sm text-brand-600">Saved.</span>}
+                    <button
+                      type="button"
+                      onClick={onLock}
+                      disabled={locking}
+                      className="ml-auto rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
+                    >
+                      {locking ? 'Locking...' : 'Lock report'}
+                    </button>
+                  </div>
+                )}
+                {error && <p className="mt-3 text-sm text-warm-500">{error}</p>}
+              </div>
             </>
           )}
         </div>
+      ) : !started ? (
+        <div className="mx-auto flex w-full max-w-md flex-col items-center gap-5 rounded-2xl border border-border bg-surface p-8 text-center">
+          <div>
+            <h2 className="text-lg font-semibold text-ink">Let's talk through this lesson</h2>
+            <p className="mt-1.5 text-sm text-ink-soft">
+              Pick something to start with, or just start talking — one question at a time, at your pace.
+            </p>
+          </div>
 
-        {reflectError && (
-          <p className="border-t border-border px-4 py-2 text-sm text-warm-500">{reflectError.message}</p>
-        )}
+          {starterPrompts.length > 0 && (
+            <div className="flex w-full flex-col gap-2">
+              {starterPrompts.map((p) => (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => handleStartVoice(p.focus)}
+                  disabled={sending}
+                  className="rounded-xl border border-border bg-canvas px-4 py-3 text-left text-sm text-ink transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          )}
 
-        {started && (
-          <form
-            className="border-t border-border p-4"
-            onSubmit={(e) => {
-              e.preventDefault()
-              onSend()
-            }}
-          >
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={draft}
-                onChange={(e) => onDraftChange(e.target.value)}
-                placeholder="Say what's on your mind..."
-                disabled={sending || locked || turnCapHit}
-                className="flex-1 rounded-lg border border-border bg-canvas px-4 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
-              />
+          {!locked && (
+            <div className="flex w-full flex-col items-center gap-2">
               <button
-                type="submit"
-                disabled={sending || locked || turnCapHit || !draft.trim()}
-                className="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                type="button"
+                onClick={() => handleStartVoice()}
+                disabled={sending}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
               >
-                Send
+                <MicIcon className="h-4 w-4" />
+                {sending ? 'Starting...' : 'Start Talking'}
+              </button>
+              <button
+                type="button"
+                onClick={handleStartTyped}
+                disabled={sending}
+                className="text-sm font-medium text-ink-soft hover:text-ink"
+              >
+                Type instead
               </button>
             </div>
-            {locked ? (
-              <p className="mt-2 text-xs text-ink-soft">This report is locked — the conversation is read-only.</p>
-            ) : turnCapHit ? (
-              <p className="mt-2 text-xs text-ink-soft">
-                You've reached today's reflection limit for this session.
-              </p>
-            ) : null}
-          </form>
-        )}
-
-        {started && !locked && (
-          <div className="border-t border-border p-4">
-            <button
-              type="button"
-              onClick={onSummarize}
-              disabled={summarizing}
-              className="w-full rounded-lg border border-brand-300 bg-brand-50 px-4 py-2.5 text-sm font-semibold text-brand-600 transition-colors hover:border-brand-400 hover:bg-brand-100 disabled:opacity-60"
-            >
-              {summarizing ? 'Turning this into notes...' : 'Turn this into notes when you’re ready'}
-            </button>
-            {summarizeError && <p className="mt-2 text-xs text-warm-500">{summarizeError}</p>}
-          </div>
-        )}
-      </div>
-      </div>
-
-      <div className="flex flex-col gap-6 lg:w-80 lg:shrink-0">
-      <div className="rounded-2xl border border-border bg-surface p-6">
-        <h2 className="text-sm font-semibold text-ink">My next step</h2>
-        <p className="mt-1 text-sm text-ink-soft">Choose one focus for your next recording.</p>
-        <div className="mt-3">
-          <FocusSelector focusMetric={focusMetric} onChange={onFocusMetricChange} />
+          )}
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <div className="rounded-2xl border border-border bg-surface p-6">
+            <div className="flex flex-col gap-3">
+              {userTranscript && (
+                <div className="rounded-xl bg-brand-50 px-4 py-2.5 text-sm text-ink">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">You</p>
+                  <p className="mt-1">{userTranscript}</p>
+                </div>
+              )}
+              {lastAssistant && (
+                <div className="rounded-xl border border-border bg-canvas px-4 py-2.5 text-sm whitespace-pre-wrap text-ink">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Coach</p>
+                  <p className="mt-1">{lastAssistant.text}</p>
+                </div>
+              )}
+              {sending && <p className="text-sm text-ink-soft">Thinking...</p>}
+            </div>
 
-      <div className="rounded-2xl border border-border bg-surface p-6">
-        <h2 className="text-sm font-semibold text-ink">Your reflection</h2>
-        <div className="mt-4 flex flex-col gap-4">
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-ink">What I noticed</span>
-            <textarea
-              value={strengths}
-              onChange={(e) => onStrengthsChange(e.target.value)}
-              disabled={locked}
-              rows={3}
-              className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
-            />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-ink">What I want to explore</span>
-            <textarea
-              value={growthAreas}
-              onChange={(e) => onGrowthAreasChange(e.target.value)}
-              disabled={locked}
-              rows={3}
-              className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
-            />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-ink">My next step</span>
-            <textarea
-              value={nextStep}
-              onChange={(e) => onNextStepChange(e.target.value)}
-              disabled={locked}
-              rows={2}
-              className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
-            />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-ink">Follow-up date</span>
-            <input
-              type="date"
-              value={followUpDate}
-              onChange={(e) => onFollowUpDateChange(e.target.value)}
-              disabled={locked}
-              className="w-fit rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
-            />
-          </label>
-        </div>
+            {(reflectError || voiceFatalError) && (
+              <p className="mt-3 text-sm text-warm-500">{reflectError?.message ?? voiceFatalError}</p>
+            )}
 
-        {!locked && (
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={onSave}
-              disabled={saving}
-              className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
-            >
-              {saving ? 'Saving...' : 'Save notes'}
-            </button>
-            {saved && <span className="text-sm text-brand-600">Saved.</span>}
-            <button
-              type="button"
-              onClick={onLock}
-              disabled={locking}
-              className="ml-auto rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
-            >
-              {locking ? 'Locking...' : 'Lock report'}
-            </button>
+            {voiceMode ? (
+              <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`h-2 w-2 shrink-0 rounded-full ${
+                      isSpeaking || sending || transcribing ? 'animate-pulse bg-brand-500' : 'bg-ink-soft'
+                    }`}
+                  />
+                  <p className="text-sm text-ink-soft">{voiceStatus}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {!locked && !turnCapHit && (
+                    <button
+                      type="button"
+                      onClick={listening ? () => close() : () => start()}
+                      className="rounded-full border border-border px-3.5 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600"
+                    >
+                      {listening ? 'Pause mic' : 'Resume'}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setMuted((m) => !m)}
+                    className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                      muted
+                        ? 'border-warm-500 bg-warm-100 text-warm-500'
+                        : 'border-border text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                    }`}
+                  >
+                    {muted ? 'Unmute coach' : 'Mute coach'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSwitchToTyping}
+                    className="rounded-full border border-border px-3.5 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600"
+                  >
+                    Type instead
+                  </button>
+                  {!locked && (
+                    <button
+                      type="button"
+                      onClick={handleFinish}
+                      className="ml-auto rounded-full bg-brand-500 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-600"
+                    >
+                      Finish
+                    </button>
+                  )}
+                </div>
+                {locked ? (
+                  <p className="text-xs text-ink-soft">This report is locked — the conversation is read-only.</p>
+                ) : turnCapHit ? (
+                  <p className="text-xs text-ink-soft">You've reached today's reflection limit for this session.</p>
+                ) : null}
+              </div>
+            ) : (
+              <div className="mt-4 border-t border-border pt-4">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    setUserTranscript(draft.trim())
+                    onSend()
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={draft}
+                      onChange={(e) => onDraftChange(e.target.value)}
+                      placeholder="Say what's on your mind..."
+                      disabled={sending || locked || turnCapHit}
+                      className="flex-1 rounded-lg border border-border bg-canvas px-4 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                    />
+                    <button
+                      type="submit"
+                      disabled={sending || locked || turnCapHit || !draft.trim()}
+                      className="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                    >
+                      Send
+                    </button>
+                  </div>
+                </form>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  {voiceSupported && !locked && !turnCapHit && (
+                    <button
+                      type="button"
+                      onClick={handleSwitchToVoice}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:text-brand-700"
+                    >
+                      <MicIcon className="h-3.5 w-3.5" />
+                      Talk instead
+                    </button>
+                  )}
+                  {!locked && (
+                    <button
+                      type="button"
+                      onClick={handleFinish}
+                      className="ml-auto rounded-full border border-border px-4 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600"
+                    >
+                      Finish
+                    </button>
+                  )}
+                </div>
+                {locked ? (
+                  <p className="mt-2 text-xs text-ink-soft">This report is locked — the conversation is read-only.</p>
+                ) : turnCapHit ? (
+                  <p className="mt-2 text-xs text-ink-soft">
+                    You've reached today's reflection limit for this session.
+                  </p>
+                ) : null}
+              </div>
+            )}
           </div>
-        )}
-        {error && <p className="mt-3 text-sm text-warm-500">{error}</p>}
-      </div>
-      </div>
+        </div>
+      )}
     </div>
   )
 }
