@@ -2551,22 +2551,29 @@ function ReflectTab({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => close, [])
 
-  async function primeAudio() {
+  // Fire-and-forget, same as TalkToMe.tsx's own priming — never awaited,
+  // since the <audio> element has no source yet and this must never block
+  // the actual state transition (starting the conversation, or entering
+  // voice mode) behind however long play()/pause() takes to settle.
+  function primeAudio() {
     const audio = audioRef.current
     if (!audio) return
     audio.muted = true
-    try {
-      await audio.play()
-      audio.pause()
-      audio.currentTime = 0
-    } catch (err) {
-      console.warn('[ReflectTab] audio unlock (priming) rejected', err)
-    }
-    audio.muted = false
+    audio
+      .play()
+      .then(() => {
+        audio.pause()
+        audio.currentTime = 0
+        audio.muted = false
+      })
+      .catch((err) => {
+        console.warn('[ReflectTab] audio unlock (priming) rejected', err)
+        audio.muted = false
+      })
   }
 
-  async function handleStartVoice(focus?: string) {
-    await primeAudio()
+  function handleStartVoice(focus?: string) {
+    primeAudio()
     setVoiceMode(true)
     onStart(focus)
   }
@@ -2576,8 +2583,8 @@ function ReflectTab({
     onStart()
   }
 
-  async function handleSwitchToVoice() {
-    await primeAudio()
+  function handleSwitchToVoice() {
+    primeAudio()
     setVoiceMode(true)
     if (!locked && !turnCapHit) start()
   }
