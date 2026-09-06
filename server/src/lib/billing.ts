@@ -72,12 +72,16 @@ export async function hasActivePlan(userId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
+      role: true,
       plan: true,
       planStatus: true,
       organization: { select: { plan: true, pilotEndsAt: true } },
     },
   })
   if (!user) return false
+  // Superadmin needs to exercise every feature area to support/verify the
+  // platform — never blocked behind a paywall meant for teachers.
+  if (user.role === 'superadmin') return true
   if (user.plan === 'plus' && user.planStatus === 'active') return true
   if (user.organization?.plan === 'district') return true
   if (user.organization?.pilotEndsAt && user.organization.pilotEndsAt > new Date()) return true
