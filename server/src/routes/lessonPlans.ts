@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
-import { checkFeatureAccess, countUsageLogActionsThisMonth } from '../lib/billing.ts'
+import { checkFeatureAccess, countUsageLogActionsThisMonth, LESSON_PLANNING_ACTIONS } from '../lib/billing.ts'
 import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES, INSTRUCTION_PRIORITY_NOTICE } from '../lib/coachPersona.ts'
 import { extractTag } from '../lib/extractTag.ts'
@@ -9,8 +9,6 @@ import { generateShareToken } from '../lib/shareToken.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const lessonPlansRouter = Router()
-
-const LESSON_PLANNING_ACTIONS = ['lesson_plan_feedback', 'lesson_plan_generate', 'lesson_plan_chat']
 
 const FEEDBACK_SYSTEM_PROMPT = `You are a warm, practical instructional coach for K-12 teachers, reviewing a lesson plan the teacher wrote themselves. Coach, don't grade.
 

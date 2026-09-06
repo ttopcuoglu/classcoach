@@ -34,6 +34,9 @@ export type UsageAction =
   | 'talk_to_me_chat'
   | 'talk_to_me_takeaway'
   | 'class_summary'
+  | 'assignment_coach'
+  | 'assignment_coach_chat'
+  | 'assignment_coach_finalize'
 
 // Counts today's Claude-costing calls for this user and logs this one if
 // they're still under the daily cap. One shared API key funds every

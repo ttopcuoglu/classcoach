@@ -22,6 +22,7 @@ const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
 const AudioCoaching = lazy(() => import('./pages/AudioCoaching'))
 const AudioCoachingExport = lazy(() => import('./pages/AudioCoachingExport'))
 const LessonPlanning = lazy(() => import('./pages/LessonPlanning'))
+const AssignmentCoach = lazy(() => import('./pages/AssignmentCoach'))
 const LessonPlanExport = lazy(() => import('./pages/LessonPlanExport'))
 const TalkToMe = lazy(() => import('./pages/TalkToMe'))
 const Onboarding = lazy(() => import('./pages/Onboarding'))
@@ -168,6 +169,7 @@ export default function App() {
               <Route path="communications" element={<Communications />} />
               <Route path="audio-coaching" element={<AudioCoaching />} />
               <Route path="lesson-planning" element={<LessonPlanning />} />
+              <Route path="assignment-coach" element={<AssignmentCoach />} />
               <Route path="profile" element={<Profile />} />
               <Route path="cheat-sheet" element={<CheatSheet />} />
               <Route path="first-30-days" element={<FirstThirtyDays />} />

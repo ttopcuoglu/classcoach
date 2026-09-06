@@ -54,6 +54,17 @@ export const COMMUNICATIONS_ACTIONS = [
   'conversation_plan_chat',
 ]
 
+// Spans lessonPlans.ts and assignmentCoach.ts — one shared list so a
+// future new action in either file doesn't silently fall outside the gate.
+export const LESSON_PLANNING_ACTIONS = [
+  'lesson_plan_feedback',
+  'lesson_plan_generate',
+  'lesson_plan_chat',
+  'assignment_coach',
+  'assignment_coach_chat',
+  'assignment_coach_finalize',
+]
+
 // True if the user's own subscription is active, OR their organization
 // grants paid access (a signed district contract, or a still-open free
 // pilot window) — either path grants the same Plus-equivalent access.

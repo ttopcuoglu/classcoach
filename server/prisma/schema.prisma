@@ -68,6 +68,7 @@ model User {
   lessonPlans       LessonPlan[]
   conversationPreps ConversationPrep[]
   conversationPlans ConversationPlan[]
+  assignmentCoachSessions AssignmentCoachSession[]
 }
 
 // A school/district that's signed an agreement. joinCode is what its
@@ -271,6 +272,29 @@ model ConversationPlan {
   // also revises planContent in place, same "chat reply IS the deliverable"
   // behavior as ParentMessage, since a plan is one evolving deliverable.
   conversation   Json?
+}
+
+// Unlike ConversationPlan, the deliverable is NOT produced on creation —
+// conversation starts with only Coach's opening question, and
+// finalMaterials stays null until the teacher explicitly asks to finalize
+// (matches AudioSession.reflectConversation's "discuss first, produce
+// later" shape, not ConversationPlan's "generate immediately" shape).
+model AssignmentCoachSession {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mode           String // 'create' | 'review' | 'differentiate' | 'rubric' | 'ai_aware'
+  gradeLevel     String?
+  subject        String?
+  objective      String? // learning objective — required for 'create'
+  originalText   String? // the teacher's existing assignment — required for every other mode
+  title          String?
+  conversation   Json? // ChatMessage[] — seeded with Coach's opening reply only
+  // { assignment?, rubric?, scaffolds?, aiUseStatement? } — null until
+  // finalized; only the sections actually discussed are ever populated.
+  finalMaterials Json?
+  saved          Boolean  @default(false)
+  createdAt      DateTime @default(now())
 }
 
 // mode is "feedback" (teacher submits their own plan in planText, gets

@@ -390,6 +390,27 @@ export type ConversationPlan = {
   conversation: ChatMessage[]
 }
 
+export type AssignmentCoachMode = 'create' | 'review' | 'differentiate' | 'rubric' | 'ai_aware'
+export type AssignmentFinalMaterials = {
+  assignment: string | null
+  rubric: string | null
+  scaffolds: string | null
+  aiUseStatement: string | null
+}
+export type AssignmentCoachSession = {
+  id: string
+  mode: AssignmentCoachMode
+  gradeLevel: string | null
+  subject: string | null
+  objective: string | null
+  originalText: string | null
+  title: string | null
+  conversation: ChatMessage[]
+  finalMaterials: AssignmentFinalMaterials | null
+  saved: boolean
+  createdAt: string
+}
+
 // status is one of: setup, recording, paused, transcribing, tagging,
 // analyzed, locked
 export type AudioSessionStatus =
@@ -880,6 +901,41 @@ export function renameConversationPlan(id: string, title: string): Promise<Conve
 
 export function deleteConversationPlan(id: string): Promise<void> {
   return request(`/api/conversation-plans/${id}`, { method: 'DELETE' })
+}
+
+export function getAssignmentCoachSessions(params?: { saved?: boolean }): Promise<AssignmentCoachSession[]> {
+  const query = params?.saved ? '?saved=true' : ''
+  return request(`/api/assignment-coach${query}`)
+}
+
+export function startAssignmentCoach(input: {
+  mode: AssignmentCoachMode
+  gradeLevel?: string
+  subject?: string
+  objective?: string
+  originalText?: string
+}): Promise<AssignmentCoachSession> {
+  return request('/api/assignment-coach', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export function sendAssignmentCoachChat(id: string, message: string): Promise<AssignmentCoachSession> {
+  return request(`/api/assignment-coach/${id}/chat`, { method: 'POST', body: JSON.stringify({ message }) })
+}
+
+export function finalizeAssignmentCoach(id: string): Promise<AssignmentCoachSession> {
+  return request(`/api/assignment-coach/${id}/finalize`, { method: 'POST' })
+}
+
+export function setAssignmentCoachSaved(id: string, saved: boolean): Promise<AssignmentCoachSession> {
+  return request(`/api/assignment-coach/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) })
+}
+
+export function renameAssignmentCoachSession(id: string, title: string): Promise<AssignmentCoachSession> {
+  return request(`/api/assignment-coach/${id}`, { method: 'PATCH', body: JSON.stringify({ title }) })
+}
+
+export function deleteAssignmentCoachSession(id: string): Promise<void> {
+  return request(`/api/assignment-coach/${id}`, { method: 'DELETE' })
 }
 
 export type LessonPlanContext = {

@@ -3,6 +3,7 @@ import cookieParser from 'cookie-parser'
 import cors from 'cors'
 import express from 'express'
 import { adminRouter } from './routes/admin.ts'
+import { assignmentCoachRouter } from './routes/assignmentCoach.ts'
 import { attemptsRouter } from './routes/attempts.ts'
 import { audioSessionsRouter } from './routes/audioSessions.ts'
 import { authRouter } from './routes/auth.ts'
@@ -57,6 +58,7 @@ app.use('/api/audio-sessions', requireAuth, audioSessionsRouter)
 app.use('/api/lesson-plans', requireAuth, lessonPlansRouter)
 app.use('/api/conversation-prep', requireAuth, conversationPrepRouter)
 app.use('/api/conversation-plans', requireAuth, conversationPlanRouter)
+app.use('/api/assignment-coach', requireAuth, assignmentCoachRouter)
 app.use('/api/tts', requireAuth, ttsRouter)
 app.use('/api/onboarding', requireAuth, onboardingRouter)
 
