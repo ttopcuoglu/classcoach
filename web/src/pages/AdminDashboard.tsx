@@ -22,7 +22,7 @@ import {
 } from '../lib/api'
 import { categoryLabel } from '../lib/categories'
 import { challengeLabel, purposeLabel } from '../lib/communicationOptions'
-import { LockIcon } from '../components/icons'
+import { ChatBubbleIcon, LockIcon } from '../components/icons'
 
 function formatShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
@@ -543,6 +543,78 @@ const PRIORITY_LABELS: Record<string, string> = {
   feedback: 'Specific feedback',
 }
 
+// A staff-wide, deterministic coach-voice observation — same discipline as
+// every other coach note in this app: never invented, only surfaced when
+// the aggregate data actually shows something worth naming, and always
+// about the group, never a single teacher.
+function AdminCoachNote({ text }: { text: string | null }) {
+  if (!text) return null
+  return (
+    <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-brand-100 bg-brand-50 p-3">
+      <ChatBubbleIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
+      <p className="text-sm text-ink">{text}</p>
+    </div>
+  )
+}
+
+// Shared insight logic for a plain "which value shows up most" tally
+// (category/challenge/purpose/priority/content-note tallies all have this
+// exact shape) — only speaks up once there's enough real activity to say
+// anything, and never claims a lead that isn't actually there.
+function buildTallyInsight(
+  tally: Record<string, TallyEntry>,
+  labelFor: (value: string) => string,
+  itemNoun: string,
+  activityNoun: string,
+  minTotal = 3,
+): string | null {
+  const entries = Object.entries(tally).filter(([, v]) => v.count > 0)
+  if (entries.length === 0) return null
+  const total = entries.reduce((sum, [, v]) => sum + v.count, 0)
+  if (total < minTotal) return null
+  const sorted = [...entries].sort((a, b) => b[1].count - a[1].count)
+  const [topValue, topEntry] = sorted[0]
+  const label = labelFor(topValue)
+  const share = Math.round((topEntry.count / total) * 100)
+  if (entries.length === 1 || share >= 40) {
+    return `${label} stands out as the most common ${itemNoun} across your staff (${share}% of ${activityNoun}) — a candidate for a shared PD session or resource.`
+  }
+  return `No single ${itemNoun} dominates yet — ${label} leads narrowly, but ${activityNoun} are fairly spread out.`
+}
+
+function buildInstructionalGroupInsight(data: InstructionalAverages): string | null {
+  if (data.higherOrderSampleSize >= 10 && data.higherOrderPct != null && data.higherOrderPct < 30) {
+    return `Higher-order questions are a stretch area staff-wide (${data.higherOrderPct}% of questions) — a good theme for a shared PD session on questioning technique.`
+  }
+  if (data.cfuSampleSize >= 5 && data.cfuRatePct != null && data.cfuRatePct < 50) {
+    return `Checks for understanding show up in only ${data.cfuRatePct}% of eligible sessions staff-wide — worth reinforcing as a quick, low-lift routine.`
+  }
+  if (data.waitTimeSampleSize >= 5 && data.avgWaitTimeSec != null && data.avgWaitTimeSec < 3) {
+    return `Average wait time after a question is ${data.avgWaitTimeSec.toFixed(1)}s staff-wide — extending it by even a couple seconds is a well-supported, easy lever to name.`
+  }
+  if (data.higherOrderSampleSize >= 10 && data.higherOrderPct != null && data.higherOrderPct >= 40) {
+    return `Higher-order questioning is a real strength staff-wide (${data.higherOrderPct}% of questions) — worth naming and reinforcing.`
+  }
+  return null
+}
+
+function buildClimateGroupInsight(data: ClimateAverages): string | null {
+  if (
+    data.redirectionMeasuredSampleSize >= 5 &&
+    data.zeroRedirectionRatePct != null &&
+    data.zeroRedirectionRatePct >= 60
+  ) {
+    return `${data.zeroRedirectionRatePct}% of sessions show no redirection language at all — a sign of generally smooth-running classrooms staff-wide.`
+  }
+  if (data.toneSampleSize >= 10 && data.positiveTonePct != null && data.positiveTonePct < 50) {
+    return `Corrective language outweighs positive language staff-wide (${data.positiveTonePct}% positive) — could be worth a shared conversation on tone.`
+  }
+  if (data.directiveSampleSize >= 5 && data.clearDirectivesRatePct != null && data.clearDirectivesRatePct >= 70) {
+    return `${data.clearDirectivesRatePct}% of sessions show clear directive language staff-wide — a real strength worth naming.`
+  }
+  return null
+}
+
 function StatRow({ label, value, sampleNote }: { label: string; value: string; sampleNote: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-2 last:border-0">
@@ -555,7 +627,7 @@ function StatRow({ label, value, sampleNote }: { label: string; value: string; s
   )
 }
 
-function InstructionalAveragesCard({ data }: { data: InstructionalAverages }) {
+function InstructionalAveragesCard({ data, insight }: { data: InstructionalAverages; insight?: string | null }) {
   const sampleOr = (n: number, unit: string) => (n > 0 ? `based on ${n} ${unit}` : 'not enough data yet')
   return (
     <div className="rounded-2xl border border-border bg-surface p-5">
@@ -601,11 +673,12 @@ function InstructionalAveragesCard({ data }: { data: InstructionalAverages }) {
         {data.totalAnalyzedSessions === 1 ? '' : 's'} — each stat only counts sessions with real evidence for it,
         never padded with sessions where it wasn&rsquo;t measured.
       </p>
+      {insight !== undefined && <AdminCoachNote text={insight} />}
     </div>
   )
 }
 
-function ClimateAveragesCard({ data }: { data: ClimateAverages }) {
+function ClimateAveragesCard({ data, insight }: { data: ClimateAverages; insight?: string | null }) {
   const sampleOr = (n: number, unit: string) => (n > 0 ? `based on ${n} ${unit}` : 'not enough data yet')
   return (
     <div className="rounded-2xl border border-border bg-surface p-5">
@@ -643,6 +716,7 @@ function ClimateAveragesCard({ data }: { data: ClimateAverages }) {
         Keyword/phrase-matched counts only — clarity and effectiveness aren&rsquo;t judged automatically. Each stat
         only counts sessions with real evidence for it.
       </p>
+      {insight !== undefined && <AdminCoachNote text={insight} />}
     </div>
   )
 }
@@ -652,17 +726,22 @@ function TallyBarList({
   tally,
   labelFor,
   totalTeachers,
+  comment,
+  insight,
 }: {
   title: string
   tally: Record<string, TallyEntry>
   labelFor: (value: string) => string
   totalTeachers: number
+  comment?: string
+  insight?: string | null
 }) {
   const sorted = Object.entries(tally).sort((a, b) => b[1].count - a[1].count)
   const maxCount = Math.max(1, ...sorted.map(([, v]) => v.count))
   return (
     <div className="rounded-2xl border border-border bg-surface p-5">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{title}</h2>
+      {comment && <p className="mt-1 text-xs text-ink-soft">{comment}</p>}
       <div className="mt-3 flex flex-col gap-2">
         {sorted.map(([value, { count, teachers }]) => (
           <div key={value} className="flex items-center gap-3">
@@ -676,6 +755,7 @@ function TallyBarList({
           </div>
         ))}
       </div>
+      {insight !== undefined && <AdminCoachNote text={insight} />}
     </div>
   )
 }
@@ -809,48 +889,69 @@ function CoachingThemesPanel({ overview }: { overview: AdminOverview }) {
     <div className="flex flex-col gap-6">
       <TallyBarList
         title="Practice by category"
+        comment="Which classroom situations your staff most often choose to rehearse in Coach Chat's Practice tool."
         tally={overview.categoryTally}
         labelFor={categoryLabel}
         totalTeachers={overview.totalTeachers}
+        insight={buildTallyInsight(overview.categoryTally, categoryLabel, 'situation', 'practice sessions')}
       />
 
       <TallyBarList
         title="Conversations practiced, by challenge"
+        comment="The kinds of difficult conversations your staff are rehearsing before having them for real."
         tally={overview.challengeTally}
         labelFor={(v) => challengeLabel(v) ?? v}
         totalTeachers={overview.totalTeachers}
+        insight={buildTallyInsight(
+          overview.challengeTally,
+          (v) => challengeLabel(v) ?? v,
+          'conversation type',
+          'conversations practiced',
+        )}
       />
 
       <TallyBarList
         title="Messages written, by purpose"
+        comment="What teachers are reaching out to parents, colleagues, or administrators about most."
         tally={overview.messagePurposeTally}
         labelFor={(v) => purposeLabel(v) ?? v}
         totalTeachers={overview.totalTeachers}
+        insight={buildTallyInsight(
+          overview.messagePurposeTally,
+          (v) => purposeLabel(v) ?? v,
+          'message purpose',
+          'messages written',
+        )}
       />
 
-      <div>
-        <TallyBarList
-          title="Lesson Debrief: most common coaching priority"
-          tally={overview.priorityTally}
-          labelFor={(v) => PRIORITY_LABELS[v] ?? v}
-          totalTeachers={overview.totalTeachers}
-        />
-        <p className="mt-2 text-xs text-ink-soft">
-          Based on each analyzed session's own measured numbers — a short recording or one with too little evidence
-          on a given metric doesn&rsquo;t count toward any priority, so totals here can be lower than the number of
-          sessions recorded.
-        </p>
-      </div>
+      <TallyBarList
+        title="Lesson Debrief: most common coaching priority"
+        comment="Based on each analyzed session's own measured numbers — a short recording or one with too little evidence on a given metric doesn't count toward any priority, so totals here can be lower than the number of sessions recorded."
+        tally={overview.priorityTally}
+        labelFor={(v) => PRIORITY_LABELS[v] ?? v}
+        totalTeachers={overview.totalTeachers}
+        insight={buildTallyInsight(
+          overview.priorityTally,
+          (v) => PRIORITY_LABELS[v] ?? v,
+          'coaching priority',
+          'sessions with a clear priority',
+        )}
+      />
 
-      <InstructionalAveragesCard data={overview.instructionalAverages} />
+      <InstructionalAveragesCard
+        data={overview.instructionalAverages}
+        insight={buildInstructionalGroupInsight(overview.instructionalAverages)}
+      />
 
-      <ClimateAveragesCard data={overview.climateAverages} />
+      <ClimateAveragesCard data={overview.climateAverages} insight={buildClimateGroupInsight(overview.climateAverages)} />
 
       <TallyBarList
         title="Content specialist notes, by theme"
+        comment="Which content-note themes (Clarity, Vocabulary, Engagement, Worth double-checking) come up most across your staff's recordings."
         tally={overview.contentNoteTally}
         labelFor={(v) => v}
         totalTeachers={overview.totalTeachers}
+        insight={buildTallyInsight(overview.contentNoteTally, (v) => v, 'content note theme', 'content notes')}
       />
     </div>
   )
