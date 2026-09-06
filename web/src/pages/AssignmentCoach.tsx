@@ -1,14 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import CoachingChat from '../components/CoachingChat'
-import { ChecklistIcon, KebabIcon, SparkleIcon, StarIcon, TargetIcon } from '../components/icons'
+import { BrainIcon, ChecklistIcon, KebabIcon, SparkleIcon, StarIcon } from '../components/icons'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import { ASSIGNMENT_GRADE_LEVELS } from '../lib/assignmentGradeLevels'
-import { ASSIGNMENT_SUBJECTS, ASSIGNMENT_TYPES, assignmentTypeLabel, TYPE_FIELDS } from '../lib/assignmentTypes'
+import {
+  ASSIGNMENT_SUBJECTS,
+  ASSIGNMENT_TYPES,
+  assignmentTypeLabel,
+  ESTIMATED_TIME_OPTIONS,
+  TYPE_FIELDS,
+} from '../lib/assignmentTypes'
 import {
   deleteAssignmentCoachSession,
   finalizeAssignmentCoach,
   getAssignmentCoachSessions,
   reviewAssignmentCoach,
+  runAiResistant,
   sendAssignmentCoachChat,
   startAssignmentCoach,
   updateAssignmentCoachSession,
@@ -17,13 +25,13 @@ import {
   type AssignmentType,
 } from '../lib/api'
 
-type Tool = 'review' | 'differentiate' | 'rubric' | 'ai_resilient' | 'student_view'
+type Tool = 'review' | 'differentiate' | 'rubric' | 'ai_resistant' | 'student_view'
 
 const TOOLS: { key: Tool; label: string; enabled: boolean }[] = [
   { key: 'review', label: 'Review', enabled: true },
   { key: 'differentiate', label: 'Differentiate', enabled: false },
   { key: 'rubric', label: 'Rubric', enabled: false },
-  { key: 'ai_resilient', label: 'AI-resilient', enabled: false },
+  { key: 'ai_resistant', label: 'AI-Resistant', enabled: true },
   { key: 'student_view', label: 'Student view', enabled: false },
 ]
 
@@ -34,6 +42,7 @@ const COACHING_DIRECTIONS = [
   { label: 'Check workload', message: "Let's check whether the workload is reasonable." },
   { label: 'Check alignment with the objective', message: "Let's check how well this aligns with the objective." },
   { label: 'Review the entire assignment', message: "Let's review the entire assignment." },
+  { label: "I don't love this — try a different approach", message: "I don't love this — can you try a different approach?" },
 ]
 
 const inputClass =
@@ -42,6 +51,7 @@ const inputClass =
 export default function AssignmentCoach() {
   const [pendingMode, setPendingMode] = useState<AssignmentCoachMode | null>(null)
   const [pendingType, setPendingType] = useState<AssignmentType | null>(null)
+  const [pendingTool, setPendingTool] = useState<Tool>('review')
   const [session, setSession] = useState<AssignmentCoachSession | null>(null)
 
   const [sessions, setSessions] = useState<AssignmentCoachSession[]>([])
@@ -59,6 +69,7 @@ export default function AssignmentCoach() {
     setSession(null)
     setPendingMode(null)
     setPendingType(null)
+    setPendingTool('review')
   }
 
   function handleUpdate(updated: AssignmentCoachSession) {
@@ -80,7 +91,7 @@ export default function AssignmentCoach() {
   }
 
   if (session) {
-    return <Workspace session={session} onUpdate={handleUpdate} onExit={handleExit} />
+    return <Workspace session={session} initialTool={pendingTool} onUpdate={handleUpdate} onExit={handleExit} />
   }
 
   if (pendingMode && pendingType) {
@@ -128,13 +139,16 @@ export default function AssignmentCoach() {
         </button>
         <button
           type="button"
-          onClick={() => myAssignmentsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          onClick={() => {
+            setPendingTool('ai_resistant')
+            setPendingMode('improve')
+          }}
           className="group rounded-2xl border border-hairline bg-cream-card p-6 text-left transition-shadow hover:shadow-md"
         >
-          <TargetIcon className="h-8 w-8 text-terracotta" />
-          <h2 className="mt-4 font-heading text-lg font-semibold text-forest">Continue recent work</h2>
+          <BrainIcon className="h-8 w-8 text-terracotta" />
+          <h2 className="mt-4 font-heading text-lg font-semibold text-forest">Make it AI-Resistant</h2>
           <p className="mt-1 text-sm text-ink-soft">
-            Reopen an assignment and keep reviewing, differentiating, or refining it.
+            Turn an assignment you already have into one that keeps student thinking visible.
           </p>
         </button>
       </div>
@@ -169,11 +183,6 @@ function AssignmentRow({
   onDelete: () => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
-
-  async function handleExport() {
-    await navigator.clipboard.writeText(session.liveAssignmentText ?? '').catch(() => {})
-    setMenuOpen(false)
-  }
 
   return (
     <div className="flex items-center justify-between gap-4 rounded-xl border border-hairline bg-cream-card p-4">
@@ -218,13 +227,13 @@ function AssignmentRow({
               >
                 Continue
               </button>
-              <button
-                type="button"
-                onClick={handleExport}
-                className="w-full rounded-lg px-3 py-2 text-left text-sm text-ink hover:bg-cream"
+              <Link
+                to={`/assignment-coach/${session.id}/export`}
+                onClick={() => setMenuOpen(false)}
+                className="block w-full rounded-lg px-3 py-2 text-left text-sm text-ink hover:bg-cream"
               >
                 Export
-              </button>
+              </Link>
               <button
                 type="button"
                 onClick={() => {
@@ -295,14 +304,32 @@ function IntakeForm({
   const [objective, setObjective] = useState('')
   const [originalText, setOriginalText] = useState('')
   const [estimatedTime, setEstimatedTime] = useState('')
+  const [estimatedTimeCustom, setEstimatedTimeCustom] = useState(false)
   const [standards, setStandards] = useState('')
   const [specificNeeds, setSpecificNeeds] = useState('')
   const [typeDetails, setTypeDetails] = useState<Record<string, string>>({})
+  const [customFields, setCustomFields] = useState<Set<string>>(new Set())
+  const [showMoreFields, setShowMoreFields] = useState(false)
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const fields = TYPE_FIELDS[assignmentType]
+  const visibleFields = showMoreFields ? fields : fields.slice(0, 3)
   const canSubmit = mode === 'create' ? objective.trim().length > 0 : originalText.trim().length > 0
+
+  function handleTypeFieldChange(key: string, value: string) {
+    if (value === 'Other') {
+      setCustomFields((prev) => new Set(prev).add(key))
+      setTypeDetails((prev) => ({ ...prev, [key]: '' }))
+    } else {
+      setCustomFields((prev) => {
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
+      setTypeDetails((prev) => ({ ...prev, [key]: value }))
+    }
+  }
 
   const ctaLabel =
     mode === 'create'
@@ -375,18 +402,57 @@ function IntakeForm({
           </div>
 
           {fields.length > 0 && (
-            <div className="grid gap-4 sm:grid-cols-2">
-              {fields.map((f) => (
-                <label key={f.key} className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-forest">{f.label}</span>
-                  <input
-                    value={typeDetails[f.key] ?? ''}
-                    onChange={(e) => setTypeDetails((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                    disabled={starting}
-                    className={inputClass}
-                  />
-                </label>
-              ))}
+            <div className="flex flex-col gap-3">
+              <div className="grid gap-4 sm:grid-cols-2">
+                {visibleFields.map((f) => (
+                  <label key={f.key} className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-forest">{f.label}</span>
+                    {f.options ? (
+                      <>
+                        <select
+                          value={customFields.has(f.key) ? 'Other' : (typeDetails[f.key] ?? '')}
+                          onChange={(e) => handleTypeFieldChange(f.key, e.target.value)}
+                          disabled={starting}
+                          className={inputClass}
+                        >
+                          <option value="">Select an option</option>
+                          {f.options.map((o) => (
+                            <option key={o} value={o}>
+                              {o}
+                            </option>
+                          ))}
+                          <option value="Other">Other</option>
+                        </select>
+                        {customFields.has(f.key) && (
+                          <input
+                            value={typeDetails[f.key] ?? ''}
+                            onChange={(e) => setTypeDetails((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                            disabled={starting}
+                            placeholder="Describe..."
+                            className={inputClass}
+                          />
+                        )}
+                      </>
+                    ) : (
+                      <input
+                        value={typeDetails[f.key] ?? ''}
+                        onChange={(e) => setTypeDetails((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                        disabled={starting}
+                        className={inputClass}
+                      />
+                    )}
+                  </label>
+                ))}
+              </div>
+              {fields.length > 3 && (
+                <button
+                  type="button"
+                  onClick={() => setShowMoreFields((v) => !v)}
+                  className="self-start text-xs font-semibold text-ink-soft hover:text-forest"
+                >
+                  {showMoreFields ? '− Fewer details' : '+ More details (optional)'}
+                </button>
+              )}
             </div>
           )}
 
@@ -401,6 +467,9 @@ function IntakeForm({
                 placeholder="e.g. SWBAT explain how natural selection leads to adaptation"
                 className={inputClass}
               />
+              <span className="text-xs text-ink-soft">
+                You don't have to write complete sentences — just jot down what's on your mind.
+              </span>
             </label>
           ) : (
             <label className="flex flex-col gap-1.5">
@@ -413,19 +482,46 @@ function IntakeForm({
                 placeholder="Paste the assignment text, or describe it in your own words..."
                 className={inputClass}
               />
+              <span className="text-xs text-ink-soft">
+                You don't have to write complete sentences — just jot down what's on your mind.
+              </span>
             </label>
           )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-forest">Estimated student work time</span>
-              <input
-                value={estimatedTime}
-                onChange={(e) => setEstimatedTime(e.target.value)}
+              <select
+                value={estimatedTimeCustom ? 'Other' : estimatedTime}
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (v === 'Other') {
+                    setEstimatedTimeCustom(true)
+                    setEstimatedTime('')
+                  } else {
+                    setEstimatedTimeCustom(false)
+                    setEstimatedTime(v)
+                  }
+                }}
                 disabled={starting}
-                placeholder="e.g. 20 minutes, or 2 weeks"
                 className={inputClass}
-              />
+              >
+                <option value="">Select an estimate</option>
+                {ESTIMATED_TIME_OPTIONS.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+              {estimatedTimeCustom && (
+                <input
+                  value={estimatedTime}
+                  onChange={(e) => setEstimatedTime(e.target.value)}
+                  disabled={starting}
+                  placeholder="Describe..."
+                  className={inputClass}
+                />
+              )}
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-forest">Standards (optional)</span>
@@ -463,14 +559,17 @@ function IntakeForm({
 
 function Workspace({
   session,
+  initialTool,
   onUpdate,
   onExit,
 }: {
   session: AssignmentCoachSession
+  initialTool?: Tool
   onUpdate: (session: AssignmentCoachSession) => void
   onExit: () => void
 }) {
-  const [activeTool, setActiveTool] = useState<Tool>('review')
+  const navigate = useNavigate()
+  const [activeTool, setActiveTool] = useState<Tool>(initialTool ?? 'review')
   const [mobilePane, setMobilePane] = useState<'coach' | 'assignment'>('coach')
 
   const [chatDraft, setChatDraft] = useState('')
@@ -479,6 +578,9 @@ function Workspace({
 
   const [reviewing, setReviewing] = useState(false)
   const [reviewError, setReviewError] = useState<string | null>(null)
+
+  const [aiResisting, setAiResisting] = useState(false)
+  const [aiResistError, setAiResistError] = useState<string | null>(null)
 
   const [finalizing, setFinalizing] = useState(false)
   const [finalizeError, setFinalizeError] = useState<string | null>(null)
@@ -565,6 +667,24 @@ function Workspace({
     }
   }
 
+  async function handleAiResistant() {
+    if (aiResisting) return
+    setAiResisting(true)
+    setAiResistError(null)
+    try {
+      const updated = await runAiResistant(session.id)
+      onUpdate(updated)
+    } catch (err) {
+      setAiResistError((err as Error).message || 'Could not put this together. Please try again.')
+    } finally {
+      setAiResisting(false)
+    }
+  }
+
+  function handleApplyAiResistant() {
+    if (session.aiResistant?.revisedAssignment) setText(session.aiResistant.revisedAssignment)
+  }
+
   async function handleFinalize() {
     if (finalizing) return
     setFinalizing(true)
@@ -591,10 +711,6 @@ function Workspace({
 
   async function handleCopy() {
     await navigator.clipboard.writeText(text).catch(() => {})
-  }
-
-  function handlePrint() {
-    window.print()
   }
 
   const chips = [
@@ -672,9 +788,18 @@ function Workspace({
                 {!t.enabled && <span className="ml-1 text-[10px] font-normal opacity-70">Soon</span>}
               </button>
             ))}
+            {activeTool !== 'ai_resistant' && (
+              <button
+                type="button"
+                onClick={() => setActiveTool('ai_resistant')}
+                className="rounded-full border border-terracotta/40 bg-peach-tint px-3 py-1.5 text-xs font-semibold text-terracotta-600 hover:bg-peach-tint/70"
+              >
+                ✨ Make it AI-Resistant
+              </button>
+            )}
             <button
               type="button"
-              onClick={handleCopy}
+              onClick={() => navigate(`/assignment-coach/${session.id}/export`)}
               className="rounded-full border border-hairline bg-cream-card px-3 py-1.5 text-xs font-semibold text-ink-soft hover:text-forest"
             >
               Export
@@ -745,6 +870,72 @@ function Workspace({
                 ))}
               </div>
             </div>
+          ) : activeTool === 'ai_resistant' ? (
+            <div className="flex flex-col gap-3">
+              {!session.aiResistant ? (
+                <div className="rounded-2xl border border-hairline bg-cream-card p-5 text-center">
+                  <p className="text-sm text-ink-soft">
+                    Keep student thinking visible while still allowing responsible AI use — not "AI-proof," just
+                    resistant to being fully outsourced.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleAiResistant}
+                    disabled={aiResisting || !text.trim()}
+                    className="mt-3 rounded-xl bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+                  >
+                    {aiResisting ? 'Working on it...' : 'Make it AI-Resistant'}
+                  </button>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-hairline bg-cream-card p-5">
+                  {session.aiResistant.strategies && (
+                    <div className="mb-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-forest">Strategies</p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.aiResistant.strategies}</p>
+                    </div>
+                  )}
+                  {session.aiResistant.guidelines && (
+                    <div className="mb-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">
+                        Student AI guidelines
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.aiResistant.guidelines}</p>
+                    </div>
+                  )}
+                  {session.aiResistant.revisedAssignment && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">
+                        Revised assignment (preview)
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-ink">
+                        {session.aiResistant.revisedAssignment}
+                      </p>
+                    </div>
+                  )}
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    {session.aiResistant.revisedAssignment && (
+                      <button
+                        type="button"
+                        onClick={handleApplyAiResistant}
+                        className="rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-cream transition-opacity hover:opacity-90"
+                      >
+                        Apply to assignment
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleAiResistant}
+                      disabled={aiResisting}
+                      className="text-xs font-semibold text-ink-soft hover:text-forest disabled:opacity-50"
+                    >
+                      {aiResisting ? 'Regenerating...' : 'Regenerate ↻'}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {aiResistError && <p className="text-sm text-terracotta-600">{aiResistError}</p>}
+            </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-hairline p-5 text-center text-sm text-ink-soft">
               {TOOLS.find((t) => t.key === activeTool)?.label} is coming soon.
@@ -769,8 +960,8 @@ function Workspace({
               {saveStatus === 'saving' && <span>Saving…</span>}
               {saveStatus === 'saved' && <span>Saved</span>}
               {saveStatus === 'error' && <span className="text-terracotta-600">Couldn't save</span>}
-              <button type="button" onClick={handlePrint} className="font-semibold hover:text-forest">
-                Print
+              <button type="button" onClick={handleCopy} className="font-semibold hover:text-forest">
+                Copy
               </button>
             </div>
           </div>

@@ -302,6 +302,10 @@ model AssignmentCoachSession {
   // { working, misunderstand, opportunity } — the Review tool's
   // structured output, regenerated on demand from liveAssignmentText.
   reviewSummary  Json?
+  // { strategies, guidelines, revisedAssignment } — the AI-Resistant
+  // tool's output. Never auto-applied to liveAssignmentText; the teacher
+  // explicitly accepts it.
+  aiResistant    Json?
   // { assignment?, rubric?, scaffolds?, aiUseStatement? } — superseded by
   // liveAssignmentText/reviewSummary/future tool-specific fields; kept for
   // pre-redesign rows.

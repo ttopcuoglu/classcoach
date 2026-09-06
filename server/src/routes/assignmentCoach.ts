@@ -97,6 +97,26 @@ The single highest-impact improvement to make next, stated as one clear recommen
 </opportunity>
 ${CORE_COACHING_RULES}`
 
+const AI_RESISTANT_SYSTEM_PROMPT = `You are Coach, helping a teacher make an assignment more resistant to being fully outsourced to AI, while still allowing students to responsibly use AI as a tutor or thinking partner. The goal is not to make the assignment "AI-proof" — that's not realistic — but to keep student thinking visible and make it hard to skip the learning process entirely.
+
+Ground every suggestion in the actual assignment below. Never invent details about the class or students that weren't given to you.
+
+Favor concrete, low-lift moves: requiring a brief plan or prediction before starting, referencing something specific from class (a discussion, a text, an activity), asking students to show their process (drafts, an explanation of what they tried), or a short in-class or reflective piece that doesn't rely on AI.
+
+Write in plain text only — no markdown. Use a dash ("-") at the start of a line for list-like content.
+
+Respond with exactly these three sections and nothing else:
+<strategies>
+2-3 concrete strategies tailored to this specific assignment, each one sentence.
+</strategies>
+<guidelines>
+A short, plain-language statement for students about how AI may and may not be used on this task.
+</guidelines>
+<revised_assignment>
+The full assignment text, incorporating the strategies above naturally into the instructions.
+</revised_assignment>
+${CORE_COACHING_RULES}`
+
 function buildContext(
   body: Record<string, unknown>,
   mode: string,
@@ -176,6 +196,17 @@ assignmentCoachRouter.get('/', async (req, res) => {
     orderBy: { updatedAt: 'desc' },
   })
   res.json(sessions)
+})
+
+assignmentCoachRouter.get('/:id', async (req, res) => {
+  const session = await prisma.assignmentCoachSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Assignment Coach session not found' })
+    return
+  }
+  res.json(session)
 })
 
 assignmentCoachRouter.post('/', async (req, res) => {
@@ -373,6 +404,63 @@ assignmentCoachRouter.post('/:id/review', async (req, res) => {
   } catch (error) {
     console.error('[assignment-coach] review failed:', error)
     res.status(502).json({ error: 'Could not put together a review. Please try again.' })
+  }
+})
+
+// Generates the AI-Resistant tool's output, grounded in the CURRENT
+// liveAssignmentText. Never applied automatically — the teacher explicitly
+// accepts the revised text via a separate action on the client.
+assignmentCoachRouter.post('/:id/ai-resistant', async (req, res) => {
+  const session = await prisma.assignmentCoachSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Assignment Coach session not found' })
+    return
+  }
+  if (!session.liveAssignmentText || !session.liveAssignmentText.trim()) {
+    res.status(400).json({ error: 'Add some assignment text before making it AI-resistant.' })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'assignment_coach_ai_resistant')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  try {
+    const context = contextFromSession(session)
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 1200,
+      thinking: { type: 'disabled' },
+      system: AI_RESISTANT_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: context.join('\n') }],
+    })
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+
+    const aiResistant = {
+      strategies: extractTag(text, 'strategies'),
+      guidelines: extractTag(text, 'guidelines'),
+      revisedAssignment: extractTag(text, 'revised_assignment'),
+    }
+    if (!Object.values(aiResistant).some(Boolean)) {
+      res.status(502).json({ error: 'Could not put this together. Please try again.' })
+      return
+    }
+
+    const updated = await prisma.assignmentCoachSession.update({
+      where: { id: session.id },
+      data: { aiResistant },
+    })
+    res.json(updated)
+  } catch (error) {
+    console.error('[assignment-coach] ai-resistant failed:', error)
+    res.status(502).json({ error: 'Could not put this together. Please try again.' })
   }
 })
 

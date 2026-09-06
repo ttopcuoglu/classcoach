@@ -397,6 +397,11 @@ export type AssignmentReviewSummary = {
   misunderstand: string | null
   opportunity: string | null
 }
+export type AssignmentAiResistant = {
+  strategies: string | null
+  guidelines: string | null
+  revisedAssignment: string | null
+}
 export type AssignmentFinalMaterials = {
   assignment: string | null
   rubric: string | null
@@ -419,6 +424,7 @@ export type AssignmentCoachSession = {
   title: string | null
   conversation: ChatMessage[]
   reviewSummary: AssignmentReviewSummary | null
+  aiResistant: AssignmentAiResistant | null
   finalMaterials: AssignmentFinalMaterials | null
   saved: boolean
   createdAt: string
@@ -922,6 +928,10 @@ export function getAssignmentCoachSessions(params?: { saved?: boolean }): Promis
   return request(`/api/assignment-coach${query}`)
 }
 
+export function getAssignmentCoachSession(id: string): Promise<AssignmentCoachSession> {
+  return request(`/api/assignment-coach/${id}`)
+}
+
 export function startAssignmentCoach(input: {
   mode: AssignmentCoachMode
   assignmentType: AssignmentType
@@ -946,6 +956,10 @@ export function reviewAssignmentCoach(id: string): Promise<AssignmentCoachSessio
 
 export function finalizeAssignmentCoach(id: string): Promise<AssignmentCoachSession> {
   return request(`/api/assignment-coach/${id}/finalize`, { method: 'POST' })
+}
+
+export function runAiResistant(id: string): Promise<AssignmentCoachSession> {
+  return request(`/api/assignment-coach/${id}/ai-resistant`, { method: 'POST' })
 }
 
 export function updateAssignmentCoachSession(
