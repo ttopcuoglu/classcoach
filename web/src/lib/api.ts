@@ -390,12 +390,16 @@ export type ConversationPlan = {
   conversation: ChatMessage[]
 }
 
-export type AssignmentCoachMode = 'create' | 'improve'
+// 'create'/'improve' are retired — kept in the union only so a pre-existing
+// row's mode still typechecks; the workspace falls back to Review-style
+// display for anything other than 'review'/'redesign_ai'.
+export type AssignmentCoachMode = 'review' | 'redesign_ai' | 'create' | 'improve'
+export type AssignmentAiUseLevel = 'thinking_partner' | 'limited' | 'no_ai'
 export type AssignmentType = 'classwork' | 'homework' | 'project' | 'assessment' | 'group_task' | 'exit_ticket' | 'other'
 export type AssignmentReviewSummary = {
   working: string | null
-  misunderstand: string | null
-  opportunity: string | null
+  needsAttention: string | null
+  suggestions: string | null
 }
 export type AssignmentAiResistant = {
   strategies: string | null
@@ -411,6 +415,7 @@ export type AssignmentFinalMaterials = {
 export type AssignmentCoachSession = {
   id: string
   mode: AssignmentCoachMode
+  aiUseLevel: AssignmentAiUseLevel | null
   assignmentType: AssignmentType | null
   typeDetails: Record<string, string> | null
   estimatedTime: string | null
@@ -933,15 +938,15 @@ export function getAssignmentCoachSession(id: string): Promise<AssignmentCoachSe
 }
 
 export function startAssignmentCoach(input: {
-  mode: AssignmentCoachMode
-  assignmentType: AssignmentType
-  typeDetails?: Record<string, string>
+  mode: 'review' | 'redesign_ai'
+  aiUseLevel?: AssignmentAiUseLevel
+  assignmentType?: AssignmentType
   estimatedTime?: string
   specificNeeds?: string
   gradeLevel?: string
   subject?: string
   objective?: string
-  originalText?: string
+  originalText: string
 }): Promise<AssignmentCoachSession> {
   return request('/api/assignment-coach', { method: 'POST', body: JSON.stringify(input) })
 }
@@ -954,12 +959,29 @@ export function reviewAssignmentCoach(id: string): Promise<AssignmentCoachSessio
   return request(`/api/assignment-coach/${id}/review`, { method: 'POST' })
 }
 
-export function finalizeAssignmentCoach(id: string): Promise<AssignmentCoachSession> {
-  return request(`/api/assignment-coach/${id}/finalize`, { method: 'POST' })
+export function reviseAssignmentCoach(id: string): Promise<AssignmentCoachSession> {
+  return request(`/api/assignment-coach/${id}/revise`, { method: 'POST' })
 }
 
 export function runAiResistant(id: string): Promise<AssignmentCoachSession> {
   return request(`/api/assignment-coach/${id}/ai-resistant`, { method: 'POST' })
+}
+
+// Multipart upload for the "Upload a file" intake path — same convention
+// as analyzeDemoClip: bypasses the JSON-only request() helper.
+export async function extractAssignmentText(file: File): Promise<{ text: string }> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await fetch(`${API_BASE_URL}/api/assignment-coach/extract-text`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error ?? `Request failed with status ${res.status}`)
+  }
+  return res.json()
 }
 
 export function updateAssignmentCoachSession(

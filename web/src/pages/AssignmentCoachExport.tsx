@@ -63,19 +63,17 @@ export default function AssignmentCoachExport() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Coaching review</p>
                 {session.reviewSummary.working && (
                   <p className="mt-2 text-sm text-ink">
-                    <span className="font-semibold">What's working:</span> {session.reviewSummary.working}
+                    <span className="font-semibold">Working:</span> {session.reviewSummary.working}
                   </p>
                 )}
-                {session.reviewSummary.misunderstand && (
+                {session.reviewSummary.needsAttention && (
                   <p className="mt-2 text-sm text-ink">
-                    <span className="font-semibold">Students may misunderstand:</span>{' '}
-                    {session.reviewSummary.misunderstand}
+                    <span className="font-semibold">Needs attention:</span> {session.reviewSummary.needsAttention}
                   </p>
                 )}
-                {session.reviewSummary.opportunity && (
+                {session.reviewSummary.suggestions && (
                   <p className="mt-2 text-sm text-ink">
-                    <span className="font-semibold">Most important opportunity:</span>{' '}
-                    {session.reviewSummary.opportunity}
+                    <span className="font-semibold">Suggestions:</span> {session.reviewSummary.suggestions}
                   </p>
                 )}
               </section>
@@ -85,6 +83,11 @@ export default function AssignmentCoachExport() {
               <section className="mt-4 break-inside-avoid rounded-xl border border-hairline p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Student AI guidelines</p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.aiResistant.guidelines}</p>
+                {session.aiResistant.strategies && (
+                  <p className="mt-2 text-sm text-ink">
+                    <span className="font-semibold">Strategies:</span> {session.aiResistant.strategies}
+                  </p>
+                )}
               </section>
             )}
 

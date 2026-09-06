@@ -283,15 +283,17 @@ model AssignmentCoachSession {
   id             String   @id @default(cuid())
   userId         String
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  mode           String // 'create' | 'improve' (older rows may carry a retired mode value)
+  mode           String // 'review' | 'redesign_ai' (older rows may carry a retired 'create'/'improve' value — the workspace falls back to Review-style display for anything unrecognized)
+  // 'thinking_partner' | 'limited' | 'no_ai' — only set for 'redesign_ai'
+  aiUseLevel     String?
   assignmentType String? // 'classwork' | 'homework' | 'project' | 'assessment' | 'group_task' | 'exit_ticket' | 'other'
-  typeDetails    Json? // assignment-type-specific intake answers, shape varies by assignmentType
+  typeDetails    Json? // legacy per-type intake answers from the retired type-specific question sets — no longer written to
   estimatedTime  String? // free text, e.g. "20 minutes" or "2 weeks" — shown as a workspace chip
   specificNeeds  String? // optional free text on learning needs
   gradeLevel     String?
   subject        String?
-  objective      String? // learning objective — required for 'create'
-  originalText   String? // the teacher's originally pasted/described assignment — required for 'improve'
+  objective      String? // optional learning objective/standard context
+  originalText   String? // the teacher's pasted/uploaded/described existing assignment — always required now that "create from scratch" is retired
   // The single editable source of truth for the assignment shown in the
   // workspace — independent of how it was first produced (pasted,
   // described, or drafted by Coach). Autosaved as the teacher edits it.
@@ -299,12 +301,13 @@ model AssignmentCoachSession {
   status         String   @default("draft") // 'draft' | 'completed'
   title          String?
   conversation   Json? // ChatMessage[] — seeded with Coach's opening reply only
-  // { working, misunderstand, opportunity } — the Review tool's
+  // { working, needsAttention, suggestions } — the Review path's
   // structured output, regenerated on demand from liveAssignmentText.
   reviewSummary  Json?
-  // { strategies, guidelines, revisedAssignment } — the AI-Resistant
-  // tool's output. Never auto-applied to liveAssignmentText; the teacher
-  // explicitly accepts it.
+  // { strategies, guidelines, revisedAssignment } — the Redesign path's
+  // structured output. revisedAssignment seeds liveAssignmentText
+  // immediately on creation; regenerating never auto-overwrites it again
+  // without the teacher applying it explicitly.
   aiResistant    Json?
   // { assignment?, rubric?, scaffolds?, aiUseStatement? } — superseded by
   // liveAssignmentText/reviewSummary/future tool-specific fields; kept for

@@ -2,62 +2,76 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AssignmentContent } from '../components/AssignmentDiagram'
 import CoachingChat from '../components/CoachingChat'
-import { BrainIcon, ChecklistIcon, KebabIcon, SparkleIcon, StarIcon } from '../components/icons'
+import { BrainIcon, ChecklistIcon, KebabIcon, StarIcon } from '../components/icons'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import { ASSIGNMENT_GRADE_LEVELS } from '../lib/assignmentGradeLevels'
-import {
-  ASSIGNMENT_SUBJECTS,
-  ASSIGNMENT_TYPES,
-  assignmentTypeLabel,
-  ESTIMATED_TIME_OPTIONS,
-  TYPE_FIELDS,
-} from '../lib/assignmentTypes'
+import { ASSIGNMENT_SUBJECTS, ASSIGNMENT_TYPES, assignmentTypeLabel, ESTIMATED_TIME_OPTIONS } from '../lib/assignmentTypes'
 import {
   deleteAssignmentCoachSession,
-  finalizeAssignmentCoach,
+  extractAssignmentText,
   getAssignmentCoachSessions,
   reviewAssignmentCoach,
+  reviseAssignmentCoach,
   runAiResistant,
   sendAssignmentCoachChat,
   startAssignmentCoach,
   updateAssignmentCoachSession,
+  type AssignmentAiUseLevel,
   type AssignmentCoachMode,
   type AssignmentCoachSession,
   type AssignmentType,
 } from '../lib/api'
 
-type Tool = 'review' | 'differentiate' | 'rubric' | 'ai_resistant' | 'student_view'
-
-const TOOLS: { key: Tool; label: string; enabled: boolean }[] = [
-  { key: 'review', label: 'Review', enabled: true },
-  { key: 'differentiate', label: 'Differentiate', enabled: false },
-  { key: 'rubric', label: 'Rubric', enabled: false },
-  { key: 'ai_resistant', label: 'AI-Resistant', enabled: true },
-  { key: 'student_view', label: 'Student view', enabled: false },
+const AI_USE_LEVEL_OPTIONS: { value: AssignmentAiUseLevel; label: string; description: string }[] = [
+  {
+    value: 'thinking_partner',
+    label: 'AI as a thinking partner',
+    description: 'Students may use AI to question, brainstorm, receive feedback, or revise—but must show their own reasoning.',
+  },
+  {
+    value: 'limited',
+    label: 'Limited AI use',
+    description: 'AI is permitted only for specific teacher-approved steps.',
+  },
+  {
+    value: 'no_ai',
+    label: 'No AI use',
+    description: 'The task is completed without generative AI and includes authentic evidence of student thinking.',
+  },
 ]
 
-const COACHING_DIRECTIONS = [
-  { label: 'Strengthen the rigor', message: "Let's strengthen the rigor of this." },
-  { label: 'Clarify student directions', message: "Let's clarify the student directions." },
-  { label: 'Improve engagement', message: "Let's improve how engaging this is." },
-  { label: 'Check workload', message: "Let's check whether the workload is reasonable." },
-  { label: 'Check alignment with the objective', message: "Let's check how well this aligns with the objective." },
-  { label: 'Review the entire assignment', message: "Let's review the entire assignment." },
-  { label: "I don't love this — try a different approach", message: "I don't love this — can you try a different approach?" },
+const REVIEW_AREA_PILLS = [
+  { label: 'Purpose and clarity', message: "Let's improve the purpose and clarity of this assignment." },
+  { label: 'Cognitive demand', message: "Let's strengthen the cognitive demand of this assignment." },
+  { label: 'Student ownership and critical thinking', message: "Let's increase student ownership and critical thinking here." },
+  { label: 'Accessibility and differentiation', message: "Let's improve accessibility and differentiation." },
+  { label: 'Success criteria', message: "Let's clarify the success criteria." },
+  { label: 'Potential AI shortcuts', message: "Let's address potential AI shortcuts in this assignment." },
 ]
 
 const inputClass =
   'rounded-xl border border-hairline bg-cream-card px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta/50 focus:outline-none disabled:opacity-60'
 
+function tabPillClass(active: boolean): string {
+  return `flex-1 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+    active ? 'bg-forest text-cream' : 'bg-cream-card text-ink-soft'
+  }`
+}
+
+// Treats anything other than the two current modes (older rows may carry a
+// retired 'create'/'improve' value) as Review — the workspace never breaks
+// on a pre-redesign session, it just falls back to the closer display.
+function modeLabel(mode: AssignmentCoachMode): string {
+  return mode === 'redesign_ai' ? 'Redesign for AI' : 'Review'
+}
+
 export default function AssignmentCoach() {
-  const [pendingMode, setPendingMode] = useState<AssignmentCoachMode | null>(null)
-  const [pendingType, setPendingType] = useState<AssignmentType | null>(null)
-  const [pendingTool, setPendingTool] = useState<Tool>('review')
+  const [pendingMode, setPendingMode] = useState<'review' | 'redesign_ai' | null>(null)
+  const [pendingText, setPendingText] = useState<string | null>(null)
   const [session, setSession] = useState<AssignmentCoachSession | null>(null)
 
   const [sessions, setSessions] = useState<AssignmentCoachSession[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
-  const myAssignmentsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     getAssignmentCoachSessions()
@@ -69,8 +83,7 @@ export default function AssignmentCoach() {
   function handleExit() {
     setSession(null)
     setPendingMode(null)
-    setPendingType(null)
-    setPendingTool('review')
+    setPendingText(null)
   }
 
   function handleUpdate(updated: AssignmentCoachSession) {
@@ -92,22 +105,28 @@ export default function AssignmentCoach() {
   }
 
   if (session) {
-    return <Workspace session={session} initialTool={pendingTool} onUpdate={handleUpdate} onExit={handleExit} />
+    return <Workspace session={session} onUpdate={handleUpdate} onExit={handleExit} />
   }
 
-  if (pendingMode && pendingType) {
+  if (pendingMode && pendingText != null) {
     return (
-      <IntakeForm
+      <ContextForm
         mode={pendingMode}
-        assignmentType={pendingType}
-        onBack={() => setPendingType(null)}
+        originalText={pendingText}
+        onBack={() => setPendingText(null)}
         onStarted={setSession}
       />
     )
   }
 
   if (pendingMode) {
-    return <TypeSelect mode={pendingMode} onBack={() => setPendingMode(null)} onSelect={setPendingType} />
+    return (
+      <AddAssignmentScreen
+        mode={pendingMode}
+        onBack={() => setPendingMode(null)}
+        onNext={setPendingText}
+      />
+    )
   }
 
   return (
@@ -117,50 +136,40 @@ export default function AssignmentCoach() {
         <p className="text-ink-soft">Design, review, and refine meaningful student work—with a coach beside you.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <button
           type="button"
-          onClick={() => setPendingMode('create')}
+          onClick={() => setPendingMode('review')}
           className="group rounded-2xl border border-hairline bg-cream-card p-6 text-left transition-shadow hover:shadow-md"
         >
-          <SparkleIcon className="h-8 w-8 text-terracotta" />
-          <h2 className="mt-4 font-heading text-lg font-semibold text-forest">Create something new</h2>
+          <ChecklistIcon className="h-8 w-8 text-terracotta" />
+          <h2 className="mt-4 font-heading text-lg font-semibold text-forest">Review an assignment</h2>
           <p className="mt-1 text-sm text-ink-soft">
-            Start with a learning objective, standard, topic, or assignment idea.
+            Get coaching feedback on clarity, rigor, student thinking, accessibility, differentiation, and
+            assessment alignment.
           </p>
         </button>
         <button
           type="button"
-          onClick={() => setPendingMode('improve')}
-          className="group rounded-2xl border border-hairline bg-cream-card p-6 text-left transition-shadow hover:shadow-md"
-        >
-          <ChecklistIcon className="h-8 w-8 text-terracotta" />
-          <h2 className="mt-4 font-heading text-lg font-semibold text-forest">Improve an existing assignment</h2>
-          <p className="mt-1 text-sm text-ink-soft">Paste it in, or describe it, and work through it together.</p>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setPendingTool('ai_resistant')
-            setPendingMode('improve')
-          }}
+          onClick={() => setPendingMode('redesign_ai')}
           className="group rounded-2xl border border-hairline bg-cream-card p-6 text-left transition-shadow hover:shadow-md"
         >
           <BrainIcon className="h-8 w-8 text-terracotta" />
-          <h2 className="mt-4 font-heading text-lg font-semibold text-forest">Make it AI-Resistant</h2>
+          <h2 className="mt-4 font-heading text-lg font-semibold text-forest">Redesign for meaningful AI use</h2>
           <p className="mt-1 text-sm text-ink-soft">
-            Turn an assignment you already have into one that keeps student thinking visible.
+            Adapt an assignment so students must demonstrate their own thinking—whether AI is allowed, limited, or
+            not allowed.
           </p>
         </button>
       </div>
 
-      <div ref={myAssignmentsRef}>
+      <div>
         <h2 className="font-heading text-sm font-semibold uppercase tracking-wide text-ink-soft">My Assignments</h2>
         {historyLoading ? (
           <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
         ) : sessions.length === 0 ? (
           <div className="mt-3 rounded-2xl border border-dashed border-hairline p-6 text-center text-sm text-ink-soft">
-            Assignments you create or improve will show up here.
+            Assignments you review or redesign will show up here.
           </div>
         ) : (
           <div className="mt-3 flex flex-col gap-3">
@@ -189,18 +198,20 @@ function AssignmentRow({
     <div className="flex items-center justify-between gap-4 rounded-xl border border-hairline bg-cream-card p-4">
       <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-peach-tint px-2 py-0.5 text-xs font-semibold text-terracotta-600">
-            {assignmentTypeLabel(session.assignmentType)}
+          <span className="rounded-full bg-mint-tint px-2 py-0.5 text-xs font-semibold text-forest">
+            {modeLabel(session.mode)}
           </span>
+          {session.assignmentType && (
+            <span className="rounded-full bg-peach-tint px-2 py-0.5 text-xs font-semibold text-terracotta-600">
+              {assignmentTypeLabel(session.assignmentType)}
+            </span>
+          )}
           <span className="rounded-full bg-gold-tint px-2 py-0.5 text-xs font-semibold text-terracotta-600">
             {session.status === 'completed' ? 'Completed' : 'Draft'}
           </span>
-          {session.reviewSummary && (
-            <span className="text-xs font-medium text-ink-soft">Reviewed</span>
-          )}
         </div>
         <p className="mt-1.5 truncate text-sm text-ink">
-          {session.title || session.objective || session.originalText?.slice(0, 80) || 'Untitled assignment'}
+          {session.title || session.originalText?.slice(0, 80) || 'Untitled assignment'}
         </p>
         <p className="mt-0.5 text-xs text-ink-soft">
           {[session.gradeLevel, session.subject].filter(Boolean).join(' · ')}
@@ -253,90 +264,135 @@ function AssignmentRow({
   )
 }
 
-function TypeSelect({
+function AddAssignmentScreen({
   mode,
   onBack,
-  onSelect,
+  onNext,
 }: {
-  mode: AssignmentCoachMode
+  mode: 'review' | 'redesign_ai'
   onBack: () => void
-  onSelect: (type: AssignmentType) => void
+  onNext: (text: string) => void
 }) {
+  const [inputMode, setInputMode] = useState<'paste' | 'upload'>('paste')
+  const [text, setText] = useState('')
+  const [extracting, setExtracting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleFile(file: File) {
+    setExtracting(true)
+    setError(null)
+    try {
+      const { text: extracted } = await extractAssignmentText(file)
+      setText(extracted)
+      setInputMode('paste')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not read that file. Please try pasting the text instead.')
+    } finally {
+      setExtracting(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6 bg-cream text-ink">
       <button type="button" onClick={onBack} className="self-start text-sm font-medium text-ink-soft hover:text-forest">
         ← Back
       </button>
       <div>
-        <h1 className="font-heading text-xl font-bold text-forest">What are you creating?</h1>
+        <h1 className="font-heading text-xl font-bold text-forest">Add the assignment</h1>
         <p className="mt-1 text-sm text-ink-soft">
-          {mode === 'create' ? 'This shapes the questions Coach asks.' : 'This shapes how Coach reviews it.'}
+          {mode === 'review'
+            ? "Paste or upload the assignment you'd like feedback on."
+            : "Paste or upload the assignment you'd like to redesign."}
         </p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {ASSIGNMENT_TYPES.map((t) => (
-          <button
-            key={t.value}
-            type="button"
-            onClick={() => onSelect(t.value)}
-            className="rounded-xl border border-hairline bg-cream-card p-4 text-left text-sm font-semibold text-forest transition-colors hover:border-terracotta/50"
-          >
-            {t.label}
-          </button>
-        ))}
+
+      <div className="flex gap-2">
+        <button type="button" onClick={() => setInputMode('paste')} className={tabPillClass(inputMode === 'paste')}>
+          Paste text
+        </button>
+        <button type="button" onClick={() => setInputMode('upload')} className={tabPillClass(inputMode === 'upload')}>
+          Upload a file
+        </button>
       </div>
+
+      {inputMode === 'paste' ? (
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={12}
+          placeholder="Paste the assignment text here..."
+          className={inputClass}
+        />
+      ) : (
+        <div className="rounded-2xl border border-dashed border-hairline bg-cream-card p-8 text-center">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".docx,.pdf,.txt"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) handleFile(file)
+              e.target.value = ''
+            }}
+          />
+          <p className="text-sm text-ink-soft">Upload a .docx, .pdf, or .txt file.</p>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={extracting}
+            className="mt-3 rounded-xl bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {extracting ? 'Reading file...' : 'Choose a file'}
+          </button>
+          {text.trim() && !extracting && (
+            <p className="mt-4 text-xs font-semibold text-forest">
+              File read successfully — switch to "Paste text" to review it before continuing.
+            </p>
+          )}
+        </div>
+      )}
+      {error && <p className="text-sm text-terracotta-600">{error}</p>}
+
+      <button
+        type="button"
+        onClick={() => onNext(text.trim())}
+        disabled={!text.trim()}
+        className="self-end rounded-xl bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+      >
+        Continue
+      </button>
     </div>
   )
 }
 
-function IntakeForm({
+function ContextForm({
   mode,
-  assignmentType,
+  originalText,
   onBack,
   onStarted,
 }: {
-  mode: AssignmentCoachMode
-  assignmentType: AssignmentType
+  mode: 'review' | 'redesign_ai'
+  originalText: string
   onBack: () => void
   onStarted: (session: AssignmentCoachSession) => void
 }) {
+  const [assignmentType, setAssignmentType] = useState<AssignmentType | ''>('')
   const [gradeLevel, setGradeLevel] = useState('')
   const [subject, setSubject] = useState('')
-  const [objective, setObjective] = useState('')
-  const [originalText, setOriginalText] = useState('')
   const [estimatedTime, setEstimatedTime] = useState('')
   const [estimatedTimeCustom, setEstimatedTimeCustom] = useState(false)
+  const [aiUseLevel, setAiUseLevel] = useState<AssignmentAiUseLevel | ''>('')
+  const [showMoreFields, setShowMoreFields] = useState(false)
+  const [objective, setObjective] = useState('')
   const [standards, setStandards] = useState('')
   const [specificNeeds, setSpecificNeeds] = useState('')
-  const [typeDetails, setTypeDetails] = useState<Record<string, string>>({})
-  const [customFields, setCustomFields] = useState<Set<string>>(new Set())
-  const [showMoreFields, setShowMoreFields] = useState(false)
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const fields = TYPE_FIELDS[assignmentType]
-  const canSubmit = mode === 'create' ? objective.trim().length > 0 : originalText.trim().length > 0
-
-  function handleTypeFieldChange(key: string, value: string) {
-    if (value === 'Other') {
-      setCustomFields((prev) => new Set(prev).add(key))
-      setTypeDetails((prev) => ({ ...prev, [key]: '' }))
-    } else {
-      setCustomFields((prev) => {
-        const next = new Set(prev)
-        next.delete(key)
-        return next
-      })
-      setTypeDetails((prev) => ({ ...prev, [key]: value }))
-    }
-  }
-
-  const ctaLabel =
-    mode === 'create'
-      ? 'Help me create it'
-      : assignmentType === 'assessment' || assignmentType === 'exit_ticket'
-        ? 'Review this assignment'
-        : 'Help me improve it'
+  const canSubmit = mode === 'review' || aiUseLevel !== ''
+  const ctaLabel = mode === 'review' ? 'Review this assignment' : 'Redesign this assignment'
 
   async function handleStart() {
     if (!canSubmit || starting) return
@@ -345,16 +401,16 @@ function IntakeForm({
     try {
       const session = await startAssignmentCoach({
         mode,
-        assignmentType,
-        typeDetails,
+        aiUseLevel: mode === 'redesign_ai' ? (aiUseLevel as AssignmentAiUseLevel) : undefined,
+        assignmentType: assignmentType || undefined,
         gradeLevel: gradeLevel || undefined,
         subject: subject || undefined,
-        objective: mode === 'create' ? objective.trim() : undefined,
-        originalText: mode !== 'create' ? originalText.trim() : undefined,
         estimatedTime: estimatedTime.trim() || undefined,
-        specificNeeds: [standards.trim() ? `Standards: ${standards.trim()}` : '', specificNeeds.trim()]
-          .filter(Boolean)
-          .join(' — ') || undefined,
+        objective: objective.trim() || undefined,
+        specificNeeds:
+          [standards.trim() ? `Standards: ${standards.trim()}` : '', specificNeeds.trim()].filter(Boolean).join(' — ') ||
+          undefined,
+        originalText,
       })
       onStarted(session)
     } catch (e) {
@@ -372,7 +428,7 @@ function IntakeForm({
 
       <div className="rounded-2xl border border-hairline bg-cream-card p-6">
         <h1 className="font-heading text-lg font-bold text-forest">
-          {mode === 'create' ? 'Create a' : 'Improve a'} {assignmentTypeLabel(assignmentType).toLowerCase()}
+          {mode === 'review' ? 'A little context before we review' : 'A little context before we redesign'}
         </h1>
 
         <div className="mt-4 flex flex-col gap-4">
@@ -401,72 +457,82 @@ function IntakeForm({
             </label>
           </div>
 
-          {mode === 'create' ? (
+          <div className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-forest">Learning objective, standard, or topic idea</span>
-              <textarea
-                value={objective}
-                onChange={(e) => setObjective(e.target.value)}
+              <span className="text-sm font-medium text-forest">Assignment type</span>
+              <select
+                value={assignmentType}
+                onChange={(e) => setAssignmentType(e.target.value as AssignmentType)}
                 disabled={starting}
-                rows={3}
-                placeholder="e.g. SWBAT explain how natural selection leads to adaptation"
                 className={inputClass}
-              />
-              <span className="text-xs text-ink-soft">
-                You don't have to write complete sentences — just jot down what's on your mind.
-              </span>
+              >
+                <option value="">Select a type</option>
+                {ASSIGNMENT_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
             </label>
-          ) : (
             <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-forest">Paste or describe the assignment</span>
-              <textarea
-                value={originalText}
-                onChange={(e) => setOriginalText(e.target.value)}
+              <span className="text-sm font-medium text-forest">Estimated student work time</span>
+              <select
+                value={estimatedTimeCustom ? 'Other' : estimatedTime}
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (v === 'Other') {
+                    setEstimatedTimeCustom(true)
+                    setEstimatedTime('')
+                  } else {
+                    setEstimatedTimeCustom(false)
+                    setEstimatedTime(v)
+                  }
+                }}
                 disabled={starting}
-                rows={8}
-                placeholder="Paste the assignment text, or describe it in your own words..."
                 className={inputClass}
-              />
-              <span className="text-xs text-ink-soft">
-                You don't have to write complete sentences — just jot down what's on your mind.
-              </span>
+              >
+                <option value="">Select an estimate</option>
+                {ESTIMATED_TIME_OPTIONS.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
             </label>
+          </div>
+          {estimatedTimeCustom && (
+            <input
+              value={estimatedTime}
+              onChange={(e) => setEstimatedTime(e.target.value)}
+              disabled={starting}
+              placeholder="Describe the estimated time..."
+              className={inputClass}
+            />
           )}
 
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-forest">Estimated student work time</span>
-            <select
-              value={estimatedTimeCustom ? 'Other' : estimatedTime}
-              onChange={(e) => {
-                const v = e.target.value
-                if (v === 'Other') {
-                  setEstimatedTimeCustom(true)
-                  setEstimatedTime('')
-                } else {
-                  setEstimatedTimeCustom(false)
-                  setEstimatedTime(v)
-                }
-              }}
-              disabled={starting}
-              className={inputClass}
-            >
-              <option value="">Select an estimate</option>
-              {ESTIMATED_TIME_OPTIONS.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-            {estimatedTimeCustom && (
-              <input
-                value={estimatedTime}
-                onChange={(e) => setEstimatedTime(e.target.value)}
-                disabled={starting}
-                placeholder="Describe..."
-                className={inputClass}
-              />
-            )}
-          </label>
+          {mode === 'redesign_ai' && (
+            <div>
+              <p className="text-sm font-medium text-forest">How should students use AI?</p>
+              <div className="mt-2 grid gap-3 sm:grid-cols-3">
+                {AI_USE_LEVEL_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setAiUseLevel(opt.value)}
+                    disabled={starting}
+                    className={`rounded-xl border p-4 text-left transition-colors ${
+                      aiUseLevel === opt.value
+                        ? 'border-forest bg-mint-tint'
+                        : 'border-hairline bg-cream-card hover:border-terracotta/40'
+                    }`}
+                  >
+                    <p className="text-sm font-semibold text-forest">{opt.label}</p>
+                    <p className="mt-1 text-xs text-ink-soft">{opt.description}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <button
             type="button"
@@ -478,49 +544,16 @@ function IntakeForm({
 
           {showMoreFields && (
             <div className="flex flex-col gap-4 border-t border-hairline pt-4">
-              {fields.length > 0 && (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {fields.map((f) => (
-                    <label key={f.key} className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium text-forest">{f.label}</span>
-                      {f.options ? (
-                        <>
-                          <select
-                            value={customFields.has(f.key) ? 'Other' : (typeDetails[f.key] ?? '')}
-                            onChange={(e) => handleTypeFieldChange(f.key, e.target.value)}
-                            disabled={starting}
-                            className={inputClass}
-                          >
-                            <option value="">Select an option</option>
-                            {f.options.map((o) => (
-                              <option key={o} value={o}>
-                                {o}
-                              </option>
-                            ))}
-                            <option value="Other">Other</option>
-                          </select>
-                          {customFields.has(f.key) && (
-                            <input
-                              value={typeDetails[f.key] ?? ''}
-                              onChange={(e) => setTypeDetails((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                              disabled={starting}
-                              placeholder="Describe..."
-                              className={inputClass}
-                            />
-                          )}
-                        </>
-                      ) : (
-                        <input
-                          value={typeDetails[f.key] ?? ''}
-                          onChange={(e) => setTypeDetails((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                          disabled={starting}
-                          className={inputClass}
-                        />
-                      )}
-                    </label>
-                  ))}
-                </div>
-              )}
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium text-forest">Learning objective or standard</span>
+                <textarea
+                  value={objective}
+                  onChange={(e) => setObjective(e.target.value)}
+                  disabled={starting}
+                  rows={2}
+                  className={inputClass}
+                />
+              </label>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="flex flex-col gap-1.5">
                   <span className="text-sm font-medium text-forest">Standards</span>
@@ -560,17 +593,15 @@ function IntakeForm({
 
 function Workspace({
   session,
-  initialTool,
   onUpdate,
   onExit,
 }: {
   session: AssignmentCoachSession
-  initialTool?: Tool
   onUpdate: (session: AssignmentCoachSession) => void
   onExit: () => void
 }) {
   const navigate = useNavigate()
-  const [activeTool, setActiveTool] = useState<Tool>(initialTool ?? 'review')
+  const isRedesign = session.mode === 'redesign_ai'
   const [mobilePane, setMobilePane] = useState<'coach' | 'assignment'>('coach')
   const [viewMode, setViewMode] = useState<'edit' | 'preview'>('preview')
 
@@ -584,17 +615,17 @@ function Workspace({
   const [aiResisting, setAiResisting] = useState(false)
   const [aiResistError, setAiResistError] = useState<string | null>(null)
 
-  const [finalizing, setFinalizing] = useState(false)
-  const [finalizeError, setFinalizeError] = useState<string | null>(null)
+  const [revising, setRevising] = useState(false)
+  const [reviseError, setReviseError] = useState<string | null>(null)
 
   const [text, setText] = useState(session.liveAssignmentText ?? '')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const lastSavedRef = useRef(session.liveAssignmentText ?? '')
   const saveTimerRef = useRef<number | null>(null)
 
-  // Reflects an external change (e.g. finalize drafting the assignment)
-  // into the editor — never overwrites text the teacher is mid-typing
-  // into, since this only fires when the prop actually changed.
+  // Reflects an external change (e.g. revising the whole assignment) into
+  // the editor — never overwrites text the teacher is mid-typing into,
+  // since this only fires when the prop actually changed.
   useEffect(() => {
     const incoming = session.liveAssignmentText ?? ''
     if (incoming !== lastSavedRef.current) {
@@ -641,7 +672,7 @@ function Workspace({
     }
   }
 
-  async function handleDirectionPill(message: string) {
+  async function handleAreaPill(message: string) {
     if (chatSending) return
     setChatSending(true)
     setChatError(null)
@@ -687,34 +718,17 @@ function Workspace({
     if (session.aiResistant?.revisedAssignment) setText(session.aiResistant.revisedAssignment)
   }
 
-  // The home screen's "Make it AI-Resistant" card opens straight into
-  // this tool — run it automatically once, rather than just landing the
-  // teacher on the tab and making them click the button again themselves.
-  const autoAiResistantRef = useRef(false)
-  useEffect(() => {
-    if (
-      initialTool === 'ai_resistant' &&
-      !autoAiResistantRef.current &&
-      !session.aiResistant &&
-      session.liveAssignmentText?.trim()
-    ) {
-      autoAiResistantRef.current = true
-      handleAiResistant()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialTool, session.liveAssignmentText])
-
-  async function handleFinalize() {
-    if (finalizing) return
-    setFinalizing(true)
-    setFinalizeError(null)
+  async function handleRevise() {
+    if (revising) return
+    setRevising(true)
+    setReviseError(null)
     try {
-      const updated = await finalizeAssignmentCoach(session.id)
+      const updated = await reviseAssignmentCoach(session.id)
       onUpdate(updated)
     } catch (err) {
-      setFinalizeError((err as Error).message || 'Could not put together the assignment. Please try again.')
+      setReviseError((err as Error).message || 'Could not revise the assignment. Please try again.')
     } finally {
-      setFinalizing(false)
+      setRevising(false)
     }
   }
 
@@ -733,10 +747,14 @@ function Workspace({
   }
 
   const chips = [
-    assignmentTypeLabel(session.assignmentType),
+    modeLabel(session.mode),
+    session.assignmentType ? assignmentTypeLabel(session.assignmentType) : null,
     session.gradeLevel,
     session.subject,
     session.estimatedTime,
+    isRedesign && session.aiUseLevel
+      ? `AI use: ${AI_USE_LEVEL_OPTIONS.find((o) => o.value === session.aiUseLevel)?.label ?? session.aiUseLevel}`
+      : null,
     session.status === 'completed' ? 'Completed' : 'Draft',
   ].filter((c): c is string => Boolean(c))
 
@@ -769,53 +787,20 @@ function Workspace({
       {/* Mobile tab switcher — Coach and Assignment are separate tabs
           instead of squeezing a split screen into a narrow viewport. */}
       <div className="flex gap-2 lg:hidden">
-        <button
-          type="button"
-          onClick={() => setMobilePane('coach')}
-          className={`flex-1 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-            mobilePane === 'coach' ? 'bg-forest text-cream' : 'bg-cream-card text-ink-soft'
-          }`}
-        >
+        <button type="button" onClick={() => setMobilePane('coach')} className={tabPillClass(mobilePane === 'coach')}>
           Coach
         </button>
-        <button
-          type="button"
-          onClick={() => setMobilePane('assignment')}
-          className={`flex-1 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-            mobilePane === 'assignment' ? 'bg-forest text-cream' : 'bg-cream-card text-ink-soft'
-          }`}
-        >
+        <button type="button" onClick={() => setMobilePane('assignment')} className={tabPillClass(mobilePane === 'assignment')}>
           Assignment
         </button>
       </div>
 
       <div className="flex flex-1 flex-col gap-4 lg:flex-row lg:items-start">
         <div className={`flex min-w-0 flex-1 flex-col gap-4 lg:flex ${mobilePane === 'coach' ? '' : 'hidden lg:flex'}`}>
-          <div className="flex flex-wrap gap-2">
-            {TOOLS.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => setActiveTool(t.key)}
-                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  activeTool === t.key
-                    ? 'bg-forest text-cream'
-                    : 'border border-hairline bg-cream-card text-ink-soft hover:text-forest'
-                }`}
-              >
-                {t.label}
-                {!t.enabled && <span className="ml-1 text-[10px] font-normal opacity-70">Soon</span>}
-              </button>
-            ))}
-            {activeTool !== 'ai_resistant' && (
-              <button
-                type="button"
-                onClick={() => setActiveTool('ai_resistant')}
-                className="rounded-full border border-terracotta/40 bg-peach-tint px-3 py-1.5 text-xs font-semibold text-terracotta-600 hover:bg-peach-tint/70"
-              >
-                ✨ Make it AI-Resistant
-              </button>
-            )}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-heading text-sm font-semibold text-forest">
+              {isRedesign ? 'Redesign for meaningful AI use' : 'Review'}
+            </h2>
             <button
               type="button"
               onClick={() => navigate(`/assignment-coach/${session.id}/export`)}
@@ -825,7 +810,50 @@ function Workspace({
             </button>
           </div>
 
-          {activeTool === 'review' ? (
+          {isRedesign ? (
+            <div className="flex flex-col gap-3">
+              <div className="rounded-2xl border border-hairline bg-cream-card p-5">
+                {session.aiResistant?.strategies && (
+                  <div className="mb-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-forest">Strategies</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.aiResistant.strategies}</p>
+                  </div>
+                )}
+                {session.aiResistant?.guidelines && (
+                  <div className="mb-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Student AI guidelines</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.aiResistant.guidelines}</p>
+                  </div>
+                )}
+                {session.aiResistant?.revisedAssignment && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Revised assignment (preview)</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.aiResistant.revisedAssignment}</p>
+                  </div>
+                )}
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  {session.aiResistant?.revisedAssignment && (
+                    <button
+                      type="button"
+                      onClick={handleApplyAiResistant}
+                      className="rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-cream transition-opacity hover:opacity-90"
+                    >
+                      Apply to assignment
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleAiResistant}
+                    disabled={aiResisting || !text.trim()}
+                    className="text-xs font-semibold text-ink-soft hover:text-forest disabled:opacity-50"
+                  >
+                    {aiResisting ? 'Regenerating...' : 'Regenerate ↻'}
+                  </button>
+                </div>
+              </div>
+              {aiResistError && <p className="text-sm text-terracotta-600">{aiResistError}</p>}
+            </div>
+          ) : (
             <div className="flex flex-col gap-3">
               {!session.reviewSummary ? (
                 <div className="rounded-2xl border border-hairline bg-cream-card p-5 text-center">
@@ -847,20 +875,16 @@ function Workspace({
                       <p className="mt-1 text-sm text-ink">{session.reviewSummary.working}</p>
                     </div>
                   )}
-                  {session.reviewSummary.misunderstand && (
+                  {session.reviewSummary.needsAttention && (
                     <div className="mb-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">
-                        What students may misunderstand
-                      </p>
-                      <p className="mt-1 text-sm text-ink">{session.reviewSummary.misunderstand}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">What may need attention</p>
+                      <p className="mt-1 text-sm text-ink">{session.reviewSummary.needsAttention}</p>
                     </div>
                   )}
-                  {session.reviewSummary.opportunity && (
+                  {session.reviewSummary.suggestions && (
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">
-                        Most important opportunity
-                      </p>
-                      <p className="mt-1 text-sm text-ink">{session.reviewSummary.opportunity}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Suggested improvements</p>
+                      <p className="mt-1 text-sm text-ink">{session.reviewSummary.suggestions}</p>
                     </div>
                   )}
                   <button
@@ -876,11 +900,11 @@ function Workspace({
               {reviewError && <p className="text-sm text-terracotta-600">{reviewError}</p>}
 
               <div className="flex flex-wrap gap-2">
-                {COACHING_DIRECTIONS.map((d) => (
+                {REVIEW_AREA_PILLS.map((d) => (
                   <button
                     key={d.label}
                     type="button"
-                    onClick={() => handleDirectionPill(d.message)}
+                    onClick={() => handleAreaPill(d.message)}
                     disabled={chatSending}
                     className="rounded-full border border-hairline bg-cream-card px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-50"
                   >
@@ -888,76 +912,16 @@ function Workspace({
                   </button>
                 ))}
               </div>
-            </div>
-          ) : activeTool === 'ai_resistant' ? (
-            <div className="flex flex-col gap-3">
-              {!session.aiResistant ? (
-                <div className="rounded-2xl border border-hairline bg-cream-card p-5 text-center">
-                  <p className="text-sm text-ink-soft">
-                    Keep student thinking visible while still allowing responsible AI use — not "AI-proof," just
-                    resistant to being fully outsourced.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleAiResistant}
-                    disabled={aiResisting || !text.trim()}
-                    className="mt-3 rounded-xl bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
-                  >
-                    {aiResisting ? 'Working on it...' : 'Make it AI-Resistant'}
-                  </button>
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-                  {session.aiResistant.strategies && (
-                    <div className="mb-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-forest">Strategies</p>
-                      <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.aiResistant.strategies}</p>
-                    </div>
-                  )}
-                  {session.aiResistant.guidelines && (
-                    <div className="mb-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">
-                        Student AI guidelines
-                      </p>
-                      <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.aiResistant.guidelines}</p>
-                    </div>
-                  )}
-                  {session.aiResistant.revisedAssignment && (
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">
-                        Revised assignment (preview)
-                      </p>
-                      <p className="mt-1 whitespace-pre-wrap text-sm text-ink">
-                        {session.aiResistant.revisedAssignment}
-                      </p>
-                    </div>
-                  )}
-                  <div className="mt-4 flex flex-wrap items-center gap-3">
-                    {session.aiResistant.revisedAssignment && (
-                      <button
-                        type="button"
-                        onClick={handleApplyAiResistant}
-                        className="rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-cream transition-opacity hover:opacity-90"
-                      >
-                        Apply to assignment
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={handleAiResistant}
-                      disabled={aiResisting}
-                      className="text-xs font-semibold text-ink-soft hover:text-forest disabled:opacity-50"
-                    >
-                      {aiResisting ? 'Regenerating...' : 'Regenerate ↻'}
-                    </button>
-                  </div>
-                </div>
-              )}
-              {aiResistError && <p className="text-sm text-terracotta-600">{aiResistError}</p>}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-hairline p-5 text-center text-sm text-ink-soft">
-              {TOOLS.find((t) => t.key === activeTool)?.label} is coming soon.
+
+              <button
+                type="button"
+                onClick={handleRevise}
+                disabled={revising || session.conversation.length === 0}
+                className="self-start rounded-xl border border-forest/40 bg-mint-tint px-4 py-2 text-xs font-semibold text-forest transition-colors hover:bg-mint-tint/70 disabled:opacity-50"
+              >
+                {revising ? 'Revising...' : 'Revise the whole assignment'}
+              </button>
+              {reviseError && <p className="text-sm text-terracotta-600">{reviseError}</p>}
             </div>
           )}
 
@@ -968,7 +932,7 @@ function Workspace({
             draft={chatDraft}
             onDraftChange={setChatDraft}
             onSend={handleSendChat}
-            placeholder="Reply to your coach..."
+            placeholder="Discuss this with your coach..."
           />
         </div>
 
@@ -1006,22 +970,7 @@ function Workspace({
               </button>
             </div>
           </div>
-          {!text.trim() && session.mode === 'create' ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-hairline p-8 text-center">
-              <p className="text-sm text-ink-soft">
-                Once you and Coach land on an approach, draft the assignment here.
-              </p>
-              <button
-                type="button"
-                onClick={handleFinalize}
-                disabled={finalizing || session.conversation.length === 0}
-                className="rounded-xl bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                {finalizing ? 'Drafting...' : 'Draft the assignment'}
-              </button>
-              {finalizeError && <p className="text-sm text-terracotta-600">{finalizeError}</p>}
-            </div>
-          ) : viewMode === 'preview' ? (
+          {viewMode === 'preview' ? (
             <div className="flex-1 overflow-y-auto rounded-2xl border border-hairline bg-cream-card p-4">
               <AssignmentContent text={text} />
             </div>
