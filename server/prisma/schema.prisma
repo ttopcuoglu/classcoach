@@ -283,18 +283,32 @@ model AssignmentCoachSession {
   id             String   @id @default(cuid())
   userId         String
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  mode           String // 'create' | 'review' | 'differentiate' | 'rubric' | 'ai_aware'
+  mode           String // 'create' | 'improve' (older rows may carry a retired mode value)
+  assignmentType String? // 'classwork' | 'homework' | 'project' | 'assessment' | 'group_task' | 'exit_ticket' | 'other'
+  typeDetails    Json? // assignment-type-specific intake answers, shape varies by assignmentType
+  estimatedTime  String? // free text, e.g. "20 minutes" or "2 weeks" — shown as a workspace chip
+  specificNeeds  String? // optional free text on learning needs
   gradeLevel     String?
   subject        String?
   objective      String? // learning objective — required for 'create'
-  originalText   String? // the teacher's existing assignment — required for every other mode
+  originalText   String? // the teacher's originally pasted/described assignment — required for 'improve'
+  // The single editable source of truth for the assignment shown in the
+  // workspace — independent of how it was first produced (pasted,
+  // described, or drafted by Coach). Autosaved as the teacher edits it.
+  liveAssignmentText String?
+  status         String   @default("draft") // 'draft' | 'completed'
   title          String?
   conversation   Json? // ChatMessage[] — seeded with Coach's opening reply only
-  // { assignment?, rubric?, scaffolds?, aiUseStatement? } — null until
-  // finalized; only the sections actually discussed are ever populated.
+  // { working, misunderstand, opportunity } — the Review tool's
+  // structured output, regenerated on demand from liveAssignmentText.
+  reviewSummary  Json?
+  // { assignment?, rubric?, scaffolds?, aiUseStatement? } — superseded by
+  // liveAssignmentText/reviewSummary/future tool-specific fields; kept for
+  // pre-redesign rows.
   finalMaterials Json?
   saved          Boolean  @default(false)
   createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 // mode is "feedback" (teacher submits their own plan in planText, gets

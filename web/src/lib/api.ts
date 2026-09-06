@@ -390,7 +390,13 @@ export type ConversationPlan = {
   conversation: ChatMessage[]
 }
 
-export type AssignmentCoachMode = 'create' | 'review' | 'differentiate' | 'rubric' | 'ai_aware'
+export type AssignmentCoachMode = 'create' | 'improve'
+export type AssignmentType = 'classwork' | 'homework' | 'project' | 'assessment' | 'group_task' | 'exit_ticket' | 'other'
+export type AssignmentReviewSummary = {
+  working: string | null
+  misunderstand: string | null
+  opportunity: string | null
+}
 export type AssignmentFinalMaterials = {
   assignment: string | null
   rubric: string | null
@@ -400,15 +406,23 @@ export type AssignmentFinalMaterials = {
 export type AssignmentCoachSession = {
   id: string
   mode: AssignmentCoachMode
+  assignmentType: AssignmentType | null
+  typeDetails: Record<string, string> | null
+  estimatedTime: string | null
+  specificNeeds: string | null
   gradeLevel: string | null
   subject: string | null
   objective: string | null
   originalText: string | null
+  liveAssignmentText: string | null
+  status: 'draft' | 'completed'
   title: string | null
   conversation: ChatMessage[]
+  reviewSummary: AssignmentReviewSummary | null
   finalMaterials: AssignmentFinalMaterials | null
   saved: boolean
   createdAt: string
+  updatedAt: string
 }
 
 // status is one of: setup, recording, paused, transcribing, tagging,
@@ -910,6 +924,10 @@ export function getAssignmentCoachSessions(params?: { saved?: boolean }): Promis
 
 export function startAssignmentCoach(input: {
   mode: AssignmentCoachMode
+  assignmentType: AssignmentType
+  typeDetails?: Record<string, string>
+  estimatedTime?: string
+  specificNeeds?: string
   gradeLevel?: string
   subject?: string
   objective?: string
@@ -922,16 +940,19 @@ export function sendAssignmentCoachChat(id: string, message: string): Promise<As
   return request(`/api/assignment-coach/${id}/chat`, { method: 'POST', body: JSON.stringify({ message }) })
 }
 
+export function reviewAssignmentCoach(id: string): Promise<AssignmentCoachSession> {
+  return request(`/api/assignment-coach/${id}/review`, { method: 'POST' })
+}
+
 export function finalizeAssignmentCoach(id: string): Promise<AssignmentCoachSession> {
   return request(`/api/assignment-coach/${id}/finalize`, { method: 'POST' })
 }
 
-export function setAssignmentCoachSaved(id: string, saved: boolean): Promise<AssignmentCoachSession> {
-  return request(`/api/assignment-coach/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) })
-}
-
-export function renameAssignmentCoachSession(id: string, title: string): Promise<AssignmentCoachSession> {
-  return request(`/api/assignment-coach/${id}`, { method: 'PATCH', body: JSON.stringify({ title }) })
+export function updateAssignmentCoachSession(
+  id: string,
+  data: { saved?: boolean; title?: string; liveAssignmentText?: string; status?: 'draft' | 'completed' },
+): Promise<AssignmentCoachSession> {
+  return request(`/api/assignment-coach/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
 }
 
 export function deleteAssignmentCoachSession(id: string): Promise<void> {

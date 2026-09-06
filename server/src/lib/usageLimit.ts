@@ -37,6 +37,7 @@ export type UsageAction =
   | 'assignment_coach'
   | 'assignment_coach_chat'
   | 'assignment_coach_finalize'
+  | 'assignment_coach_review'
 
 // Counts today's Claude-costing calls for this user and logs this one if
 // they're still under the daily cap. One shared API key funds every

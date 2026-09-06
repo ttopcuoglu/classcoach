@@ -11,22 +11,48 @@ export const assignmentCoachRouter = Router()
 
 const START_MESSAGE = 'Start our conversation about this assignment.'
 
-const MODE_LENS: Record<string, string> = {
-  create:
-    'Help them turn a learning objective into a concrete, well-scoped task. Ask about the objective, the students, and roughly how much time this should take before proposing an approach.',
-  review:
-    "Look at what they've shared through the lens of clarity, rigor, workload, and engagement. Start with whichever of those is most obviously worth discussing, not all four at once.",
-  differentiate:
-    "Focus on scaffolds, extensions, and accommodations that don't lower the expectation — ask who in the room needs more support and who needs more challenge before suggesting anything.",
-  rubric:
-    'Help them define clear success criteria tied to the actual skill or standard, not generic rubric language. Ask what a strong response actually looks like in their own words first.',
-  ai_aware:
-    "Help them think through AI's role in this task. Ask what their school or department's existing AI policy is before suggesting anything — never assume none exists, and never issue a ruling on whether AI should be allowed; offer considerations (process evidence, requiring students to explain their reasoning, in-class components) and let the teacher decide.",
-}
-const VALID_MODES = Object.keys(MODE_LENS)
+const VALID_MODES = ['create', 'improve']
 
-function buildAssignmentCoachSystemPrompt(mode: string, context: string[]): string {
+const ASSIGNMENT_TYPE_LABELS: Record<string, string> = {
+  classwork: 'classwork',
+  homework: 'homework',
+  project: 'project',
+  assessment: 'assessment',
+  group_task: 'group task',
+  exit_ticket: 'exit ticket',
+  other: 'assignment',
+}
+const VALID_ASSIGNMENT_TYPES = Object.keys(ASSIGNMENT_TYPE_LABELS)
+
+// One short, type-aware coaching note folded into the conversational
+// prompt — kept intentionally light (the teacher's own typeDetails
+// answers, when given, already carry the specifics) rather than a full
+// branch per type.
+const TYPE_COACHING_NOTES: Record<string, string> = {
+  classwork: 'Keep in mind the available class time and whether this is individual, partner, or group work.',
+  homework:
+    "Keep in mind how long this should realistically take, whether students can complete it independently, and whether it truly needs to happen outside class.",
+  project:
+    'Keep in mind the project timeline and milestones, and how individual accountability works within any group components.',
+  assessment: 'Keep in mind whether this is formative or summative, and how AI use should factor into it.',
+  group_task: 'Keep in mind group roles, individual accountability, and how participation will be documented.',
+  exit_ticket: 'Keep this tight — an exit ticket should be answerable in the time remaining and tied to one clear learning target.',
+  other: '',
+}
+
+const MODE_FRAMING: Record<string, string> = {
+  create: 'The teacher wants to create a new {type} together, starting from their objective or idea.',
+  improve: 'The teacher already has a {type} they want to improve — discuss it with them before suggesting changes.',
+}
+
+function buildAssignmentCoachSystemPrompt(mode: string, assignmentType: string, context: string[]): string {
+  const typeLabel = ASSIGNMENT_TYPE_LABELS[assignmentType] ?? 'assignment'
+  const modeFraming = (MODE_FRAMING[mode] ?? MODE_FRAMING.improve).replace('{type}', typeLabel)
+  const typeNote = TYPE_COACHING_NOTES[assignmentType] ?? ''
+
   return `You are Coach, a warm, practical instructional coach helping a teacher design or improve an assignment, piece of homework, or classroom task. This is a live, back-and-forth conversation, not a one-shot generator: your job is to understand the teacher's actual purpose before producing anything, not to rewrite their work on the first message.
+
+${modeFraming}
 
 Ask one specific, useful question at a time. Before suggesting any change, identify what's already working — name it plainly. Then identify 2-3 meaningful improvements to discuss, not an exhaustive list — depth over coverage. Never produce a full revised version during this conversation; that happens in a separate step once the teacher says they're ready.
 
@@ -34,7 +60,7 @@ Ground every suggestion in what the teacher has actually told you. Never invent 
 
 Coach, don't grade — you're a thinking partner, not an evaluator. Never rate the assignment on any scale, implicit or explicit.
 
-${MODE_LENS[mode]}
+${typeNote}
 
 Write in plain conversational text only — no markdown, no bullet lists in the chat itself.
 
@@ -43,31 +69,33 @@ ${context.map((line) => `- ${line}`).join('\n')}
 ${CORE_COACHING_RULES}`
 }
 
-const ASSIGNMENT_FINALIZE_SYSTEM_PROMPT = `You are Coach, wrapping up a conversation about an assignment with a teacher. Produce the final materials based on everything actually discussed — never introduce a new idea that wasn't part of the conversation.
+const ASSIGNMENT_FINALIZE_SYSTEM_PROMPT = `You are Coach, wrapping up a conversation about an assignment with a teacher. Produce the final assignment text based on everything actually discussed — never introduce a new idea that wasn't part of the conversation.
 
 Write in plain text only — no markdown. Use a dash ("-") at the start of a line for any list-like content.
 
-Respond with only the sections that were actually relevant to this conversation, each in its own tag, and omit any tag that doesn't apply:
+Respond with exactly this block and nothing else:
 <assignment>
 The final assignment text — instructions, questions, or task description as the student would see it.
 </assignment>
-<rubric>
-Success criteria, only if a rubric was discussed.
-</rubric>
-<scaffolds>
-Scaffolds, extensions, or accommodations, only if differentiation was discussed.
-</scaffolds>
-<ai_use_statement>
-A short statement for students about AI use on this task, only if AI-awareness was discussed.
-</ai_use_statement>
 ${CORE_COACHING_RULES}`
 
-type FinalMaterials = {
-  assignment: string | null
-  rubric: string | null
-  scaffolds: string | null
-  aiUseStatement: string | null
-}
+const REVIEW_SYSTEM_PROMPT = `You are Coach, giving a teacher a concise coaching review of an assignment they're working on. Do not rewrite it — just review it.
+
+Never state or imply a numeric score, rating, grade, or evaluative label of any kind.
+
+Write in plain text only — no markdown.
+
+Respond with exactly these three sections and nothing else:
+<working>
+One or two meaningful strengths, named plainly and specifically — not generic praise.
+</working>
+<misunderstand>
+Unclear directions, missing expectations, or a likely student misconception — grounded in the actual text, not a guess about students you weren't told about.
+</misunderstand>
+<opportunity>
+The single highest-impact improvement to make next, stated as one clear recommendation.
+</opportunity>
+${CORE_COACHING_RULES}`
 
 function buildContext(
   body: Record<string, unknown>,
@@ -77,6 +105,11 @@ function buildContext(
   const subject = typeof body.subject === 'string' ? body.subject.trim() : ''
   const objective = typeof body.objective === 'string' ? body.objective.trim() : ''
   const originalText = typeof body.originalText === 'string' ? body.originalText.trim() : ''
+  const estimatedTime = typeof body.estimatedTime === 'string' ? body.estimatedTime.trim() : ''
+  const specificNeeds = typeof body.specificNeeds === 'string' ? body.specificNeeds.trim() : ''
+  const assignmentType = typeof body.assignmentType === 'string' ? body.assignmentType : ''
+  const typeDetails =
+    body.typeDetails && typeof body.typeDetails === 'object' ? (body.typeDetails as Record<string, string>) : {}
 
   if (mode === 'create' && !objective) {
     return { context: [], error: 'objective is required for this mode' }
@@ -85,9 +118,17 @@ function buildContext(
     return { context: [], error: 'originalText is required for this mode' }
   }
 
+  const typeDetailLines = Object.entries(typeDetails)
+    .filter(([, v]) => typeof v === 'string' && v.trim())
+    .map(([k, v]) => `${k}: ${v.trim()}`)
+
   const lines = [
+    assignmentType ? `Assignment type: ${ASSIGNMENT_TYPE_LABELS[assignmentType] ?? assignmentType}` : null,
     gradeLevel ? `Grade level: ${gradeLevel}` : null,
     subject ? `Subject: ${subject}` : null,
+    estimatedTime ? `Estimated student work time: ${estimatedTime}` : null,
+    specificNeeds ? `Specific learning needs to keep in mind: ${specificNeeds}` : null,
+    ...typeDetailLines,
     mode === 'create' ? `Learning objective: ${objective}` : null,
     mode !== 'create' ? `The existing assignment:\n${originalText}` : null,
   ].filter((line): line is string => line != null)
@@ -95,11 +136,44 @@ function buildContext(
   return { context: lines, error: null }
 }
 
+// Rebuilds the same context array from a persisted session — used by
+// every stateless-system-prompt call site (chat, review) after the
+// initial POST /.
+function contextFromSession(session: {
+  assignmentType: string | null
+  typeDetails: unknown
+  gradeLevel: string | null
+  subject: string | null
+  objective: string | null
+  originalText: string | null
+  liveAssignmentText: string | null
+  estimatedTime: string | null
+  specificNeeds: string | null
+  mode: string
+}): string[] {
+  const { context } = buildContext(
+    {
+      assignmentType: session.assignmentType,
+      typeDetails: session.typeDetails,
+      gradeLevel: session.gradeLevel,
+      subject: session.subject,
+      objective: session.objective,
+      // Once a live assignment exists, ground the conversation in its
+      // current (possibly edited) text rather than the original.
+      originalText: session.liveAssignmentText ?? session.originalText,
+      estimatedTime: session.estimatedTime,
+      specificNeeds: session.specificNeeds,
+    },
+    session.mode,
+  )
+  return context
+}
+
 assignmentCoachRouter.get('/', async (req, res) => {
   const { saved } = req.query
   const sessions = await prisma.assignmentCoachSession.findMany({
     where: { userId: req.user!.userId, ...(saved === 'true' ? { saved: true } : {}) },
-    orderBy: { createdAt: 'desc' },
+    orderBy: { updatedAt: 'desc' },
   })
   res.json(sessions)
 })
@@ -109,6 +183,11 @@ assignmentCoachRouter.post('/', async (req, res) => {
   const mode = typeof body.mode === 'string' ? body.mode : ''
   if (!VALID_MODES.includes(mode)) {
     res.status(400).json({ error: 'Invalid mode' })
+    return
+  }
+  const assignmentType = typeof body.assignmentType === 'string' ? body.assignmentType : ''
+  if (!VALID_ASSIGNMENT_TYPES.includes(assignmentType)) {
+    res.status(400).json({ error: 'Invalid assignmentType' })
     return
   }
 
@@ -137,7 +216,7 @@ assignmentCoachRouter.post('/', async (req, res) => {
       model: CLAUDE_MODEL,
       max_tokens: 500,
       thinking: { type: 'disabled' },
-      system: buildAssignmentCoachSystemPrompt(mode, context),
+      system: buildAssignmentCoachSystemPrompt(mode, assignmentType, context),
       messages: [{ role: 'user', content: START_MESSAGE }],
     })
     const reply = response.content
@@ -154,15 +233,23 @@ assignmentCoachRouter.post('/', async (req, res) => {
     // Seeded with only Coach's opening reply — no synthetic user turn ever
     // renders, matching Reflect's own "start" convention.
     const conversation: ChatMessage[] = [{ role: 'assistant', text: reply, createdAt: new Date().toISOString() }]
+    const originalText = typeof body.originalText === 'string' ? body.originalText.trim() || null : null
 
     const session = await prisma.assignmentCoachSession.create({
       data: {
         userId: req.user!.userId,
         mode,
+        assignmentType,
+        typeDetails: body.typeDetails && typeof body.typeDetails === 'object' ? body.typeDetails : undefined,
+        estimatedTime: typeof body.estimatedTime === 'string' ? body.estimatedTime.trim() || null : null,
+        specificNeeds: typeof body.specificNeeds === 'string' ? body.specificNeeds.trim() || null : null,
         gradeLevel: typeof body.gradeLevel === 'string' ? body.gradeLevel.trim() || null : null,
         subject: typeof body.subject === 'string' ? body.subject.trim() || null : null,
         objective: typeof body.objective === 'string' ? body.objective.trim() || null : null,
-        originalText: typeof body.originalText === 'string' ? body.originalText.trim() || null : null,
+        originalText,
+        // The workspace never opens empty for "improve" — the teacher's
+        // own pasted/described text is immediately the live document.
+        liveAssignmentText: mode === 'improve' ? originalText : null,
         conversation,
       },
     })
@@ -200,23 +287,14 @@ assignmentCoachRouter.post('/:id/chat', async (req, res) => {
     return
   }
 
-  const { context } = buildContext(
-    {
-      gradeLevel: session.gradeLevel,
-      subject: session.subject,
-      objective: session.objective,
-      originalText: session.originalText,
-    },
-    session.mode,
-  )
-
+  const context = contextFromSession(session)
   const trimmed = message.trim()
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 700,
       thinking: { type: 'disabled' },
-      system: buildAssignmentCoachSystemPrompt(session.mode, context),
+      system: buildAssignmentCoachSystemPrompt(session.mode, session.assignmentType ?? 'other', context),
       messages: toClaudeMessages(existing, trimmed),
     })
     const reply = response.content
@@ -238,6 +316,63 @@ assignmentCoachRouter.post('/:id/chat', async (req, res) => {
   } catch (error) {
     console.error('[assignment-coach] chat failed:', error)
     res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
+  }
+})
+
+// Generates the Review tool's structured 3-part card, grounded in the
+// CURRENT liveAssignmentText — regenerate-able on demand as the teacher
+// edits, never blended into the free-form chat.
+assignmentCoachRouter.post('/:id/review', async (req, res) => {
+  const session = await prisma.assignmentCoachSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Assignment Coach session not found' })
+    return
+  }
+  if (!session.liveAssignmentText || !session.liveAssignmentText.trim()) {
+    res.status(400).json({ error: 'Add some assignment text before requesting a review.' })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'assignment_coach_review')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  try {
+    const context = contextFromSession(session)
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 800,
+      thinking: { type: 'disabled' },
+      system: REVIEW_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: context.join('\n') }],
+    })
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+
+    const reviewSummary = {
+      working: extractTag(text, 'working'),
+      misunderstand: extractTag(text, 'misunderstand'),
+      opportunity: extractTag(text, 'opportunity'),
+    }
+    if (!Object.values(reviewSummary).some(Boolean)) {
+      res.status(502).json({ error: 'Could not put together a review. Please try again.' })
+      return
+    }
+
+    const updated = await prisma.assignmentCoachSession.update({
+      where: { id: session.id },
+      data: { reviewSummary },
+    })
+    res.json(updated)
+  } catch (error) {
+    console.error('[assignment-coach] review failed:', error)
+    res.status(502).json({ error: 'Could not put together a review. Please try again.' })
   }
 })
 
@@ -266,7 +401,7 @@ assignmentCoachRouter.post('/:id/finalize', async (req, res) => {
     const transcript = existing.map((m) => `${m.role === 'assistant' ? 'Coach' : 'Teacher'}: ${m.text}`).join('\n')
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 1500,
+      max_tokens: 1200,
       thinking: { type: 'disabled' },
       system: ASSIGNMENT_FINALIZE_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: transcript }],
@@ -276,31 +411,26 @@ assignmentCoachRouter.post('/:id/finalize', async (req, res) => {
       .map((block) => block.text)
       .join('\n')
 
-    const finalMaterials: FinalMaterials = {
-      assignment: extractTag(text, 'assignment'),
-      rubric: extractTag(text, 'rubric'),
-      scaffolds: extractTag(text, 'scaffolds'),
-      aiUseStatement: extractTag(text, 'ai_use_statement'),
-    }
-    if (!Object.values(finalMaterials).some(Boolean)) {
-      res.status(502).json({ error: 'Could not put together the final materials. Please try again.' })
+    const assignment = extractTag(text, 'assignment')
+    if (!assignment) {
+      res.status(502).json({ error: 'Could not put together the assignment. Please try again.' })
       return
     }
 
     const updated = await prisma.assignmentCoachSession.update({
       where: { id: session.id },
-      data: { finalMaterials },
+      data: { liveAssignmentText: assignment },
     })
     res.json(updated)
   } catch (error) {
     console.error('[assignment-coach] finalize failed:', error)
-    res.status(502).json({ error: 'Could not put together the final materials. Please try again.' })
+    res.status(502).json({ error: 'Could not put together the assignment. Please try again.' })
   }
 })
 
 assignmentCoachRouter.patch('/:id', async (req, res) => {
-  const { saved, title } = req.body ?? {}
-  const data: { saved?: boolean; title?: string } = {}
+  const { saved, title, liveAssignmentText, status } = req.body ?? {}
+  const data: { saved?: boolean; title?: string; liveAssignmentText?: string; status?: string } = {}
   if (saved !== undefined) {
     if (typeof saved !== 'boolean') {
       res.status(400).json({ error: 'saved must be a boolean' })
@@ -314,6 +444,20 @@ assignmentCoachRouter.patch('/:id', async (req, res) => {
       return
     }
     data.title = title.trim() || undefined
+  }
+  if (liveAssignmentText !== undefined) {
+    if (typeof liveAssignmentText !== 'string') {
+      res.status(400).json({ error: 'liveAssignmentText must be a string' })
+      return
+    }
+    data.liveAssignmentText = liveAssignmentText
+  }
+  if (status !== undefined) {
+    if (status !== 'draft' && status !== 'completed') {
+      res.status(400).json({ error: 'status must be draft or completed' })
+      return
+    }
+    data.status = status
   }
   const { count } = await prisma.assignmentCoachSession.updateMany({
     where: { id: req.params.id, userId: req.user!.userId },

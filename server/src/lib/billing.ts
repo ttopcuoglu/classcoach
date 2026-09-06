@@ -63,6 +63,7 @@ export const LESSON_PLANNING_ACTIONS = [
   'assignment_coach',
   'assignment_coach_chat',
   'assignment_coach_finalize',
+  'assignment_coach_review',
 ]
 
 // True if the user's own subscription is active, OR their organization
