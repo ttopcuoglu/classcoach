@@ -69,7 +69,19 @@ ${context.map((line) => `- ${line}`).join('\n')}
 ${CORE_COACHING_RULES}`
 }
 
+// Coach places a real, deterministic diagram directly in the assignment
+// text using this inline syntax, instead of writing a prose instruction
+// like "draw a fraction bar" — the client (web/src/lib/assignmentDiagrams.ts)
+// parses it and renders an actual SVG. Only relevant to prompts that
+// produce the assignment artifact itself — never the conversational ones.
+const DIAGRAM_SYNTAX_INSTRUCTIONS = `When a visual model would genuinely help (a fraction bar, a number line), insert the actual diagram using this exact inline syntax instead of describing it in words — never write an instruction like "draw a fraction bar" when you can place the real thing:
+[[diagram:fraction_bar|segments=N|shaded=M]] — a bar split into N equal parts with M shaded, representing the fraction M/N.
+[[diagram:number_line|start=S|end=E|points=v1,v2,...|labels=l1,l2,...]] — a number line from S to E, points as decimals (e.g. 0.25 for 1/4), each labeled with the matching entry in labels (e.g. "1/4").
+Use these only where a visual genuinely clarifies the task, not on every line.`
+
 const ASSIGNMENT_FINALIZE_SYSTEM_PROMPT = `You are Coach, wrapping up a conversation about an assignment with a teacher. Produce the final assignment text based on everything actually discussed — never introduce a new idea that wasn't part of the conversation.
+
+${DIAGRAM_SYNTAX_INSTRUCTIONS}
 
 Write in plain text only — no markdown. Use a dash ("-") at the start of a line for any list-like content.
 
@@ -78,6 +90,27 @@ Respond with exactly this block and nothing else:
 The final assignment text — instructions, questions, or task description as the student would see it.
 </assignment>
 ${CORE_COACHING_RULES}`
+
+function buildCreateDraftSystemPrompt(assignmentType: string, context: string[]): string {
+  const typeLabel = ASSIGNMENT_TYPE_LABELS[assignmentType] ?? 'assignment'
+  return `You are Coach, helping a teacher create a new ${typeLabel} from their learning objective or idea. Produce a solid first draft right away, grounded only in what they've told you — never invent facts about their class or students. The teacher will refine it with you afterward, so this draft doesn't need to be perfect, just a genuine, usable starting point.
+
+${DIAGRAM_SYNTAX_INSTRUCTIONS}
+
+Write in plain text only — no markdown. Use a dash ("-") at the start of a line for list-like content.
+
+Here is what the teacher has shared:
+${context.map((line) => `- ${line}`).join('\n')}
+
+Respond with exactly these two sections and nothing else:
+<reply>
+A short, warm 1-2 sentence message introducing the draft and inviting the teacher to say what they'd like to adjust.
+</reply>
+<assignment>
+The full draft assignment text, ready for a student to read.
+</assignment>
+${CORE_COACHING_RULES}`
+}
 
 const REVIEW_SYSTEM_PROMPT = `You are Coach, giving a teacher a concise coaching review of an assignment they're working on. Do not rewrite it — just review it.
 
@@ -102,6 +135,8 @@ const AI_RESISTANT_SYSTEM_PROMPT = `You are Coach, helping a teacher make an ass
 Ground every suggestion in the actual assignment below. Never invent details about the class or students that weren't given to you.
 
 Favor concrete, low-lift moves: requiring a brief plan or prediction before starting, referencing something specific from class (a discussion, a text, an activity), asking students to show their process (drafts, an explanation of what they tried), or a short in-class or reflective piece that doesn't rely on AI.
+
+${DIAGRAM_SYNTAX_INSTRUCTIONS}
 
 Write in plain text only — no markdown. Use a dash ("-") at the start of a line for list-like content.
 
@@ -243,28 +278,55 @@ assignmentCoachRouter.post('/', async (req, res) => {
   }
 
   try {
-    const response = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 500,
-      thinking: { type: 'disabled' },
-      system: buildAssignmentCoachSystemPrompt(mode, assignmentType, context),
-      messages: [{ role: 'user', content: START_MESSAGE }],
-    })
-    const reply = response.content
-      .filter((block) => block.type === 'text')
-      .map((block) => block.text)
-      .join('\n')
-      .trim()
-
-    if (!reply) {
-      res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
-      return
-    }
-
-    // Seeded with only Coach's opening reply — no synthetic user turn ever
-    // renders, matching Reflect's own "start" convention.
-    const conversation: ChatMessage[] = [{ role: 'assistant', text: reply, createdAt: new Date().toISOString() }]
     const originalText = typeof body.originalText === 'string' ? body.originalText.trim() || null : null
+    let conversation: ChatMessage[]
+    // The workspace never opens empty. "Improve" already has the
+    // teacher's own pasted/described text; "create" gets a real drafted
+    // assignment in the same call that starts the conversation, instead
+    // of forcing a back-and-forth before anything exists to look at.
+    let liveAssignmentText: string | null = mode === 'improve' ? originalText : null
+
+    if (mode === 'create') {
+      const response = await anthropic.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 1200,
+        thinking: { type: 'disabled' },
+        system: buildCreateDraftSystemPrompt(assignmentType, context),
+        messages: [{ role: 'user', content: START_MESSAGE }],
+      })
+      const text = response.content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
+        .join('\n')
+      const reply = extractTag(text, 'reply')
+      const assignment = extractTag(text, 'assignment')
+      if (!reply || !assignment) {
+        res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
+        return
+      }
+      conversation = [{ role: 'assistant', text: reply, createdAt: new Date().toISOString() }]
+      liveAssignmentText = assignment
+    } else {
+      const response = await anthropic.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 500,
+        thinking: { type: 'disabled' },
+        system: buildAssignmentCoachSystemPrompt(mode, assignmentType, context),
+        messages: [{ role: 'user', content: START_MESSAGE }],
+      })
+      const reply = response.content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
+        .join('\n')
+        .trim()
+      if (!reply) {
+        res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
+        return
+      }
+      // Seeded with only Coach's opening reply — no synthetic user turn
+      // ever renders, matching Reflect's own "start" convention.
+      conversation = [{ role: 'assistant', text: reply, createdAt: new Date().toISOString() }]
+    }
 
     const session = await prisma.assignmentCoachSession.create({
       data: {
@@ -278,9 +340,7 @@ assignmentCoachRouter.post('/', async (req, res) => {
         subject: typeof body.subject === 'string' ? body.subject.trim() || null : null,
         objective: typeof body.objective === 'string' ? body.objective.trim() || null : null,
         originalText,
-        // The workspace never opens empty for "improve" — the teacher's
-        // own pasted/described text is immediately the live document.
-        liveAssignmentText: mode === 'improve' ? originalText : null,
+        liveAssignmentText,
         conversation,
       },
     })

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { AssignmentContent } from '../components/AssignmentDiagram'
 import CoachingChat from '../components/CoachingChat'
 import { BrainIcon, ChecklistIcon, KebabIcon, SparkleIcon, StarIcon } from '../components/icons'
 import { UpgradeMessage } from '../components/UpgradeMessage'
@@ -314,7 +315,6 @@ function IntakeForm({
   const [error, setError] = useState<string | null>(null)
 
   const fields = TYPE_FIELDS[assignmentType]
-  const visibleFields = showMoreFields ? fields : fields.slice(0, 3)
   const canSubmit = mode === 'create' ? objective.trim().length > 0 : originalText.trim().length > 0
 
   function handleTypeFieldChange(key: string, value: string) {
@@ -401,61 +401,6 @@ function IntakeForm({
             </label>
           </div>
 
-          {fields.length > 0 && (
-            <div className="flex flex-col gap-3">
-              <div className="grid gap-4 sm:grid-cols-2">
-                {visibleFields.map((f) => (
-                  <label key={f.key} className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-forest">{f.label}</span>
-                    {f.options ? (
-                      <>
-                        <select
-                          value={customFields.has(f.key) ? 'Other' : (typeDetails[f.key] ?? '')}
-                          onChange={(e) => handleTypeFieldChange(f.key, e.target.value)}
-                          disabled={starting}
-                          className={inputClass}
-                        >
-                          <option value="">Select an option</option>
-                          {f.options.map((o) => (
-                            <option key={o} value={o}>
-                              {o}
-                            </option>
-                          ))}
-                          <option value="Other">Other</option>
-                        </select>
-                        {customFields.has(f.key) && (
-                          <input
-                            value={typeDetails[f.key] ?? ''}
-                            onChange={(e) => setTypeDetails((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                            disabled={starting}
-                            placeholder="Describe..."
-                            className={inputClass}
-                          />
-                        )}
-                      </>
-                    ) : (
-                      <input
-                        value={typeDetails[f.key] ?? ''}
-                        onChange={(e) => setTypeDetails((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                        disabled={starting}
-                        className={inputClass}
-                      />
-                    )}
-                  </label>
-                ))}
-              </div>
-              {fields.length > 3 && (
-                <button
-                  type="button"
-                  onClick={() => setShowMoreFields((v) => !v)}
-                  className="self-start text-xs font-semibold text-ink-soft hover:text-forest"
-                >
-                  {showMoreFields ? '− Fewer details' : '+ More details (optional)'}
-                </button>
-              )}
-            </div>
-          )}
-
           {mode === 'create' ? (
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-forest">Learning objective, standard, or topic idea</span>
@@ -488,55 +433,111 @@ function IntakeForm({
             </label>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-forest">Estimated student work time</span>
-              <select
-                value={estimatedTimeCustom ? 'Other' : estimatedTime}
-                onChange={(e) => {
-                  const v = e.target.value
-                  if (v === 'Other') {
-                    setEstimatedTimeCustom(true)
-                    setEstimatedTime('')
-                  } else {
-                    setEstimatedTimeCustom(false)
-                    setEstimatedTime(v)
-                  }
-                }}
-                disabled={starting}
-                className={inputClass}
-              >
-                <option value="">Select an estimate</option>
-                {ESTIMATED_TIME_OPTIONS.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-              {estimatedTimeCustom && (
-                <input
-                  value={estimatedTime}
-                  onChange={(e) => setEstimatedTime(e.target.value)}
-                  disabled={starting}
-                  placeholder="Describe..."
-                  className={inputClass}
-                />
-              )}
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-forest">Standards (optional)</span>
-              <input value={standards} onChange={(e) => setStandards(e.target.value)} disabled={starting} className={inputClass} />
-            </label>
-          </div>
           <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-forest">Specific learning needs (optional)</span>
-            <input
-              value={specificNeeds}
-              onChange={(e) => setSpecificNeeds(e.target.value)}
+            <span className="text-sm font-medium text-forest">Estimated student work time</span>
+            <select
+              value={estimatedTimeCustom ? 'Other' : estimatedTime}
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === 'Other') {
+                  setEstimatedTimeCustom(true)
+                  setEstimatedTime('')
+                } else {
+                  setEstimatedTimeCustom(false)
+                  setEstimatedTime(v)
+                }
+              }}
               disabled={starting}
               className={inputClass}
-            />
+            >
+              <option value="">Select an estimate</option>
+              {ESTIMATED_TIME_OPTIONS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+            {estimatedTimeCustom && (
+              <input
+                value={estimatedTime}
+                onChange={(e) => setEstimatedTime(e.target.value)}
+                disabled={starting}
+                placeholder="Describe..."
+                className={inputClass}
+              />
+            )}
           </label>
+
+          <button
+            type="button"
+            onClick={() => setShowMoreFields((v) => !v)}
+            className="self-start text-xs font-semibold text-ink-soft hover:text-forest"
+          >
+            {showMoreFields ? '− Hide extra details' : '+ Add more details (optional)'}
+          </button>
+
+          {showMoreFields && (
+            <div className="flex flex-col gap-4 border-t border-hairline pt-4">
+              {fields.length > 0 && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {fields.map((f) => (
+                    <label key={f.key} className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-forest">{f.label}</span>
+                      {f.options ? (
+                        <>
+                          <select
+                            value={customFields.has(f.key) ? 'Other' : (typeDetails[f.key] ?? '')}
+                            onChange={(e) => handleTypeFieldChange(f.key, e.target.value)}
+                            disabled={starting}
+                            className={inputClass}
+                          >
+                            <option value="">Select an option</option>
+                            {f.options.map((o) => (
+                              <option key={o} value={o}>
+                                {o}
+                              </option>
+                            ))}
+                            <option value="Other">Other</option>
+                          </select>
+                          {customFields.has(f.key) && (
+                            <input
+                              value={typeDetails[f.key] ?? ''}
+                              onChange={(e) => setTypeDetails((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                              disabled={starting}
+                              placeholder="Describe..."
+                              className={inputClass}
+                            />
+                          )}
+                        </>
+                      ) : (
+                        <input
+                          value={typeDetails[f.key] ?? ''}
+                          onChange={(e) => setTypeDetails((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                          disabled={starting}
+                          className={inputClass}
+                        />
+                      )}
+                    </label>
+                  ))}
+                </div>
+              )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-forest">Standards</span>
+                  <input value={standards} onChange={(e) => setStandards(e.target.value)} disabled={starting} className={inputClass} />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-forest">Specific learning needs</span>
+                  <input
+                    value={specificNeeds}
+                    onChange={(e) => setSpecificNeeds(e.target.value)}
+                    disabled={starting}
+                    className={inputClass}
+                  />
+                </label>
+              </div>
+            </div>
+          )}
 
           <button
             type="button"
@@ -571,6 +572,7 @@ function Workspace({
   const navigate = useNavigate()
   const [activeTool, setActiveTool] = useState<Tool>(initialTool ?? 'review')
   const [mobilePane, setMobilePane] = useState<'coach' | 'assignment'>('coach')
+  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('preview')
 
   const [chatDraft, setChatDraft] = useState('')
   const [chatSending, setChatSending] = useState(false)
@@ -955,7 +957,29 @@ function Workspace({
 
         <div className={`flex min-w-0 flex-1 flex-col gap-3 lg:flex ${mobilePane === 'assignment' ? '' : 'hidden lg:flex'}`}>
           <div className="flex items-center justify-between">
-            <h2 className="font-heading text-sm font-semibold text-forest">Live Assignment</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="font-heading text-sm font-semibold text-forest">Live Assignment</h2>
+              <div className="flex rounded-full border border-hairline bg-cream-card p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('edit')}
+                  className={`rounded-full px-2.5 py-1 font-semibold transition-colors ${
+                    viewMode === 'edit' ? 'bg-forest text-cream' : 'text-ink-soft'
+                  }`}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('preview')}
+                  className={`rounded-full px-2.5 py-1 font-semibold transition-colors ${
+                    viewMode === 'preview' ? 'bg-forest text-cream' : 'text-ink-soft'
+                  }`}
+                >
+                  Preview
+                </button>
+              </div>
+            </div>
             <div className="flex items-center gap-3 text-xs text-ink-soft">
               {saveStatus === 'saving' && <span>Saving…</span>}
               {saveStatus === 'saved' && <span>Saved</span>}
@@ -979,6 +1003,10 @@ function Workspace({
                 {finalizing ? 'Drafting...' : 'Draft the assignment'}
               </button>
               {finalizeError && <p className="text-sm text-terracotta-600">{finalizeError}</p>}
+            </div>
+          ) : viewMode === 'preview' ? (
+            <div className="flex-1 overflow-y-auto rounded-2xl border border-hairline bg-cream-card p-4">
+              <AssignmentContent text={text} />
             </div>
           ) : (
             <textarea

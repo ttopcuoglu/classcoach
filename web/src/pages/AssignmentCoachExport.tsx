@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { AssignmentContent } from '../components/AssignmentDiagram'
 import { assignmentTypeLabel } from '../lib/assignmentTypes'
 import { getAssignmentCoachSession, type AssignmentCoachSession } from '../lib/api'
 
@@ -51,7 +52,9 @@ export default function AssignmentCoachExport() {
             {session.liveAssignmentText && (
               <section className="mt-6 break-inside-avoid rounded-xl border border-hairline p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Assignment</p>
-                <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.liveAssignmentText}</p>
+                <div className="mt-1">
+                  <AssignmentContent text={session.liveAssignmentText} />
+                </div>
               </section>
             )}
 
