@@ -191,9 +191,18 @@ function buildContext(
   return { context: lines, error: null }
 }
 
-// Rebuilds the same context array from a persisted session — used by
-// every stateless-system-prompt call site (chat, review) after the
-// initial POST /.
+// Rebuilds the context array from a persisted session — used by every
+// stateless-system-prompt call site (chat, review, ai-resistant) after
+// the initial POST /. Deliberately independent of buildContext's
+// mode-based branching (that function only ever knows about the very
+// first request, before any liveAssignmentText exists) — this one always
+// includes the CURRENT assignment text when there is one, regardless of
+// mode. A "create" session's mode never changes after it's created, so
+// gating on mode here previously meant every later chat/review/
+// ai-resistant call for a "create" session only ever saw the original
+// learning objective, never the assignment Coach actually drafted —
+// Coach would correctly say it couldn't see an assignment, because it
+// genuinely wasn't given one.
 function contextFromSession(session: {
   assignmentType: string | null
   typeDetails: unknown
@@ -204,24 +213,27 @@ function contextFromSession(session: {
   liveAssignmentText: string | null
   estimatedTime: string | null
   specificNeeds: string | null
-  mode: string
 }): string[] {
-  const { context } = buildContext(
-    {
-      assignmentType: session.assignmentType,
-      typeDetails: session.typeDetails,
-      gradeLevel: session.gradeLevel,
-      subject: session.subject,
-      objective: session.objective,
-      // Once a live assignment exists, ground the conversation in its
-      // current (possibly edited) text rather than the original.
-      originalText: session.liveAssignmentText ?? session.originalText,
-      estimatedTime: session.estimatedTime,
-      specificNeeds: session.specificNeeds,
-    },
-    session.mode,
-  )
-  return context
+  const typeDetails =
+    session.typeDetails && typeof session.typeDetails === 'object'
+      ? (session.typeDetails as Record<string, string>)
+      : {}
+  const typeDetailLines = Object.entries(typeDetails)
+    .filter(([, v]) => typeof v === 'string' && v.trim())
+    .map(([k, v]) => `${k}: ${v.trim()}`)
+
+  const currentText = session.liveAssignmentText ?? session.originalText
+
+  return [
+    session.assignmentType ? `Assignment type: ${ASSIGNMENT_TYPE_LABELS[session.assignmentType] ?? session.assignmentType}` : null,
+    session.gradeLevel ? `Grade level: ${session.gradeLevel}` : null,
+    session.subject ? `Subject: ${session.subject}` : null,
+    session.estimatedTime ? `Estimated student work time: ${session.estimatedTime}` : null,
+    session.specificNeeds ? `Specific learning needs to keep in mind: ${session.specificNeeds}` : null,
+    ...typeDetailLines,
+    session.objective ? `Learning objective: ${session.objective}` : null,
+    currentText ? `The current assignment:\n${currentText}` : null,
+  ].filter((line): line is string => line != null)
 }
 
 assignmentCoachRouter.get('/', async (req, res) => {

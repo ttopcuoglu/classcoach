@@ -687,6 +687,23 @@ function Workspace({
     if (session.aiResistant?.revisedAssignment) setText(session.aiResistant.revisedAssignment)
   }
 
+  // The home screen's "Make it AI-Resistant" card opens straight into
+  // this tool — run it automatically once, rather than just landing the
+  // teacher on the tab and making them click the button again themselves.
+  const autoAiResistantRef = useRef(false)
+  useEffect(() => {
+    if (
+      initialTool === 'ai_resistant' &&
+      !autoAiResistantRef.current &&
+      !session.aiResistant &&
+      session.liveAssignmentText?.trim()
+    ) {
+      autoAiResistantRef.current = true
+      handleAiResistant()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialTool, session.liveAssignmentText])
+
   async function handleFinalize() {
     if (finalizing) return
     setFinalizing(true)
