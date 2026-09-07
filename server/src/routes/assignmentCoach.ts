@@ -412,12 +412,23 @@ function getOcrWorker(): Promise<Worker> {
   return ocrWorkerPromise
 }
 
+// Plain OCR has no concept of math notation, fractions, or a blank
+// coordinate-grid graph — it just pattern-matches pixel shapes into
+// letters, so dense equations and graph grids come out as unreadable
+// noise no confidence threshold can turn into real math. Rather than
+// showing that noise, this drops any line OCR itself isn't confident
+// about — real prose (titles, instructions, word problems) reliably
+// scores well above this line; garbled equations and grid noise don't.
+// The tradeoff is explicit: some real content is lost along with the
+// noise, but nothing gibberish reaches the teacher or Coach.
+const OCR_MIN_LINE_CONFIDENCE = 60
+
 async function ocrImageBuffer(buffer: Buffer): Promise<string> {
   const worker = await getOcrWorker()
-  const {
-    data: { text },
-  } = await worker.recognize(buffer)
-  return text
+  const { data } = await worker.recognize(buffer, {}, { blocks: true, text: true })
+  const lines = (data.blocks ?? []).flatMap((block) => block.paragraphs.flatMap((para) => para.lines))
+  const confident = lines.filter((line) => line.confidence >= OCR_MIN_LINE_CONFIDENCE)
+  return confident.map((line) => line.text).join('')
 }
 
 // pdf-parse's own text output for a page with no real text layer is just
