@@ -113,7 +113,7 @@ How to close the lesson so it reinforces the objective and sets up next time.
 ${CORE_COACHING_RULES}`
 
 function buildPresentationReviewSystemPrompt(gradeLevel: string | null, subject: string | null): string {
-  return `You are a warm, practical instructional coach for K-12 teachers, reviewing a presentation (slides) the teacher has already built for their class. You are only given the extracted TEXT of each slide — you cannot see images, charts, colors, fonts, or layout. Never claim to have seen or judged an actual visual element; instead, reason about what the text suggests about density, structure, and where a visual would likely help.
+  return `You are a warm, practical instructional coach for K-12 teachers, reviewing a presentation (slides) the teacher has already built for their class. You are only given the extracted TEXT of each slide, plus a flag on any slide that also contains at least one image — you cannot see what that image actually shows (its content, quality, or relevance), only that one is present. Never claim to have seen or judged an actual visual element's content. A slide with no text and no image flag is a genuinely empty slide, not necessarily a mistake — some decks use blank slides as spacers or for a live demo.
 
 ${gradeLevel ? `Grade level: ${gradeLevel}` : 'No grade level was given — infer an appropriate one from the content and vocabulary, and say so.'}
 ${subject ? `Subject: ${subject}` : ''}
@@ -122,10 +122,10 @@ Write in plain text only — no markdown (no **bold**, no # headings).
 
 Respond with exactly these five sections and nothing outside them:
 <grade_level_fit>
-Is the vocabulary, complexity, and pacing appropriate for this grade level? Call out anything too advanced or too simple, grounded in the actual slide text.
+Is the vocabulary, complexity, and pacing appropriate for this grade level? Call out anything too advanced or too simple, grounded in the actual slide text. If there's too little text to judge this reliably (a mostly image-based deck), say so plainly instead of guessing.
 </grade_level_fit>
 <visuals>
-Given you can only see text, suggest specific slides (by number) that are dense or abstract enough to benefit from a diagram, image, chart, or example — and note any slide that already reads as appropriately visual/sparse. Never claim to critique actual images.
+Use the per-slide image flag: never suggest adding a visual to a slide already flagged as containing one — instead, if it's a slide where that content is doing heavy lifting (e.g. explaining a dense concept), note that it's worth double-checking the image actually shows what's needed. For slides with dense or abstract text and NO image flag, suggest a specific diagram, image, chart, or example. Note any slide that already reads as appropriately sparse/visual on its own.
 </visuals>
 <ideas>
 Is the content clear, logically sequenced, and complete? Flag any gap, ambiguous slide, or place where a student would likely get lost.
@@ -156,7 +156,9 @@ function decodeXmlEntities(value: string): string {
 // Pulls the visible text runs (<a:t>...</a:t>) out of each slide's raw XML,
 // in slide order — a .pptx is just a zip of XML parts, so this needs no
 // heavier office-document library, only a zip reader.
-async function extractPptxSlides(buffer: Buffer): Promise<string[]> {
+type ExtractedSlide = { text: string; hasImage: boolean }
+
+async function extractPptxSlides(buffer: Buffer): Promise<ExtractedSlide[]> {
   const zip = await JSZip.loadAsync(buffer)
   const slideFiles = Object.keys(zip.files)
     .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
@@ -166,11 +168,14 @@ async function extractPptxSlides(buffer: Buffer): Promise<string[]> {
       return numA - numB
     })
 
-  const slides: string[] = []
+  const slides: ExtractedSlide[] = []
   for (const name of slideFiles) {
     const xml = await zip.files[name].async('string')
     const runs = Array.from(xml.matchAll(/<a:t>([^<]*)<\/a:t>/g)).map((m) => decodeXmlEntities(m[1]))
-    slides.push(runs.join(' ').trim())
+    // <p:pic> is the Picture-shape element PowerPoint writes for any
+    // inserted image — presence alone tells us a slide has visual content
+    // this text-only extraction otherwise has no way to know about.
+    slides.push({ text: runs.join(' ').trim(), hasImage: xml.includes('<p:pic>') })
   }
   return slides
 }
@@ -180,18 +185,32 @@ async function extractPptxSlides(buffer: Buffer): Promise<string[]> {
 // slide — no OCR: an exported deck's text layer is real vector text, never
 // a scanned image, unlike the scanned-worksheet case Assignment Coach's
 // uploader has to handle.
-async function extractPdfSlides(buffer: Buffer): Promise<string[]> {
+async function extractPdfSlides(buffer: Buffer): Promise<ExtractedSlide[]> {
   const parser = new PDFParse({ data: buffer })
   try {
-    const result = await parser.getText()
-    return result.pages.map((page) => page.text.trim())
+    const [textResult, imageResult] = await Promise.all([
+      parser.getText(),
+      // Counts only — skip the actual pixel data, we only need to know a
+      // page has at least one non-decorative (>80px) embedded image.
+      parser.getImage({ imageDataUrl: false, imageBuffer: false }),
+    ])
+    const imageCountByPage = new Map(imageResult.pages.map((p) => [p.pageNumber, p.images.length]))
+    return textResult.pages.map((page) => ({
+      text: page.text.trim(),
+      hasImage: (imageCountByPage.get(page.num) ?? 0) > 0,
+    }))
   } finally {
     await parser.destroy()
   }
 }
 
-function formatSlidesAsText(slides: string[]): string {
-  return slides.map((text, i) => `Slide ${i + 1}:\n${text || '(no text on this slide)'}`).join('\n\n')
+function formatSlidesAsText(slides: ExtractedSlide[]): string {
+  return slides
+    .map(({ text, hasImage }, i) => {
+      const imageNote = hasImage ? ' [This slide also contains at least one image — its visual content is not visible to you.]' : ''
+      return `Slide ${i + 1}:${imageNote}\n${text || '(no text detected on this slide)'}`
+    })
+    .join('\n\n')
 }
 
 lessonPlansRouter.post('/extract-presentation', presentationUpload.single('file'), async (req, res) => {
@@ -201,7 +220,7 @@ lessonPlansRouter.post('/extract-presentation', presentationUpload.single('file'
   }
   const name = req.file.originalname.toLowerCase()
   try {
-    let slides: string[]
+    let slides: ExtractedSlide[]
     if (name.endsWith('.pptx')) {
       slides = await extractPptxSlides(req.file.buffer)
     } else if (name.endsWith('.pdf')) {
@@ -210,8 +229,8 @@ lessonPlansRouter.post('/extract-presentation', presentationUpload.single('file'
       res.status(400).json({ error: 'Please upload a .pptx or .pdf file (export your presentation as PDF if needed).' })
       return
     }
-    if (slides.length === 0 || !slides.some((s) => s.trim())) {
-      res.status(422).json({ error: "Couldn't find any text in that file. If your slides are mostly images, this won't pick up their content." })
+    if (slides.length === 0 || !slides.some((s) => s.text.trim() || s.hasImage)) {
+      res.status(422).json({ error: "Couldn't find any text or images in that file. Please try a different export." })
       return
     }
     res.json({ text: formatSlidesAsText(slides), slideCount: slides.length, fileName: req.file.originalname })
