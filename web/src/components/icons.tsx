@@ -314,3 +314,44 @@ export function UploadIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function CheckCircleIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <circle cx="12" cy="12" r="8" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="m8.5 12.2 2.2 2.2 4.8-4.8" />
+    </svg>
+  )
+}
+
+export function RobotIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <rect x="5" y="9" width="14" height="10" rx="2.5" />
+      <path strokeLinecap="round" d="M12 9V6" />
+      <circle cx="12" cy="4.5" r="1.25" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="14" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="14" r="1.1" fill="currentColor" stroke="none" />
+      <path strokeLinecap="round" d="M9.5 17.2h5M2.5 12.5v3M21.5 12.5v3" />
+    </svg>
+  )
+}
+
+export function ClockIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <circle cx="12" cy="12" r="8" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4.5l3 1.8" />
+    </svg>
+  )
+}
+
+export function GraduationCapIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.5 9 12 5l9.5 4-9.5 4-9.5-4Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.5 11v4c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5v-4" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21.5 9v5.5" />
+    </svg>
+  )
+}

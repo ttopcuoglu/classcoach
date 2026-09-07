@@ -2,7 +2,20 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AssignmentContent } from '../components/AssignmentDiagram'
 import CoachingChat from '../components/CoachingChat'
-import { BrainIcon, ChecklistIcon, ClipboardIcon, KebabIcon, StarIcon, UploadIcon } from '../components/icons'
+import {
+  BrainIcon,
+  ChatBubbleIcon,
+  CheckCircleIcon,
+  ChecklistIcon,
+  ClipboardIcon,
+  ClockIcon,
+  GraduationCapIcon,
+  KebabIcon,
+  RobotIcon,
+  StarIcon,
+  TargetIcon,
+  UploadIcon,
+} from '../components/icons'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import { ASSIGNMENT_GRADE_LEVELS } from '../lib/assignmentGradeLevels'
 import { ASSIGNMENT_SUBJECTS, ASSIGNMENT_TYPES, assignmentTypeLabel, ESTIMATED_TIME_OPTIONS } from '../lib/assignmentTypes'
@@ -21,7 +34,6 @@ import {
   type AssignmentClarifyingQuestion,
   type AssignmentCoachMode,
   type AssignmentCoachSession,
-  type AssignmentReviewSnapshot,
   type AssignmentType,
 } from '../lib/api'
 
@@ -71,19 +83,7 @@ type Tone = 'good' | 'warn' | 'concern' | 'neutral'
 
 // Restrained status colors, no numeric scores anywhere: soft green for
 // aligned, soft gold for worth reviewing, soft terracotta for a genuine
-// concern, neutral cream for informational/not-yet-determined.
-function toneStyles(tone: Tone): { badge: string; text: string; glyph: string } {
-  switch (tone) {
-    case 'good':
-      return { badge: 'bg-mint-tint', text: 'text-forest', glyph: '✓' }
-    case 'warn':
-      return { badge: 'bg-gold-tint', text: 'text-terracotta-600', glyph: '◇' }
-    case 'concern':
-      return { badge: 'bg-peach-tint', text: 'text-terracotta-600', glyph: '!' }
-    default:
-      return { badge: 'bg-cream', text: 'text-ink-soft', glyph: '·' }
-  }
-}
+// concern, neutral for informational/not-yet-determined.
 function gradeFitTone(rating: string | null): Tone {
   return rating === 'appropriate' ? 'good' : 'neutral'
 }
@@ -528,9 +528,28 @@ function AddAssignmentScreen({
   )
 }
 
-function ReviewCard({
-  title,
+// Dark, "focused coaching workspace" treatment for the Review snapshot
+// specifically — a deliberate departure from the rest of the app's cream
+// theme, scoped to this one panel (per the reference design). Colors are
+// hand-picked dark tints of the same brand hues (forest/terracotta/gold)
+// rather than a generic dark palette, so it still reads as Wivoza.
+function darkToneStyles(tone: Tone): { badge: string } {
+  switch (tone) {
+    case 'good':
+      return { badge: 'bg-[#1f2e26] text-[#7fbf99]' }
+    case 'warn':
+      return { badge: 'bg-[#2e2a1a] text-[#e4b84a]' }
+    case 'concern':
+      return { badge: 'bg-[#332019] text-[#d98262]' }
+    default:
+      return { badge: 'bg-white/5 text-[#c7cfc7]' }
+  }
+}
+
+function DarkReviewCard({
+  icon,
   tone,
+  label,
   statusLabel,
   explanation,
   detail,
@@ -539,47 +558,55 @@ function ReviewCard({
   onAction,
   disabled,
 }: {
-  title: string
+  icon: React.ReactNode
   tone: Tone
+  label: string
   statusLabel: string
   explanation: string | null
   detail?: string | null
   note?: string | null
-  actionLabel?: string
+  actionLabel: string
   onAction?: () => void
   disabled?: boolean
 }) {
-  const t = toneStyles(tone)
+  const t = darkToneStyles(tone)
   return (
-    <div className="flex flex-col rounded-2xl border border-hairline bg-cream-card p-4">
-      <div className="flex items-center gap-2">
-        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${t.badge} ${t.text}`}>
-          {t.glyph}
-        </span>
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-soft">{title}</p>
-          <p className={`text-sm font-semibold ${t.text}`}>{statusLabel}</p>
+    <div className="rounded-2xl border border-white/10 bg-[#1a231d] p-5">
+      <div className="flex items-start gap-3">
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${t.badge}`}>{icon}</span>
+        <div className="min-w-0 flex-1 pt-0.5">
+          <p className="text-xs text-[#8fa196]">{label}</p>
+          <p className="text-base font-semibold text-[#f7f3ea]">{statusLabel}</p>
         </div>
       </div>
-      {explanation && <p className="mt-2 line-clamp-3 text-sm text-ink">{explanation}</p>}
-      {detail && <p className="mt-1 whitespace-pre-wrap text-xs text-ink-soft">{detail}</p>}
-      {note && <p className="mt-1 text-xs italic text-terracotta-600">{note}</p>}
+      {explanation && <p className="mt-3 text-sm leading-relaxed text-[#c7cfc7]">{explanation}</p>}
+      {detail && <p className="mt-2 whitespace-pre-wrap text-xs text-[#8fa196]">{detail}</p>}
+      {note && <p className="mt-2 text-xs italic text-[#d98262]">{note}</p>}
       {onAction && (
         <button
           type="button"
           onClick={onAction}
           disabled={disabled}
-          className="mt-2 self-start text-xs font-semibold text-ink-soft hover:text-forest disabled:opacity-50"
+          className="mt-3 text-xs font-semibold text-[#c7cfc7] hover:text-[#f7f3ea] disabled:opacity-50"
         >
-          {actionLabel ?? 'Improve this'}
+          {actionLabel} →
         </button>
       )}
     </div>
   )
 }
 
-function ReviewDashboard({
-  snapshot,
+function ReviewSnapshotPanel({
+  session,
+  onExit,
+  onExport,
+  onDiscuss,
+  onSaveDetails,
+  onAnswerClarifying,
+  onSkipClarifying,
+  clarifyingDismissed,
+  refining,
+  refineError,
   chatSending,
   onAction,
   onRevise,
@@ -587,7 +614,16 @@ function ReviewDashboard({
   reviseError,
   conversationEmpty,
 }: {
-  snapshot: AssignmentReviewSnapshot
+  session: AssignmentCoachSession
+  onExit: () => void
+  onExport: () => void
+  onDiscuss: () => void
+  onSaveDetails: (fields: { assignmentType?: AssignmentType; gradeLevel?: string; subject?: string; estimatedTime?: string }) => Promise<void>
+  onAnswerClarifying: (answer: string) => void
+  onSkipClarifying: () => void
+  clarifyingDismissed: boolean
+  refining: boolean
+  refineError: string | null
   chatSending: boolean
   onAction: (message: string) => void
   onRevise: () => void
@@ -595,41 +631,209 @@ function ReviewDashboard({
   reviseError: string | null
   conversationEmpty: boolean
 }) {
+  const snapshot = session.reviewSnapshot!
   const [showAll, setShowAll] = useState(false)
+  const [editingDetails, setEditingDetails] = useState(false)
+  const [assignmentType, setAssignmentType] = useState<AssignmentType | ''>(session.assignmentType ?? '')
+  const [gradeLevel, setGradeLevel] = useState(session.gradeLevel ?? '')
+  const [subject, setSubject] = useState(session.subject ?? '')
+  const [estimatedTime, setEstimatedTime] = useState(session.estimatedTime ?? '')
+  const [savingDetails, setSavingDetails] = useState(false)
+
   const hasOpportunity = Boolean(snapshot.mainOpportunity.title || snapshot.mainOpportunity.description)
+  const darkSelect =
+    'rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 text-xs text-[#f7f3ea] focus:border-[#c96a45]/50 focus:outline-none [&>option]:bg-[#1a231d]'
+
+  async function handleSaveDetails() {
+    setSavingDetails(true)
+    try {
+      await onSaveDetails({
+        assignmentType: assignmentType || undefined,
+        gradeLevel: gradeLevel || undefined,
+        subject: subject || undefined,
+        estimatedTime: estimatedTime || undefined,
+      })
+      setEditingDetails(false)
+    } finally {
+      setSavingDetails(false)
+    }
+  }
 
   return (
-    <div className="flex flex-col gap-3">
-      {hasOpportunity && (
-        <div className="rounded-2xl border border-forest/30 bg-mint-tint p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-forest">Most important opportunity</p>
-          {snapshot.mainOpportunity.title && <p className="mt-1 text-sm font-semibold text-forest">{snapshot.mainOpportunity.title}</p>}
-          {snapshot.mainOpportunity.description && <p className="mt-1 text-sm text-ink">{snapshot.mainOpportunity.description}</p>}
-          <div className="mt-3 flex flex-wrap items-center gap-3">
+    <div className="rounded-3xl bg-[#11150f] p-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={onExit}
+            className="rounded-full px-3.5 py-1.5 text-xs font-semibold text-[#9aa79f] hover:bg-white/5 hover:text-[#f7f3ea]"
+          >
+            Add assignment
+          </button>
+          <span className="rounded-full bg-white/10 px-3.5 py-1.5 text-xs font-semibold text-[#f7f3ea]">Review snapshot</span>
+        </div>
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={onExport}
+            className="rounded-full border border-white/15 px-3.5 py-1.5 text-xs font-semibold text-[#e7ece7] hover:bg-white/5"
+          >
+            Export
+          </button>
+          <button
+            type="button"
+            onClick={onDiscuss}
+            className="flex items-center gap-1.5 rounded-full border border-white/15 px-3.5 py-1.5 text-xs font-semibold text-[#e7ece7] hover:bg-white/5"
+          >
+            <ChatBubbleIcon className="h-3.5 w-3.5" />
+            Discuss with Coach
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[#c96a45]">Assignment review</p>
+        <h1 className="mt-1 font-heading text-2xl font-bold text-[#f7f3ea] sm:text-3xl">
+          {session.title || assignmentTypeLabel(session.assignmentType)}
+        </h1>
+        <p className="mt-1 text-sm text-[#9aa79f]">A concise review of what students are being asked to do and think.</p>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <span className="text-xs text-[#9aa79f]">Wivoza detected</span>
+        {session.gradeLevel && (
+          <span className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-[#e7ece7]">
+            <GraduationCapIcon className="h-3.5 w-3.5" />
+            Likely {session.gradeLevel}
+          </span>
+        )}
+        {session.subject && (
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-[#e7ece7]">{session.subject}</span>
+        )}
+        {session.assignmentType && (
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-[#e7ece7]">
+            {assignmentTypeLabel(session.assignmentType)}
+          </span>
+        )}
+        {session.estimatedTime && (
+          <span className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-[#e7ece7]">
+            <ClockIcon className="h-3.5 w-3.5" />
+            {session.estimatedTime}
+          </span>
+        )}
+        <button type="button" onClick={() => setEditingDetails((v) => !v)} className="text-xs font-semibold text-[#e7ece7] hover:opacity-80">
+          Edit details
+        </button>
+      </div>
+
+      {editingDetails && (
+        <div className="mt-2 rounded-xl border border-white/10 bg-white/5 p-3">
+          <div className="grid gap-2 sm:grid-cols-4">
+            <select value={gradeLevel} onChange={(e) => setGradeLevel(e.target.value)} className={darkSelect}>
+              <option value="">Grade level</option>
+              {ASSIGNMENT_GRADE_LEVELS.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
+            <select value={subject} onChange={(e) => setSubject(e.target.value)} className={darkSelect}>
+              <option value="">Subject</option>
+              {ASSIGNMENT_SUBJECTS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <select value={assignmentType} onChange={(e) => setAssignmentType(e.target.value as AssignmentType)} className={darkSelect}>
+              <option value="">Assignment type</option>
+              {ASSIGNMENT_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+            <select value={estimatedTime} onChange={(e) => setEstimatedTime(e.target.value)} className={darkSelect}>
+              <option value="">Estimated time</option>
+              {ESTIMATED_TIME_OPTIONS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="mt-2 flex justify-end gap-2">
+            <button type="button" onClick={() => setEditingDetails(false)} className="text-xs font-semibold text-[#9aa79f] hover:text-[#f7f3ea]">
+              Cancel
+            </button>
             <button
               type="button"
-              onClick={() => onAction(`Let's work on this: ${snapshot.mainOpportunity.title ?? 'the main opportunity'}.`)}
-              disabled={chatSending}
-              className="rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+              onClick={handleSaveDetails}
+              disabled={savingDetails}
+              className="rounded-lg bg-[#f7f3ea] px-3 py-1.5 text-xs font-semibold text-[#11150f] hover:opacity-90 disabled:opacity-50"
             >
-              Improve this with Coach
-            </button>
-            <button type="button" onClick={() => setShowAll((v) => !v)} className="text-xs font-semibold text-forest hover:opacity-80">
-              {showAll ? 'Hide recommendations' : 'See all recommendations'}
+              {savingDetails ? 'Saving...' : 'Save'}
             </button>
           </div>
         </div>
       )}
 
+      {session.clarifyingQuestion && !clarifyingDismissed && (
+        <div className="mt-4 rounded-2xl border border-[#c96a45]/30 bg-[#2a1c15] p-4">
+          <p className="text-sm font-semibold text-[#f7f3ea]">{session.clarifyingQuestion.question}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {session.clarifyingQuestion.options.map((o) => (
+              <button
+                key={o}
+                type="button"
+                onClick={() => onAnswerClarifying(o)}
+                disabled={refining}
+                className="rounded-full border border-[#c96a45]/40 bg-white/5 px-3 py-1.5 text-xs font-semibold text-[#e2986f] hover:bg-white/10 disabled:opacity-50"
+              >
+                {o}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={onSkipClarifying}
+              disabled={refining}
+              className="rounded-full px-3 py-1.5 text-xs font-medium text-[#9aa79f] hover:text-[#f7f3ea] disabled:opacity-50"
+            >
+              Skip
+            </button>
+          </div>
+        </div>
+      )}
+      {refineError && <p className="mt-2 text-sm text-[#d98262]">{refineError}</p>}
+
+      {hasOpportunity && (
+        <div className="mt-6 rounded-2xl bg-[#dce7df] p-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#3f5a4c]">Most important opportunity</p>
+          {snapshot.mainOpportunity.title && <p className="mt-2 text-xl font-bold text-[#1b2e28]">{snapshot.mainOpportunity.title}</p>}
+          {snapshot.mainOpportunity.description && <p className="mt-1 text-sm text-[#33473c]">{snapshot.mainOpportunity.description}</p>}
+          <button
+            type="button"
+            onClick={() => onAction(`Let's work on this: ${snapshot.mainOpportunity.title ?? 'the main opportunity'}.`)}
+            disabled={chatSending}
+            className="mt-4 w-full rounded-xl bg-[#11150f] py-3 text-sm font-semibold text-[#f7f3ea] transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            Improve with Coach
+          </button>
+          <button type="button" onClick={() => setShowAll((v) => !v)} className="mt-2 text-xs font-semibold text-[#1b2e28] hover:opacity-80">
+            {showAll ? 'Hide recommendations' : 'See all recommendations'}
+          </button>
+        </div>
+      )}
+
       {showAll && (
-        <div className="flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
           {REVIEW_QUICK_ACTIONS.map((a) => (
             <button
               key={a.label}
               type="button"
               onClick={() => onAction(a.message)}
               disabled={chatSending}
-              className="rounded-full border border-hairline bg-cream-card px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-50"
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-[#c7cfc7] transition-colors hover:border-[#c96a45]/40 hover:text-[#e2986f] disabled:opacity-50"
             >
               {a.label}
             </button>
@@ -637,47 +841,55 @@ function ReviewDashboard({
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <ReviewCard
-          title="Grade-Level Fit"
+      <div className="mt-4 flex flex-col gap-3">
+        <DarkReviewCard
+          icon={<CheckCircleIcon className="h-5 w-5" />}
           tone={gradeFitTone(snapshot.gradeFit.rating)}
+          label="Grade-level fit"
           statusLabel={GRADE_FIT_LABELS[snapshot.gradeFit.rating ?? ''] ?? 'Not enough evidence yet'}
           explanation={snapshot.gradeFit.explanation}
+          actionLabel="See evidence"
           onAction={() => onAction("Let's talk about whether this fits the intended grade level.")}
           disabled={chatSending}
         />
-        <ReviewCard
-          title="Thinking & Rigor"
-          tone="neutral"
+        <DarkReviewCard
+          icon={<BrainIcon className="h-5 w-5" />}
+          tone="warn"
+          label="Thinking and rigor"
           statusLabel={snapshot.rigor.label ?? 'Not enough evidence yet'}
           explanation={snapshot.rigor.explanation}
+          actionLabel="Strengthen thinking"
           onAction={() => onAction("Let's strengthen the rigor of this assignment.")}
           disabled={chatSending}
         />
-        <ReviewCard
-          title="Meaningful Work"
+        <DarkReviewCard
+          icon={<TargetIcon className="h-5 w-5" />}
           tone={meaningfulWorkTone(snapshot.meaningfulWork.rating)}
+          label="Meaningful work"
           statusLabel={MEANINGFUL_WORK_LABELS[snapshot.meaningfulWork.rating ?? ''] ?? 'Not enough evidence yet'}
           explanation={snapshot.meaningfulWork.explanation}
           note={snapshot.meaningfulWork.suggestion}
+          actionLabel="Remove low-value work"
           onAction={() => onAction("Let's remove any low-value or busywork steps.")}
           disabled={chatSending}
         />
-        <ReviewCard
-          title="AI Completion Risk"
+        <DarkReviewCard
+          icon={<RobotIcon className="h-5 w-5" />}
           tone={aiRiskTone(snapshot.aiRisk.rating)}
+          label="AI completion risk"
           statusLabel={AI_RISK_LABELS[snapshot.aiRisk.rating ?? ''] ?? 'Not enough evidence yet'}
           explanation={snapshot.aiRisk.explanation}
           detail={snapshot.aiRisk.reasons}
+          actionLabel="Make it AI-resilient"
           onAction={() => onAction("Let's make student thinking more visible so this is harder to fully outsource to AI.")}
           disabled={chatSending}
         />
       </div>
 
       {snapshot.workloadSummary && (
-        <div className="rounded-2xl border border-hairline bg-cream-card p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-soft">Workload &amp; clarity</p>
-          <p className="mt-1 text-sm text-ink">{snapshot.workloadSummary}</p>
+        <div className="mt-3 rounded-2xl border border-white/10 bg-[#1a231d] p-5">
+          <p className="text-xs text-[#8fa196]">Workload &amp; clarity</p>
+          <p className="mt-1 text-sm text-[#c7cfc7]">{snapshot.workloadSummary}</p>
         </div>
       )}
 
@@ -685,11 +897,11 @@ function ReviewDashboard({
         type="button"
         onClick={onRevise}
         disabled={revising || conversationEmpty}
-        className="self-start rounded-xl border border-forest/40 bg-mint-tint px-4 py-2 text-xs font-semibold text-forest transition-colors hover:bg-mint-tint/70 disabled:opacity-50"
+        className="mt-4 self-start rounded-xl border border-white/15 px-4 py-2 text-xs font-semibold text-[#e7ece7] hover:bg-white/5 disabled:opacity-50"
       >
         {revising ? 'Revising...' : 'Revise the whole assignment'}
       </button>
-      {reviseError && <p className="text-sm text-terracotta-600">{reviseError}</p>}
+      {reviseError && <p className="mt-2 text-sm text-[#d98262]">{reviseError}</p>}
     </div>
   )
 }
@@ -1045,13 +1257,15 @@ function Workspace({
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {chips.map((chip) => (
-          <span key={chip} className="rounded-full border border-hairline bg-cream-card px-2.5 py-1 text-xs font-semibold text-forest">
-            {chip}
-          </span>
-        ))}
-      </div>
+      {!(!isRedesign && session.reviewSnapshot) && (
+        <div className="flex flex-wrap gap-2">
+          {chips.map((chip) => (
+            <span key={chip} className="rounded-full border border-hairline bg-cream-card px-2.5 py-1 text-xs font-semibold text-forest">
+              {chip}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Mobile tab switcher — Coach and Assignment are separate tabs
           instead of squeezing a split screen into a narrow viewport. */}
@@ -1066,77 +1280,88 @@ function Workspace({
 
       <div className="flex flex-1 flex-col gap-4 lg:flex-row lg:items-start">
         <div className={`flex min-w-0 flex-1 flex-col gap-4 lg:flex ${mobilePane === 'coach' ? '' : 'hidden lg:flex'}`}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="font-heading text-sm font-semibold text-forest">
-              {isRedesign ? 'Redesign for meaningful AI use' : 'Review'}
-            </h2>
-            <button
-              type="button"
-              onClick={() => navigate(`/assignment-coach/${session.id}/export`)}
-              className="rounded-full border border-hairline bg-cream-card px-3 py-1.5 text-xs font-semibold text-ink-soft hover:text-forest"
-            >
-              Export
-            </button>
-          </div>
-
-          <DetectedContextBar session={session} onSave={handleSaveDetails} />
-
-          {session.clarifyingQuestion && !clarifyingDismissed && (
-            <ClarifyingBanner
-              question={session.clarifyingQuestion}
-              onAnswer={handleRefine}
-              onSkip={() => setClarifyingDismissed(true)}
-              answering={refining}
-            />
-          )}
-          {refineError && <p className="text-sm text-terracotta-600">{refineError}</p>}
-
           {isRedesign ? (
-            <div className="flex flex-col gap-3">
-              <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-                {session.aiResistant?.strategies && (
-                  <div className="mb-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-forest">Strategies</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.aiResistant.strategies}</p>
-                  </div>
-                )}
-                {session.aiResistant?.guidelines && (
-                  <div className="mb-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Student AI guidelines</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.aiResistant.guidelines}</p>
-                  </div>
-                )}
-                {session.aiResistant?.revisedAssignment && (
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Revised assignment (preview)</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.aiResistant.revisedAssignment}</p>
-                  </div>
-                )}
-                <div className="mt-4 flex flex-wrap items-center gap-3">
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="font-heading text-sm font-semibold text-forest">Redesign for meaningful AI use</h2>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/assignment-coach/${session.id}/export`)}
+                  className="rounded-full border border-hairline bg-cream-card px-3 py-1.5 text-xs font-semibold text-ink-soft hover:text-forest"
+                >
+                  Export
+                </button>
+              </div>
+
+              <DetectedContextBar session={session} onSave={handleSaveDetails} />
+
+              {session.clarifyingQuestion && !clarifyingDismissed && (
+                <ClarifyingBanner
+                  question={session.clarifyingQuestion}
+                  onAnswer={handleRefine}
+                  onSkip={() => setClarifyingDismissed(true)}
+                  answering={refining}
+                />
+              )}
+              {refineError && <p className="text-sm text-terracotta-600">{refineError}</p>}
+
+              <div className="flex flex-col gap-3">
+                <div className="rounded-2xl border border-hairline bg-cream-card p-5">
+                  {session.aiResistant?.strategies && (
+                    <div className="mb-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-forest">Strategies</p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.aiResistant.strategies}</p>
+                    </div>
+                  )}
+                  {session.aiResistant?.guidelines && (
+                    <div className="mb-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Student AI guidelines</p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.aiResistant.guidelines}</p>
+                    </div>
+                  )}
                   {session.aiResistant?.revisedAssignment && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Revised assignment (preview)</p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.aiResistant.revisedAssignment}</p>
+                    </div>
+                  )}
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    {session.aiResistant?.revisedAssignment && (
+                      <button
+                        type="button"
+                        onClick={handleApplyAiResistant}
+                        className="rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-cream transition-opacity hover:opacity-90"
+                      >
+                        Apply to assignment
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={handleApplyAiResistant}
-                      className="rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-cream transition-opacity hover:opacity-90"
+                      onClick={handleAiResistant}
+                      disabled={aiResisting || !text.trim()}
+                      className="text-xs font-semibold text-ink-soft hover:text-forest disabled:opacity-50"
                     >
-                      Apply to assignment
+                      {aiResisting ? 'Regenerating...' : 'Regenerate ↻'}
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleAiResistant}
-                    disabled={aiResisting || !text.trim()}
-                    className="text-xs font-semibold text-ink-soft hover:text-forest disabled:opacity-50"
-                  >
-                    {aiResisting ? 'Regenerating...' : 'Regenerate ↻'}
-                  </button>
+                  </div>
                 </div>
+                {aiResistError && <p className="text-sm text-terracotta-600">{aiResistError}</p>}
               </div>
-              {aiResistError && <p className="text-sm text-terracotta-600">{aiResistError}</p>}
-            </div>
+            </>
           ) : session.reviewSnapshot ? (
-            <ReviewDashboard
-              snapshot={session.reviewSnapshot}
+            <ReviewSnapshotPanel
+              session={session}
+              onExit={onExit}
+              onExport={() => navigate(`/assignment-coach/${session.id}/export`)}
+              onDiscuss={() =>
+                document.getElementById('assignment-coach-chat')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }
+              onSaveDetails={handleSaveDetails}
+              onAnswerClarifying={handleRefine}
+              onSkipClarifying={() => setClarifyingDismissed(true)}
+              clarifyingDismissed={clarifyingDismissed}
+              refining={refining}
+              refineError={refineError}
               chatSending={chatSending}
               onAction={handleAreaPill}
               onRevise={handleRevise}
@@ -1145,86 +1370,113 @@ function Workspace({
               conversationEmpty={session.conversation.length === 0}
             />
           ) : (
-            <div className="flex flex-col gap-3">
-              {!session.reviewSummary ? (
-                <div className="rounded-2xl border border-hairline bg-cream-card p-5 text-center">
-                  <p className="text-sm text-ink-soft">Get a concise coaching review of the assignment as it stands.</p>
-                  <button
-                    type="button"
-                    onClick={handleReview}
-                    disabled={reviewing || !text.trim()}
-                    className="mt-3 rounded-xl bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
-                  >
-                    {reviewing ? 'Reviewing...' : 'Get a coaching review'}
-                  </button>
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-                  {session.reviewSummary.working && (
-                    <div className="mb-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-forest">What's already working</p>
-                      <p className="mt-1 text-sm text-ink">{session.reviewSummary.working}</p>
-                    </div>
-                  )}
-                  {session.reviewSummary.needsAttention && (
-                    <div className="mb-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">What may need attention</p>
-                      <p className="mt-1 text-sm text-ink">{session.reviewSummary.needsAttention}</p>
-                    </div>
-                  )}
-                  {session.reviewSummary.suggestions && (
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Suggested improvements</p>
-                      <p className="mt-1 text-sm text-ink">{session.reviewSummary.suggestions}</p>
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleReview}
-                    disabled={reviewing}
-                    className="mt-4 text-xs font-semibold text-ink-soft hover:text-forest disabled:opacity-50"
-                  >
-                    {reviewing ? 'Refreshing...' : 'Refresh review ↻'}
-                  </button>
-                </div>
-              )}
-              {reviewError && <p className="text-sm text-terracotta-600">{reviewError}</p>}
-
-              <div className="flex flex-wrap gap-2">
-                {REVIEW_QUICK_ACTIONS.map((d) => (
-                  <button
-                    key={d.label}
-                    type="button"
-                    onClick={() => handleAreaPill(d.message)}
-                    disabled={chatSending}
-                    className="rounded-full border border-hairline bg-cream-card px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-50"
-                  >
-                    {d.label}
-                  </button>
-                ))}
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="font-heading text-sm font-semibold text-forest">Review</h2>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/assignment-coach/${session.id}/export`)}
+                  className="rounded-full border border-hairline bg-cream-card px-3 py-1.5 text-xs font-semibold text-ink-soft hover:text-forest"
+                >
+                  Export
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={handleRevise}
-                disabled={revising || session.conversation.length === 0}
-                className="self-start rounded-xl border border-forest/40 bg-mint-tint px-4 py-2 text-xs font-semibold text-forest transition-colors hover:bg-mint-tint/70 disabled:opacity-50"
-              >
-                {revising ? 'Revising...' : 'Revise the whole assignment'}
-              </button>
-              {reviseError && <p className="text-sm text-terracotta-600">{reviseError}</p>}
-            </div>
+              <DetectedContextBar session={session} onSave={handleSaveDetails} />
+
+              {session.clarifyingQuestion && !clarifyingDismissed && (
+                <ClarifyingBanner
+                  question={session.clarifyingQuestion}
+                  onAnswer={handleRefine}
+                  onSkip={() => setClarifyingDismissed(true)}
+                  answering={refining}
+                />
+              )}
+              {refineError && <p className="text-sm text-terracotta-600">{refineError}</p>}
+
+              <div className="flex flex-col gap-3">
+                {!session.reviewSummary ? (
+                  <div className="rounded-2xl border border-hairline bg-cream-card p-5 text-center">
+                    <p className="text-sm text-ink-soft">Get a concise coaching review of the assignment as it stands.</p>
+                    <button
+                      type="button"
+                      onClick={handleReview}
+                      disabled={reviewing || !text.trim()}
+                      className="mt-3 rounded-xl bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+                    >
+                      {reviewing ? 'Reviewing...' : 'Get a coaching review'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-hairline bg-cream-card p-5">
+                    {session.reviewSummary.working && (
+                      <div className="mb-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-forest">What's already working</p>
+                        <p className="mt-1 text-sm text-ink">{session.reviewSummary.working}</p>
+                      </div>
+                    )}
+                    {session.reviewSummary.needsAttention && (
+                      <div className="mb-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">What may need attention</p>
+                        <p className="mt-1 text-sm text-ink">{session.reviewSummary.needsAttention}</p>
+                      </div>
+                    )}
+                    {session.reviewSummary.suggestions && (
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Suggested improvements</p>
+                        <p className="mt-1 text-sm text-ink">{session.reviewSummary.suggestions}</p>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleReview}
+                      disabled={reviewing}
+                      className="mt-4 text-xs font-semibold text-ink-soft hover:text-forest disabled:opacity-50"
+                    >
+                      {reviewing ? 'Refreshing...' : 'Refresh review ↻'}
+                    </button>
+                  </div>
+                )}
+                {reviewError && <p className="text-sm text-terracotta-600">{reviewError}</p>}
+
+                <div className="flex flex-wrap gap-2">
+                  {REVIEW_QUICK_ACTIONS.map((d) => (
+                    <button
+                      key={d.label}
+                      type="button"
+                      onClick={() => handleAreaPill(d.message)}
+                      disabled={chatSending}
+                      className="rounded-full border border-hairline bg-cream-card px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-50"
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleRevise}
+                  disabled={revising || session.conversation.length === 0}
+                  className="self-start rounded-xl border border-forest/40 bg-mint-tint px-4 py-2 text-xs font-semibold text-forest transition-colors hover:bg-mint-tint/70 disabled:opacity-50"
+                >
+                  {revising ? 'Revising...' : 'Revise the whole assignment'}
+                </button>
+                {reviseError && <p className="text-sm text-terracotta-600">{reviseError}</p>}
+              </div>
+            </>
           )}
 
-          <CoachingChat
-            messages={session.conversation}
-            sending={chatSending}
-            error={chatError}
-            draft={chatDraft}
-            onDraftChange={setChatDraft}
-            onSend={handleSendChat}
-            placeholder="Discuss this with your coach..."
-          />
+          <div id="assignment-coach-chat">
+            <CoachingChat
+              messages={session.conversation}
+              sending={chatSending}
+              error={chatError}
+              draft={chatDraft}
+              onDraftChange={setChatDraft}
+              onSend={handleSendChat}
+              placeholder="Discuss this with your coach..."
+            />
+          </div>
         </div>
 
         <div
