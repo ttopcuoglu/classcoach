@@ -188,13 +188,21 @@ async function extractPptxSlides(buffer: Buffer): Promise<ExtractedSlide[]> {
 async function extractPdfSlides(buffer: Buffer): Promise<ExtractedSlide[]> {
   const parser = new PDFParse({ data: buffer })
   try {
-    const [textResult, imageResult] = await Promise.all([
-      parser.getText(),
-      // Counts only — skip the actual pixel data, we only need to know a
-      // page has at least one non-decorative (>80px) embedded image.
-      parser.getImage({ imageDataUrl: false, imageBuffer: false }),
-    ])
-    const imageCountByPage = new Map(imageResult.pages.map((p) => [p.pageNumber, p.images.length]))
+    const textResult = await parser.getText()
+
+    // Best-effort only: some real-world PDFs (certain embedded image
+    // encodings) make pdfjs-dist's getImage() throw internally rather than
+    // just skip that image. Image-presence detection is a nice-to-have for
+    // the review, never worth failing the whole upload over — fall back to
+    // "unknown" (treated as no image) for every page if it errors.
+    let imageCountByPage = new Map<number, number>()
+    try {
+      const imageResult = await parser.getImage({ imageDataUrl: false, imageBuffer: false })
+      imageCountByPage = new Map(imageResult.pages.map((p) => [p.pageNumber, p.images.length]))
+    } catch (error) {
+      console.warn('[lesson-plans] pdf image detection failed, continuing without it:', error)
+    }
+
     return textResult.pages.map((page) => ({
       text: page.text.trim(),
       hasImage: (imageCountByPage.get(page.num) ?? 0) > 0,
