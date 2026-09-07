@@ -115,7 +115,7 @@ ${CORE_COACHING_RULES}`
 // judgment otherwise, since a wrong-but-editable guess beats a blocking
 // question every time.
 const DETECTION_INSTRUCTIONS = `Also infer the following from the assignment text itself — make your best judgment even when something is only implied, and use "Unclear" only when there's truly nothing to go on:
-<detected_title>A short, specific title for this assignment, e.g. "Forest Food Web" — a few words, not a full sentence.</detected_title>
+<detected_title>A short title (2-6 words). If the assignment already has a heading or title printed at the top of the text, use it verbatim (cleaned up if it's garbled) — otherwise invent a short, specific, descriptive name from the content, e.g. "Forest Food Web." Always provide a real title here — never "Unclear," even for a plain worksheet.</detected_title>
 <detected_grade_level>A single grade, or a narrow band like "6th-8th" only if genuinely ambiguous.</detected_grade_level>
 <detected_subject>The subject area, e.g. "Math" or "English / ELA".</detected_subject>
 <detected_assignment_type>One of: classwork, homework, project, assessment, group_task, exit_ticket, other.</detected_assignment_type>
