@@ -391,27 +391,27 @@ function AddAssignmentScreen({
         ← Back
       </button>
 
-      <div className="mx-auto w-full max-w-[900px] rounded-3xl bg-[#11150f] p-8">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[#c96a45]">Assignment Coach</p>
-        <h1 className="mt-1 font-heading text-2xl font-bold text-[#f7f3ea] sm:text-3xl">
+      <div className="mx-auto w-full max-w-[900px] rounded-3xl bg-forest p-8">
+        <p className="text-xs font-semibold uppercase tracking-wide text-terracotta">Assignment Coach</p>
+        <h1 className="mt-1 font-heading text-2xl font-bold text-cream sm:text-3xl">
           {mode === 'review'
             ? 'See what this assignment truly asks of students.'
             : 'See how ready this assignment is for meaningful AI use.'}
         </h1>
-        <p className="mt-2 text-sm text-[#9aa79f]">
+        <p className="mt-2 text-sm text-cream/60">
           Add the assignment. Wivoza will estimate the context and{' '}
           {mode === 'review' ? 'examine the quality of the learning experience.' : 'help you redesign it for meaningful AI use.'}
         </p>
 
         <div className="mt-5 flex flex-wrap gap-2">
           {previewPills.map((p) => (
-            <span key={p} className="rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-xs font-medium text-[#c7cfc7]">
+            <span key={p} className="rounded-full border border-cream/10 bg-cream/5 px-3.5 py-1.5 text-xs font-medium text-cream/80">
               {p}
             </span>
           ))}
         </div>
 
-        <div className="mt-6 rounded-2xl border border-white/10 bg-[#161c17] p-6">
+        <div className="mt-6 rounded-2xl border border-cream/10 bg-forest-soft p-6">
           {inputMode === 'upload' ? (
             <div
               onDragOver={(e) => {
@@ -426,7 +426,7 @@ function AddAssignmentScreen({
                 if (file) handleFile(file)
               }}
               className={`flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-10 text-center transition-colors ${
-                dragOver ? 'border-[#c96a45] bg-[#c96a45]/10' : 'border-white/15'
+                dragOver ? 'border-terracotta bg-terracotta/10' : 'border-cream/15'
               }`}
             >
               <input
@@ -441,20 +441,20 @@ function AddAssignmentScreen({
                 }}
               />
               <div className="relative">
-                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#3a241c] text-[#e2986f]">
+                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-terracotta/20 text-terracotta">
                   <ClipboardIcon className="h-6 w-6" />
                 </span>
-                <span className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-[#e4b84a] text-[#3a2c0a]">
+                <span className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-gold text-forest">
                   <SparkleIcon className="h-3.5 w-3.5" />
                 </span>
               </div>
-              <p className="font-heading text-lg font-semibold text-[#f7f3ea]">Add your assignment</p>
-              <p className="text-sm text-[#9aa79f]">Drag a file here, or paste the text below.</p>
+              <p className="font-heading text-lg font-semibold text-cream">Add your assignment</p>
+              <p className="text-sm text-cream/60">Drag a file here, or paste the text below.</p>
               <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
                 <button
                   type="button"
                   onClick={() => setInputMode('paste')}
-                  className="flex items-center gap-1.5 rounded-xl bg-[#dce7df] px-4 py-2.5 text-sm font-semibold text-[#1b2e28] transition-opacity hover:opacity-90"
+                  className="flex items-center gap-1.5 rounded-xl bg-mint-tint px-4 py-2.5 text-sm font-semibold text-forest transition-opacity hover:opacity-90"
                 >
                   <ClipboardIcon className="h-4 w-4" />
                   Paste text
@@ -463,22 +463,22 @@ function AddAssignmentScreen({
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={extracting}
-                  className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-[#e7ece7] hover:bg-white/10 disabled:opacity-50"
+                  className="flex items-center gap-1.5 rounded-xl border border-cream/15 bg-cream/5 px-4 py-2.5 text-sm font-semibold text-cream/90 hover:bg-cream/10 disabled:opacity-50"
                 >
                   <UploadIcon className="h-4 w-4" />
                   {extracting ? 'Reading file...' : 'Choose file'}
                 </button>
               </div>
-              <p className="text-xs text-[#8fa196]">PDF, Word, image, or plain text</p>
+              <p className="text-xs text-cream/50">PDF, Word, image, or plain text</p>
               {fileReady && !extracting && (
-                <p className="text-xs font-semibold text-[#7fbf99]">File read successfully — ready to analyze.</p>
+                <p className="text-xs font-semibold text-mint-tint">File read successfully — ready to analyze.</p>
               )}
             </div>
           ) : (
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-[#e7ece7]">Paste the assignment</p>
-                <button type="button" onClick={() => setInputMode('upload')} className="text-xs font-semibold text-[#9aa79f] hover:text-[#f7f3ea]">
+                <p className="text-sm font-medium text-cream/90">Paste the assignment</p>
+                <button type="button" onClick={() => setInputMode('upload')} className="text-xs font-semibold text-cream/60 hover:text-cream">
                   Upload a file instead
                 </button>
               </div>
@@ -488,15 +488,15 @@ function AddAssignmentScreen({
                 disabled={starting}
                 rows={9}
                 placeholder="Paste the assignment here…"
-                className="w-full rounded-xl border border-white/15 bg-white/5 px-3.5 py-2.5 text-sm text-[#f7f3ea] placeholder:text-[#8fa196] focus:border-[#c96a45]/50 focus:outline-none disabled:opacity-60"
+                className="w-full rounded-xl border border-cream/15 bg-cream/5 px-3.5 py-2.5 text-sm text-cream placeholder:text-cream/50 focus:border-terracotta/50 focus:outline-none disabled:opacity-60"
               />
-              <span className="self-end text-xs text-[#8fa196]">{text.length.toLocaleString()} characters</span>
+              <span className="self-end text-xs text-cream/50">{text.length.toLocaleString()} characters</span>
             </div>
           )}
 
           {mode === 'redesign_ai' && (
             <div className="mt-5">
-              <p className="text-sm font-medium text-[#e7ece7]">How should students use AI?</p>
+              <p className="text-sm font-medium text-cream/90">How should students use AI?</p>
               <div className="mt-2 grid gap-3 sm:grid-cols-3">
                 {AI_USE_LEVEL_OPTIONS.map((opt) => (
                   <button
@@ -505,11 +505,11 @@ function AddAssignmentScreen({
                     onClick={() => setAiUseLevel(opt.value)}
                     disabled={starting}
                     className={`rounded-xl border p-3.5 text-left transition-colors ${
-                      aiUseLevel === opt.value ? 'border-[#c96a45] bg-[#3a241c]' : 'border-white/10 bg-white/5 hover:border-white/25'
+                      aiUseLevel === opt.value ? 'border-terracotta bg-terracotta/20' : 'border-cream/10 bg-cream/5 hover:border-cream/25'
                     }`}
                   >
-                    <p className="text-sm font-semibold text-[#f7f3ea]">{opt.label}</p>
-                    <p className="mt-1 text-xs text-[#9aa79f]">{opt.description}</p>
+                    <p className="text-sm font-semibold text-cream">{opt.label}</p>
+                    <p className="mt-1 text-xs text-cream/60">{opt.description}</p>
                   </button>
                 ))}
               </div>
@@ -517,14 +517,14 @@ function AddAssignmentScreen({
           )}
 
           {error && (
-            <p className="mt-4 text-sm text-[#d98262]">
+            <p className="mt-4 text-sm text-terracotta">
               <UpgradeMessage text={error} />
             </p>
           )}
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <p className="flex items-center gap-1.5 text-xs text-[#8fa196]">
+          <p className="flex items-center gap-1.5 text-xs text-cream/50">
             <ShieldIcon className="h-3.5 w-3.5" />
             Do not include student names or personally identifiable information.
           </p>
@@ -532,7 +532,7 @@ function AddAssignmentScreen({
             type="button"
             onClick={handleAnalyze}
             disabled={!canSubmit || starting}
-            className="rounded-xl bg-[#dce7df] px-5 py-2.5 text-sm font-semibold text-[#1b2e28] transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="rounded-xl bg-mint-tint px-5 py-2.5 text-sm font-semibold text-forest transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {starting ? analyzingSteps[analyzingStep] : 'Analyze assignment'}
           </button>
@@ -544,19 +544,20 @@ function AddAssignmentScreen({
 
 // Dark, "focused coaching workspace" treatment for the Review snapshot
 // specifically — a deliberate departure from the rest of the app's cream
-// theme, scoped to this one panel (per the reference design). Colors are
-// hand-picked dark tints of the same brand hues (forest/terracotta/gold)
-// rather than a generic dark palette, so it still reads as Wivoza.
+// theme, scoped to this one panel (per the reference design). Built from
+// the site's own existing dark tokens (forest/forest-soft, the same green
+// already used for the sidebar) plus opacity-tinted terracotta/gold/mint,
+// rather than a separate hand-picked dark palette.
 function darkToneStyles(tone: Tone): { badge: string } {
   switch (tone) {
     case 'good':
-      return { badge: 'bg-[#1f2e26] text-[#7fbf99]' }
+      return { badge: 'bg-mint-tint/15 text-mint-tint' }
     case 'warn':
-      return { badge: 'bg-[#2e2a1a] text-[#e4b84a]' }
+      return { badge: 'bg-gold/15 text-gold' }
     case 'concern':
-      return { badge: 'bg-[#332019] text-[#d98262]' }
+      return { badge: 'bg-terracotta/20 text-terracotta' }
     default:
-      return { badge: 'bg-white/5 text-[#c7cfc7]' }
+      return { badge: 'bg-cream/5 text-cream/80' }
   }
 }
 
@@ -585,23 +586,23 @@ function DarkReviewCard({
 }) {
   const t = darkToneStyles(tone)
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#1a231d] p-5">
+    <div className="rounded-2xl border border-cream/10 bg-forest-soft p-5">
       <div className="flex items-start gap-3">
         <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${t.badge}`}>{icon}</span>
         <div className="min-w-0 flex-1 pt-0.5">
-          <p className="text-xs text-[#8fa196]">{label}</p>
-          <p className="text-base font-semibold text-[#f7f3ea]">{statusLabel}</p>
+          <p className="text-xs text-cream/60">{label}</p>
+          <p className="text-base font-semibold text-cream">{statusLabel}</p>
         </div>
       </div>
-      {explanation && <p className="mt-3 text-sm leading-relaxed text-[#c7cfc7]">{explanation}</p>}
-      {detail && <p className="mt-2 whitespace-pre-wrap text-xs text-[#8fa196]">{detail}</p>}
-      {note && <p className="mt-2 text-xs italic text-[#d98262]">{note}</p>}
+      {explanation && <p className="mt-3 text-sm leading-relaxed text-cream/80">{explanation}</p>}
+      {detail && <p className="mt-2 whitespace-pre-wrap text-xs text-cream/60">{detail}</p>}
+      {note && <p className="mt-2 text-xs italic text-terracotta">{note}</p>}
       {onAction && (
         <button
           type="button"
           onClick={onAction}
           disabled={disabled}
-          className="mt-3 text-xs font-semibold text-[#c7cfc7] hover:text-[#f7f3ea] disabled:opacity-50"
+          className="mt-3 text-xs font-semibold text-cream/80 hover:text-cream disabled:opacity-50"
         >
           {actionLabel} →
         </button>
@@ -656,7 +657,7 @@ function ReviewSnapshotPanel({
 
   const hasOpportunity = Boolean(snapshot.mainOpportunity.title || snapshot.mainOpportunity.description)
   const darkSelect =
-    'rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 text-xs text-[#f7f3ea] focus:border-[#c96a45]/50 focus:outline-none [&>option]:bg-[#1a231d]'
+    'rounded-lg border border-cream/15 bg-cream/5 px-2.5 py-1.5 text-xs text-cream focus:border-terracotta/50 focus:outline-none [&>option]:bg-forest-soft'
 
   async function handleSaveDetails() {
     setSavingDetails(true)
@@ -674,30 +675,30 @@ function ReviewSnapshotPanel({
   }
 
   return (
-    <div className="rounded-3xl bg-[#11150f] p-6">
+    <div className="rounded-3xl bg-forest p-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-1.5">
           <button
             type="button"
             onClick={onExit}
-            className="rounded-full px-3.5 py-1.5 text-xs font-semibold text-[#9aa79f] hover:bg-white/5 hover:text-[#f7f3ea]"
+            className="rounded-full px-3.5 py-1.5 text-xs font-semibold text-cream/60 hover:bg-cream/5 hover:text-cream"
           >
             Add assignment
           </button>
-          <span className="rounded-full bg-white/10 px-3.5 py-1.5 text-xs font-semibold text-[#f7f3ea]">Review snapshot</span>
+          <span className="rounded-full bg-cream/10 px-3.5 py-1.5 text-xs font-semibold text-cream">Review snapshot</span>
         </div>
         <div className="flex gap-1.5">
           <button
             type="button"
             onClick={onExport}
-            className="rounded-full border border-white/15 px-3.5 py-1.5 text-xs font-semibold text-[#e7ece7] hover:bg-white/5"
+            className="rounded-full border border-cream/15 px-3.5 py-1.5 text-xs font-semibold text-cream/90 hover:bg-cream/5"
           >
             Export
           </button>
           <button
             type="button"
             onClick={onDiscuss}
-            className="flex items-center gap-1.5 rounded-full border border-white/15 px-3.5 py-1.5 text-xs font-semibold text-[#e7ece7] hover:bg-white/5"
+            className="flex items-center gap-1.5 rounded-full border border-cream/15 px-3.5 py-1.5 text-xs font-semibold text-cream/90 hover:bg-cream/5"
           >
             <ChatBubbleIcon className="h-3.5 w-3.5" />
             Discuss with Coach
@@ -706,42 +707,42 @@ function ReviewSnapshotPanel({
       </div>
 
       <div className="mt-6">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[#c96a45]">Assignment review</p>
-        <h1 className="mt-1 font-heading text-2xl font-bold text-[#f7f3ea] sm:text-3xl">
+        <p className="text-xs font-semibold uppercase tracking-wide text-terracotta">Assignment review</p>
+        <h1 className="mt-1 font-heading text-2xl font-bold text-cream sm:text-3xl">
           {session.title || assignmentTypeLabel(session.assignmentType)}
         </h1>
-        <p className="mt-1 text-sm text-[#9aa79f]">A concise review of what students are being asked to do and think.</p>
+        <p className="mt-1 text-sm text-cream/60">A concise review of what students are being asked to do and think.</p>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <span className="text-xs text-[#9aa79f]">Wivoza detected</span>
+        <span className="text-xs text-cream/60">Wivoza detected</span>
         {session.gradeLevel && (
-          <span className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-[#e7ece7]">
+          <span className="flex items-center gap-1.5 rounded-full border border-cream/10 bg-cream/5 px-3 py-1 text-xs text-cream/90">
             <GraduationCapIcon className="h-3.5 w-3.5" />
             Likely {session.gradeLevel}
           </span>
         )}
         {session.subject && (
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-[#e7ece7]">{session.subject}</span>
+          <span className="rounded-full border border-cream/10 bg-cream/5 px-3 py-1 text-xs text-cream/90">{session.subject}</span>
         )}
         {session.assignmentType && (
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-[#e7ece7]">
+          <span className="rounded-full border border-cream/10 bg-cream/5 px-3 py-1 text-xs text-cream/90">
             {assignmentTypeLabel(session.assignmentType)}
           </span>
         )}
         {session.estimatedTime && (
-          <span className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-[#e7ece7]">
+          <span className="flex items-center gap-1.5 rounded-full border border-cream/10 bg-cream/5 px-3 py-1 text-xs text-cream/90">
             <ClockIcon className="h-3.5 w-3.5" />
             {session.estimatedTime}
           </span>
         )}
-        <button type="button" onClick={() => setEditingDetails((v) => !v)} className="text-xs font-semibold text-[#e7ece7] hover:opacity-80">
+        <button type="button" onClick={() => setEditingDetails((v) => !v)} className="text-xs font-semibold text-cream/90 hover:opacity-80">
           Edit details
         </button>
       </div>
 
       {editingDetails && (
-        <div className="mt-2 rounded-xl border border-white/10 bg-white/5 p-3">
+        <div className="mt-2 rounded-xl border border-cream/10 bg-cream/5 p-3">
           <div className="grid gap-2 sm:grid-cols-4">
             <select value={gradeLevel} onChange={(e) => setGradeLevel(e.target.value)} className={darkSelect}>
               <option value="">Grade level</option>
@@ -777,14 +778,14 @@ function ReviewSnapshotPanel({
             </select>
           </div>
           <div className="mt-2 flex justify-end gap-2">
-            <button type="button" onClick={() => setEditingDetails(false)} className="text-xs font-semibold text-[#9aa79f] hover:text-[#f7f3ea]">
+            <button type="button" onClick={() => setEditingDetails(false)} className="text-xs font-semibold text-cream/60 hover:text-cream">
               Cancel
             </button>
             <button
               type="button"
               onClick={handleSaveDetails}
               disabled={savingDetails}
-              className="rounded-lg bg-[#f7f3ea] px-3 py-1.5 text-xs font-semibold text-[#11150f] hover:opacity-90 disabled:opacity-50"
+              className="rounded-lg bg-cream px-3 py-1.5 text-xs font-semibold text-forest hover:opacity-90 disabled:opacity-50"
             >
               {savingDetails ? 'Saving...' : 'Save'}
             </button>
@@ -793,8 +794,8 @@ function ReviewSnapshotPanel({
       )}
 
       {session.clarifyingQuestion && !clarifyingDismissed && (
-        <div className="mt-4 rounded-2xl border border-[#c96a45]/30 bg-[#2a1c15] p-4">
-          <p className="text-sm font-semibold text-[#f7f3ea]">{session.clarifyingQuestion.question}</p>
+        <div className="mt-4 rounded-2xl border border-terracotta/30 bg-terracotta/10 p-4">
+          <p className="text-sm font-semibold text-cream">{session.clarifyingQuestion.question}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {session.clarifyingQuestion.options.map((o) => (
               <button
@@ -802,7 +803,7 @@ function ReviewSnapshotPanel({
                 type="button"
                 onClick={() => onAnswerClarifying(o)}
                 disabled={refining}
-                className="rounded-full border border-[#c96a45]/40 bg-white/5 px-3 py-1.5 text-xs font-semibold text-[#e2986f] hover:bg-white/10 disabled:opacity-50"
+                className="rounded-full border border-terracotta/40 bg-cream/5 px-3 py-1.5 text-xs font-semibold text-terracotta hover:bg-cream/10 disabled:opacity-50"
               >
                 {o}
               </button>
@@ -811,29 +812,29 @@ function ReviewSnapshotPanel({
               type="button"
               onClick={onSkipClarifying}
               disabled={refining}
-              className="rounded-full px-3 py-1.5 text-xs font-medium text-[#9aa79f] hover:text-[#f7f3ea] disabled:opacity-50"
+              className="rounded-full px-3 py-1.5 text-xs font-medium text-cream/60 hover:text-cream disabled:opacity-50"
             >
               Skip
             </button>
           </div>
         </div>
       )}
-      {refineError && <p className="mt-2 text-sm text-[#d98262]">{refineError}</p>}
+      {refineError && <p className="mt-2 text-sm text-terracotta">{refineError}</p>}
 
       {hasOpportunity && (
-        <div className="mt-6 rounded-2xl bg-[#dce7df] p-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#3f5a4c]">Most important opportunity</p>
-          {snapshot.mainOpportunity.title && <p className="mt-2 text-xl font-bold text-[#1b2e28]">{snapshot.mainOpportunity.title}</p>}
-          {snapshot.mainOpportunity.description && <p className="mt-1 text-sm text-[#33473c]">{snapshot.mainOpportunity.description}</p>}
+        <div className="mt-6 rounded-2xl bg-mint-tint p-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-forest/70">Most important opportunity</p>
+          {snapshot.mainOpportunity.title && <p className="mt-2 text-xl font-bold text-forest">{snapshot.mainOpportunity.title}</p>}
+          {snapshot.mainOpportunity.description && <p className="mt-1 text-sm text-forest/80">{snapshot.mainOpportunity.description}</p>}
           <button
             type="button"
             onClick={() => onAction(`Let's work on this: ${snapshot.mainOpportunity.title ?? 'the main opportunity'}.`)}
             disabled={chatSending}
-            className="mt-4 w-full rounded-xl bg-[#11150f] py-3 text-sm font-semibold text-[#f7f3ea] transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="mt-4 w-full rounded-xl bg-forest py-3 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             Improve with Coach
           </button>
-          <button type="button" onClick={() => setShowAll((v) => !v)} className="mt-2 text-xs font-semibold text-[#1b2e28] hover:opacity-80">
+          <button type="button" onClick={() => setShowAll((v) => !v)} className="mt-2 text-xs font-semibold text-forest hover:opacity-80">
             {showAll ? 'Hide recommendations' : 'See all recommendations'}
           </button>
         </div>
@@ -847,7 +848,7 @@ function ReviewSnapshotPanel({
               type="button"
               onClick={() => onAction(a.message)}
               disabled={chatSending}
-              className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-[#c7cfc7] transition-colors hover:border-[#c96a45]/40 hover:text-[#e2986f] disabled:opacity-50"
+              className="rounded-full border border-cream/10 bg-cream/5 px-3 py-1.5 text-xs font-medium text-cream/80 transition-colors hover:border-terracotta/40 hover:text-terracotta disabled:opacity-50"
             >
               {a.label}
             </button>
@@ -901,9 +902,9 @@ function ReviewSnapshotPanel({
       </div>
 
       {snapshot.workloadSummary && (
-        <div className="mt-3 rounded-2xl border border-white/10 bg-[#1a231d] p-5">
-          <p className="text-xs text-[#8fa196]">Workload &amp; clarity</p>
-          <p className="mt-1 text-sm text-[#c7cfc7]">{snapshot.workloadSummary}</p>
+        <div className="mt-3 rounded-2xl border border-cream/10 bg-forest-soft p-5">
+          <p className="text-xs text-cream/50">Workload &amp; clarity</p>
+          <p className="mt-1 text-sm text-cream/80">{snapshot.workloadSummary}</p>
         </div>
       )}
 
@@ -911,11 +912,11 @@ function ReviewSnapshotPanel({
         type="button"
         onClick={onRevise}
         disabled={revising || conversationEmpty}
-        className="mt-4 self-start rounded-xl border border-white/15 px-4 py-2 text-xs font-semibold text-[#e7ece7] hover:bg-white/5 disabled:opacity-50"
+        className="mt-4 self-start rounded-xl border border-cream/15 px-4 py-2 text-xs font-semibold text-cream/90 hover:bg-cream/5 disabled:opacity-50"
       >
         {revising ? 'Revising...' : 'Revise the whole assignment'}
       </button>
-      {reviseError && <p className="mt-2 text-sm text-[#d98262]">{reviseError}</p>}
+      {reviseError && <p className="mt-2 text-sm text-terracotta">{reviseError}</p>}
     </div>
   )
 }
