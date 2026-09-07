@@ -128,11 +128,6 @@ export default function AssignmentCoachExport() {
             {session.aiResistant?.guidelines && (
               <section className="mt-4 break-inside-avoid rounded-xl border border-hairline p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Student AI guidelines</p>
-                {session.aiResistant.recommendedAiUse && (
-                  <p className="mt-1 text-sm text-ink">
-                    <span className="font-semibold">Wivoza-recommended AI use:</span> {session.aiResistant.recommendedAiUse.note}
-                  </p>
-                )}
                 <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.aiResistant.guidelines}</p>
                 {session.aiResistant.strategies && (
                   <p className="mt-2 text-sm text-ink">

@@ -405,9 +405,6 @@ export type AssignmentAiResistant = {
   strategies: string | null
   guidelines: string | null
   revisedAssignment: string | null
-  // Set only when the teacher chose "let Wivoza recommend" — the level
-  // Claude picked, plus a one-sentence reason it fits this assignment.
-  recommendedAiUse?: { level: AssignmentAiUseLevel; note: string | null } | null
 }
 export type AssignmentFinalMaterials = {
   assignment: string | null
@@ -962,9 +959,7 @@ export function getAssignmentCoachSession(id: string): Promise<AssignmentCoachSe
 export function startAssignmentCoach(input: {
   mode: 'review' | 'redesign_ai'
   aiUseLevel?: AssignmentAiUseLevel
-  letWivozaChooseAiUseLevel?: boolean
   originalText: string
-  extraNote?: string
 }): Promise<AssignmentCoachSession> {
   return request('/api/assignment-coach', { method: 'POST', body: JSON.stringify(input) })
 }

@@ -2,15 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import CoachingChat from '../components/CoachingChat'
 import {
-  ArrowRightIcon,
   BrainIcon,
   ChatBubbleIcon,
   CheckCircleIcon,
-  CheckIcon,
   ChecklistIcon,
   ClipboardIcon,
   ClockIcon,
-  CloseIcon,
   GraduationCapIcon,
   KebabIcon,
   RobotIcon,
@@ -23,7 +20,6 @@ import {
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import { ASSIGNMENT_GRADE_LEVELS } from '../lib/assignmentGradeLevels'
 import { ASSIGNMENT_SUBJECTS, ASSIGNMENT_TYPES, assignmentTypeLabel, ESTIMATED_TIME_OPTIONS } from '../lib/assignmentTypes'
-import { setAssignmentRedesignPrefill, takeAssignmentRedesignPrefill } from '../lib/communicationsPrefill'
 import {
   deleteAssignmentCoachSession,
   extractAssignmentText,
@@ -113,10 +109,8 @@ const REVIEW_ANALYZING_STEPS = [
 ]
 const REDESIGN_ANALYZING_STEPS = [
   'Reading the assignment…',
-  'Identifying the learning goal…',
-  'Examining AI-completion risk…',
-  'Protecting student thinking…',
-  'Creating the revised assignment…',
+  'Identifying where AI could shortcut the thinking…',
+  'Building strategies to keep reasoning visible…',
 ]
 
 const inputClass =
@@ -166,27 +160,8 @@ export default function AssignmentCoach() {
     }
   }
 
-  // From a Review session's "Make this assignment AI-ready" banner — hands
-  // the original text plus the review's own AI-risk finding to the
-  // redesign intake screen (via the same sessionStorage prefill mechanism
-  // other Wivoza tools already use), so the teacher never has to re-upload
-  // or re-paste what's already on file.
-  function handleRedesignFromReview(reviewSession: AssignmentCoachSession) {
-    const snapshot = reviewSession.reviewSnapshot
-    const extraNote = snapshot
-      ? `This assignment was already reviewed. Detected AI completion risk: ${snapshot.aiRisk.rating ?? 'unknown'}. ${
-          snapshot.aiRisk.explanation ?? ''
-        } ${snapshot.aiRisk.reasons ?? ''}`.trim()
-      : undefined
-    setAssignmentRedesignPrefill({ originalText: reviewSession.originalText ?? '', extraNote })
-    setSession(null)
-    setPendingMode('redesign_ai')
-  }
-
   if (session) {
-    return (
-      <Workspace session={session} onUpdate={handleUpdate} onExit={handleExit} onRedesignFromReview={handleRedesignFromReview} />
-    )
+    return <Workspace session={session} onUpdate={handleUpdate} onExit={handleExit} />
   }
 
   if (pendingMode) {
@@ -204,7 +179,7 @@ export default function AssignmentCoach() {
         <button
           type="button"
           onClick={() => setPendingMode('review')}
-          className="group relative rounded-2xl border border-hairline bg-cream-card p-6 text-left transition-shadow hover:shadow-md"
+          className="group rounded-2xl border border-hairline bg-cream-card p-6 text-left transition-shadow hover:shadow-md"
         >
           <ChecklistIcon className="h-8 w-8 text-terracotta" />
           <h2 className="mt-4 font-heading text-lg font-semibold text-forest">Review an assignment</h2>
@@ -212,29 +187,18 @@ export default function AssignmentCoach() {
             Get coaching feedback on clarity, rigor, student thinking, accessibility, differentiation, and
             assessment alignment.
           </p>
-          <p className="mt-3 text-xs font-semibold text-terracotta">Start review</p>
-          <ArrowRightIcon className="absolute bottom-5 right-5 h-4 w-4 text-ink-soft transition-transform group-hover:translate-x-0.5 group-hover:text-terracotta" />
         </button>
         <button
           type="button"
           onClick={() => setPendingMode('redesign_ai')}
-          className="group relative rounded-2xl border border-hairline bg-cream-card p-6 text-left transition-shadow hover:shadow-md"
+          className="group rounded-2xl border border-hairline bg-cream-card p-6 text-left transition-shadow hover:shadow-md"
         >
-          <div className="relative inline-block">
-            <span className="flex h-8 w-8 items-center justify-center text-terracotta">
-              <ClipboardIcon className="h-8 w-8" />
-            </span>
-            <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-gold text-forest">
-              <SparkleIcon className="h-2.5 w-2.5" />
-            </span>
-          </div>
+          <BrainIcon className="h-8 w-8 text-terracotta" />
           <h2 className="mt-4 font-heading text-lg font-semibold text-forest">Redesign for meaningful AI use</h2>
           <p className="mt-1 text-sm text-ink-soft">
             Adapt an assignment so students must demonstrate their own thinking—whether AI is allowed, limited, or
             not allowed.
           </p>
-          <p className="mt-3 text-xs font-semibold text-terracotta">Start redesign</p>
-          <ArrowRightIcon className="absolute bottom-5 right-5 h-4 w-4 text-ink-soft transition-transform group-hover:translate-x-0.5 group-hover:text-terracotta" />
         </button>
       </div>
 
@@ -360,37 +324,16 @@ function AddAssignmentScreen({
 }) {
   const [inputMode, setInputMode] = useState<'paste' | 'upload'>('upload')
   const [text, setText] = useState('')
-  const [fileName, setFileName] = useState<string | null>(null)
   const [fileReady, setFileReady] = useState(false)
   const [extracting, setExtracting] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [aiUseLevel, setAiUseLevel] = useState<AssignmentAiUseLevel | ''>('')
-  const [letWivozaRecommend, setLetWivozaRecommend] = useState(false)
   const [starting, setStarting] = useState(false)
   const [analyzingStep, setAnalyzingStep] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Carried over from a Review session's "Make this assignment AI-ready"
-  // banner — pre-fills the assignment text so the teacher never has to
-  // re-upload or re-paste what's already on file. `carriedOver` just flags
-  // the intake UI to skip the upload/paste chrome; `extraNote` (the
-  // review's own findings, not shown to the teacher here) rides along to
-  // the backend on submit.
-  const [carriedOver, setCarriedOver] = useState(false)
-  const [extraNote, setExtraNote] = useState<string | undefined>(undefined)
-  useEffect(() => {
-    if (mode !== 'redesign_ai') return
-    const prefill = takeAssignmentRedesignPrefill()
-    if (!prefill) return
-    setText(prefill.originalText)
-    setFileReady(true)
-    setCarriedOver(true)
-    setExtraNote(prefill.extraNote)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const canSubmit = text.trim().length > 0 && (mode === 'review' || aiUseLevel !== '' || letWivozaRecommend)
+  const canSubmit = text.trim().length > 0 && (mode === 'review' || aiUseLevel !== '')
   const analyzingSteps = mode === 'review' ? REVIEW_ANALYZING_STEPS : REDESIGN_ANALYZING_STEPS
   const previewPills = mode === 'review' ? REVIEW_PREVIEW_PILLS : REDESIGN_PREVIEW_PILLS
 
@@ -417,21 +360,12 @@ function AddAssignmentScreen({
       // "file read successfully" confirmation, not the (possibly OCR-rough)
       // extracted text itself.
       setText(extracted)
-      setFileName(file.name)
       setFileReady(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not read that file. Please try pasting the text instead.')
     } finally {
       setExtracting(false)
     }
-  }
-
-  function handleRemoveFile() {
-    setText('')
-    setFileName(null)
-    setFileReady(false)
-    setCarriedOver(false)
-    setExtraNote(undefined)
   }
 
   async function handleAnalyze() {
@@ -441,24 +375,12 @@ function AddAssignmentScreen({
     try {
       const session = await startAssignmentCoach({
         mode,
-        aiUseLevel: mode === 'redesign_ai' && !letWivozaRecommend ? (aiUseLevel as AssignmentAiUseLevel) : undefined,
-        letWivozaChooseAiUseLevel: mode === 'redesign_ai' && letWivozaRecommend ? true : undefined,
+        aiUseLevel: mode === 'redesign_ai' ? (aiUseLevel as AssignmentAiUseLevel) : undefined,
         originalText: text.trim(),
-        extraNote,
       })
       onStarted(session)
     } catch (e) {
-      // Redesign gets its own calm, reassuring copy regardless of the
-      // underlying reason — the teacher's text and AI-use choice are both
-      // still right here (canSubmit/text/aiUseLevel are never cleared on
-      // failure), so "start over" is never required.
-      setError(
-        mode === 'redesign_ai'
-          ? "We couldn't redesign the assignment. Your work is still here."
-          : e instanceof Error
-            ? e.message
-            : 'Could not analyze this assignment. Please try again.',
-      )
+      setError(e instanceof Error ? e.message : 'Could not analyze this assignment. Please try again.')
       setStarting(false)
     }
   }
@@ -490,116 +412,68 @@ function AddAssignmentScreen({
         </div>
 
         <div className="mt-6 rounded-2xl border border-cream/10 bg-forest-soft p-6">
-          {carriedOver ? (
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-cream/15 bg-cream/5 px-4 py-3.5">
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-terracotta/20 text-terracotta">
-                  <ClipboardIcon className="h-4.5 w-4.5" />
-                </span>
-                <p className="text-sm font-semibold text-cream">Carried over from your review — no need to re-add it.</p>
-              </div>
-              <button type="button" onClick={handleRemoveFile} className="shrink-0 text-xs font-semibold text-cream/60 hover:text-cream">
-                Remove
-              </button>
-            </div>
-          ) : inputMode === 'upload' ? (
-            fileReady && !extracting ? (
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-cream/15 bg-cream/5 px-4 py-3.5">
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-terracotta/20 text-terracotta">
-                    <ClipboardIcon className="h-4.5 w-4.5" />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-cream">{fileName ?? 'Assignment text'}</p>
-                    <p className="text-xs font-semibold text-mint-tint">
-                      {mode === 'review' ? 'Ready to review' : 'Ready to redesign'}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="text-xs font-semibold text-cream/80 hover:text-cream"
-                  >
-                    Replace
-                  </button>
-                  <button type="button" onClick={handleRemoveFile} aria-label="Remove file" className="text-cream/60 hover:text-cream">
-                    <CloseIcon className="h-4 w-4" />
-                  </button>
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".docx,.pdf,.txt,.jpg,.jpeg,.png"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) handleFile(file)
-                    e.target.value = ''
-                  }}
-                />
-              </div>
-            ) : (
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault()
-                  setDragOver(true)
-                }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={(e) => {
-                  e.preventDefault()
-                  setDragOver(false)
-                  const file = e.dataTransfer.files?.[0]
+          {inputMode === 'upload' ? (
+            <div
+              onDragOver={(e) => {
+                e.preventDefault()
+                setDragOver(true)
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault()
+                setDragOver(false)
+                const file = e.dataTransfer.files?.[0]
+                if (file) handleFile(file)
+              }}
+              className={`flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-10 text-center transition-colors ${
+                dragOver ? 'border-terracotta bg-terracotta/10' : 'border-cream/15'
+              }`}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".docx,.pdf,.txt,.jpg,.jpeg,.png"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
                   if (file) handleFile(file)
+                  e.target.value = ''
                 }}
-                className={`flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-10 text-center transition-colors ${
-                  dragOver ? 'border-terracotta bg-terracotta/10' : 'border-cream/15'
-                }`}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".docx,.pdf,.txt,.jpg,.jpeg,.png"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) handleFile(file)
-                    e.target.value = ''
-                  }}
-                />
-                <div className="relative">
-                  <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-terracotta/20 text-terracotta">
-                    <ClipboardIcon className="h-6 w-6" />
-                  </span>
-                  <span className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-gold text-forest">
-                    <SparkleIcon className="h-3.5 w-3.5" />
-                  </span>
-                </div>
-                <p className="font-heading text-lg font-semibold text-cream">Add your assignment</p>
-                <p className="text-sm text-cream/60">Drag a file here, or paste the text below.</p>
-                <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setInputMode('paste')}
-                    className="flex items-center gap-1.5 rounded-xl bg-mint-tint px-4 py-2.5 text-sm font-semibold text-forest transition-opacity hover:opacity-90"
-                  >
-                    <ClipboardIcon className="h-4 w-4" />
-                    Paste text
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={extracting}
-                    className="flex items-center gap-1.5 rounded-xl border border-cream/15 bg-cream/5 px-4 py-2.5 text-sm font-semibold text-cream/90 hover:bg-cream/10 disabled:opacity-50"
-                  >
-                    <UploadIcon className="h-4 w-4" />
-                    {extracting ? 'Reading file...' : 'Choose file'}
-                  </button>
-                </div>
-                <p className="text-xs text-cream/50">PDF, Word, image, or plain text</p>
+              />
+              <div className="relative">
+                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-terracotta/20 text-terracotta">
+                  <ClipboardIcon className="h-6 w-6" />
+                </span>
+                <span className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-gold text-forest">
+                  <SparkleIcon className="h-3.5 w-3.5" />
+                </span>
               </div>
-            )
+              <p className="font-heading text-lg font-semibold text-cream">Add your assignment</p>
+              <p className="text-sm text-cream/60">Drag a file here, or paste the text below.</p>
+              <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setInputMode('paste')}
+                  className="flex items-center gap-1.5 rounded-xl bg-mint-tint px-4 py-2.5 text-sm font-semibold text-forest transition-opacity hover:opacity-90"
+                >
+                  <ClipboardIcon className="h-4 w-4" />
+                  Paste text
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={extracting}
+                  className="flex items-center gap-1.5 rounded-xl border border-cream/15 bg-cream/5 px-4 py-2.5 text-sm font-semibold text-cream/90 hover:bg-cream/10 disabled:opacity-50"
+                >
+                  <UploadIcon className="h-4 w-4" />
+                  {extracting ? 'Reading file...' : 'Choose file'}
+                </button>
+              </div>
+              <p className="text-xs text-cream/50">PDF, Word, image, or plain text</p>
+              {fileReady && !extracting && (
+                <p className="text-xs font-semibold text-mint-tint">File read successfully — ready to analyze.</p>
+              )}
+            </div>
           ) : (
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
@@ -620,6 +494,28 @@ function AddAssignmentScreen({
             </div>
           )}
 
+          {mode === 'redesign_ai' && (
+            <div className="mt-5">
+              <p className="text-sm font-medium text-cream/90">How should students use AI?</p>
+              <div className="mt-2 grid gap-3 sm:grid-cols-3">
+                {AI_USE_LEVEL_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setAiUseLevel(opt.value)}
+                    disabled={starting}
+                    className={`rounded-xl border p-3.5 text-left transition-colors ${
+                      aiUseLevel === opt.value ? 'border-terracotta bg-terracotta/20' : 'border-cream/10 bg-cream/5 hover:border-cream/25'
+                    }`}
+                  >
+                    <p className="text-sm font-semibold text-cream">{opt.label}</p>
+                    <p className="mt-1 text-xs text-cream/60">{opt.description}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {error && (
             <p className="mt-4 text-sm text-terracotta">
               <UpgradeMessage text={error} />
@@ -627,64 +523,20 @@ function AddAssignmentScreen({
           )}
         </div>
 
-        <p className="mt-4 flex items-center gap-1.5 text-xs text-cream/50">
-          <ShieldIcon className="h-3.5 w-3.5" />
-          Do not include student names or personally identifiable information.
-        </p>
-
-        {mode === 'redesign_ai' && (
-          <div className="mt-5">
-            <p className="text-sm font-medium text-cream/90">How should students use AI?</p>
-            <label className="mt-2 flex items-center gap-2 text-xs text-cream/70">
-              <input
-                type="checkbox"
-                checked={letWivozaRecommend}
-                onChange={(e) => {
-                  setLetWivozaRecommend(e.target.checked)
-                  if (e.target.checked) setAiUseLevel('')
-                }}
-                disabled={starting}
-                className="h-3.5 w-3.5 rounded border-cream/30 accent-terracotta"
-              />
-              Not sure? Let Wivoza recommend the best approach.
-            </label>
-            <div className={`mt-2 grid gap-3 sm:grid-cols-3 ${letWivozaRecommend ? 'pointer-events-none opacity-40' : ''}`}>
-              {AI_USE_LEVEL_OPTIONS.map((opt) => {
-                const selected = !letWivozaRecommend && aiUseLevel === opt.value
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setAiUseLevel(opt.value)}
-                    disabled={starting || letWivozaRecommend}
-                    className={`relative rounded-xl border p-3.5 text-left transition-colors ${
-                      selected
-                        ? 'border-terracotta bg-cream/15 shadow-md shadow-terracotta/10'
-                        : 'border-cream/10 bg-cream/5 hover:border-cream/25'
-                    }`}
-                  >
-                    {selected && (
-                      <span className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-terracotta text-cream">
-                        <CheckIcon className="h-3 w-3" />
-                      </span>
-                    )}
-                    <p className={`text-sm font-semibold ${selected ? 'text-cream' : 'text-cream/90'}`}>{opt.label}</p>
-                    <p className={`mt-1 text-xs ${selected ? 'text-cream/90' : 'text-cream/60'}`}>{opt.description}</p>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        <button
-          type="button"
-          onClick={handleAnalyze}
-          disabled={!canSubmit || starting}
-          className="mt-5 w-full rounded-xl bg-mint-tint px-5 py-2.5 text-sm font-semibold text-forest transition-opacity hover:opacity-90 disabled:opacity-50 sm:w-auto"
-        >
-          {starting ? analyzingSteps[analyzingStep] : error ? 'Try again' : mode === 'redesign_ai' ? 'Redesign assignment' : 'Analyze assignment'}
-        </button>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="flex items-center gap-1.5 text-xs text-cream/50">
+            <ShieldIcon className="h-3.5 w-3.5" />
+            Do not include student names or personally identifiable information.
+          </p>
+          <button
+            type="button"
+            onClick={handleAnalyze}
+            disabled={!canSubmit || starting}
+            className="rounded-xl bg-mint-tint px-5 py-2.5 text-sm font-semibold text-forest transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {starting ? analyzingSteps[analyzingStep] : 'Analyze assignment'}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -776,7 +628,6 @@ function ReviewSnapshotPanel({
   revising,
   reviseError,
   conversationEmpty,
-  onRedesign,
 }: {
   session: AssignmentCoachSession
   onExit: () => void
@@ -794,7 +645,6 @@ function ReviewSnapshotPanel({
   revising: boolean
   reviseError: string | null
   conversationEmpty: boolean
-  onRedesign: () => void
 }) {
   const snapshot = session.reviewSnapshot!
   const [showAll, setShowAll] = useState(false)
@@ -1058,21 +908,6 @@ function ReviewSnapshotPanel({
         </div>
       )}
 
-      {(snapshot.aiRisk.rating === 'high' || snapshot.aiRisk.rating === 'moderate') && (
-        <div className="mt-3 rounded-2xl border border-terracotta/30 bg-terracotta/10 p-5">
-          <p className="text-sm font-bold text-cream">AI completion risk: {AI_RISK_LABELS[snapshot.aiRisk.rating]}</p>
-          {snapshot.aiRisk.explanation && <p className="mt-1 text-sm text-cream/80">{snapshot.aiRisk.explanation}</p>}
-          <button
-            type="button"
-            onClick={onRedesign}
-            className="mt-3 flex items-center gap-1.5 rounded-xl bg-cream px-4 py-2 text-xs font-semibold text-forest transition-opacity hover:opacity-90"
-          >
-            Make this assignment AI-ready
-            <ArrowRightIcon className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      )}
-
       <button
         type="button"
         onClick={onRevise}
@@ -1232,12 +1067,10 @@ function Workspace({
   session,
   onUpdate,
   onExit,
-  onRedesignFromReview,
 }: {
   session: AssignmentCoachSession
   onUpdate: (session: AssignmentCoachSession) => void
   onExit: () => void
-  onRedesignFromReview: (session: AssignmentCoachSession) => void
 }) {
   const navigate = useNavigate()
   const isRedesign = session.mode === 'redesign_ai'
@@ -1488,16 +1321,6 @@ function Workspace({
 
               <div className="flex flex-col gap-3">
                 <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-                  {session.aiResistant?.recommendedAiUse && (
-                    <p className="mb-3 rounded-lg bg-mint-tint/40 px-3 py-2 text-xs text-forest">
-                      <span className="font-semibold">
-                        Wivoza recommended{' '}
-                        {AI_USE_LEVEL_OPTIONS.find((o) => o.value === session.aiResistant?.recommendedAiUse?.level)?.label ??
-                          'AI as a thinking partner'}
-                      </span>
-                      {session.aiResistant.recommendedAiUse.note ? ` — ${session.aiResistant.recommendedAiUse.note}` : ''}
-                    </p>
-                  )}
                   {session.aiResistant?.strategies && (
                     <div className="mb-3">
                       <p className="text-xs font-semibold uppercase tracking-wide text-forest">Strategies</p>
@@ -1559,7 +1382,6 @@ function Workspace({
               revising={revising}
               reviseError={reviseError}
               conversationEmpty={session.conversation.length === 0}
-              onRedesign={() => onRedesignFromReview(session)}
             />
           ) : (
             <>

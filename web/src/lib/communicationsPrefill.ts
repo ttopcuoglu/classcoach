@@ -38,22 +38,12 @@ export type AskPrefill = {
   incidentText?: string
 }
 
-// Carries an already-reviewed assignment's text (plus a short note on why
-// it was flagged) straight into the Redesign intake screen, so a teacher
-// acting on a Review session's AI-completion-risk finding never has to
-// re-upload or re-paste what's already on file.
-export type AssignmentRedesignPrefill = {
-  originalText: string
-  extraNote?: string
-}
-
 const KEYS = {
   write: 'wivoza.prefill.write',
   prepare: 'wivoza.prefill.prepare',
   practice: 'wivoza.prefill.practice',
   review: 'wivoza.prefill.review',
   ask: 'wivoza.prefill.ask',
-  assignmentRedesign: 'wivoza.prefill.assignmentRedesign',
 } as const
 
 function setPrefill<T>(key: string, value: T) {
@@ -85,6 +75,3 @@ export const takeReviewPrefill = () => takePrefill<ReviewPrefill>(KEYS.review)
 
 export const setAskPrefill = (value: AskPrefill) => setPrefill(KEYS.ask, value)
 export const takeAskPrefill = () => takePrefill<AskPrefill>(KEYS.ask)
-
-export const setAssignmentRedesignPrefill = (value: AssignmentRedesignPrefill) => setPrefill(KEYS.assignmentRedesign, value)
-export const takeAssignmentRedesignPrefill = () => takePrefill<AssignmentRedesignPrefill>(KEYS.assignmentRedesign)
