@@ -19,7 +19,6 @@ import {
   StarIcon,
   TargetIcon,
   UploadIcon,
-  WarningIcon,
 } from '../components/icons'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import { ASSIGNMENT_GRADE_LEVELS } from '../lib/assignmentGradeLevels'
@@ -1229,33 +1228,6 @@ function ClarifyingBanner({
   )
 }
 
-// Light-themed sibling to DarkReviewCard, for the redesign output's five
-// sections — Workspace is cream-themed, so reusing DarkReviewCard's dark
-// styling verbatim would look like a foreign patch.
-function LightResultCard({
-  icon,
-  label,
-  accentClassName,
-  children,
-}: {
-  icon: React.ReactNode
-  label: string
-  accentClassName?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-      <div className="flex items-center gap-2">
-        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${accentClassName ?? 'bg-mint-tint text-forest'}`}>
-          {icon}
-        </span>
-        <p className="text-xs font-semibold uppercase tracking-wide text-forest">{label}</p>
-      </div>
-      <div className="mt-3">{children}</div>
-    </div>
-  )
-}
-
 function Workspace({
   session,
   onUpdate,
@@ -1286,9 +1258,6 @@ function Workspace({
   const [refining, setRefining] = useState(false)
   const [refineError, setRefineError] = useState<string | null>(null)
   const [clarifyingDismissed, setClarifyingDismissed] = useState(false)
-
-  const [revisedView, setRevisedView] = useState<'original' | 'revised'>('revised')
-  const [editingRedesign, setEditingRedesign] = useState(false)
 
   const [text, setText] = useState(session.liveAssignmentText ?? '')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -1442,10 +1411,6 @@ function Workspace({
     await navigator.clipboard.writeText(text).catch(() => {})
   }
 
-  async function handleCopyValue(value: string) {
-    await navigator.clipboard.writeText(value).catch(() => {})
-  }
-
   const chips = [
     modeLabel(session.mode),
     isRedesign && session.aiUseLevel
@@ -1500,22 +1465,13 @@ function Workspace({
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="font-heading text-sm font-semibold text-forest">Redesign for meaningful AI use</h2>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/assignment-coach/${session.id}/export`)}
-                    className="rounded-full border border-hairline bg-cream-card px-3 py-1.5 text-xs font-semibold text-ink-soft hover:text-forest"
-                  >
-                    Download
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onExit}
-                    className="rounded-full border border-hairline bg-cream-card px-3 py-1.5 text-xs font-semibold text-ink-soft hover:text-forest"
-                  >
-                    Start over
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/assignment-coach/${session.id}/export`)}
+                  className="rounded-full border border-hairline bg-cream-card px-3 py-1.5 text-xs font-semibold text-ink-soft hover:text-forest"
+                >
+                  Export
+                </button>
               </div>
 
               <DetectedContextBar session={session} onSave={handleSaveDetails} />
@@ -1530,122 +1486,58 @@ function Workspace({
               )}
               {refineError && <p className="text-sm text-terracotta-600">{refineError}</p>}
 
-              {session.aiResistant && (
-                <div className="flex flex-col gap-3">
-                  {session.aiResistant.aiRole && (
-                    <LightResultCard icon={<TargetIcon className="h-4 w-4" />} label="Recommended AI role">
-                      <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-forest">
-                        {AI_USE_LEVEL_OPTIONS.find((o) => o.value === session.aiResistant?.aiRole?.level)?.label ?? 'AI as a thinking partner'}
-                        {session.aiResistant.aiRole.recommended && (
-                          <span className="rounded-full bg-mint-tint px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-forest">
-                            Recommended by Wivoza
-                          </span>
-                        )}
-                      </p>
-                      {session.aiResistant.aiRole.explanation && (
-                        <p className="mt-1 text-sm text-ink">{session.aiResistant.aiRole.explanation}</p>
-                      )}
-                    </LightResultCard>
+              <div className="flex flex-col gap-3">
+                <div className="rounded-2xl border border-hairline bg-cream-card p-5">
+                  {session.aiResistant?.recommendedAiUse && (
+                    <p className="mb-3 rounded-lg bg-mint-tint/40 px-3 py-2 text-xs text-forest">
+                      <span className="font-semibold">
+                        Wivoza recommended{' '}
+                        {AI_USE_LEVEL_OPTIONS.find((o) => o.value === session.aiResistant?.recommendedAiUse?.level)?.label ??
+                          'AI as a thinking partner'}
+                      </span>
+                      {session.aiResistant.recommendedAiUse.note ? ` — ${session.aiResistant.recommendedAiUse.note}` : ''}
+                    </p>
                   )}
-                  {session.aiResistant.vulnerableSteps && (
-                    <LightResultCard
-                      icon={<WarningIcon className="h-4 w-4" />}
-                      label="Vulnerable steps"
-                      accentClassName="bg-peach-tint text-terracotta-600"
-                    >
-                      <p className="whitespace-pre-wrap text-sm text-ink">{session.aiResistant.vulnerableSteps}</p>
-                    </LightResultCard>
-                  )}
-                  {(session.aiResistant.thinkingSafeguards ?? session.aiResistant.strategies) && (
-                    <LightResultCard icon={<ShieldIcon className="h-4 w-4" />} label="Thinking safeguards">
-                      <p className="whitespace-pre-wrap text-sm text-ink">
-                        {session.aiResistant.thinkingSafeguards ?? session.aiResistant.strategies}
-                      </p>
-                    </LightResultCard>
-                  )}
-                  {session.aiResistant.guidelines && (
-                    <LightResultCard icon={<ChecklistIcon className="h-4 w-4" />} label="Student AI guidelines">
-                      <p className="whitespace-pre-wrap text-sm text-ink">{session.aiResistant.guidelines}</p>
-                      <button
-                        type="button"
-                        onClick={() => handleCopyValue(session.aiResistant?.guidelines ?? '')}
-                        className="mt-2 text-xs font-semibold text-ink-soft hover:text-forest"
-                      >
-                        Copy student AI guidelines
-                      </button>
-                    </LightResultCard>
-                  )}
-                  {session.aiResistant.revisedAssignment && (
-                    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Revised assignment</p>
-                        <div className="flex rounded-full border border-hairline bg-cream p-0.5 text-xs font-semibold">
-                          <button
-                            type="button"
-                            onClick={() => setRevisedView('original')}
-                            className={`rounded-full px-2.5 py-1 ${revisedView === 'original' ? 'bg-forest text-cream' : 'text-ink-soft'}`}
-                          >
-                            Original
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setRevisedView('revised')}
-                            className={`rounded-full px-2.5 py-1 ${revisedView === 'revised' ? 'bg-forest text-cream' : 'text-ink-soft'}`}
-                          >
-                            Revised
-                          </button>
-                        </div>
-                      </div>
-                      {editingRedesign ? (
-                        <textarea
-                          value={text}
-                          onChange={(e) => setText(e.target.value)}
-                          rows={12}
-                          className="mt-2 w-full rounded-lg border border-hairline bg-cream px-3 py-2 text-sm text-ink focus:border-terracotta/50 focus:outline-none"
-                        />
-                      ) : (
-                        <p className="mt-2 whitespace-pre-wrap text-sm text-ink">
-                          {revisedView === 'original'
-                            ? session.originalText || 'No original text on file.'
-                            : session.aiResistant.revisedAssignment}
-                        </p>
-                      )}
-                      <div className="mt-4 flex flex-wrap items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={handleApplyAiResistant}
-                          className="rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-cream transition-opacity hover:opacity-90"
-                        >
-                          Apply to assignment
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleCopyValue(session.aiResistant?.revisedAssignment ?? '')}
-                          className="text-xs font-semibold text-ink-soft hover:text-forest"
-                        >
-                          Copy revised assignment
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingRedesign((v) => !v)}
-                          className="text-xs font-semibold text-ink-soft hover:text-forest"
-                        >
-                          {editingRedesign ? 'Done editing' : 'Edit'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleAiResistant}
-                          disabled={aiResisting || !text.trim()}
-                          className="text-xs font-semibold text-ink-soft hover:text-forest disabled:opacity-50"
-                        >
-                          {aiResisting ? 'Regenerating...' : 'Regenerate ↻'}
-                        </button>
-                      </div>
+                  {session.aiResistant?.strategies && (
+                    <div className="mb-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-forest">Strategies</p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.aiResistant.strategies}</p>
                     </div>
                   )}
-                  {aiResistError && <p className="text-sm text-terracotta-600">{aiResistError}</p>}
+                  {session.aiResistant?.guidelines && (
+                    <div className="mb-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Student AI guidelines</p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.aiResistant.guidelines}</p>
+                    </div>
+                  )}
+                  {session.aiResistant?.revisedAssignment && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Revised assignment (preview)</p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.aiResistant.revisedAssignment}</p>
+                    </div>
+                  )}
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    {session.aiResistant?.revisedAssignment && (
+                      <button
+                        type="button"
+                        onClick={handleApplyAiResistant}
+                        className="rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-cream transition-opacity hover:opacity-90"
+                      >
+                        Apply to assignment
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleAiResistant}
+                      disabled={aiResisting || !text.trim()}
+                      className="text-xs font-semibold text-ink-soft hover:text-forest disabled:opacity-50"
+                    >
+                      {aiResisting ? 'Regenerating...' : 'Regenerate ↻'}
+                    </button>
+                  </div>
                 </div>
-              )}
+                {aiResistError && <p className="text-sm text-terracotta-600">{aiResistError}</p>}
+              </div>
             </>
           ) : session.reviewSnapshot ? (
             <ReviewSnapshotPanel

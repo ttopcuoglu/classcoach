@@ -402,14 +402,12 @@ export type AssignmentReviewSummary = {
   suggestions: string | null
 }
 export type AssignmentAiResistant = {
-  aiRole: { level: AssignmentAiUseLevel | null; explanation: string | null; recommended: boolean } | null
-  vulnerableSteps: string | null
-  thinkingSafeguards: string | null
+  strategies: string | null
   guidelines: string | null
   revisedAssignment: string | null
-  // Pre-existing sessions only stored this field, under this name — kept
-  // for backward-compat reads (render `thinkingSafeguards ?? strategies`).
-  strategies?: string | null
+  // Set only when the teacher chose "let Wivoza recommend" — the level
+  // Claude picked, plus a one-sentence reason it fits this assignment.
+  recommendedAiUse?: { level: AssignmentAiUseLevel; note: string | null } | null
 }
 export type AssignmentFinalMaterials = {
   assignment: string | null

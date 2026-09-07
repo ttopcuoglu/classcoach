@@ -222,24 +222,23 @@ function aiRoleFramingBlock(aiUseLevel: string | null): string {
   }
   return `The teacher wants your recommendation on how students should use AI for this specific assignment. Choose the single best-fitting option from:
 ${ALL_AI_USE_LEVELS_TEXT}
-State your choice via the <recommended_ai_use_level> tag below, using exactly one of: thinking_partner, limited, no_ai.`
+State your choice and a one-sentence reason via the <recommended_ai_use_level> and <recommended_ai_use_note> tags below, using exactly one of: thinking_partner, limited, no_ai for the level.`
 }
 
-// New five-section output contract — the "recommended" role explanation,
-// vulnerable-steps, and safeguards tags shared by both the initial start
-// call and the regenerate call, since both currently produce this shape.
+// Original three-tag output contract. When aiUseLevel is null (the
+// teacher chose "let Wivoza recommend"), two extra tags are appended so
+// the resolved level and a one-sentence reason can be shown — everything
+// else is unchanged from the shape this app has always produced.
 function redesignOutputTags(aiUseLevel: string | null): string {
-  return `${aiUseLevel ? '' : `<recommended_ai_use_level>\nOne of: thinking_partner, limited, no_ai.\n</recommended_ai_use_level>\n`}<ai_role_explanation>
-1-2 sentences on why the selected or recommended AI-use level genuinely fits THIS assignment — not a generic justification.
-</ai_role_explanation>
-<vulnerable_steps>
-The specific parts of the ORIGINAL assignment a student could complete by pasting the directions into an AI tool, without demonstrating genuine understanding. Dash-prefixed, one per line. Omit this tag entirely if nothing genuinely qualifies.
-</vulnerable_steps>
-<thinking_safeguards>
-2-3 concrete safeguards actually used in the revised assignment below, each one sentence — only ones that genuinely fit this assignment, don't force-fit every option.
-</thinking_safeguards>
+  return `${
+    aiUseLevel
+      ? ''
+      : `<recommended_ai_use_level>\nOne of: thinking_partner, limited, no_ai.\n</recommended_ai_use_level>\n<recommended_ai_use_note>\nOne short sentence on why this level fits this specific assignment.\n</recommended_ai_use_note>\n`
+  }<strategies>
+2-3 concrete strategies actually used in the revised assignment below, each one sentence.
+</strategies>
 <guidelines>
-A short, plain-language, copy-ready statement for students covering: what AI use is allowed, what's limited, what's prohibited, what they must disclose, and what evidence of their own thinking they must provide.
+A short, plain-language statement for students about how AI may and may not be used on this task, consistent with what the teacher chose.
 </guidelines>
 <revised_assignment>
 The full redesigned assignment text, ready for a student to read.
@@ -328,36 +327,36 @@ function parseReviewSnapshot(text: string): ReviewSnapshot {
 type RedesignOutput = {
   resolvedAiUseLevel: string
   aiResistant: {
-    aiRole: { level: string; explanation: string | null; recommended: boolean }
-    vulnerableSteps: string | null
-    thinkingSafeguards: string | null
+    strategies: string | null
     guidelines: string | null
     revisedAssignment: string | null
+    recommendedAiUse: { level: string; note: string | null } | null
   }
 }
 
 // Shared by the start, regenerate, and refine routes — all three produce
-// this same five-section shape. `knownAiUseLevel` is null only when the
+// this same three-field shape. `knownAiUseLevel` is null only when the
 // teacher chose "let Wivoza recommend"; in that case the concrete level
 // comes back from Claude's own <recommended_ai_use_level> tag (validated,
 // falling back to thinking_partner if malformed) — this function always
 // returns a real level, never "auto", since every downstream read of
 // `session.aiUseLevel` expects one.
 function parseRedesignOutput(text: string, knownAiUseLevel: string | null): RedesignOutput {
-  const recommended = knownAiUseLevel == null
+  const isRecommended = knownAiUseLevel == null
   let resolvedAiUseLevel = knownAiUseLevel ?? 'thinking_partner'
-  if (recommended) {
+  let recommendedAiUse: { level: string; note: string | null } | null = null
+  if (isRecommended) {
     const raw = (extractTag(text, 'recommended_ai_use_level') ?? '').trim()
     if (VALID_AI_USE_LEVELS.includes(raw)) resolvedAiUseLevel = raw
+    recommendedAiUse = { level: resolvedAiUseLevel, note: extractTag(text, 'recommended_ai_use_note') }
   }
   return {
     resolvedAiUseLevel,
     aiResistant: {
-      aiRole: { level: resolvedAiUseLevel, explanation: extractTag(text, 'ai_role_explanation'), recommended },
-      vulnerableSteps: extractTag(text, 'vulnerable_steps'),
-      thinkingSafeguards: extractTag(text, 'thinking_safeguards'),
+      strategies: extractTag(text, 'strategies'),
       guidelines: extractTag(text, 'guidelines'),
       revisedAssignment: extractTag(text, 'revised_assignment'),
+      recommendedAiUse,
     },
   }
 }
