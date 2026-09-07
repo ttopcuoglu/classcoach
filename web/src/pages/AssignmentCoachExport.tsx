@@ -125,13 +125,31 @@ export default function AssignmentCoachExport() {
               )
             )}
 
-            {session.aiResistant?.guidelines && (
+            {session.aiResistant && (
               <section className="mt-4 break-inside-avoid rounded-xl border border-hairline p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Student AI guidelines</p>
-                <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{session.aiResistant.guidelines}</p>
-                {session.aiResistant.strategies && (
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Redesign for meaningful AI use</p>
+                {session.aiResistant.aiRole && (
                   <p className="mt-2 text-sm text-ink">
-                    <span className="font-semibold">Strategies:</span> {session.aiResistant.strategies}
+                    <span className="font-semibold">
+                      {session.aiResistant.aiRole.recommended ? 'Wivoza-recommended AI role:' : 'Selected AI role:'}
+                    </span>{' '}
+                    {session.aiResistant.aiRole.explanation}
+                  </p>
+                )}
+                {session.aiResistant.vulnerableSteps && (
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-ink">
+                    <span className="font-semibold">Vulnerable steps:</span> {session.aiResistant.vulnerableSteps}
+                  </p>
+                )}
+                {(session.aiResistant.thinkingSafeguards ?? session.aiResistant.strategies) && (
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-ink">
+                    <span className="font-semibold">Thinking safeguards:</span>{' '}
+                    {session.aiResistant.thinkingSafeguards ?? session.aiResistant.strategies}
+                  </p>
+                )}
+                {session.aiResistant.guidelines && (
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-ink">
+                    <span className="font-semibold">Student AI guidelines:</span> {session.aiResistant.guidelines}
                   </p>
                 )}
               </section>
