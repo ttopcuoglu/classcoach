@@ -449,7 +449,7 @@ function AddAssignmentScreen({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".docx,.pdf,.txt"
+                  accept=".docx,.pdf,.txt,.jpg,.jpeg,.png"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0]
@@ -467,7 +467,8 @@ function AddAssignmentScreen({
                 >
                   {extracting ? 'Reading file...' : 'Choose a file'}
                 </button>
-                <p className="text-xs text-ink-soft">Supports .docx, .pdf, and .txt</p>
+                <p className="text-xs text-ink-soft">Supports .docx, .pdf, .txt, .jpg, and .png</p>
+                <p className="text-xs text-ink-soft">A scanned or photographed page works too — it just takes a bit longer to read.</p>
                 {text.trim() && !extracting && (
                   <p className="text-xs font-semibold text-forest">
                     File read successfully — switch to "Paste text" to review it.

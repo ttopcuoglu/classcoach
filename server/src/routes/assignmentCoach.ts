@@ -1,7 +1,9 @@
+import { tmpdir } from 'node:os'
 import { Router } from 'express'
 import mammoth from 'mammoth'
 import multer from 'multer'
 import { PDFParse } from 'pdf-parse'
+import { createWorker, type Worker } from 'tesseract.js'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { checkFeatureAccess, countUsageLogActionsThisMonth, LESSON_PLANNING_ACTIONS } from '../lib/billing.ts'
@@ -395,6 +397,61 @@ function contextFromSession(session: {
 // pure local parsing, no Claude call, so this isn't usage-capped.
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } })
 
+// Lazily created once per server process and reused across requests — the
+// English trained-data download only happens on the very first OCR call,
+// not on every upload. Never terminated: this route may be hit again at
+// any time for the life of the process.
+let ocrWorkerPromise: Promise<Worker> | null = null
+function getOcrWorker(): Promise<Worker> {
+  if (!ocrWorkerPromise) {
+    // Cache the downloaded English trained-data in the OS temp dir, not the
+    // working directory — keeps this out of the repo regardless of where
+    // the process runs.
+    ocrWorkerPromise = createWorker('eng', undefined, { cachePath: tmpdir() })
+  }
+  return ocrWorkerPromise
+}
+
+async function ocrImageBuffer(buffer: Buffer): Promise<string> {
+  const worker = await getOcrWorker()
+  const {
+    data: { text },
+  } = await worker.recognize(buffer)
+  return text
+}
+
+// pdf-parse's own text output for a page with no real text layer is just
+// this separator artifact, not an empty string — strip it before judging
+// whether OCR is actually needed.
+function stripPdfPageMarkers(text: string): string {
+  return text.replace(/--\s*\d+\s*of\s*\d+\s*--/g, '').trim()
+}
+
+// Scanned/photographed pages are just an embedded image with no text
+// layer at all — pdf-parse (or any text-layer extractor) correctly finds
+// nothing. Falls back to OCR by rendering each page to an image via
+// pdf-parse's own built-in (pure-JS, no native/poppler dependency)
+// screenshot renderer. Capped at a handful of pages to bound latency/cost
+// on an unexpectedly long scanned packet.
+const MAX_OCR_PAGES = 5
+
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  const parser = new PDFParse({ data: buffer })
+  try {
+    const direct = stripPdfPageMarkers((await parser.getText()).text)
+    if (direct.length >= 15) return direct
+
+    const screenshot = await parser.getScreenshot({ scale: 2 })
+    const pages = screenshot.pages.slice(0, MAX_OCR_PAGES)
+    const ocrTexts = await Promise.all(pages.map((page) => ocrImageBuffer(Buffer.from(page.data))))
+    return ocrTexts.join('\n\n').trim()
+  } finally {
+    await parser.destroy()
+  }
+}
+
+const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png']
+
 assignmentCoachRouter.post('/extract-text', upload.single('file'), async (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: 'No file received' })
@@ -406,20 +463,17 @@ assignmentCoachRouter.post('/extract-text', upload.single('file'), async (req, r
     if (name.endsWith('.docx')) {
       text = (await mammoth.extractRawText({ buffer: req.file.buffer })).value
     } else if (name.endsWith('.pdf')) {
-      const parser = new PDFParse({ data: req.file.buffer })
-      try {
-        text = (await parser.getText()).text
-      } finally {
-        await parser.destroy()
-      }
+      text = await extractPdfText(req.file.buffer)
     } else if (name.endsWith('.txt')) {
       text = req.file.buffer.toString('utf-8')
+    } else if (IMAGE_EXTENSIONS.some((ext) => name.endsWith(ext))) {
+      text = await ocrImageBuffer(req.file.buffer)
     } else {
-      res.status(400).json({ error: 'Please upload a .docx, .pdf, or .txt file.' })
+      res.status(400).json({ error: 'Please upload a .docx, .pdf, .txt, .jpg, or .png file.' })
       return
     }
     if (!text.trim()) {
-      res.status(422).json({ error: "Couldn't find any text in that file." })
+      res.status(422).json({ error: "Couldn't find any text in that file — if it's a scan or photo, make sure the writing is clear and well-lit." })
       return
     }
     res.json({ text: text.trim() })
