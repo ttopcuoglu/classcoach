@@ -572,9 +572,14 @@ assignmentCoachRouter.post('/', async (req, res) => {
 
   try {
     const systemPrompt = mode === 'review' ? buildReviewStartPrompt(originalText) : buildRedesignAiStartPrompt(aiUseLevel!, originalText)
+    // Redesign has to reproduce the full assignment text in <revised_assignment>,
+    // which for a real multi-page assignment can run several thousand tokens on
+    // its own — a low cap here truncates mid-tag, the closing tag never appears,
+    // and extractTag comes back empty (surfacing as "Could not put this
+    // together" for any sufficiently long real assignment).
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 1800,
+      max_tokens: 8192,
       thinking: { type: 'disabled' },
       system: systemPrompt,
       messages: [{ role: 'user', content: START_MESSAGE }],
@@ -781,9 +786,11 @@ assignmentCoachRouter.post('/:id/ai-resistant', async (req, res) => {
 
   try {
     const context = contextFromSession(session)
+    // Same reproduce-the-full-assignment concern as the start route — a low
+    // cap here truncates <revised_assignment> mid-write on a real assignment.
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 1200,
+      max_tokens: 8192,
       thinking: { type: 'disabled' },
       system: buildAiResistantSystemPrompt(session.aiUseLevel),
       messages: [{ role: 'user', content: context.join('\n') }],
@@ -841,9 +848,11 @@ assignmentCoachRouter.post('/:id/revise', async (req, res) => {
 
   try {
     const transcript = existing.map((m) => `${m.role === 'assistant' ? 'Coach' : 'Teacher'}: ${m.text}`).join('\n')
+    // Same reproduce-the-full-assignment concern as the start route — a low
+    // cap here truncates <assignment> mid-write on a real assignment.
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 1200,
+      max_tokens: 8192,
       thinking: { type: 'disabled' },
       system: ASSIGNMENT_FINALIZE_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: transcript }],
@@ -909,9 +918,11 @@ assignmentCoachRouter.post('/:id/refine', async (req, res) => {
       ? buildRedesignAiStartPrompt(session.aiUseLevel ?? 'thinking_partner', session.originalText, extraNote)
       : buildReviewStartPrompt(session.originalText, extraNote)
 
+    // Same reproduce-the-full-assignment concern as the start route — a low
+    // cap here truncates <revised_assignment> mid-write on a real assignment.
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 1800,
+      max_tokens: 8192,
       thinking: { type: 'disabled' },
       system: systemPrompt,
       messages: [{ role: 'user', content: START_MESSAGE }],
