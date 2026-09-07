@@ -445,9 +445,15 @@ function stripPdfPageMarkers(text: string): string {
 // layer at all — pdf-parse (or any text-layer extractor) correctly finds
 // nothing. Falls back to OCR by rendering each page to an image via
 // pdf-parse's own built-in (pure-JS, no native/poppler dependency)
-// screenshot renderer. Capped at a handful of pages to bound latency/cost
-// on an unexpectedly long scanned packet.
-const MAX_OCR_PAGES = 5
+// screenshot renderer. Capped at a handful of pages to bound memory/latency
+// on an unexpectedly long scanned packet — critically, `first` must be
+// passed to getScreenshot itself, not applied by slicing its result
+// afterward: without it, pdf-parse rasterizes every page in the document
+// up front (at full resolution, each also serialized to a base64 data URL
+// by default) regardless of how many pages are actually used afterward,
+// which was enough to exhaust memory and crash the process on a multi-page
+// scan (surfacing as an opaque 502 rather than a real error response).
+const MAX_OCR_PAGES = 3
 
 async function extractPdfText(buffer: Buffer): Promise<string> {
   const parser = new PDFParse({ data: buffer })
@@ -455,10 +461,14 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
     const direct = stripPdfPageMarkers((await parser.getText()).text)
     if (direct.length >= 15) return direct
 
-    const screenshot = await parser.getScreenshot({ scale: 2 })
-    const pages = screenshot.pages.slice(0, MAX_OCR_PAGES)
-    const ocrTexts = await Promise.all(pages.map((page) => ocrImageBuffer(Buffer.from(page.data))))
-    return ocrTexts.join('\n\n').trim()
+    const screenshot = await parser.getScreenshot({ scale: 2, first: MAX_OCR_PAGES, imageDataUrl: false })
+    const texts: string[] = []
+    // Sequential, not Promise.all — keeps at most one rendered page buffer
+    // in memory during OCR at a time, rather than holding all of them.
+    for (const page of screenshot.pages) {
+      texts.push(await ocrImageBuffer(Buffer.from(page.data)))
+    }
+    return texts.join('\n\n').trim()
   } finally {
     await parser.destroy()
   }
