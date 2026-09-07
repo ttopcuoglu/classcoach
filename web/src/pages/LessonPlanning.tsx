@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ShareIcon, StarIcon } from '../components/icons'
 import CoachingChat from '../components/CoachingChat'
+import { Spinner } from '../components/Spinner'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import {
   applyLessonPlanRevision,
@@ -507,7 +508,13 @@ function GeneratePanel() {
               disabled={generating || !context.objective.trim()}
               className="self-end rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
             >
-              {generating ? 'Generating...' : 'Generate Sample Plan'}
+              {generating ? (
+                <span className="flex items-center gap-2">
+                  <Spinner /> Generating...
+                </span>
+              ) : (
+                'Generate Sample Plan'
+              )}
             </button>
           </div>
         ) : (
@@ -540,11 +547,15 @@ function GeneratePanel() {
                   disabled={deliveryLoading}
                   className="text-sm font-medium text-ink-soft hover:text-brand-600 disabled:opacity-60"
                 >
-                  {deliveryLoading
-                    ? 'Getting feedback...'
-                    : plan.deliveryCoaching
-                      ? 'Regenerate ↻'
-                      : 'Get presentation & delivery feedback'}
+                  {deliveryLoading ? (
+                    <span className="flex items-center gap-2">
+                      <Spinner /> Getting feedback...
+                    </span>
+                  ) : plan.deliveryCoaching ? (
+                    'Regenerate ↻'
+                  ) : (
+                    'Get presentation & delivery feedback'
+                  )}
                 </button>
               </div>
               <button
@@ -710,7 +721,13 @@ function FeedbackPanel() {
               disabled={submitting || !canSubmit}
               className="self-end rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
             >
-              {submitting ? 'Getting feedback...' : 'Get Feedback'}
+              {submitting ? (
+                <span className="flex items-center gap-2">
+                  <Spinner /> Getting feedback...
+                </span>
+              ) : (
+                'Get Feedback'
+              )}
             </button>
           </div>
         ) : (
@@ -746,7 +763,13 @@ function FeedbackPanel() {
                     disabled={applyingRevision}
                     className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
                   >
-                    {applyingRevision ? 'Applying...' : 'Use this version'}
+                    {applyingRevision ? (
+                      <span className="flex items-center gap-2">
+                        <Spinner /> Applying...
+                      </span>
+                    ) : (
+                      'Use this version'
+                    )}
                   </button>
                   <button
                     type="button"
@@ -777,11 +800,15 @@ function FeedbackPanel() {
                   disabled={deliveryLoading}
                   className="text-sm font-medium text-ink-soft hover:text-brand-600 disabled:opacity-60"
                 >
-                  {deliveryLoading
-                    ? 'Getting feedback...'
-                    : plan.deliveryCoaching
-                      ? 'Regenerate ↻'
-                      : 'Get presentation & delivery feedback'}
+                  {deliveryLoading ? (
+                    <span className="flex items-center gap-2">
+                      <Spinner /> Getting feedback...
+                    </span>
+                  ) : plan.deliveryCoaching ? (
+                    'Regenerate ↻'
+                  ) : (
+                    'Get presentation & delivery feedback'
+                  )}
                 </button>
               </div>
               <button
@@ -961,8 +988,14 @@ function PresentationPanel() {
 
             {!extractedText ? (
               <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border bg-canvas px-4 py-8 text-center transition-colors hover:border-brand-300">
-                <span className="text-sm font-medium text-ink">
-                  {extracting ? 'Reading your presentation...' : 'Click to upload a .pptx or .pdf'}
+                <span className="flex items-center gap-2 text-sm font-medium text-ink">
+                  {extracting ? (
+                    <>
+                      <Spinner /> Reading your presentation...
+                    </>
+                  ) : (
+                    'Click to upload a .pptx or .pdf'
+                  )}
                 </span>
                 <span className="text-xs text-ink-soft">Export Google Slides or Keynote as PDF first if needed.</span>
                 <input
@@ -1039,7 +1072,13 @@ function PresentationPanel() {
               disabled={submitting || !extractedText}
               className="self-end rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
             >
-              {submitting ? 'Reviewing...' : 'Review Presentation'}
+              {submitting ? (
+                <span className="flex items-center gap-2">
+                  <Spinner /> Reviewing...
+                </span>
+              ) : (
+                'Review Presentation'
+              )}
             </button>
           </div>
         ) : (
@@ -1082,7 +1121,13 @@ function PresentationPanel() {
                     disabled={applyingRevision}
                     className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
                   >
-                    {applyingRevision ? 'Applying...' : 'Use this version'}
+                    {applyingRevision ? (
+                      <span className="flex items-center gap-2">
+                        <Spinner /> Applying...
+                      </span>
+                    ) : (
+                      'Use this version'
+                    )}
                   </button>
                   <button
                     type="button"
