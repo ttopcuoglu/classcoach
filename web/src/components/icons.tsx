@@ -355,3 +355,12 @@ export function GraduationCapIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function ShieldIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3.5 4.5 6v5.5c0 4.4 3 7.7 7.5 9 4.5-1.3 7.5-4.6 7.5-9V6L12 3.5Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="m9 12 2 2 4-4.5" />
+    </svg>
+  )
+}

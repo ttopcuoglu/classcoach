@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { AssignmentContent } from '../components/AssignmentDiagram'
 import CoachingChat from '../components/CoachingChat'
 import {
   BrainIcon,
@@ -12,6 +11,8 @@ import {
   GraduationCapIcon,
   KebabIcon,
   RobotIcon,
+  ShieldIcon,
+  SparkleIcon,
   StarIcon,
   TargetIcon,
   UploadIcon,
@@ -114,12 +115,6 @@ const REDESIGN_ANALYZING_STEPS = [
 
 const inputClass =
   'rounded-xl border border-hairline bg-cream-card px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta/50 focus:outline-none disabled:opacity-60'
-
-function tabPillClass(active: boolean): string {
-  return `flex-1 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-    active ? 'bg-forest text-cream' : 'bg-cream-card text-ink-soft'
-  }`
-}
 
 // Treats anything other than the two current modes (older rows may carry a
 // retired 'create'/'improve' value) as Review — the workspace never breaks
@@ -312,6 +307,12 @@ function AssignmentRow({
 // Redesign only — how students should use AI (a real policy choice, not
 // something to infer). Everything else (grade/subject/type/estimated
 // time) is detected from the text itself once "Analyze assignment" runs.
+const REVIEW_PREVIEW_PILLS = ['Grade fit', 'Thinking & rigor', 'Learning value', 'Workload', 'AI completion risk']
+const REDESIGN_PREVIEW_PILLS = ['Grade fit', 'AI use level', 'Redesign strategies', 'Student guidelines', 'Revised assignment']
+
+// Dark, "focused coaching workspace" treatment, matching the reference
+// design — same hand-picked dark brand tints as the Review snapshot panel,
+// applied here too so the whole Assignment Coach flow reads as one piece.
 function AddAssignmentScreen({
   mode,
   onBack,
@@ -321,8 +322,9 @@ function AddAssignmentScreen({
   onBack: () => void
   onStarted: (session: AssignmentCoachSession) => void
 }) {
-  const [inputMode, setInputMode] = useState<'paste' | 'upload'>('paste')
+  const [inputMode, setInputMode] = useState<'paste' | 'upload'>('upload')
   const [text, setText] = useState('')
+  const [fileReady, setFileReady] = useState(false)
   const [extracting, setExtracting] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [aiUseLevel, setAiUseLevel] = useState<AssignmentAiUseLevel | ''>('')
@@ -333,6 +335,7 @@ function AddAssignmentScreen({
 
   const canSubmit = text.trim().length > 0 && (mode === 'review' || aiUseLevel !== '')
   const analyzingSteps = mode === 'review' ? REVIEW_ANALYZING_STEPS : REDESIGN_ANALYZING_STEPS
+  const previewPills = mode === 'review' ? REVIEW_PREVIEW_PILLS : REDESIGN_PREVIEW_PILLS
 
   // Cycles a short, honestly-labeled sequence while the request is in
   // flight — never claims to be a real progress measurement, matching
@@ -350,10 +353,14 @@ function AddAssignmentScreen({
   async function handleFile(file: File) {
     setExtracting(true)
     setError(null)
+    setFileReady(false)
     try {
       const { text: extracted } = await extractAssignmentText(file)
+      // Held internally, never shown back — the teacher just sees a plain
+      // "file read successfully" confirmation, not the (possibly OCR-rough)
+      // extracted text itself.
       setText(extracted)
-      setInputMode('paste')
+      setFileReady(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not read that file. Please try pasting the text instead.')
     } finally {
@@ -379,149 +386,156 @@ function AddAssignmentScreen({
   }
 
   return (
-    <div className="flex flex-col gap-6 bg-cream text-ink">
+    <div className="flex flex-col gap-6">
       <button type="button" onClick={onBack} className="self-start text-sm font-medium text-ink-soft hover:text-forest">
         ← Back
       </button>
 
-      <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <h1 className="font-heading text-xl font-bold text-forest">
-            {mode === 'review' ? 'Review an assignment' : 'Redesign for meaningful AI use'}
-          </h1>
-          <p className="text-sm text-ink-soft">
-            Add what students will receive. Wivoza will identify the context and{' '}
-            {mode === 'review' ? 'review the learning value.' : 'redesign it for meaningful AI use.'}
-          </p>
+      <div className="mx-auto w-full max-w-[900px] rounded-3xl bg-[#11150f] p-8">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[#c96a45]">Assignment Coach</p>
+        <h1 className="mt-1 font-heading text-2xl font-bold text-[#f7f3ea] sm:text-3xl">
+          {mode === 'review'
+            ? 'See what this assignment truly asks of students.'
+            : 'See how ready this assignment is for meaningful AI use.'}
+        </h1>
+        <p className="mt-2 text-sm text-[#9aa79f]">
+          Add the assignment. Wivoza will estimate the context and{' '}
+          {mode === 'review' ? 'examine the quality of the learning experience.' : 'help you redesign it for meaningful AI use.'}
+        </p>
+
+        <div className="mt-5 flex flex-wrap gap-2">
+          {previewPills.map((p) => (
+            <span key={p} className="rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-xs font-medium text-[#c7cfc7]">
+              {p}
+            </span>
+          ))}
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-hairline bg-cream-card">
-          <div className="flex gap-1.5 border-b border-hairline p-2">
-            <button
-              type="button"
-              onClick={() => setInputMode('paste')}
-              className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-                inputMode === 'paste' ? 'bg-forest text-cream' : 'text-ink-soft hover:text-forest'
+        <div className="mt-6 rounded-2xl border border-white/10 bg-[#161c17] p-6">
+          {inputMode === 'upload' ? (
+            <div
+              onDragOver={(e) => {
+                e.preventDefault()
+                setDragOver(true)
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault()
+                setDragOver(false)
+                const file = e.dataTransfer.files?.[0]
+                if (file) handleFile(file)
+              }}
+              className={`flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-10 text-center transition-colors ${
+                dragOver ? 'border-[#c96a45] bg-[#c96a45]/10' : 'border-white/15'
               }`}
             >
-              <ClipboardIcon className="h-4 w-4" />
-              Paste text
-            </button>
-            <button
-              type="button"
-              onClick={() => setInputMode('upload')}
-              className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-                inputMode === 'upload' ? 'bg-forest text-cream' : 'text-ink-soft hover:text-forest'
-              }`}
-            >
-              <UploadIcon className="h-4 w-4" />
-              Upload file
-            </button>
-          </div>
-
-          <div className="p-4">
-            {inputMode === 'paste' ? (
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".docx,.pdf,.txt,.jpg,.jpeg,.png"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) handleFile(file)
+                  e.target.value = ''
+                }}
+              />
+              <div className="relative">
+                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#3a241c] text-[#e2986f]">
+                  <ClipboardIcon className="h-6 w-6" />
+                </span>
+                <span className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-[#e4b84a] text-[#3a2c0a]">
+                  <SparkleIcon className="h-3.5 w-3.5" />
+                </span>
+              </div>
+              <p className="font-heading text-lg font-semibold text-[#f7f3ea]">Add your assignment</p>
+              <p className="text-sm text-[#9aa79f]">Drag a file here, or paste the text below.</p>
+              <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setInputMode('paste')}
+                  className="flex items-center gap-1.5 rounded-xl bg-[#dce7df] px-4 py-2.5 text-sm font-semibold text-[#1b2e28] transition-opacity hover:opacity-90"
+                >
+                  <ClipboardIcon className="h-4 w-4" />
+                  Paste text
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={extracting}
+                  className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-[#e7ece7] hover:bg-white/10 disabled:opacity-50"
+                >
+                  <UploadIcon className="h-4 w-4" />
+                  {extracting ? 'Reading file...' : 'Choose file'}
+                </button>
+              </div>
+              <p className="text-xs text-[#8fa196]">PDF, Word, image, or plain text</p>
+              {fileReady && !extracting && (
+                <p className="text-xs font-semibold text-[#7fbf99]">File read successfully — ready to analyze.</p>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-[#e7ece7]">Paste the assignment</p>
+                <button type="button" onClick={() => setInputMode('upload')} className="text-xs font-semibold text-[#9aa79f] hover:text-[#f7f3ea]">
+                  Upload a file instead
+                </button>
+              </div>
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 disabled={starting}
                 rows={9}
                 placeholder="Paste the assignment here…"
-                className="w-full rounded-xl border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta/50 focus:outline-none disabled:opacity-60"
+                className="w-full rounded-xl border border-white/15 bg-white/5 px-3.5 py-2.5 text-sm text-[#f7f3ea] placeholder:text-[#8fa196] focus:border-[#c96a45]/50 focus:outline-none disabled:opacity-60"
               />
-            ) : (
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault()
-                  setDragOver(true)
-                }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={(e) => {
-                  e.preventDefault()
-                  setDragOver(false)
-                  const file = e.dataTransfer.files?.[0]
-                  if (file) handleFile(file)
-                }}
-                className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
-                  dragOver ? 'border-terracotta bg-peach-tint/40' : 'border-hairline'
-                }`}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".docx,.pdf,.txt,.jpg,.jpeg,.png"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) handleFile(file)
-                    e.target.value = ''
-                  }}
-                />
-                <UploadIcon className="h-6 w-6 text-terracotta" />
-                <p className="text-sm text-ink-soft">Drag a file here, or</p>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={extracting}
-                  className="rounded-xl bg-forest px-4 py-2 text-xs font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
-                >
-                  {extracting ? 'Reading file...' : 'Choose a file'}
-                </button>
-                <p className="text-xs text-ink-soft">Supports .docx, .pdf, .txt, .jpg, and .png</p>
-                <p className="text-xs text-ink-soft">A scanned or photographed page works too — it just takes a bit longer to read.</p>
-                {text.trim() && !extracting && (
-                  <p className="text-xs font-semibold text-forest">
-                    File read successfully — switch to "Paste text" to review it.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {mode === 'redesign_ai' && (
-              <div className="mt-4">
-                <p className="text-sm font-medium text-forest">How should students use AI?</p>
-                <div className="mt-2 grid gap-3 sm:grid-cols-3">
-                  {AI_USE_LEVEL_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setAiUseLevel(opt.value)}
-                      disabled={starting}
-                      className={`rounded-xl border p-3.5 text-left transition-colors ${
-                        aiUseLevel === opt.value
-                          ? 'border-forest bg-mint-tint'
-                          : 'border-hairline bg-cream hover:border-terracotta/40'
-                      }`}
-                    >
-                      <p className="text-sm font-semibold text-forest">{opt.label}</p>
-                      <p className="mt-1 text-xs text-ink-soft">{opt.description}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {error && (
-              <p className="mt-3 text-sm text-terracotta-600">
-                <UpgradeMessage text={error} />
-              </p>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline bg-cream px-4 py-3">
-            <div className="flex flex-wrap items-center gap-3 text-xs text-ink-soft">
-              <span>Do not include student names.</span>
-              <span>{text.length.toLocaleString()} characters</span>
+              <span className="self-end text-xs text-[#8fa196]">{text.length.toLocaleString()} characters</span>
             </div>
-            <button
-              type="button"
-              onClick={handleAnalyze}
-              disabled={!canSubmit || starting}
-              className="rounded-xl bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {starting ? analyzingSteps[analyzingStep] : 'Analyze assignment'}
-            </button>
-          </div>
+          )}
+
+          {mode === 'redesign_ai' && (
+            <div className="mt-5">
+              <p className="text-sm font-medium text-[#e7ece7]">How should students use AI?</p>
+              <div className="mt-2 grid gap-3 sm:grid-cols-3">
+                {AI_USE_LEVEL_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setAiUseLevel(opt.value)}
+                    disabled={starting}
+                    className={`rounded-xl border p-3.5 text-left transition-colors ${
+                      aiUseLevel === opt.value ? 'border-[#c96a45] bg-[#3a241c]' : 'border-white/10 bg-white/5 hover:border-white/25'
+                    }`}
+                  >
+                    <p className="text-sm font-semibold text-[#f7f3ea]">{opt.label}</p>
+                    <p className="mt-1 text-xs text-[#9aa79f]">{opt.description}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <p className="mt-4 text-sm text-[#d98262]">
+              <UpgradeMessage text={error} />
+            </p>
+          )}
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="flex items-center gap-1.5 text-xs text-[#8fa196]">
+            <ShieldIcon className="h-3.5 w-3.5" />
+            Do not include student names or personally identifiable information.
+          </p>
+          <button
+            type="button"
+            onClick={handleAnalyze}
+            disabled={!canSubmit || starting}
+            className="rounded-xl bg-[#dce7df] px-5 py-2.5 text-sm font-semibold text-[#1b2e28] transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {starting ? analyzingSteps[analyzingStep] : 'Analyze assignment'}
+          </button>
         </div>
       </div>
     </div>
@@ -1059,8 +1073,6 @@ function Workspace({
 }) {
   const navigate = useNavigate()
   const isRedesign = session.mode === 'redesign_ai'
-  const [mobilePane, setMobilePane] = useState<'coach' | 'assignment'>('coach')
-  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('preview')
 
   const [chatDraft, setChatDraft] = useState('')
   const [chatSending, setChatSending] = useState(false)
@@ -1245,16 +1257,29 @@ function Workspace({
         <button type="button" onClick={onExit} className="text-sm font-medium text-ink-soft hover:text-forest">
           ← Back to Assignment Coach
         </button>
-        <button
-          type="button"
-          onClick={handleToggleSaved}
-          className={`flex items-center gap-1.5 text-sm font-medium ${
-            session.saved ? 'text-terracotta-600' : 'text-ink-soft hover:text-terracotta-600'
-          }`}
-        >
-          <StarIcon className="h-4 w-4" filled={session.saved} />
-          {session.saved ? 'Saved' : 'Save for later'}
-        </button>
+        <div className="flex items-center gap-4">
+          {saveStatus === 'saving' && <span className="text-xs text-ink-soft">Saving…</span>}
+          {saveStatus === 'saved' && <span className="text-xs text-ink-soft">Saved</span>}
+          {saveStatus === 'error' && <span className="text-xs text-terracotta-600">Couldn't save</span>}
+          <button
+            type="button"
+            onClick={handleCopy}
+            disabled={!text.trim()}
+            className="text-sm font-medium text-ink-soft hover:text-forest disabled:opacity-50"
+          >
+            Copy assignment
+          </button>
+          <button
+            type="button"
+            onClick={handleToggleSaved}
+            className={`flex items-center gap-1.5 text-sm font-medium ${
+              session.saved ? 'text-terracotta-600' : 'text-ink-soft hover:text-terracotta-600'
+            }`}
+          >
+            <StarIcon className="h-4 w-4" filled={session.saved} />
+            {session.saved ? 'Saved' : 'Save for later'}
+          </button>
+        </div>
       </div>
 
       {!(!isRedesign && session.reviewSnapshot) && (
@@ -1267,20 +1292,8 @@ function Workspace({
         </div>
       )}
 
-      {/* Mobile tab switcher — Coach and Assignment are separate tabs
-          instead of squeezing a split screen into a narrow viewport. */}
-      <div className="flex gap-2 lg:hidden">
-        <button type="button" onClick={() => setMobilePane('coach')} className={tabPillClass(mobilePane === 'coach')}>
-          Coach
-        </button>
-        <button type="button" onClick={() => setMobilePane('assignment')} className={tabPillClass(mobilePane === 'assignment')}>
-          Assignment
-        </button>
-      </div>
-
-      <div className="flex flex-1 flex-col gap-4 lg:flex-row lg:items-start">
-        <div className={`flex min-w-0 flex-1 flex-col gap-4 lg:flex ${mobilePane === 'coach' ? '' : 'hidden lg:flex'}`}>
-          {isRedesign ? (
+      <div className="flex flex-1 flex-col gap-4">
+        {isRedesign ? (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="font-heading text-sm font-semibold text-forest">Redesign for meaningful AI use</h2>
@@ -1466,69 +1479,16 @@ function Workspace({
             </>
           )}
 
-          <div id="assignment-coach-chat">
-            <CoachingChat
-              messages={session.conversation}
-              sending={chatSending}
-              error={chatError}
-              draft={chatDraft}
-              onDraftChange={setChatDraft}
-              onSend={handleSendChat}
-              placeholder="Discuss this with your coach..."
-            />
-          </div>
-        </div>
-
-        <div
-          className={`flex min-w-0 flex-1 flex-col gap-3 lg:sticky lg:top-4 lg:flex ${
-            mobilePane === 'assignment' ? '' : 'hidden lg:flex'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h2 className="font-heading text-sm font-semibold text-forest">Original Assignment</h2>
-              <div className="flex rounded-full border border-hairline bg-cream-card p-0.5 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setViewMode('edit')}
-                  className={`rounded-full px-2.5 py-1 font-semibold transition-colors ${
-                    viewMode === 'edit' ? 'bg-forest text-cream' : 'text-ink-soft'
-                  }`}
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('preview')}
-                  className={`rounded-full px-2.5 py-1 font-semibold transition-colors ${
-                    viewMode === 'preview' ? 'bg-forest text-cream' : 'text-ink-soft'
-                  }`}
-                >
-                  Preview
-                </button>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 text-xs text-ink-soft">
-              {saveStatus === 'saving' && <span>Saving…</span>}
-              {saveStatus === 'saved' && <span>Saved</span>}
-              {saveStatus === 'error' && <span className="text-terracotta-600">Couldn't save</span>}
-              <button type="button" onClick={handleCopy} className="font-semibold hover:text-forest">
-                Copy
-              </button>
-            </div>
-          </div>
-          {viewMode === 'preview' ? (
-            <div className="flex-1 overflow-y-auto rounded-2xl border border-hairline bg-cream-card p-4">
-              <AssignmentContent text={text} />
-            </div>
-          ) : (
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              rows={20}
-              className="flex-1 rounded-2xl border border-hairline bg-cream-card p-4 text-sm text-ink focus:border-terracotta/50 focus:outline-none"
-            />
-          )}
+        <div id="assignment-coach-chat">
+          <CoachingChat
+            messages={session.conversation}
+            sending={chatSending}
+            error={chatError}
+            draft={chatDraft}
+            onDraftChange={setChatDraft}
+            onSend={handleSendChat}
+            placeholder="Discuss this with your coach..."
+          />
         </div>
       </div>
     </div>
