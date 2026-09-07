@@ -282,6 +282,15 @@ export type LessonPlan = {
   createdAt: string
   conversation: ChatMessage[]
   suggestedRevision: string | null
+  deliveryCoaching: LessonPlanDeliveryCoaching | null
+}
+
+export type LessonPlanDeliveryCoaching = {
+  openingHook: string | null
+  pacing: string | null
+  engagementCheckpoints: string | null
+  explainingTheHardPart: string | null
+  closing: string | null
 }
 
 export type SharedLessonPlan = {
@@ -1064,6 +1073,10 @@ export function sendLessonPlanChat(id: string, message: string): Promise<LessonP
 
 export function applyLessonPlanRevision(id: string): Promise<LessonPlan> {
   return request(`/api/lesson-plans/${id}/apply-revision`, { method: 'POST' })
+}
+
+export function getPresentationFeedback(id: string): Promise<LessonPlan> {
+  return request(`/api/lesson-plans/${id}/presentation-feedback`, { method: 'POST' })
 }
 
 export function generateLessonPlan(context: LessonPlanContext): Promise<LessonPlan> {

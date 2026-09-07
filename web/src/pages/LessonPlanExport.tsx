@@ -115,6 +115,41 @@ export default function LessonPlanExport() {
                 </p>
               </>
             )}
+
+            {plan.deliveryCoaching && (
+              <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                  Presentation & Delivery
+                </p>
+                {plan.deliveryCoaching.openingHook && (
+                  <p className="mt-2 text-sm text-ink">
+                    <span className="font-semibold">Opening hook:</span> {plan.deliveryCoaching.openingHook}
+                  </p>
+                )}
+                {plan.deliveryCoaching.pacing && (
+                  <p className="mt-2 text-sm text-ink">
+                    <span className="font-semibold">Pacing & timing:</span> {plan.deliveryCoaching.pacing}
+                  </p>
+                )}
+                {plan.deliveryCoaching.engagementCheckpoints && (
+                  <p className="mt-2 text-sm text-ink">
+                    <span className="font-semibold">Engagement checkpoints:</span>{' '}
+                    {plan.deliveryCoaching.engagementCheckpoints}
+                  </p>
+                )}
+                {plan.deliveryCoaching.explainingTheHardPart && (
+                  <p className="mt-2 text-sm text-ink">
+                    <span className="font-semibold">Explaining the hard part:</span>{' '}
+                    {plan.deliveryCoaching.explainingTheHardPart}
+                  </p>
+                )}
+                {plan.deliveryCoaching.closing && (
+                  <p className="mt-2 text-sm text-ink">
+                    <span className="font-semibold">Closing:</span> {plan.deliveryCoaching.closing}
+                  </p>
+                )}
+              </section>
+            )}
           </>
         )}
       </div>

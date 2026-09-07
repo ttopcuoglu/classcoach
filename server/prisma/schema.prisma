@@ -378,6 +378,14 @@ model LessonPlan {
   // auto-applied; null until the teacher accepts it (which copies this into
   // planText and clears it) or a newer suggestion replaces it.
   suggestedRevision String?
+
+  // { openingHook, pacing, engagementCheckpoints, explainingTheHardPart,
+  // closing } — a structured presentation/delivery coaching pass, generated
+  // from the plan's own content (planText for feedback-mode, the assembled
+  // doNow/agenda/closure/hots/homework for generated-mode). Regenerating
+  // overwrites this field. Never auto-applied to planText/agenda/etc. —
+  // delivery advice, not a content edit.
+  deliveryCoaching Json?
 }
 
 // A recorded class period, transcribed once (never stored as audio) and

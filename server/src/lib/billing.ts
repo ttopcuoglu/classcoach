@@ -65,6 +65,7 @@ export const LESSON_PLANNING_ACTIONS = [
   'assignment_coach_finalize',
   'assignment_coach_review',
   'assignment_coach_ai_resistant',
+  'lesson_plan_delivery_feedback',
 ]
 
 // True if the user's own subscription is active, OR their organization

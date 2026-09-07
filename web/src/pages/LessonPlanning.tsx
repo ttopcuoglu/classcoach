@@ -7,12 +7,14 @@ import {
   applyLessonPlanRevision,
   generateLessonPlan,
   getLessonPlans,
+  getPresentationFeedback,
   sendLessonPlanChat,
   setLessonPlanSaved,
   shareLessonPlan,
   submitLessonPlanFeedback,
   type LessonPlan,
   type LessonPlanContext,
+  type LessonPlanDeliveryCoaching,
 } from '../lib/api'
 
 type ContextForm = {
@@ -185,6 +187,31 @@ function PlanSection({ label, value, accent }: { label: string; value: string | 
         {label}
       </p>
       <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{value}</p>
+    </div>
+  )
+}
+
+function DeliveryCoachingCard({ coaching }: { coaching: LessonPlanDeliveryCoaching }) {
+  const rows: [string, string | null][] = [
+    ['Opening hook', coaching.openingHook],
+    ['Pacing & timing', coaching.pacing],
+    ['Engagement checkpoints', coaching.engagementCheckpoints],
+    ['Explaining the hard part', coaching.explainingTheHardPart],
+    ['Closing', coaching.closing],
+  ]
+  return (
+    <div className="rounded-xl border border-border bg-canvas p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Presentation & Delivery</p>
+      <div className="mt-2 flex flex-col gap-3">
+        {rows.map(([label, value]) =>
+          value ? (
+            <div key={label}>
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
+              <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{value}</p>
+            </div>
+          ) : null,
+        )}
+      </div>
     </div>
   )
 }
@@ -365,6 +392,9 @@ function GeneratePanel() {
   const [allPlans, setAllPlans] = useState<LessonPlan[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
 
+  const [deliveryLoading, setDeliveryLoading] = useState(false)
+  const [deliveryError, setDeliveryError] = useState<string | null>(null)
+
   useEffect(() => {
     getLessonPlans({ mode: 'generated' })
       .then(setAllPlans)
@@ -373,6 +403,21 @@ function GeneratePanel() {
   }, [])
 
   const savedPlans = allPlans.filter((p) => p.saved)
+
+  async function handlePresentationFeedback() {
+    if (!plan || deliveryLoading) return
+    setDeliveryLoading(true)
+    setDeliveryError(null)
+    try {
+      const updated = await getPresentationFeedback(plan.id)
+      setPlan(updated)
+      setAllPlans((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+    } catch (err) {
+      setDeliveryError((err as Error).message || 'Could not put together delivery feedback. Please try again.')
+    } finally {
+      setDeliveryLoading(false)
+    }
+  }
 
   async function handleGenerate() {
     if (!context.objective.trim() || generating) return
@@ -392,6 +437,7 @@ function GeneratePanel() {
   function handleNew() {
     setPlan(null)
     setError(null)
+    setDeliveryError(null)
   }
 
   async function handleToggleSaved(target: LessonPlan) {
@@ -437,6 +483,9 @@ function GeneratePanel() {
 
             <p className="text-xs text-ink-soft">This is a sample for ideas — adjust it to fit your class.</p>
 
+            {plan.deliveryCoaching && <DeliveryCoachingCard coaching={plan.deliveryCoaching} />}
+            {deliveryError && <p className="text-sm text-warm-500">{deliveryError}</p>}
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <SaveButton plan={plan} onToggle={handleToggleSaved} />
@@ -447,6 +496,18 @@ function GeneratePanel() {
                 >
                   Download
                 </Link>
+                <button
+                  type="button"
+                  onClick={handlePresentationFeedback}
+                  disabled={deliveryLoading}
+                  className="text-sm font-medium text-ink-soft hover:text-brand-600 disabled:opacity-60"
+                >
+                  {deliveryLoading
+                    ? 'Getting feedback...'
+                    : plan.deliveryCoaching
+                      ? 'Regenerate ↻'
+                      : 'Get presentation & delivery feedback'}
+                </button>
               </div>
               <button
                 type="button"
@@ -486,6 +547,9 @@ function FeedbackPanel() {
   const [applyingRevision, setApplyingRevision] = useState(false)
   const [revisionDismissed, setRevisionDismissed] = useState(false)
 
+  const [deliveryLoading, setDeliveryLoading] = useState(false)
+  const [deliveryError, setDeliveryError] = useState<string | null>(null)
+
   useEffect(() => {
     getLessonPlans({ mode: 'feedback' })
       .then(setAllPlans)
@@ -496,6 +560,21 @@ function FeedbackPanel() {
   const savedPlans = allPlans.filter((p) => p.saved)
 
   const canSubmit = planText.trim().length > 0
+
+  async function handlePresentationFeedback() {
+    if (!plan || deliveryLoading) return
+    setDeliveryLoading(true)
+    setDeliveryError(null)
+    try {
+      const updated = await getPresentationFeedback(plan.id)
+      setPlan(updated)
+      setAllPlans((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+    } catch (err) {
+      setDeliveryError((err as Error).message || 'Could not put together delivery feedback. Please try again.')
+    } finally {
+      setDeliveryLoading(false)
+    }
+  }
 
   async function handleSubmit() {
     if (!canSubmit || submitting) return
@@ -554,6 +633,7 @@ function FeedbackPanel() {
     setChatDraft('')
     setChatError(null)
     setRevisionDismissed(false)
+    setDeliveryError(null)
   }
 
   async function handleToggleSaved(target: LessonPlan) {
@@ -641,6 +721,8 @@ function FeedbackPanel() {
                 </div>
               </div>
             )}
+            {plan.deliveryCoaching && <DeliveryCoachingCard coaching={plan.deliveryCoaching} />}
+            {deliveryError && <p className="text-sm text-warm-500">{deliveryError}</p>}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <SaveButton plan={plan} onToggle={handleToggleSaved} />
@@ -651,6 +733,18 @@ function FeedbackPanel() {
                 >
                   Download
                 </Link>
+                <button
+                  type="button"
+                  onClick={handlePresentationFeedback}
+                  disabled={deliveryLoading}
+                  className="text-sm font-medium text-ink-soft hover:text-brand-600 disabled:opacity-60"
+                >
+                  {deliveryLoading
+                    ? 'Getting feedback...'
+                    : plan.deliveryCoaching
+                      ? 'Regenerate ↻'
+                      : 'Get presentation & delivery feedback'}
+                </button>
               </div>
               <button
                 type="button"

@@ -85,6 +85,30 @@ The homework suggestion, or "None".
 </homework>
 ${INSTRUCTION_PRIORITY_NOTICE}`
 
+const DELIVERY_COACHING_SYSTEM_PROMPT = `You are a warm, practical instructional coach for K-12 teachers, giving feedback on HOW to actually deliver this lesson to students — not on whether the content itself is well built (that's covered elsewhere). Assume the content is what it is; focus entirely on delivery.
+
+Ground every suggestion in the specific lesson given below — never generic public-speaking advice that could apply to any lesson.
+
+Write in plain text only — no markdown (no **bold**, no # headings).
+
+Respond with exactly these five sections and nothing outside them:
+<opening_hook>
+How to open in a way that grabs attention and connects to the objective — one concrete suggestion grounded in this lesson's actual topic.
+</opening_hook>
+<pacing>
+Realistic pacing/timing guidance for this specific lesson — where to move quickly, where to slow down, and any point that risks running long or short.
+</pacing>
+<engagement_checkpoints>
+1-2 specific moments to check students are following (a quick check for understanding, a turn-and-talk, a show of hands) — tied to this lesson's actual content, not generic.
+</engagement_checkpoints>
+<explaining_the_hard_part>
+Identify the single most likely point of confusion in this lesson and suggest a concrete way to explain or model it.
+</explaining_the_hard_part>
+<closing>
+How to close the lesson so it reinforces the objective and sets up next time.
+</closing>
+${CORE_COACHING_RULES}`
+
 lessonPlansRouter.get('/', async (req, res) => {
   const { saved, mode } = req.query
   const lessonPlans = await prisma.lessonPlan.findMany({
@@ -305,6 +329,70 @@ lessonPlansRouter.post('/:id/apply-revision', async (req, res) => {
     data: { planText: lessonPlan.suggestedRevision, suggestedRevision: null },
   })
   res.json(updated)
+})
+
+lessonPlansRouter.post('/:id/presentation-feedback', async (req, res) => {
+  const plan = await prisma.lessonPlan.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+  })
+  if (!plan) {
+    res.status(404).json({ error: 'Lesson plan not found' })
+    return
+  }
+
+  const content =
+    plan.mode === 'feedback'
+      ? plan.planText
+      : [plan.doNow, plan.agenda, plan.closure, plan.hots, plan.homework].filter(Boolean).join('\n\n')
+  if (!content?.trim()) {
+    res.status(400).json({ error: "This plan doesn't have content yet." })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'lesson_plan_delivery_feedback')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      // Generous headroom — a verbose response across all five sections can
+      // otherwise get truncated before the closing tag, silently dropping
+      // the last section (the exact 502-truncation risk fixed elsewhere in
+      // this app for Assignment Coach).
+      max_tokens: 2500,
+      thinking: { type: 'disabled' },
+      system: DELIVERY_COACHING_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content }],
+    })
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+
+    const deliveryCoaching = {
+      openingHook: extractTag(text, 'opening_hook'),
+      pacing: extractTag(text, 'pacing'),
+      engagementCheckpoints: extractTag(text, 'engagement_checkpoints'),
+      explainingTheHardPart: extractTag(text, 'explaining_the_hard_part'),
+      closing: extractTag(text, 'closing'),
+    }
+    if (!Object.values(deliveryCoaching).some(Boolean)) {
+      res.status(502).json({ error: 'Could not put together delivery feedback. Please try again.' })
+      return
+    }
+
+    const updated = await prisma.lessonPlan.update({
+      where: { id: plan.id },
+      data: { deliveryCoaching },
+    })
+    res.json(updated)
+  } catch (error) {
+    console.error('[lesson-plans] presentation-feedback failed:', error)
+    res.status(502).json({ error: 'Could not put together delivery feedback. Please try again.' })
+  }
 })
 
 lessonPlansRouter.post('/generate', async (req, res) => {
