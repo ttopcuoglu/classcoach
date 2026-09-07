@@ -3,6 +3,7 @@ import mammoth from 'mammoth'
 import multer from 'multer'
 import { PDFParse } from 'pdf-parse'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
+import { Prisma } from '../generated/prisma/client.ts'
 import { checkFeatureAccess, countUsageLogActionsThisMonth, LESSON_PLANNING_ACTIONS } from '../lib/billing.ts'
 import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
@@ -57,9 +58,6 @@ const REDESIGN_STRATEGIES_LIST = `- Student-specific choices or local context th
 - Personal application of the concept
 - Required evidence of the student's own reasoning`
 
-const REVIEW_LENSES =
-  'purpose and clarity, cognitive demand, student ownership and critical thinking, accessibility and differentiation, success criteria, and potential AI shortcuts'
-
 const MODE_FRAMING: Record<string, string> = {
   review:
     "The teacher wants coaching feedback on an assignment they already have — discuss it with them, and don't rewrite the whole thing unless they ask.",
@@ -108,55 +106,107 @@ The final assignment text — instructions, questions, or task description as th
 </assignment>
 ${CORE_COACHING_RULES}`
 
-function buildReviewStartPrompt(context: string[]): string {
+// Appended to both start prompts so a single Claude call can both analyze
+// the assignment AND infer the context a teacher used to have to fill in
+// on a separate form. "Unclear" (normalized to null downstream) is only
+// for genuinely undeterminable fields — Claude should make its best
+// judgment otherwise, since a wrong-but-editable guess beats a blocking
+// question every time.
+const DETECTION_INSTRUCTIONS = `Also infer the following from the assignment text itself — make your best judgment even when something is only implied, and use "Unclear" only when there's truly nothing to go on:
+<detected_grade_level>A single grade, or a narrow band like "6th-8th" only if genuinely ambiguous.</detected_grade_level>
+<detected_subject>The subject area, e.g. "Math" or "English / ELA".</detected_subject>
+<detected_assignment_type>One of: classwork, homework, project, assessment, group_task, exit_ticket, other.</detected_assignment_type>
+<detected_estimated_time>Your own estimate, e.g. "20-30 min".</detected_estimated_time>
+<detected_objective>The likely learning objective, one sentence.</detected_objective>
+
+Only if one of the details above is both genuinely uncertain AND would materially change your review, include one clarifying question — never more than one, and never for something you can reasonably assume:
+<clarifying_question>A single specific question, e.g. "This could fit Grades 6-8. Which grade is it intended for?"</clarifying_question>
+<clarifying_options>2-4 short answers, comma-separated.</clarifying_options>`
+
+const RIGOR_AND_AI_RISK_GROUNDING = `Rate cognitive demand against what students actually have to DO, not how much work is involved — recall information, apply a learned procedure, explain reasoning, analyze relationships, make decisions, create or defend a solution, or transfer learning to a new situation. More steps or more time is not the same as more rigor.
+
+For "AI completion risk," judge how much of the response a student could get from pasting the directions into an AI tool with no personal input — never claim an assignment is "AI-proof." Ground the reasons in: whether the final answer is predictable, whether classroom-specific evidence is required, whether any draft or process is visible, whether student decisions require explanation, and whether a follow-up or transfer task exists.`
+
+const REVIEW_SNAPSHOT_TAGS = `<purpose>
+What this assignment actually asks students to learn or demonstrate — or, if unclear, say so plainly rather than guessing.
+</purpose>
+<grade_fit_rating>
+below | appropriate | above | need_more_context
+</grade_fit_rating>
+<grade_fit_explanation>
+Reference vocabulary/reading complexity, prerequisite knowledge, conceptual complexity, independence required, and workload.
+</grade_fit_explanation>
+<rigor_label>
+A short phrase, e.g. "Mostly application."
+</rigor_label>
+<rigor_explanation>
+What students actually have to do, and — if it would raise the ceiling — one concrete way to add deeper reasoning.
+</rigor_explanation>
+<meaningful_work_rating>
+clear_value | some_repetition | purpose_unclear | mostly_completion
+</meaningful_work_rating>
+<meaningful_work_explanation>
+Whether every task supports the objective, whether students make meaningful decisions, and whether repetition serves a clear practice purpose.
+</meaningful_work_explanation>
+<meaningful_work_suggestion>
+One concrete low-value step to cut — omit this section entirely if nothing genuinely qualifies.
+</meaningful_work_suggestion>
+<ai_risk_rating>
+high | moderate | low
+</ai_risk_rating>
+<ai_risk_explanation>
+...
+</ai_risk_explanation>
+<ai_risk_reasons>
+Dash-prefixed short reasons, one per line, drawn only from what's actually true of this assignment.
+</ai_risk_reasons>
+<workload_summary>
+Estimated time, steps, reading/writing, materials, likely points of confusion, and whether it's completable independently — 2-3 sentences.
+</workload_summary>
+<main_opportunity_title>
+A short, specific title, e.g. "Make student reasoning visible."
+</main_opportunity_title>
+<main_opportunity_description>
+1-2 sentences on what to add or change.
+</main_opportunity_description>`
+
+function buildReviewStartPrompt(originalText: string, extraNote?: string): string {
   return `You are Coach, giving a teacher a coaching review of an assignment they've shared, and opening a conversation about it. Do not rewrite the assignment — review it.
 
-Look at it through these lenses: ${REVIEW_LENSES}. You don't need to comment on every lens — focus on what's most worth saying.
+${RIGOR_AND_AI_RISK_GROUNDING}
 
 Never state or imply a numeric score, rating, grade, or evaluative label of any kind.
 
 Write in plain text only — no markdown.
+${extraNote ? `\n${extraNote}\n` : ''}
+Here is the assignment:
+${originalText}
 
-Here is what the teacher has shared:
-${context.map((line) => `- ${line}`).join('\n')}
-
-Respond with exactly these four sections and nothing else:
+Respond with exactly these sections and nothing else:
 <reply>
 A short, warm 1-2 sentence message introducing the review below and inviting the teacher to ask about anything or request changes.
 </reply>
-<working>
-One or two meaningful strengths, named plainly and specifically — not generic praise.
-</working>
-<needs_attention>
-What may need attention — unclear directions, missing expectations, a likely student misconception, or a place where the cognitive demand, accessibility, or success criteria could be stronger.
-</needs_attention>
-<suggestions>
-1-3 concrete, actionable suggested improvements.
-</suggestions>
+${REVIEW_SNAPSHOT_TAGS}
+${DETECTION_INSTRUCTIONS}
 ${CORE_COACHING_RULES}`
 }
 
+// Used by /:id/review's "Refresh review" regenerate action — same
+// snapshot shape, no <reply> (not a new conversation turn) and no
+// detection block (context was already set at creation / via Edit details).
 const REVIEW_SYSTEM_PROMPT = `You are Coach, giving a teacher a concise coaching review of an assignment they're working on. Do not rewrite it — just review it.
 
-Look at it through these lenses: ${REVIEW_LENSES}. You don't need to comment on every lens — focus on what's most worth saying.
+${RIGOR_AND_AI_RISK_GROUNDING}
 
 Never state or imply a numeric score, rating, grade, or evaluative label of any kind.
 
 Write in plain text only — no markdown.
 
-Respond with exactly these three sections and nothing else:
-<working>
-One or two meaningful strengths, named plainly and specifically — not generic praise.
-</working>
-<needs_attention>
-What may need attention — unclear directions, missing expectations, a likely student misconception, or a place where the cognitive demand, accessibility, or success criteria could be stronger.
-</needs_attention>
-<suggestions>
-1-3 concrete, actionable suggested improvements.
-</suggestions>
+Respond with exactly these sections and nothing else:
+${REVIEW_SNAPSHOT_TAGS}
 ${CORE_COACHING_RULES}`
 
-function buildRedesignAiStartPrompt(aiUseLevel: string, context: string[]): string {
+function buildRedesignAiStartPrompt(aiUseLevel: string, originalText: string, extraNote?: string): string {
   const levelGuidance = AI_USE_LEVEL_GUIDANCE[aiUseLevel] ?? AI_USE_LEVEL_GUIDANCE.thinking_partner
   return `You are Coach, helping a teacher redesign an assignment for meaningful AI use, and opening a conversation about it. The goal is not to make the assignment "AI-proof" — that's not realistic — but to keep student thinking, judgment, voice, and process visible throughout the task.
 
@@ -172,11 +222,11 @@ Ground every suggestion in the actual assignment below. Never invent details abo
 ${DIAGRAM_SYNTAX_INSTRUCTIONS}
 
 Write in plain text only — no markdown. Use a dash ("-") at the start of a line for list-like content.
+${extraNote ? `\n${extraNote}\n` : ''}
+Here is the assignment:
+${originalText}
 
-Here is what the teacher has shared:
-${context.map((line) => `- ${line}`).join('\n')}
-
-Respond with exactly these four sections and nothing else:
+Respond with exactly these sections and nothing else:
 <reply>
 A short, warm 1-2 sentence message introducing the redesign below and inviting the teacher to ask about anything or request changes.
 </reply>
@@ -189,6 +239,7 @@ A short, plain-language statement for students about how AI may and may not be u
 <revised_assignment>
 The full redesigned assignment text, ready for a student to read.
 </revised_assignment>
+${DETECTION_INSTRUCTIONS}
 ${CORE_COACHING_RULES}`
 }
 
@@ -222,22 +273,91 @@ The full assignment text, incorporating the strategies above naturally into the 
 ${CORE_COACHING_RULES}`
 }
 
-function buildStartContext(body: Record<string, unknown>, originalText: string, assignmentType: string): string[] {
-  const gradeLevel = typeof body.gradeLevel === 'string' ? body.gradeLevel.trim() : ''
-  const subject = typeof body.subject === 'string' ? body.subject.trim() : ''
-  const estimatedTime = typeof body.estimatedTime === 'string' ? body.estimatedTime.trim() : ''
-  const specificNeeds = typeof body.specificNeeds === 'string' ? body.specificNeeds.trim() : ''
-  const objective = typeof body.objective === 'string' ? body.objective.trim() : ''
+type ReviewSnapshot = {
+  purpose: string | null
+  gradeFit: { rating: string | null; explanation: string | null }
+  rigor: { label: string | null; explanation: string | null }
+  meaningfulWork: { rating: string | null; explanation: string | null; suggestion: string | null }
+  aiRisk: { rating: string | null; explanation: string | null; reasons: string | null }
+  workloadSummary: string | null
+  mainOpportunity: { title: string | null; description: string | null }
+}
 
-  return [
-    assignmentType ? `Assignment type: ${ASSIGNMENT_TYPE_LABELS[assignmentType] ?? assignmentType}` : null,
-    gradeLevel ? `Grade level: ${gradeLevel}` : null,
-    subject ? `Subject: ${subject}` : null,
-    estimatedTime ? `Estimated student work time: ${estimatedTime}` : null,
-    specificNeeds ? `Specific learning needs to keep in mind: ${specificNeeds}` : null,
-    objective ? `Learning objective or standard: ${objective}` : null,
-    `The current assignment:\n${originalText}`,
-  ].filter((line): line is string => line != null)
+function parseReviewSnapshot(text: string): ReviewSnapshot {
+  return {
+    purpose: extractTag(text, 'purpose'),
+    gradeFit: { rating: extractTag(text, 'grade_fit_rating'), explanation: extractTag(text, 'grade_fit_explanation') },
+    rigor: { label: extractTag(text, 'rigor_label'), explanation: extractTag(text, 'rigor_explanation') },
+    meaningfulWork: {
+      rating: extractTag(text, 'meaningful_work_rating'),
+      explanation: extractTag(text, 'meaningful_work_explanation'),
+      suggestion: extractTag(text, 'meaningful_work_suggestion'),
+    },
+    aiRisk: {
+      rating: extractTag(text, 'ai_risk_rating'),
+      explanation: extractTag(text, 'ai_risk_explanation'),
+      reasons: extractTag(text, 'ai_risk_reasons'),
+    },
+    workloadSummary: extractTag(text, 'workload_summary'),
+    mainOpportunity: { title: extractTag(text, 'main_opportunity_title'), description: extractTag(text, 'main_opportunity_description') },
+  }
+}
+
+function isReviewSnapshotEmpty(snapshot: ReviewSnapshot): boolean {
+  return (
+    !snapshot.purpose &&
+    !snapshot.gradeFit.rating &&
+    !snapshot.rigor.label &&
+    !snapshot.meaningfulWork.rating &&
+    !snapshot.aiRisk.rating &&
+    !snapshot.workloadSummary &&
+    !snapshot.mainOpportunity.title
+  )
+}
+
+type DetectedContext = {
+  assignmentType: string
+  gradeLevel: string | null
+  subject: string | null
+  estimatedTime: string | null
+  objective: string | null
+}
+type ClarifyingQuestion = { question: string; options: string[] } | null
+
+// "Unclear" (or empty) means Claude genuinely had nothing to go on for
+// that field — treated as null so it doesn't overwrite an already-known
+// value (e.g. one set earlier via Edit details) with a meaningless string.
+function normalizeDetected(value: string | null): string | null {
+  if (!value) return null
+  const trimmed = value.trim()
+  if (!trimmed || /^unclear$/i.test(trimmed)) return null
+  return trimmed
+}
+
+function parseDetection(text: string): { detected: DetectedContext; clarifyingQuestion: ClarifyingQuestion } {
+  const rawType = (extractTag(text, 'detected_assignment_type') ?? '').trim().toLowerCase()
+  const assignmentType = VALID_ASSIGNMENT_TYPES.includes(rawType) ? rawType : 'other'
+
+  const question = extractTag(text, 'clarifying_question')
+  const rawOptions = extractTag(text, 'clarifying_options')
+  const options = rawOptions
+    ? rawOptions
+        .split(',')
+        .map((o) => o.trim())
+        .filter(Boolean)
+    : []
+  const clarifyingQuestion = question && options.length > 0 ? { question, options } : null
+
+  return {
+    detected: {
+      assignmentType,
+      gradeLevel: normalizeDetected(extractTag(text, 'detected_grade_level')),
+      subject: normalizeDetected(extractTag(text, 'detected_subject')),
+      estimatedTime: normalizeDetected(extractTag(text, 'detected_estimated_time')),
+      objective: normalizeDetected(extractTag(text, 'detected_objective')),
+    },
+    clarifyingQuestion,
+  }
 }
 
 // Rebuilds the context array from a persisted session — used by every
@@ -329,6 +449,11 @@ assignmentCoachRouter.get('/:id', async (req, res) => {
   res.json(session)
 })
 
+// The only inputs left: what the assignment is, and (for redesign_ai) how
+// students should use AI — a real policy choice, not something to infer.
+// Everything else (grade/subject/type/estimated time/objective) is
+// detected from the text itself in the same Claude call that produces the
+// review/redesign, never collected via a separate required form.
 assignmentCoachRouter.post('/', async (req, res) => {
   const body = (req.body ?? {}) as Record<string, unknown>
   const mode = typeof body.mode === 'string' ? body.mode : ''
@@ -353,11 +478,6 @@ assignmentCoachRouter.post('/', async (req, res) => {
     aiUseLevel = rawLevel
   }
 
-  const rawType = typeof body.assignmentType === 'string' ? body.assignmentType : ''
-  const assignmentType = VALID_ASSIGNMENT_TYPES.includes(rawType) ? rawType : 'other'
-
-  const context = buildStartContext(body, originalText, assignmentType)
-
   const access = await checkFeatureAccess(req.user!.userId, 'lesson_planning', () =>
     countUsageLogActionsThisMonth(req.user!.userId, LESSON_PLANNING_ACTIONS),
   )
@@ -373,10 +493,10 @@ assignmentCoachRouter.post('/', async (req, res) => {
   }
 
   try {
-    const systemPrompt = mode === 'review' ? buildReviewStartPrompt(context) : buildRedesignAiStartPrompt(aiUseLevel!, context)
+    const systemPrompt = mode === 'review' ? buildReviewStartPrompt(originalText) : buildRedesignAiStartPrompt(aiUseLevel!, originalText)
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: mode === 'review' ? 1000 : 1400,
+      max_tokens: 1800,
       thinking: { type: 'disabled' },
       system: systemPrompt,
       messages: [{ role: 'user', content: START_MESSAGE }],
@@ -391,17 +511,15 @@ assignmentCoachRouter.post('/', async (req, res) => {
       return
     }
 
+    const { detected, clarifyingQuestion } = parseDetection(text)
+
     let liveAssignmentText: string
-    let reviewSummary: Record<string, string | null> | undefined
+    let reviewSnapshot: ReviewSnapshot | undefined
     let aiResistant: Record<string, string | null> | undefined
 
     if (mode === 'review') {
-      reviewSummary = {
-        working: extractTag(text, 'working'),
-        needsAttention: extractTag(text, 'needs_attention'),
-        suggestions: extractTag(text, 'suggestions'),
-      }
-      if (!Object.values(reviewSummary).some(Boolean)) {
+      reviewSnapshot = parseReviewSnapshot(text)
+      if (isReviewSnapshotEmpty(reviewSnapshot)) {
         res.status(502).json({ error: 'Could not put together a review. Please try again.' })
         return
       }
@@ -427,17 +545,17 @@ assignmentCoachRouter.post('/', async (req, res) => {
         userId: req.user!.userId,
         mode,
         aiUseLevel,
-        assignmentType,
-        estimatedTime: typeof body.estimatedTime === 'string' ? body.estimatedTime.trim() || null : null,
-        specificNeeds: typeof body.specificNeeds === 'string' ? body.specificNeeds.trim() || null : null,
-        gradeLevel: typeof body.gradeLevel === 'string' ? body.gradeLevel.trim() || null : null,
-        subject: typeof body.subject === 'string' ? body.subject.trim() || null : null,
-        objective: typeof body.objective === 'string' ? body.objective.trim() || null : null,
+        assignmentType: detected.assignmentType,
+        gradeLevel: detected.gradeLevel,
+        subject: detected.subject,
+        estimatedTime: detected.estimatedTime,
+        objective: detected.objective,
         originalText,
         liveAssignmentText,
         conversation,
-        reviewSummary,
+        reviewSnapshot,
         aiResistant,
+        clarifyingQuestion: clarifyingQuestion ?? undefined,
       },
     })
     res.status(201).json(session)
@@ -506,7 +624,7 @@ assignmentCoachRouter.post('/:id/chat', async (req, res) => {
   }
 })
 
-// Regenerates the Review structured card, grounded in the CURRENT
+// Regenerates the Review structured snapshot, grounded in the CURRENT
 // liveAssignmentText — a "Refresh review" action once more chat has
 // happened, never blended into the free-form chat.
 assignmentCoachRouter.post('/:id/review', async (req, res) => {
@@ -532,7 +650,7 @@ assignmentCoachRouter.post('/:id/review', async (req, res) => {
     const context = contextFromSession(session)
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 800,
+      max_tokens: 1200,
       thinking: { type: 'disabled' },
       system: REVIEW_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: context.join('\n') }],
@@ -542,19 +660,15 @@ assignmentCoachRouter.post('/:id/review', async (req, res) => {
       .map((block) => block.text)
       .join('\n')
 
-    const reviewSummary = {
-      working: extractTag(text, 'working'),
-      needsAttention: extractTag(text, 'needs_attention'),
-      suggestions: extractTag(text, 'suggestions'),
-    }
-    if (!Object.values(reviewSummary).some(Boolean)) {
+    const reviewSnapshot = parseReviewSnapshot(text)
+    if (isReviewSnapshotEmpty(reviewSnapshot)) {
       res.status(502).json({ error: 'Could not put together a review. Please try again.' })
       return
     }
 
     const updated = await prisma.assignmentCoachSession.update({
       where: { id: session.id },
-      data: { reviewSummary },
+      data: { reviewSnapshot },
     })
     res.json(updated)
   } catch (error) {
@@ -677,9 +791,113 @@ assignmentCoachRouter.post('/:id/revise', async (req, res) => {
   }
 })
 
+// Answers the one optional clarifying question from the initial analysis
+// (or a prior refine) — re-runs the same start-prompt logic grounded in
+// the original text plus the confirmed detail, and clears the question.
+// Never a chat turn (nothing is appended to `conversation`), and for the
+// Redesign path never touches liveAssignmentText on its own — same
+// "teacher applies explicitly" rule /:id/ai-resistant's regenerate uses.
+assignmentCoachRouter.post('/:id/refine', async (req, res) => {
+  const { answer } = req.body ?? {}
+  if (typeof answer !== 'string' || !answer.trim()) {
+    res.status(400).json({ error: 'answer is required' })
+    return
+  }
+
+  const session = await prisma.assignmentCoachSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Assignment Coach session not found' })
+    return
+  }
+  if (!session.originalText) {
+    res.status(400).json({ error: 'Nothing to refine yet.' })
+    return
+  }
+
+  const isRedesign = session.mode === 'redesign_ai'
+  const usageAction = isRedesign ? 'assignment_coach_ai_resistant' : 'assignment_coach_review'
+  const allowed = await checkAndLogUsage(req.user!.userId, usageAction)
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  try {
+    const extraNote = `Confirmed detail: ${answer.trim()}`
+    const systemPrompt = isRedesign
+      ? buildRedesignAiStartPrompt(session.aiUseLevel ?? 'thinking_partner', session.originalText, extraNote)
+      : buildReviewStartPrompt(session.originalText, extraNote)
+
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 1800,
+      thinking: { type: 'disabled' },
+      system: systemPrompt,
+      messages: [{ role: 'user', content: START_MESSAGE }],
+    })
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+
+    const { detected } = parseDetection(text)
+
+    let reviewSnapshot: ReviewSnapshot | undefined
+    let aiResistant: Record<string, string | null> | undefined
+
+    if (isRedesign) {
+      const revisedAssignment = extractTag(text, 'revised_assignment')
+      if (!revisedAssignment) {
+        res.status(502).json({ error: 'Could not put this together. Please try again.' })
+        return
+      }
+      aiResistant = {
+        strategies: extractTag(text, 'strategies'),
+        guidelines: extractTag(text, 'guidelines'),
+        revisedAssignment,
+      }
+    } else {
+      reviewSnapshot = parseReviewSnapshot(text)
+      if (isReviewSnapshotEmpty(reviewSnapshot)) {
+        res.status(502).json({ error: 'Could not put together a review. Please try again.' })
+        return
+      }
+    }
+
+    const updated = await prisma.assignmentCoachSession.update({
+      where: { id: session.id },
+      data: {
+        assignmentType: detected.assignmentType,
+        gradeLevel: detected.gradeLevel ?? session.gradeLevel,
+        subject: detected.subject ?? session.subject,
+        estimatedTime: detected.estimatedTime ?? session.estimatedTime,
+        objective: detected.objective ?? session.objective,
+        reviewSnapshot: reviewSnapshot ?? undefined,
+        aiResistant: aiResistant ?? undefined,
+        clarifyingQuestion: Prisma.JsonNull,
+      },
+    })
+    res.json(updated)
+  } catch (error) {
+    console.error('[assignment-coach] refine failed:', error)
+    res.status(502).json({ error: 'Could not refine this. Please try again.' })
+  }
+})
+
 assignmentCoachRouter.patch('/:id', async (req, res) => {
-  const { saved, title, liveAssignmentText, status } = req.body ?? {}
-  const data: { saved?: boolean; title?: string; liveAssignmentText?: string; status?: string } = {}
+  const { saved, title, liveAssignmentText, status, assignmentType, gradeLevel, subject, estimatedTime } = req.body ?? {}
+  const data: {
+    saved?: boolean
+    title?: string
+    liveAssignmentText?: string
+    status?: string
+    assignmentType?: string
+    gradeLevel?: string | null
+    subject?: string | null
+    estimatedTime?: string | null
+  } = {}
   if (saved !== undefined) {
     if (typeof saved !== 'boolean') {
       res.status(400).json({ error: 'saved must be a boolean' })
@@ -707,6 +925,34 @@ assignmentCoachRouter.patch('/:id', async (req, res) => {
       return
     }
     data.status = status
+  }
+  if (assignmentType !== undefined) {
+    if (typeof assignmentType !== 'string' || !VALID_ASSIGNMENT_TYPES.includes(assignmentType)) {
+      res.status(400).json({ error: 'Invalid assignmentType' })
+      return
+    }
+    data.assignmentType = assignmentType
+  }
+  if (gradeLevel !== undefined) {
+    if (typeof gradeLevel !== 'string') {
+      res.status(400).json({ error: 'gradeLevel must be a string' })
+      return
+    }
+    data.gradeLevel = gradeLevel.trim() || null
+  }
+  if (subject !== undefined) {
+    if (typeof subject !== 'string') {
+      res.status(400).json({ error: 'subject must be a string' })
+      return
+    }
+    data.subject = subject.trim() || null
+  }
+  if (estimatedTime !== undefined) {
+    if (typeof estimatedTime !== 'string') {
+      res.status(400).json({ error: 'estimatedTime must be a string' })
+      return
+    }
+    data.estimatedTime = estimatedTime.trim() || null
   }
   const { count } = await prisma.assignmentCoachSession.updateMany({
     where: { id: req.params.id, userId: req.user!.userId },

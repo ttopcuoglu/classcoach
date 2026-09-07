@@ -58,25 +58,71 @@ export default function AssignmentCoachExport() {
               </section>
             )}
 
-            {session.reviewSummary && (
+            {session.reviewSnapshot ? (
               <section className="mt-4 break-inside-avoid rounded-xl border border-hairline p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Coaching review</p>
-                {session.reviewSummary.working && (
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Assignment Review Snapshot</p>
+                {session.reviewSnapshot.purpose && (
                   <p className="mt-2 text-sm text-ink">
-                    <span className="font-semibold">Working:</span> {session.reviewSummary.working}
+                    <span className="font-semibold">Purpose:</span> {session.reviewSnapshot.purpose}
                   </p>
                 )}
-                {session.reviewSummary.needsAttention && (
+                {session.reviewSnapshot.gradeFit.explanation && (
                   <p className="mt-2 text-sm text-ink">
-                    <span className="font-semibold">Needs attention:</span> {session.reviewSummary.needsAttention}
+                    <span className="font-semibold">Grade-level fit:</span> {session.reviewSnapshot.gradeFit.explanation}
                   </p>
                 )}
-                {session.reviewSummary.suggestions && (
+                {session.reviewSnapshot.rigor.explanation && (
                   <p className="mt-2 text-sm text-ink">
-                    <span className="font-semibold">Suggestions:</span> {session.reviewSummary.suggestions}
+                    <span className="font-semibold">Thinking & rigor{session.reviewSnapshot.rigor.label ? ` (${session.reviewSnapshot.rigor.label})` : ''}:</span>{' '}
+                    {session.reviewSnapshot.rigor.explanation}
+                  </p>
+                )}
+                {session.reviewSnapshot.meaningfulWork.explanation && (
+                  <p className="mt-2 text-sm text-ink">
+                    <span className="font-semibold">Meaningful work:</span> {session.reviewSnapshot.meaningfulWork.explanation}
+                  </p>
+                )}
+                {session.reviewSnapshot.aiRisk.explanation && (
+                  <p className="mt-2 text-sm text-ink">
+                    <span className="font-semibold">AI completion risk{session.reviewSnapshot.aiRisk.rating ? ` (${session.reviewSnapshot.aiRisk.rating})` : ''}:</span>{' '}
+                    {session.reviewSnapshot.aiRisk.explanation}
+                  </p>
+                )}
+                {session.reviewSnapshot.workloadSummary && (
+                  <p className="mt-2 text-sm text-ink">
+                    <span className="font-semibold">Workload &amp; clarity:</span> {session.reviewSnapshot.workloadSummary}
+                  </p>
+                )}
+                {session.reviewSnapshot.mainOpportunity.description && (
+                  <p className="mt-2 text-sm text-ink">
+                    <span className="font-semibold">
+                      Main opportunity{session.reviewSnapshot.mainOpportunity.title ? ` — ${session.reviewSnapshot.mainOpportunity.title}` : ''}:
+                    </span>{' '}
+                    {session.reviewSnapshot.mainOpportunity.description}
                   </p>
                 )}
               </section>
+            ) : (
+              session.reviewSummary && (
+                <section className="mt-4 break-inside-avoid rounded-xl border border-hairline p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Coaching review</p>
+                  {session.reviewSummary.working && (
+                    <p className="mt-2 text-sm text-ink">
+                      <span className="font-semibold">Working:</span> {session.reviewSummary.working}
+                    </p>
+                  )}
+                  {session.reviewSummary.needsAttention && (
+                    <p className="mt-2 text-sm text-ink">
+                      <span className="font-semibold">Needs attention:</span> {session.reviewSummary.needsAttention}
+                    </p>
+                  )}
+                  {session.reviewSummary.suggestions && (
+                    <p className="mt-2 text-sm text-ink">
+                      <span className="font-semibold">Suggestions:</span> {session.reviewSummary.suggestions}
+                    </p>
+                  )}
+                </section>
+              )
             )}
 
             {session.aiResistant?.guidelines && (

@@ -412,6 +412,19 @@ export type AssignmentFinalMaterials = {
   scaffolds: string | null
   aiUseStatement: string | null
 }
+// The Review path's richer structured output — replaces AssignmentReviewSummary
+// for sessions created after the auto-detected-context redesign. A
+// pre-existing session may have reviewSummary set and this null instead.
+export type AssignmentReviewSnapshot = {
+  purpose: string | null
+  gradeFit: { rating: string | null; explanation: string | null }
+  rigor: { label: string | null; explanation: string | null }
+  meaningfulWork: { rating: string | null; explanation: string | null; suggestion: string | null }
+  aiRisk: { rating: string | null; explanation: string | null; reasons: string | null }
+  workloadSummary: string | null
+  mainOpportunity: { title: string | null; description: string | null }
+}
+export type AssignmentClarifyingQuestion = { question: string; options: string[] }
 export type AssignmentCoachSession = {
   id: string
   mode: AssignmentCoachMode
@@ -429,6 +442,8 @@ export type AssignmentCoachSession = {
   title: string | null
   conversation: ChatMessage[]
   reviewSummary: AssignmentReviewSummary | null
+  reviewSnapshot: AssignmentReviewSnapshot | null
+  clarifyingQuestion: AssignmentClarifyingQuestion | null
   aiResistant: AssignmentAiResistant | null
   finalMaterials: AssignmentFinalMaterials | null
   saved: boolean
@@ -937,18 +952,22 @@ export function getAssignmentCoachSession(id: string): Promise<AssignmentCoachSe
   return request(`/api/assignment-coach/${id}`)
 }
 
+// Grade level, subject, assignment type, estimated time, and objective are
+// no longer sent here — Wivoza detects them from originalText itself in
+// the same call that produces the review/redesign. aiUseLevel is the one
+// real exception: it's a policy choice, not a fact to infer.
 export function startAssignmentCoach(input: {
   mode: 'review' | 'redesign_ai'
   aiUseLevel?: AssignmentAiUseLevel
-  assignmentType?: AssignmentType
-  estimatedTime?: string
-  specificNeeds?: string
-  gradeLevel?: string
-  subject?: string
-  objective?: string
   originalText: string
 }): Promise<AssignmentCoachSession> {
   return request('/api/assignment-coach', { method: 'POST', body: JSON.stringify(input) })
+}
+
+// Answers the one optional clarifying question from the initial analysis —
+// never blocks the review/redesign, which is always already showing.
+export function refineAssignmentCoach(id: string, answer: string): Promise<AssignmentCoachSession> {
+  return request(`/api/assignment-coach/${id}/refine`, { method: 'POST', body: JSON.stringify({ answer }) })
 }
 
 export function sendAssignmentCoachChat(id: string, message: string): Promise<AssignmentCoachSession> {
@@ -986,7 +1005,16 @@ export async function extractAssignmentText(file: File): Promise<{ text: string 
 
 export function updateAssignmentCoachSession(
   id: string,
-  data: { saved?: boolean; title?: string; liveAssignmentText?: string; status?: 'draft' | 'completed' },
+  data: {
+    saved?: boolean
+    title?: string
+    liveAssignmentText?: string
+    status?: 'draft' | 'completed'
+    assignmentType?: AssignmentType
+    gradeLevel?: string
+    subject?: string
+    estimatedTime?: string
+  },
 ): Promise<AssignmentCoachSession> {
   return request(`/api/assignment-coach/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
 }

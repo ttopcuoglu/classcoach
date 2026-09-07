@@ -309,6 +309,18 @@ model AssignmentCoachSession {
   // immediately on creation; regenerating never auto-overwrites it again
   // without the teacher applying it explicitly.
   aiResistant    Json?
+  // { purpose, gradeFit: {rating, explanation}, rigor: {label,
+  // explanation}, meaningfulWork: {rating, explanation, suggestion},
+  // aiRisk: {rating, explanation, reasons}, workloadSummary,
+  // mainOpportunity: {title, description} } — the Review path's richer
+  // structured output, replacing reviewSummary for new sessions.
+  // reviewSummary is kept, untouched, for pre-existing rows.
+  reviewSnapshot Json?
+  // { question, options } — set when the initial analysis (or a
+  // /:id/refine call) found one genuinely uncertain, material detail.
+  // Cleared once answered. Never gates reviewSnapshot/aiResistant, which
+  // are always generated regardless of whether this is set.
+  clarifyingQuestion Json?
   // { assignment?, rubric?, scaffolds?, aiUseStatement? } — superseded by
   // liveAssignmentText/reviewSummary/future tool-specific fields; kept for
   // pre-redesign rows.

@@ -295,3 +295,22 @@ export function KebabIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function ClipboardIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <rect x="6" y="4.5" width="12" height="16" rx="2" />
+      <path strokeLinecap="round" d="M9 4.5V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v.5" />
+      <path strokeLinecap="round" d="M9 11h6M9 15h6" />
+    </svg>
+  )
+}
+
+export function UploadIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15V4M8 8l4-4 4 4" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15v3a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3" />
+    </svg>
+  )
+}
