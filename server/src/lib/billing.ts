@@ -106,6 +106,11 @@ export async function checkFeatureAccess(
   area: FeatureArea,
   countThisMonth: () => Promise<number>,
 ): Promise<{ allowed: boolean; upgradeMessage?: string }> {
+  // Superadmin never hits the monthly soft ceiling either — same reasoning
+  // as the daily cap's bypass in usageLimit.ts.
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+  if (user?.role === 'superadmin') return { allowed: true }
+
   const paid = await hasActivePlan(userId)
   const limit = paid ? PAID_MONTHLY_LIMITS[area] : FREE_MONTHLY_LIMITS[area]
   if (limit === 0) return { allowed: false, upgradeMessage: UPGRADE_MESSAGES[area] }

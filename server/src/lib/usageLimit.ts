@@ -46,6 +46,15 @@ export type UsageAction =
 // they're still under the daily cap. One shared API key funds every
 // teacher's usage, so this is the cost-protection backstop for a public app.
 export async function checkAndLogUsage(userId: string, action: UsageAction): Promise<boolean> {
+  // Superadmin needs to exercise every feature to support/verify the
+  // platform — never blocked behind the shared-cost daily ceiling meant for
+  // teachers. Usage is still logged, just never counted against the cap.
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+  if (user?.role === 'superadmin') {
+    await prisma.usageLog.create({ data: { userId, action } })
+    return true
+  }
+
   const startOfDay = new Date()
   startOfDay.setHours(0, 0, 0, 0)
 
