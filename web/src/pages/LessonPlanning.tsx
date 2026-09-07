@@ -5,6 +5,7 @@ import CoachingChat from '../components/CoachingChat'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import {
   applyLessonPlanRevision,
+  extractPresentationText,
   generateLessonPlan,
   getLessonPlans,
   getPresentationFeedback,
@@ -12,9 +13,11 @@ import {
   setLessonPlanSaved,
   shareLessonPlan,
   submitLessonPlanFeedback,
+  submitPresentationReview,
   type LessonPlan,
   type LessonPlanContext,
   type LessonPlanDeliveryCoaching,
+  type LessonPlanPresentationReview,
 } from '../lib/api'
 
 type ContextForm = {
@@ -47,16 +50,18 @@ function toApiContext(context: ContextForm): LessonPlanContext {
 }
 
 export default function LessonPlanning() {
-  const [tab, setTab] = useState<'generate' | 'feedback'>('generate')
+  const [tab, setTab] = useState<'generate' | 'feedback' | 'presentation'>('generate')
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold text-ink md:text-3xl">Lesson Planning</h1>
-        <p className="text-ink-soft">Get feedback on a plan you wrote, or generate a sample plan for ideas.</p>
+        <p className="text-ink-soft">
+          Get feedback on a plan you wrote, generate a sample plan for ideas, or get feedback on a presentation.
+        </p>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => setTab('generate')}
@@ -75,9 +80,18 @@ export default function LessonPlanning() {
         >
           Get Feedback
         </button>
+        <button
+          type="button"
+          onClick={() => setTab('presentation')}
+          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+            tab === 'presentation' ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:text-ink'
+          }`}
+        >
+          Review a Presentation
+        </button>
       </div>
 
-      {tab === 'generate' ? <GeneratePanel /> : <FeedbackPanel />}
+      {tab === 'generate' ? <GeneratePanel /> : tab === 'feedback' ? <FeedbackPanel /> : <PresentationPanel />}
     </div>
   )
 }
@@ -216,6 +230,28 @@ function DeliveryCoachingCard({ coaching }: { coaching: LessonPlanDeliveryCoachi
   )
 }
 
+function PresentationReviewCard({ review }: { review: LessonPlanPresentationReview }) {
+  const rows: [string, string | null][] = [
+    ['Grade-level fit', review.gradeLevelFit],
+    ['Visuals', review.visuals],
+    ['Ideas', review.ideas],
+    ['Length', review.length],
+    ['Implementation', review.implementation],
+  ]
+  return (
+    <div className="flex flex-col gap-3">
+      {rows.map(([label, value]) =>
+        value ? (
+          <div key={label} className="rounded-xl border border-border bg-canvas p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">{label}</p>
+            <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{value}</p>
+          </div>
+        ) : null,
+      )}
+    </div>
+  )
+}
+
 function SaveButton({ plan, onToggle }: { plan: LessonPlan; onToggle: (plan: LessonPlan) => void }) {
   return (
     <button
@@ -307,10 +343,10 @@ function SavedPlanCard({ plan }: { plan: LessonPlan }) {
       >
         <div>
           <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-600">
-            {plan.mode === 'generated' ? 'Sample plan' : 'Feedback'}
+            {plan.mode === 'generated' ? 'Sample plan' : plan.mode === 'presentation' ? 'Presentation review' : 'Feedback'}
           </span>
           <p className="mt-1.5 text-sm text-ink">
-            {plan.objective || plan.planText?.slice(0, 80) || 'Lesson plan'}
+            {plan.objective || plan.fileName || plan.planText?.slice(0, 80) || 'Lesson plan'}
           </p>
         </div>
         <span className="shrink-0 text-xs font-medium text-ink-soft">{expanded ? 'Hide' : 'Show'}</span>
@@ -332,6 +368,8 @@ function SavedPlanCard({ plan }: { plan: LessonPlan }) {
                 </div>
               )}
             </>
+          ) : plan.mode === 'presentation' ? (
+            plan.presentationReview && <PresentationReviewCard review={plan.presentationReview} />
           ) : (
             <>
               {plan.doNow && (
@@ -764,6 +802,329 @@ function FeedbackPanel() {
       </div>
 
       <HistoryList title="Saved feedback" loading={historyLoading} plans={savedPlans} />
+    </div>
+  )
+}
+
+function PresentationPanel() {
+  const [file, setFile] = useState<File | null>(null)
+  const [extracting, setExtracting] = useState(false)
+  const [extractError, setExtractError] = useState<string | null>(null)
+  const [extractedText, setExtractedText] = useState<string | null>(null)
+  const [slideCount, setSlideCount] = useState<number | null>(null)
+
+  const [gradeLevel, setGradeLevel] = useState('')
+  const [subject, setSubject] = useState('')
+  const [objective, setObjective] = useState('')
+
+  const [plan, setPlan] = useState<LessonPlan | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const [allPlans, setAllPlans] = useState<LessonPlan[]>([])
+  const [historyLoading, setHistoryLoading] = useState(true)
+
+  const [chatDraft, setChatDraft] = useState('')
+  const [chatSending, setChatSending] = useState(false)
+  const [chatError, setChatError] = useState<string | null>(null)
+
+  const [applyingRevision, setApplyingRevision] = useState(false)
+  const [revisionDismissed, setRevisionDismissed] = useState(false)
+
+  useEffect(() => {
+    getLessonPlans({ mode: 'presentation' })
+      .then(setAllPlans)
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false))
+  }, [])
+
+  const savedPlans = allPlans.filter((p) => p.saved)
+
+  async function handleFile(selected: File) {
+    setFile(selected)
+    setExtracting(true)
+    setExtractError(null)
+    setExtractedText(null)
+    setSlideCount(null)
+    try {
+      const result = await extractPresentationText(selected)
+      setExtractedText(result.text)
+      setSlideCount(result.slideCount)
+    } catch (e) {
+      setExtractError(e instanceof Error ? e.message : 'Could not read that file. Please try a different export.')
+    } finally {
+      setExtracting(false)
+    }
+  }
+
+  function handleRemoveFile() {
+    setFile(null)
+    setExtractedText(null)
+    setSlideCount(null)
+    setExtractError(null)
+  }
+
+  async function handleSubmit() {
+    if (!extractedText || submitting) return
+    setSubmitting(true)
+    setError(null)
+    try {
+      const result = await submitPresentationReview({
+        text: extractedText,
+        fileName: file?.name,
+        slideCount: slideCount ?? undefined,
+        gradeLevel: gradeLevel.trim() || undefined,
+        subject: subject.trim() || undefined,
+        objective: objective.trim() || undefined,
+      })
+      setPlan(result)
+      setAllPlans((prev) => [result, ...prev])
+      setChatDraft('')
+      setChatError(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not review this presentation. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleSendChat() {
+    const trimmed = chatDraft.trim()
+    if (!plan || !trimmed || chatSending) return
+    setChatSending(true)
+    setChatError(null)
+    setChatDraft('')
+    try {
+      const updated = await sendLessonPlanChat(plan.id, trimmed)
+      setPlan(updated)
+      setAllPlans((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+      setRevisionDismissed(false)
+    } catch (err) {
+      setChatError((err as Error).message || 'Could not reach your coach. Please try again.')
+      setChatDraft(trimmed)
+    } finally {
+      setChatSending(false)
+    }
+  }
+
+  async function handleApplyRevision() {
+    if (!plan || applyingRevision) return
+    setApplyingRevision(true)
+    try {
+      const updated = await applyLessonPlanRevision(plan.id)
+      setPlan(updated)
+      setAllPlans((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+    } catch {
+      setChatError('Could not apply the revision. Please try again.')
+    } finally {
+      setApplyingRevision(false)
+    }
+  }
+
+  function handleNew() {
+    setFile(null)
+    setExtractedText(null)
+    setSlideCount(null)
+    setExtractError(null)
+    setGradeLevel('')
+    setSubject('')
+    setObjective('')
+    setPlan(null)
+    setError(null)
+    setChatDraft('')
+    setChatError(null)
+    setRevisionDismissed(false)
+  }
+
+  async function handleToggleSaved(target: LessonPlan) {
+    const nextSaved = !target.saved
+    const apply = (p: LessonPlan) => (p.id === target.id ? { ...p, saved: nextSaved } : p)
+    setAllPlans((prev) => prev.map(apply))
+    if (plan?.id === target.id) setPlan((prev) => (prev ? { ...prev, saved: nextSaved } : prev))
+    try {
+      await setLessonPlanSaved(target.id, nextSaved)
+    } catch {
+      setAllPlans((prev) => prev.map((p) => (p.id === target.id ? { ...p, saved: !nextSaved } : p)))
+      if (plan?.id === target.id) setPlan((prev) => (prev ? { ...prev, saved: !nextSaved } : prev))
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="rounded-2xl border border-border bg-surface p-6">
+        {!plan ? (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-ink-soft">
+              Upload a presentation you've already built — get feedback on grade-level fit, visuals, ideas, length,
+              and how to actually run it in class.
+            </p>
+
+            {!extractedText ? (
+              <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border bg-canvas px-4 py-8 text-center transition-colors hover:border-brand-300">
+                <span className="text-sm font-medium text-ink">
+                  {extracting ? 'Reading your presentation...' : 'Click to upload a .pptx or .pdf'}
+                </span>
+                <span className="text-xs text-ink-soft">Export Google Slides or Keynote as PDF first if needed.</span>
+                <input
+                  type="file"
+                  accept=".pptx,.pdf"
+                  className="hidden"
+                  disabled={extracting}
+                  onChange={(e) => {
+                    const selected = e.target.files?.[0]
+                    if (selected) void handleFile(selected)
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+            ) : (
+              <div className="flex items-center justify-between rounded-xl border border-border bg-canvas px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-ink">{file?.name}</p>
+                  <p className="text-xs text-ink-soft">
+                    {slideCount != null ? `${slideCount} slide${slideCount === 1 ? '' : 's'} read` : 'Ready'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRemoveFile}
+                  disabled={submitting}
+                  className="text-sm font-medium text-ink-soft hover:text-warm-500 disabled:opacity-60"
+                >
+                  Remove
+                </button>
+              </div>
+            )}
+            {extractError && <p className="text-sm text-warm-500">{extractError}</p>}
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium text-ink">Grade level (optional)</span>
+                <input
+                  type="text"
+                  value={gradeLevel}
+                  onChange={(e) => setGradeLevel(e.target.value)}
+                  disabled={submitting}
+                  placeholder="e.g. 9th grade"
+                  className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium text-ink">Subject (optional)</span>
+                <input
+                  type="text"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  disabled={submitting}
+                  placeholder="e.g. Biology"
+                  className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                />
+              </label>
+            </div>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-ink">What's this presentation about? (optional)</span>
+              <input
+                type="text"
+                value={objective}
+                onChange={(e) => setObjective(e.target.value)}
+                disabled={submitting}
+                placeholder="e.g. Introducing photosynthesis"
+                className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={submitting || !extractedText}
+              className="self-end rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+            >
+              {submitting ? 'Reviewing...' : 'Review Presentation'}
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div>
+              <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600">
+                Presentation review
+                {plan.subject ? ` · ${plan.subject}` : ''}
+                {plan.gradeLevel ? ` · ${plan.gradeLevel}` : ''}
+              </span>
+              <p className="mt-2 text-sm font-medium text-ink">
+                {plan.objective || plan.fileName || 'Your presentation'}
+              </p>
+              {plan.slideCount != null && (
+                <p className="mt-0.5 text-xs text-ink-soft">
+                  {plan.slideCount} slide{plan.slideCount === 1 ? '' : 's'}
+                </p>
+              )}
+            </div>
+
+            {plan.presentationReview && <PresentationReviewCard review={plan.presentationReview} />}
+
+            <CoachingChat
+              messages={plan.conversation.slice(2)}
+              sending={chatSending}
+              error={chatError}
+              draft={chatDraft}
+              onDraftChange={setChatDraft}
+              onSend={handleSendChat}
+              placeholder="Ask a follow-up, or ask the coach to revise a slide..."
+            />
+            {plan.suggestedRevision && !revisionDismissed && (
+              <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Suggested Revision</p>
+                <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{plan.suggestedRevision}</p>
+                <div className="mt-3 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleApplyRevision}
+                    disabled={applyingRevision}
+                    className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                  >
+                    {applyingRevision ? 'Applying...' : 'Use this version'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRevisionDismissed(true)}
+                    disabled={applyingRevision}
+                    className="text-sm font-medium text-ink-soft hover:text-ink"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <SaveButton plan={plan} onToggle={handleToggleSaved} />
+                <ShareButton onShare={() => shareLessonPlan(plan.id)} />
+                <Link
+                  to={`/lesson-planning/${plan.id}/export`}
+                  className="text-sm font-medium text-ink-soft hover:text-brand-600"
+                >
+                  Download
+                </Link>
+              </div>
+              <button
+                type="button"
+                onClick={handleNew}
+                className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+              >
+                New Presentation
+              </button>
+            </div>
+          </div>
+        )}
+        {error && (
+          <p className="mt-4 text-center text-sm text-warm-500">
+            <UpgradeMessage text={error} />
+          </p>
+        )}
+      </div>
+
+      <HistoryList title="Saved presentation reviews" loading={historyLoading} plans={savedPlans} />
     </div>
   )
 }

@@ -38,28 +38,40 @@ export default function LessonPlanExport() {
         ) : (
           <>
             <h1 className="text-2xl font-semibold text-ink">
-              Wivoza — {plan.mode === 'generated' ? 'Sample Lesson Plan' : 'Lesson Plan Feedback'}
+              Wivoza —{' '}
+              {plan.mode === 'generated'
+                ? 'Sample Lesson Plan'
+                : plan.mode === 'presentation'
+                  ? 'Presentation Review'
+                  : 'Lesson Plan Feedback'}
             </h1>
             <p className="mt-1 text-sm text-ink-soft">
-              {plan.unitName ? `${plan.unitName} · ` : ''}
+              {plan.mode === 'presentation' ? (plan.fileName ? `${plan.fileName} · ` : '') : plan.unitName ? `${plan.unitName} · ` : ''}
               {plan.subject ? `${plan.subject} · ` : ''}
-              {plan.gradeLevel || ''}
+              {plan.gradeLevel ? `${plan.gradeLevel}` : ''}
+              {plan.mode === 'presentation' && plan.slideCount != null
+                ? `${plan.subject || plan.gradeLevel ? ' · ' : ''}${plan.slideCount} slide${plan.slideCount === 1 ? '' : 's'}`
+                : ''}
             </p>
 
-            <section className="mt-6 break-inside-avoid rounded-xl border border-border p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Objective</p>
-              <p className="mt-1 text-sm text-ink">{plan.objective}</p>
-              {plan.standard && (
-                <p className="mt-2 text-xs text-ink-soft">
-                  <span className="font-semibold">Standard:</span> {plan.standard}
+            {plan.objective && (
+              <section className="mt-6 break-inside-avoid rounded-xl border border-border p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                  {plan.mode === 'presentation' ? 'About this presentation' : 'Objective'}
                 </p>
-              )}
-              {plan.essentialQuestion && (
-                <p className="mt-1 text-xs text-ink-soft">
-                  <span className="font-semibold">Essential question:</span> {plan.essentialQuestion}
-                </p>
-              )}
-            </section>
+                <p className="mt-1 text-sm text-ink">{plan.objective}</p>
+                {plan.standard && (
+                  <p className="mt-2 text-xs text-ink-soft">
+                    <span className="font-semibold">Standard:</span> {plan.standard}
+                  </p>
+                )}
+                {plan.essentialQuestion && (
+                  <p className="mt-1 text-xs text-ink-soft">
+                    <span className="font-semibold">Essential question:</span> {plan.essentialQuestion}
+                  </p>
+                )}
+              </section>
+            )}
 
             {plan.mode === 'feedback' ? (
               <>
@@ -73,6 +85,45 @@ export default function LessonPlanExport() {
                   <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Coaching</p>
                     <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.feedback}</p>
+                  </section>
+                )}
+              </>
+            ) : plan.mode === 'presentation' ? (
+              <>
+                {plan.presentationReview?.gradeLevelFit && (
+                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Grade-level fit</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.presentationReview.gradeLevelFit}</p>
+                  </section>
+                )}
+                {plan.presentationReview?.visuals && (
+                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Visuals</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.presentationReview.visuals}</p>
+                  </section>
+                )}
+                {plan.presentationReview?.ideas && (
+                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Ideas</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.presentationReview.ideas}</p>
+                  </section>
+                )}
+                {plan.presentationReview?.length && (
+                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Length</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.presentationReview.length}</p>
+                  </section>
+                )}
+                {plan.presentationReview?.implementation && (
+                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Implementation</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.presentationReview.implementation}</p>
+                  </section>
+                )}
+                {plan.planText && (
+                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Slide text</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.planText}</p>
                   </section>
                 )}
               </>

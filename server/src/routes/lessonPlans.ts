@@ -1,4 +1,7 @@
 import { Router } from 'express'
+import JSZip from 'jszip'
+import multer from 'multer'
+import { PDFParse } from 'pdf-parse'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { checkFeatureAccess, countUsageLogActionsThisMonth, LESSON_PLANNING_ACTIONS } from '../lib/billing.ts'
 import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
@@ -30,7 +33,7 @@ A single integer 1-5 rating of your honest private assessment of how well this p
 </rating>
 ${CORE_COACHING_RULES}`
 
-const LESSON_PLAN_CHAT_SYSTEM_PROMPT = `You are a warm, practical instructional coach for K-12 teachers, continuing a conversation about a lesson plan you already gave feedback on. Build on what the teacher says: if they push back, ask a follow-up, or want to think through a change, engage with that directly rather than repeating your first assessment. Keep in mind whether the plan is a single lesson or a multi-day/weekly plan, as established earlier in the conversation. Stay grounded in what's already been discussed; never invent details about the plan that weren't given to you.
+const LESSON_PLAN_CHAT_SYSTEM_PROMPT = `You are a warm, practical instructional coach for K-12 teachers, continuing a conversation about a lesson plan or presentation you already gave feedback on. Build on what the teacher says: if they push back, ask a follow-up, or want to think through a change, engage with that directly rather than repeating your first assessment. Keep in mind whether this is a single lesson, a multi-day/weekly plan, or a slide presentation, as established earlier in the conversation. Stay grounded in what's already been discussed; never invent details that weren't given to you.
 
 Write in plain text only — no markdown (no **bold**, no # headings).
 
@@ -40,10 +43,10 @@ Respond with exactly this tag and nothing outside it:
 Your reply, 2-4 sentences, conversational.
 </message>
 
-If — and only if — the teacher is asking for a concrete change to the plan itself (not just discussing or asking a question), also include a second tag right after </message>:
+If — and only if — the teacher is asking for a concrete change to the plan or presentation's content itself (not just discussing or asking a question), also include a second tag right after </message>:
 
 <revised_plan>
-The full plan, reproduced in its entirety with the requested change incorporated. Not a diff or a summary of the change — the whole plan, ready to replace the original.
+The full plan or slide-by-slide text, reproduced in its entirety with the requested change incorporated. Not a diff or a summary of the change — the whole thing, ready to replace the original.
 </revised_plan>
 
 Omit <revised_plan> entirely when the teacher is just asking a question, reflecting, or hasn't asked for an edit.
@@ -108,6 +111,191 @@ Identify the single most likely point of confusion in this lesson and suggest a 
 How to close the lesson so it reinforces the objective and sets up next time.
 </closing>
 ${CORE_COACHING_RULES}`
+
+function buildPresentationReviewSystemPrompt(gradeLevel: string | null, subject: string | null): string {
+  return `You are a warm, practical instructional coach for K-12 teachers, reviewing a presentation (slides) the teacher has already built for their class. You are only given the extracted TEXT of each slide — you cannot see images, charts, colors, fonts, or layout. Never claim to have seen or judged an actual visual element; instead, reason about what the text suggests about density, structure, and where a visual would likely help.
+
+${gradeLevel ? `Grade level: ${gradeLevel}` : 'No grade level was given — infer an appropriate one from the content and vocabulary, and say so.'}
+${subject ? `Subject: ${subject}` : ''}
+
+Write in plain text only — no markdown (no **bold**, no # headings).
+
+Respond with exactly these five sections and nothing outside them:
+<grade_level_fit>
+Is the vocabulary, complexity, and pacing appropriate for this grade level? Call out anything too advanced or too simple, grounded in the actual slide text.
+</grade_level_fit>
+<visuals>
+Given you can only see text, suggest specific slides (by number) that are dense or abstract enough to benefit from a diagram, image, chart, or example — and note any slide that already reads as appropriately visual/sparse. Never claim to critique actual images.
+</visuals>
+<ideas>
+Is the content clear, logically sequenced, and complete? Flag any gap, ambiguous slide, or place where a student would likely get lost.
+</ideas>
+<length>
+Given the slide count and content density, is this too long or too short for a typical class period at this grade level? Suggest specific slides to trim, combine, or expand.
+</length>
+<implementation>
+Practical delivery guidance: pacing across the deck, where to pause for questions or a check for understanding, and anything worth saying aloud that isn't on the slides themselves.
+</implementation>
+${CORE_COACHING_RULES}`
+}
+
+// Stateless document-text extraction for the "Upload your presentation"
+// intake path — pure local parsing, no Claude call, so this isn't
+// usage-capped. Presentations can run larger than a typical document.
+const presentationUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } })
+
+function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&')
+}
+
+// Pulls the visible text runs (<a:t>...</a:t>) out of each slide's raw XML,
+// in slide order — a .pptx is just a zip of XML parts, so this needs no
+// heavier office-document library, only a zip reader.
+async function extractPptxSlides(buffer: Buffer): Promise<string[]> {
+  const zip = await JSZip.loadAsync(buffer)
+  const slideFiles = Object.keys(zip.files)
+    .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+    .sort((a, b) => {
+      const numA = Number(a.match(/slide(\d+)\.xml$/)?.[1] ?? 0)
+      const numB = Number(b.match(/slide(\d+)\.xml$/)?.[1] ?? 0)
+      return numA - numB
+    })
+
+  const slides: string[] = []
+  for (const name of slideFiles) {
+    const xml = await zip.files[name].async('string')
+    const runs = Array.from(xml.matchAll(/<a:t>([^<]*)<\/a:t>/g)).map((m) => decodeXmlEntities(m[1]))
+    slides.push(runs.join(' ').trim())
+  }
+  return slides
+}
+
+// A PDF export of a slide deck (PowerPoint/Google Slides "Export as PDF")
+// keeps one page per slide, so each page's extracted text stands in for a
+// slide — no OCR: an exported deck's text layer is real vector text, never
+// a scanned image, unlike the scanned-worksheet case Assignment Coach's
+// uploader has to handle.
+async function extractPdfSlides(buffer: Buffer): Promise<string[]> {
+  const parser = new PDFParse({ data: buffer })
+  try {
+    const result = await parser.getText()
+    return result.pages.map((page) => page.text.trim())
+  } finally {
+    await parser.destroy()
+  }
+}
+
+function formatSlidesAsText(slides: string[]): string {
+  return slides.map((text, i) => `Slide ${i + 1}:\n${text || '(no text on this slide)'}`).join('\n\n')
+}
+
+lessonPlansRouter.post('/extract-presentation', presentationUpload.single('file'), async (req, res) => {
+  if (!req.file) {
+    res.status(400).json({ error: 'No file received' })
+    return
+  }
+  const name = req.file.originalname.toLowerCase()
+  try {
+    let slides: string[]
+    if (name.endsWith('.pptx')) {
+      slides = await extractPptxSlides(req.file.buffer)
+    } else if (name.endsWith('.pdf')) {
+      slides = await extractPdfSlides(req.file.buffer)
+    } else {
+      res.status(400).json({ error: 'Please upload a .pptx or .pdf file (export your presentation as PDF if needed).' })
+      return
+    }
+    if (slides.length === 0 || !slides.some((s) => s.trim())) {
+      res.status(422).json({ error: "Couldn't find any text in that file. If your slides are mostly images, this won't pick up their content." })
+      return
+    }
+    res.json({ text: formatSlidesAsText(slides), slideCount: slides.length, fileName: req.file.originalname })
+  } catch (error) {
+    console.error('[lesson-plans] extract-presentation failed:', error)
+    res.status(502).json({ error: 'Could not read that file. Please try a different export.' })
+  }
+})
+
+lessonPlansRouter.post('/presentation-review', async (req, res) => {
+  const { text, fileName, slideCount, gradeLevel, subject, objective } = req.body ?? {}
+
+  if (typeof text !== 'string' || !text.trim()) {
+    res.status(400).json({ error: 'text is required' })
+    return
+  }
+
+  const access = await checkFeatureAccess(req.user!.userId, 'lesson_planning', () =>
+    countUsageLogActionsThisMonth(req.user!.userId, LESSON_PLANNING_ACTIONS),
+  )
+  if (!access.allowed) {
+    res.status(403).json({ error: access.upgradeMessage })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'lesson_plan_presentation_review')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  const gradeLevelStr = typeof gradeLevel === 'string' && gradeLevel.trim() ? gradeLevel.trim() : null
+  const subjectStr = typeof subject === 'string' && subject.trim() ? subject.trim() : null
+
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      // Generous headroom for five verbose sections grounded in a full
+      // slide-by-slide transcript — same truncation risk already fixed for
+      // the delivery-coaching route above.
+      max_tokens: 3000,
+      thinking: { type: 'disabled' },
+      system: buildPresentationReviewSystemPrompt(gradeLevelStr, subjectStr),
+      messages: [{ role: 'user', content: text.trim() }],
+    })
+    const responseText = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+
+    const presentationReview = {
+      gradeLevelFit: extractTag(responseText, 'grade_level_fit'),
+      visuals: extractTag(responseText, 'visuals'),
+      ideas: extractTag(responseText, 'ideas'),
+      length: extractTag(responseText, 'length'),
+      implementation: extractTag(responseText, 'implementation'),
+    }
+    if (!Object.values(presentationReview).some(Boolean)) {
+      res.status(502).json({ error: 'Could not review this presentation. Please try again.' })
+      return
+    }
+
+    const conversation = appendTurn([], text.trim(), 'Here is my review of your presentation.')
+
+    const lessonPlan = await prisma.lessonPlan.create({
+      data: {
+        userId: req.user!.userId,
+        mode: 'presentation',
+        objective: typeof objective === 'string' && objective.trim() ? objective.trim() : null,
+        gradeLevel: gradeLevelStr,
+        subject: subjectStr,
+        planText: text.trim(),
+        fileName: typeof fileName === 'string' && fileName.trim() ? fileName.trim() : null,
+        slideCount: typeof slideCount === 'number' && Number.isFinite(slideCount) ? Math.round(slideCount) : null,
+        presentationReview,
+        conversation,
+      },
+    })
+    res.status(201).json(lessonPlan)
+  } catch (error) {
+    console.error('[lesson-plans] presentation-review failed:', error)
+    res.status(502).json({ error: 'Could not review this presentation. Please try again.' })
+  }
+})
 
 lessonPlansRouter.get('/', async (req, res) => {
   const { saved, mode } = req.query

@@ -256,9 +256,10 @@ export type SharedDebrief = {
   createdAt: string
 }
 
-// mode is "feedback" (teacher's own plan + coaching) or "generated" (a
-// sample plan from just an objective) — see server/prisma/schema.prisma.
-export type LessonPlanMode = 'feedback' | 'generated'
+// mode is "feedback" (teacher's own plan + coaching), "generated" (a sample
+// plan from just an objective), or "presentation" (review of an uploaded
+// slide deck) — see server/prisma/schema.prisma.
+export type LessonPlanMode = 'feedback' | 'generated' | 'presentation'
 
 export type LessonPlan = {
   id: string
@@ -283,6 +284,9 @@ export type LessonPlan = {
   conversation: ChatMessage[]
   suggestedRevision: string | null
   deliveryCoaching: LessonPlanDeliveryCoaching | null
+  fileName: string | null
+  slideCount: number | null
+  presentationReview: LessonPlanPresentationReview | null
 }
 
 export type LessonPlanDeliveryCoaching = {
@@ -291,6 +295,14 @@ export type LessonPlanDeliveryCoaching = {
   engagementCheckpoints: string | null
   explainingTheHardPart: string | null
   closing: string | null
+}
+
+export type LessonPlanPresentationReview = {
+  gradeLevelFit: string | null
+  visuals: string | null
+  ideas: string | null
+  length: string | null
+  implementation: string | null
 }
 
 export type SharedLessonPlan = {
@@ -1077,6 +1089,36 @@ export function applyLessonPlanRevision(id: string): Promise<LessonPlan> {
 
 export function getPresentationFeedback(id: string): Promise<LessonPlan> {
   return request(`/api/lesson-plans/${id}/presentation-feedback`, { method: 'POST' })
+}
+
+// Multipart upload, same convention as extractAssignmentText — bypasses
+// the JSON-only request() helper.
+export async function extractPresentationText(
+  file: File,
+): Promise<{ text: string; slideCount: number; fileName: string }> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await fetch(`${API_BASE_URL}/api/lesson-plans/extract-presentation`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error ?? `Request failed with status ${res.status}`)
+  }
+  return res.json()
+}
+
+export function submitPresentationReview(data: {
+  text: string
+  fileName?: string
+  slideCount?: number
+  gradeLevel?: string
+  subject?: string
+  objective?: string
+}): Promise<LessonPlan> {
+  return request('/api/lesson-plans/presentation-review', { method: 'POST', body: JSON.stringify(data) })
 }
 
 export function generateLessonPlan(context: LessonPlanContext): Promise<LessonPlan> {

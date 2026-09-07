@@ -354,7 +354,8 @@ model LessonPlan {
   subject           String?
   gradeLevel        String?
 
-  // "feedback" mode only — the teacher's own submitted plan
+  // "feedback" mode: the teacher's own submitted plan. "presentation" mode:
+  // the extracted, slide-numbered text of an uploaded presentation.
   planText          String?
   feedback          String?
   rating            Int? // same private growth-tracking rating as ScenarioAttempt/Debrief
@@ -370,14 +371,27 @@ model LessonPlan {
   shareToken        String?  @unique
   createdAt         DateTime @default(now())
 
-  // Same convention as ScenarioAttempt.conversation — "feedback" mode only.
+  // Same convention as ScenarioAttempt.conversation — "feedback" and
+  // "presentation" modes only.
   conversation      Json?
 
   // The coach's latest proposed rewrite of planText, offered during the
-  // follow-up chat — "feedback" mode only. Shown separately, never
-  // auto-applied; null until the teacher accepts it (which copies this into
-  // planText and clears it) or a newer suggestion replaces it.
+  // follow-up chat — "feedback" and "presentation" modes only. Shown
+  // separately, never auto-applied; null until the teacher accepts it
+  // (which copies this into planText and clears it) or a newer suggestion
+  // replaces it.
   suggestedRevision String?
+
+  // "presentation" mode only — the uploaded file's original name and its
+  // slide/page count, both purely for display (e.g. "my-slides.pptx · 12
+  // slides"), never used in the review itself beyond the count.
+  fileName          String?
+  slideCount        Int?
+
+  // "presentation" mode only — { gradeLevelFit, visuals, ideas, length,
+  // implementation }, Claude's review of an already-built presentation.
+  // Regenerating overwrites this field.
+  presentationReview Json?
 
   // { openingHook, pacing, engagementCheckpoints, explainingTheHardPart,
   // closing } — a structured presentation/delivery coaching pass, generated
