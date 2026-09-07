@@ -209,15 +209,51 @@ Respond with exactly these sections and nothing else:
 ${REVIEW_SNAPSHOT_TAGS}
 ${CORE_COACHING_RULES}`
 
-function buildRedesignAiStartPrompt(aiUseLevel: string, originalText: string, extraNote?: string): string {
-  const levelGuidance = AI_USE_LEVEL_GUIDANCE[aiUseLevel] ?? AI_USE_LEVEL_GUIDANCE.thinking_partner
+// Lists all three levels with their guidance, for the "let Wivoza
+// recommend" path, where Claude has to choose one rather than being told.
+const ALL_AI_USE_LEVELS_TEXT = VALID_AI_USE_LEVELS.map(
+  (level) => `- ${AI_USE_LEVEL_LABELS[level]}: ${AI_USE_LEVEL_GUIDANCE[level]}`,
+).join('\n')
+
+function aiRoleFramingBlock(aiUseLevel: string | null): string {
+  if (aiUseLevel) {
+    const levelGuidance = AI_USE_LEVEL_GUIDANCE[aiUseLevel] ?? AI_USE_LEVEL_GUIDANCE.thinking_partner
+    return `The teacher has said students should use AI this way: ${levelGuidance}`
+  }
+  return `The teacher wants your recommendation on how students should use AI for this specific assignment. Choose the single best-fitting option from:
+${ALL_AI_USE_LEVELS_TEXT}
+State your choice via the <recommended_ai_use_level> tag below, using exactly one of: thinking_partner, limited, no_ai.`
+}
+
+// New five-section output contract — the "recommended" role explanation,
+// vulnerable-steps, and safeguards tags shared by both the initial start
+// call and the regenerate call, since both currently produce this shape.
+function redesignOutputTags(aiUseLevel: string | null): string {
+  return `${aiUseLevel ? '' : `<recommended_ai_use_level>\nOne of: thinking_partner, limited, no_ai.\n</recommended_ai_use_level>\n`}<ai_role_explanation>
+1-2 sentences on why the selected or recommended AI-use level genuinely fits THIS assignment — not a generic justification.
+</ai_role_explanation>
+<vulnerable_steps>
+The specific parts of the ORIGINAL assignment a student could complete by pasting the directions into an AI tool, without demonstrating genuine understanding. Dash-prefixed, one per line. Omit this tag entirely if nothing genuinely qualifies.
+</vulnerable_steps>
+<thinking_safeguards>
+2-3 concrete safeguards actually used in the revised assignment below, each one sentence — only ones that genuinely fit this assignment, don't force-fit every option.
+</thinking_safeguards>
+<guidelines>
+A short, plain-language, copy-ready statement for students covering: what AI use is allowed, what's limited, what's prohibited, what they must disclose, and what evidence of their own thinking they must provide.
+</guidelines>
+<revised_assignment>
+The full redesigned assignment text, ready for a student to read.
+</revised_assignment>`
+}
+
+function buildRedesignAiStartPrompt(aiUseLevel: string | null, originalText: string, extraNote?: string): string {
   return `You are Coach, helping a teacher redesign an assignment for meaningful AI use, and opening a conversation about it. The goal is not to make the assignment "AI-proof" — that's not realistic — but to keep student thinking, judgment, voice, and process visible throughout the task.
 
 ${REDESIGN_GUIDING_PRINCIPLE}
 
-The teacher has said students should use AI this way: ${levelGuidance}
+${aiRoleFramingBlock(aiUseLevel)}
 
-Choose from these kinds of strategies where they genuinely fit this assignment — don't force all of them in:
+Choose from these kinds of safeguards where they genuinely fit this assignment — don't force all of them in:
 ${REDESIGN_STRATEGIES_LIST}
 
 Ground every suggestion in the actual assignment below. Never invent details about the class or students that weren't given to you.
@@ -233,28 +269,19 @@ Respond with exactly these sections and nothing else:
 <reply>
 A short, warm 1-2 sentence message introducing the redesign below and inviting the teacher to ask about anything or request changes.
 </reply>
-<strategies>
-2-3 concrete strategies actually used in the revised assignment below, each one sentence.
-</strategies>
-<guidelines>
-A short, plain-language statement for students about how AI may and may not be used on this task, consistent with what the teacher chose.
-</guidelines>
-<revised_assignment>
-The full redesigned assignment text, ready for a student to read.
-</revised_assignment>
+${redesignOutputTags(aiUseLevel)}
 ${DETECTION_INSTRUCTIONS}
 ${CORE_COACHING_RULES}`
 }
 
 function buildAiResistantSystemPrompt(aiUseLevel: string | null): string {
-  const levelGuidance = AI_USE_LEVEL_GUIDANCE[aiUseLevel ?? ''] ?? AI_USE_LEVEL_GUIDANCE.thinking_partner
   return `You are Coach, helping a teacher redesign an assignment for meaningful AI use. The goal is not to make the assignment "AI-proof" — that's not realistic — but to keep student thinking, judgment, voice, and process visible throughout the task.
 
 ${REDESIGN_GUIDING_PRINCIPLE}
 
-The teacher has said students should use AI this way: ${levelGuidance}
+${aiRoleFramingBlock(aiUseLevel)}
 
-Choose from these kinds of strategies where they genuinely fit this assignment — don't force all of them in:
+Choose from these kinds of safeguards where they genuinely fit this assignment — don't force all of them in:
 ${REDESIGN_STRATEGIES_LIST}
 
 Ground every suggestion in the actual assignment below. Never invent details about the class or students that weren't given to you.
@@ -263,16 +290,8 @@ ${DIAGRAM_SYNTAX_INSTRUCTIONS}
 
 Write in plain text only — no markdown. Use a dash ("-") at the start of a line for list-like content.
 
-Respond with exactly these three sections and nothing else:
-<strategies>
-2-3 concrete strategies tailored to this specific assignment, each one sentence.
-</strategies>
-<guidelines>
-A short, plain-language statement for students about how AI may and may not be used on this task, consistent with what the teacher chose.
-</guidelines>
-<revised_assignment>
-The full assignment text, incorporating the strategies above naturally into the instructions.
-</revised_assignment>
+Respond with exactly these sections and nothing else:
+${redesignOutputTags(aiUseLevel)}
 ${CORE_COACHING_RULES}`
 }
 
@@ -303,6 +322,43 @@ function parseReviewSnapshot(text: string): ReviewSnapshot {
     },
     workloadSummary: extractTag(text, 'workload_summary'),
     mainOpportunity: { title: extractTag(text, 'main_opportunity_title'), description: extractTag(text, 'main_opportunity_description') },
+  }
+}
+
+type RedesignOutput = {
+  resolvedAiUseLevel: string
+  aiResistant: {
+    aiRole: { level: string; explanation: string | null; recommended: boolean }
+    vulnerableSteps: string | null
+    thinkingSafeguards: string | null
+    guidelines: string | null
+    revisedAssignment: string | null
+  }
+}
+
+// Shared by the start, regenerate, and refine routes — all three produce
+// this same five-section shape. `knownAiUseLevel` is null only when the
+// teacher chose "let Wivoza recommend"; in that case the concrete level
+// comes back from Claude's own <recommended_ai_use_level> tag (validated,
+// falling back to thinking_partner if malformed) — this function always
+// returns a real level, never "auto", since every downstream read of
+// `session.aiUseLevel` expects one.
+function parseRedesignOutput(text: string, knownAiUseLevel: string | null): RedesignOutput {
+  const recommended = knownAiUseLevel == null
+  let resolvedAiUseLevel = knownAiUseLevel ?? 'thinking_partner'
+  if (recommended) {
+    const raw = (extractTag(text, 'recommended_ai_use_level') ?? '').trim()
+    if (VALID_AI_USE_LEVELS.includes(raw)) resolvedAiUseLevel = raw
+  }
+  return {
+    resolvedAiUseLevel,
+    aiResistant: {
+      aiRole: { level: resolvedAiUseLevel, explanation: extractTag(text, 'ai_role_explanation'), recommended },
+      vulnerableSteps: extractTag(text, 'vulnerable_steps'),
+      thinkingSafeguards: extractTag(text, 'thinking_safeguards'),
+      guidelines: extractTag(text, 'guidelines'),
+      revisedAssignment: extractTag(text, 'revised_assignment'),
+    },
   }
 }
 
@@ -546,8 +602,9 @@ assignmentCoachRouter.post('/', async (req, res) => {
     return
   }
 
+  const letWivozaChooseAiUseLevel = mode === 'redesign_ai' && body.letWivozaChooseAiUseLevel === true
   let aiUseLevel: string | null = null
-  if (mode === 'redesign_ai') {
+  if (mode === 'redesign_ai' && !letWivozaChooseAiUseLevel) {
     const rawLevel = typeof body.aiUseLevel === 'string' ? body.aiUseLevel : ''
     if (!VALID_AI_USE_LEVELS.includes(rawLevel)) {
       res.status(400).json({ error: 'Invalid aiUseLevel' })
@@ -555,6 +612,8 @@ assignmentCoachRouter.post('/', async (req, res) => {
     }
     aiUseLevel = rawLevel
   }
+
+  const extraNote = typeof body.extraNote === 'string' && body.extraNote.trim() ? body.extraNote.trim() : undefined
 
   const access = await checkFeatureAccess(req.user!.userId, 'lesson_planning', () =>
     countUsageLogActionsThisMonth(req.user!.userId, LESSON_PLANNING_ACTIONS),
@@ -571,7 +630,8 @@ assignmentCoachRouter.post('/', async (req, res) => {
   }
 
   try {
-    const systemPrompt = mode === 'review' ? buildReviewStartPrompt(originalText) : buildRedesignAiStartPrompt(aiUseLevel!, originalText)
+    const systemPrompt =
+      mode === 'review' ? buildReviewStartPrompt(originalText, extraNote) : buildRedesignAiStartPrompt(aiUseLevel, originalText, extraNote)
     // Redesign has to reproduce the full assignment text in <revised_assignment>,
     // which for a real multi-page assignment can run several thousand tokens on
     // its own — a low cap here truncates mid-tag, the closing tag never appears,
@@ -598,7 +658,8 @@ assignmentCoachRouter.post('/', async (req, res) => {
 
     let liveAssignmentText: string
     let reviewSnapshot: ReviewSnapshot | undefined
-    let aiResistant: Record<string, string | null> | undefined
+    let aiResistant: RedesignOutput['aiResistant'] | undefined
+    let resolvedAiUseLevel: string | null = aiUseLevel
 
     if (mode === 'review') {
       reviewSnapshot = parseReviewSnapshot(text)
@@ -608,17 +669,14 @@ assignmentCoachRouter.post('/', async (req, res) => {
       }
       liveAssignmentText = originalText
     } else {
-      const revisedAssignment = extractTag(text, 'revised_assignment')
-      if (!revisedAssignment) {
+      const parsed = parseRedesignOutput(text, aiUseLevel)
+      if (!parsed.aiResistant.revisedAssignment) {
         res.status(502).json({ error: 'Could not put this together. Please try again.' })
         return
       }
-      aiResistant = {
-        strategies: extractTag(text, 'strategies'),
-        guidelines: extractTag(text, 'guidelines'),
-        revisedAssignment,
-      }
-      liveAssignmentText = revisedAssignment
+      aiResistant = parsed.aiResistant
+      resolvedAiUseLevel = parsed.resolvedAiUseLevel
+      liveAssignmentText = parsed.aiResistant.revisedAssignment
     }
 
     const conversation: ChatMessage[] = [{ role: 'assistant', text: reply, createdAt: new Date().toISOString() }]
@@ -627,7 +685,7 @@ assignmentCoachRouter.post('/', async (req, res) => {
       data: {
         userId: req.user!.userId,
         mode,
-        aiUseLevel,
+        aiUseLevel: resolvedAiUseLevel,
         title: detected.title,
         assignmentType: detected.assignmentType,
         gradeLevel: detected.gradeLevel,
@@ -800,12 +858,10 @@ assignmentCoachRouter.post('/:id/ai-resistant', async (req, res) => {
       .map((block) => block.text)
       .join('\n')
 
-    const aiResistant = {
-      strategies: extractTag(text, 'strategies'),
-      guidelines: extractTag(text, 'guidelines'),
-      revisedAssignment: extractTag(text, 'revised_assignment'),
-    }
-    if (!Object.values(aiResistant).some(Boolean)) {
+    // Regenerate always has a concrete stored level already — never re-asks
+    // Claude to pick one here.
+    const { aiResistant } = parseRedesignOutput(text, session.aiUseLevel)
+    if (!aiResistant.revisedAssignment) {
       res.status(502).json({ error: 'Could not put this together. Please try again.' })
       return
     }
@@ -935,19 +991,17 @@ assignmentCoachRouter.post('/:id/refine', async (req, res) => {
     const { detected } = parseDetection(text)
 
     let reviewSnapshot: ReviewSnapshot | undefined
-    let aiResistant: Record<string, string | null> | undefined
+    let aiResistant: RedesignOutput['aiResistant'] | undefined
 
     if (isRedesign) {
-      const revisedAssignment = extractTag(text, 'revised_assignment')
-      if (!revisedAssignment) {
+      // Refine always has a concrete stored level already — never re-asks
+      // Claude to pick one here.
+      const parsed = parseRedesignOutput(text, session.aiUseLevel)
+      if (!parsed.aiResistant.revisedAssignment) {
         res.status(502).json({ error: 'Could not put this together. Please try again.' })
         return
       }
-      aiResistant = {
-        strategies: extractTag(text, 'strategies'),
-        guidelines: extractTag(text, 'guidelines'),
-        revisedAssignment,
-      }
+      aiResistant = parsed.aiResistant
     } else {
       reviewSnapshot = parseReviewSnapshot(text)
       if (isReviewSnapshotEmpty(reviewSnapshot)) {

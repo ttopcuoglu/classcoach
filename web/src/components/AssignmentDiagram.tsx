@@ -95,18 +95,51 @@ function renderDiagram(diagramType: string, params: Record<string, string>, key:
   )
 }
 
+// A blank-line-separated block whose first line reads like "Step 1: ..."
+// or "Part 2 - ..." gets that line rendered as a small heading, with the
+// rest of the block as body text below it — real visual structure for a
+// multi-step redesigned assignment, instead of one flat wall of text.
+const STEP_HEADING_PATTERN = /^(step|part|stage)\s+\d+\s*[:.-]?\s*(.*)$/i
+
+function renderTextSegment(content: string, key: number): React.ReactNode {
+  const paragraphs = content.split(/\n{2,}/).filter((p) => p.trim().length > 0)
+  if (paragraphs.length === 0) return null
+  return (
+    <div key={key} className="flex flex-col gap-3">
+      {paragraphs.map((paragraph, i) => {
+        const lines = paragraph.split('\n')
+        const match = lines[0].match(STEP_HEADING_PATTERN)
+        if (match) {
+          const rest = lines.slice(1).join('\n').trim()
+          return (
+            <div key={i}>
+              <p className="text-sm font-semibold text-forest">{lines[0].trim()}</p>
+              {rest && <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{rest}</p>}
+            </div>
+          )
+        }
+        return (
+          <p key={i} className="whitespace-pre-wrap text-sm text-ink">
+            {paragraph}
+          </p>
+        )
+      })}
+    </div>
+  )
+}
+
 // Renders assignment text, substituting each [[diagram:...]] directive
-// with a real rendered diagram — used everywhere the final assignment is
-// shown to a teacher or printed (never in the raw editable textarea).
+// with a real rendered diagram, and giving step-by-step text real visual
+// structure (heading + body per step) instead of one flat block — used
+// everywhere the final assignment is shown to a teacher or printed (never
+// in the raw editable textarea).
 export function AssignmentContent({ text }: { text: string }) {
   const segments = parseAssignmentContent(text)
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
       {segments.map((s, i) =>
         s.type === 'text' ? (
-          <span key={i} className="whitespace-pre-wrap text-sm text-ink">
-            {s.content}
-          </span>
+          renderTextSegment(s.content, i)
         ) : (
           <div key={i} className="py-1">
             {renderDiagram(s.diagramType, s.params, i)}

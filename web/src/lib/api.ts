@@ -402,9 +402,14 @@ export type AssignmentReviewSummary = {
   suggestions: string | null
 }
 export type AssignmentAiResistant = {
-  strategies: string | null
+  aiRole: { level: AssignmentAiUseLevel | null; explanation: string | null; recommended: boolean } | null
+  vulnerableSteps: string | null
+  thinkingSafeguards: string | null
   guidelines: string | null
   revisedAssignment: string | null
+  // Pre-existing sessions only stored this field, under this name — kept
+  // for backward-compat reads (render `thinkingSafeguards ?? strategies`).
+  strategies?: string | null
 }
 export type AssignmentFinalMaterials = {
   assignment: string | null
@@ -959,7 +964,9 @@ export function getAssignmentCoachSession(id: string): Promise<AssignmentCoachSe
 export function startAssignmentCoach(input: {
   mode: 'review' | 'redesign_ai'
   aiUseLevel?: AssignmentAiUseLevel
+  letWivozaChooseAiUseLevel?: boolean
   originalText: string
+  extraNote?: string
 }): Promise<AssignmentCoachSession> {
   return request('/api/assignment-coach', { method: 'POST', body: JSON.stringify(input) })
 }
