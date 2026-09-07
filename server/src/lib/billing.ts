@@ -70,7 +70,16 @@ export const LESSON_PLANNING_ACTIONS = [
 // True if the user's own subscription is active, OR their organization
 // grants paid access (a signed district contract, or a still-open free
 // pilot window) — either path grants the same Plus-equivalent access.
+// TEMPORARY (2026-09-06): limits lifted for everyone, not just superadmin —
+// every teacher gets Plus-equivalent access (the generous paid monthly
+// limits below, plus the higher daily cost-protection ceiling in
+// usageLimit.ts) while this early-access period lasts. Flip back to false
+// to restore the normal free/paid split below.
+const LIMITS_LIFTED_FOR_EVERYONE = true
+
 export async function hasActivePlan(userId: string): Promise<boolean> {
+  if (LIMITS_LIFTED_FOR_EVERYONE) return true
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
