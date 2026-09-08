@@ -1,16 +1,46 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BrainIcon, ChatBubbleIcon, ChecklistIcon, HeadsetIcon, MicIcon, PlayIcon, StarIcon } from '../components/icons'
 import {
+  BookIcon,
+  BrainIcon,
+  ChatBubbleIcon,
+  ChecklistIcon,
+  HeadsetIcon,
+  LessonPlanIcon,
+  MailIcon,
+  MicIcon,
+  PlayIcon,
+  StarIcon,
+} from '../components/icons'
+import {
+  getAssignmentCoachSessions,
   getAttempts,
   getAudioSessions,
+  getConversationPlans,
   getDebriefs,
+  getLessonPlans,
   getProfile,
   type AudioSession,
   type Debrief,
   type ScenarioAttempt,
 } from '../lib/api'
 import { pickDailyTip, type Mood } from '../lib/dailyTips'
+
+type IconComponent = (props: { className?: string }) => React.ReactElement
+
+type NextStep = {
+  icon: IconComponent
+  title: string
+  description: string
+  linkLabel: string
+  to: string
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+// Below this many days of total inactivity, the "Next" card still shows
+// whichever step would otherwise apply — just with a "welcome back" framing
+// instead of pretending nothing happened.
+const WELCOME_BACK_THRESHOLD_DAYS = 14
 
 type Activity =
   | { type: 'scenario'; id: string; createdAt: string; attempt: ScenarioAttempt }
@@ -104,6 +134,18 @@ export default function Home() {
   const [name, setName] = useState<string | null>(null)
   const [activity, setActivity] = useState<Activity[]>([])
   const [sessions, setSessions] = useState<AudioSession[]>([])
+  // Unfiltered, newest-first — used only to drive the "Next" card's
+  // priority logic (has any lesson been recorded, is the latest one
+  // reflected on), separate from `sessions` above which is filtered/sorted
+  // for the classroom-pulse chart.
+  const [allSessions, setAllSessions] = useState<AudioSession[]>([])
+  const [hasLessonPlans, setHasLessonPlans] = useState(false)
+  const [hasAssignmentSessions, setHasAssignmentSessions] = useState(false)
+  const [hasConversationPlans, setHasConversationPlans] = useState(false)
+  // Newest createdAt across attempts/debriefs/lesson plans/assignment
+  // sessions/conversation plans — combined with allSessions' own newest
+  // timestamp below to get the true overall last-activity time.
+  const [latestOtherActivityAt, setLatestOtherActivityAt] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [mood, setMood] = useState<Mood | null>(null)
   const [tip, setTip] = useState(() => pickDailyTip(null))
@@ -118,6 +160,7 @@ export default function Home() {
 
     getAudioSessions()
       .then((all) => {
+        setAllSessions([...all].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
         const withVoice = all
           .filter((s) => (s.status === 'analyzed' || s.status === 'locked') && s.studentTalkPct != null)
           .sort((a, b) => new Date(a.sessionDate).getTime() - new Date(b.sessionDate).getTime())
@@ -125,14 +168,34 @@ export default function Home() {
       })
       .catch(() => {})
 
-    Promise.all([getAttempts(), getDebriefs()])
-      .then(([attempts, debriefs]) => {
+    Promise.all([
+      getAttempts(),
+      getDebriefs(),
+      getLessonPlans(),
+      getAssignmentCoachSessions(),
+      getConversationPlans(),
+    ])
+      .then(([attempts, debriefs, lessonPlans, assignmentSessions, conversationPlans]) => {
         const combined: Activity[] = [
           ...attempts.map((a): Activity => ({ type: 'scenario', id: a.id, createdAt: a.createdAt, attempt: a })),
           ...debriefs.map((d): Activity => ({ type: 'ask', id: d.id, createdAt: d.createdAt, debrief: d })),
         ]
         combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         setActivity(combined.slice(0, 4))
+
+        setHasLessonPlans(lessonPlans.length > 0)
+        setHasAssignmentSessions(assignmentSessions.length > 0)
+        setHasConversationPlans(conversationPlans.length > 0)
+
+        const timestamps = [
+          combined[0]?.createdAt,
+          lessonPlans[0]?.createdAt,
+          assignmentSessions[0]?.createdAt,
+          conversationPlans[0]?.createdAt,
+        ]
+          .filter((d): d is string => Boolean(d))
+          .map((d) => new Date(d).getTime())
+        setLatestOtherActivityAt(timestamps.length > 0 ? Math.max(...timestamps) : null)
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -170,6 +233,89 @@ export default function Home() {
       : null
   const sparkline = sessions.slice(-5)
   const maxSpark = Math.max(1, ...sparkline.map((s) => s.studentTalkPct ?? 0))
+
+  // Priority-ordered "Next" recommendation, cheapest/most-certain signal
+  // first. Each rule only fires once everything above it doesn't apply, so
+  // exactly one recommendation shows at a time. Deliberately does not try
+  // to track "which step of Notice/Practice/Try/Reflect you're on" (see
+  // COACHING_PATH above) — this only ever names one concrete next action.
+  const completedSessions = allSessions.filter((s) => s.status === 'analyzed' || s.status === 'locked')
+  const latestCompletedSession = completedSessions[0] ?? null
+  const latestSessionUnreflected =
+    latestCompletedSession != null &&
+    (!latestCompletedSession.reflectConversation || latestCompletedSession.reflectConversation.length === 0)
+  const hasAnyActivity = activity.length > 0 || allSessions.length > 0
+
+  function computeNextStep(): NextStep {
+    if (!hasAnyActivity) {
+      return {
+        icon: PlayIcon,
+        title: 'Practice a scenario',
+        description: 'Run a realistic classroom moment and get coaching on your response.',
+        linkLabel: 'Practice now',
+        to: '/coach-chat',
+      }
+    }
+    if (!latestCompletedSession) {
+      return {
+        icon: MicIcon,
+        title: 'Try recording a real lesson',
+        description: 'See how it plays out for real — record a class and turn it into feedback.',
+        linkLabel: 'Record a lesson',
+        to: '/audio-coaching',
+      }
+    }
+    if (latestSessionUnreflected) {
+      return {
+        icon: ChatBubbleIcon,
+        title: 'Reflect on your last lesson',
+        description: 'You recorded a class — talk through what stood out and what to try next.',
+        linkLabel: 'Open Lesson Debrief',
+        to: '/audio-coaching',
+      }
+    }
+    if (!hasLessonPlans) {
+      return {
+        icon: LessonPlanIcon,
+        title: 'Try Lesson Planning',
+        description: "A tool you haven't opened yet — strengthen a lesson or get ideas from an objective.",
+        linkLabel: 'Open Lesson Planning',
+        to: '/lesson-planning',
+      }
+    }
+    if (!hasAssignmentSessions) {
+      return {
+        icon: BookIcon,
+        title: 'Try Assignment Coach',
+        description: "A tool you haven't opened yet — review or redesign an assignment.",
+        linkLabel: 'Open Assignment Coach',
+        to: '/assignment-coach',
+      }
+    }
+    if (!hasConversationPlans) {
+      return {
+        icon: MailIcon,
+        title: 'Try Communication Coach',
+        description: "A tool you haven't opened yet — prepare for a meeting or draft a message.",
+        linkLabel: 'Open Communication Coach',
+        to: '/communications',
+      }
+    }
+    // Already touched every tool — a safe, encouraging fallback rather than
+    // no recommendation at all.
+    return {
+      icon: PlayIcon,
+      title: 'Keep the momentum going',
+      description: 'Practice another scenario to stay sharp.',
+      linkLabel: 'Practice now',
+      to: '/coach-chat',
+    }
+  }
+
+  const nextStep = computeNextStep()
+  const lastActivityAt = Math.max(latestOtherActivityAt ?? 0, allSessions[0] ? new Date(allSessions[0].createdAt).getTime() : 0) || null
+  const daysSinceActivity = lastActivityAt != null ? (today.getTime() - lastActivityAt) / DAY_MS : null
+  const isWelcomeBack = hasAnyActivity && daysSinceActivity != null && daysSinceActivity >= WELCOME_BACK_THRESHOLD_DAYS
 
   return (
     <div className="flex flex-col gap-8">
@@ -240,19 +386,21 @@ export default function Home() {
           <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-cream p-4">
             <div className="flex items-center gap-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-forest text-cream">
-                <PlayIcon className="h-4 w-4" />
+                <nextStep.icon className="h-4 w-4" />
               </span>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Next</p>
-                <p className="text-sm font-semibold text-forest">Practice a scenario</p>
-                <p className="text-xs text-ink-soft">Run a realistic classroom moment and get coaching on your response.</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                  {isWelcomeBack ? 'Welcome back' : 'Next'}
+                </p>
+                <p className="text-sm font-semibold text-forest">{nextStep.title}</p>
+                <p className="text-xs text-ink-soft">{nextStep.description}</p>
               </div>
             </div>
             <Link
-              to="/coach-chat"
+              to={nextStep.to}
               className="rounded-full bg-forest px-4 py-2 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
             >
-              Practice now
+              {nextStep.linkLabel}
             </Link>
           </div>
         </div>
