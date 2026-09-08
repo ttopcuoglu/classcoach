@@ -434,8 +434,8 @@ function WeeklyActivityChart({ data }: { data: { weekStart: string; activeCount:
     <div>
       <h3 className="text-sm font-semibold text-ink">Weekly participation</h3>
       <p className="text-xs text-ink-soft">Active teachers per week, last {n} weeks — count of teachers, not a percentage</p>
-      <div className="relative mt-4">
-        <span className="absolute -top-3 left-0 text-[10px] text-ink-soft">max {maxCount}</span>
+      <p className="mt-3 text-[10px] text-ink-soft">max {maxCount}</p>
+      <div className="relative mt-6">
         <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} preserveAspectRatio="none">
           <path d={path} fill="none" stroke="var(--color-brand-500)" strokeWidth={2} strokeLinecap="round" />
           {points.map((p, i) => (
@@ -445,8 +445,8 @@ function WeeklyActivityChart({ data }: { data: { weekStart: string; activeCount:
         {points.map((p, i) => (
           <span
             key={i}
-            className="absolute -translate-x-1/2 text-[10px] font-semibold text-ink"
-            style={{ left: `${p.xPct}%`, top: `${(p.y / height) * 100}%`, transform: 'translate(-50%, -140%)' }}
+            className="absolute text-[10px] font-semibold text-ink"
+            style={{ left: `${p.xPct}%`, top: `${(p.y / height) * 100}%`, transform: 'translate(-50%, calc(-100% - 4px))' }}
           >
             {p.count}
           </span>
