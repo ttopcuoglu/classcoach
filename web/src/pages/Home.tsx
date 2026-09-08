@@ -152,7 +152,15 @@ export default function Home() {
     .toUpperCase()
   const hour = today.getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
-  const firstName = name?.split(' ')[0]
+  // Skip a leading honorific (e.g. "Ms. Rivera") so the greeting doesn't
+  // address someone by a bare title, or double up on the period from
+  // "Ms." plus the sentence's own trailing period.
+  const HONORIFICS = new Set(['mr', 'mrs', 'ms', 'miss', 'dr', 'prof', 'mx'])
+  const firstName = name
+    ?.trim()
+    .split(/\s+/)
+    .map((token) => token.replace(/\.$/, ''))
+    .find((token) => token && !HONORIFICS.has(token.toLowerCase()))
 
   const latest = sessions[sessions.length - 1]
   const first = sessions[0]

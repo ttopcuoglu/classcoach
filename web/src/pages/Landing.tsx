@@ -517,7 +517,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                 </li>
                 <li className="flex items-start gap-2.5">
                   <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
-                  Full Messages suite
+                  Full Communication Coach suite
                 </li>
                 <li className="flex items-start gap-2.5">
                   <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
