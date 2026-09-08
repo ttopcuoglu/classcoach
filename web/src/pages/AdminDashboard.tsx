@@ -3,6 +3,7 @@ import {
   createOrganization,
   deleteOrganization,
   deleteUser,
+  getAdminBreakdown,
   getAdminOverview,
   getAdminUsers,
   getMe,
@@ -11,6 +12,7 @@ import {
   removeMember,
   suspendUser,
   updateOrganization,
+  type AdminBreakdown,
   type AdminOverview,
   type AdminUser,
   type ClimateAverages,
@@ -178,7 +180,9 @@ export default function AdminDashboard() {
         {tab === 'engagement' && overview && (
           <EngagementPanel overview={overview} selectedOrgId={selectedOrgId} isSuperadmin={isSuperadmin} />
         )}
-        {tab === 'themes' && overview && <CoachingThemesPanel overview={overview} />}
+        {tab === 'themes' && overview && (
+          <CoachingThemesPanel overview={overview} selectedOrgId={selectedOrgId} />
+        )}
         {tab === 'organizations' && <OrganizationsPanel />}
         {tab === 'users' && <UsersPanel />}
       </div>
@@ -721,6 +725,122 @@ function ClimateAveragesCard({ data, insight }: { data: ClimateAverages; insight
   )
 }
 
+type BreakdownBy = 'gradeBand' | 'subject'
+
+const BREAKDOWN_OPTIONS: { id: 'none' | BreakdownBy; label: string }[] = [
+  { id: 'none', label: 'None' },
+  { id: 'gradeBand', label: 'Grade band' },
+  { id: 'subject', label: 'Subject' },
+]
+
+// Same 5 headline instructional/climate metrics as the two cards above,
+// sliced by grade band or subject instead of one school-wide number — a
+// bucket only shows up once at least a few distinct teachers have
+// contributed to it (see MIN_TEACHERS_FOR_BREAKDOWN server-side); until
+// then it's a deliberate "not enough data yet," not a missing feature.
+function BreakdownCard({ selectedOrgId }: { selectedOrgId: string }) {
+  const [by, setBy] = useState<'none' | BreakdownBy>('none')
+  const [data, setData] = useState<AdminBreakdown | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (by === 'none') {
+      setData(null)
+      setError(null)
+      return
+    }
+    setData(null)
+    setError(null)
+    getAdminBreakdown({ by, organizationId: selectedOrgId || undefined })
+      .then(setData)
+      .catch(() => setError('Could not load the breakdown.'))
+  }, [by, selectedOrgId])
+
+  const sampleOr = (n: number, unit: string) => (n > 0 ? `based on ${n} ${unit}` : 'not enough data yet')
+
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+          Instructional averages, by grade or subject
+        </h2>
+        <div className="flex gap-1 rounded-lg bg-canvas p-1">
+          {BREAKDOWN_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setBy(opt.id)}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                by === opt.id ? 'bg-surface text-ink shadow-sm' : 'text-ink-soft hover:text-ink'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {by === 'none' && (
+        <p className="mt-2 text-xs text-ink-soft">
+          See the same averages above split by grade band or subject, to spot where PD would help most.
+        </p>
+      )}
+
+      {by !== 'none' && error && <p className="mt-3 text-sm text-warm-500">{error}</p>}
+
+      {by !== 'none' && !data && !error && <p className="mt-3 text-sm text-ink-soft">Loading...</p>}
+
+      {data && (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {data.breakdown.map((entry) => (
+            <div key={entry.bucket} className="rounded-xl border border-border/60 p-3">
+              <p className="text-sm font-semibold text-ink">{entry.bucket}</p>
+              {entry.suppressed ? (
+                <p className="mt-2 text-xs text-ink-soft">
+                  Not enough data yet — fewer than {data.minTeachers} teachers have a session here.
+                </p>
+              ) : (
+                <div className="mt-1 flex flex-col">
+                  <StatRow
+                    label="Avg. wait time"
+                    value={entry.metrics.avgWaitTimeSec != null ? `${entry.metrics.avgWaitTimeSec.toFixed(1)}s` : '—'}
+                    sampleNote={sampleOr(entry.metrics.waitTimeSampleSize, 'sessions')}
+                  />
+                  <StatRow
+                    label="Teacher talk"
+                    value={entry.metrics.avgTeacherTalkPct != null ? `${Math.round(entry.metrics.avgTeacherTalkPct)}%` : '—'}
+                    sampleNote={sampleOr(entry.metrics.talkSampleSize, 'sessions')}
+                  />
+                  <StatRow
+                    label="Higher-order questions"
+                    value={entry.metrics.higherOrderPct != null ? `${entry.metrics.higherOrderPct}%` : '—'}
+                    sampleNote={sampleOr(entry.metrics.higherOrderSampleSize, 'questions')}
+                  />
+                  <StatRow
+                    label="Redirection language"
+                    value={
+                      entry.metrics.avgRedirectionPer10Min != null
+                        ? `${entry.metrics.avgRedirectionPer10Min.toFixed(1)}/10min`
+                        : '—'
+                    }
+                    sampleNote={sampleOr(entry.metrics.redirectionFrequencySampleSize, 'sessions')}
+                  />
+                  <StatRow
+                    label="Positive tone"
+                    value={entry.metrics.positiveTonePct != null ? `${entry.metrics.positiveTonePct}%` : '—'}
+                    sampleNote={sampleOr(entry.metrics.toneSampleSize, 'tone-language moments')}
+                  />
+                  <p className="mt-1.5 text-xs text-ink-soft">{entry.teacherCount} teachers</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TallyBarList({
   title,
   tally,
@@ -884,7 +1004,7 @@ function EngagementPanel({
   )
 }
 
-function CoachingThemesPanel({ overview }: { overview: AdminOverview }) {
+function CoachingThemesPanel({ overview, selectedOrgId }: { overview: AdminOverview; selectedOrgId: string }) {
   return (
     <div className="flex flex-col gap-6">
       <TallyBarList
@@ -944,6 +1064,8 @@ function CoachingThemesPanel({ overview }: { overview: AdminOverview }) {
       />
 
       <ClimateAveragesCard data={overview.climateAverages} insight={buildClimateGroupInsight(overview.climateAverages)} />
+
+      <BreakdownCard selectedOrgId={selectedOrgId} />
 
       <TallyBarList
         title="Content specialist notes, by theme"

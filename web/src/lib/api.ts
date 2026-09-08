@@ -134,6 +134,29 @@ export type ClimateAverages = {
   toneSampleSize: number
 }
 
+export type BreakdownHeadlineMetrics = {
+  avgWaitTimeSec: number | null
+  waitTimeSampleSize: number
+  avgTeacherTalkPct: number | null
+  talkSampleSize: number
+  higherOrderPct: number | null
+  higherOrderSampleSize: number
+  avgRedirectionPer10Min: number | null
+  redirectionFrequencySampleSize: number
+  positiveTonePct: number | null
+  toneSampleSize: number
+}
+
+export type AdminBreakdownBucket =
+  | { bucket: string; suppressed: true }
+  | { bucket: string; suppressed: false; teacherCount: number; metrics: BreakdownHeadlineMetrics }
+
+export type AdminBreakdown = {
+  by: 'gradeBand' | 'subject'
+  minTeachers: number
+  breakdown: AdminBreakdownBucket[]
+}
+
 export type AdminOverview = {
   scope: 'platform' | 'organization'
   organizationName: string | null
@@ -621,6 +644,15 @@ export function getAdminOverview(params?: {
   if (params?.endDate) query.set('endDate', params.endDate)
   const queryString = query.toString()
   return request(`/api/admin/overview${queryString ? `?${queryString}` : ''}`)
+}
+
+export function getAdminBreakdown(params: {
+  by: 'gradeBand' | 'subject'
+  organizationId?: string
+}): Promise<AdminBreakdown> {
+  const query = new URLSearchParams({ by: params.by })
+  if (params.organizationId) query.set('organizationId', params.organizationId)
+  return request(`/api/admin/overview/breakdown?${query.toString()}`)
 }
 
 export function getOrganizationMembers(organizationId?: string): Promise<OrgMember[]> {

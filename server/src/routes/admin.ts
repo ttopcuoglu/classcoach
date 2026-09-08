@@ -40,6 +40,124 @@ function createTally(keys: readonly string[]) {
   }
 }
 
+// Grade/subject breakdown (see /overview/breakdown below) — a bucket only
+// ever renders numbers once at least this many *distinct teachers* have
+// contributed a session to it. Below that, a narrow enough slice (e.g. one
+// grade band in a small department) would start re-identifying a specific
+// teacher even with no name shown, which breaks the "individual coaching
+// stays private" promise in the Privacy Notice. Not yet configurable per
+// org — no district has enough volume yet to know what the right number
+// would even be, so a fixed floor is the honest choice for now.
+const MIN_TEACHERS_FOR_BREAKDOWN = 3
+
+const GRADE_BANDS = ['K-2', '3-5', '6-8', '9-12', 'Unspecified'] as const
+const SUBJECT_BUCKETS = ['Math', 'ELA', 'Science', 'Social Studies', 'Other'] as const
+
+// gradeLevel/classSubject are free text a teacher types at session setup
+// (see audioSessions.ts), not a fixed picker — so bucketing is a best-effort
+// parse, not a lookup. Grade bands absorb typing variance ("6th grade",
+// "Grade 6", "6") by just pulling the first digit out. Anything that
+// doesn't parse lands in "Unspecified"/"Other" rather than being dropped,
+// so every session is still represented somewhere.
+function gradeBandFor(gradeLevel: string | null): (typeof GRADE_BANDS)[number] {
+  if (!gradeLevel) return 'Unspecified'
+  const normalized = gradeLevel.trim().toLowerCase()
+  if (/\bk\b|kindergarten/.test(normalized)) return 'K-2'
+  const match = normalized.match(/\d+/)
+  if (!match) return 'Unspecified'
+  const grade = parseInt(match[0], 10)
+  if (grade <= 2) return 'K-2'
+  if (grade <= 5) return '3-5'
+  if (grade <= 8) return '6-8'
+  if (grade <= 12) return '9-12'
+  return 'Unspecified'
+}
+
+const CLASS_SUBJECT_KEYWORDS: Record<Exclude<(typeof SUBJECT_BUCKETS)[number], 'Other'>, string[]> = {
+  Math: ['math', 'algebra', 'geometry', 'calculus'],
+  ELA: ['ela', 'english', 'language arts', 'reading', 'writing', 'literacy'],
+  Science: ['science', 'biology', 'chemistry', 'physics'],
+  'Social Studies': ['social studies', 'history', 'geography', 'civics'],
+}
+
+function subjectBucketFor(classSubject: string | null): (typeof SUBJECT_BUCKETS)[number] {
+  if (!classSubject) return 'Other'
+  const normalized = classSubject.trim().toLowerCase()
+  for (const [bucket, keywords] of Object.entries(CLASS_SUBJECT_KEYWORDS)) {
+    if (keywords.some((k) => normalized.includes(k))) return bucket as (typeof SUBJECT_BUCKETS)[number]
+  }
+  return 'Other'
+}
+
+function average(values: number[]): number | null {
+  return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null
+}
+
+type HeadlineMetricsRow = {
+  teacherTalkPct: number | null
+  questionCount: number | null
+  avgWaitTimeSec: number | null
+  durationSec: number | null
+  metricsDetail: unknown
+}
+
+function metricsOf(s: HeadlineMetricsRow): Record<string, unknown> {
+  return (s.metricsDetail ?? {}) as Record<string, unknown>
+}
+function numDetail(s: HeadlineMetricsRow, key: string): number | null {
+  const v = metricsOf(s)[key]
+  return typeof v === 'number' ? v : null
+}
+
+// The 5 headline instructional/climate metrics shown per grade/subject
+// bucket — a curated subset of the full instructionalAverages/
+// climateAverages computed below in /overview, using the exact same
+// formulas so a bucket's numbers are directly comparable to the school-wide
+// figure. Same evidence-only discipline: a session missing a field never
+// counts as a zero for that field.
+function computeHeadlineMetrics(sessions: HeadlineMetricsRow[]) {
+  const waitTimes = sessions.map((s) => s.avgWaitTimeSec).filter((v): v is number => v != null)
+  const teacherTalkPcts = sessions.map((s) => s.teacherTalkPct).filter((v): v is number => v != null)
+
+  let higherOrderNumerator = 0
+  let higherOrderDenominator = 0
+  for (const s of sessions) {
+    if (s.questionCount == null || s.questionCount <= 0) continue
+    higherOrderNumerator += numDetail(s, 'higherOrderQuestionCount') ?? 0
+    higherOrderDenominator += s.questionCount
+  }
+
+  const redirectionFrequencies: number[] = []
+  let toneNumerator = 0
+  let toneDenominator = 0
+  for (const s of sessions) {
+    const redirectionCount = numDetail(s, 'redirectionCount')
+    if (redirectionCount != null && s.durationSec) {
+      redirectionFrequencies.push(redirectionCount / (s.durationSec / 600))
+    }
+    const positiveCount = numDetail(s, 'positivePhraseCount')
+    const correctiveCount = numDetail(s, 'correctivePhraseCount')
+    if (positiveCount != null && correctiveCount != null && positiveCount + correctiveCount > 0) {
+      toneNumerator += positiveCount
+      toneDenominator += positiveCount + correctiveCount
+    }
+  }
+
+  return {
+    avgWaitTimeSec: average(waitTimes),
+    waitTimeSampleSize: waitTimes.length,
+    avgTeacherTalkPct: average(teacherTalkPcts),
+    talkSampleSize: teacherTalkPcts.length,
+    higherOrderPct:
+      higherOrderDenominator > 0 ? Math.round((higherOrderNumerator / higherOrderDenominator) * 100) : null,
+    higherOrderSampleSize: higherOrderDenominator,
+    avgRedirectionPer10Min: average(redirectionFrequencies),
+    redirectionFrequencySampleSize: redirectionFrequencies.length,
+    positiveTonePct: toneDenominator > 0 ? Math.round((toneNumerator / toneDenominator) * 100) : null,
+    toneSampleSize: toneDenominator,
+  }
+}
+
 // Shared by /overview and /members — resolves which organization (if any)
 // the requester is allowed to see: an org_admin always sees their own,
 // unset for everyone else unless a superadmin explicitly selects one via
@@ -422,6 +540,55 @@ adminRouter.get('/overview', async (req, res) => {
     },
     weeklyActivity,
   })
+})
+
+// Same 5 headline instructional/climate metrics as /overview, sliced by
+// grade band or subject instead of rolled into one school-wide number — so
+// an admin can see *where* to target PD, not just that PD is needed. Every
+// bucket is suppressed below MIN_TEACHERS_FOR_BREAKDOWN distinct teachers;
+// a suppressed bucket reports only that it's suppressed, never its actual
+// (small, re-identifying) teacher count.
+adminRouter.get('/overview/breakdown', async (req, res) => {
+  const resolved = await resolveScope(req, res)
+  if (!resolved) return
+  const { organizationId } = resolved
+
+  const by = req.query.by === 'subject' ? 'subject' : 'gradeBand'
+  const relatedUserScope = organizationId ? { user: { organizationId } } : {}
+
+  const sessions = await prisma.audioSession.findMany({
+    where: { status: { in: ['analyzed', 'locked'] }, ...relatedUserScope },
+    select: {
+      userId: true,
+      teacherTalkPct: true,
+      questionCount: true,
+      avgWaitTimeSec: true,
+      durationSec: true,
+      metricsDetail: true,
+      gradeLevel: true,
+      classSubject: true,
+    },
+  })
+
+  const bucketKeys: readonly string[] = by === 'subject' ? SUBJECT_BUCKETS : GRADE_BANDS
+  const bucketOf = (s: (typeof sessions)[number]) =>
+    by === 'subject' ? subjectBucketFor(s.classSubject) : gradeBandFor(s.gradeLevel)
+
+  const grouped = new Map<string, (typeof sessions)[number][]>(bucketKeys.map((k) => [k, []]))
+  for (const s of sessions) {
+    grouped.get(bucketOf(s))!.push(s)
+  }
+
+  const breakdown = bucketKeys.map((bucket) => {
+    const rows = grouped.get(bucket) ?? []
+    const teacherCount = new Set(rows.map((r) => r.userId)).size
+    if (teacherCount < MIN_TEACHERS_FOR_BREAKDOWN) {
+      return { bucket, suppressed: true as const }
+    }
+    return { bucket, suppressed: false as const, teacherCount, metrics: computeHeadlineMetrics(rows) }
+  })
+
+  res.json({ by, minTeachers: MIN_TEACHERS_FOR_BREAKDOWN, breakdown })
 })
 
 // Names/emails only — no attempts, ratings, or any practice content. Only
