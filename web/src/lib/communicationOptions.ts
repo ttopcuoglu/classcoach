@@ -106,6 +106,49 @@ export const MEETING_FORMATS: { label: string; value: MeetingFormat }[] = [
   { label: 'Formal meeting', value: 'formal_meeting' },
 ]
 
+export type MeetingType =
+  | 'parent_family'
+  | 'student'
+  | 'iep_504'
+  | 'team_department'
+  | 'administrator'
+  | 'post_observation'
+  | 'difficult_colleague'
+  | 'other'
+export const MEETING_TYPES: { label: string; value: MeetingType }[] = [
+  { label: 'Parent or family conference', value: 'parent_family' },
+  { label: 'Student conference', value: 'student' },
+  { label: 'IEP or 504 meeting', value: 'iep_504' },
+  { label: 'Team or department meeting', value: 'team_department' },
+  { label: 'Meeting with an administrator', value: 'administrator' },
+  { label: 'Post-observation meeting', value: 'post_observation' },
+  { label: 'Difficult colleague conversation', value: 'difficult_colleague' },
+  { label: 'Other', value: 'other' },
+]
+export function meetingTypeLabel(value: string | null) {
+  if (!value) return null
+  return MEETING_TYPES.find((m) => m.value === value)?.label ?? value
+}
+
+// Best-effort mapping onto Practice's coarser RecipientType, for the
+// "Practice This Meeting" handoff — several meeting types (IEP/504, team
+// meeting, post-observation, other) don't map onto a specific person, so
+// those are left undefined and Practice's own picker stays unset.
+export function meetingTypeToRecipientType(value: MeetingType | undefined): RecipientType | undefined {
+  switch (value) {
+    case 'parent_family':
+      return 'parent_caregiver'
+    case 'student':
+      return 'student'
+    case 'administrator':
+      return 'administrator'
+    case 'difficult_colleague':
+      return 'colleague'
+    default:
+      return undefined
+  }
+}
+
 export type ReviewMode = 'feedback_only' | 'rewrite_only' | 'both'
 export const REVIEW_MODES: { label: string; description: string; value: ReviewMode }[] = [
   { label: 'Give feedback only', description: 'Coaching notes, no rewrite.', value: 'feedback_only' },

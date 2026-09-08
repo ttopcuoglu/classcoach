@@ -16,6 +16,7 @@ export type WritePrefill = {
 export type PreparePrefill = {
   situationText?: string
   recipientType?: string
+  meetingType?: string
   desiredOutcome?: string
   concerns?: string
   background?: string
@@ -27,6 +28,10 @@ export type PracticePrefill = {
   challenge?: string
   gradeBand?: string
   difficulty?: string
+  // A custom scenario description — used by "Practice This Meeting" to
+  // hand off a real meeting's situation text directly, bypassing the
+  // generated-scenario path entirely (no challenge/difficulty needed).
+  situationText?: string
 }
 
 export type ReviewPrefill = {

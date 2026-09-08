@@ -258,6 +258,12 @@ model ConversationPlan {
   userId         String
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   recipientType  String?
+  // What kind of meeting this is (parent conference, IEP/504, post-observation,
+  // etc.) — a finer-grained categorization than recipientType, which only
+  // captures who's in the room, not what kind of meeting it is.
+  meetingType    String?
+  // Who will be in the meeting, free text (e.g. "Mom, Dad, the school counselor").
+  attendees      String?
   situationText  String
   desiredOutcome String?
   concerns       String?

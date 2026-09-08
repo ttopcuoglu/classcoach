@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import CoachingChat from '../components/CoachingChat'
 import { StarIcon } from '../components/icons'
+import { Spinner } from '../components/Spinner'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import SafetyAdvisoryBanner, { PrivacyReminder } from '../components/SafetyAdvisoryBanner'
-import { MEETING_FORMATS, RECIPIENT_TYPES, type MeetingFormat, type RecipientType } from '../lib/communicationOptions'
-import { setWritePrefill, takePreparePrefill } from '../lib/communicationsPrefill'
+import { MEETING_TYPES, meetingTypeToRecipientType, type MeetingType } from '../lib/communicationOptions'
+import { setPracticePrefill, setWritePrefill, takePreparePrefill } from '../lib/communicationsPrefill'
 import {
+  extractAssignmentText,
   sendConversationPlanChat,
   setConversationPlanSaved,
   submitConversationPlan,
@@ -14,13 +16,14 @@ import {
 } from '../lib/api'
 
 const PLAN_SECTIONS_BEFORE_MODEL: { key: keyof NonNullable<ConversationPlan['planContent']>; label: string }[] = [
+  { key: 'agenda', label: 'Suggested meeting agenda' },
   { key: 'opening', label: 'Suggested opening' },
-  { key: 'mainConcern', label: 'Main concern' },
+  { key: 'mainConcern', label: 'Key talking points' },
   { key: 'facts', label: 'Important facts to present' },
   { key: 'questions', label: 'Questions to ask' },
   { key: 'reactions', label: 'Possible reactions' },
-  { key: 'recommendedResponses', label: 'Recommended responses' },
-  { key: 'phrasesToAvoid', label: 'Phrases to avoid' },
+  { key: 'recommendedResponses', label: 'How to respond' },
+  { key: 'phrasesToAvoid', label: 'Language to avoid' },
   { key: 'boundaries', label: 'Boundaries to maintain' },
   { key: 'closing', label: 'Suggested closing' },
 ]
@@ -42,26 +45,40 @@ function PlanSectionCard({ label, value }: { label: string; value: string }) {
 export default function PrepareConversation() {
   const navigate = useNavigate()
   const [prefill] = useState(() => takePreparePrefill())
-  const [recipientType, setRecipientType] = useState<RecipientType | undefined>(
-    (prefill?.recipientType as RecipientType | undefined) ?? undefined,
+  const [meetingType, setMeetingType] = useState<MeetingType | undefined>(
+    (prefill?.meetingType as MeetingType | undefined) ?? undefined,
   )
   const [situationText, setSituationText] = useState(prefill?.situationText ?? '')
+  const [attendees, setAttendees] = useState('')
   const [desiredOutcome, setDesiredOutcome] = useState(prefill?.desiredOutcome ?? '')
   const [concerns, setConcerns] = useState(prefill?.concerns ?? '')
   const [background, setBackground] = useState(prefill?.background ?? '')
-  const [meetingFormat, setMeetingFormat] = useState<MeetingFormat | undefined>(
-    (prefill?.meetingFormat as MeetingFormat | undefined) ?? undefined,
-  )
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [plan, setPlan] = useState<ConversationPlan | null>(null)
+
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   const [chatDraft, setChatDraft] = useState('')
   const [chatSending, setChatSending] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
 
   const canSubmit = situationText.trim().length > 0 && !submitting
+
+  async function handleUpload(file: File) {
+    setUploading(true)
+    setUploadError(null)
+    try {
+      const { text } = await extractAssignmentText(file)
+      setBackground((prev) => (prev ? `${prev}\n\n${text}` : text))
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : 'Could not read that file. Please try pasting the text instead.')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   async function handleSubmit() {
     if (!canSubmit) return
@@ -70,11 +87,11 @@ export default function PrepareConversation() {
     try {
       const result = await submitConversationPlan({
         situationText: situationText.trim(),
-        recipientType,
+        meetingType,
+        attendees: attendees.trim() || undefined,
         desiredOutcome: desiredOutcome.trim() || undefined,
         concerns: concerns.trim() || undefined,
         background: background.trim() || undefined,
-        meetingFormat,
       })
       setPlan(result)
       setChatDraft('')
@@ -119,18 +136,29 @@ export default function PrepareConversation() {
     setWritePrefill({
       startingAction: 'new',
       incidentSummary: plan.situationText,
-      recipientType: plan.recipientType ?? undefined,
+      recipientType: meetingTypeToRecipientType(plan.meetingType as MeetingType | undefined),
     })
     navigate('/communications?tool=write')
+  }
+
+  function handlePracticeThisMeeting() {
+    if (!plan) return
+    setPracticePrefill({
+      personType: meetingTypeToRecipientType(plan.meetingType as MeetingType | undefined),
+      situationText: plan.situationText,
+    })
+    navigate('/communications?tool=practice')
   }
 
   function handleNewPlan() {
     setPlan(null)
     setSituationText('')
+    setAttendees('')
     setDesiredOutcome('')
     setConcerns('')
     setBackground('')
     setError(null)
+    setUploadError(null)
     setChatDraft('')
     setChatError(null)
   }
@@ -138,35 +166,35 @@ export default function PrepareConversation() {
   return (
     <div className="flex flex-col gap-6">
       <Link to="/communications" className="text-sm font-medium text-ink-soft hover:text-ink">
-        ← Messages
+        ← Communication Coach
       </Link>
 
       <div className="rounded-2xl border border-border bg-surface p-6 print:border-0 print:p-0">
         {!plan ? (
           <div className="flex flex-col gap-4">
             <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-ink">Who are you speaking with?</span>
+              <span className="text-sm font-medium text-ink">What kind of meeting are you preparing for?</span>
               <div className="flex flex-wrap gap-2">
-                {RECIPIENT_TYPES.map((r) => (
+                {MEETING_TYPES.map((m) => (
                   <button
-                    key={r.value}
+                    key={m.value}
                     type="button"
-                    onClick={() => setRecipientType(r.value)}
+                    onClick={() => setMeetingType(m.value)}
                     disabled={submitting}
                     className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                      recipientType === r.value
+                      meetingType === m.value
                         ? 'border-brand-500 bg-brand-50 text-brand-600'
                         : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
                     }`}
                   >
-                    {r.label}
+                    {m.label}
                   </button>
                 ))}
               </div>
             </label>
 
             <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-ink">What happened?</span>
+              <span className="text-sm font-medium text-ink">What is the meeting about?</span>
               <textarea
                 value={situationText}
                 onChange={(e) => setSituationText(e.target.value)}
@@ -178,7 +206,21 @@ export default function PrepareConversation() {
 
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-ink">
-                What outcome do you want? <span className="font-normal text-ink-soft">(optional)</span>
+                Who will attend? <span className="font-normal text-ink-soft">(optional)</span>
+              </span>
+              <input
+                type="text"
+                value={attendees}
+                onChange={(e) => setAttendees(e.target.value)}
+                disabled={submitting}
+                placeholder="e.g. Mom, Dad, the school counselor"
+                className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
+              />
+            </label>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-ink">
+                What outcome do you hope for? <span className="font-normal text-ink-soft">(optional)</span>
               </span>
               <textarea
                 value={desiredOutcome}
@@ -191,7 +233,7 @@ export default function PrepareConversation() {
 
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-ink">
-                What concerns do you have about the conversation? <span className="font-normal text-ink-soft">(optional)</span>
+                Is there anything sensitive or difficult? <span className="font-normal text-ink-soft">(optional)</span>
               </span>
               <textarea
                 value={concerns}
@@ -204,7 +246,7 @@ export default function PrepareConversation() {
 
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-ink">
-                Relevant background or evidence <span className="font-normal text-ink-soft">(optional)</span>
+                Paste or upload an agenda, email, report, or notes <span className="font-normal text-ink-soft">(optional)</span>
               </span>
               <textarea
                 value={background}
@@ -213,26 +255,28 @@ export default function PrepareConversation() {
                 rows={2}
                 className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-60"
               />
-            </label>
-
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-ink">Meeting format</span>
-              <div className="flex flex-wrap gap-2">
-                {MEETING_FORMATS.map((f) => (
-                  <button
-                    key={f.value}
-                    type="button"
-                    onClick={() => setMeetingFormat(f.value)}
-                    disabled={submitting}
-                    className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                      meetingFormat === f.value
-                        ? 'border-brand-500 bg-brand-50 text-brand-600'
-                        : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
+              <div className="flex items-center gap-3">
+                <label className="cursor-pointer text-sm font-medium text-ink-soft hover:text-brand-600">
+                  {uploading ? (
+                    <span className="flex items-center gap-2">
+                      <Spinner /> Reading file...
+                    </span>
+                  ) : (
+                    'Upload a file'
+                  )}
+                  <input
+                    type="file"
+                    accept=".docx,.pdf,.txt,.jpg,.jpeg,.png"
+                    className="hidden"
+                    disabled={submitting || uploading}
+                    onChange={(e) => {
+                      const selected = e.target.files?.[0]
+                      if (selected) void handleUpload(selected)
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+                {uploadError && <p className="text-sm text-warm-500">{uploadError}</p>}
               </div>
             </label>
 
@@ -245,7 +289,13 @@ export default function PrepareConversation() {
               disabled={!canSubmit}
               className="self-end rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
             >
-              {submitting ? 'Building plan...' : 'Build Conversation Plan'}
+              {submitting ? (
+                <span className="flex items-center gap-2">
+                  <Spinner /> Preparing...
+                </span>
+              ) : (
+                'Prepare Me'
+              )}
             </button>
           </div>
         ) : (
@@ -303,10 +353,17 @@ export default function PrepareConversation() {
               <div className="flex flex-wrap items-center gap-4">
                 <button
                   type="button"
+                  onClick={handlePracticeThisMeeting}
+                  className="text-sm font-medium text-ink-soft hover:text-ink"
+                >
+                  Practice This Meeting
+                </button>
+                <button
+                  type="button"
                   onClick={handleConvertToMessage}
                   className="text-sm font-medium text-ink-soft hover:text-ink"
                 >
-                  Convert to a message
+                  Create a Follow-Up Message
                 </button>
                 <button type="button" onClick={() => window.print()} className="text-sm font-medium text-ink-soft hover:text-ink">
                   Print

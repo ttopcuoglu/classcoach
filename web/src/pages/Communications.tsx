@@ -16,8 +16,8 @@ const TOOLS = [
   },
   {
     value: 'prepare',
-    label: 'Prepare for a Conversation',
-    description: 'Build talking points for a real situation.',
+    label: 'Prepare for a Meeting',
+    description: 'Build an agenda, talking points, and a plan for an upcoming meeting.',
     icon: ChecklistIcon,
   },
   {
@@ -53,8 +53,8 @@ export default function Communications() {
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Messages</h1>
-        <p className="text-ink-soft">Write, prepare, practice, or review — pick what you need right now.</p>
+        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Communication Coach</h1>
+        <p className="text-ink-soft">Prepare, write, practice, and improve important communication.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

@@ -382,6 +382,7 @@ export type SharedConversationPrep = {
 }
 
 export type ConversationPlanContent = {
+  agenda: string
   opening: string
   mainConcern: string
   facts: string
@@ -399,6 +400,8 @@ export type ConversationPlanContent = {
 export type ConversationPlan = {
   id: string
   recipientType: string | null
+  meetingType: string | null
+  attendees: string | null
   situationText: string
   desiredOutcome: string | null
   concerns: string | null
@@ -938,6 +941,8 @@ export function shareConversationPrep(id: string): Promise<{ shareToken: string 
 export type SubmitConversationPlanInput = {
   situationText: string
   recipientType?: string
+  meetingType?: string
+  attendees?: string
   desiredOutcome?: string
   concerns?: string
   background?: string

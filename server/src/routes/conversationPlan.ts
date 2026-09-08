@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { checkFeatureAccess, COMMUNICATIONS_ACTIONS, countUsageLogActionsThisMonth } from '../lib/billing.ts'
-import { isValidMeetingFormat, isValidRecipientType } from '../lib/communicationOptions.ts'
+import { isValidMeetingFormat, isValidMeetingType, isValidRecipientType } from '../lib/communicationOptions.ts'
 import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { extractTag } from '../lib/extractTag.ts'
@@ -24,12 +24,25 @@ const MEETING_FORMAT_GUIDANCE: Record<string, string> = {
   formal_meeting: 'This is a formal meeting (e.g. IEP/504, parent-teacher conference).',
 }
 
+const MEETING_TYPE_GUIDANCE: Record<string, string> = {
+  parent_family: 'This is a conference with a parent or family member.',
+  student: 'This is a conference directly with the student.',
+  iep_504: 'This is an IEP or 504 meeting — a formal, team-based meeting with specific procedural expectations.',
+  team_department: 'This is a team or department meeting with colleagues.',
+  administrator: "This is a meeting with a school administrator — the teacher's own supervisor or a school leader.",
+  post_observation: 'This is a post-observation meeting, following a classroom observation.',
+  difficult_colleague: 'This is a difficult conversation with a colleague.',
+}
+
 const PLAN_SYSTEM_PROMPT = `You are a warm, practical communication coach helping a K-12 teacher prepare for a real, upcoming conversation. Build a concrete plan grounded only in what the teacher told you — never invent facts, names, or details they didn't give you.
 
 Write in plain text only — no markdown (no **bold**, no # headings). Use a leading "-" for list items, one per line.
 
-Respond with exactly these twelve sections and nothing outside them:
+Respond with exactly these thirteen sections and nothing outside them:
 
+<agenda>
+A short suggested agenda for the meeting — the 3-5 items it should cover, in order. Skip this section's usefulness check only if the situation clearly isn't a multi-item meeting (e.g. a single quick check-in) — even then, give a minimal one-line agenda rather than omitting it.
+</agenda>
 <opening>
 A suggested opening line or two to start the conversation.
 </opening>
@@ -72,6 +85,7 @@ const PLAN_CHAT_SYSTEM_PROMPT = `You are a warm, practical communication coach c
 ${CORE_COACHING_RULES}`
 
 type PlanContent = {
+  agenda: string
   opening: string
   mainConcern: string
   facts: string
@@ -88,6 +102,7 @@ type PlanContent = {
 
 function parsePlan(text: string): PlanContent | null {
   const plan: PlanContent = {
+    agenda: extractTag(text, 'agenda') ?? '',
     opening: extractTag(text, 'opening') ?? '',
     mainConcern: extractTag(text, 'main_concern') ?? '',
     facts: extractTag(text, 'facts') ?? '',
@@ -110,18 +125,22 @@ function buildContext(body: Record<string, unknown>): { context: string; error: 
   if (!situationText) return { context: '', error: 'situationText is required' }
 
   const recipientType = isValidRecipientType(body.recipientType) ? body.recipientType : null
+  const meetingType = isValidMeetingType(body.meetingType) ? body.meetingType : null
   const meetingFormat = isValidMeetingFormat(body.meetingFormat) ? body.meetingFormat : null
+  const attendees = typeof body.attendees === 'string' ? body.attendees.trim() : ''
   const desiredOutcome = typeof body.desiredOutcome === 'string' ? body.desiredOutcome.trim() : ''
   const concerns = typeof body.concerns === 'string' ? body.concerns.trim() : ''
   const background = typeof body.background === 'string' ? body.background.trim() : ''
 
   const lines = [
+    meetingType ? MEETING_TYPE_GUIDANCE[meetingType] : null,
     recipientType ? RECIPIENT_GUIDANCE[recipientType] : null,
     meetingFormat ? MEETING_FORMAT_GUIDANCE[meetingFormat] : null,
-    `What happened:\n${situationText}`,
+    attendees ? `Who will attend:\n${attendees}` : null,
+    `What the meeting is about:\n${situationText}`,
     desiredOutcome ? `Desired outcome:\n${desiredOutcome}` : null,
-    concerns ? `Concerns about the conversation:\n${concerns}` : null,
-    background ? `Relevant background/evidence:\n${background}` : null,
+    concerns ? `Anything sensitive or difficult:\n${concerns}` : null,
+    background ? `Relevant background/agenda/notes:\n${background}` : null,
   ].filter(Boolean)
 
   return { context: lines.join('\n\n'), error: null }
@@ -161,10 +180,10 @@ conversationPlanRouter.post('/', async (req, res) => {
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      // 12 tagged sections including a full model-response script — 1400
+      // 13 tagged sections including a full model-response script — 1400
       // risked cutting the response off before the last section(s), same
       // issue hit in conversationPrep.ts's practice report.
-      max_tokens: 2400,
+      max_tokens: 2800,
       thinking: { type: 'disabled' },
       system: PLAN_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: context }],
@@ -187,6 +206,8 @@ conversationPlanRouter.post('/', async (req, res) => {
       data: {
         userId: req.user!.userId,
         recipientType: isValidRecipientType(body.recipientType) ? body.recipientType : null,
+        meetingType: isValidMeetingType(body.meetingType) ? body.meetingType : null,
+        attendees: typeof body.attendees === 'string' ? body.attendees.trim() || null : null,
         situationText: (body.situationText as string).trim(),
         desiredOutcome: typeof body.desiredOutcome === 'string' ? body.desiredOutcome.trim() : null,
         concerns: typeof body.concerns === 'string' ? body.concerns.trim() : null,

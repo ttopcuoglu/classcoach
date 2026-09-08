@@ -41,6 +41,18 @@ export type ConversationDifficulty = (typeof CONVERSATION_DIFFICULTY_LEVELS)[num
 export const MEETING_FORMATS = ['in_person', 'phone', 'video', 'formal_meeting'] as const
 export type MeetingFormat = (typeof MEETING_FORMATS)[number]
 
+export const MEETING_TYPES = [
+  'parent_family',
+  'student',
+  'iep_504',
+  'team_department',
+  'administrator',
+  'post_observation',
+  'difficult_colleague',
+  'other',
+] as const
+export type MeetingType = (typeof MEETING_TYPES)[number]
+
 export const REVIEW_MODES = ['feedback_only', 'rewrite_only', 'both'] as const
 export type ReviewMode = (typeof REVIEW_MODES)[number]
 
@@ -56,4 +68,5 @@ export const isValidStartingAction = makeValidator(STARTING_ACTIONS)
 export const isValidChallengeType = makeValidator(CHALLENGE_TYPES)
 export const isValidConversationDifficulty = makeValidator(CONVERSATION_DIFFICULTY_LEVELS)
 export const isValidMeetingFormat = makeValidator(MEETING_FORMATS)
+export const isValidMeetingType = makeValidator(MEETING_TYPES)
 export const isValidReviewMode = makeValidator(REVIEW_MODES)

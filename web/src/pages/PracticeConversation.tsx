@@ -52,9 +52,9 @@ export default function PracticeConversation() {
     (prefill?.difficulty as ConversationDifficulty | undefined) ?? undefined,
   )
 
-  const [useCustom, setUseCustom] = useState(false)
+  const [useCustom, setUseCustom] = useState(Boolean(prefill?.situationText))
   const [situationText, setSituationText] = useState<string | null>(null)
-  const [customSituation, setCustomSituation] = useState('')
+  const [customSituation, setCustomSituation] = useState(prefill?.situationText ?? '')
   const [responseText, setResponseText] = useState('')
   const [prep, setPrep] = useState<ConversationPrep | null>(null)
   const [generating, setGenerating] = useState(false)
@@ -125,7 +125,7 @@ export default function PracticeConversation() {
   return (
     <div className="flex flex-col gap-6">
       <Link to="/communications" className="text-sm font-medium text-ink-soft hover:text-ink">
-        ← Messages
+        ← Communication Coach
       </Link>
 
       <div className="rounded-2xl border border-border bg-surface p-6">
