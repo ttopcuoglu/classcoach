@@ -26,7 +26,7 @@ import {
   type UserProfile,
 } from '../lib/api'
 import { categoryLabel } from '../lib/categories'
-import { challengeLabel, purposeLabel } from '../lib/communicationOptions'
+import { CHALLENGE_TYPES, MESSAGE_PURPOSES, challengeLabel, purposeLabel } from '../lib/communicationOptions'
 import { ChartBarIcon, ChatBubbleIcon, HomeIcon, LockIcon, ShieldIcon, UserIcon } from '../components/icons'
 
 function formatShortDate(iso: string): string {
@@ -1202,11 +1202,50 @@ function DashboardPanel({ overview, onNavigate }: { overview: AdminOverview; onN
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-surface p-5">
-          <WeeklyActivityChart data={overview.weeklyActivity} />
-        </div>
-        <FeatureAdoptionCard data={overview.featureAdoption} totalTeachers={overview.totalTeachers} />
+      <AdoptionFunnelCard overview={overview} />
+
+      <div className="rounded-2xl border border-border bg-surface p-5">
+        <WeeklyActivityChart data={overview.weeklyActivity} />
+      </div>
+
+      <FeatureAdoptionCard data={overview.featureAdoption} totalTeachers={overview.totalTeachers} />
+    </div>
+  )
+}
+
+// Licensed → activated → active this period → returning — the same four
+// numbers already shown as separate stat tiles on the Dashboard, here
+// connected into one funnel so it's clear where staff actually drop off,
+// which is the whole point of a page titled "Adoption & engagement."
+function AdoptionFunnelCard({ overview }: { overview: AdminOverview }) {
+  const stages: { label: string; count: number }[] = [
+    { label: 'Licensed staff', count: overview.totalTeachers },
+    { label: 'Activated (finished onboarding)', count: overview.activatedAccounts },
+    { label: 'Active this period', count: overview.activeThisWeek },
+    { label: 'Returning (active this period and the last)', count: overview.returningUsers },
+  ]
+  const total = overview.totalTeachers
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-5">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Adoption funnel</h2>
+      <p className="text-xs text-ink-soft">Where licensed staff actually stick with Wivoza</p>
+      <div className="mt-3 flex flex-col gap-3">
+        {stages.map(({ label, count }) => {
+          const pct = total > 0 ? Math.round((count / total) * 100) : 0
+          return (
+            <div key={label}>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-sm font-medium text-ink">{label}</span>
+                <span className="text-sm font-semibold text-ink">
+                  {pct}% · {count} of {total}
+                </span>
+              </div>
+              <div className="mt-1 h-2 overflow-hidden rounded-full bg-canvas">
+                <div className="h-full rounded-full bg-brand-500" style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -1290,7 +1329,7 @@ function TopNList({
         <div key={value} className="flex items-center justify-between gap-3 text-sm">
           <span className="text-ink">{labelFor(value)}</span>
           <span className="text-ink-soft">
-            {count} · {teachers} teachers
+            {count}× · {teachers} teacher{teachers === 1 ? '' : 's'}
           </span>
         </div>
       ))}
@@ -1343,7 +1382,13 @@ const INSIGHTS_TABS: { id: InsightsTab; label: string }[] = [
 
 function CoachingInsightsPanel({ overview, selectedOrgId }: { overview: AdminOverview; selectedOrgId: string }) {
   const [tab, setTab] = useState<InsightsTab>('overview')
-  const communicationLabel = (v: string) => challengeLabel(v) ?? purposeLabel(v) ?? v
+  // challengeLabel/purposeLabel each fall back to the raw value when a
+  // value isn't in their own list, so chaining them with ?? never actually
+  // reaches the second lookup — the first call always returns something
+  // truthy. Check both lists directly instead, so a message-purpose-only
+  // value like "academic_concern" doesn't render as its raw enum string.
+  const communicationLabel = (v: string) =>
+    CHALLENGE_TYPES.find((c) => c.value === v)?.label ?? MESSAGE_PURPOSES.find((p) => p.value === v)?.label ?? v
 
   return (
     <div className="flex flex-col gap-6">
