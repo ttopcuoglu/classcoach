@@ -36,9 +36,9 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Plan',
     icon: LessonPlanIcon,
     items: [
-      { to: '/lesson-planning', label: 'Lesson Planning', icon: LessonPlanIcon },
-      { to: '/assignment-coach', label: 'Assignment Coach', icon: BookIcon },
-      { to: '/communications', label: 'Communication Coach', icon: MailIcon },
+      { to: '/lesson-planning', label: 'Lesson Planning', icon: LessonPlanIcon, subtitle: 'plans & presentations' },
+      { to: '/assignment-coach', label: 'Assignment Coach', icon: BookIcon, subtitle: 'review & redesign assignments' },
+      { to: '/communications', label: 'Communication Coach', icon: MailIcon, subtitle: 'write, prepare & practice' },
     ],
   },
   {
