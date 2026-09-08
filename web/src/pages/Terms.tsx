@@ -291,14 +291,26 @@ export default function Terms() {
               3. AI Processing, Training, and Human Access
             </h2>
             <p className="mt-1">
-              Wivoza uses third-party service providers to generate AI coaching feedback, transcribe audio, and
-              produce spoken responses. These features require processing the audio, text, and other content
-              submitted to them.
+              Wivoza sends your submitted content to the following named third-party AI providers to power specific
+              features. Before you create an account, the app discloses this and asks you to affirmatively agree;
+              you can withdraw that agreement at any time by deleting your account.
             </p>
             <p className="mt-2">
-              Our AI coaching provider does not use content submitted through its commercial API to train its
-              models. Our speech-processing provider may use submitted audio to improve its models unless that use
-              is disabled through account settings. Wivoza maintains account-level controls to restrict that use.
+              <strong>Anthropic (Claude API):</strong> text you submit for coaching features — including transcripts,
+              chat messages, practice responses, and lesson materials — is sent to Anthropic to generate AI coaching
+              feedback, reflections, suggested language, and lesson-planning content. Anthropic does not use content
+              submitted through its commercial API to train its models.
+            </p>
+            <p className="mt-2">
+              <strong>Deepgram:</strong> audio you record or upload is sent to Deepgram to generate a text transcript,
+              and text is sent to Deepgram to generate the spoken audio used in voice features like Talk It Through.
+              Deepgram may use submitted audio to improve its models unless that use is disabled through account
+              settings; Wivoza maintains account-level controls to restrict that use.
+            </p>
+            <p className="mt-2">
+              These providers receive only the content you submit for the features above — never your account
+              password or payment details — and are contractually required to protect it to a standard consistent
+              with this Notice.
             </p>
             <p className="mt-2">
               Wivoza employees do not routinely review individual coaching content. Processing is primarily

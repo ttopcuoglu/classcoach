@@ -12,6 +12,7 @@ struct WelcomeView: View {
     @EnvironmentObject private var authManager: AuthManager
     @State private var errorMessage: String?
     @State private var isSubmitting = false
+    @State private var aiDisclosureAccepted = false
 
     var body: some View {
         ScrollView {
@@ -43,12 +44,31 @@ struct WelcomeView: View {
                         .padding(.vertical, 20)
                 } else {
                     VStack(spacing: 12) {
+                        HStack(alignment: .top, spacing: 8) {
+                            Button {
+                                aiDisclosureAccepted.toggle()
+                            } label: {
+                                Image(systemName: aiDisclosureAccepted ? "checkmark.square.fill" : "square")
+                                    .foregroundStyle(aiDisclosureAccepted ? AppTheme.primary : AppTheme.textSecondary)
+                            }
+                            Text("I agree that responses, recordings, and messages I submit are sent to Anthropic's Claude AI (for coaching feedback and chat) and Deepgram (for transcription and voice playback), as described in our [Privacy Policy](https://www.wivoza.com/terms).")
+                                .font(.caption)
+                                .foregroundStyle(AppTheme.textSecondary)
+                                .tint(AppTheme.primary)
+                        }
+                        .padding(.horizontal, 4)
+                        .padding(.bottom, 4)
+
                         SignInWithAppleButton(.continue, onRequest: configureAppleRequest, onCompletion: handleAppleCompletion)
                             .signInWithAppleButtonStyle(.black)
                             .frame(height: 50)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .disabled(!aiDisclosureAccepted)
+                            .opacity(aiDisclosureAccepted ? 1 : 0.4)
 
                         GoogleSignInButton(style: .wide, action: signInWithGoogle)
+                            .disabled(!aiDisclosureAccepted)
+                            .opacity(aiDisclosureAccepted ? 1 : 0.4)
 
                         NavigationLink {
                             EmailAuthView(initialMode: "signup")

@@ -85,15 +85,41 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
         </button>
       </div>
 
-      <div className="mt-4 flex justify-center">
-        <GoogleLogin
-          onSuccess={handleGoogleSuccess}
-          onError={() => setError('Sign-in failed. Please try again.')}
-          size="large"
-          width="336"
-          text={mode === 'signup' ? 'signup_with' : 'signin_with'}
-        />
-      </div>
+        {mode === 'signup' && (
+          <label className="mt-4 flex items-start gap-2 text-xs text-ink-soft">
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={(e) => setAgreed(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              I agree to Wivoza's{' '}
+              <Link to="/terms" className="underline hover:text-forest">
+                terms and conditions
+              </Link>
+              , I am 13 years of age or older, and I agree that my responses, recordings, and messages may be sent to
+              Anthropic's Claude AI (for coaching feedback and chat) and Deepgram (for transcription and voice
+              playback), as described in the Privacy Policy.
+            </span>
+          </label>
+        )}
+
+        <div className={`flex justify-center ${mode === 'signup' ? 'mt-3' : 'mt-4'}`}>
+          {mode === 'signup' && !agreed ? (
+            <div className="flex h-10 w-[336px] max-w-full items-center justify-center rounded-full border border-hairline bg-cream text-xs text-ink-soft">
+              Check the box above to continue
+            </div>
+          ) : (
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => setError('Sign-in failed. Please try again.')}
+              size="large"
+              width="336"
+              text={mode === 'signup' ? 'signup_with' : 'signin_with'}
+            />
+          )}
+        </div>
 
       <div className="my-4 flex items-center gap-3 text-xs text-ink-soft">
         <span className="h-px flex-1 bg-hairline" />
@@ -128,23 +154,6 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
           className={inputClass}
           required
         />
-        {mode === 'signup' && (
-          <label className="flex items-start gap-2 text-xs text-ink-soft">
-            <input
-              type="checkbox"
-              checked={agreed}
-              onChange={(e) => setAgreed(e.target.checked)}
-              className="mt-0.5"
-            />
-            <span>
-              I agree to Wivoza's{' '}
-              <Link to="/terms" className="underline hover:text-forest">
-                terms and conditions
-              </Link>{' '}
-              and I am 13 years of age or older.
-            </span>
-          </label>
-        )}
         {error && <p className="text-sm text-terracotta-600">{error}</p>}
         <button
           type="submit"
