@@ -45,10 +45,11 @@ function createTally(keys: readonly string[]) {
 // contributed a session to it. Below that, a narrow enough slice (e.g. one
 // grade band in a small department) would start re-identifying a specific
 // teacher even with no name shown, which breaks the "individual coaching
-// stays private" promise in the Privacy Notice. Not yet configurable per
-// org — no district has enough volume yet to know what the right number
-// would even be, so a fixed floor is the honest choice for now.
-const MIN_TEACHERS_FOR_BREAKDOWN = 3
+// stays private" promise in the Privacy Notice. This is the same "group
+// comparisons need at least 5 teachers" floor used everywhere else (see
+// dataConfidence below) — not yet configurable per org, since no district
+// has enough volume yet to know what the right number would even be.
+const MIN_TEACHERS_FOR_BREAKDOWN = 5
 
 const GRADE_BANDS = ['K-2', '3-5', '6-8', '9-12', 'Unspecified'] as const
 const SUBJECT_BUCKETS = ['Math', 'ELA', 'Science', 'Social Studies', 'Other'] as const
@@ -91,6 +92,33 @@ function subjectBucketFor(classSubject: string | null): (typeof SUBJECT_BUCKETS)
 
 function average(values: number[]): number | null {
   return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null
+}
+
+// Median instead of mean for the small set of "average X per session" stats
+// (wait time, redirections/transitions/follow-ups per 10 min) — these are
+// exactly the outlier-sensitive metrics where one unusually long or short
+// session can swing a small-n average hard. The proportion-style rates
+// elsewhere (higherOrderPct, cfuRatePct, etc.) are already a ratio computed
+// across every session's raw counts, not a per-session average, so they
+// don't have this problem and stay as-is.
+function median(values: number[]): number | null {
+  if (!values.length) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+}
+
+// The single confidence rule applied to every stat on the Dashboard and
+// Analytics pages: under 3 (sessions, or teachers for a group comparison)
+// isn't shown as a number at all, 3-4 shows with a "Limited data" badge,
+// 5+ shows with full confidence. Centralizing this in one place is what
+// lets every stat use the same bar instead of the ad hoc >=5/>=10 checks
+// that used to be scattered through the insight-builder functions below.
+type DataConfidence = 'none' | 'limited' | 'full'
+function dataConfidence(n: number): DataConfidence {
+  if (n < 3) return 'none'
+  if (n < 5) return 'limited'
+  return 'full'
 }
 
 type HeadlineMetricsRow = {
@@ -144,17 +172,22 @@ function computeHeadlineMetrics(sessions: HeadlineMetricsRow[]) {
   }
 
   return {
-    avgWaitTimeSec: average(waitTimes),
+    avgWaitTimeSec: median(waitTimes),
     waitTimeSampleSize: waitTimes.length,
+    waitTimeConfidence: dataConfidence(waitTimes.length),
     avgTeacherTalkPct: average(teacherTalkPcts),
     talkSampleSize: teacherTalkPcts.length,
+    talkConfidence: dataConfidence(teacherTalkPcts.length),
     higherOrderPct:
       higherOrderDenominator > 0 ? Math.round((higherOrderNumerator / higherOrderDenominator) * 100) : null,
     higherOrderSampleSize: higherOrderDenominator,
-    avgRedirectionPer10Min: average(redirectionFrequencies),
+    higherOrderConfidence: dataConfidence(higherOrderDenominator),
+    avgRedirectionPer10Min: median(redirectionFrequencies),
     redirectionFrequencySampleSize: redirectionFrequencies.length,
+    redirectionConfidence: dataConfidence(redirectionFrequencies.length),
     positiveTonePct: toneDenominator > 0 ? Math.round((toneNumerator / toneDenominator) * 100) : null,
     toneSampleSize: toneDenominator,
+    toneConfidence: dataConfidence(toneDenominator),
   }
 }
 
@@ -207,10 +240,13 @@ async function resolveScope(req: Request, res: Response) {
 // returns one teacher's individual attempts, responses, or ratings. That's
 // the whole point of the "aggregate trends only" admin visibility choice,
 // unchanged whether the requester sees the whole platform or just their own
-// organization.
-adminRouter.get('/overview', async (req, res) => {
+// organization. Factored out as a plain function (rather than living
+// directly in the route handler) so /overview/export below can reuse the
+// exact same computation and just serialize it differently — returns null
+// once resolveScope has already written an error response.
+async function computeOverview(req: Request, res: Response) {
   const resolved = await resolveScope(req, res)
-  if (!resolved) return
+  if (!resolved) return null
   const { scope, organizationId, organizationName } = resolved
 
   const userScope = organizationId ? { organizationId } : {}
@@ -244,7 +280,19 @@ adminRouter.get('/overview', async (req, res) => {
   }
   const priorPeriodStart = new Date(periodStart.getTime() - (periodEnd.getTime() - periodStart.getTime()))
 
+  // Grade band / subject filter — only ever narrows Lesson Debrief data
+  // (instructionalAverages/climateAverages/priorityTally/contentNoteTally
+  // below), since gradeLevel/classSubject only exist on AudioSession. Try
+  // It Out, Communications, and Ask/Debrief have no grade/subject
+  // dimension, so those tallies are always all-time/unfiltered regardless
+  // of this param — there's no real relationship to filter them by.
+  const gradeBandFilter = typeof req.query.gradeBand === 'string' ? req.query.gradeBand : null
+  const subjectFilter = typeof req.query.subject === 'string' ? req.query.subject : null
+
   const totalTeachers = await prisma.user.count({ where: { role: 'teacher', ...userScope } })
+  const activatedAccounts = await prisma.user.count({
+    where: { role: 'teacher', onboardingCompletedAt: { not: null }, ...userScope },
+  })
 
   const activitiesThisWeek = await prisma.usageLog.count({
     where: { createdAt: { gte: periodStart, lt: periodEnd }, ...relatedUserScope },
@@ -258,6 +306,17 @@ adminRouter.get('/overview', async (req, res) => {
     select: { userId: true },
     distinct: ['userId'],
   })
+
+  // "Returning users" — active in this period AND the immediately
+  // preceding period of equal length, i.e. showing up more than once, not
+  // just a one-time spike in participation.
+  const priorPeriodUserIds = await prisma.usageLog.findMany({
+    where: { createdAt: { gte: priorPeriodStart, lt: periodStart }, ...relatedUserScope },
+    select: { userId: true },
+    distinct: ['userId'],
+  })
+  const priorPeriodUserIdSet = new Set(priorPeriodUserIds.map((r) => r.userId))
+  const returningUsers = activeUserIds.filter((r) => priorPeriodUserIdSet.has(r.userId)).length
 
   // Category lives on the related Scenario, which Prisma can't group by
   // directly, so pull rows and tally by category in JS instead. All-time,
@@ -323,10 +382,21 @@ adminRouter.get('/overview', async (req, res) => {
       metricsDetail: true,
       lessonContent: true,
       contentNotes: true,
+      gradeLevel: true,
+      classSubject: true,
     },
   })
+
+  // gradeBand/subject only ever narrow the metrics below — featureActivity/
+  // featureAdoption above already used the full, unfiltered `audioSessions`.
+  const filteredAudioSessions = audioSessions.filter((s) => {
+    if (gradeBandFilter && gradeBandFor(s.gradeLevel) !== gradeBandFilter) return false
+    if (subjectFilter && subjectBucketFor(s.classSubject) !== subjectFilter) return false
+    return true
+  })
+
   const priorityTally = createTally(PRIORITY_LABELS)
-  for (const s of audioSessions) {
+  for (const s of filteredAudioSessions) {
     const top = topPriorityForSession(s)
     if (top) priorityTally.record(top, s.userId)
   }
@@ -363,66 +433,66 @@ adminRouter.get('/overview', async (req, res) => {
   // Staff-wide averages for the same underlying numbers each session's own
   // report already shows — rolled up instead of per-teacher. Every stat
   // only counts sessions with real evidence for it (a session missing a
-  // field never counts as a zero) and reports its own sample size, the
-  // same "never show a number with false precision" discipline the report
-  // itself applies via reportConfidence.ts.
-  const average = (values: number[]): number | null =>
-    values.length ? values.reduce((a, b) => a + b, 0) / values.length : null
-
-  const metricsOf = (s: (typeof audioSessions)[number]) => (s.metricsDetail ?? {}) as Record<string, unknown>
-  const numDetail = (s: (typeof audioSessions)[number], key: string): number | null => {
-    const v = metricsOf(s)[key]
-    return typeof v === 'number' ? v : null
-  }
-
-  const waitTimes = audioSessions.map((s) => s.avgWaitTimeSec).filter((v): v is number => v != null)
-  const teacherTalkPcts = audioSessions.map((s) => s.teacherTalkPct).filter((v): v is number => v != null)
-  const studentTalkPcts = audioSessions.map((s) => s.studentTalkPct).filter((v): v is number => v != null)
+  // field never counts as a zero) and reports its own sample size plus a
+  // dataConfidence level, the same "never show a number with false
+  // precision" discipline the report itself applies via reportConfidence.ts.
+  // average/metricsOf/numDetail are the module-scope helpers defined above
+  // (shared with computeHeadlineMetrics for the grade/subject breakdown).
+  const waitTimes = filteredAudioSessions.map((s) => s.avgWaitTimeSec).filter((v): v is number => v != null)
+  const teacherTalkPcts = filteredAudioSessions.map((s) => s.teacherTalkPct).filter((v): v is number => v != null)
+  const studentTalkPcts = filteredAudioSessions.map((s) => s.studentTalkPct).filter((v): v is number => v != null)
 
   let higherOrderNumerator = 0
   let higherOrderDenominator = 0
-  for (const s of audioSessions) {
+  for (const s of filteredAudioSessions) {
     if (s.questionCount == null || s.questionCount <= 0) continue
     higherOrderNumerator += numDetail(s, 'higherOrderQuestionCount') ?? 0
     higherOrderDenominator += s.questionCount
   }
 
-  const sessionsWithLessonContent = audioSessions.filter((s) => s.lessonContent != null)
+  const sessionsWithLessonContent = filteredAudioSessions.filter((s) => s.lessonContent != null)
   const sessionsWithConnections = sessionsWithLessonContent.filter((s) => {
     const lc = s.lessonContent as { connections?: unknown[] } | null
     return Array.isArray(lc?.connections) && lc.connections.length > 0
   })
 
   const followUpFrequencies: number[] = []
-  for (const s of audioSessions) {
+  for (const s of filteredAudioSessions) {
     if (!s.durationSec || s.durationSec <= 0) continue
     const count = numDetail(s, 'followUpQuestionCount')
     if (count == null) continue
     followUpFrequencies.push(count / (s.durationSec / 600))
   }
 
-  const cfuEligible = audioSessions.filter((s) => (s.durationSec ?? 0) >= MIN_DURATION_FOR_CFU_DETECTION_SEC)
+  const cfuEligible = filteredAudioSessions.filter((s) => (s.durationSec ?? 0) >= MIN_DURATION_FOR_CFU_DETECTION_SEC)
   const cfuSessionsWithCheck = cfuEligible.filter((s) => (s.cfuCount ?? 0) > 0)
 
+  const talkSampleSize = Math.min(teacherTalkPcts.length, studentTalkPcts.length)
   const instructionalAverages = {
-    totalAnalyzedSessions: audioSessions.length,
-    avgWaitTimeSec: average(waitTimes),
+    totalAnalyzedSessions: filteredAudioSessions.length,
+    avgWaitTimeSec: median(waitTimes),
     waitTimeSampleSize: waitTimes.length,
+    waitTimeConfidence: dataConfidence(waitTimes.length),
     avgTeacherTalkPct: average(teacherTalkPcts),
     avgStudentTalkPct: average(studentTalkPcts),
-    talkSampleSize: Math.min(teacherTalkPcts.length, studentTalkPcts.length),
+    talkSampleSize,
+    talkConfidence: dataConfidence(talkSampleSize),
     higherOrderPct:
       higherOrderDenominator > 0 ? Math.round((higherOrderNumerator / higherOrderDenominator) * 100) : null,
     higherOrderSampleSize: higherOrderDenominator,
+    higherOrderConfidence: dataConfidence(higherOrderDenominator),
     realLifeConnectionRatePct:
       sessionsWithLessonContent.length > 0
         ? Math.round((sessionsWithConnections.length / sessionsWithLessonContent.length) * 100)
         : null,
     realLifeConnectionSampleSize: sessionsWithLessonContent.length,
-    avgFollowUpPer10Min: average(followUpFrequencies),
+    realLifeConnectionConfidence: dataConfidence(sessionsWithLessonContent.length),
+    avgFollowUpPer10Min: median(followUpFrequencies),
     followUpSampleSize: followUpFrequencies.length,
+    followUpConfidence: dataConfidence(followUpFrequencies.length),
     cfuRatePct: cfuEligible.length > 0 ? Math.round((cfuSessionsWithCheck.length / cfuEligible.length) * 100) : null,
     cfuSampleSize: cfuEligible.length,
+    cfuConfidence: dataConfidence(cfuEligible.length),
   }
 
   // Classroom climate and management — the same redirection/transition/
@@ -436,7 +506,7 @@ adminRouter.get('/overview', async (req, res) => {
   const directiveMeasuredSessions: number[] = []
   let toneNumerator = 0
   let toneDenominator = 0
-  for (const s of audioSessions) {
+  for (const s of filteredAudioSessions) {
     const redirectionCount = numDetail(s, 'redirectionCount')
     if (redirectionCount != null) {
       redirectionMeasuredSessions.push(redirectionCount)
@@ -457,8 +527,9 @@ adminRouter.get('/overview', async (req, res) => {
     }
   }
   const climateAverages = {
-    avgRedirectionPer10Min: average(redirectionFrequencies),
+    avgRedirectionPer10Min: median(redirectionFrequencies),
     redirectionFrequencySampleSize: redirectionFrequencies.length,
+    redirectionConfidence: dataConfidence(redirectionFrequencies.length),
     zeroRedirectionRatePct:
       redirectionMeasuredSessions.length > 0
         ? Math.round(
@@ -466,15 +537,19 @@ adminRouter.get('/overview', async (req, res) => {
           )
         : null,
     redirectionMeasuredSampleSize: redirectionMeasuredSessions.length,
-    avgTransitionPer10Min: average(transitionFrequencies),
+    redirectionMeasuredConfidence: dataConfidence(redirectionMeasuredSessions.length),
+    avgTransitionPer10Min: median(transitionFrequencies),
     transitionSampleSize: transitionFrequencies.length,
+    transitionConfidence: dataConfidence(transitionFrequencies.length),
     clearDirectivesRatePct:
       directiveMeasuredSessions.length > 0
         ? Math.round((directiveMeasuredSessions.filter((c) => c > 0).length / directiveMeasuredSessions.length) * 100)
         : null,
     directiveSampleSize: directiveMeasuredSessions.length,
+    directiveConfidence: dataConfidence(directiveMeasuredSessions.length),
     positiveTonePct: toneDenominator > 0 ? Math.round((toneNumerator / toneDenominator) * 100) : null,
     toneSampleSize: toneDenominator,
+    toneConfidence: dataConfidence(toneDenominator),
   }
 
   // Content Specialist Notes: which theme (Clarity, Vocabulary, Engagement
@@ -483,7 +558,7 @@ adminRouter.get('/overview', async (req, res) => {
   // everything else here.
   const CONTENT_NOTE_LABELS = ['Clarity', 'Vocabulary', 'Engagement with content', 'Worth double-checking'] as const
   const contentNoteTally = createTally(CONTENT_NOTE_LABELS)
-  for (const s of audioSessions) {
+  for (const s of filteredAudioSessions) {
     const cn = s.contentNotes as { notes?: { label?: string }[] } | null
     if (!cn?.notes) continue
     for (const note of cn.notes) {
@@ -491,6 +566,31 @@ adminRouter.get('/overview', async (req, res) => {
       contentNoteTally.record(note.label, s.userId)
     }
   }
+
+  // "Top 3 shared strengths" — the inverse of priorityTally (which surfaces
+  // growth needs): each of these named thresholds is a metric performing
+  // well enough, staff-wide, to be worth naming and reinforcing rather than
+  // just flagging as a gap. Only a metric that clears both its threshold
+  // AND the minimum-data rule counts as a candidate; the strongest 3 (by
+  // how far over threshold, as a rough ranking) are returned.
+  type StrengthCandidate = { label: string; value: number; confidence: DataConfidence }
+  const strengthCandidates: StrengthCandidate[] = []
+  if (instructionalAverages.cfuRatePct != null && instructionalAverages.cfuConfidence !== 'none' && instructionalAverages.cfuRatePct >= 70) {
+    strengthCandidates.push({ label: 'Checks for understanding', value: instructionalAverages.cfuRatePct, confidence: instructionalAverages.cfuConfidence })
+  }
+  if (instructionalAverages.higherOrderPct != null && instructionalAverages.higherOrderConfidence !== 'none' && instructionalAverages.higherOrderPct >= 40) {
+    strengthCandidates.push({ label: 'Higher-order questioning', value: instructionalAverages.higherOrderPct, confidence: instructionalAverages.higherOrderConfidence })
+  }
+  if (instructionalAverages.realLifeConnectionRatePct != null && instructionalAverages.realLifeConnectionConfidence !== 'none' && instructionalAverages.realLifeConnectionRatePct >= 60) {
+    strengthCandidates.push({ label: 'Real-life examples and connections', value: instructionalAverages.realLifeConnectionRatePct, confidence: instructionalAverages.realLifeConnectionConfidence })
+  }
+  if (climateAverages.zeroRedirectionRatePct != null && climateAverages.redirectionMeasuredConfidence !== 'none' && climateAverages.zeroRedirectionRatePct >= 70) {
+    strengthCandidates.push({ label: 'Calm classroom management', value: climateAverages.zeroRedirectionRatePct, confidence: climateAverages.redirectionMeasuredConfidence })
+  }
+  if (climateAverages.clearDirectivesRatePct != null && climateAverages.directiveConfidence !== 'none' && climateAverages.clearDirectivesRatePct >= 80) {
+    strengthCandidates.push({ label: 'Clear directions', value: climateAverages.clearDirectivesRatePct, confidence: climateAverages.directiveConfidence })
+  }
+  const strengths = strengthCandidates.sort((a, b) => b.value - a.value).slice(0, 3)
 
   const recentRated = attempts.filter((a) => a.rating != null && a.createdAt >= periodStart && a.createdAt < periodEnd)
   const priorRated = attempts.filter(
@@ -514,11 +614,13 @@ adminRouter.get('/overview', async (req, res) => {
     weeklyActivity.push({ weekStart: start.toISOString(), activeCount: ids.length })
   }
 
-  res.json({
+  return {
     scope,
     organizationName,
     totalTeachers,
+    activatedAccounts,
     activeThisWeek: activeUserIds.length,
+    returningUsers,
     activitiesThisWeek,
     activitiesPriorWeek,
     periodStart: periodStart.toISOString(),
@@ -529,6 +631,7 @@ adminRouter.get('/overview', async (req, res) => {
     challengeTally: challengeTally.toJSON(),
     messagePurposeTally: messagePurposeTally.toJSON(),
     priorityTally: priorityTally.toJSON(),
+    strengths,
     instructionalAverages,
     climateAverages,
     contentNoteTally: contentNoteTally.toJSON(),
@@ -539,7 +642,49 @@ adminRouter.get('/overview', async (req, res) => {
       priorTotal: priorRated.length,
     },
     weeklyActivity,
-  })
+  }
+}
+
+adminRouter.get('/overview', async (req, res) => {
+  const data = await computeOverview(req, res)
+  if (!data) return
+  res.json(data)
+})
+
+// CSV export of the same headline numbers shown on the Dashboard, for an
+// admin to hand off to their own leadership — same query params/scoping as
+// /overview, just a different serializer over the identical computation.
+function csvEscape(value: string | number | null): string {
+  if (value == null) return ''
+  const s = String(value)
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+adminRouter.get('/overview/export', async (req, res) => {
+  const data = await computeOverview(req, res)
+  if (!data) return
+
+  const rows: [string, string | number | null][] = [
+    ['Organization', data.organizationName ?? 'All organizations'],
+    ['Period start', data.periodStart],
+    ['Period end', data.periodEnd],
+    ['Licensed staff', data.totalTeachers],
+    ['Activated accounts', data.activatedAccounts],
+    ['Active this period', data.activeThisWeek],
+    ['Returning users', data.returningUsers],
+    ['Coaching activities', data.activitiesThisWeek],
+    ['Avg. wait time after a question (s)', data.instructionalAverages.avgWaitTimeSec],
+    ['Avg. teacher talk %', data.instructionalAverages.avgTeacherTalkPct],
+    ['Higher-order questions %', data.instructionalAverages.higherOrderPct],
+    ['Checks for understanding rate %', data.instructionalAverages.cfuRatePct],
+    ['Avg. redirections per 10 min', data.climateAverages.avgRedirectionPer10Min],
+    ['Positive tone %', data.climateAverages.positiveTonePct],
+  ]
+  const csv = ['Metric,Value', ...rows.map(([label, value]) => `${csvEscape(label)},${csvEscape(value)}`)].join('\n')
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+  res.setHeader('Content-Disposition', 'attachment; filename="wivoza-admin-overview.csv"')
+  res.send(csv)
 })
 
 // Same 5 headline instructional/climate metrics as /overview, sliced by

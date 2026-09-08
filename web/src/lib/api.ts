@@ -104,47 +104,71 @@ export type Organization = {
 
 export type TallyEntry = { count: number; teachers: number }
 
+// The one confidence bar used for every stat on the admin Dashboard/
+// Analytics pages: 'none' (<3, don't show a number), 'limited' (3-4, show
+// with a badge), 'full' (5+, no badge). See dataConfidence() in
+// server/src/routes/admin.ts.
+export type DataConfidence = 'none' | 'limited' | 'full'
+
 export type InstructionalAverages = {
   totalAnalyzedSessions: number
   avgWaitTimeSec: number | null
   waitTimeSampleSize: number
+  waitTimeConfidence: DataConfidence
   avgTeacherTalkPct: number | null
   avgStudentTalkPct: number | null
   talkSampleSize: number
+  talkConfidence: DataConfidence
   higherOrderPct: number | null
   higherOrderSampleSize: number
+  higherOrderConfidence: DataConfidence
   realLifeConnectionRatePct: number | null
   realLifeConnectionSampleSize: number
+  realLifeConnectionConfidence: DataConfidence
   avgFollowUpPer10Min: number | null
   followUpSampleSize: number
+  followUpConfidence: DataConfidence
   cfuRatePct: number | null
   cfuSampleSize: number
+  cfuConfidence: DataConfidence
 }
 
 export type ClimateAverages = {
   avgRedirectionPer10Min: number | null
   redirectionFrequencySampleSize: number
+  redirectionConfidence: DataConfidence
   zeroRedirectionRatePct: number | null
   redirectionMeasuredSampleSize: number
+  redirectionMeasuredConfidence: DataConfidence
   avgTransitionPer10Min: number | null
   transitionSampleSize: number
+  transitionConfidence: DataConfidence
   clearDirectivesRatePct: number | null
   directiveSampleSize: number
+  directiveConfidence: DataConfidence
   positiveTonePct: number | null
   toneSampleSize: number
+  toneConfidence: DataConfidence
 }
+
+export type Strength = { label: string; value: number; confidence: DataConfidence }
 
 export type BreakdownHeadlineMetrics = {
   avgWaitTimeSec: number | null
   waitTimeSampleSize: number
+  waitTimeConfidence: DataConfidence
   avgTeacherTalkPct: number | null
   talkSampleSize: number
+  talkConfidence: DataConfidence
   higherOrderPct: number | null
   higherOrderSampleSize: number
+  higherOrderConfidence: DataConfidence
   avgRedirectionPer10Min: number | null
   redirectionFrequencySampleSize: number
+  redirectionConfidence: DataConfidence
   positiveTonePct: number | null
   toneSampleSize: number
+  toneConfidence: DataConfidence
 }
 
 export type AdminBreakdownBucket =
@@ -161,7 +185,9 @@ export type AdminOverview = {
   scope: 'platform' | 'organization'
   organizationName: string | null
   totalTeachers: number
+  activatedAccounts: number
   activeThisWeek: number
+  returningUsers: number
   activitiesThisWeek: number
   activitiesPriorWeek: number
   periodStart: string
@@ -181,6 +207,7 @@ export type AdminOverview = {
   categoryTally: Record<string, TallyEntry>
   challengeTally: Record<string, TallyEntry>
   messagePurposeTally: Record<string, TallyEntry>
+  strengths: Strength[]
   priorityTally: Record<string, TallyEntry>
   instructionalAverages: InstructionalAverages
   climateAverages: ClimateAverages
@@ -633,16 +660,35 @@ export function logout(): Promise<{ status: string }> {
   return request('/api/auth/logout', { method: 'POST' })
 }
 
-export function getAdminOverview(params?: {
+export type AdminOverviewParams = {
   organizationId?: string
   startDate?: string
   endDate?: string
-}): Promise<AdminOverview> {
+  gradeBand?: string
+  subject?: string
+}
+
+function buildOverviewQuery(params?: AdminOverviewParams): URLSearchParams {
   const query = new URLSearchParams()
   if (params?.organizationId) query.set('organizationId', params.organizationId)
   if (params?.startDate) query.set('startDate', params.startDate)
   if (params?.endDate) query.set('endDate', params.endDate)
-  const queryString = query.toString()
+  if (params?.gradeBand) query.set('gradeBand', params.gradeBand)
+  if (params?.subject) query.set('subject', params.subject)
+  return query
+}
+
+// Builds the download URL for the CSV export rather than fetching it —
+// the caller opens this directly (window.open / an <a> click) so the
+// browser handles the Content-Disposition: attachment response itself,
+// same-origin cookies included automatically.
+export function getAdminExportUrl(params?: AdminOverviewParams): string {
+  const queryString = buildOverviewQuery(params).toString()
+  return `${API_BASE_URL}/api/admin/overview/export${queryString ? `?${queryString}` : ''}`
+}
+
+export function getAdminOverview(params?: AdminOverviewParams): Promise<AdminOverview> {
+  const queryString = buildOverviewQuery(params).toString()
   return request(`/api/admin/overview${queryString ? `?${queryString}` : ''}`)
 }
 
