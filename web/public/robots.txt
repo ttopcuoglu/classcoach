@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+Disallow: /coach-chat
+Disallow: /communications
+Disallow: /audio-coaching
+Disallow: /lesson-planning
+Disallow: /assignment-coach
+Disallow: /profile
+Disallow: /cheat-sheet
+Disallow: /first-30-days
+Disallow: /admin
+Disallow: /onboarding
+Disallow: /export
+Disallow: /shared/
+
+Sitemap: https://www.wivoza.com/sitemap.xml
