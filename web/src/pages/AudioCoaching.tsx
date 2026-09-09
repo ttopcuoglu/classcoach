@@ -871,6 +871,8 @@ function buildVoiceBalanceCaption(judgment: TalkBalanceJudgment | null): string 
   switch (judgment.kind) {
     case 'balanced':
       return `Talk time was fairly balanced today — you at ${judgment.teacherPct}%, students at ${judgment.studentPct}%.`
+    case 'teacher-leaning':
+      return `Teacher talk was higher than student talk today (you at ${judgment.teacherPct}%, students at ${judgment.studentPct}%) — a good opportunity to build in longer stretches of student thinking and discussion.`
     case 'teacher-heavy':
       return `You did most of the talking today (${judgment.teacherPct}%) — look for a moment to hand the floor to students.`
     case 'student-heavy':
@@ -1096,24 +1098,38 @@ type FocusSnapshot = {
   tryNextTip: string
 }
 
+// Only talkRatio and avgWaitTime are backed by getPresenceMetric, whose
+// .display is a bare, unitless number ("42.6", not "42.6%") — every other
+// focus metric is backed by formatRatio (already embeds its own "%") or
+// getCountMetric (a plain count needs no unit). Appending a suffix to
+// those would double up or add a nonsensical unit, so this only covers
+// the two that are actually missing one.
+const FOCUS_METRIC_UNIT_SUFFIX: Partial<Record<FocusMetric, string>> = {
+  talkRatio: '%',
+  avgWaitTime: 's',
+}
+
 // Summary's "My Focus" card — a plain, always-honest snapshot of where the
 // teacher's chosen focus stands this session. Reuses the same coach-voice
 // insight sentence already computed for the matching Insights category
 // (never invents new copy) and the metric's own ConfidentMetric display/
-// reason for the literal "what was captured" line.
+// reason for the literal captured-value line, labeled with the metric's
+// own name rather than a generic "What was captured" (which read as
+// unitless and unclear on its own, e.g. "What was captured: 42.6").
 function buildFocusSnapshot(
   focusMetric: FocusMetric | null,
   metric: ConfidentMetric,
   statusLine: string | null,
 ): FocusSnapshot | null {
   if (!focusMetric) return null
+  const label = FOCUS_METRIC_LABELS[focusMetric]
   return {
-    label: FOCUS_METRIC_LABELS[focusMetric],
+    label,
     tier: evidenceTier(metric.state),
     statusLine,
     capturedLine: isConfidentState(metric.state)
-      ? `What was captured: ${metric.display}`
-      : `What was captured: ${metric.reason ?? 'not enough usable evidence'}`,
+      ? `${label}: ${metric.display}${FOCUS_METRIC_UNIT_SUFFIX[focusMetric] ?? ''}`
+      : `${label}: ${metric.reason ?? 'not enough usable evidence'}`,
     tryNextTip: FOCUS_METRIC_TRY_NEXT[focusMetric],
   }
 }

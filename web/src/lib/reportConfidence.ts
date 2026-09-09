@@ -206,7 +206,12 @@ export function buildEvidenceQualityLine(
   }
   parts.push(`${measured} of ${total} metrics measured confidently`)
   if (coverage.uncapturedPhases.length > 0) {
-    parts.push(`not clearly captured: ${coverage.uncapturedPhases.join(', ')}`)
+    // "Not clearly captured" read as if it contradicted the confident-
+    // metrics count right before it — it's actually a narrower claim about
+    // phase *timing* (Opening/Instruction/Work Time/Closing boundaries),
+    // not about the metrics or the lesson's content.
+    const phaseWord = coverage.uncapturedPhases.length === 1 ? 'phase' : 'phases'
+    parts.push(`${phaseWord} timing unclear: ${coverage.uncapturedPhases.join(', ')}`)
   }
   return { text: parts.join(' · '), tone: warn ? 'warn' : 'good' }
 }
@@ -217,8 +222,16 @@ export function buildEvidenceQualityLine(
 // could be emitted (the old logic branched only on teacherTalkPct).
 export const BALANCED_STUDENT_FLOOR_PCT = 15
 
+// "Balanced" also requires teacher and student talk to actually be close,
+// not just both clear their individual floors — without this, 42.6%
+// teacher / 15.9% student (a ~2.7:1 ratio) fell through to "balanced"
+// purely because 15.9 cleared the floor above. A gap this wide gets its
+// own middle bucket ("teacher-leaning") instead of being called balanced.
+export const TEACHER_LEANING_GAP_PCT = 20
+
 export type TalkBalanceJudgment =
   | { kind: 'teacher-heavy'; teacherPct: number; studentPct: number | null }
+  | { kind: 'teacher-leaning'; teacherPct: number; studentPct: number }
   | { kind: 'student-heavy'; teacherPct: number; studentPct: number }
   | { kind: 'balanced'; teacherPct: number; studentPct: number }
   | { kind: 'student-unmeasured'; teacherPct: number }
@@ -237,5 +250,8 @@ export function judgeTalkBalance(
   if (studentPct == null) return { kind: 'student-unmeasured', teacherPct }
   if (studentPct === 0) return { kind: 'student-zero', teacherPct }
   if (studentPct < BALANCED_STUDENT_FLOOR_PCT) return { kind: 'student-thin', teacherPct, studentPct }
+  if (teacherPct - studentPct >= TEACHER_LEANING_GAP_PCT) {
+    return { kind: 'teacher-leaning', teacherPct, studentPct }
+  }
   return { kind: 'balanced', teacherPct, studentPct }
 }
