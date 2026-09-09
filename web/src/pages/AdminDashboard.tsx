@@ -1633,6 +1633,10 @@ function PdFocusAreaPanel({
         <p className="text-sm text-ink-soft">Loading...</p>
       ) : overview.scope === 'organization' ? (
         <PdFocusAreaContent organizationId={selectedOrgId || undefined} />
+      ) : isSuperadmin && orgs.length === 0 ? (
+        <p className="text-sm text-ink-soft">
+          A focus area needs a concrete school — create an organization first under Organizations.
+        </p>
       ) : (
         <p className="text-sm text-ink-soft">Select an organization above to track a focus area for it.</p>
       )}
