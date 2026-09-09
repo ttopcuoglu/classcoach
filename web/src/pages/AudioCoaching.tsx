@@ -692,7 +692,7 @@ const REPORT_TABS: { key: ReportTab; label: string }[] = [
 const INSIGHTS_SECTIONS: { key: InsightsSection; label: string }[] = [
   { key: 'talk', label: 'Talk & Participation' },
   { key: 'questions', label: 'Questions & Thinking' },
-  { key: 'understanding', label: 'Checks for Understanding & Feedback' },
+  { key: 'understanding', label: 'Checks & Feedback' },
   { key: 'content', label: 'Clarity & Content' },
   { key: 'routines', label: 'Climate & Routines' },
 ]
@@ -938,26 +938,28 @@ function buildCfuInsight(
   specificFeedbackCount: number | null,
   feedbackTotal: number | null,
 ): string | null {
-  let sentence: string | null = null
-  if (cfuMetric.state === 'measured') {
-    const count = cfuMetric.display
-    sentence = `${count} verbal check${count === '1' ? '' : 's'} for understanding ${count === '1' ? 'was' : 'were'} detected during this lesson.`
-  } else if (cfuMetric.state === 'confirmed_none') {
-    sentence = 'No verbal checks for understanding were detected this session — even a quick thumbs-up check can catch confusion early.'
-  }
+  const parts: string[] = []
   if (
     feedbackRatio.state === 'measured' &&
     specificFeedbackCount != null &&
     feedbackTotal != null &&
     feedbackTotal > 0
   ) {
-    const clause =
+    parts.push(
       specificFeedbackCount / feedbackTotal >= 0.5
-        ? `${specificFeedbackCount} of ${feedbackTotal} feedback moments referred to something specific in a student's response or work — that gave students clearer information than general praise alone.`
-        : `Only ${specificFeedbackCount} of ${feedbackTotal} feedback moments referred to something specific in a student's response or work — naming exactly what a student did well tends to stick better than general praise.`
-    sentence = sentence ? `${sentence} ${clause}` : clause
+        ? `Your feedback was consistently specific, with ${specificFeedbackCount} of ${feedbackTotal} moments connected to something identifiable in a student's response or work.`
+        : `Only ${specificFeedbackCount} of ${feedbackTotal} feedback moments connected to something identifiable in a student's response or work.`,
+    )
   }
-  return sentence
+  if (cfuMetric.state === 'measured') {
+    const count = cfuMetric.display
+    parts.push(
+      `${count} verbal check${count === '1' ? '' : 's'} for understanding ${count === '1' ? 'was' : 'were'} also detected.`,
+    )
+  } else if (cfuMetric.state === 'confirmed_none') {
+    parts.push('No verbal checks for understanding were detected this session.')
+  }
+  return parts.length > 0 ? parts.join(' ') : null
 }
 
 function buildRoutinesInsight(
@@ -4464,6 +4466,90 @@ function formatFeedbackSpecificityValue(
   return feedbackRatio.display
 }
 
+function specificFeedbackShare(specificFeedbackCount: number | null, feedbackTotal: number | null): number | null {
+  if (specificFeedbackCount == null || feedbackTotal == null || feedbackTotal <= 0) return null
+  return specificFeedbackCount / feedbackTotal
+}
+
+type UnderstandingNextStep = {
+  headline: string
+  example: string
+  buttonLabel: string
+  discussLabel: string
+  discussWhyItMatters: string
+}
+
+function buildUnderstandingNextStep(feedbackShare: number | null): UnderstandingNextStep {
+  if (feedbackShare != null && feedbackShare < 0.5) {
+    return {
+      headline: 'Name something specific the next time you give feedback.',
+      example: 'Instead of "good job," point to the exact thing a student did well or should reconsider.',
+      buttonLabel: 'Plan feedback with Wivoza →',
+      discussLabel: 'Feedback specificity this session',
+      discussWhyItMatters: "Let's talk through how to make feedback more specific next time.",
+    }
+  }
+  return {
+    headline: 'At one transition point, ask students to restate the key idea in their own words before moving on.',
+    example:
+      'A quick verbal check — like "in one sentence, explain what we just covered" — takes seconds and surfaces confusion early.',
+    buttonLabel: 'Plan a check with Wivoza →',
+    discussLabel: 'Checking for understanding this session',
+    discussWhyItMatters: "Let's talk through where to build in a quick check for understanding.",
+  }
+}
+
+function EvidenceItemCard({
+  candidate,
+  segments,
+  onDiscuss,
+}: {
+  candidate: NoticeCandidate
+  segments: TranscriptSegment[]
+  onDiscuss: (c: NoticeCandidate) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const window =
+    candidate.timestampSec != null ? buildTranscriptWindow(segments, candidate.timestampSec, expanded ? 45 : 15) : []
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-6">
+      <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+        {formatCandidateHeadline(candidate)}
+      </p>
+      {window.length > 0 ? (
+        <div className="mt-2 flex flex-col gap-1.5">
+          {window.map((s, i) => (
+            <p key={i} className="text-sm text-ink">
+              <span className="font-medium">{s.speakerLabel}:</span> "{s.text}"
+            </p>
+          ))}
+        </div>
+      ) : (
+        candidate.excerpt && <p className="mt-2 text-sm text-ink">"{candidate.excerpt}"</p>
+      )}
+      <p className="mt-2 text-sm text-ink-soft">{candidate.whyItMatters}</p>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+        {candidate.timestampSec != null && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="text-sm font-medium text-brand-600 hover:text-brand-700"
+          >
+            {expanded ? 'Show less' : 'View in transcript'}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => onDiscuss(candidate)}
+          className="text-sm font-medium text-brand-600 hover:text-brand-700"
+        >
+          Discuss with Wivoza →
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function UnderstandingFeedbackTab({
   cfuMetric,
   feedbackRatio,
@@ -4485,16 +4571,13 @@ function UnderstandingFeedbackTab({
   feedbackTotal: number | null
   onDiscussWithCoach: (candidate: NoticeCandidate) => void
 }) {
-  const showStrengthToKeep =
-    feedbackRatio.state === 'measured' &&
-    specificFeedbackCount != null &&
-    feedbackTotal != null &&
-    feedbackTotal > 0 &&
-    specificFeedbackCount / feedbackTotal >= 0.5
+  const [showAllEvidence, setShowAllEvidence] = useState(false)
+  const feedbackShare = specificFeedbackShare(specificFeedbackCount, feedbackTotal)
+  const showStrengthToKeep = feedbackRatio.state === 'measured' && feedbackShare != null && feedbackShare >= 0.5
 
   const cfuCandidates: NoticeCandidate[] = (cfuLog ?? []).map((entry, i) => ({
     id: `cfu-log-${i}`,
-    observation: 'Verbal check',
+    observation: 'Check for understanding',
     whyItMatters: entry.whatItChecked,
     timestampSec: entry.timestampSec,
     excerpt: entry.text,
@@ -4502,6 +4585,9 @@ function UnderstandingFeedbackTab({
     weight: 0,
     focusMetric: 'cfuCount',
   }))
+  const visibleCandidates = showAllEvidence ? cfuCandidates : cfuCandidates.slice(0, 1)
+
+  const nextStep = buildUnderstandingNextStep(feedbackShare)
 
   return (
     <div className="flex flex-col gap-6">
@@ -4530,21 +4616,12 @@ function UnderstandingFeedbackTab({
 
       <CoachNote text={cfuInsight} />
 
-      {showStrengthToKeep && (
-        <div className="rounded-2xl border border-border bg-surface p-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Strength to keep</p>
-          <p className="mt-2 text-sm text-ink">
-            Naming precisely what a student did well or needs to reconsider.
-          </p>
-        </div>
-      )}
-
       {cfuCandidates.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-ink">Checks observed</h3>
+          <h3 className="text-sm font-semibold text-ink">Evidence from the lesson</h3>
           <div className="mt-2 flex flex-col gap-4">
-            {cfuCandidates.map((candidate) => (
-              <TranscriptEvidenceCard
+            {visibleCandidates.map((candidate) => (
+              <EvidenceItemCard
                 key={candidate.id}
                 candidate={candidate}
                 segments={segments}
@@ -4552,33 +4629,54 @@ function UnderstandingFeedbackTab({
               />
             ))}
           </div>
+          {cfuCandidates.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setShowAllEvidence((v) => !v)}
+              className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700"
+            >
+              {showAllEvidence ? 'Show less' : `View all evidence (${cfuCandidates.length})`}
+            </button>
+          )}
         </div>
       )}
 
-      <div className="rounded-2xl border border-border bg-surface p-6">
-        <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">One next step</p>
-        <p className="mt-2 text-sm text-ink">
-          Pick one moment to add a quick check for understanding, and one piece of feedback where you name
-          something specific a student did.
-        </p>
-        <button
-          type="button"
-          onClick={() =>
-            onDiscussWithCoach({
-              id: 'understanding-feedback',
-              observation: 'Checking for understanding and feedback this session',
-              whyItMatters: cfuInsight ?? "Let's talk through how checks for understanding and feedback went today.",
-              timestampSec: null,
-              excerpt: null,
-              durationSec: null,
-              weight: 0,
-              focusMetric: 'cfuCount',
-            })
-          }
-          className="mt-3 text-sm font-medium text-brand-600 hover:text-brand-700"
-        >
-          Reflect on checking understanding →
-        </button>
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        {showStrengthToKeep && (
+          <div className="rounded-2xl border border-border bg-surface p-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+              Strength to keep · {specificFeedbackCount} of {feedbackTotal} moments
+            </p>
+            <p className="mt-2 text-sm text-ink">
+              You regularly named something specific in a student's response instead of relying only on general
+              praise.
+            </p>
+          </div>
+        )}
+
+        <div className="rounded-2xl border border-border bg-surface p-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">One next step</p>
+          <p className="mt-2 text-sm text-ink">{nextStep.headline}</p>
+          <p className="mt-1 text-sm text-ink-soft">{nextStep.example}</p>
+          <button
+            type="button"
+            onClick={() =>
+              onDiscussWithCoach({
+                id: 'understanding-feedback',
+                observation: nextStep.discussLabel,
+                whyItMatters: nextStep.discussWhyItMatters,
+                timestampSec: null,
+                excerpt: null,
+                durationSec: null,
+                weight: 0,
+                focusMetric: 'cfuCount',
+              })
+            }
+            className="mt-3 text-sm font-medium text-brand-600 hover:text-brand-700"
+          >
+            {nextStep.buttonLabel}
+          </button>
+        </div>
       </div>
     </div>
   )
