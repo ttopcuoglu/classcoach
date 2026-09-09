@@ -341,11 +341,24 @@ export default function TalkToMe() {
 
   return (
     <div className="flex min-h-screen flex-col bg-cream text-ink">
-      {/* crossOrigin is required for the session cookie to ride along with
-          this cross-subdomain GET (frontend/backend are on different
-          origins) — without it, /api/tts's requireAuth would reject the
-          audio element's own request. */}
-      <audio ref={audioRef} crossOrigin="use-credentials" className="hidden" />
+      {/* Must render as a genuinely laid-out element, not display:none —
+          Chromium's own UA stylesheet has `audio:not([controls]) {
+          display: none !important }`, which no inline/author style can
+          override (confirmed: setting display:block inline still computed
+          to none until `controls` was added). Without a real layout box,
+          Chrome's background-media power-saving policy also suspends the
+          element, rejecting play() with "video-only background media was
+          paused to save power" the moment it's called — the exact,
+          confirmed cause of this playing fine on Safari (no such policy)
+          and silently failing on Chrome. The `controls` attribute escapes
+          that UA rule; opacity/size/position then hide the native player
+          UI without display:none ever coming back into play. */}
+      <audio
+        ref={audioRef}
+        crossOrigin="use-credentials"
+        controls
+        style={{ position: 'fixed', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
+      />
 
       <header className="flex items-center justify-between border-b border-hairline bg-cream-card px-4 py-3">
         <p className="font-heading text-base font-bold text-forest">Talk to Coach</p>

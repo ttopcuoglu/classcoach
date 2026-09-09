@@ -3129,9 +3129,26 @@ function ReflectTab({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Persistent, hidden element — playQueue always plays a locally
-          created blob: URL through it, never /api/tts directly. */}
-      <audio ref={audioRef} crossOrigin="use-credentials" className="hidden" />
+      {/* Persistent element — playQueue always plays a locally created
+          blob: URL through it, never /api/tts directly. Must render as a
+          genuinely laid-out element, not display:none — Chromium's own UA
+          stylesheet has `audio:not([controls]) { display: none !important
+          }`, which no inline/author style can override (confirmed: setting
+          display:block inline still computed to none until `controls` was
+          added). Without a real layout box, Chrome's background-media
+          power-saving policy also suspends the element, rejecting play()
+          with "video-only background media was paused to save power" the
+          moment it's called — the exact, confirmed cause of this playing
+          fine on Safari (no such policy) and silently failing on Chrome.
+          The `controls` attribute escapes that UA rule; opacity/size/
+          position then hide the native player UI without display:none
+          ever coming back into play. */}
+      <audio
+        ref={audioRef}
+        crossOrigin="use-credentials"
+        controls
+        style={{ position: 'fixed', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
+      />
 
       {reviewingNotes ? (
         <div className="flex flex-col gap-6">
