@@ -518,7 +518,7 @@ function memberRoleLabel(role: OrgMember['role']): string {
 
 type MemberSortKey = 'name' | 'role' | 'status' | 'lastActive' | 'joined'
 
-function SortableTh({
+function SortableTh<K extends string>({
   label,
   sortKey,
   active,
@@ -526,10 +526,10 @@ function SortableTh({
   onSort,
 }: {
   label: string
-  sortKey: MemberSortKey
-  active: MemberSortKey
+  sortKey: K
+  active: K
   dir: 'asc' | 'desc'
-  onSort: (key: MemberSortKey) => void
+  onSort: (key: K) => void
 }) {
   const isActive = active === sortKey
   return (
@@ -2134,9 +2134,20 @@ function OrganizationRow({ org, onChanged }: { org: Organization; onChanged: () 
 
 // Superadmin-only, platform-wide — the one place to find an independent
 // teacher who isn't in any org (and so never appears in a Members list).
+function platformUserRoleLabel(role: AdminUser['role']): string {
+  return role === 'superadmin' ? 'Superadmin' : role === 'org_admin' ? 'Org admin' : 'Teacher'
+}
+
+type UserSortKey = 'name' | 'role' | 'organization' | 'status' | 'joined'
+
+// Same searchable/sortable table pattern as Members above — this list spans
+// every organization on the platform, so it needs search even more.
 function UsersPanel() {
   const [users, setUsers] = useState<AdminUser[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [sortKey, setSortKey] = useState<UserSortKey>('name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   function refresh() {
     setError(null)
@@ -2149,23 +2160,88 @@ function UsersPanel() {
     refresh()
   }, [])
 
+  function handleSort(key: UserSortKey) {
+    if (key === sortKey) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  const query = search.trim().toLowerCase()
+  const filtered = (users ?? []).filter(
+    (u) =>
+      !query ||
+      (u.name ?? '').toLowerCase().includes(query) ||
+      u.email.toLowerCase().includes(query) ||
+      (u.organizationName ?? '').toLowerCase().includes(query),
+  )
+
+  const sorted = [...filtered].sort((a, b) => {
+    let cmp = 0
+    if (sortKey === 'name') cmp = (a.name ?? a.email).localeCompare(b.name ?? b.email)
+    else if (sortKey === 'role') cmp = platformUserRoleLabel(a.role).localeCompare(platformUserRoleLabel(b.role))
+    else if (sortKey === 'organization') cmp = (a.organizationName ?? 'Independent').localeCompare(b.organizationName ?? 'Independent')
+    else if (sortKey === 'status') cmp = Number(!!a.suspendedAt) - Number(!!b.suspendedAt)
+    else if (sortKey === 'joined') cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    return sortDir === 'asc' ? cmp : -cmp
+  })
+
   return (
     <div>
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Platform users</h2>
-      <p className="mt-0.5 text-xs text-ink-soft">
-        Every user across every organization, including independent teachers not part of any school — Wivoza-internal
-        only.
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">
+            Platform users{users ? ` (${users.length})` : ''}
+          </h2>
+          <p className="mt-0.5 text-xs text-ink-soft">
+            Every user across every organization, including independent teachers not part of any school —
+            Wivoza-internal only.
+          </p>
+        </div>
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name, email, or organization"
+          className={`${inputClass} w-full max-w-xs`}
+        />
+      </div>
       {error && <p className="mt-2 text-sm text-warm-500">{error}</p>}
       {!users ? (
         <p className="mt-3 text-sm text-ink-soft">Loading...</p>
       ) : users.length === 0 ? (
         <p className="mt-3 text-sm text-ink-soft">No users yet.</p>
+      ) : sorted.length === 0 ? (
+        <p className="mt-3 text-sm text-ink-soft">No users match &ldquo;{search}&rdquo;.</p>
       ) : (
-        <div className="mt-3 flex flex-col gap-2">
-          {users.map((u) => (
-            <UserRow key={u.id} user={u} onChanged={refresh} />
-          ))}
+        <div className="mt-3 overflow-x-auto rounded-xl border border-border">
+          <table className="w-full min-w-[720px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-border bg-canvas">
+                <SortableTh label="Name" sortKey="name" active={sortKey} dir={sortDir} onSort={handleSort} />
+                <SortableTh label="Role" sortKey="role" active={sortKey} dir={sortDir} onSort={handleSort} />
+                <SortableTh
+                  label="Organization"
+                  sortKey="organization"
+                  active={sortKey}
+                  dir={sortDir}
+                  onSort={handleSort}
+                />
+                <SortableTh label="Status" sortKey="status" active={sortKey} dir={sortDir} onSort={handleSort} />
+                <SortableTh label="Joined" sortKey="joined" active={sortKey} dir={sortDir} onSort={handleSort} />
+                <th className="px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((u) => (
+                <UserRow key={u.id} user={u} onChanged={refresh} />
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
@@ -2206,43 +2282,50 @@ function UserRow({ user, onChanged }: { user: AdminUser; onChanged: () => void }
   }
 
   return (
-    <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-surface p-3.5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-sm font-semibold text-ink">{user.name ?? user.email}</p>
-          <p className="text-xs text-ink-soft">{user.email}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-soft">
-            {user.role === 'superadmin' ? 'Superadmin' : user.role === 'org_admin' ? 'Org admin' : 'Teacher'}
+    <tr className="border-b border-border/60 align-top last:border-0">
+      <td className="px-3.5 py-3">
+        <p className="text-sm font-semibold text-ink">{user.name ?? user.email}</p>
+        <p className="text-xs text-ink-soft">{user.email}</p>
+      </td>
+      <td className="whitespace-nowrap px-3.5 py-3">
+        <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-soft">
+          {platformUserRoleLabel(user.role)}
+        </span>
+      </td>
+      <td className="whitespace-nowrap px-3.5 py-3 text-sm text-ink-soft">{user.organizationName ?? 'Independent'}</td>
+      <td className="whitespace-nowrap px-3.5 py-3">
+        {user.suspendedAt ? (
+          <span className="rounded-full bg-warm-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warm-500">
+            Suspended
           </span>
-          <span className="text-xs text-ink-soft">{user.organizationName ?? 'Independent'}</span>
-          {user.suspendedAt && (
-            <span className="rounded-full bg-warm-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warm-500">
-              Suspended
-            </span>
-          )}
+        ) : (
+          <span className="text-sm text-ink-soft">Active</span>
+        )}
+      </td>
+      <td className="whitespace-nowrap px-3.5 py-3 text-sm text-ink-soft">
+        {new Date(user.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+      </td>
+      <td className="px-3.5 py-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={handleSuspendToggle}
+            disabled={busy}
+            className="text-xs font-medium text-ink-soft hover:text-ink disabled:opacity-50"
+          >
+            {user.suspendedAt ? 'Unsuspend' : 'Suspend'}
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={busy}
+            className="text-xs font-medium text-warm-500 hover:text-warm-600 disabled:opacity-50"
+          >
+            Delete
+          </button>
         </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={handleSuspendToggle}
-          disabled={busy}
-          className="text-xs font-medium text-ink-soft hover:text-ink disabled:opacity-50"
-        >
-          {user.suspendedAt ? 'Unsuspend' : 'Suspend'}
-        </button>
-        <button
-          type="button"
-          onClick={handleDelete}
-          disabled={busy}
-          className="text-xs font-medium text-warm-500 hover:text-warm-600 disabled:opacity-50"
-        >
-          Delete account
-        </button>
-        {error && <span className="text-xs text-warm-500">{error}</span>}
-      </div>
-    </div>
+        {error && <p className="mt-1 text-xs text-warm-500">{error}</p>}
+      </td>
+    </tr>
   )
 }
