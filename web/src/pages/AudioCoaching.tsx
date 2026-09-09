@@ -657,8 +657,8 @@ const REFLECT_PATH_CARDS: {
     key: 'full_report',
     icon: <ChecklistIcon className="h-5 w-5 text-brand-600" />,
     iconBg: 'bg-brand-50',
-    title: 'Walk me through the full report',
-    description: 'Review strengths, patterns, and opportunities',
+    title: "Talk through today's highlights",
+    description: 'A strength to keep, and a moment worth revisiting',
     recommended: true,
   },
   {
@@ -3010,7 +3010,11 @@ function ReflectTab({
   function resolveSelectedPath(): { focus: string | undefined; timestampSec: number | null } {
     switch (selectedPath) {
       case 'full_report':
-        return { focus: undefined, timestampSec: null }
+        return {
+          focus:
+            'the session as a whole — open by naming one genuine strength from the facts below and one moment worth revisiting, each grounded in specific evidence, before landing on a question',
+          timestampSec: null,
+        }
       case 'specific_moment': {
         const prompt = starterPrompts[selectedMomentIndex]
         return {
