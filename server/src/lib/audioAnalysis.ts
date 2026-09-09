@@ -544,7 +544,8 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
         redirectionHighlightTaken = true
       }
 
-      if (countPhraseMatches(segment.text, TRANSITION_PHRASES) > 0) {
+      const transitionMatched = countPhraseMatches(segment.text, TRANSITION_PHRASES) > 0
+      if (transitionMatched) {
         transitionCount++
         transitionIndexes.push(index)
       }
@@ -563,7 +564,18 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       positivePhraseCount += countPhraseMatches(segment.text, POSITIVE_PHRASES)
       correctivePhraseCount += countPhraseMatches(segment.text, CORRECTIVE_PHRASES)
 
-      if (precedingWasStudent) {
+      // A "feedback moment" is meant to capture the teacher responding to
+      // what a student just said — not every teacher turn that happens to
+      // follow one. Segments already accounted for as a different kind of
+      // move (a CFU prompt, a redirection, a transition, a task directive,
+      // or a new question of their own) are excluded here so they aren't
+      // double-counted as feedback too.
+      const isQuestionSegment = splitSentences(segment.text).some(
+        ({ sentence, endedWithQuestion }) => endedWithQuestion || classifyQuestion(sentence) !== null,
+      )
+      const isFeedbackEligible =
+        precedingWasStudent && !cfuPhrase && redirectionHits === 0 && !transitionMatched && !directivePhrase && !isQuestionSegment
+      if (isFeedbackEligible) {
         const wordCount = segment.text.trim().split(/\s+/).filter(Boolean).length
         const referencesContent = /\b(because|since|so that|which|specifically)\b/i.test(segment.text)
         if (wordCount <= 4 && !referencesContent) genericFeedbackCount++
