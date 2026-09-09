@@ -991,7 +991,7 @@ function buildQuestioningInsight(
   if (higherOrderRatio.state === 'possible_detection') {
     sentence = `Only ${session.questionCount} question${session.questionCount === 1 ? '' : 's'} came through today — too few to say whether they leaned recall or higher-order.`
   } else if (session.higherOrderPct != null && session.higherOrderPct >= 40) {
-    sentence = `A good chunk of today's questions pushed for real thinking (${session.higherOrderPct}% higher-order) — that's the harder kind of question to ask on the fly.`
+    sentence = `A good chunk of today's questions pushed for real thinking (${higherOrderRatio.display} higher-order) — that's the harder kind of question to ask on the fly.`
   } else {
     sentence = "Most of today's questions were quick recall checks — a natural spot to slip in one 'why' or 'how' next time."
   }
