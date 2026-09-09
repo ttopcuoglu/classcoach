@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { BrainIcon, MicIcon, StarIcon, WarningIcon } from '../components/icons'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import {
   generateTalkTakeaway,
   getDebriefs,
   getProfile,
+  saveDebriefReflection,
   sendDebriefChat,
   setDebriefSaved,
   startTalkToMe,
@@ -32,6 +33,28 @@ const EXAMPLE_PROMPTS = [
 // mobile Safari then silently rejects every `play()` call for the whole
 // session (see playQueue's comment). Requiring one tap on "Start Talking"
 // guarantees that unlock happens before the first reply tries to play.
+// Reached from the "Debrief This Experience" button in the Talk It Through
+// teacher's guide (/guide/talk-it-through) via ?mode=debrief. Same
+// conversation engine, same backend — only the framing changes, because a
+// debrief starts from a plan you already tried rather than from a problem
+// you're still inside. The openers are first-person on purpose: they're
+// sent verbatim as the teacher's first turn, so they have to be things a
+// teacher would actually say.
+const DEBRIEF_PROMPTS = [
+  'I tried the plan and here\u2019s what happened.',
+  'It went better than I expected.',
+  'It didn\u2019t really work, and I\u2019m not sure why.',
+  'Some of it landed and some of it didn\u2019t.',
+]
+
+const DEBRIEF_QUESTIONS = [
+  'What did you try?',
+  'What happened?',
+  'What seemed to help?',
+  'What would you adjust next time?',
+  'What\u2019s your next step?',
+]
+
 const AUTO_START_ON_OPEN = false
 
 type Phase = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
@@ -75,6 +98,8 @@ function statusLabel(state: VisualState, level: number, hasConversation: boolean
 
 export default function TalkToMe() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const isDebrief = searchParams.get('mode') === 'debrief'
   const [phase, setPhase] = useState<Phase>('idle')
   const [debrief, setDebrief] = useState<Debrief | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -92,6 +117,11 @@ export default function TalkToMe() {
   const [takeawayLoading, setTakeawayLoading] = useState(false)
   const [takeawayError, setTakeawayError] = useState<string | null>(null)
   const [savedTalks, setSavedTalks] = useState<Debrief[]>([])
+  // Debrief-mode only: the "Set a Next Step" note, persisted as the
+  // conversation's reflectionNote (the same field Ask and Practice already
+  // use for "what happened when you tried it").
+  const [nextStepOpen, setNextStepOpen] = useState(false)
+  const [nextStepDraft, setNextStepDraft] = useState('')
   const [talkVoice, setTalkVoice] = useState<TalkVoice | null>(null)
   const talkVoiceRef = useRef<TalkVoice | null>(null)
   talkVoiceRef.current = talkVoice
@@ -335,6 +365,45 @@ export default function TalkToMe() {
     }
   }
 
+  // "Continue This Conversation" — drop back out of the takeaway screen into
+  // the live session rather than starting over, so the whole conversation
+  // stays intact and Coach keeps its context.
+  function handleContinueTalking() {
+    setTakeaway(null)
+    setTakeawayError(null)
+    setNextStepOpen(false)
+    beginListening()
+  }
+
+  function handleStartOver() {
+    sessionActiveRef.current = false
+    close()
+    audioRef.current?.pause()
+    setDebrief(null)
+    setTakeaway(null)
+    setTakeawayError(null)
+    setUserTranscript(null)
+    setError(null)
+    setNextStepOpen(false)
+    setNextStepDraft('')
+    setPhase('idle')
+    // Also clears ?mode=debrief: starting over from a debrief means an
+    // ordinary new conversation, not another debrief of the same plan.
+    navigate('/talk-to-me', { replace: true })
+  }
+
+  async function handleSaveNextStep() {
+    const note = nextStepDraft.trim()
+    if (!debrief || !note) return
+    try {
+      const updated = await saveDebriefReflection(debrief.id, note)
+      setDebrief(updated)
+      setNextStepOpen(false)
+    } catch {
+      setError('Could not save that next step. Please try again.')
+    }
+  }
+
   const messages: ChatMessage[] = debrief?.conversation ?? []
   const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
   const finishing = takeawayLoading || takeaway != null || takeawayError != null
@@ -361,7 +430,9 @@ export default function TalkToMe() {
       />
 
       <header className="flex items-center justify-between border-b border-hairline bg-cream-card px-4 py-3">
-        <p className="font-heading text-base font-bold text-forest">Talk to Coach</p>
+        <p className="font-heading text-base font-bold text-forest">
+          {isDebrief ? 'Debrief with Coach' : 'Talk to Coach'}
+        </p>
         {/* A fast, no-questions-asked way out — deliberately distinct from
             "Finish session" below: this skips the takeaway entirely. */}
         <button type="button" onClick={handleClose} className="text-sm font-medium text-ink-soft hover:text-ink">
@@ -392,9 +463,12 @@ export default function TalkToMe() {
             ) : takeaway ? (
               <>
                 <div className="flex items-start justify-between gap-3">
-                  <h1 className="font-heading text-xl font-bold text-forest">Here's your takeaway</h1>
+                  <h1 className="font-heading text-xl font-bold text-forest">
+                    {isDebrief ? "Here's your debrief" : "Here's your takeaway"}
+                  </h1>
                   <button
                     type="button"
+                    hidden={isDebrief}
                     onClick={handleToggleSaved}
                     className={`flex shrink-0 items-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-xs font-semibold transition-colors ${
                       debrief?.saved
@@ -422,13 +496,105 @@ export default function TalkToMe() {
                 </div>
               </>
             ) : null}
-            <button
-              type="button"
-              onClick={() => navigate('/')}
-              className="self-center rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
-            >
-              Done
-            </button>
+            {isDebrief && takeaway ? (
+              <div className="flex flex-col gap-3 border-t border-hairline pt-4">
+                {nextStepOpen ? (
+                  <div className="flex flex-col gap-2 text-left">
+                    <label htmlFor="next-step" className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">
+                      Your next step
+                    </label>
+                    <textarea
+                      id="next-step"
+                      autoFocus
+                      rows={2}
+                      value={nextStepDraft}
+                      onChange={(e) => setNextStepDraft(e.target.value)}
+                      placeholder="The one thing I'll do next..."
+                      className="rounded-xl border border-hairline bg-cream-card px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta/40 focus:outline-none"
+                    />
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handleSaveNextStep}
+                        disabled={!nextStepDraft.trim()}
+                        className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+                      >
+                        Save next step
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNextStepOpen(false)}
+                        className="text-sm font-medium text-ink-soft hover:text-ink"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2.5">
+                    <button
+                      type="button"
+                      onClick={handleContinueTalking}
+                      className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
+                    >
+                      Continue This Conversation
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Seeded with what Coach heard you commit to, so the
+                        // common case is confirming a sentence, not writing one.
+                        setNextStepDraft((draft) => draft || takeaway.tryNext)
+                        setNextStepOpen(true)
+                      }}
+                      className="rounded-full border-2 border-hairline bg-cream-card px-5 py-2.5 text-sm font-semibold text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
+                    >
+                      {debrief?.reflectionNote ? 'Edit My Next Step' : 'Set a Next Step'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleToggleSaved}
+                      className={`flex items-center gap-1.5 rounded-full border-2 px-5 py-2.5 text-sm font-semibold transition-colors ${
+                        debrief?.saved
+                          ? 'border-warm-500 bg-warm-100 text-warm-500'
+                          : 'border-hairline bg-cream-card text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
+                      }`}
+                    >
+                      <StarIcon className="h-3.5 w-3.5" filled={debrief?.saved} />
+                      {debrief?.saved ? 'Reflection Saved' : 'Save My Reflection'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleStartOver}
+                      className="rounded-full border-2 border-hairline bg-cream-card px-5 py-2.5 text-sm font-semibold text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
+                    >
+                      Start a New Talk It Through
+                    </button>
+                  </div>
+                )}
+                {debrief?.reflectionNote && !nextStepOpen && (
+                  <div className="rounded-xl bg-mint-tint/40 p-4 text-left">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-forest">Your next step</p>
+                    <p className="mt-1 text-sm text-ink">{debrief.reflectionNote}</p>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => navigate('/')}
+                  className="self-center text-sm font-medium text-ink-soft hover:text-ink"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="self-center rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
+              >
+                Done
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -507,15 +673,28 @@ export default function TalkToMe() {
               <div className="flex w-full max-w-md flex-col gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                    A moment for your teaching
+                    {isDebrief ? 'Debrief' : 'A moment for your teaching'}
                   </p>
-                  <h1 className="mt-1 font-heading text-2xl font-bold text-forest">What's on your mind today?</h1>
+                  <h1 className="mt-1 font-heading text-2xl font-bold text-forest">
+                    {isDebrief ? 'How did it go?' : "What's on your mind today?"}
+                  </h1>
                   <p className="mt-1.5 text-sm text-ink-soft">
-                    Talk through a challenge, find the right words, or reflect on your day.
+                    {isDebrief
+                      ? "Start wherever you like — Coach will walk through the rest with you."
+                      : 'Talk through a challenge, find the right words, or reflect on your day.'}
                   </p>
                 </div>
+                {isDebrief && (
+                  <ul className="flex flex-col gap-1.5 rounded-xl bg-mint-tint/40 p-4 text-left">
+                    {DEBRIEF_QUESTIONS.map((question) => (
+                      <li key={question} className="text-sm text-forest">
+                        {question}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <div className="flex flex-col gap-2">
-                  {EXAMPLE_PROMPTS.map((prompt) => (
+                  {(isDebrief ? DEBRIEF_PROMPTS : EXAMPLE_PROMPTS).map((prompt) => (
                     <button
                       key={prompt}
                       type="button"
@@ -526,6 +705,15 @@ export default function TalkToMe() {
                     </button>
                   ))}
                 </div>
+
+                {!isDebrief && (
+                  <Link
+                    to="/guide/talk-it-through"
+                    className="text-xs font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta-600"
+                  >
+                    New to this? Read the teacher's guide
+                  </Link>
+                )}
 
                 {savedTalks.length > 0 && (
                   <div className="flex flex-col gap-2 text-left">

@@ -200,6 +200,12 @@ export default function AssignmentCoach() {
       <div className="flex flex-col gap-1.5">
         <h1 className="font-heading text-2xl font-bold text-forest md:text-3xl">Assignment Coach</h1>
         <p className="text-ink-soft">Design, review, and refine meaningful student work—with a coach beside you.</p>
+        <Link
+          to="/guide/assignment-coach"
+          className="w-fit text-xs font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta"
+        >
+          New to this? Read the teacher's guide
+        </Link>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

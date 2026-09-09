@@ -29,6 +29,13 @@ const TalkToMe = lazy(() => import('./pages/TalkToMe'))
 const Onboarding = lazy(() => import('./pages/Onboarding'))
 const Terms = lazy(() => import('./pages/Terms'))
 const Guide = lazy(() => import('./pages/Guide'))
+const GuideTalkItThrough = lazy(() => import('./pages/GuideTalkItThrough'))
+const GuideLessonDebrief = lazy(() => import('./pages/GuideLessonDebrief'))
+const GuideAskPractice = lazy(() => import('./pages/GuideAskPractice'))
+const GuideLessonPlanning = lazy(() => import('./pages/GuideLessonPlanning'))
+const GuideAssignmentCoach = lazy(() => import('./pages/GuideAssignmentCoach'))
+const GuideCommunicationCoach = lazy(() => import('./pages/GuideCommunicationCoach'))
+const GuideCheatSheet = lazy(() => import('./pages/GuideCheatSheet'))
 const Faq = lazy(() => import('./pages/Faq'))
 
 function RouteFallback() {
@@ -117,6 +124,13 @@ export default function App() {
             <Route path="shared/:type/:token" element={<Shared />} />
             <Route path="terms" element={<Terms />} />
             <Route path="guide" element={<Guide />} />
+            <Route path="guide/talk-it-through" element={<GuideTalkItThrough />} />
+            <Route path="guide/lesson-debrief" element={<GuideLessonDebrief />} />
+            <Route path="guide/ask-practice" element={<GuideAskPractice />} />
+            <Route path="guide/lesson-planning" element={<GuideLessonPlanning />} />
+            <Route path="guide/assignment-coach" element={<GuideAssignmentCoach />} />
+            <Route path="guide/communication-coach" element={<GuideCommunicationCoach />} />
+            <Route path="guide/cheat-sheet" element={<GuideCheatSheet />} />
             <Route path="faq" element={<Faq />} />
             <Route
               path="onboarding"

@@ -46,6 +46,12 @@ export default function CheatSheet() {
         <p className="text-ink-soft">
           Go-to phrases and tips, auto-built from what you've saved.
         </p>
+        <Link
+          to="/guide/cheat-sheet"
+          className="mt-1 w-fit text-xs font-medium text-ink-soft underline decoration-border underline-offset-4 hover:text-terracotta"
+        >
+          New to this? Read the teacher's guide
+        </Link>
       </div>
 
       {loading ? (

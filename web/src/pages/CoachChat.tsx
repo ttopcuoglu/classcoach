@@ -1,4 +1,4 @@
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import Ask from './Ask'
 import TryItOut from './TryItOut'
 
@@ -15,6 +15,12 @@ export default function CoachChat() {
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold text-ink md:text-3xl">Ask & Practice</h1>
         <p className="text-ink-soft">Ask a question or describe what happened, or practice a scenario.</p>
+        <Link
+          to="/guide/ask-practice"
+          className="mt-1 w-fit text-xs font-medium text-ink-soft underline decoration-border underline-offset-4 hover:text-terracotta"
+        >
+          New to this? Read the teacher's guide
+        </Link>
       </div>
 
       <div className="flex gap-2">

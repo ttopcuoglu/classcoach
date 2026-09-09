@@ -55,6 +55,12 @@ export default function Communications() {
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold text-ink md:text-3xl">Communication Coach</h1>
         <p className="text-ink-soft">Prepare, write, practice, and improve important communication.</p>
+        <Link
+          to="/guide/communication-coach"
+          className="mt-1 w-fit text-xs font-medium text-ink-soft underline decoration-border underline-offset-4 hover:text-terracotta"
+        >
+          New to this? Read the teacher's guide
+        </Link>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

@@ -60,6 +60,12 @@ export default function LessonPlanning() {
         <p className="text-ink-soft">
           Get feedback on a plan you wrote, generate a sample plan for ideas, or get feedback on a presentation.
         </p>
+        <Link
+          to="/guide/lesson-planning"
+          className="mt-1 w-fit text-xs font-medium text-ink-soft underline decoration-border underline-offset-4 hover:text-terracotta"
+        >
+          New to this? Read the teacher's guide
+        </Link>
       </div>
 
       <div className="flex flex-wrap gap-2">

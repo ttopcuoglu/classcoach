@@ -184,6 +184,12 @@ export default function AudioCoaching() {
             Record a class period, get a transcript, and see a coaching report. Audio is never saved — only
             the text.
           </p>
+          <Link
+            to="/guide/lesson-debrief"
+            className="mt-1 w-fit text-xs font-medium text-ink-soft underline decoration-border underline-offset-4 hover:text-terracotta"
+          >
+            New to this? Read the teacher's guide
+          </Link>
         </div>
       )}
 
