@@ -184,9 +184,15 @@ export default function AudioCoachingExport() {
                   </section>
 
                   <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Checking Understanding</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                      Checks for Understanding & Feedback
+                    </p>
                     <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      <Stat label="Checks for understanding" value={cfuMetric.display} reason={cfuMetric.reason} />
+                      <Stat
+                        label="Verbal checks for understanding detected"
+                        value={cfuMetric.display}
+                        reason={cfuMetric.reason}
+                      />
                     </div>
                   </section>
                 </>

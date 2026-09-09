@@ -475,6 +475,10 @@ model AudioSession {
   // [{ timestampSec, type: 'recall'|'higher_order', waitTimeSec, text, followUps: [{ timestampSec, text }] }]
   // null for sessions analyzed before this was tracked.
   questionLog      Json?
+  // [{ timestampSec, text, whatItChecked }] — one entry per detected
+  // verbal check-for-understanding phrase. null for sessions analyzed
+  // before this was tracked.
+  cfuLog           Json?
 
   // Keyword/phrase-matched flags and quotes only — never scored. See
   // audioAnalysis.ts's LessonContentResult for the exact shape.
