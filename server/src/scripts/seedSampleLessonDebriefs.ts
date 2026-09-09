@@ -319,6 +319,139 @@ const SOCIAL_STUDIES_LINES: Line[] = [
   },
 ]
 
+// A ~13-minute 6th-grade arts (music) lesson, deliberately teacher-heavy
+// (long explanations, few and short student turns, no independent-work
+// gap) so the coaching-priority signal that emerges is "talk-balance"
+// rather than the "wait-time" theme the four earlier samples all landed
+// on — real variety in which theme a sample's own numbers point to.
+const ARTS_LINES: Line[] = [
+  { speaker: 'Teacher', text: "Good morning everyone, eyes up here please, let's get started.", duration: 4 },
+  { speaker: 'Teacher', text: 'Today we are going to learn how rhythm and melody work together in a song.', duration: 6 },
+  { speaker: 'Teacher', text: 'By the end of today you will be able to describe how rhythm and melody interact in a piece of music.', duration: 7 },
+  { speaker: 'Teacher', text: 'Think about a time when you heard a song stuck in your head, that connects to how melody works, because a strong melody is memorable and easy to repeat in your mind.', duration: 9 },
+  { speaker: 'Student', text: 'Oh yeah, that happens to me all the time with songs on the radio.', duration: 3 },
+  { speaker: 'Teacher', text: 'Exactly, nice connection. The word rhythm means the pattern of beats in music, and every instrument in the band follows that same underlying pulse.', duration: 8 },
+  { speaker: 'Teacher', text: 'Melody is defined as a sequence of notes that forms a tune, and it usually sits on top of the rhythm section.', duration: 7 },
+  { speaker: 'Teacher', text: 'Think about a drum, a guitar, and a piano all playing together, the drum keeps the rhythm steady while the guitar and piano can carry the melody.', duration: 8 },
+  { speaker: 'Teacher', text: 'Who is able to tell me what instrument usually keeps the steady beat in a band?', duration: 4, gapAfter: 2 },
+  { speaker: 'Student', text: 'The drums?', duration: 1.5 },
+  { speaker: 'Teacher', text: "Great job, that's exactly right, the drum set is often the backbone of the rhythm section, and without it the rest of the band can drift apart in tempo.", duration: 8 },
+  { speaker: 'Teacher', text: "Now, when we talk about rhythm, we're really talking about how sound is organized in time, and that includes the beat, the tempo, and the pattern of long and short sounds.", duration: 9 },
+  { speaker: 'Teacher', text: 'A melody, on the other hand, is about pitch, meaning how high or low the notes are, and how they move from one note to the next to create a musical idea.', duration: 9 },
+  { speaker: 'Teacher', text: 'What are the two main things we listen for to describe a melody?', duration: 4, gapAfter: 2.5 },
+  { speaker: 'Student', text: 'Um, how high or low it is?', duration: 2.5 },
+  { speaker: 'Teacher', text: 'Nice work explaining that, pitch is definitely one part, and the other is the rhythm of the notes themselves, how long or short each one is held.', duration: 8 },
+  { speaker: 'Teacher', text: "Let's listen to a short clip and think about how the rhythm section and the melody are working together in this piece.", duration: 6 },
+  { speaker: 'Teacher', text: 'Why do you think a song can still sound recognizable even if you only hum the rhythm without the melody?', duration: 5, gapAfter: 3.5 },
+  { speaker: 'Student', text: 'Maybe because the beat is still really familiar?', duration: 2.5 },
+  { speaker: 'Teacher', text: "Great point, I like how you connected that to how familiar patterns stick with us, that's exactly the kind of thinking a composer relies on.", duration: 8 },
+  { speaker: 'Teacher', text: 'How would you explain the difference between rhythm and melody to a younger student?', duration: 4.5, gapAfter: 3 },
+  { speaker: 'Student', text: 'Maybe rhythm is the beat and melody is the tune?', duration: 3 },
+  { speaker: 'Teacher', text: "Excellent thinking there, that's a really clean way to put it, and composers use both together on purpose to create the feeling of a song.", duration: 8 },
+  { speaker: 'Teacher', text: 'Explain why a composer might change the rhythm of a melody without changing the notes.', duration: 5, gapAfter: 4 },
+  { speaker: 'Student', text: 'Maybe to make it feel faster or slower?', duration: 2.5 },
+  { speaker: 'Teacher', text: "That's not quite it, let's rethink that together, changing rhythm can also change the mood, like making something feel more urgent or more relaxed even with the same notes.", duration: 9 },
+  { speaker: 'Teacher', text: 'Turn and talk to your partner about one song where the rhythm feels really important.', duration: 4, gapAfter: 20 },
+  { speaker: 'Teacher', text: 'Thumbs up if you found an example with your partner.', duration: 3, gapAfter: 2 },
+  { speaker: 'Student', text: 'Thumbs up!', duration: 1.5 },
+  { speaker: 'Teacher', text: 'How could you prove that rhythm and melody are two separate things in a song?', duration: 4.5, gapAfter: 3.5 },
+  { speaker: 'Student', text: 'Maybe by clapping the rhythm without singing the notes?', duration: 3 },
+  { speaker: 'Teacher', text: 'Nice work explaining that, clapping the rhythm alone is actually a great way musicians practice separating the two elements.', duration: 8 },
+  { speaker: 'Teacher', text: 'Compare a march and a lullaby, how are the rhythm and melody different between them?', duration: 5, gapAfter: 4 },
+  { speaker: 'Student', text: 'A march feels steady and strong, a lullaby feels slow and gentle.', duration: 3.5 },
+  { speaker: 'Teacher', text: "Awesome, that's such an important point, tempo and rhythm choices really do shape the whole feeling of a piece of music.", duration: 8 },
+  { speaker: 'Teacher', text: 'Take out your listening journal and write down one instrument you noticed keeping the rhythm in that clip.', duration: 5 },
+  { speaker: 'Student', text: 'Can it be more than one instrument?', duration: 2 },
+  { speaker: 'Teacher', text: 'Sure, write down as many as you noticed, and be ready to share one with the class.', duration: 5 },
+  { speaker: 'Teacher', text: "Great job everyone, I'm hearing some really strong listening today.", duration: 4 },
+  { speaker: 'Teacher', text: 'Who can share one thing they noticed about rhythm and melody working together?', duration: 4, gapAfter: 3 },
+  { speaker: 'Student', text: 'The piano was playing the melody while the drums kept the beat.', duration: 3 },
+  { speaker: 'Teacher', text: "Awesome, that's such a clear example, and that's exactly the relationship we've been talking about all class.", duration: 7 },
+  {
+    speaker: 'Teacher',
+    text: "Tomorrow we'll practice writing our own simple rhythm pattern, so make sure you remember the difference between rhythm and melody.",
+    duration: 7,
+  },
+]
+
+// A ~14-minute 7th-grade math lesson on decimals, deliberately built with
+// NO check-for-understanding language anywhere (no "thumbs up," "turn and
+// talk," etc.) — otherwise a solid, balanced lesson — so the coaching
+// priority that emerges is "cfu" rather than talk-balance or wait-time.
+// Wait times are also kept comfortably at or above 3s throughout so
+// "wait-time" doesn't also fire and outrank it.
+const MATH_DECIMALS_LINES: Line[] = [
+  { speaker: 'Teacher', text: "Good morning everyone, eyes up here please, let's get started.", duration: 4 },
+  { speaker: 'Teacher', text: 'Today we are going to learn how decimals represent parts of a whole using place value.', duration: 6 },
+  { speaker: 'Teacher', text: 'By the end of today you will be able to compare and explain decimal place value.', duration: 6 },
+  { speaker: 'Teacher', text: 'Think about a time when you used money and had to add cents together, that is just like working with decimals in real life.', duration: 6 },
+  { speaker: 'Student', text: 'Oh yeah, like counting change at the store.', duration: 3 },
+  { speaker: 'Teacher', text: 'Exactly, nice connection. Who is able to tell me what a decimal point does?', duration: 4, gapAfter: 4 },
+  { speaker: 'Student', text: 'It separates the whole number from the parts less than one?', duration: 3 },
+  { speaker: 'Teacher', text: "Great job, Sofia, that's exactly right.", duration: 2.5 },
+  { speaker: 'Teacher', text: "Okay, next let's dig into some practice problems together.", duration: 3 },
+
+  { speaker: 'Teacher', text: 'The word decimal means a number that uses a point to show parts less than one.', duration: 5 },
+  { speaker: 'Teacher', text: 'Place value is defined as the value of a digit based on its position in a number.', duration: 5 },
+  { speaker: 'Teacher', text: 'What is a decimal?', duration: 3, gapAfter: 3.5 },
+  { speaker: 'Student', text: 'A number with a point that shows parts less than one.', duration: 3.5 },
+  { speaker: 'Teacher', text: 'Nice work explaining that.', duration: 2 },
+  { speaker: 'Teacher', text: 'What are the digits after the decimal point called?', duration: 3, gapAfter: 3.5 },
+  { speaker: 'Student', text: 'The decimal places.', duration: 2 },
+  { speaker: 'Teacher', text: 'Define decimal in your own words.', duration: 2.5, gapAfter: 4 },
+  { speaker: 'Student', text: 'It is a way to write a fraction using place value instead.', duration: 3.5 },
+  { speaker: 'Teacher', text: 'Excellent thinking there.', duration: 2 },
+  { speaker: 'Teacher', text: 'Name a real-world example where we use decimals.', duration: 3, gapAfter: 3.5 },
+  { speaker: 'Student', text: 'Money, like dollars and cents.', duration: 2 },
+  { speaker: 'Teacher', text: 'How many decimal places are in the number three point two five?', duration: 4, gapAfter: 3 },
+  { speaker: 'Student', text: 'Two.', duration: 1.2 },
+  { speaker: 'Teacher', text: 'What does the tenths place represent?', duration: 3, gapAfter: 3.5 },
+  { speaker: 'Student', text: 'One out of ten equal parts.', duration: 2.5 },
+  { speaker: 'Teacher', text: 'What is zero point five as a fraction?', duration: 3, gapAfter: 3 },
+  { speaker: 'Student', text: 'One half.', duration: 1.5 },
+  { speaker: 'Teacher', text: "Let's keep practicing with a few more examples on the board.", duration: 4, gapAfter: 2 },
+  { speaker: 'Teacher', text: 'Why do you think we use decimals instead of always using fractions?', duration: 4.5, gapAfter: 5 },
+  { speaker: 'Student', text: "Um, I'm not totally sure.", duration: 2 },
+  { speaker: 'Teacher', text: "Not quite, let's rethink that together.", duration: 3 },
+  { speaker: 'Teacher', text: 'How would you explain a decimal to a first grader?', duration: 4, gapAfter: 3.5 },
+  { speaker: 'Student', text: 'Maybe like money, cents are parts of a dollar?', duration: 3 },
+  { speaker: 'Teacher', text: 'Great point, I like how you connected that to something real.', duration: 3.5 },
+  { speaker: 'Teacher', text: 'What would happen if we lined up decimal points incorrectly when adding?', duration: 4.5, gapAfter: 4 },
+  { speaker: 'Student', text: 'We would get the wrong answer because the place values would not match.', duration: 3.5 },
+  { speaker: 'Teacher', text: 'How does place value help us compare two decimals?', duration: 4, gapAfter: 3.5 },
+  { speaker: 'Student', text: 'It lets you compare digit by digit starting from the left.', duration: 3.5 },
+  { speaker: 'Teacher', text: 'How could you prove that zero point five is equal to one half?', duration: 4.5, gapAfter: 4 },
+  { speaker: 'Student', text: 'Maybe show that five tenths simplifies to one half.', duration: 3 },
+  { speaker: 'Teacher', text: 'Explain why zero point three zero and zero point three represent the same value.', duration: 5, gapAfter: 4.5 },
+  { speaker: 'Student', text: 'Because the extra zero does not add any real value.', duration: 3 },
+  { speaker: 'Teacher', text: 'Compare decimals and percents, how are they related?', duration: 4, gapAfter: 4 },
+  { speaker: 'Student', text: 'A percent is just a decimal multiplied by one hundred.', duration: 3 },
+  { speaker: 'Teacher', text: 'Sofia, can you give it a try on the board?', duration: 3, gapAfter: 2 },
+  { speaker: 'Student', text: 'Sure, I think zero point six is bigger than zero point six five.', duration: 3.5 },
+  { speaker: 'Teacher', text: "That's not right, try again.", duration: 2 },
+  { speaker: 'Student', text: 'Oh wait, zero point six five is actually bigger.', duration: 3 },
+  { speaker: 'Teacher', text: 'Nice work explaining that.', duration: 2 },
+  { speaker: 'Teacher', text: 'Let us move on to group work now.', duration: 3 },
+
+  { speaker: 'Teacher', text: 'Take out your decimal place value chart from your desk.', duration: 3 },
+  { speaker: 'Teacher', text: 'Work with your partner on problems one through five.', duration: 3.5 },
+  { speaker: 'Student', text: 'Which page are they on?', duration: 2 },
+  { speaker: 'Teacher', text: 'Page eighteen, write down your answer in your math journal.', duration: 4 },
+  { speaker: 'Student', text: 'I think number two is zero point seven five.', duration: 3 },
+  { speaker: 'Student', text: 'Wait, I got zero point seven for that one.', duration: 2.5, gapAfter: 150 },
+  { speaker: 'Teacher', text: 'Voices off for a second, quiet please, let us check in.', duration: 4 },
+  { speaker: 'Teacher', text: "Great job everyone, I'm hearing some really strong thinking.", duration: 3.5 },
+  { speaker: 'Teacher', text: 'Okay, let us come back together.', duration: 2.5 },
+  { speaker: 'Teacher', text: 'Who can share one thing they learned about decimals today?', duration: 3.5, gapAfter: 4 },
+  { speaker: 'Student', text: 'That place value tells you how to compare decimals.', duration: 3 },
+  { speaker: 'Teacher', text: "Awesome, that's such an important point.", duration: 3 },
+  {
+    speaker: 'Teacher',
+    text: "Tomorrow we'll practice adding decimals, so make sure you remember what place value and decimal mean.",
+    duration: 6,
+  },
+]
+
 async function seedSession(
   teacherId: string,
   lines: Line[],
@@ -379,6 +512,11 @@ const LESSONS: { lines: Line[]; meta: { classSubject: string; gradeLevel: string
   {
     lines: SOCIAL_STUDIES_LINES,
     meta: { classSubject: 'Social Studies 8', gradeLevel: '8th', period: '1st period', daysAgo: 3 },
+  },
+  { lines: ARTS_LINES, meta: { classSubject: 'Music 6', gradeLevel: '6th', period: '5th period', daysAgo: 7 } },
+  {
+    lines: MATH_DECIMALS_LINES,
+    meta: { classSubject: 'Math 7', gradeLevel: '7th', period: '6th period', daysAgo: 2 },
   },
 ]
 
