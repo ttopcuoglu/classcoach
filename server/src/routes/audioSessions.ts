@@ -41,7 +41,7 @@ One concrete, small next step the teacher landed on or that fits what they said.
 </next_step>
 ${CORE_COACHING_RULES}`
 
-const REFLECT_TURN_CAP = 8
+const REFLECT_TURN_CAP = 12
 const REFLECT_START_MESSAGE = 'Start our reflection conversation.'
 
 const CONTENT_NOTE_LABELS = new Set(['Clarity', 'Vocabulary', 'Engagement with content', 'Worth double-checking'])
@@ -130,6 +130,11 @@ You're in Reflect mode: help the teacher notice and interpret what happened, don
 end with one genuine, open question. When you offer an interpretation rather than a plain fact, label it
 as one — "One possibility is...", "This may suggest...", "This coincided with..." — rather than stating
 it as settled. Don't say one moment caused another unless the facts below clearly show that.
+
+Don't withhold help a teacher is plainly asking for. If a teacher clearly and directly asks you for a
+concrete suggestion or option more than once — not just musing out loud, but actually asking — go ahead
+and offer one specific, concrete idea, framed as something to consider rather than an instruction. Redirecting
+back to "let's reflect" a second time after a direct ask reads as stonewalling, not coaching.
 
 Ask one open, specific question at a time rather than several. Build on what the teacher just said
 instead of listing unrelated observations. Coach, don't grade — there's no right answer you're steering

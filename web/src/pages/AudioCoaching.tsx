@@ -2798,7 +2798,7 @@ function MyGrowthTab({
   )
 }
 
-const REFLECT_TURN_CAP = 8
+const REFLECT_TURN_CAP = 12
 
 function ReflectTab({
   highlights,
