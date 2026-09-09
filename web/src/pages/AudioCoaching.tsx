@@ -872,6 +872,24 @@ function buildFeedbackExchange(segments: TranscriptSegment[], timestampSec: numb
   return [ordered[idx - 1], ordered[idx]]
 }
 
+// Same idea for a check-for-understanding moment: the phrase match is the
+// teacher's own segment, full stop — anything before it just happens to be
+// nearby in time and is often a completely unrelated exchange (see the
+// "What is one half plus one half?" / "One whole!" pair that a plain +/-15s
+// window pulled in ahead of an unrelated "Turn and talk..." CFU prompt).
+// The one thing worth keeping is a student's response immediately after,
+// since that's a genuine reaction to the check, not surrounding noise.
+function buildCfuExchange(segments: TranscriptSegment[], timestampSec: number): TranscriptSegment[] {
+  const ordered = [...segments].sort((a, b) => a.startSec - b.startSec)
+  const idx = ordered.findIndex((s) => s.startSec === timestampSec)
+  if (idx === -1) return []
+  const exchange = [ordered[idx]]
+  if (idx + 1 < ordered.length && ordered[idx + 1].speakerLabel === 'Student') {
+    exchange.push(ordered[idx + 1])
+  }
+  return exchange
+}
+
 // Coach-voice interpretations of the category stats — deterministic
 // templates, no Claude call (the analysis-time notes generation was
 // removed for exactly this reason: two independent AI summaries of the
@@ -4523,17 +4541,18 @@ function EvidenceItemCard({
   segments: TranscriptSegment[]
   onDiscuss: (c: NoticeCandidate) => void
 }) {
-  const [expanded, setExpanded] = useState(false)
-  // A feedback moment is exactly one student→teacher pair — showing the
-  // wider surrounding window (like CFU cards do) makes it look like every
-  // nearby line was counted, not just the one that actually was.
+  // Both kinds of evidence here are one precise, real exchange — not a
+  // window of surrounding talk, which in a densely-packed transcript can
+  // sweep in unrelated lines (an unconnected question-and-answer that
+  // just happens to fall nearby in time) that make a single moment look
+  // like it's citing several.
   const isFeedback = candidate.observation === 'Specific feedback'
   const window =
     candidate.timestampSec == null
       ? []
       : isFeedback
         ? buildFeedbackExchange(segments, candidate.timestampSec)
-        : buildTranscriptWindow(segments, candidate.timestampSec, expanded ? 45 : 15)
+        : buildCfuExchange(segments, candidate.timestampSec)
   return (
     <div className="rounded-2xl border border-border bg-surface p-6">
       <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
@@ -4552,15 +4571,6 @@ function EvidenceItemCard({
       )}
       <p className="mt-2 text-sm text-ink-soft">{candidate.whyItMatters}</p>
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-        {!isFeedback && candidate.timestampSec != null && (
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            className="text-sm font-medium text-brand-600 hover:text-brand-700"
-          >
-            {expanded ? 'Show less' : 'View in transcript'}
-          </button>
-        )}
         <button
           type="button"
           onClick={() => onDiscuss(candidate)}
