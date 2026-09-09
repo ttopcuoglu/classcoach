@@ -21,11 +21,6 @@ export type QuestionLogEntry = {
   text: string
   followUps: { timestampSec: number; text: string }[]
 }
-// whatItChecked is a short, phrase-based gloss (see CFU_PHRASE_DESCRIPTIONS)
-// — never a claim about the specific content of what was checked, since
-// that would require actually understanding the question, not just
-// matching a fixed phrase.
-export type CfuLogEntry = { timestampSec: number; text: string; whatItChecked: string }
 
 export type AnalysisResult = {
   teacherTalkPct: number | null
@@ -58,7 +53,6 @@ export type AnalysisResult = {
   highlights: Highlight[]
   phases: Phase[]
   questionLog: QuestionLogEntry[]
-  cfuLog: CfuLogEntry[]
 }
 
 export const RECALL_STARTERS = [
@@ -88,21 +82,6 @@ export const CFU_PHRASES = [
   'raise your hand if', 'show me with your fingers', 'talk to your partner',
   'fist to five',
 ]
-
-// A short, generic description per matched phrase — never derived from
-// the surrounding sentence's actual content, since a fixed phrase match
-// can't tell what was being checked, only that a check-style move was
-// made.
-const CFU_PHRASE_DESCRIPTIONS: Record<string, string> = {
-  'thumbs up': 'A quick individual signal check.',
-  'thumbs down': 'A quick individual signal check.',
-  'turn and talk': 'A peer discussion check.',
-  'talk to your partner': 'A peer discussion check.',
-  'on a scale of': 'A self-rated confidence check.',
-  'raise your hand if': 'A show-of-hands check.',
-  'show me with your fingers': 'A quick individual signal check.',
-  'fist to five': 'A self-rated confidence check.',
-}
 
 export const REDIRECTION_PHRASES = [
   'eyes up here', 'eyes on me', 'stop talking', 'focus up', 'put that away',
@@ -454,7 +433,6 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
   let followUpQuestionCount = 0
 
   let cfuCount = 0
-  const cfuLog: CfuLogEntry[] = []
   let redirectionCount = 0
   let redirectionStreak = 0
   let firstRedirectionTimestampSec: number | null = null
@@ -521,15 +499,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
     const precedingWasStudent = index > 0 && ordered[index - 1].speakerLabel !== 'Teacher'
 
     if (isTeacher) {
-      const cfuPhrase = findMatchedPhrase(segment.text, CFU_PHRASES)
-      if (cfuPhrase) {
-        cfuCount++
-        cfuLog.push({
-          timestampSec: segment.startSec,
-          text: segment.text,
-          whatItChecked: CFU_PHRASE_DESCRIPTIONS[cfuPhrase] ?? 'A verbal check for understanding.',
-        })
-      }
+      if (countPhraseMatches(segment.text, CFU_PHRASES) > 0) cfuCount++
 
       const redirectionHits = countPhraseMatches(segment.text, REDIRECTION_PHRASES)
       if (redirectionHits > 0) {
@@ -686,7 +656,6 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
     highlights: highlights.slice(0, 5),
     phases,
     questionLog,
-    cfuLog,
   }
 }
 

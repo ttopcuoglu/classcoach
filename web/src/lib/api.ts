@@ -569,7 +569,6 @@ export type AudioQuestionLogEntry = {
   text: string
   followUps: { timestampSec: number; text: string }[]
 }
-export type AudioCfuLogEntry = { timestampSec: number; text: string; whatItChecked: string }
 export type AudioReflectMessage = { role: 'user' | 'assistant'; text: string; createdAt: string }
 
 // Keyword/phrase-matched flags and quotes only — never scored.
@@ -613,7 +612,6 @@ export type AudioSession = {
   highlights: AudioHighlight[] | null
   phases: AudioPhase[] | null
   questionLog: AudioQuestionLogEntry[] | null
-  cfuLog: AudioCfuLogEntry[] | null
   reflectConversation: AudioReflectMessage[] | null
   lessonContent: AudioLessonContent | null
   contentNotes: AudioContentNotes | null

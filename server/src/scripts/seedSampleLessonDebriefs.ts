@@ -485,7 +485,6 @@ async function seedSession(
       highlights: analysis.highlights,
       phases: analysis.phases,
       questionLog: analysis.questionLog,
-      cfuLog: analysis.cfuLog,
       lessonContent,
       createdAt: sessionDate,
       updatedAt: sessionDate,

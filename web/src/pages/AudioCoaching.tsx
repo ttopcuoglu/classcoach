@@ -21,7 +21,6 @@ import {
   transcribeAudioSession,
   updateAudioSession,
   updateProfile,
-  type AudioCfuLogEntry,
   type AudioContentNotes,
   type AudioHighlight,
   type AudioLessonContent,
@@ -692,7 +691,7 @@ const REPORT_TABS: { key: ReportTab; label: string }[] = [
 const INSIGHTS_SECTIONS: { key: InsightsSection; label: string }[] = [
   { key: 'talk', label: 'Talk & Participation' },
   { key: 'questions', label: 'Questions & Thinking' },
-  { key: 'understanding', label: 'Checks for Understanding & Feedback' },
+  { key: 'understanding', label: 'Understanding & Feedback' },
   { key: 'content', label: 'Clarity & Content' },
   { key: 'routines', label: 'Climate & Routines' },
 ]
@@ -932,29 +931,19 @@ function buildQuestioningInsight(
   return sentence
 }
 
-function buildCfuInsight(
-  cfuMetric: { state: string; display: string },
-  feedbackRatio: ConfidentMetric,
-  specificFeedbackCount: number | null,
-  feedbackTotal: number | null,
-): string | null {
+function buildCfuInsight(cfuMetric: { state: string }, feedbackRatio: ConfidentMetric): string | null {
   let sentence: string | null = null
   if (cfuMetric.state === 'measured') {
-    const count = cfuMetric.display
-    sentence = `${count} verbal check${count === '1' ? '' : 's'} for understanding ${count === '1' ? 'was' : 'were'} detected during this lesson.`
+    sentence = 'You checked for understanding today — a good habit for catching confusion before it compounds.'
   } else if (cfuMetric.state === 'confirmed_none') {
-    sentence = 'No verbal checks for understanding were detected this session — even a quick thumbs-up check can catch confusion early.'
+    sentence = 'No explicit check for understanding was detected this session — even a quick thumbs-up check can catch confusion early.'
   }
-  if (
-    feedbackRatio.state === 'measured' &&
-    specificFeedbackCount != null &&
-    feedbackTotal != null &&
-    feedbackTotal > 0
-  ) {
+  if (feedbackRatio.state === 'measured' && feedbackRatio.display.endsWith('%')) {
+    const pct = Number.parseInt(feedbackRatio.display, 10)
     const clause =
-      specificFeedbackCount / feedbackTotal >= 0.5
-        ? `${specificFeedbackCount} of ${feedbackTotal} feedback moments referred to something specific in a student's response or work — that gave students clearer information than general praise alone.`
-        : `Only ${specificFeedbackCount} of ${feedbackTotal} feedback moments referred to something specific in a student's response or work — naming exactly what a student did well tends to stick better than general praise.`
+      pct >= 50
+        ? `Your feedback tended to be specific (${feedbackRatio.display}) rather than generic praise — that's what actually helps students improve.`
+        : `Your feedback leaned generic (only ${feedbackRatio.display} specific) — naming exactly what a student did well tends to stick better.`
     sentence = sentence ? `${sentence} ${clause}` : clause
   }
   return sentence
@@ -1922,8 +1911,7 @@ function ReportPanel({
 
   const talkInsight = buildTalkInsight(session, studentSegmentsMetric)
   const questioningInsight = buildQuestioningInsight(session, higherOrderRatio, followUpMetric, waitTimeMetric)
-  const feedbackTotal = genericCount != null && specificCount != null ? genericCount + specificCount : null
-  const cfuInsight = buildCfuInsight(cfuMetric, feedbackRatio, specificCount, feedbackTotal)
+  const cfuInsight = buildCfuInsight(cfuMetric, feedbackRatio)
   const contentInsight = buildContentInsight(lessonContent)
   const hasRepeatedInstructionHighlight = (session.highlights ?? []).some((h) => h.label === 'Repeated instruction')
   const hasRedirectionCluster = (session.highlights ?? []).some((h) => h.label === 'Redirection cluster')
@@ -2174,11 +2162,6 @@ function ReportPanel({
                 feedbackRatio={feedbackRatio}
                 focusMetric={focusMetric}
                 cfuInsight={cfuInsight}
-                cfuLog={session.cfuLog}
-                segments={session.segments}
-                specificFeedbackCount={specificCount}
-                feedbackTotal={feedbackTotal}
-                onDiscussWithCoach={handleDiscussWithCoach}
               />
             )}
 
@@ -4446,140 +4429,39 @@ function QuestionsThinkingTab({
   )
 }
 
-const CFU_DETECTION_LIMITATION =
-  'Wivoza detects verbal checks. Written responses, hand signals, student work, and other visual checks may not be captured.'
-
-function formatFeedbackSpecificityValue(
-  feedbackRatio: ConfidentMetric,
-  specificFeedbackCount: number | null,
-  feedbackTotal: number | null,
-): string {
-  if (specificFeedbackCount == null || feedbackTotal == null) return feedbackRatio.display
-  if (feedbackRatio.state === 'measured') {
-    return `${specificFeedbackCount} of ${feedbackTotal} moments · ${feedbackRatio.display}`
-  }
-  if (feedbackRatio.state === 'possible_detection') {
-    return `${specificFeedbackCount} of ${feedbackTotal} moments`
-  }
-  return feedbackRatio.display
-}
-
 function UnderstandingFeedbackTab({
   cfuMetric,
   feedbackRatio,
   focusMetric,
   cfuInsight,
-  cfuLog,
-  segments,
-  specificFeedbackCount,
-  feedbackTotal,
-  onDiscussWithCoach,
 }: {
   cfuMetric: ReturnType<typeof getCountMetric>
   feedbackRatio: ConfidentMetric
   focusMetric: FocusMetric | null
   cfuInsight: string | null
-  cfuLog: AudioCfuLogEntry[] | null
-  segments: TranscriptSegment[]
-  specificFeedbackCount: number | null
-  feedbackTotal: number | null
-  onDiscussWithCoach: (candidate: NoticeCandidate) => void
 }) {
-  const showStrengthToKeep =
-    feedbackRatio.state === 'measured' &&
-    specificFeedbackCount != null &&
-    feedbackTotal != null &&
-    feedbackTotal > 0 &&
-    specificFeedbackCount / feedbackTotal >= 0.5
-
-  const cfuCandidates: NoticeCandidate[] = (cfuLog ?? []).map((entry, i) => ({
-    id: `cfu-log-${i}`,
-    observation: 'Verbal check',
-    whyItMatters: entry.whatItChecked,
-    timestampSec: entry.timestampSec,
-    excerpt: entry.text,
-    durationSec: null,
-    weight: 0,
-    focusMetric: 'cfuCount',
-  }))
-
   return (
     <div className="flex flex-col gap-6">
-      <CategorySection
-        title="Checks for Understanding & Feedback"
-        coverage={categoryCoverage([cfuMetric, feedbackRatio])}
-      >
+      <CategorySection title="Checking Understanding" coverage={categoryCoverage([cfuMetric, feedbackRatio])}>
         <div id="stat-cfu">
           <Stat
-            label="Verbal checks for understanding detected"
+            label="Your checks for understanding"
             value={cfuMetric.display}
             muted={isMissingState(cfuMetric.state)}
             reason={cfuMetric.reason}
-            sub={CFU_DETECTION_LIMITATION}
             focused={focusMetric === 'cfuCount'}
           />
         </div>
         <Stat
-          label="Specific feedback"
-          value={formatFeedbackSpecificityValue(feedbackRatio, specificFeedbackCount, feedbackTotal)}
+          label="Your feedback specificity"
+          value={feedbackRatio.display}
           muted={isMissingState(feedbackRatio.state)}
           reason={feedbackRatio.reason}
+          sub={isConfidentState(feedbackRatio.state) ? 'specific of total feedback moments' : undefined}
           focused={focusMetric === 'feedbackSpecificity'}
         />
       </CategorySection>
-
       <CoachNote text={cfuInsight} />
-
-      {showStrengthToKeep && (
-        <div className="rounded-2xl border border-border bg-surface p-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Strength to keep</p>
-          <p className="mt-2 text-sm text-ink">
-            Naming precisely what a student did well or needs to reconsider.
-          </p>
-        </div>
-      )}
-
-      {cfuCandidates.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold text-ink">Checks observed</h3>
-          <div className="mt-2 flex flex-col gap-4">
-            {cfuCandidates.map((candidate) => (
-              <TranscriptEvidenceCard
-                key={candidate.id}
-                candidate={candidate}
-                segments={segments}
-                onDiscuss={onDiscussWithCoach}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="rounded-2xl border border-border bg-surface p-6">
-        <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">One next step</p>
-        <p className="mt-2 text-sm text-ink">
-          Pick one moment to add a quick check for understanding, and one piece of feedback where you name
-          something specific a student did.
-        </p>
-        <button
-          type="button"
-          onClick={() =>
-            onDiscussWithCoach({
-              id: 'understanding-feedback',
-              observation: 'Checking for understanding and feedback this session',
-              whyItMatters: cfuInsight ?? "Let's talk through how checks for understanding and feedback went today.",
-              timestampSec: null,
-              excerpt: null,
-              durationSec: null,
-              weight: 0,
-              focusMetric: 'cfuCount',
-            })
-          }
-          className="mt-3 text-sm font-medium text-brand-600 hover:text-brand-700"
-        >
-          Reflect on checking understanding →
-        </button>
-      </div>
     </div>
   )
 }
