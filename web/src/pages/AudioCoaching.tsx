@@ -23,6 +23,7 @@ import {
   updateProfile,
   type AudioCfuLogEntry,
   type AudioContentNotes,
+  type AudioFeedbackLogEntry,
   type AudioHighlight,
   type AudioLessonContent,
   type AudioPhase,
@@ -2177,6 +2178,7 @@ function ReportPanel({
                 focusMetric={focusMetric}
                 cfuInsight={cfuInsight}
                 cfuLog={session.cfuLog}
+                feedbackLog={session.feedbackLog}
                 segments={session.segments}
                 specificFeedbackCount={specificCount}
                 feedbackTotal={feedbackTotal}
@@ -4556,6 +4558,7 @@ function UnderstandingFeedbackTab({
   focusMetric,
   cfuInsight,
   cfuLog,
+  feedbackLog,
   segments,
   specificFeedbackCount,
   feedbackTotal,
@@ -4566,6 +4569,7 @@ function UnderstandingFeedbackTab({
   focusMetric: FocusMetric | null
   cfuInsight: string | null
   cfuLog: AudioCfuLogEntry[] | null
+  feedbackLog: AudioFeedbackLogEntry[] | null
   segments: TranscriptSegment[]
   specificFeedbackCount: number | null
   feedbackTotal: number | null
@@ -4585,7 +4589,23 @@ function UnderstandingFeedbackTab({
     weight: 0,
     focusMetric: 'cfuCount',
   }))
-  const visibleCandidates = showAllEvidence ? cfuCandidates : cfuCandidates.slice(0, 1)
+  const feedbackCandidates: NoticeCandidate[] = (feedbackLog ?? [])
+    .filter((entry) => entry.kind === 'specific')
+    .map((entry, i) => ({
+      id: `feedback-log-${i}`,
+      observation: 'Specific feedback',
+      whyItMatters:
+        "Naming something specific in a student's response gives clearer information than general praise alone.",
+      timestampSec: entry.timestampSec,
+      excerpt: entry.text,
+      durationSec: null,
+      weight: 0,
+      focusMetric: 'feedbackSpecificity',
+    }))
+  const evidenceCandidates = [...cfuCandidates, ...feedbackCandidates].sort(
+    (a, b) => (a.timestampSec ?? 0) - (b.timestampSec ?? 0),
+  )
+  const visibleCandidates = showAllEvidence ? evidenceCandidates : evidenceCandidates.slice(0, 1)
 
   const nextStep = buildUnderstandingNextStep(feedbackShare)
 
@@ -4616,7 +4636,7 @@ function UnderstandingFeedbackTab({
 
       <CoachNote text={cfuInsight} />
 
-      {cfuCandidates.length > 0 && (
+      {evidenceCandidates.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold text-ink">Evidence from the lesson</h3>
           <div className="mt-2 flex flex-col gap-4">
@@ -4629,13 +4649,13 @@ function UnderstandingFeedbackTab({
               />
             ))}
           </div>
-          {cfuCandidates.length > 1 && (
+          {evidenceCandidates.length > 1 && (
             <button
               type="button"
               onClick={() => setShowAllEvidence((v) => !v)}
               className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700"
             >
-              {showAllEvidence ? 'Show less' : `View all evidence (${cfuCandidates.length})`}
+              {showAllEvidence ? 'Show less' : `View all evidence (${evidenceCandidates.length})`}
             </button>
           )}
         </div>

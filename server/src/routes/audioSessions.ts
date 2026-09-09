@@ -379,6 +379,7 @@ audioSessionsRouter.post('/:id/tag-speaker', async (req, res) => {
       phases: analysis.phases,
       questionLog: analysis.questionLog,
       cfuLog: analysis.cfuLog,
+      feedbackLog: analysis.feedbackLog,
       lessonContent,
     },
     include: { segments: { orderBy: { startSec: 'asc' } } },

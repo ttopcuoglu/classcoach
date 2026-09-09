@@ -26,6 +26,11 @@ export type QuestionLogEntry = {
 // that would require actually understanding the question, not just
 // matching a fixed phrase.
 export type CfuLogEntry = { timestampSec: number; text: string; whatItChecked: string }
+// One entry per teacher turn counted toward genericFeedbackCount/
+// specificFeedbackCount — text is the teacher's own turn; the preceding
+// student turn (for real evidence context) is recovered from the
+// transcript itself via its timestamp, not duplicated here.
+export type FeedbackLogEntry = { timestampSec: number; kind: 'generic' | 'specific'; text: string }
 
 export type AnalysisResult = {
   teacherTalkPct: number | null
@@ -59,6 +64,7 @@ export type AnalysisResult = {
   phases: Phase[]
   questionLog: QuestionLogEntry[]
   cfuLog: CfuLogEntry[]
+  feedbackLog: FeedbackLogEntry[]
 }
 
 export const RECALL_STARTERS = [
@@ -455,6 +461,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
 
   let cfuCount = 0
   const cfuLog: CfuLogEntry[] = []
+  const feedbackLog: FeedbackLogEntry[] = []
   let redirectionCount = 0
   let redirectionStreak = 0
   let firstRedirectionTimestampSec: number | null = null
@@ -578,8 +585,13 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       if (isFeedbackEligible) {
         const wordCount = segment.text.trim().split(/\s+/).filter(Boolean).length
         const referencesContent = /\b(because|since|so that|which|specifically)\b/i.test(segment.text)
-        if (wordCount <= 4 && !referencesContent) genericFeedbackCount++
-        else if (wordCount > 4) specificFeedbackCount++
+        if (wordCount <= 4 && !referencesContent) {
+          genericFeedbackCount++
+          feedbackLog.push({ timestampSec: segment.startSec, kind: 'generic', text: segment.text })
+        } else if (wordCount > 4) {
+          specificFeedbackCount++
+          feedbackLog.push({ timestampSec: segment.startSec, kind: 'specific', text: segment.text })
+        }
       }
 
       let askedQuestionThisSegment = false
@@ -699,6 +711,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
     phases,
     questionLog,
     cfuLog,
+    feedbackLog,
   }
 }
 
