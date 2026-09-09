@@ -890,6 +890,49 @@ function buildCfuExchange(segments: TranscriptSegment[], timestampSec: number): 
   return exchange
 }
 
+// A "longest uninterrupted teacher monologue" highlight's own timestamp is
+// only the START of that stretch — a symmetric +/-15s window centered on
+// it mostly misses a genuinely long monologue (e.g. a real 40s stretch)
+// while still pulling in whatever unrelated line happens to sit just
+// before it starts. Return the actual span instead: every segment from
+// startSec up to (but not including) startSec + durationSec, which by
+// construction is exactly the run of consecutive teacher turns that made
+// up the monologue (a student turn would have already ended the streak).
+function buildMonologueExchange(
+  segments: TranscriptSegment[],
+  startSec: number,
+  durationSec: number,
+): TranscriptSegment[] {
+  return segments
+    .filter((s) => s.startSec >= startSec && s.startSec < startSec + durationSec)
+    .sort((a, b) => a.startSec - b.startSec)
+}
+
+// A "follow-up / probing question" highlight's timestamp is only the
+// follow-up itself — the exchange that actually makes it a follow-up (the
+// root question and its first answer) sits before it, at a distance a
+// generic time window can't reliably bound. questionLog already links a
+// follow-up back to its root question by timestamp, so reconstruct the
+// real 4-part exchange (root question, its answer, the follow-up, its
+// answer) from that instead of guessing from proximity.
+function buildFollowUpExchange(
+  segments: TranscriptSegment[],
+  questionLog: AudioQuestionLogEntry[] | null,
+  followUpTimestampSec: number,
+): TranscriptSegment[] {
+  const root = (questionLog ?? []).find((q) => q.followUps.some((f) => f.timestampSec === followUpTimestampSec))
+  if (!root) return []
+  const ordered = [...segments].sort((a, b) => a.startSec - b.startSec)
+  const pickWithAnswer = (ts: number): TranscriptSegment[] => {
+    const idx = ordered.findIndex((s) => s.startSec === ts)
+    if (idx === -1) return []
+    const pair = [ordered[idx]]
+    if (idx + 1 < ordered.length && ordered[idx + 1].speakerLabel === 'Student') pair.push(ordered[idx + 1])
+    return pair
+  }
+  return [...pickWithAnswer(root.timestampSec), ...pickWithAnswer(followUpTimestampSec)]
+}
+
 // Coach-voice interpretations of the category stats — deterministic
 // templates, no Claude call (the analysis-time notes generation was
 // removed for exactly this reason: two independent AI summaries of the
@@ -4104,13 +4147,26 @@ function QuestioningMixChart({
 function TranscriptEvidenceCard({
   candidate,
   segments,
+  questionLog,
   onDiscuss,
 }: {
   candidate: NoticeCandidate
   segments: TranscriptSegment[]
+  questionLog: AudioQuestionLogEntry[] | null
   onDiscuss: (c: NoticeCandidate) => void
 }) {
-  const window = candidate.timestampSec != null ? buildTranscriptWindow(segments, candidate.timestampSec) : []
+  // Each highlight type has its own precise, reconstructable exchange — a
+  // generic time window either misses the real span (a monologue) or can't
+  // tell which nearby line is actually part of it (a follow-up question's
+  // root question and answer aren't always close enough to guess at).
+  const window =
+    candidate.timestampSec == null
+      ? []
+      : candidate.observation === 'Longest uninterrupted teacher monologue'
+        ? buildMonologueExchange(segments, candidate.timestampSec, candidate.durationSec ?? 0)
+        : candidate.observation === 'Follow-up / probing question'
+          ? buildFollowUpExchange(segments, questionLog, candidate.timestampSec)
+          : buildTranscriptWindow(segments, candidate.timestampSec)
   return (
     <div className="rounded-2xl border border-border bg-surface p-6">
       <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
@@ -4268,6 +4324,7 @@ function TalkParticipationTab({
             <TranscriptEvidenceCard
               candidate={exampleCandidate}
               segments={session.segments}
+              questionLog={session.questionLog}
               onDiscuss={onDiscussWithCoach}
             />
           </div>
@@ -4278,6 +4335,7 @@ function TalkParticipationTab({
         <TranscriptEvidenceCard
           candidate={monologueCandidate}
           segments={session.segments}
+          questionLog={session.questionLog}
           onDiscuss={onDiscussWithCoach}
         />
       )}
