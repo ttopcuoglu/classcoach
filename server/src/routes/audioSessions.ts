@@ -525,11 +525,15 @@ audioSessionsRouter.post('/:id/reflect-summary', async (req, res) => {
       .join('\n')
     flagIfUnsafe(text, 'audioSessions.reflectSummary')
 
-    res.json({
-      strengths: extractTag(text, 'noticed'),
-      growthAreas: extractTag(text, 'want_to_explore'),
-      nextStep: extractTag(text, 'next_step'),
-    })
+    const strengths = extractTag(text, 'noticed')
+    const growthAreas = extractTag(text, 'want_to_explore')
+    const nextStep = extractTag(text, 'next_step')
+    if (!strengths && !growthAreas && !nextStep) {
+      res.status(502).json({ error: 'Could not summarize your conversation. Please try again.' })
+      return
+    }
+
+    res.json({ strengths, growthAreas, nextStep })
   } catch (error) {
     console.error('[audio-sessions] reflect summary failed:', error)
     res.status(502).json({ error: 'Could not summarize your conversation. Please try again.' })
