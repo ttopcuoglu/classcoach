@@ -497,9 +497,62 @@ const FEATURE_ACTIVITY_META: Record<keyof AdminOverview['featureActivity'], { la
   practiceReflect: { label: 'Practice & Ask', sub: 'Scenario practice and reflections' },
 }
 
+const INACTIVE_THRESHOLD_DAYS = 14
+
+function daysSince(iso: string | null): number | null {
+  if (!iso) return null
+  return Math.floor((Date.now() - new Date(iso).getTime()) / (24 * 60 * 60 * 1000))
+}
+
+function memberStatusLabel(member: OrgMember): 'Suspended' | 'Never active' | 'Inactive' | 'Active' {
+  if (member.suspendedAt) return 'Suspended'
+  const d = daysSince(member.lastActiveAt)
+  if (d == null) return 'Never active'
+  if (d > INACTIVE_THRESHOLD_DAYS) return 'Inactive'
+  return 'Active'
+}
+
+function memberRoleLabel(role: OrgMember['role']): string {
+  return role === 'org_admin' ? 'Admin' : role === 'superadmin' ? 'Superadmin' : 'Teacher'
+}
+
+type MemberSortKey = 'name' | 'role' | 'status' | 'lastActive' | 'joined'
+
+function SortableTh({
+  label,
+  sortKey,
+  active,
+  dir,
+  onSort,
+}: {
+  label: string
+  sortKey: MemberSortKey
+  active: MemberSortKey
+  dir: 'asc' | 'desc'
+  onSort: (key: MemberSortKey) => void
+}) {
+  const isActive = active === sortKey
+  return (
+    <th className="whitespace-nowrap px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-ink-soft">
+      <button type="button" onClick={() => onSort(sortKey)} className="flex items-center gap-1 hover:text-ink">
+        {label}
+        <span aria-hidden="true" className={isActive ? 'text-ink' : 'text-ink-soft/40'}>
+          {isActive && dir === 'desc' ? '↓' : '↑'}
+        </span>
+      </button>
+    </th>
+  )
+}
+
+// A real searchable, sortable table — replaces the earlier card list, which
+// had no way to find or reorder anyone once a roster grew past a handful of
+// names.
 function MembersList({ organizationId, isSuperadmin }: { organizationId?: string; isSuperadmin: boolean }) {
   const [members, setMembers] = useState<OrgMember[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [sortKey, setSortKey] = useState<MemberSortKey>('name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   function refresh() {
     setError(null)
@@ -514,30 +567,80 @@ function MembersList({ organizationId, isSuperadmin }: { organizationId?: string
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId])
 
+  function handleSort(key: MemberSortKey) {
+    if (key === sortKey) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  const query = search.trim().toLowerCase()
+  const filtered = (members ?? []).filter(
+    (m) =>
+      !query ||
+      (m.name ?? '').toLowerCase().includes(query) ||
+      m.email.toLowerCase().includes(query) ||
+      (m.jobTitle ?? '').toLowerCase().includes(query),
+  )
+
+  const sorted = [...filtered].sort((a, b) => {
+    let cmp = 0
+    if (sortKey === 'name') cmp = (a.name ?? a.email).localeCompare(b.name ?? b.email)
+    else if (sortKey === 'role') cmp = memberRoleLabel(a.role).localeCompare(memberRoleLabel(b.role))
+    else if (sortKey === 'status') cmp = memberStatusLabel(a).localeCompare(memberStatusLabel(b))
+    else if (sortKey === 'lastActive') cmp = (daysSince(a.lastActiveAt) ?? Infinity) - (daysSince(b.lastActiveAt) ?? Infinity)
+    else if (sortKey === 'joined') cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    return sortDir === 'asc' ? cmp : -cmp
+  })
+
   return (
     <div>
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Members</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">
+          Members{members ? ` (${members.length})` : ''}
+        </h2>
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name, email, or title"
+          className={`${inputClass} w-full max-w-xs`}
+        />
+      </div>
       {error && <p className="mt-2 text-sm text-warm-500">{error}</p>}
       {!members ? (
         <p className="mt-3 text-sm text-ink-soft">Loading...</p>
       ) : members.length === 0 ? (
         <p className="mt-3 text-sm text-ink-soft">No members yet.</p>
+      ) : sorted.length === 0 ? (
+        <p className="mt-3 text-sm text-ink-soft">No members match &ldquo;{search}&rdquo;.</p>
       ) : (
-        <div className="mt-3 flex flex-col gap-2">
-          {members.map((m) => (
-            <MemberRow key={m.id} member={m} isSuperadmin={isSuperadmin} onChanged={refresh} />
-          ))}
+        <div className="mt-3 overflow-x-auto rounded-xl border border-border">
+          <table className="w-full min-w-[720px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-border bg-canvas">
+                <SortableTh label="Name" sortKey="name" active={sortKey} dir={sortDir} onSort={handleSort} />
+                <SortableTh label="Role" sortKey="role" active={sortKey} dir={sortDir} onSort={handleSort} />
+                <SortableTh label="Status" sortKey="status" active={sortKey} dir={sortDir} onSort={handleSort} />
+                <SortableTh label="Last active" sortKey="lastActive" active={sortKey} dir={sortDir} onSort={handleSort} />
+                <SortableTh label="Joined" sortKey="joined" active={sortKey} dir={sortDir} onSort={handleSort} />
+                <th className="px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((m) => (
+                <MemberRow key={m.id} member={m} isSuperadmin={isSuperadmin} onChanged={refresh} />
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
   )
-}
-
-const INACTIVE_THRESHOLD_DAYS = 14
-
-function daysSince(iso: string | null): number | null {
-  if (!iso) return null
-  return Math.floor((Date.now() - new Date(iso).getTime()) / (24 * 60 * 60 * 1000))
 }
 
 function MemberRow({
@@ -598,74 +701,77 @@ function MemberRow({
     }
   }
 
+  const status = memberStatusLabel(member)
+
   return (
-    <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-surface p-3.5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-sm font-semibold text-ink">{member.name ?? member.email}</p>
-          <p className="text-xs text-ink-soft">
-            {member.email}
-            {member.jobTitle ? ` · ${member.jobTitle}` : ''}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {member.role === 'org_admin' && (
-            <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
-              Admin
-            </span>
-          )}
-          {member.suspendedAt && (
-            <span className="rounded-full bg-warm-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warm-500">
-              Suspended
-            </span>
-          )}
-          {!member.suspendedAt &&
-            (daysSince(member.lastActiveAt) == null || daysSince(member.lastActiveAt)! > INACTIVE_THRESHOLD_DAYS) && (
-              <span className="rounded-full bg-warm-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warm-500">
-                {member.lastActiveAt ? 'Inactive' : 'Never active'}
-              </span>
-            )}
-          <span className="text-xs text-ink-soft">
-            {member.lastActiveAt
-              ? `Active ${new Date(member.lastActiveAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
-              : 'Never active'}
-            {' · Joined '}
-            {new Date(member.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+    <tr className="border-b border-border/60 align-top last:border-0">
+      <td className="px-3.5 py-3">
+        <p className="text-sm font-semibold text-ink">{member.name ?? member.email}</p>
+        <p className="text-xs text-ink-soft">
+          {member.email}
+          {member.jobTitle ? ` · ${member.jobTitle}` : ''}
+        </p>
+      </td>
+      <td className="whitespace-nowrap px-3.5 py-3">
+        {member.role === 'org_admin' ? (
+          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
+            Admin
           </span>
-        </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={handleRemove}
-          disabled={busy}
-          className="text-xs font-medium text-ink-soft hover:text-ink disabled:opacity-50"
-        >
-          Remove from org
-        </button>
-        {isSuperadmin && (
-          <>
-            <button
-              type="button"
-              onClick={handleSuspendToggle}
-              disabled={busy}
-              className="text-xs font-medium text-ink-soft hover:text-ink disabled:opacity-50"
-            >
-              {member.suspendedAt ? 'Unsuspend' : 'Suspend'}
-            </button>
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={busy}
-              className="text-xs font-medium text-warm-500 hover:text-warm-600 disabled:opacity-50"
-            >
-              Delete account
-            </button>
-          </>
+        ) : (
+          <span className="text-sm text-ink-soft">{memberRoleLabel(member.role)}</span>
         )}
-        {error && <span className="text-xs text-warm-500">{error}</span>}
-      </div>
-    </div>
+      </td>
+      <td className="whitespace-nowrap px-3.5 py-3">
+        {status === 'Active' ? (
+          <span className="text-sm text-ink-soft">Active</span>
+        ) : (
+          <span className="rounded-full bg-warm-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warm-500">
+            {status}
+          </span>
+        )}
+      </td>
+      <td className="whitespace-nowrap px-3.5 py-3 text-sm text-ink-soft">
+        {member.lastActiveAt
+          ? new Date(member.lastActiveAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+          : '—'}
+      </td>
+      <td className="whitespace-nowrap px-3.5 py-3 text-sm text-ink-soft">
+        {new Date(member.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+      </td>
+      <td className="px-3.5 py-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={handleRemove}
+            disabled={busy}
+            className="text-xs font-medium text-ink-soft hover:text-ink disabled:opacity-50"
+          >
+            Remove
+          </button>
+          {isSuperadmin && (
+            <>
+              <button
+                type="button"
+                onClick={handleSuspendToggle}
+                disabled={busy}
+                className="text-xs font-medium text-ink-soft hover:text-ink disabled:opacity-50"
+              >
+                {member.suspendedAt ? 'Unsuspend' : 'Suspend'}
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={busy}
+                className="text-xs font-medium text-warm-500 hover:text-warm-600 disabled:opacity-50"
+              >
+                Delete
+              </button>
+            </>
+          )}
+        </div>
+        {error && <p className="mt-1 text-xs text-warm-500">{error}</p>}
+      </td>
+    </tr>
   )
 }
 
