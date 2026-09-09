@@ -17,6 +17,7 @@ import {
   GuideHero,
   GuidePathway,
   GuidePrimaryButton,
+  GuideSample,
   GuideSection,
   GuideShell,
 } from '../components/featureGuide'
@@ -125,6 +126,40 @@ const DEBRIEF_ACTIONS = [
   { label: 'Save My Reflection', body: 'Keep it to read before you assign this again.' },
   { label: 'Start a New Talk It Through', body: 'Begin fresh on something else.' },
 ]
+
+function SampleSnapshot() {
+  const rows = [
+    { label: 'Grade fit', value: 'Appears grade-level appropriate' },
+    { label: 'Thinking and rigor', value: 'Mostly recall and summary' },
+    { label: 'Learning value', value: 'Mostly completion-focused' },
+    { label: 'AI completion risk', value: 'High' },
+  ]
+  return (
+    <GuideSample
+      title="Review · Snapshot"
+      caption="An illustration of a Review snapshot. Every finding is a phrase with an explanation behind it — there are no numbers anywhere."
+    >
+      <div className="rounded-2xl bg-forest p-5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-cream/50">Most important opportunity</p>
+        <p className="mt-2 font-heading text-lg font-bold text-cream">
+          The task asks for a product, not the thinking behind it
+        </p>
+        <p className="mt-1 text-sm text-cream/70">
+          A 500-word essay on a well-documented topic is something a chatbot can produce in one pass. The
+          reasoning you actually want to assess never has to appear.
+        </p>
+        <div className="mt-4 flex flex-col gap-2.5">
+          {rows.map((r) => (
+            <div key={r.label} className="flex flex-wrap items-baseline justify-between gap-2 border-t border-cream/10 pt-2.5">
+              <span className="text-xs font-medium text-cream/50">{r.label}</span>
+              <span className="text-sm font-medium text-cream">{r.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </GuideSample>
+  )
+}
 
 export default function GuideAssignmentCoach() {
   return (
@@ -258,6 +293,10 @@ export default function GuideAssignmentCoach() {
                 </span>
               ))}
             </div>
+          </div>
+
+          <div className="mt-6">
+            <SampleSnapshot />
           </div>
 
           <div className="mt-8 flex flex-col items-start gap-3">

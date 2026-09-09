@@ -16,6 +16,7 @@ import {
   GuideHero,
   GuidePathway,
   GuidePrimaryButton,
+  GuideSample,
   GuideSection,
   GuideShell,
 } from '../components/featureGuide'
@@ -139,6 +140,51 @@ const DEBRIEF_ACTIONS = [
   { label: 'Save My Reflection', body: 'Keep it for the next time this family or colleague comes up.' },
   { label: 'Start a New Talk It Through', body: 'Begin fresh on something else.' },
 ]
+
+function SamplePlanExcerpt() {
+  const sections = [
+    {
+      label: 'Suggested opening',
+      value:
+        '“Thanks for making time. I want to start by hearing how you’re seeing this, and then walk you through what I’ve been tracking.”',
+    },
+    {
+      label: 'Key talking points',
+      value:
+        '- The grade reflects four assignments, not one.\n- Two were late; both were accepted at full credit.\n- The pattern changed in November, not at the start of the term.',
+    },
+    {
+      label: 'Possible reactions',
+      value:
+        '- “You never told us.” Expect this early. Don’t litigate it — move to what happens next.\n- Silence. Give it room before filling it.',
+    },
+    {
+      label: 'When to involve an administrator',
+      value:
+        'Not yet. Loop one in only if the conversation turns to your competence rather than the student’s work, or if a second meeting is requested with one present.',
+    },
+  ]
+  return (
+    <GuideSample
+      title="Prepare for a Meeting · Your plan"
+      caption="An illustration — four of the twelve sections a real plan returns, plus the pills naming what it was built from."
+    >
+      <div className="flex flex-wrap items-center gap-1.5">
+        {['Parent or family conference', 'Video call'].map((pill) => (
+          <span key={pill} className="rounded-full border border-border bg-canvas px-2.5 py-0.5 text-xs font-medium text-ink-soft">
+            {pill}
+          </span>
+        ))}
+      </div>
+      {sections.map((s) => (
+        <div key={s.label} className="rounded-xl border border-border bg-canvas p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{s.label}</p>
+          <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{s.value}</p>
+        </div>
+      ))}
+    </GuideSample>
+  )
+}
 
 export default function GuideCommunicationCoach() {
   return (
@@ -269,6 +315,10 @@ export default function GuideCommunicationCoach() {
                 ))}
               </div>
             </div>
+          </div>
+
+          <div className="mt-6">
+            <SamplePlanExcerpt />
           </div>
 
           <div className="mt-8 flex flex-col items-start gap-3">

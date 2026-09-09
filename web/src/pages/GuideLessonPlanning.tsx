@@ -17,6 +17,7 @@ import {
   GuideHero,
   GuidePathway,
   GuidePrimaryButton,
+  GuideSample,
   GuideSection,
   GuideShell,
 } from '../components/featureGuide'
@@ -118,6 +119,47 @@ const DEBRIEF_ACTIONS = [
   { label: 'Save My Reflection', body: 'Keep it to read before you plan this unit again.' },
   { label: 'Start a New Talk It Through', body: 'Begin fresh on something else.' },
 ]
+
+function SamplePlan() {
+  return (
+    <GuideSample
+      title="Generate Ideas · Sample plan"
+      caption="An illustration of a generated single day. It&apos;s a starting point to adapt — the card says so in the app too."
+    >
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Do Now</p>
+        <p className="mt-1.5 text-sm text-ink">
+          Three review questions on yesterday&apos;s vocabulary, projected as students enter. 5 minutes.
+        </p>
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Agenda</p>
+        <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">
+          {'I Do (10 min) — model one worked example, thinking aloud at each decision.' +
+            '\nWe Do (12 min) — a second example together, students calling out the next step.' +
+            '\nYou Do (15 min) — pairs work three problems; you circulate and check.'}
+        </p>
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Higher-order thinking</p>
+        <p className="mt-1.5 text-sm text-ink">
+          Ask students to find the step where a common mistake happens, and explain why it&apos;s tempting.
+        </p>
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Closure</p>
+        <p className="mt-1.5 text-sm text-ink">Exit ticket: one problem, plus a sentence on which step was hardest.</p>
+      </div>
+      <div className="rounded-xl border border-border bg-canvas p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Presentation &amp; Delivery</p>
+        <p className="mt-1.5 text-sm text-ink-soft">
+          <strong className="font-semibold text-ink">Pacing &amp; timing</strong> — the We Do usually runs long.
+          If you&apos;re past 25 minutes, cut to one pair problem rather than shortening the close.
+        </p>
+      </div>
+    </GuideSample>
+  )
+}
 
 export default function GuideLessonPlanning() {
   return (
@@ -228,6 +270,10 @@ export default function GuideLessonPlanning() {
                 </span>
               ))}
             </div>
+          </div>
+
+          <div className="mt-6">
+            <SamplePlan />
           </div>
 
           <div className="mt-8 flex flex-col items-start gap-3">

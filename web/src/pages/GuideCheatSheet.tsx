@@ -15,6 +15,7 @@ import {
   GuideHero,
   GuidePathway,
   GuidePrimaryButton,
+  GuideSample,
   GuideSection,
   GuideShell,
 } from '../components/featureGuide'
@@ -90,6 +91,46 @@ const DEBRIEF_ACTIONS = [
   { label: 'Save My Reflection', body: 'Keep it alongside the phrase it came from.' },
   { label: 'Start a New Talk It Through', body: 'Begin fresh on something else.' },
 ]
+
+function SampleSheet() {
+  const entries = [
+    {
+      text: '“I’m not going to argue about it in front of everyone. Hang on to it for now and see me at the end.”',
+      source: 'A student refuses to put their phone away',
+    },
+    {
+      text: '“You don’t have to be happy about it. You do have to start.”',
+      source: 'A student pushes back when you ask them to do something',
+    },
+  ]
+  return (
+    <GuideSample
+      title="Your Cheat Sheet"
+      caption="An illustration of one situation group. Yours holds only what you’ve starred, under only the headings you’ve used."
+    >
+      <div>
+        <p className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Responding to resistance</p>
+        <div className="mt-2 flex flex-col gap-2">
+          {entries.map((e) => (
+            <div key={e.source} className="rounded-xl border border-border bg-surface p-4">
+              <p className="text-sm text-ink">{e.text}</p>
+              <p className="mt-2 text-xs text-ink-soft">For: {e.source}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div>
+        <p className="text-sm font-semibold uppercase tracking-wide text-ink-soft">General tips</p>
+        <div className="mt-2 rounded-xl border border-border bg-surface p-4">
+          <p className="text-sm font-semibold text-ink">How do I set expectations on day one?</p>
+          <p className="mt-1.5 text-sm text-ink-soft">
+            Pick three routines, teach them like content, and practise them twice before you rely on them.
+          </p>
+        </div>
+      </div>
+    </GuideSample>
+  )
+}
 
 export default function GuideCheatSheet() {
   return (
@@ -190,6 +231,10 @@ export default function GuideCheatSheet() {
                 under General tips when the question was a broader one.
               </p>
             </div>
+          </div>
+
+          <div className="mt-6">
+            <SampleSheet />
           </div>
 
           <div className="mt-8 flex flex-col items-start gap-3">

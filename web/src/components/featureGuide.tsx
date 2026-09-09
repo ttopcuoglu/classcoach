@@ -110,6 +110,37 @@ export function GuidePathway({ steps = GUIDE_PATHWAY }: { steps?: PathwayStep[] 
   )
 }
 
+// A labelled frame for an illustrative screen sample. Deliberately NOT a
+// screenshot: each guide draws its own body in its feature's real palette
+// (several screens still use the older brand-*/canvas/surface tokens, others
+// the 2026 forest/cream set), so it reads as a picture of the screen while
+// staying responsive, theme-consistent, and immune to going stale. The badge
+// and caption exist so nobody mistakes the numbers for their own.
+export function GuideSample({
+  title,
+  caption,
+  children,
+}: {
+  title: string
+  caption: string
+  children: React.ReactNode
+}) {
+  return (
+    <figure className="m-0">
+      <div className="overflow-hidden rounded-2xl border border-hairline bg-canvas">
+        <div className="flex items-center justify-between gap-3 border-b border-border bg-surface px-4 py-2.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{title}</p>
+          <span className="shrink-0 rounded-full bg-gold-tint px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-terracotta-600">
+            Sample
+          </span>
+        </div>
+        <div className="flex flex-col gap-4 p-4 sm:p-5">{children}</div>
+      </div>
+      <figcaption className="mt-2.5 text-xs text-ink-soft">{caption}</figcaption>
+    </figure>
+  )
+}
+
 export function GuideClosing({
   icon: Icon,
   title,

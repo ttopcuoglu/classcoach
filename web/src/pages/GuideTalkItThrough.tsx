@@ -15,6 +15,7 @@ import {
   GuideHero,
   GuidePathway,
   GuidePrimaryButton,
+  GuideSample,
   GuideSection,
   GuideShell,
 } from '../components/featureGuide'
@@ -90,6 +91,42 @@ const DEBRIEF_ACTIONS = [
   { label: 'Start a New Talk It Through', body: 'Begin fresh on something else.' },
 ]
 
+
+function SampleTakeaway() {
+  return (
+    <GuideSample
+      title="Talk It Through · Your takeaway"
+      caption="An illustration of the takeaway screen. Yours is written from your own conversation."
+    >
+      <div className="flex items-start justify-between gap-3">
+        <p className="font-heading text-lg font-bold text-forest">Here&apos;s your takeaway</p>
+        <span className="flex shrink-0 items-center gap-1.5 rounded-full border-2 border-hairline bg-cream-card px-3 py-1.5 text-xs font-semibold text-ink-soft">
+          <StarIcon className="h-3.5 w-3.5" /> Save
+        </span>
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-forest">What we explored</p>
+        <p className="mt-1 text-sm text-ink">
+          Third period came apart during the handoff from your modelling to independent work, not during the
+          lesson itself — students weren&apos;t sure what they were meant to do on their own.
+        </p>
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">What I&apos;ll try</p>
+        <p className="mt-1 text-sm text-ink">
+          Model the first problem, ask a student to restate the directions in their own words, and leave the
+          three steps on the board.
+        </p>
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">What I&apos;ll notice</p>
+        <p className="mt-1 text-sm text-ink">
+          Whether the talking starts at the transition again, or somewhere else entirely.
+        </p>
+      </div>
+    </GuideSample>
+  )
+}
 
 export default function GuideTalkItThrough() {
   return (
@@ -171,6 +208,10 @@ export default function GuideTalkItThrough() {
               </li>
             ))}
           </ol>
+
+          <div className="mt-6">
+            <SampleTakeaway />
+          </div>
 
           <div className="mt-8 flex flex-col items-start gap-3">
             <GuidePrimaryButton to="/talk-to-me">Talk It Through Now</GuidePrimaryButton>
