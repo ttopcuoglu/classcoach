@@ -102,9 +102,14 @@ export type MeetingFormat = 'in_person' | 'phone' | 'video' | 'formal_meeting'
 export const MEETING_FORMATS: { label: string; value: MeetingFormat }[] = [
   { label: 'In person', value: 'in_person' },
   { label: 'Phone', value: 'phone' },
-  { label: 'Video', value: 'video' },
+  { label: 'Video call', value: 'video' },
   { label: 'Formal meeting', value: 'formal_meeting' },
 ]
+
+export function meetingFormatLabel(value: string | null) {
+  if (!value) return null
+  return MEETING_FORMATS.find((f) => f.value === value)?.label ?? value
+}
 
 export type MeetingType =
   | 'parent_family'

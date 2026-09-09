@@ -5,7 +5,15 @@ import { StarIcon } from '../components/icons'
 import { Spinner } from '../components/Spinner'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import SafetyAdvisoryBanner, { PrivacyReminder } from '../components/SafetyAdvisoryBanner'
-import { MEETING_TYPES, meetingTypeToRecipientType, type MeetingType } from '../lib/communicationOptions'
+import {
+  MEETING_FORMATS,
+  MEETING_TYPES,
+  meetingFormatLabel,
+  meetingTypeLabel,
+  meetingTypeToRecipientType,
+  type MeetingFormat,
+  type MeetingType,
+} from '../lib/communicationOptions'
 import { setPracticePrefill, setWritePrefill, takePreparePrefill } from '../lib/communicationsPrefill'
 import {
   extractAssignmentText,
@@ -48,6 +56,9 @@ export default function PrepareConversation() {
   const [meetingType, setMeetingType] = useState<MeetingType | undefined>(
     (prefill?.meetingType as MeetingType | undefined) ?? undefined,
   )
+  const [meetingFormat, setMeetingFormat] = useState<MeetingFormat | undefined>(
+    (prefill?.meetingFormat as MeetingFormat | undefined) ?? undefined,
+  )
   const [situationText, setSituationText] = useState(prefill?.situationText ?? '')
   const [attendees, setAttendees] = useState('')
   const [desiredOutcome, setDesiredOutcome] = useState(prefill?.desiredOutcome ?? '')
@@ -66,6 +77,11 @@ export default function PrepareConversation() {
   const [chatError, setChatError] = useState<string | null>(null)
 
   const canSubmit = situationText.trim().length > 0 && !submitting
+
+  // What the plan was actually built from — shown back on the finished plan so
+  // it states its own assumptions rather than leaving you to remember them.
+  const typePill = plan ? meetingTypeLabel(plan.meetingType) : null
+  const formatPill = plan ? meetingFormatLabel(plan.meetingFormat) : null
 
   async function handleUpload(file: File) {
     setUploading(true)
@@ -88,6 +104,7 @@ export default function PrepareConversation() {
       const result = await submitConversationPlan({
         situationText: situationText.trim(),
         meetingType,
+        meetingFormat,
         attendees: attendees.trim() || undefined,
         desiredOutcome: desiredOutcome.trim() || undefined,
         concerns: concerns.trim() || undefined,
@@ -188,6 +205,33 @@ export default function PrepareConversation() {
                     }`}
                   >
                     {m.label}
+                  </button>
+                ))}
+              </div>
+            </label>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-ink">
+                How will it happen? <span className="font-normal text-ink-soft">(optional)</span>
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {MEETING_FORMATS.map((f) => (
+                  <button
+                    key={f.value}
+                    type="button"
+                    // Unlike the meeting-type chips above, tapping the selected
+                    // one clears it — this field is optional, so a mistaken tap
+                    // shouldn't permanently commit the plan to phone guidance.
+                    onClick={() => setMeetingFormat((current) => (current === f.value ? undefined : f.value))}
+                    disabled={submitting}
+                    aria-pressed={meetingFormat === f.value}
+                    className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                      meetingFormat === f.value
+                        ? 'border-brand-500 bg-brand-50 text-brand-600'
+                        : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                    }`}
+                  >
+                    {f.label}
                   </button>
                 ))}
               </div>
@@ -300,12 +344,29 @@ export default function PrepareConversation() {
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between print:hidden">
-              <p className="text-sm text-ink-soft">{plan.situationText}</p>
+            {/* The row itself prints so the pills survive onto paper — they're
+                what tells you which meeting a printed plan is for. The
+                situation text and the Save control stay screen-only. */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col gap-1.5">
+                {(typePill || formatPill) && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {[typePill, formatPill].filter(Boolean).map((pill) => (
+                      <span
+                        key={pill}
+                        className="rounded-full border border-border bg-canvas px-2.5 py-0.5 text-xs font-medium text-ink-soft print:border-ink/20"
+                      >
+                        {pill}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <p className="text-sm text-ink-soft print:hidden">{plan.situationText}</p>
+              </div>
               <button
                 type="button"
                 onClick={handleToggleSaved}
-                className={`flex shrink-0 items-center gap-1.5 text-sm font-medium ${
+                className={`flex shrink-0 items-center gap-1.5 text-sm font-medium print:hidden ${
                   plan.saved ? 'text-warm-500' : 'text-ink-soft hover:text-warm-500'
                 }`}
               >
