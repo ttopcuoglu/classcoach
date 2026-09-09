@@ -520,7 +520,7 @@ audioSessionsRouter.post('/:id/reflect-summary', async (req, res) => {
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 500,
+      max_tokens: 700,
       system: REFLECT_SUMMARY_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: transcript }],
     })
@@ -533,7 +533,14 @@ audioSessionsRouter.post('/:id/reflect-summary', async (req, res) => {
     const strengths = extractTag(text, 'noticed')
     const growthAreas = extractTag(text, 'want_to_explore')
     const nextStep = extractTag(text, 'next_step')
-    if (!strengths && !growthAreas && !nextStep) {
+    const allEmpty = !strengths && !growthAreas && !nextStep
+    // A response cut off by the token limit before finishing all three
+    // sections would otherwise silently save a partial summary (whichever
+    // section Claude wrote first, with the rest left blank) — retry instead
+    // of accepting it. A normal completion that legitimately only touched
+    // on one or two sections is still accepted as-is.
+    const truncatedIncomplete = response.stop_reason === 'max_tokens' && (!strengths || !growthAreas || !nextStep)
+    if (allEmpty || truncatedIncomplete) {
       res.status(502).json({ error: 'Could not summarize your conversation. Please try again.' })
       return
     }
