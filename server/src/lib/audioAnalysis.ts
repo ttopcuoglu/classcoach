@@ -31,6 +31,15 @@ export type CfuLogEntry = { timestampSec: number; text: string; whatItChecked: s
 // student turn (for real evidence context) is recovered from the
 // transcript itself via its timestamp, not duplicated here.
 export type FeedbackLogEntry = { timestampSec: number; kind: 'generic' | 'specific'; text: string }
+// One entry per task-instruction phrase match.
+export type DirectiveLogEntry = { timestampSec: number; text: string }
+// One entry per positive- or corrective-phrase match — mutually exclusive
+// per teacher turn (a turn matching both is classified by whichever
+// phrase list it hits first), so a "moment" of classroom-language tone
+// stays one instance, not a double count.
+export type ToneLogEntry = { timestampSec: number; kind: 'positive' | 'corrective'; text: string }
+// One entry per redirection-phrase match.
+export type RedirectionLogEntry = { timestampSec: number; text: string }
 
 export type AnalysisResult = {
   teacherTalkPct: number | null
@@ -65,6 +74,9 @@ export type AnalysisResult = {
   questionLog: QuestionLogEntry[]
   cfuLog: CfuLogEntry[]
   feedbackLog: FeedbackLogEntry[]
+  directiveLog: DirectiveLogEntry[]
+  toneLog: ToneLogEntry[]
+  redirectionLog: RedirectionLogEntry[]
 }
 
 export const RECALL_STARTERS = [
@@ -463,14 +475,17 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
   const cfuLog: CfuLogEntry[] = []
   const feedbackLog: FeedbackLogEntry[] = []
   let redirectionCount = 0
+  const redirectionLog: RedirectionLogEntry[] = []
   let redirectionStreak = 0
   let firstRedirectionTimestampSec: number | null = null
   let transitionCount = 0
   let directiveCount = 0
+  const directiveLog: DirectiveLogEntry[] = []
   const lastDirectiveSeenAt = new Map<string, number>()
   let repeatedInstructionHighlightTaken = false
   let positivePhraseCount = 0
   let correctivePhraseCount = 0
+  const toneLog: ToneLogEntry[] = []
   let genericFeedbackCount = 0
   let specificFeedbackCount = 0
   const nameMentions: string[] = []
@@ -538,9 +553,11 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
         })
       }
 
-      const redirectionHits = countPhraseMatches(segment.text, REDIRECTION_PHRASES)
-      if (redirectionHits > 0) {
-        redirectionCount += redirectionHits
+      const redirectionPhrase = findMatchedPhrase(segment.text, REDIRECTION_PHRASES)
+      const redirectionHits = redirectionPhrase ? 1 : 0
+      if (redirectionPhrase) {
+        redirectionCount++
+        redirectionLog.push({ timestampSec: segment.startSec, text: segment.text })
         redirectionStreak++
         if (firstRedirectionTimestampSec == null) firstRedirectionTimestampSec = segment.startSec
       } else {
@@ -560,6 +577,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       const directivePhrase = findMatchedPhrase(segment.text, DIRECTIVE_PHRASES)
       if (directivePhrase) {
         directiveCount++
+        directiveLog.push({ timestampSec: segment.startSec, text: segment.text })
         const lastSeen = lastDirectiveSeenAt.get(directivePhrase)
         if (lastSeen != null && segment.startSec - lastSeen <= 90 && !repeatedInstructionHighlightTaken) {
           highlights.push({ label: 'Repeated instruction', timestampSec: segment.startSec, excerpt: segment.text })
@@ -568,8 +586,18 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
         lastDirectiveSeenAt.set(directivePhrase, segment.startSec)
       }
 
-      positivePhraseCount += countPhraseMatches(segment.text, POSITIVE_PHRASES)
-      correctivePhraseCount += countPhraseMatches(segment.text, CORRECTIVE_PHRASES)
+      // Positive/corrective are classified per turn, not summed per phrase
+      // hit — a turn matching both is counted once, by whichever it hits
+      // first, so "moments" of tone stay real instances, not phrase tallies.
+      const positivePhrase = findMatchedPhrase(segment.text, POSITIVE_PHRASES)
+      const correctivePhrase = !positivePhrase ? findMatchedPhrase(segment.text, CORRECTIVE_PHRASES) : null
+      if (positivePhrase) {
+        positivePhraseCount++
+        toneLog.push({ timestampSec: segment.startSec, kind: 'positive', text: segment.text })
+      } else if (correctivePhrase) {
+        correctivePhraseCount++
+        toneLog.push({ timestampSec: segment.startSec, kind: 'corrective', text: segment.text })
+      }
 
       // A "feedback moment" is meant to capture the teacher responding to
       // what a student just said — not every teacher turn that happens to
@@ -712,6 +740,9 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
     questionLog,
     cfuLog,
     feedbackLog,
+    directiveLog,
+    toneLog,
+    redirectionLog,
   }
 }
 

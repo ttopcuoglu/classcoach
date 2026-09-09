@@ -23,14 +23,16 @@ import {
   updateProfile,
   type AudioCfuLogEntry,
   type AudioContentNotes,
+  type AudioDirectiveLogEntry,
   type AudioFeedbackLogEntry,
   type AudioHighlight,
   type AudioLessonContent,
-  type AudioPhase,
   type AudioQuestionLogEntry,
   type AudioReflectMessage,
+  type AudioRedirectionLogEntry,
   type AudioSession,
   type AudioSessionWithSegments,
+  type AudioToneLogEntry,
   type AudioTopicTerm,
   type FocusMetric,
   type ReflectChatErrorKind,
@@ -53,7 +55,6 @@ import {
   MIN_DURATION_FOR_CFU_DETECTION_SEC,
   MIN_DURATION_FOR_TALK_BALANCE_CANDIDATE_SEC,
   MIN_N_FOR_PERCENT,
-  MIN_PHASE_DURATION_SEC,
   SHORT_SESSION_THRESHOLD_SEC,
   type ConfidentMetric,
   type MetricState,
@@ -872,14 +873,15 @@ function buildFeedbackExchange(segments: TranscriptSegment[], timestampSec: numb
   return [ordered[idx - 1], ordered[idx]]
 }
 
-// Same idea for a check-for-understanding moment: the phrase match is the
-// teacher's own segment, full stop — anything before it just happens to be
+// A single phrase-matched teacher turn — a check for understanding, a
+// clear direction, a positive/corrective tone moment, a redirection — is
+// its own segment, full stop; anything before it just happens to be
 // nearby in time and is often a completely unrelated exchange (see the
 // "What is one half plus one half?" / "One whole!" pair that a plain +/-15s
 // window pulled in ahead of an unrelated "Turn and talk..." CFU prompt).
 // The one thing worth keeping is a student's response immediately after,
-// since that's a genuine reaction to the check, not surrounding noise.
-function buildCfuExchange(segments: TranscriptSegment[], timestampSec: number): TranscriptSegment[] {
+// since that's a genuine reaction to the moment, not surrounding noise.
+function buildSingleTurnExchange(segments: TranscriptSegment[], timestampSec: number): TranscriptSegment[] {
   const ordered = [...segments].sort((a, b) => a.startSec - b.startSec)
   const idx = ordered.findIndex((s) => s.startSec === timestampSec)
   if (idx === -1) return []
@@ -1038,66 +1040,66 @@ function buildCfuInsight(
 }
 
 function buildRoutinesInsight(
-  directiveMetric: { state: string; display: string },
+  directiveMetric: ConfidentMetric,
   hasRepeatedInstructionHighlight: boolean,
   transitionMetric: ConfidentMetric,
 ): string | null {
-  let sentence: string | null = null
-  if (directiveMetric.state === 'measured') {
-    const base = `You gave clear, direct instructions ${directiveMetric.display} today — that kind of clarity helps routines run themselves.`
-    sentence = hasRepeatedInstructionHighlight
-      ? `${base} A couple needed repeating, though — worth double-checking they land the first time.`
-      : base
-  } else if (directiveMetric.state === 'confirmed_none') {
-    sentence = "No task-instruction language was picked up today — if you gave directions, they may just have been phrased differently than what's detected here."
-  }
+  const counted: string[] = []
   if (transitionMetric.state === 'measured') {
-    const clause = `You used transition language ${transitionMetric.display} today, marking the shifts between activities.`
-    sentence = sentence ? `${sentence} ${clause}` : clause
+    counted.push(`${transitionMetric.display} transition cue${transitionMetric.display === '1' ? '' : 's'}`)
   }
-  return sentence
+  if (directiveMetric.state === 'measured') {
+    counted.push(`${directiveMetric.display} clear direction moment${directiveMetric.display === '1' ? '' : 's'}`)
+  }
+  const parts: string[] = []
+  if (counted.length > 0) {
+    parts.push(`${counted.join(' and ')} ${counted.length === 1 && counted[0].startsWith('1 ') ? 'was' : 'were'} detected.`)
+  } else if (transitionMetric.state === 'confirmed_none' && directiveMetric.state === 'confirmed_none') {
+    parts.push('No transition language or task-instruction language was detected in this session.')
+  }
+  if (directiveMetric.state === 'measured') {
+    parts.push(
+      hasRepeatedInstructionHighlight
+        ? 'One direction was repeated within a short window — worth checking it landed the first time.'
+        : 'No repeated directions were clearly identified in the transcript.',
+    )
+  }
+  return parts.length > 0 ? parts.join(' ') : null
 }
 
 function buildClimateInsight(
-  redirectionMetric: { state: string; display: string },
+  redirectionMetric: ConfidentMetric,
   positiveCount: number | null,
   correctiveCount: number | null,
   nameMentionMetric: ConfidentMetric,
-  hasRedirectionCluster: boolean,
-  firstRedirectionTimestampSec: number | null,
+  uniqueNameCount: number | null,
 ): string | null {
-  let sentence: string | null = null
+  const parts: string[] = []
   if (redirectionMetric.state === 'confirmed_none') {
-    sentence = 'No redirection language was detected this session.'
+    parts.push('No redirection moments were detected this session.')
   } else if (redirectionMetric.state === 'measured') {
-    sentence = `You used redirection language ${redirectionMetric.display} today.`
-    if (positiveCount != null && correctiveCount != null) {
-      const toneTotal = positiveCount + correctiveCount
-      if (toneTotal >= MIN_N_FOR_PERCENT) {
-        if (positiveCount > correctiveCount * 2) {
-          sentence += ' Positive language clearly outweighed corrective — that sets a warm tone alongside the redirects.'
-        } else if (correctiveCount > positiveCount) {
-          sentence += ' Corrective language outweighed positive today — a few more specific call-outs of what\'s going right could balance that.'
-        }
-      } else if (toneTotal > 0) {
-        sentence +=
-          ' Only a few tone-language moments came through today — too few to say whether positive or corrective language dominated.'
-      }
-    }
-    if (hasRedirectionCluster) {
-      sentence += ' A few of those redirections clustered close together — worth a look at what led into that stretch.'
-    }
-    if (firstRedirectionTimestampSec != null && firstRedirectionTimestampSec < 120) {
-      sentence += ' The first one came quite early in the session — a rough start, or just day-one energy?'
+    parts.push(
+      `${redirectionMetric.display} redirection moment${redirectionMetric.display === '1' ? ' was' : 's were'} detected.`,
+    )
+  }
+  if (positiveCount != null && correctiveCount != null) {
+    const toneTotal = positiveCount + correctiveCount
+    if (toneTotal >= MIN_N_FOR_PERCENT) {
+      parts.push(
+        `${positiveCount} of ${toneTotal} clearly classified classroom-language moment${toneTotal === 1 ? ' was' : 's were'} positive.`,
+      )
+    } else if (toneTotal > 0) {
+      parts.push(
+        `${positiveCount} of ${toneTotal} clearly classified classroom-language moments ${positiveCount === 1 ? 'was' : 'were'} positive — too few to say whether positive or corrective language dominated overall.`,
+      )
     }
   }
-  if (nameMentionMetric.state === 'measured') {
-    const clause = `You used student names ${nameMentionMetric.display} today — a small thing that builds real relationship.`
-    sentence = sentence ? `${sentence} ${clause}` : clause
-  } else if (nameMentionMetric.state === 'confirmed_none' && sentence) {
-    sentence += ' No student names came through in the transcript today.'
+  if (nameMentionMetric.state === 'measured' && uniqueNameCount != null) {
+    parts.push(`Student names were used ${nameMentionMetric.display} times across ${uniqueNameCount} distinct names.`)
+  } else if (nameMentionMetric.state === 'confirmed_none') {
+    parts.push('No student names came through in the transcript this session.')
   }
-  return sentence
+  return parts.length > 0 ? parts.join(' ') : null
 }
 
 // Content & Explanations has no coach-voice sentence today — stitches
@@ -2003,16 +2005,13 @@ function ReportPanel({
   const cfuInsight = buildCfuInsight(cfuMetric, feedbackRatio, specificCount, feedbackTotal)
   const contentInsight = buildContentInsight(lessonContent)
   const hasRepeatedInstructionHighlight = (session.highlights ?? []).some((h) => h.label === 'Repeated instruction')
-  const hasRedirectionCluster = (session.highlights ?? []).some((h) => h.label === 'Redirection cluster')
-  const firstRedirectionTimestampSec = num('firstRedirectionTimestampSec')
   const routinesInsight = buildRoutinesInsight(directiveMetric, hasRepeatedInstructionHighlight, transitionMetric)
   const climateInsight = buildClimateInsight(
     redirectionMetric,
     positiveCount,
     correctiveCount,
     nameMentionMetric,
-    hasRedirectionCluster,
-    firstRedirectionTimestampSec,
+    uniqueNameCount,
   )
 
   // Summary's "My Focus" card — maps the teacher's chosen focus to its
@@ -2277,17 +2276,20 @@ function ReportPanel({
               <ClimateRoutinesTab
                 transitionMetric={transitionMetric}
                 directiveMetric={directiveMetric}
-                phases={session.phases}
                 nameMentionMetric={nameMentionMetric}
                 uniqueNameCount={uniqueNameCount}
                 toneRatio={toneRatio}
+                positiveCount={positiveCount}
+                correctiveCount={correctiveCount}
                 redirectionMetric={redirectionMetric}
-                hasRedirectionCluster={hasRedirectionCluster}
-                hasRepeatedInstructionHighlight={hasRepeatedInstructionHighlight}
-                firstRedirectionTimestampSec={firstRedirectionTimestampSec}
                 routinesInsight={routinesInsight}
                 climateInsight={climateInsight}
                 focusMetric={focusMetric}
+                directiveLog={session.directiveLog}
+                toneLog={session.toneLog}
+                redirectionLog={session.redirectionLog}
+                segments={session.segments}
+                onDiscussWithCoach={handleDiscussWithCoach}
               />
             )}
           </div>
@@ -3824,159 +3826,225 @@ function LessonContentTab({
 function ClimateRoutinesTab({
   transitionMetric,
   directiveMetric,
-  phases,
   nameMentionMetric,
   uniqueNameCount,
   toneRatio,
+  positiveCount,
+  correctiveCount,
   redirectionMetric,
-  hasRedirectionCluster,
-  hasRepeatedInstructionHighlight,
-  firstRedirectionTimestampSec,
   routinesInsight,
   climateInsight,
   focusMetric,
+  directiveLog,
+  toneLog,
+  redirectionLog,
+  segments,
+  onDiscussWithCoach,
 }: {
   transitionMetric: ReturnType<typeof getCountMetric>
   directiveMetric: ReturnType<typeof getCountMetric>
-  phases: AudioPhase[] | null
   nameMentionMetric: ReturnType<typeof getCountMetric>
   uniqueNameCount: number | null
   toneRatio: ConfidentMetric
+  positiveCount: number | null
+  correctiveCount: number | null
   redirectionMetric: ReturnType<typeof getCountMetric>
-  hasRedirectionCluster: boolean
-  hasRepeatedInstructionHighlight: boolean
-  firstRedirectionTimestampSec: number | null
   routinesInsight: string | null
   climateInsight: string | null
   focusMetric: FocusMetric | null
+  directiveLog: AudioDirectiveLogEntry[] | null
+  toneLog: AudioToneLogEntry[] | null
+  redirectionLog: AudioRedirectionLogEntry[] | null
+  segments: TranscriptSegment[]
+  onDiscussWithCoach: (candidate: NoticeCandidate) => void
 }) {
-  const firstRedirectionDisplay =
-    redirectionMetric.state === 'confirmed_none'
-      ? 'None detected'
-      : firstRedirectionTimestampSec != null
-        ? formatTime(firstRedirectionTimestampSec)
-        : '—'
-  const firstRedirectionMuted = redirectionMetric.state === 'confirmed_none' ? false : firstRedirectionTimestampSec == null
+  const [showAllEvidence, setShowAllEvidence] = useState(false)
+
+  const toneTotal = positiveCount != null && correctiveCount != null ? positiveCount + correctiveCount : null
+  const positiveDisplay =
+    isMissingState(toneRatio.state) || positiveCount == null || toneTotal == null || toneTotal === 0
+      ? toneRatio.display
+      : `${positiveCount} of ${toneTotal} classified moments`
+
+  const directiveCandidates: NoticeCandidate[] = (directiveLog ?? []).map((entry, i) => ({
+    id: `directive-log-${i}`,
+    observation: 'Clear direction',
+    whyItMatters: 'Clear, specific directions help students know exactly what to do next.',
+    timestampSec: entry.timestampSec,
+    excerpt: entry.text,
+    durationSec: null,
+    weight: 0,
+    focusMetric: 'directiveCount',
+  }))
+  const positiveCandidates: NoticeCandidate[] = (toneLog ?? [])
+    .filter((entry) => entry.kind === 'positive')
+    .map((entry, i) => ({
+      id: `positive-log-${i}`,
+      observation: 'Positive language',
+      whyItMatters: "Naming what's going well reinforces it and helps build trust.",
+      timestampSec: entry.timestampSec,
+      excerpt: entry.text,
+      durationSec: null,
+      weight: 0,
+      focusMetric: 'toneRatio',
+    }))
+  const redirectionCandidates: NoticeCandidate[] = (redirectionLog ?? []).map((entry, i) => ({
+    id: `redirection-log-${i}`,
+    observation: 'Redirection',
+    whyItMatters: 'A brief, direct redirection keeps the lesson moving without dwelling on it.',
+    timestampSec: entry.timestampSec,
+    excerpt: entry.text,
+    durationSec: null,
+    weight: 0,
+    focusMetric: 'redirectionCount',
+  }))
+  // One example of each kind shown first, so a teacher sees real variety
+  // before expanding — not three of whichever kind happens to be most
+  // frequent in a row.
+  const firstOfEach = [directiveCandidates[0], positiveCandidates[0], redirectionCandidates[0]].filter(
+    (c): c is NoticeCandidate => c != null,
+  )
+  const remaining = [
+    ...directiveCandidates.slice(1),
+    ...positiveCandidates.slice(1),
+    ...redirectionCandidates.slice(1),
+  ].sort((a, b) => (a.timestampSec ?? 0) - (b.timestampSec ?? 0))
+  const evidenceCandidates = [...firstOfEach, ...remaining]
+  const visibleCandidates = showAllEvidence ? evidenceCandidates : firstOfEach
+
+  const hasTransitionEvidence = transitionMetric.state === 'measured'
+  const hasNameEvidence = nameMentionMetric.state === 'measured'
+  const strengthText = hasTransitionEvidence
+    ? hasNameEvidence
+      ? 'You used concise transition language and frequently addressed students by name.'
+      : 'You used concise transition language to mark the shifts between activities.'
+    : hasNameEvidence
+      ? 'You frequently addressed students by name.'
+      : null
 
   return (
     <div className="flex flex-col gap-6">
-      <CategorySection title="Routines" coverage={categoryCoverage([transitionMetric, directiveMetric])}>
+      <CategorySection title="Routines & transitions" coverage={categoryCoverage([transitionMetric, directiveMetric])}>
         <Stat
-          label="Your transitions"
+          label="Transition cues detected"
           value={transitionMetric.display}
           muted={isMissingState(transitionMetric.state)}
           reason={transitionMetric.reason}
         />
         <Stat
-          label="Clear directions given"
+          label="Clear direction moments"
           value={directiveMetric.display}
           muted={isMissingState(directiveMetric.state)}
           reason={directiveMetric.reason ?? "Count only — clarity isn't judged automatically."}
           focused={focusMetric === 'directiveCount'}
         />
-        <Stat
-          label="Repeated instruction"
-          value={isMissingState(directiveMetric.state) ? '—' : hasRepeatedInstructionHighlight ? 'Detected' : 'None detected'}
-          muted={isMissingState(directiveMetric.state)}
-          reason={
-            isMissingState(directiveMetric.state)
-              ? directiveMetric.reason
-              : 'Flags the same direction repeated within 90 seconds — a sign it may not have landed the first time.'
-          }
-        />
       </CategorySection>
       <CoachNote text={routinesInsight} />
 
-      {/* Session Phases lives here now, alongside Routines, rather than on
-          a separate "Discourse Details" screen it used to need a cross-link
-          to reach. */}
-      {phases && phases.length > 0 && (
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Session phases</h2>
-          <div className="mt-3 flex flex-col gap-2">
-            {phases.map((p, i) => {
-              const isSliver = p.endSec - p.startSec < MIN_PHASE_DURATION_SEC
-              return (
-                <div
-                  key={i}
-                  className={`flex items-center gap-3 rounded-lg border px-4 py-2.5 ${
-                    isSliver ? 'border-dashed border-border/60 bg-canvas' : 'border-border bg-surface'
-                  }`}
-                >
-                  <span className={`w-28 shrink-0 text-sm font-medium ${isSliver ? 'text-ink-soft' : 'text-ink'}`}>
-                    {p.label}
-                  </span>
-                  <span className="text-sm text-ink-soft">
-                    {formatTime(p.startSec)} – {formatTime(p.endSec)}
-                    {isSliver && ' · too brief to treat as a real phase'}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-          <p className="mt-2 text-xs text-ink-soft">
-            These boundaries are an automated estimate — treat them as a starting point.
-          </p>
-        </div>
-      )}
-
       <CategorySection
-        title="Climate & Tone"
+        title="Classroom language"
         coverage={categoryCoverage([nameMentionMetric, toneRatio, redirectionMetric])}
       >
         <Stat
-          label="Student names used"
+          label="Student-name use"
           value={
             nameMentionMetric.state === 'measured' && uniqueNameCount != null
-              ? `${nameMentionMetric.display} mentions · ${uniqueNameCount} distinct`
+              ? `${nameMentionMetric.display} mentions across ${uniqueNameCount} names`
               : nameMentionMetric.display
           }
           muted={isMissingState(nameMentionMetric.state)}
-          reason={
-            nameMentionMetric.reason ??
-            "Distinct names are a text-pattern guess, not a verified roster match — two students sharing a first name would count as one."
-          }
+          reason={nameMentionMetric.reason}
+          sub="Name use does not indicate how evenly students participated or received attention."
           focused={focusMetric === 'nameMentionCount'}
         />
         <Stat
-          label="Your positive / corrective ratio"
-          value={toneRatio.display}
+          label={
+            <>
+              Positive language
+              <InfoTooltip text="Positive: affirms effort, behavior, participation, or a specific contribution. Corrective: redirects behavior, attention, or task completion. The two aren't opposites — a corrective statement can still be respectful and effective." />
+            </>
+          }
+          value={positiveDisplay}
           muted={isMissingState(toneRatio.state)}
           reason={toneRatio.reason}
-          sub={isConfidentState(toneRatio.state) ? 'share positive' : undefined}
           focused={focusMetric === 'toneRatio'}
         />
         <div id="stat-redirection">
           <Stat
-            label="Your redirection language"
-            value={redirectionMetric.display}
+            label="Redirections"
+            value={redirectionMetric.state === 'measured' ? `${redirectionMetric.display} moments` : redirectionMetric.display}
             muted={isMissingState(redirectionMetric.state)}
-            reason={redirectionMetric.reason ?? 'Count only — tone isn\'t judged automatically.'}
+            reason={redirectionMetric.reason ?? "Count only — tone isn't judged automatically."}
             focused={focusMetric === 'redirectionCount'}
           />
         </div>
-        <Stat
-          label="Redirection cluster"
-          value={isMissingState(redirectionMetric.state) ? '—' : hasRedirectionCluster ? 'Detected' : 'None detected'}
-          muted={isMissingState(redirectionMetric.state)}
-          reason={
-            isMissingState(redirectionMetric.state)
-              ? redirectionMetric.reason
-              : 'Flags back-to-back redirections close together — a possible sign the room needed a different routine in that moment.'
-          }
-        />
-        <Stat
-          label="Time to first redirection"
-          value={firstRedirectionDisplay}
-          muted={firstRedirectionMuted}
-          reason={
-            firstRedirectionMuted
-              ? (redirectionMetric.reason ?? 'Not available for this session — analyzed before this was tracked.')
-              : undefined
-          }
-        />
       </CategorySection>
       <CoachNote text={climateInsight} />
+
+      {evidenceCandidates.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-ink">Evidence from the transcript</h3>
+          <div className="mt-2 flex flex-col gap-4">
+            {visibleCandidates.map((candidate) => (
+              <EvidenceItemCard
+                key={candidate.id}
+                candidate={candidate}
+                segments={segments}
+                onDiscuss={onDiscussWithCoach}
+              />
+            ))}
+          </div>
+          {evidenceCandidates.length > firstOfEach.length && (
+            <button
+              type="button"
+              onClick={() => setShowAllEvidence((v) => !v)}
+              className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700"
+            >
+              {showAllEvidence ? 'Show less' : `View all routine and climate moments (${evidenceCandidates.length})`}
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        {strengthText && (
+          <div className="rounded-2xl border border-border bg-surface p-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Strength to keep</p>
+            <p className="mt-2 text-sm text-ink">{strengthText}</p>
+          </div>
+        )}
+
+        <div className="rounded-2xl border border-border bg-surface p-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">One next step</p>
+          <p className="mt-2 text-sm text-ink">
+            At one transition, give students three pieces of information: what to do, how long they have, and what
+            should be ready when time ends.
+          </p>
+          <p className="mt-1 text-sm text-ink-soft">
+            Example: "With your partner, identify one example of the change we discussed. You have 60 seconds. Be
+            ready to support your answer with a quotation."
+          </p>
+          <button
+            type="button"
+            onClick={() =>
+              onDiscussWithCoach({
+                id: 'routines-climate',
+                observation: 'Routines and classroom language this session',
+                whyItMatters:
+                  climateInsight ?? routinesInsight ?? "Let's talk through transitions and directions this session.",
+                timestampSec: null,
+                excerpt: null,
+                durationSec: null,
+                weight: 0,
+                focusMetric: 'directiveCount',
+              })
+            }
+            className="mt-3 text-sm font-medium text-brand-600 hover:text-brand-700"
+          >
+            Plan a transition with Wivoza →
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -4610,7 +4678,7 @@ function EvidenceItemCard({
       ? []
       : isFeedback
         ? buildFeedbackExchange(segments, candidate.timestampSec)
-        : buildCfuExchange(segments, candidate.timestampSec)
+        : buildSingleTurnExchange(segments, candidate.timestampSec)
   return (
     <div className="rounded-2xl border border-border bg-surface p-6">
       <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
@@ -4821,7 +4889,7 @@ function Stat({
   reason,
   focused,
 }: {
-  label: string
+  label: React.ReactNode
   value: string
   sub?: string
   muted?: boolean
@@ -4831,7 +4899,7 @@ function Stat({
   return (
     <div>
       <div className="flex items-center gap-1.5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
+        <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
         {focused && (
           <span className="rounded-full bg-brand-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
             Your focus

@@ -483,6 +483,17 @@ model AudioSession {
   // teacher turn counted toward genericFeedbackCount/specificFeedbackCount.
   // null for sessions analyzed before this was tracked.
   feedbackLog      Json?
+  // [{ timestampSec, text }] — one entry per detected task-instruction
+  // phrase. null for sessions analyzed before this was tracked.
+  directiveLog     Json?
+  // [{ timestampSec, kind: 'positive'|'corrective', text }] — one entry
+  // per teacher turn classified toward positivePhraseCount/
+  // correctivePhraseCount. null for sessions analyzed before this was
+  // tracked.
+  toneLog          Json?
+  // [{ timestampSec, text }] — one entry per detected redirection phrase.
+  // null for sessions analyzed before this was tracked.
+  redirectionLog   Json?
 
   // Keyword/phrase-matched flags and quotes only — never scored. See
   // audioAnalysis.ts's LessonContentResult for the exact shape.

@@ -571,6 +571,9 @@ export type AudioQuestionLogEntry = {
 }
 export type AudioCfuLogEntry = { timestampSec: number; text: string; whatItChecked: string }
 export type AudioFeedbackLogEntry = { timestampSec: number; kind: 'generic' | 'specific'; text: string }
+export type AudioDirectiveLogEntry = { timestampSec: number; text: string }
+export type AudioToneLogEntry = { timestampSec: number; kind: 'positive' | 'corrective'; text: string }
+export type AudioRedirectionLogEntry = { timestampSec: number; text: string }
 export type AudioReflectMessage = { role: 'user' | 'assistant'; text: string; createdAt: string }
 
 // Keyword/phrase-matched flags and quotes only — never scored.
@@ -616,6 +619,9 @@ export type AudioSession = {
   questionLog: AudioQuestionLogEntry[] | null
   cfuLog: AudioCfuLogEntry[] | null
   feedbackLog: AudioFeedbackLogEntry[] | null
+  directiveLog: AudioDirectiveLogEntry[] | null
+  toneLog: AudioToneLogEntry[] | null
+  redirectionLog: AudioRedirectionLogEntry[] | null
   reflectConversation: AudioReflectMessage[] | null
   lessonContent: AudioLessonContent | null
   contentNotes: AudioContentNotes | null
