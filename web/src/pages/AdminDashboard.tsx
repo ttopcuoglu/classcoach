@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import {
+  archivePdFocusArea,
   createOrganization,
+  createPdFocusArea,
   deleteOrganization,
   deleteUser,
   getAdminBreakdown,
@@ -10,6 +12,7 @@ import {
   getMe,
   getOrganizationMembers,
   getOrganizations,
+  getPdFocusAreas,
   removeMember,
   suspendUser,
   updateOrganization,
@@ -21,6 +24,7 @@ import {
   type InstructionalAverages,
   type Organization,
   type OrgMember,
+  type PdFocusArea,
   type Strength,
   type TallyEntry,
   type UserProfile,
@@ -62,7 +66,7 @@ const primaryButtonClass =
   'rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50'
 
 type AnalyticsTab = 'dashboard' | 'engagement' | 'insights'
-type Tab = AnalyticsTab | 'people' | 'organizations' | 'platformUsers'
+type Tab = AnalyticsTab | 'professionalLearning' | 'people' | 'organizations' | 'platformUsers'
 
 const ANALYTICS_META: Record<AnalyticsTab, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'Are teachers using Wivoza, and what should you do next.' },
@@ -181,6 +185,13 @@ export default function AdminDashboard() {
             <button type="button" onClick={() => setTab('insights')} className={navButtonClass(tab === 'insights')}>
               Coaching insights
             </button>
+            <button
+              type="button"
+              onClick={() => setTab('professionalLearning')}
+              className={navButtonClass(tab === 'professionalLearning')}
+            >
+              Professional Learning
+            </button>
           </div>
         </div>
 
@@ -244,6 +255,15 @@ export default function AdminDashboard() {
         {tab === 'engagement' && overview && <EngagementPanel overview={overview} />}
         {tab === 'insights' && overview && (
           <CoachingInsightsPanel overview={overview} selectedOrgId={selectedOrgId} />
+        )}
+        {tab === 'professionalLearning' && (
+          <PdFocusAreaPanel
+            selectedOrgId={selectedOrgId}
+            onOrgChange={handleOrgChange}
+            orgs={orgs}
+            isSuperadmin={isSuperadmin}
+            overview={overview}
+          />
         )}
         {tab === 'people' && (
           <PeoplePanel
@@ -1199,6 +1219,8 @@ function DashboardPanel({ overview, onNavigate }: { overview: AdminOverview; onN
               ? "Once more Lesson Debrief sessions come in, we'll surface a specific recommendation here."
               : `Consider ${PD_SUGGESTIONS[topPriorityEntry[0]] ?? 'a shared PD session on this theme'}.`
           }
+          actionLabel={topPriorityConfidence !== 'none' ? 'Track this focus area' : undefined}
+          onAction={topPriorityConfidence !== 'none' ? () => onNavigate('professionalLearning') : undefined}
         />
       </div>
 
@@ -1561,6 +1583,261 @@ function PeoplePanel({
       ) : (
         <p className="text-sm text-ink-soft">Select an organization above to view its staff roster.</p>
       )}
+    </div>
+  )
+}
+
+// Persists a coaching-priority theme as a tracked focus area — an admin
+// names one of the 5 PRIORITY_LABELS themes, Wivoza snapshots its current
+// evidence, and the admin can check back later against the live numbers.
+// Org-scoped, same "select an organization" gate as PeoplePanel above,
+// since a school-wide focus area needs a concrete school.
+function PdFocusAreaPanel({
+  selectedOrgId,
+  onOrgChange,
+  orgs,
+  isSuperadmin,
+  overview,
+}: {
+  selectedOrgId: string
+  onOrgChange: (id: string) => void
+  orgs: Organization[]
+  isSuperadmin: boolean
+  overview: AdminOverview | null
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-ink md:text-[34px]">Professional Learning</h1>
+          <p className="mt-1 text-sm text-ink-soft">
+            Turn a shared coaching theme into something you can track over time.
+          </p>
+        </div>
+        {isSuperadmin && orgs.length > 0 && (
+          <select
+            value={selectedOrgId}
+            onChange={(e) => onOrgChange(e.target.value)}
+            className="rounded-lg border border-border bg-canvas px-3 py-1.5 text-sm text-ink focus:border-brand-400 focus:outline-none"
+          >
+            <option value="">Select an organization</option>
+            {orgs.map((org) => (
+              <option key={org.id} value={org.id}>
+                {org.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      {!overview ? (
+        <p className="text-sm text-ink-soft">Loading...</p>
+      ) : overview.scope === 'organization' ? (
+        <PdFocusAreaContent organizationId={selectedOrgId || undefined} />
+      ) : (
+        <p className="text-sm text-ink-soft">Select an organization above to track a focus area for it.</p>
+      )}
+    </div>
+  )
+}
+
+const PRIORITY_LABEL_KEYS = Object.keys(PRIORITY_LABELS)
+
+function PdFocusAreaContent({ organizationId }: { organizationId?: string }) {
+  const [items, setItems] = useState<PdFocusArea[]>([])
+  const [themeCounts, setThemeCounts] = useState<Record<string, TallyEntry>>({})
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [creatingKey, setCreatingKey] = useState<string | null>(null)
+  const [archivingId, setArchivingId] = useState<string | null>(null)
+
+  function refresh() {
+    setLoading(true)
+    getPdFocusAreas(organizationId)
+      .then((data) => {
+        setItems(data.items)
+        setThemeCounts(data.themeCounts)
+      })
+      .catch(() => setError('Could not load Professional Learning data.'))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organizationId])
+
+  async function handleCreate(themeKey: string) {
+    setCreatingKey(themeKey)
+    setError(null)
+    try {
+      await createPdFocusArea({
+        themeKey,
+        title: PRIORITY_LABELS[themeKey] ?? themeKey,
+        suggestedAction: PD_SUGGESTIONS[themeKey] ?? null,
+        organizationId,
+      })
+      refresh()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setCreatingKey(null)
+    }
+  }
+
+  async function handleArchive(id: string) {
+    setArchivingId(id)
+    setError(null)
+    try {
+      await archivePdFocusArea(id, organizationId)
+      refresh()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setArchivingId(null)
+    }
+  }
+
+  if (loading) return <p className="text-sm text-ink-soft">Loading...</p>
+
+  const active = items.filter((i) => i.status === 'active')
+  const archived = items.filter((i) => i.status === 'archived')
+  const activeThemeKeys = new Set(active.map((i) => i.themeKey))
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center gap-2.5 rounded-xl border border-brand-100 bg-brand-50 px-4 py-2.5 text-sm text-brand-600">
+        <LockIcon className="h-4 w-4 shrink-0" />
+        Aggregate reporting · Individual coaching stays private
+      </div>
+
+      {error && <p className="text-sm text-warm-500">{error}</p>}
+
+      {active.length > 0 && (
+        <div className="flex flex-col gap-4">
+          {active.map((item) => (
+            <FocusAreaCard
+              key={item.id}
+              item={item}
+              onArchive={() => handleArchive(item.id)}
+              archiving={archivingId === item.id}
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-border bg-surface p-5">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">+ Track a new focus area</h2>
+        <p className="mt-1 text-xs text-ink-soft">
+          Name a shared coaching theme to track over time — Wivoza snapshots the current evidence now, so you can
+          check back against it later.
+        </p>
+        <div className="mt-3 flex flex-col gap-2">
+          {PRIORITY_LABEL_KEYS.map((key) => {
+            const tally = themeCounts[key] ?? { count: 0, teachers: 0 }
+            const alreadyTracked = activeThemeKeys.has(key)
+            const disabled = tally.count === 0 || alreadyTracked || creatingKey === key
+            return (
+              <button
+                key={key}
+                type="button"
+                disabled={disabled}
+                onClick={() => handleCreate(key)}
+                className="flex items-center justify-between gap-3 rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-left text-sm transition-colors enabled:hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span className="font-medium text-ink">{PRIORITY_LABELS[key] ?? key}</span>
+                <span className="text-xs text-ink-soft">
+                  {alreadyTracked
+                    ? 'Already tracked'
+                    : tally.count === 0
+                      ? 'No evidence yet'
+                      : `${tally.count}× · ${tally.teachers} teacher${tally.teachers === 1 ? '' : 's'}`}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {archived.length > 0 && (
+        <details className="rounded-2xl border border-border bg-surface p-5">
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-ink-soft">
+            Show {archived.length} archived
+          </summary>
+          <div className="mt-3 flex flex-col">
+            {archived.map((item) => (
+              <div key={item.id} className="border-b border-border/60 py-2.5 text-sm last:border-0">
+                <p className="font-medium text-ink">{item.title}</p>
+                <p className="mt-0.5 text-xs text-ink-soft">
+                  Started {formatShortDate(item.createdAt)}
+                  {item.archivedAt ? ` · Archived ${formatShortDate(item.archivedAt)}` : ''}
+                  {' · '}
+                  {item.baselineSnapshot.count}× · {item.baselineSnapshot.teachers} teacher
+                  {item.baselineSnapshot.teachers === 1 ? '' : 's'} → {item.finalSnapshot?.count ?? 0}× ·{' '}
+                  {item.finalSnapshot?.teachers ?? 0} teacher{(item.finalSnapshot?.teachers ?? 0) === 1 ? '' : 's'}
+                </p>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  )
+}
+
+function FocusAreaCard({
+  item,
+  onArchive,
+  archiving,
+}: {
+  item: PdFocusArea
+  onArchive: () => void
+  archiving: boolean
+}) {
+  const current = item.currentSnapshot
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-ink">{item.title}</h3>
+          <p className="text-xs text-ink-soft">Started {formatShortDate(item.createdAt)}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onArchive}
+          disabled={archiving}
+          className="text-sm font-medium text-ink-soft transition-colors hover:text-ink disabled:opacity-50"
+        >
+          {archiving ? 'Archiving...' : 'Archive'}
+        </button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">When you started</p>
+          <p className="mt-1 flex items-center gap-1.5 text-sm text-ink">
+            <span className="font-semibold">
+              {item.baselineSnapshot.count}× · {item.baselineSnapshot.teachers} teacher
+              {item.baselineSnapshot.teachers === 1 ? '' : 's'}
+            </span>
+            <ConfidenceBadge level={item.baselineSnapshot.confidence} />
+          </p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Now</p>
+          {current == null || current.confidence === 'none' ? (
+            <p className="mt-1 text-sm text-ink-soft">Not enough evidence yet</p>
+          ) : (
+            <p className="mt-1 flex items-center gap-1.5 text-sm text-ink">
+              <span className="font-semibold">
+                {current.count}× · {current.teachers} teacher{current.teachers === 1 ? '' : 's'}
+              </span>
+              <ConfidenceBadge level={current.confidence} />
+            </p>
+          )}
+        </div>
+      </div>
+
+      {item.suggestedAction && <p className="mt-3 text-sm text-ink-soft">{item.suggestedAction}</p>}
     </div>
   )
 }

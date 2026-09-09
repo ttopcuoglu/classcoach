@@ -232,6 +232,24 @@ export type OrgMember = {
   lastActiveAt: string | null
 }
 
+export type PdFocusAreaSnapshot = { count: number; teachers: number; confidence: DataConfidence; capturedAt?: string }
+
+export type PdFocusArea = {
+  id: string
+  themeKey: string
+  title: string
+  suggestedAction: string | null
+  baselineSnapshot: PdFocusAreaSnapshot
+  // null once archived — an archived row's story is already finished, no
+  // further live recompute happens for it.
+  currentSnapshot: Omit<PdFocusAreaSnapshot, 'capturedAt'> | null
+  // Captured once at archive time — null while active.
+  finalSnapshot: PdFocusAreaSnapshot | null
+  status: 'active' | 'archived'
+  createdAt: string
+  archivedAt: string | null
+}
+
 export type AdminUser = {
   id: string
   name: string | null
@@ -730,6 +748,33 @@ export function getOrganizations(): Promise<Organization[]> {
 
 export function createOrganization(data: { name: string; joinCode?: string; adminEmails?: string }): Promise<Organization> {
   return request('/api/admin/organizations', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function getPdFocusAreas(
+  organizationId?: string,
+): Promise<{ items: PdFocusArea[]; themeCounts: Record<string, TallyEntry> }> {
+  return request(`/api/admin/pd-focus-areas${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`)
+}
+
+export function createPdFocusArea(data: {
+  themeKey: string
+  title: string
+  suggestedAction: string | null
+  organizationId?: string
+}): Promise<PdFocusArea> {
+  const query = data.organizationId ? `?organizationId=${encodeURIComponent(data.organizationId)}` : ''
+  return request(`/api/admin/pd-focus-areas${query}`, {
+    method: 'POST',
+    body: JSON.stringify({ themeKey: data.themeKey, title: data.title, suggestedAction: data.suggestedAction }),
+  })
+}
+
+export function archivePdFocusArea(id: string, organizationId?: string): Promise<PdFocusArea> {
+  const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''
+  return request(`/api/admin/pd-focus-areas/${id}${query}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'archived' }),
+  })
 }
 
 export function updateOrganization(

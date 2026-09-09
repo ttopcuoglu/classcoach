@@ -236,6 +236,48 @@ async function resolveScope(req: Request, res: Response) {
   return { scope, organizationId, organizationName }
 }
 
+// Shared by /overview (via the inline call below) and the Professional
+// Learning focus-area routes, which need to compute a single theme's
+// *current* tally independently of a Dashboard page load. Always all-time/
+// unfiltered when called for a focus area (a tracked theme follows its own
+// lifetime, not whatever ad hoc date range is selected elsewhere on the
+// Dashboard) — gradeBandFilter/subjectFilter are only ever passed by
+// /overview itself.
+async function computePriorityTally(
+  organizationId: string | null,
+  gradeBandFilter: string | null,
+  subjectFilter: string | null,
+): Promise<Record<string, TallyEntry>> {
+  const relatedUserScope = organizationId ? { user: { organizationId } } : {}
+  const sessions = await prisma.audioSession.findMany({
+    where: { status: { in: ['analyzed', 'locked'] }, ...relatedUserScope },
+    select: {
+      userId: true,
+      teacherTalkPct: true,
+      studentTalkPct: true,
+      questionCount: true,
+      higherOrderPct: true,
+      avgWaitTimeSec: true,
+      cfuCount: true,
+      durationSec: true,
+      metricsDetail: true,
+      gradeLevel: true,
+      classSubject: true,
+    },
+  })
+  const filtered = sessions.filter((s) => {
+    if (gradeBandFilter && gradeBandFor(s.gradeLevel) !== gradeBandFilter) return false
+    if (subjectFilter && subjectBucketFor(s.classSubject) !== subjectFilter) return false
+    return true
+  })
+  const tally = createTally(PRIORITY_LABELS)
+  for (const s of filtered) {
+    const top = topPriorityForSession(s)
+    if (top) tally.record(top, s.userId)
+  }
+  return tally.toJSON()
+}
+
 // Aggregate, staff-wide numbers only — deliberately no route exists that
 // returns one teacher's individual attempts, responses, or ratings. That's
 // the whole point of the "aggregate trends only" admin visibility choice,
@@ -1021,6 +1063,135 @@ adminRouter.post('/organizations/:id/start-pilot', requireSuperadmin, async (req
   pilotEndsAt.setMonth(pilotEndsAt.getMonth() + 4, pilotEndsAt.getDate() + 15) // ~one semester
   const updated = await prisma.organization.update({ where: { id }, data: { pilotEndsAt } })
   res.json(updated)
+})
+
+// A coaching-priority theme an admin has explicitly chosen to track over
+// time — the "Professional Learning" persistence feature. Active rows get
+// a live-recomputed currentSnapshot on every list fetch; archived rows are
+// returned as-is (their story is already finished, no further recompute).
+adminRouter.get('/pd-focus-areas', async (req, res) => {
+  const resolved = await resolveScope(req, res)
+  if (!resolved) return
+  const { organizationId } = resolved
+  if (!organizationId) {
+    res.json({ items: [], themeCounts: {} })
+    return
+  }
+
+  const rows = await prisma.pdFocusArea.findMany({ where: { organizationId }, orderBy: { createdAt: 'desc' } })
+
+  // Always computed (not just for active themes) so the client can show
+  // real current counts for every theme in "+ Track a new focus area",
+  // including ones with no tracked row yet — always all-time/unfiltered,
+  // independent of whatever ad hoc date range is selected on the Dashboard.
+  const themeCounts = await computePriorityTally(organizationId, null, null)
+
+  const items = rows.map((row) => {
+    if (row.status !== 'active') {
+      return { ...row, currentSnapshot: null }
+    }
+    const live = themeCounts[row.themeKey] ?? { count: 0, teachers: 0 }
+    return {
+      ...row,
+      currentSnapshot: { count: live.count, teachers: live.teachers, confidence: dataConfidence(live.count) },
+    }
+  })
+
+  res.json({ items, themeCounts })
+})
+
+// Creates a tracked focus area with its baseline snapshot frozen at the
+// current live tally for this theme. title/suggestedAction are sent by the
+// client (already resolved from its own PRIORITY_LABELS/PD_SUGGESTIONS
+// maps) so the server never needs its own copy of that display text.
+adminRouter.post('/pd-focus-areas', async (req, res) => {
+  const resolved = await resolveScope(req, res)
+  if (!resolved) return
+  const { organizationId } = resolved
+  if (!organizationId) {
+    res.status(400).json({ error: 'Select an organization first.' })
+    return
+  }
+
+  const { themeKey, title, suggestedAction } = req.body ?? {}
+  if (typeof themeKey !== 'string' || !PRIORITY_LABELS.includes(themeKey as (typeof PRIORITY_LABELS)[number])) {
+    res.status(400).json({ error: 'themeKey must be one of the recognized coaching-priority themes.' })
+    return
+  }
+  if (typeof title !== 'string' || !title.trim()) {
+    res.status(400).json({ error: 'title is required.' })
+    return
+  }
+
+  const existingActive = await prisma.pdFocusArea.findFirst({ where: { organizationId, themeKey, status: 'active' } })
+  if (existingActive) {
+    res.status(409).json({ error: 'This theme is already being tracked as an active focus area.' })
+    return
+  }
+
+  const tally = await computePriorityTally(organizationId, null, null)
+  const live = tally[themeKey] ?? { count: 0, teachers: 0 }
+
+  const created = await prisma.pdFocusArea.create({
+    data: {
+      organizationId,
+      createdByUserId: req.user!.userId,
+      themeKey,
+      title: title.trim(),
+      suggestedAction: typeof suggestedAction === 'string' && suggestedAction.trim() ? suggestedAction.trim() : null,
+      baselineSnapshot: {
+        count: live.count,
+        teachers: live.teachers,
+        confidence: dataConfidence(live.count),
+        capturedAt: new Date().toISOString(),
+      },
+    },
+  })
+
+  res.json({
+    ...created,
+    currentSnapshot: { count: live.count, teachers: live.teachers, confidence: dataConfidence(live.count) },
+  })
+})
+
+// The only mutation this pass needs — archiving a focus area. Ownership-
+// scoped via organizationId matching the resolved scope, same pattern as
+// /members/:id above.
+adminRouter.patch('/pd-focus-areas/:id', async (req, res) => {
+  const resolved = await resolveScope(req, res)
+  if (!resolved) return
+  const { organizationId } = resolved
+  if (!organizationId) {
+    res.status(400).json({ error: 'Select an organization first.' })
+    return
+  }
+
+  const { status } = req.body ?? {}
+  if (status !== 'archived') {
+    res.status(400).json({ error: "status must be 'archived'." })
+    return
+  }
+
+  const existing = await prisma.pdFocusArea.findUnique({ where: { id: req.params.id as string } })
+  if (!existing || existing.organizationId !== organizationId) {
+    res.status(404).json({ error: 'Focus area not found in this organization.' })
+    return
+  }
+
+  const tally = await computePriorityTally(organizationId, null, null)
+  const live = tally[existing.themeKey] ?? { count: 0, teachers: 0 }
+  const finalSnapshot = {
+    count: live.count,
+    teachers: live.teachers,
+    confidence: dataConfidence(live.count),
+    capturedAt: new Date().toISOString(),
+  }
+
+  const updated = await prisma.pdFocusArea.update({
+    where: { id: existing.id },
+    data: { status: 'archived', archivedAt: new Date(), finalSnapshot },
+  })
+  res.json({ ...updated, currentSnapshot: null })
 })
 
 // Platform-wide roster — the one place a superadmin can find any account,

@@ -69,6 +69,7 @@ model User {
   conversationPreps ConversationPrep[]
   conversationPlans ConversationPlan[]
   assignmentCoachSessions AssignmentCoachSession[]
+  pdFocusAreas      PdFocusArea[]
 }
 
 // A school/district that's signed an agreement. joinCode is what its
@@ -91,6 +92,34 @@ model Organization {
   stripeCustomerId String?   @unique // separate id-space from individual User customers, used for invoicing
   createdAt        DateTime  @default(now())
   users            User[]
+  pdFocusAreas     PdFocusArea[]
+}
+
+// A coaching-priority theme (see coachingPriority.ts's PRIORITY_LABELS) an
+// admin has explicitly chosen to track over time. title/suggestedAction are
+// copied from the client's PRIORITY_LABELS/PD_SUGGESTIONS maps at creation
+// time, not referenced live, so later wording changes to those maps never
+// rewrite an already-created focus area's own history.
+model PdFocusArea {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdByUserId String
+  createdBy       User         @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+  themeKey        String // one of PRIORITY_LABELS — 'talk-balance' | 'questioning' | 'wait-time' | 'cfu' | 'feedback'
+  title           String
+  suggestedAction String?
+  // { count, teachers, confidence, capturedAt } — the theme's tally at the
+  // moment this focus area was created, frozen forever. Compared against a
+  // live recomputation of the same tally to answer "did this move."
+  baselineSnapshot Json
+  // Same shape as baselineSnapshot, captured once at archive time — the
+  // "final" numbers this focus area ended on, frozen forever (no live
+  // recompute happens for an archived row). Null while active.
+  finalSnapshot   Json?
+  status          String    @default("active") // "active" | "archived"
+  createdAt       DateTime  @default(now())
+  archivedAt      DateTime?
 }
 
 // One row per Claude-costing call, used to enforce a per-user daily limit
