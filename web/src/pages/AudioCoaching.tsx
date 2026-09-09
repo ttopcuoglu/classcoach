@@ -722,7 +722,7 @@ function TabBar({ tab, onSelect }: { tab: ReportTab; onSelect: (t: ReportTab) =>
           key={key}
           type="button"
           onClick={() => onSelect(key)}
-          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+          className={`rounded-full px-3.5 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-brand-400 ${
             tab === key ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:text-ink'
           }`}
         >
