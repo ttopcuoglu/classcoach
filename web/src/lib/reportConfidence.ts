@@ -176,12 +176,17 @@ export const EVIDENCE_TIER_LABELS: Record<EvidenceTier, string> = {
   insufficient: 'Not enough evidence yet',
 }
 
-// "N of M measured" for a category's header — counts any confident state
-// (a confident zero, or a small-sample detection, still counts as data).
+// "N of M metrics available" for a category's header — counts any
+// confident state (a confident zero, or a small-sample detection, still
+// counts as data). "Available" rather than "measured" — a metric here
+// can itself be built from a thin sample (e.g. average wait time from
+// just a few usable question-response intervals out of many questions),
+// so this header shouldn't read as a stronger confidence claim than any
+// one metric's own caveat already makes.
 export function categoryCoverage(entries: { state: MetricState }[]): string {
   const total = entries.length
   const measured = entries.filter((e) => isConfidentState(e.state)).length
-  return `${measured} of ${total} measured`
+  return `${measured} of ${total} metrics available`
 }
 
 export function formatDuration(sec: number): string {

@@ -2152,6 +2152,7 @@ function ReportPanel({
                 avgWaitTimeSec={session.avgWaitTimeSec}
                 focusMetric={focusMetric}
                 questioningInsight={questioningInsight}
+                highlights={session.highlights}
               />
             )}
 
@@ -3967,6 +3968,28 @@ function PacingTimeline({ segments, durationSec }: { segments: TranscriptSegment
 // app actually detects are recall and higher-order (see questionLog/
 // higherOrderQuestionCount in audioAnalysis.ts) — shown as fractions, matching
 // this report's existing small-N convention, never a percentage.
+// Small "i" hover/focus tooltip — same pattern already established in
+// AdminDashboard.tsx, reused here verbatim rather than a new convention.
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="group relative inline-flex">
+      <span
+        tabIndex={0}
+        aria-label={text}
+        className="flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border border-ink-soft/40 text-[9px] font-semibold text-ink-soft"
+      >
+        i
+      </span>
+      <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 w-56 -translate-x-1/2 rounded-lg bg-ink px-2.5 py-1.5 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        {text}
+      </span>
+    </span>
+  )
+}
+
+// One stacked bar (Recall / Higher-order, same visual language as
+// TalkParticipationBar's Teacher/Student segments) instead of two
+// separate bars — makes the split easier to compare at a glance.
 function QuestioningMixChart({
   higherOrderCount,
   totalCount,
@@ -3982,9 +4005,15 @@ function QuestioningMixChart({
   // Below the same MIN_N_FOR_PERCENT floor the rest of this report already
   // uses for a percentage, show the plain count instead of the chart.
   const tooFewToCharacterize = !unavailable && state === 'possible_detection'
+  const recallCount = unavailable ? 0 : totalCount - higherOrderCount
+  const recallPct = unavailable || totalCount === 0 ? 0 : Math.round((recallCount / totalCount) * 100)
+  const higherOrderPct = unavailable || totalCount === 0 ? 0 : Math.round((higherOrderCount / totalCount) * 100)
   return (
     <div>
-      <h3 className="text-sm font-semibold text-ink">Questioning mix</h3>
+      <div className="flex items-center gap-1.5">
+        <h3 className="text-sm font-semibold text-ink">Questioning mix</h3>
+        <InfoTooltip text="Higher-order questions invite students to analyze, justify, interpret, connect, evaluate, or create — not simply remember information." />
+      </div>
       {unavailable ? (
         <div className="mt-2">
           <HatchedBar label="Question-type mix unavailable this session." />
@@ -3995,28 +4024,20 @@ function QuestioningMixChart({
           characterize the mix as a pattern.
         </p>
       ) : (
-        <div className="mt-2 flex flex-col gap-2.5">
-          {(
-            [
-              { label: 'Recall', count: totalCount - higherOrderCount },
-              { label: 'Higher-order', count: higherOrderCount },
-            ] as const
-          ).map((row) => (
-            <div key={row.label} className="flex flex-col gap-1">
-              <div className="flex items-baseline justify-between text-xs font-medium text-ink-soft">
-                <span>{row.label}</span>
-                <span>
-                  {row.count} of {totalCount}
-                </span>
-              </div>
-              <div className="h-2.5 w-full overflow-hidden rounded-full bg-canvas">
-                <div
-                  className="h-full rounded-full bg-brand-500"
-                  style={{ width: `${totalCount > 0 ? (row.count / totalCount) * 100 : 0}%` }}
-                />
-              </div>
-            </div>
-          ))}
+        <div className="mt-3">
+          <div className="flex h-4 w-full overflow-hidden rounded-full bg-canvas">
+            <div className="h-full bg-brand-500/45" style={{ width: `${recallPct}%` }} />
+            <div className="h-full bg-brand-500" style={{ width: `${higherOrderPct}%` }} />
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-soft">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-brand-500/45" /> Recall · {recallCount} · {recallPct}%
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-brand-500" /> Higher-order · {higherOrderCount} ·{' '}
+              {higherOrderPct}%
+            </span>
+          </div>
         </div>
       )}
     </div>
@@ -4218,7 +4239,7 @@ function WaitTimeChips({ questionLog }: { questionLog: AudioQuestionLogEntry[] |
   const mean = Math.round((waits.reduce((a, b) => a + b, 0) / waits.length) * 10) / 10
   return (
     <div>
-      <h3 className="text-sm font-semibold text-ink">Wait time after a question</h3>
+      <h3 className="text-sm font-semibold text-ink">Measured wait times</h3>
       <div className="mt-2 flex flex-wrap gap-2">
         {waits.map((w, i) => (
           <span key={i} className="rounded-lg border border-border bg-canvas px-3 py-1.5 text-sm font-medium text-ink">
@@ -4226,9 +4247,8 @@ function WaitTimeChips({ questionLog }: { questionLog: AudioQuestionLogEntry[] |
           </span>
         ))}
       </div>
-      <p className="mt-2 text-xs text-ink-soft">
-        Mean {mean} seconds · {waits.length} usable question-response interval{waits.length === 1 ? '' : 's'}.
-      </p>
+      <p className="mt-2 text-xs text-ink-soft">Average: {mean} seconds.</p>
+      <p className="mt-1.5 text-sm text-ink-soft">Try next: {FOCUS_METRIC_TRY_NEXT.avgWaitTime}</p>
     </div>
   )
 }
@@ -4244,6 +4264,7 @@ function QuestionsThinkingTab({
   avgWaitTimeSec,
   focusMetric,
   questioningInsight,
+  highlights,
 }: {
   questionCount: number | null
   questionLog: AudioQuestionLogEntry[] | null
@@ -4255,8 +4276,17 @@ function QuestionsThinkingTab({
   avgWaitTimeSec: number | null
   focusMetric: FocusMetric | null
   questioningInsight: string | null
+  highlights: AudioHighlight[] | null
 }) {
   const [expanded, setExpanded] = useState(false)
+  const measurableWaitCount = (questionLog ?? []).filter((q) => q.waitTimeSec != null).length
+  const strengthCandidate = highlightCandidates(
+    highlights,
+    'Follow-up / probing question',
+    'questions-strength',
+    0,
+    'Following up on a student answer pushes their thinking further instead of stopping at the first response.',
+  )[0]
 
   return (
     <div className="flex flex-col gap-6">
@@ -4293,16 +4323,35 @@ function QuestionsThinkingTab({
             value={avgWaitTimeSec != null ? `${avgWaitTimeSec}s` : waitTimeMetric.display}
             muted={isMissingState(waitTimeMetric.state)}
             reason={waitTimeMetric.reason}
+            sub={
+              !isMissingState(waitTimeMetric.state) && measurableWaitCount > 0
+                ? `Based on ${measurableWaitCount} measurable question-response interval${measurableWaitCount === 1 ? '' : 's'}`
+                : undefined
+            }
             focused={focusMetric === 'avgWaitTime'}
           />
         </div>
       </CategorySection>
-      <CoachNote text={questioningInsight} />
+
       <QuestioningMixChart
         higherOrderCount={higherOrderCount}
         totalCount={questionCount}
         state={higherOrderRatio?.state ?? 'not_measurable'}
       />
+
+      <div>
+        <CoachNote text={questioningInsight} />
+        {strengthCandidate && (
+          <div className="mt-3 rounded-xl border border-border bg-surface p-4">
+            <span className="text-xs font-semibold uppercase tracking-wide text-brand-600">Strength to keep</span>
+            <p className="mt-1 text-sm text-ink">{formatCandidateHeadline(strengthCandidate)}</p>
+            {strengthCandidate.excerpt && (
+              <p className="mt-1 text-sm text-ink-soft">"{strengthCandidate.excerpt}"</p>
+            )}
+          </div>
+        )}
+      </div>
+
       <WaitTimeChips questionLog={questionLog} />
 
       {questionLog === null ? (
@@ -4315,23 +4364,27 @@ function QuestionsThinkingTab({
           onClick={() => setExpanded(true)}
           className="self-start rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
         >
-          Show full question-by-question breakdown
+          Show question sequences
         </button>
       ) : (
         <div className="flex flex-col gap-3">
-          <button
-            type="button"
-            onClick={() => setExpanded(false)}
-            className="self-start text-sm font-medium text-ink-soft hover:text-ink"
-          >
-            Hide breakdown
-          </button>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-ink">Question sequences</h3>
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="text-sm font-medium text-ink-soft hover:text-ink"
+            >
+              Hide
+            </button>
+          </div>
           {questionLog.length === 0 ? (
             <p className="text-sm text-ink-soft">No individual questions were detected this session.</p>
           ) : (
             questionLog.map((q, i) => (
               <div key={i} className="rounded-xl border border-border bg-surface p-4">
                 <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                  <span>Initial question</span>
                   <span>{formatTime(q.timestampSec)}</span>
                   <span
                     className={`rounded-full px-2 py-0.5 ${
@@ -4350,7 +4403,7 @@ function QuestionsThinkingTab({
                     {q.followUps.map((f, j) => (
                       <p key={j} className="text-sm text-ink-soft">
                         <span className="text-xs font-semibold uppercase tracking-wide">
-                          {formatTime(f.timestampSec)}
+                          Follow-up · {formatTime(f.timestampSec)}
                         </span>{' '}
                         "{f.text}"
                       </p>
@@ -4362,6 +4415,16 @@ function QuestionsThinkingTab({
           )}
         </div>
       )}
+
+      <div className="rounded-2xl border border-border bg-surface p-6">
+        <span className="inline-block rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-brand-600">
+          One next step
+        </span>
+        <p className="mt-3 text-sm text-ink">
+          Choose one recall question and follow it with: "What makes you say that?" or "What evidence supports your
+          thinking?"
+        </p>
+      </div>
     </div>
   )
 }
