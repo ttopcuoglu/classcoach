@@ -1650,7 +1650,7 @@ function NextStepCard({
       </span>
       {priority && (
         <>
-          <p className="mt-3 text-base font-semibold text-ink">{priority.observation}</p>
+          <p className="mt-3 text-base font-semibold text-ink">{formatCandidateHeadline(priority)}</p>
           <p className="mt-1 text-sm text-ink-soft">{priority.whyItMatters}</p>
           {priority.excerpt && (
             <blockquote className="mt-3 border-l-2 border-warm-500 pl-3 text-sm italic text-ink-soft">
@@ -2309,7 +2309,7 @@ function SummaryTab({
             }
             className="mt-3 text-sm font-medium text-brand-600 hover:text-brand-700"
           >
-            Reflect with Wivoza →
+            Discuss this focus →
           </button>
         </div>
       )}
