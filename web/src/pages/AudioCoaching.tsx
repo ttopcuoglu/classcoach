@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, MicIcon, PlayIcon } from '../components/icons'
+import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, LockIcon, MicIcon, PlayIcon } from '../components/icons'
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
@@ -1420,15 +1420,6 @@ function buildPriorityCandidates(
   return candidates
 }
 
-// Same duration-vs-timestamp disambiguation as formatCandidateHeadline
-// below, for raw highlight objects (e.g. Reflect's "what stood out" list).
-function formatHighlightHeadline(h: { label: string; timestampSec: number; durationSec?: number }): string {
-  if (h.durationSec != null) {
-    return `${h.label}: ${Math.round(h.durationSec)}s — occurred at ${formatTime(h.timestampSec)}`
-  }
-  return `${h.label} · ${formatTime(h.timestampSec)}`
-}
-
 // Always shows a duration and a timestamp as two distinct, explicitly
 // labeled things — never a bare "label · 0:38" that leaves it ambiguous
 // whether the number is how long something lasted or when it happened.
@@ -2145,6 +2136,7 @@ function ReportPanel({
                 studentSegmentsMetric={studentSegmentsMetric}
                 focusMetric={focusMetric}
                 talkInsight={talkInsight}
+                onDiscussWithCoach={handleDiscussWithCoach}
               />
             )}
 
@@ -3926,9 +3918,9 @@ function PacingTimeline({ segments, durationSec }: { segments: TranscriptSegment
   if (durationSec == null || durationSec <= 0 || segments.length === 0) {
     return (
       <div className="rounded-2xl border border-border bg-surface p-6">
-        <h3 className="text-sm font-semibold text-ink">Pacing &amp; rhythm</h3>
+        <h3 className="text-sm font-semibold text-ink">Talk flow across the lesson</h3>
         <div className="mt-3">
-          <HatchedBar label="Pacing timeline unavailable this session." className="h-6 rounded-lg" />
+          <HatchedBar label="Talk flow unavailable this session." className="h-6 rounded-lg" />
         </div>
       </div>
     )
@@ -3936,13 +3928,16 @@ function PacingTimeline({ segments, durationSec }: { segments: TranscriptSegment
   const bins = buildPacingTimeline(segments, durationSec)
   return (
     <div className="rounded-2xl border border-border bg-surface p-6">
-      <h3 className="text-sm font-semibold text-ink">Pacing &amp; rhythm</h3>
+      <h3 className="text-sm font-semibold text-ink">Talk flow across the lesson</h3>
       <div className="mt-3 flex h-6 w-full overflow-hidden rounded-lg">
         {bins.map((bin, i) =>
           bin === 'unavailable' ? (
             <div key={i} className="h-full flex-1" style={HATCH_STYLE} />
           ) : (
-            <div key={i} className={`h-full flex-1 ${bin === 'teacher' ? 'bg-brand-500' : 'bg-warm-400'}`} />
+            // Same teacher/student colors as TalkParticipationBar below, so
+            // the timeline and the distribution bar read as one consistent
+            // color language rather than two different "student" colors.
+            <div key={i} className={`h-full flex-1 ${bin === 'teacher' ? 'bg-brand-500' : 'bg-brand-500/45'}`} />
           ),
         )}
       </div>
@@ -3955,10 +3950,13 @@ function PacingTimeline({ segments, durationSec }: { segments: TranscriptSegment
           <span className="h-2 w-2 rounded-full bg-brand-500" /> Teacher-heavy
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-warm-400" /> Student-heavy
+          <span className="h-2 w-2 rounded-full bg-brand-500/45" /> Student-heavy
         </span>
         <span className="flex items-center gap-1.5">
-          <HatchedSwatch /> Unavailable
+          {/* Not labeled "unclear audio" — this bucket also covers genuine
+              silence (think-time, quiet reading), which the pipeline has
+              no way to tell apart from audio that just didn't diarize. */}
+          <HatchedSwatch /> No dominant speaker
         </span>
       </div>
     </div>
@@ -4025,6 +4023,49 @@ function QuestioningMixChart({
   )
 }
 
+// Shared by "Review an exchange" and the "Longest teacher-talk stretch"
+// card below — a highlight with the real transcript turns around it
+// (since there's no audio to play back, the transcript itself is the
+// evidence) plus a "why it matters" line and a way to bring it into a
+// live conversation with Coach.
+function TranscriptEvidenceCard({
+  candidate,
+  segments,
+  onDiscuss,
+}: {
+  candidate: NoticeCandidate
+  segments: TranscriptSegment[]
+  onDiscuss: (c: NoticeCandidate) => void
+}) {
+  const window = candidate.timestampSec != null ? buildTranscriptWindow(segments, candidate.timestampSec) : []
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-6">
+      <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+        {formatCandidateHeadline(candidate)}
+      </p>
+      {window.length > 0 ? (
+        <div className="mt-2 flex flex-col gap-1.5">
+          {window.map((s, i) => (
+            <p key={i} className="text-sm text-ink">
+              <span className="font-medium">{s.speakerLabel}:</span> "{s.text}"
+            </p>
+          ))}
+        </div>
+      ) : (
+        candidate.excerpt && <p className="mt-2 text-sm text-ink">"{candidate.excerpt}"</p>
+      )}
+      <p className="mt-2 text-sm text-ink-soft">{candidate.whyItMatters}</p>
+      <button
+        type="button"
+        onClick={() => onDiscuss(candidate)}
+        className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700"
+      >
+        Discuss with Wivoza →
+      </button>
+    </div>
+  )
+}
+
 function TalkParticipationTab({
   session,
   teacherTalkMetric,
@@ -4034,6 +4075,7 @@ function TalkParticipationTab({
   studentSegmentsMetric,
   focusMetric,
   talkInsight,
+  onDiscussWithCoach,
 }: {
   session: AudioSessionWithSegments
   teacherTalkMetric: ReturnType<typeof getPresenceMetric>
@@ -4043,50 +4085,72 @@ function TalkParticipationTab({
   studentSegmentsMetric: ReturnType<typeof getCountMetric>
   focusMetric: FocusMetric | null
   talkInsight: string | null
+  onDiscussWithCoach: (candidate: NoticeCandidate) => void
 }) {
-  const exampleHighlight = (session.highlights ?? []).find((h) => h.label === 'Follow-up / probing question')
+  const exampleCandidate = highlightCandidates(
+    session.highlights,
+    'Follow-up / probing question',
+    'talk-exchange',
+    0,
+    'Following up on a student answer pushes their thinking further instead of stopping at the first response.',
+  )[0]
+  const monologueCandidate = highlightCandidates(
+    session.highlights,
+    'Longest uninterrupted teacher monologue',
+    'talk-monologue',
+    0,
+    'A long stretch without a break in teacher talk is a natural spot to build in a check-in or a question.',
+  )[0]
 
   return (
     <div className="flex flex-col gap-6">
+      <p className="flex items-center gap-2 rounded-xl border border-border bg-canvas px-4 py-2.5 text-xs text-ink-soft">
+        <LockIcon className="h-3.5 w-3.5 shrink-0" />
+        Audio is never saved — it's sent once for transcription and discarded immediately. Only the transcript and
+        these insights are kept.
+      </p>
+
       <PacingTimeline segments={session.segments} durationSec={session.durationSec} />
 
-      <CategorySection
-        title="Talk & Participation"
-        coverage={categoryCoverage([teacherTalkMetric, studentTalkMetric, silenceMetric, studentSegmentsMetric])}
-      >
-        <div id="stat-talkRatio">
+      {/* Talk distribution — the stats and the bar used to show the same
+          three percentages twice, once as text and once as a bar+legend. */}
+      <div className="rounded-2xl border border-border bg-surface p-6">
+        <h2 className="flex items-baseline justify-between text-sm font-semibold uppercase tracking-wide text-ink-soft">
+          <span>Talk distribution</span>
+          <span className="text-xs font-normal normal-case text-ink-soft">
+            {categoryCoverage([teacherTalkMetric, studentTalkMetric, silenceMetric, studentSegmentsMetric])}
+          </span>
+        </h2>
+        <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div id="stat-talkRatio">
+            <Stat
+              label="Teacher talk"
+              value={session.teacherTalkPct != null ? `${session.teacherTalkPct}%` : teacherTalkMetric.display}
+              muted={isMissingState(teacherTalkMetric.state)}
+              reason={teacherTalkMetric.reason}
+              focused={focusMetric === 'talkRatio'}
+            />
+          </div>
           <Stat
-            label="Your talk time"
-            value={session.teacherTalkPct != null ? `${session.teacherTalkPct}%` : teacherTalkMetric.display}
-            muted={isMissingState(teacherTalkMetric.state)}
-            reason={teacherTalkMetric.reason}
-            focused={focusMetric === 'talkRatio'}
+            label="Student talk"
+            value={session.studentTalkPct != null ? `${session.studentTalkPct}%` : studentTalkMetric.display}
+            muted={isMissingState(studentTalkMetric.state)}
+            reason={studentTalkMetric.reason}
+          />
+          <Stat
+            label="Silence / other"
+            value={silencePct != null ? `${silencePct}%` : silenceMetric.display}
+            muted={isMissingState(silenceMetric.state)}
+            reason={silenceMetric.reason}
+          />
+          <Stat
+            label="Student speaking moments"
+            value={studentSegmentsMetric.display}
+            muted={isMissingState(studentSegmentsMetric.state)}
+            reason={studentSegmentsMetric.reason}
           />
         </div>
-        <Stat
-          label="Student talk time"
-          value={session.studentTalkPct != null ? `${session.studentTalkPct}%` : studentTalkMetric.display}
-          muted={isMissingState(studentTalkMetric.state)}
-          reason={studentTalkMetric.reason}
-        />
-        <Stat
-          label="Silence / other"
-          value={silencePct != null ? `${silencePct}%` : silenceMetric.display}
-          muted={isMissingState(silenceMetric.state)}
-          reason={silenceMetric.reason}
-        />
-        <Stat
-          label="Student voice segments"
-          value={studentSegmentsMetric.display}
-          muted={isMissingState(studentSegmentsMetric.state)}
-          reason={studentSegmentsMetric.reason}
-        />
-      </CategorySection>
-      <CoachNote text={talkInsight} />
-
-      <div className="rounded-2xl border border-border bg-surface p-6">
-        <h3 className="text-sm font-semibold text-ink">Who was audible in this recording?</h3>
-        <div className="mt-3">
+        <div className="mt-4">
           <TalkParticipationBar
             teacherPct={session.teacherTalkPct}
             studentPct={session.studentTalkPct}
@@ -4094,21 +4158,55 @@ function TalkParticipationTab({
           />
         </div>
         <p className="mt-4 border-t border-border pt-3 text-xs text-ink-soft">
-          Talk time describes the recording. It does not show how many students participated or whether they were
-          engaged.
+          "Student speaking moments" counts separate moments student voice was detected — not the number of
+          individual students who participated. Talk time describes the recording; it doesn't show how many
+          students took part or whether they were engaged.
         </p>
       </div>
 
-      {exampleHighlight && (
+      {talkInsight && (
+        <div>
+          <CoachNote text={talkInsight} />
+          <button
+            type="button"
+            onClick={() =>
+              onDiscussWithCoach({
+                id: 'talk-balance',
+                observation: 'Talk balance this session',
+                whyItMatters: talkInsight,
+                timestampSec: null,
+                excerpt: null,
+                durationSec: null,
+                weight: 0,
+                focusMetric: 'talkRatio',
+              })
+            }
+            className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700"
+          >
+            Reflect on talk balance →
+          </button>
+        </div>
+      )}
+
+      {exampleCandidate && (
         <div>
           <h3 className="text-sm font-semibold text-ink">Review an exchange</h3>
-          <div className="mt-2 rounded-xl border border-border bg-surface p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
-              {formatHighlightHeadline(exampleHighlight)}
-            </p>
-            <p className="mt-1.5 text-sm text-ink">"{exampleHighlight.excerpt}"</p>
+          <div className="mt-2">
+            <TranscriptEvidenceCard
+              candidate={exampleCandidate}
+              segments={session.segments}
+              onDiscuss={onDiscussWithCoach}
+            />
           </div>
         </div>
+      )}
+
+      {monologueCandidate && (
+        <TranscriptEvidenceCard
+          candidate={monologueCandidate}
+          segments={session.segments}
+          onDiscuss={onDiscussWithCoach}
+        />
       )}
     </div>
   )
