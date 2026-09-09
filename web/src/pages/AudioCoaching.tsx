@@ -1440,56 +1440,42 @@ function formatCandidateHeadline(candidate: NoticeCandidate): string {
 // critique was that the report led with two always-present cards (plus a
 // raw highlights list) saying similar things; one ranked list of up to 2
 // moments, each labeled by which kind it is, says the same thing once.
-function MomentsCard({
+// Its own section, not one row of a two-row "Moments" card — the report's
+// own strength claim, grounded in a real quote/timestamp rather than a
+// paraphrase, so it can stand as the page's one dedicated "here's what to
+// keep doing" moment.
+function StrengthCard({
   strength,
-  momentToRevisit,
   coverage,
   onViewDiscourse,
   onDiscuss,
 }: {
   strength: NoticeCandidate | null
-  momentToRevisit: NoticeCandidate | null
   coverage: ReturnType<typeof getCoverage>
   onViewDiscourse: () => void
   onDiscuss: (candidate: NoticeCandidate) => void
 }) {
-  const moments = [
-    strength && { kind: 'A move to keep' as const, candidate: strength },
-    momentToRevisit && { kind: 'A moment to revisit' as const, candidate: momentToRevisit },
-  ].filter((m): m is { kind: 'A move to keep' | 'A moment to revisit'; candidate: NoticeCandidate } => m != null)
-
   return (
     <div className="rounded-2xl border border-border bg-surface p-6">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Moments worth revisiting</h2>
-      {moments.length > 0 ? (
-        <div className="mt-3 flex flex-col gap-4">
-          {moments.map(({ kind, candidate }) => (
-            <div key={kind} className="flex flex-col gap-1.5">
-              <span
-                className={`text-xs font-semibold uppercase tracking-wide ${
-                  kind === 'A move to keep' ? 'text-brand-600' : 'text-warm-500'
-                }`}
-              >
-                {kind}
-              </span>
-              <p className="text-sm font-semibold text-ink">{formatCandidateHeadline(candidate)}</p>
-              {candidate.excerpt && <p className="text-sm text-ink-soft">"{candidate.excerpt}"</p>}
-              <p className="text-sm text-ink-soft">{candidate.whyItMatters}</p>
-              <button
-                type="button"
-                onClick={() => onDiscuss(candidate)}
-                className="self-start text-sm font-medium text-brand-600 hover:text-brand-700"
-              >
-                Discuss this →
-              </button>
-            </div>
-          ))}
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">A strength to keep</h2>
+      {strength ? (
+        <div className="mt-3 flex flex-col gap-1.5">
+          <p className="text-sm font-semibold text-ink">{formatCandidateHeadline(strength)}</p>
+          {strength.excerpt && <p className="text-sm text-ink-soft">"{strength.excerpt}"</p>}
+          <p className="text-sm text-ink-soft">{strength.whyItMatters}</p>
+          <button
+            type="button"
+            onClick={() => onDiscuss(strength)}
+            className="mt-1 self-start text-sm font-medium text-brand-600 hover:text-brand-700"
+          >
+            Discuss this →
+          </button>
         </div>
       ) : (
         <div className="mt-2 flex flex-col gap-2">
           <p className="text-sm text-ink-soft">
             This recording was {formatTime(coverage.recordedSec)} — not enough measured evidence yet for a
-            stand-out moment this session.
+            stand-out strength this session.
           </p>
           <button
             type="button"
@@ -1500,6 +1486,34 @@ function MomentsCard({
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+// One card inside the "Evidence from the lesson" section — the one
+// remaining growth-oriented moment once the strength above has its own
+// section (never the same moment twice, per momentToRevisit's own
+// de-duplication against the "One next step" pick).
+function EvidenceMomentCard({
+  moment,
+  onDiscuss,
+}: {
+  moment: NoticeCandidate
+  onDiscuss: (candidate: NoticeCandidate) => void
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-6 md:col-span-2">
+      <span className="text-xs font-semibold uppercase tracking-wide text-warm-500">A moment to revisit</span>
+      <p className="mt-1.5 text-sm font-semibold text-ink">{formatCandidateHeadline(moment)}</p>
+      {moment.excerpt && <p className="mt-1 text-sm text-ink-soft">"{moment.excerpt}"</p>}
+      <p className="mt-1 text-sm text-ink-soft">{moment.whyItMatters}</p>
+      <button
+        type="button"
+        onClick={() => onDiscuss(moment)}
+        className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700"
+      >
+        Discuss this →
+      </button>
     </div>
   )
 }
@@ -2254,32 +2268,44 @@ function SummaryTab({
   // the focus-aware "One Next Step" pick — best REMAINING priority
   // candidate instead of the same one twice.
   const momentToRevisit = pickTop(priorityCandidates.filter((c) => c.id !== priority?.id))
-  // Tiny recordings omit Moments entirely when there's nothing real to
-  // rank, rather than showing its empty-state fallback card — everywhere
-  // else, MomentsCard's own fallback is fine.
-  const showMoments = !coverage.isTinyRecording || strength != null || momentToRevisit != null
   const spotlight = buildSpotlight(talkInsight, questioningInsight, cfuInsight)
 
+  // Five sections, in the order a teacher actually wants to read them:
+  // what happened, what went well, what to focus on, the evidence behind
+  // it, and what to do next — rather than a stack of similarly-weighted
+  // cards with no throughline.
   return (
-    <div className="flex flex-col gap-6">
-      {classSummary ? (
-        <div className="rounded-2xl border border-border bg-surface p-6">
-          <h2 className="text-lg font-semibold text-ink">This lesson</h2>
-          <p className="mt-2 text-sm text-ink-soft">{classSummary}</p>
-        </div>
-      ) : classSummarySending ? (
-        <div className="rounded-2xl border border-border bg-surface p-6">
-          <p className="text-sm text-ink-soft">Putting together a summary of this lesson...</p>
-        </div>
-      ) : (
-        spotlight && (
+    <div className="flex flex-col gap-8">
+      {/* 1. Lesson at a glance */}
+      <div className="flex flex-col gap-6">
+        {classSummary ? (
           <div className="rounded-2xl border border-border bg-surface p-6">
-            <h2 className="text-lg font-semibold text-ink">{spotlight.headline}</h2>
-            <p className="mt-2 text-sm text-ink-soft">{spotlight.body}</p>
+            <h2 className="text-lg font-semibold text-ink">Lesson at a glance</h2>
+            <p className="mt-2 text-sm text-ink-soft">{classSummary}</p>
           </div>
-        )
-      )}
+        ) : classSummarySending ? (
+          <div className="rounded-2xl border border-border bg-surface p-6">
+            <p className="text-sm text-ink-soft">Putting together a summary of this lesson...</p>
+          </div>
+        ) : (
+          spotlight && (
+            <div className="rounded-2xl border border-border bg-surface p-6">
+              <h2 className="text-lg font-semibold text-ink">{spotlight.headline}</h2>
+              <p className="mt-2 text-sm text-ink-soft">{spotlight.body}</p>
+            </div>
+          )
+        )}
+      </div>
 
+      {/* 2. A strength to keep */}
+      <StrengthCard
+        strength={strength}
+        coverage={coverage}
+        onViewDiscourse={() => onNavigateInsights('talk')}
+        onDiscuss={onDiscussWithCoach}
+      />
+
+      {/* 3. Your focus */}
       {focusSnapshot && (
         <div className="rounded-2xl border border-brand-100 bg-brand-50/40 p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2314,29 +2340,27 @@ function SummaryTab({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <WhoWasHeardCard
-          teacherPct={session.teacherTalkPct}
-          studentPct={session.studentTalkPct}
-          silencePct={silencePct}
-          onExplore={() => onNavigateInsights('talk')}
-        />
-        <QuestionsOpenedCard
-          questionsMetric={questionsMetric}
-          followUpMetric={followUpMetric}
-          onExplore={() => onNavigateInsights('questions')}
-        />
-        {showMoments && (
-          <MomentsCard
-            strength={strength}
-            momentToRevisit={momentToRevisit}
-            coverage={coverage}
-            onViewDiscourse={() => onNavigateInsights('talk')}
-            onDiscuss={onDiscussWithCoach}
+      {/* 4. Evidence from the lesson */}
+      <div className="flex flex-col gap-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Evidence from the lesson</h2>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <WhoWasHeardCard
+            teacherPct={session.teacherTalkPct}
+            studentPct={session.studentTalkPct}
+            silencePct={silencePct}
+            onExplore={() => onNavigateInsights('talk')}
           />
-        )}
-        <NextStepCard priority={priority} onSetFocus={onFocusMetricChange} onGoReflect={onGoReflect} />
+          <QuestionsOpenedCard
+            questionsMetric={questionsMetric}
+            followUpMetric={followUpMetric}
+            onExplore={() => onNavigateInsights('questions')}
+          />
+          {momentToRevisit && <EvidenceMomentCard moment={momentToRevisit} onDiscuss={onDiscussWithCoach} />}
+        </div>
       </div>
+
+      {/* 5. One next step */}
+      <NextStepCard priority={priority} onSetFocus={onFocusMetricChange} onGoReflect={onGoReflect} />
     </div>
   )
 }

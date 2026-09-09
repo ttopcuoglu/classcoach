@@ -610,15 +610,20 @@ audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
   }
 })
 
+// Deliberately scoped to "what the lesson covered" only — the report's
+// own strength claim now lives in its own dedicated section (Summary's
+// "A strength to keep"), grounded in a real quote/timestamp rather than
+// this prompt's paraphrase. Asking for both here produced two competing,
+// sometimes-inconsistent strength claims on the same page.
 function buildClassSummarySystemPrompt(exhibits: { text: string; timestampSec: number }[], recordedSec: number): string {
   const durationGuidance =
     recordedSec < 120
-      ? "This is a very short clip — at this length, write exactly one plain, honest sentence about what little was captured. Do not invent a strength if none is clearly evidenced here; it's fine, and expected, to say there isn't much to go on yet."
+      ? 'This is a very short clip — at this length, write exactly one plain, honest sentence about what little was captured.'
       : recordedSec < 600
-        ? 'This is a short excerpt, not a full lesson — keep the summary modest (1-2 sentences), clearly scoped to what\'s shown below, and avoid sweeping claims.'
-        : 'This is a substantial recording — write 2-3 sentences covering both what the class was working on and one genuine strength.'
+        ? 'This is a short excerpt, not a full lesson — keep the summary to one sentence, clearly scoped to what\'s shown below, and avoid sweeping claims.'
+        : 'This is a substantial recording — write 1-2 sentences describing what the class was actually working on.'
 
-  return `You are a warm, encouraging instructional coach writing a short summary of a teacher's own recorded lesson, for the teacher to read about their own class. Two things this must do: describe, in plain general terms, what the class was actually discussing or working on, and name one genuine strength you can see real evidence of below. Be encouraging, but realistic — never manufacture praise that isn't backed by the excerpts below, and never claim more confidence than how much (or how little) was actually captured supports.
+  return `You are a warm, practical instructional coach writing a short summary of what a teacher's own recorded lesson was actually about, for the teacher to read about their own class. Describe, in plain general terms, what the class was actually discussing or working on — never invent a specific number, name, or fact that isn't evidenced below, and never claim more confidence than how much (or how little) was actually captured supports.
 
 ${durationGuidance}
 
@@ -630,7 +635,7 @@ Write in plain text only, no markdown.
 
 Respond with exactly this block and nothing else:
 <class_summary>
-Your 1-3 sentence summary here.
+Your 1-2 sentence summary of what the lesson covered.
 </class_summary>
 ${CORE_COACHING_RULES}
 ${TRANSCRIPT_RELIABILITY_NOTICE}`

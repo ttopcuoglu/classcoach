@@ -121,7 +121,7 @@ export default function AudioCoachingExport() {
                 <>
                   {session.classSummary && (
                     <div className="mt-4 break-inside-avoid rounded-xl border border-border bg-surface p-4">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">This lesson</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Lesson at a glance</p>
                       <p className="mt-1.5 text-sm text-ink">{session.classSummary}</p>
                     </div>
                   )}
