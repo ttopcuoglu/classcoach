@@ -171,9 +171,9 @@ export function evidenceTier(state: MetricState): EvidenceTier {
 }
 
 export const EVIDENCE_TIER_LABELS: Record<EvidenceTier, string> = {
-  pattern: 'Pattern detected',
-  moment: 'Moment captured',
-  insufficient: 'Not enough evidence',
+  pattern: 'Clear pattern',
+  moment: 'One moment captured',
+  insufficient: 'Not enough evidence yet',
 }
 
 // "N of M measured" for a category's header — counts any confident state

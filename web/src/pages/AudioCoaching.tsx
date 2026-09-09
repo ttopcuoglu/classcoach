@@ -1095,6 +1095,11 @@ type FocusSnapshot = {
   tier: ReturnType<typeof evidenceTier>
   statusLine: string | null
   capturedLine: string
+  // The bare formatted value ("42.6%", "2.8s"), with no label prefix, for
+  // a big-stat visual treatment — null when there's nothing confident to
+  // show a number for (talk ratio uses its own dedicated bar instead of
+  // this, see SummaryTab).
+  valueText: string | null
   tryNextTip: string
 }
 
@@ -1123,13 +1128,15 @@ function buildFocusSnapshot(
 ): FocusSnapshot | null {
   if (!focusMetric) return null
   const label = FOCUS_METRIC_LABELS[focusMetric]
+  const confident = isConfidentState(metric.state)
   return {
     label,
     tier: evidenceTier(metric.state),
     statusLine,
-    capturedLine: isConfidentState(metric.state)
+    capturedLine: confident
       ? `${label}: ${metric.display}${FOCUS_METRIC_UNIT_SUFFIX[focusMetric] ?? ''}`
       : `${label}: ${metric.reason ?? 'not enough usable evidence'}`,
+    valueText: confident ? `${metric.display}${FOCUS_METRIC_UNIT_SUFFIX[focusMetric] ?? ''}` : null,
     tryNextTip: FOCUS_METRIC_TRY_NEXT[focusMetric],
   }
 }
@@ -2316,7 +2323,21 @@ function SummaryTab({
               {EVIDENCE_TIER_LABELS[focusSnapshot.tier]}
             </span>
           </div>
-          {focusSnapshot.statusLine && <p className="mt-2 text-sm text-ink">{focusSnapshot.statusLine}</p>}
+          {focusMetric === 'talkRatio' && session.teacherTalkPct != null ? (
+            <div className="mt-4 rounded-xl bg-surface/60 p-4">
+              <TalkParticipationBar
+                teacherPct={session.teacherTalkPct}
+                studentPct={session.studentTalkPct}
+                silencePct={silencePct}
+                compact
+              />
+            </div>
+          ) : (
+            focusSnapshot.valueText && (
+              <p className="mt-3 text-3xl font-semibold text-ink">{focusSnapshot.valueText}</p>
+            )
+          )}
+          {focusSnapshot.statusLine && <p className="mt-3 text-sm text-ink">{focusSnapshot.statusLine}</p>}
           <p className="mt-2 text-sm text-ink-soft">{focusSnapshot.capturedLine}</p>
           <p className="mt-1 text-sm text-ink-soft">Try next time: {focusSnapshot.tryNextTip}</p>
           <button
