@@ -859,6 +859,19 @@ function buildTranscriptWindow(
     .sort((a, b) => a.startSec - b.startSec)
 }
 
+// A feedback moment is specifically the ONE teacher turn right after a
+// student turn — not a window of surrounding talk, which in a
+// densely-packed transcript can sweep in unrelated lines (the opening
+// statement, a later follow-up question) that look like more "moments"
+// than were actually counted. Returns exactly the pair that was counted,
+// or [] if the segment isn't found.
+function buildFeedbackExchange(segments: TranscriptSegment[], timestampSec: number): TranscriptSegment[] {
+  const ordered = [...segments].sort((a, b) => a.startSec - b.startSec)
+  const idx = ordered.findIndex((s) => s.startSec === timestampSec)
+  if (idx <= 0) return []
+  return [ordered[idx - 1], ordered[idx]]
+}
+
 // Coach-voice interpretations of the category stats — deterministic
 // templates, no Claude call (the analysis-time notes generation was
 // removed for exactly this reason: two independent AI summaries of the
@@ -4511,8 +4524,16 @@ function EvidenceItemCard({
   onDiscuss: (c: NoticeCandidate) => void
 }) {
   const [expanded, setExpanded] = useState(false)
+  // A feedback moment is exactly one student→teacher pair — showing the
+  // wider surrounding window (like CFU cards do) makes it look like every
+  // nearby line was counted, not just the one that actually was.
+  const isFeedback = candidate.observation === 'Specific feedback'
   const window =
-    candidate.timestampSec != null ? buildTranscriptWindow(segments, candidate.timestampSec, expanded ? 45 : 15) : []
+    candidate.timestampSec == null
+      ? []
+      : isFeedback
+        ? buildFeedbackExchange(segments, candidate.timestampSec)
+        : buildTranscriptWindow(segments, candidate.timestampSec, expanded ? 45 : 15)
   return (
     <div className="rounded-2xl border border-border bg-surface p-6">
       <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
@@ -4531,7 +4552,7 @@ function EvidenceItemCard({
       )}
       <p className="mt-2 text-sm text-ink-soft">{candidate.whyItMatters}</p>
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-        {candidate.timestampSec != null && (
+        {!isFeedback && candidate.timestampSec != null && (
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
