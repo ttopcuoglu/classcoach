@@ -69,6 +69,22 @@ export const LESSON_PLANNING_ACTIONS = [
   'lesson_plan_presentation_review',
 ]
 
+// Accounts that must never hit a wall or a paywall — the App Store review
+// demo login above all, since a reviewer who gets blocked mid-review files a
+// rejection. Same env-driven pattern as ADMIN_EMAILS in auth.ts, but
+// deliberately NOT superadmin: a reviewer should see exactly what a teacher
+// sees, not the admin panel.
+const DEMO_ACCOUNT_EMAILS = new Set(
+  (process.env.DEMO_ACCOUNT_EMAILS ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
+)
+
+export function isDemoAccount(email: string | null | undefined): boolean {
+  return email != null && DEMO_ACCOUNT_EMAILS.has(email.toLowerCase())
+}
+
 // True if the user's own subscription is active, OR their organization
 // grants paid access (a signed district contract, or a still-open free
 // pilot window) — either path grants the same Plus-equivalent access.
@@ -86,12 +102,15 @@ export async function hasActivePlan(userId: string): Promise<boolean> {
     where: { id: userId },
     select: {
       role: true,
+      email: true,
       plan: true,
       planStatus: true,
       organization: { select: { plan: true, pilotEndsAt: true } },
     },
   })
   if (!user) return false
+  // App Store review demo logins get full access without superadmin.
+  if (isDemoAccount(user.email)) return true
   // Superadmin needs to exercise every feature area to support/verify the
   // platform — never blocked behind a paywall meant for teachers.
   if (user.role === 'superadmin') return true
