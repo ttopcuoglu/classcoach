@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import SupportChat from '../components/SupportChat'
 import { Link } from 'react-router-dom'
 import AuthCard from '../components/AuthCard'
 import {
@@ -599,6 +600,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
           </div>
         </div>
       </footer>
+      <SupportChat />
     </div>
   )
 }

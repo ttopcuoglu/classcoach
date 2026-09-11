@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import SupportChat from '../components/SupportChat'
 
 export default function Terms() {
   return (
@@ -415,6 +416,7 @@ export default function Terms() {
           </section>
         </div>
       </div>
+      <SupportChat />
     </div>
   )
 }

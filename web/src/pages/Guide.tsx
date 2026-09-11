@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import SupportChat from '../components/SupportChat'
 import {
   ArrowRightIcon,
   ArrowUpIcon,
@@ -632,6 +633,7 @@ export default function Guide() {
           </div>
         </div>
       </footer>
+      <SupportChat />
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import SupportChat from './SupportChat'
 import { ArrowRightIcon, ChartBarIcon } from './icons'
 
 // The shared chrome for every teacher-facing feature guide (/guide/<feature>).
@@ -225,6 +226,7 @@ export function GuideShell({ appTo, children }: { appTo: string; children: React
           </div>
         </div>
       </footer>
+      <SupportChat />
     </div>
   )
 }

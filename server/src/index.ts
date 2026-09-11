@@ -19,6 +19,7 @@ import { profileRouter } from './routes/profile.ts'
 import { scenariosRouter } from './routes/scenarios.ts'
 import { shareRouter } from './routes/share.ts'
 import { ttsRouter } from './routes/tts.ts'
+import { supportRouter } from './routes/support.ts'
 import { requireAuth } from './lib/auth.ts'
 
 const app = express()
@@ -45,6 +46,9 @@ app.get('/api/health', (_req, res) => {
 // Public: sign-in itself, and shared read-only links (no session needed).
 app.use('/api/auth', authRouter)
 app.use('/api/share', shareRouter)
+// Public by design — the website chatbot answers visitors who have no account.
+// Carries its own IP + global rate limits; see routes/support.ts.
+app.use('/api/support', supportRouter)
 
 // Everything else requires a signed-in user.
 app.use('/api/scenarios', requireAuth, scenariosRouter)

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import SupportChat from '../components/SupportChat'
 import { ArrowRightIcon, ChartBarIcon, SparkleIcon } from '../components/icons'
 
 type QA = { q: string; a: React.ReactNode }
@@ -241,6 +242,7 @@ export default function Faq() {
           </div>
         </div>
       </footer>
+      <SupportChat />
     </div>
   )
 }

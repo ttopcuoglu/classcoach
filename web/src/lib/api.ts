@@ -1375,3 +1375,23 @@ export function generateContentNotes(id: string): Promise<AudioSession> {
 export function generateClassSummary(id: string): Promise<AudioSession> {
   return request(`/api/audio-sessions/${id}/class-summary`, { method: 'POST' })
 }
+
+export type SupportTurn = { role: 'user' | 'assistant'; text: string }
+
+// The website chatbot's endpoint is public (no session) and deliberately
+// never throws: a rate limit or a Claude outage still returns a usable
+// `reply` pointing the visitor at the contact email, so the widget can show
+// one thing in every case instead of branching on status codes.
+export async function sendSupportChat(message: string, history: SupportTurn[]): Promise<string> {
+  const res = await fetch(`${API_BASE_URL}/api/support/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, history }),
+  })
+  const data = (await res.json().catch(() => null)) as { reply?: string; error?: string } | null
+  return (
+    data?.reply ??
+    data?.error ??
+    'Sorry — something went wrong. Email hello@wivoza.com and a person will reply.'
+  )
+}
