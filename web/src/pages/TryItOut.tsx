@@ -3,6 +3,8 @@ import CoachingChat from '../components/CoachingChat'
 import ReflectionTimeline from '../components/ReflectionTimeline'
 import ShareButton from '../components/ShareButton'
 import { ArrowUpIcon, MicIcon, StarIcon } from '../components/icons'
+import { ProgressRing } from '../components/ProgressRing'
+import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { CATEGORIES, categoryLabel } from '../lib/categories'
 import { GRADE_BANDS } from '../lib/gradeBands'
@@ -48,6 +50,7 @@ export default function TryItOut() {
   const [responseText, setResponseText] = useState('')
   const [generating, setGenerating] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const workingProgress = useSimulatedProgress(generating || submitting, 8000)
   const [error, setError] = useState<string | null>(null)
   const { supported: speechSupported, listening, toggleListening } = useSpeechToText((text) =>
     setResponseText((prev) => (prev ? `${prev} ${text}` : text)),
@@ -349,6 +352,15 @@ export default function TryItOut() {
                 </button>
               ))}
             </div>
+            {(generating || submitting) && (
+              <div className="mt-4 flex justify-center text-brand-600">
+                <ProgressRing
+                  progress={workingProgress}
+                  label={generating ? 'Building a scenario' : 'Reading your response'}
+                  hint="Usually under ten seconds."
+                />
+              </div>
+            )}
             <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
               <button
                 type="button"

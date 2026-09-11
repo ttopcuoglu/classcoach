@@ -5,6 +5,8 @@ import { StarIcon } from '../components/icons'
 import { Spinner } from '../components/Spinner'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import SafetyAdvisoryBanner, { PrivacyReminder } from '../components/SafetyAdvisoryBanner'
+import { ProgressRing } from '../components/ProgressRing'
+import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import {
   MEETING_FORMATS,
   MEETING_TYPES,
@@ -66,6 +68,7 @@ export default function PrepareConversation() {
   const [background, setBackground] = useState(prefill?.background ?? '')
 
   const [submitting, setSubmitting] = useState(false)
+  const workProgress = useSimulatedProgress(submitting, 16000)
   const [error, setError] = useState<string | null>(null)
   const [plan, setPlan] = useState<ConversationPlan | null>(null)
 
@@ -326,6 +329,12 @@ export default function PrepareConversation() {
 
             <SafetyAdvisoryBanner text={`${situationText}\n${concerns}\n${background}`} />
             <PrivacyReminder />
+
+            {submitting && (
+              <div className="flex justify-center py-1 text-brand-600">
+                <ProgressRing progress={workProgress} label="Building your meeting plan" hint="Twelve sections — usually about twenty seconds." />
+              </div>
+            )}
 
             <button
               type="button"

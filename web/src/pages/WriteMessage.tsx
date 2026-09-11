@@ -4,7 +4,9 @@ import CoachingChat from '../components/CoachingChat'
 import { MicIcon, StarIcon } from '../components/icons'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import SafetyAdvisoryBanner, { PrivacyReminder } from '../components/SafetyAdvisoryBanner'
+import { ProgressRing } from '../components/ProgressRing'
 import { useSpeechToText } from '../hooks/useSpeechToText'
+import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import {
   MESSAGE_FORMATS,
   MESSAGE_PURPOSES,
@@ -70,6 +72,7 @@ export default function WriteMessage() {
   )
 
   const [drafting, setDrafting] = useState(false)
+  const draftProgress = useSimulatedProgress(drafting, 11000)
   const [error, setError] = useState<string | null>(null)
   const [current, setCurrent] = useState<ParentMessage | null>(null)
   const [copied, setCopied] = useState(false)
@@ -348,6 +351,12 @@ export default function WriteMessage() {
 
             <SafetyAdvisoryBanner text={inputText} />
             <PrivacyReminder />
+
+            {drafting && (
+              <div className="flex justify-center py-1 text-brand-600">
+                <ProgressRing progress={draftProgress} label="Drafting your message" hint="Usually about ten seconds." />
+              </div>
+            )}
 
             <button
               type="button"

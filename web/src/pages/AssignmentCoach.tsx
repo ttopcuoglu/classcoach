@@ -22,6 +22,8 @@ import {
   UploadIcon,
   WarningIcon,
 } from '../components/icons'
+import { ProgressRing } from '../components/ProgressRing'
+import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import { ASSIGNMENT_GRADE_LEVELS } from '../lib/assignmentGradeLevels'
 import { ASSIGNMENT_SUBJECTS, ASSIGNMENT_TYPES, assignmentTypeLabel, ESTIMATED_TIME_OPTIONS } from '../lib/assignmentTypes'
@@ -375,6 +377,7 @@ function AddAssignmentScreen({
   const [aiUseLevel, setAiUseLevel] = useState<AssignmentAiUseLevel | ''>('')
   const [letWivozaRecommend, setLetWivozaRecommend] = useState(false)
   const [starting, setStarting] = useState(false)
+  const analyzeProgress = useSimulatedProgress(starting, 16000)
   const [analyzingStep, setAnalyzingStep] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -682,6 +685,16 @@ function AddAssignmentScreen({
                 )
               })}
             </div>
+          </div>
+        )}
+
+        {starting && (
+          <div className="mt-5 flex justify-center text-cream">
+            <ProgressRing
+              progress={analyzeProgress}
+              label={analyzingSteps[analyzingStep]}
+              hint="Reading the whole assignment, not just the first paragraph."
+            />
           </div>
         )}
 

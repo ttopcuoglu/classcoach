@@ -5,6 +5,8 @@ import ShareButton from '../components/ShareButton'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import { StarIcon } from '../components/icons'
 import SafetyAdvisoryBanner, { PrivacyReminder } from '../components/SafetyAdvisoryBanner'
+import { ProgressRing } from '../components/ProgressRing'
+import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { REVIEW_MODES, type ReviewMode } from '../lib/communicationOptions'
 import { takeReviewPrefill } from '../lib/communicationsPrefill'
 import {
@@ -27,6 +29,7 @@ export default function ReviewCommunication() {
   const [responseText, setResponseText] = useState(prefill?.responseText ?? '')
   const [reviewMode, setReviewMode] = useState<ReviewMode>('both')
   const [submitting, setSubmitting] = useState(false)
+  const workProgress = useSimulatedProgress(submitting, 12000)
   const [error, setError] = useState<string | null>(null)
   const [prep, setPrep] = useState<ConversationPrep | null>(null)
 
@@ -152,6 +155,12 @@ export default function ReviewCommunication() {
 
             <SafetyAdvisoryBanner text={`${situationText}\n${responseText}`} />
             <PrivacyReminder />
+
+            {submitting && (
+              <div className="flex justify-center py-1 text-brand-600">
+                <ProgressRing progress={workProgress} label="Reading both messages" hint="Usually about fifteen seconds." />
+              </div>
+            )}
 
             <button
               type="button"

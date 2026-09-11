@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, LockIcon, MicIcon, PlayIcon } from '../components/icons'
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
+import { ProgressRing } from '../components/ProgressRing'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
+import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { HATCH_STYLE } from '../lib/chartPatterns'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import { playQueue, splitIntoSentences } from '../lib/voicePlayback'
@@ -528,14 +530,13 @@ function RecordingPanel({
               </>
             )}
             {phase === 'uploading' && (
-              <div className="flex w-48 flex-col items-center gap-1.5">
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-canvas">
-                  <div
-                    className="h-full rounded-full bg-brand-500 transition-[width] duration-150 ease-out"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
-                <span className="text-xs text-ink-soft">This can take a minute for a full class period.</span>
+              <div className="text-brand-600">
+                <ProgressRing
+                  progress={uploadProgress}
+                  size={88}
+                  label="Transcribing your session"
+                  hint="This can take a minute for a full class period."
+                />
               </div>
             )}
           </div>
@@ -2363,6 +2364,7 @@ function SummaryTab({
   focusMetric: FocusMetric | null
   focusSnapshot: FocusSnapshot | null
 }) {
+  const classSummaryProgress = useSimulatedProgress(classSummarySending, 14000)
   const strengthCandidates = buildStrengthCandidates(session, cfuMetric, feedbackRatio, higherOrderRatio)
   const priorityCandidates = buildPriorityCandidates(session, cfuMetric, feedbackRatio, higherOrderRatio)
   const strength = pickTop(strengthCandidates)
@@ -2388,7 +2390,13 @@ function SummaryTab({
           </div>
         ) : classSummarySending ? (
           <div className="rounded-2xl border border-border bg-surface p-6">
-            <p className="text-sm text-ink-soft">Putting together a summary of this lesson...</p>
+            <div className="flex justify-center text-brand-600">
+              <ProgressRing
+                progress={classSummaryProgress}
+                label="Putting together a summary of this lesson"
+                hint="Reading the whole transcript, not just the start."
+              />
+            </div>
           </div>
         ) : (
           spotlight && (

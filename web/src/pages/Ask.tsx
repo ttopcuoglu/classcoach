@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ProgressRing } from '../components/ProgressRing'
+import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import CoachingChat from '../components/CoachingChat'
 import ReflectionTimeline from '../components/ReflectionTimeline'
 import ShareButton from '../components/ShareButton'
@@ -37,6 +39,7 @@ export default function Ask() {
   const [placeholder, setPlaceholder] = useState('Describe what happened, or ask a question...')
   const [debrief, setDebrief] = useState<Debrief | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const askProgress = useSimulatedProgress(submitting, 9000)
   const [error, setError] = useState<string | null>(null)
 
   const [allDebriefs, setAllDebriefs] = useState<Debrief[]>([])
@@ -198,6 +201,12 @@ export default function Ask() {
             >
               {submitting ? 'Getting coaching...' : 'Get coaching'}
             </button>
+
+            {submitting && (
+              <div className="flex justify-center py-2 text-brand-600">
+                <ProgressRing progress={askProgress} label="Reading what you wrote" hint="Usually about ten seconds." />
+              </div>
+            )}
 
             <div className="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:flex-wrap">
               {STARTER_QUESTIONS.map((starter) => (

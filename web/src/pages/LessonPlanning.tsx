@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ShareIcon, StarIcon } from '../components/icons'
 import CoachingChat from '../components/CoachingChat'
+import { ProgressRing } from '../components/ProgressRing'
+import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { Spinner } from '../components/Spinner'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import {
@@ -432,6 +434,7 @@ function GeneratePanel() {
   const [context, setContext] = useState<ContextForm>(EMPTY_CONTEXT)
   const [plan, setPlan] = useState<LessonPlan | null>(null)
   const [generating, setGenerating] = useState(false)
+  const generateProgress = useSimulatedProgress(generating, 12000)
   const [error, setError] = useState<string | null>(null)
 
   const [allPlans, setAllPlans] = useState<LessonPlan[]>([])
@@ -508,6 +511,11 @@ function GeneratePanel() {
               gradual-release template, for ideas. Not a plan you have to follow.
             </p>
             <ContextFields context={context} onChange={setContext} disabled={generating} />
+            {generating && (
+              <div className="flex justify-center py-1 text-brand-600">
+                <ProgressRing progress={generateProgress} label="Drafting a sample day" hint="Usually about fifteen seconds." />
+              </div>
+            )}
             <button
               type="button"
               onClick={handleGenerate}
@@ -590,6 +598,7 @@ function FeedbackPanel() {
   const [planText, setPlanText] = useState('')
   const [plan, setPlan] = useState<LessonPlan | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const feedbackProgress = useSimulatedProgress(submitting, 12000)
   const [error, setError] = useState<string | null>(null)
 
   const [allPlans, setAllPlans] = useState<LessonPlan[]>([])
@@ -721,10 +730,17 @@ function FeedbackPanel() {
               />
             </label>
 
+            {submitting && (
+              <div className="flex justify-center py-1 text-brand-600">
+                <ProgressRing progress={feedbackProgress} label="Reading your plan" hint="Usually about fifteen seconds." />
+              </div>
+            )}
+
             <button
               type="button"
               onClick={handleSubmit}
               disabled={submitting || !canSubmit}
+
               className="self-end rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
             >
               {submitting ? (
@@ -852,6 +868,7 @@ function PresentationPanel() {
 
   const [plan, setPlan] = useState<LessonPlan | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const reviewProgress = useSimulatedProgress(submitting, 14000)
   const [error, setError] = useState<string | null>(null)
 
   const [allPlans, setAllPlans] = useState<LessonPlan[]>([])
@@ -1072,10 +1089,17 @@ function PresentationPanel() {
               />
             </label>
 
+            {submitting && (
+              <div className="flex justify-center py-1 text-brand-600">
+                <ProgressRing progress={reviewProgress} label="Reading your presentation" hint="Usually about twenty seconds." />
+              </div>
+            )}
+
             <button
               type="button"
               onClick={handleSubmit}
               disabled={submitting || !extractedText}
+
               className="self-end rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
             >
               {submitting ? (

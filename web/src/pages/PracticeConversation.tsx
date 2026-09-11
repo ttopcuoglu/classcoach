@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom'
 import { MicIcon } from '../components/icons'
 import SafetyAdvisoryBanner, { PrivacyReminder } from '../components/SafetyAdvisoryBanner'
 import { UpgradeMessage } from '../components/UpgradeMessage'
+import { ProgressRing } from '../components/ProgressRing'
 import { useSpeechToText } from '../hooks/useSpeechToText'
+import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import {
   CHALLENGE_TYPES,
   CONVERSATION_DIFFICULTY_LEVELS,
@@ -59,6 +61,7 @@ export default function PracticeConversation() {
   const [prep, setPrep] = useState<ConversationPrep | null>(null)
   const [generating, setGenerating] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const workProgress = useSimulatedProgress(submitting, 12000)
   const [error, setError] = useState<string | null>(null)
 
   const { supported: speechSupported, listening, toggleListening } = useSpeechToText((text) =>
@@ -297,6 +300,12 @@ export default function PracticeConversation() {
                   >
                     Try a different scenario
                   </button>
+                  {submitting && (
+                    <div className="flex justify-center py-1 text-brand-600">
+                      <ProgressRing progress={workProgress} label="Reading your response" hint="Usually about fifteen seconds." />
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     onClick={handleSubmit}
