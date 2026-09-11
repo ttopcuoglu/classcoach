@@ -8,7 +8,7 @@ import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { HATCH_STYLE } from '../lib/chartPatterns'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
-import { playQueue, splitIntoSentences } from '../lib/voicePlayback'
+import { playQueue, primeAudioElement, splitIntoSentences } from '../lib/voicePlayback'
 import {
   createAudioSession,
   deleteAudioSession,
@@ -2993,25 +2993,12 @@ function ReflectTab({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => close, [])
 
-  // Fire-and-forget, same as TalkToMe.tsx's own priming — never awaited,
-  // since the <audio> element has no source yet and this must never block
-  // the actual state transition (starting the conversation, or entering
-  // voice mode) behind however long play()/pause() takes to settle.
+  // Fire-and-forget, same as TalkToMe.tsx's own priming — never awaited, so
+  // it can't block the actual state transition (starting the conversation,
+  // or entering voice mode) behind however long the unlock takes to settle.
   function primeAudio() {
     const audio = audioRef.current
-    if (!audio) return
-    audio.muted = true
-    audio
-      .play()
-      .then(() => {
-        audio.pause()
-        audio.currentTime = 0
-        audio.muted = false
-      })
-      .catch((err) => {
-        console.warn('[ReflectTab] audio unlock (priming) rejected', err)
-        audio.muted = false
-      })
+    if (audio) primeAudioElement(audio)
   }
 
   const starterPrompts = buildReflectStarterPrompts(highlights, cfuMetric, redirectionMetric)

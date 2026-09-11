@@ -15,7 +15,7 @@ import {
   type TalkTakeaway,
   type TalkVoice,
 } from '../lib/api'
-import { playQueue, splitIntoSentences } from '../lib/voicePlayback'
+import { playQueue, primeAudioElement, splitIntoSentences } from '../lib/voicePlayback'
 
 // First-person, concrete — things a teacher could plausibly say out loud,
 // not generic placeholders. Tapping one starts a real conversation
@@ -172,19 +172,7 @@ export default function TalkToMe() {
   useEffect(() => {
     function primeAudio() {
       const audio = audioRef.current
-      if (!audio) return
-      audio.muted = true
-      audio
-        .play()
-        .then(() => {
-          audio.pause()
-          audio.currentTime = 0
-          audio.muted = false
-        })
-        .catch((err) => {
-          console.warn('[TalkToMe] audio unlock (priming) rejected', err?.name, err?.message)
-          audio.muted = false
-        })
+      if (audio) primeAudioElement(audio)
     }
     // pointerdown alone missed one real path: submitting "Type instead" by
     // pressing Enter in the text field fires no pointerdown at all (it's a

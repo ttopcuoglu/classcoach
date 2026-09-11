@@ -5,6 +5,65 @@ import { buildSpeechUrl, type TalkVoice } from './api'
 // the Chrome streamed-audio-blob quirk below), so this lives in one place
 // rather than being duplicated.
 
+// 40ms of silence. Priming needs a REAL source, and that is the whole point
+// of this constant: calling play() on a src-less <audio> in Chrome returns a
+// promise that never settles — the resource selection algorithm parks at
+// NETWORK_EMPTY waiting for a source, so it neither resolves nor rejects.
+//
+// That produced a genuinely confusing bug. The unlock ran on the first tap,
+// set muted = true, and left its promise pending. It then resolved much
+// later, at the moment the FIRST real reply assigned a src and started
+// playing — running the unlock's cleanup against live playback: pause(),
+// currentTime = 0, muted = false. So the first reply of every session was
+// silent and never fired `ended` (playQueue's 20s timeout had to rescue it),
+// while every reply after it was fine, because the promise had settled and
+// the handler could not fire twice. Safari never showed this: it rejects
+// play() with no source immediately, so the catch ran cleanly at prime time.
+const SILENT_WAV = 'data:audio/wav;base64,UklGRmQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YUABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA=='
+
+// Unlocks a persistent <audio> element for later script-triggered playback.
+// Must be called from a real user gesture (mobile Safari only allows
+// programmatic play() on an element that has already played from one).
+export function primeAudioElement(audio: HTMLAudioElement): void {
+  let settled = false
+  const restore = () => {
+    if (settled) return
+    settled = true
+    window.clearTimeout(guardId)
+    // A real reply can start while this is in flight; never clobber it.
+    if (audio.src === SILENT_WAV) {
+      audio.pause()
+      audio.currentTime = 0
+    }
+    // Whatever happened, the element must not be left muted — that is the
+    // failure mode this whole function exists to avoid.
+    audio.muted = false
+  }
+
+  // Measured in Chrome: calling play() immediately after assigning src loses
+  // a race with the load that assignment kicks off and rejects with
+  // AbortError, so no playback actually happens and the gesture unlock does
+  // not take. Waiting for `loadeddata` first resolves cleanly in ~2ms.
+  const play = () => {
+    audio.play().then(restore, (err) => {
+      console.warn('[voicePlayback] audio unlock (priming) rejected', err?.name, err?.message)
+      restore()
+    })
+  }
+
+  // Belt and braces: if `loadeddata` somehow never fires, unmute anyway
+  // rather than leaving every reply of the session silent.
+  const guardId = window.setTimeout(() => {
+    console.warn('[voicePlayback] audio unlock timed out waiting for loadeddata')
+    restore()
+  }, 2000)
+
+  audio.muted = true
+  audio.addEventListener('loadeddata', play, { once: true })
+  audio.src = SILENT_WAV
+  audio.load()
+}
+
 export function splitIntoSentences(text: string): string[] {
   return text
     .split(/(?<=[.!?])\s+/)
