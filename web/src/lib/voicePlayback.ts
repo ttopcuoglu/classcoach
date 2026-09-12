@@ -93,8 +93,30 @@ export async function fetchSentenceAudio(sentence: string, voice: TalkVoice | nu
   }
 }
 
-// Plays one clip on the shared element and resolves when it finishes.
-//
+// How long to wait for a directly-streamed clip to become playable before
+// giving up and falling back to the buffered path. Generous enough to cover
+// Deepgram's synthesis latency on a slow connection, short enough that the
+// fallback still beats saying nothing.
+const DIRECT_STALL_MS = 4000
+
+// A single sentence's audio, in one of two forms. The first sentence of a
+// reply is played straight from /api/tts so playback can begin on Deepgram's
+// first byte instead of after the last one; every later sentence is
+// prefetched into a blob while earlier ones are still playing, by which time
+// it is already downloaded and a live URL would only re-introduce latency at
+// the exact moment it is needed.
+// Stop and Close have to be able to silence a clip that has not started yet.
+// Pausing the element is not enough on its own: a clip still loading will
+// call play() the moment it becomes playable, so Coach would start talking
+// just after the teacher asked for quiet. Pausing also means `ended` never
+// fires, which would otherwise leave the queue waiting out its full guard
+// timeout before reporting that it had finished.
+type Cancellation = { cancelled: boolean; onAbort: (() => void) | null }
+
+// A direct clip keeps its sentence so the buffered fallback can re-request
+// it without the queue having to track the text separately.
+type Clip = { kind: 'direct'; url: string; sentence: string } | { kind: 'blob'; url: string }
+
 // Chrome has a known quirk with streamed audio blobs (which is what this
 // pipeline always produces) where `ended` can simply never fire, even though
 // the file played and finished fine — Safari doesn't share this quirk, which
@@ -102,19 +124,32 @@ export async function fetchSentenceAudio(sentence: string, voice: TalkVoice | nu
 // exists to catch. A single sentence's TTS clip should never legitimately run
 // anywhere near this long, so hitting it always means something's wrong, not
 // that the reply is genuinely still speaking.
-function playOne(audio: HTMLAudioElement, url: string): Promise<void> {
+const ENDED_GUARD_MS = 20000
+
+function playOne(
+  audio: HTMLAudioElement,
+  url: string,
+  cancellation: Cancellation,
+  onStart?: () => void,
+): Promise<void> {
+  if (cancellation.cancelled) return Promise.resolve()
   return new Promise<void>((resolve) => {
     let settled = false
+    const onPlaying = () => onStart?.()
     const settle = () => {
       if (settled) return
       settled = true
       window.clearTimeout(timeoutId)
+      audio.removeEventListener('playing', onPlaying)
+      if (cancellation.onAbort === settle) cancellation.onAbort = null
       resolve()
     }
+    cancellation.onAbort = settle
     const timeoutId = window.setTimeout(() => {
       console.warn('[voicePlayback] audio playback timed out waiting for "ended" — advancing anyway')
       settle()
-    }, 20000)
+    }, ENDED_GUARD_MS)
+    audio.addEventListener('playing', onPlaying, { once: true })
     audio.onended = () => settle()
     audio.onerror = () => {
       console.warn('[voicePlayback] <audio> element error', audio.error?.code, audio.error?.message)
@@ -125,6 +160,87 @@ function playOne(audio: HTMLAudioElement, url: string): Promise<void> {
       console.warn('[voicePlayback] audio.play() rejected', err?.name, err?.message)
       settle()
     })
+  })
+}
+
+// Plays the live /api/tts URL rather than a downloaded copy. The route is a
+// plain GET that pipes Deepgram's stream straight through precisely so the
+// element can start on the first byte; fetching it into a blob first, as the
+// prefetch path must, throws that away and waits for the whole clip.
+//
+// Resolves 'failed' only if nothing was ever heard, so the caller can fall
+// back to the buffered path. That fallback is not hypothetical bookkeeping:
+// the element carries crossOrigin="use-credentials" because in production the
+// API is a different origin, and if that authentication ever stops working
+// the failure mode without a fallback is Coach silently saying nothing.
+function playDirect(
+  audio: HTMLAudioElement,
+  url: string,
+  cancellation: Cancellation,
+  onStart?: () => void,
+): Promise<'played' | 'failed'> {
+  if (cancellation.cancelled) return Promise.resolve('played')
+  return new Promise<'played' | 'failed'>((resolve) => {
+    let settled = false
+    let heard = false
+    const onProgress = () => {
+      if (heard) return
+      heard = true
+      onStart?.()
+    }
+    const cleanup = () => {
+      window.clearTimeout(stallId)
+      window.clearTimeout(endedId)
+      audio.removeEventListener('canplay', onCanPlay)
+      audio.removeEventListener('playing', onProgress)
+      audio.onended = null
+      audio.onerror = null
+    }
+    const settle = (result: 'played' | 'failed') => {
+      if (settled) return
+      settled = true
+      cleanup()
+      if (cancellation.onAbort === abort) cancellation.onAbort = null
+      resolve(result)
+    }
+    // Cancelled counts as 'played' so the caller does not treat the silence
+    // as a stream failure and go fetch a buffered copy of a clip nobody
+    // wants any more.
+    const abort = () => settle('played')
+    cancellation.onAbort = abort
+    // Waiting for `canplay` before calling play() rather than calling it
+    // straight after assigning src: that race is what made priming reject
+    // with AbortError in Chrome, and a network URL takes far longer to load
+    // than the data: URL that first exposed it.
+    const onCanPlay = () => {
+      window.clearTimeout(stallId)
+      if (cancellation.cancelled) {
+        settle('played')
+        return
+      }
+      audio.play().catch((err) => {
+        console.warn('[voicePlayback] direct play() rejected', err?.name, err?.message)
+        settle(heard ? 'played' : 'failed')
+      })
+    }
+    const stallId = window.setTimeout(() => {
+      console.warn('[voicePlayback] direct stream never became playable — falling back to buffered audio')
+      settle('failed')
+    }, DIRECT_STALL_MS)
+    const endedId = window.setTimeout(() => {
+      console.warn('[voicePlayback] direct playback timed out waiting for "ended" — advancing anyway')
+      settle(heard ? 'played' : 'failed')
+    }, ENDED_GUARD_MS)
+
+    audio.addEventListener('canplay', onCanPlay, { once: true })
+    audio.addEventListener('playing', onProgress)
+    audio.onended = () => settle('played')
+    audio.onerror = () => {
+      console.warn('[voicePlayback] direct stream error', audio.error?.code, audio.error?.message)
+      settle(heard ? 'played' : 'failed')
+    }
+    audio.src = url
+    audio.load()
   })
 }
 
@@ -142,10 +258,8 @@ function playOne(audio: HTMLAudioElement, url: string): Promise<void> {
 // rejected there, which .catch() then swallows as if the clip had simply
 // finished, producing total silence with no visible error.
 //
-// Each sentence's fetch starts the instant it is pushed, so synthesis of
-// later sentences overlaps playback of earlier ones. Prefetching does not
-// fight the single-element constraint — it is just a network request; only
-// the assigned `src`/`play()` needs the gesture-unlocked element.
+// Prefetching does not fight that constraint — it is just a network request;
+// only the assigned `src`/`play()` needs the gesture-unlocked element.
 export type PlaybackQueue = {
   push: (sentence: string) => void
   end: () => void
@@ -158,9 +272,9 @@ export function createPlaybackQueue(
   voice: TalkVoice | null,
   onFirstPlay?: () => void,
 ): PlaybackQueue {
-  const pending: Promise<string | null>[] = []
+  const pending: Promise<Clip | null>[] = []
+  const cancellation: Cancellation = { cancelled: false, onAbort: null }
   let closed = false
-  let cancelled = false
   let wake: (() => void) | null = null
   const nudge = () => {
     const w = wake
@@ -168,10 +282,18 @@ export function createPlaybackQueue(
     w?.()
   }
 
+  const release = (clip: Clip | null) => {
+    if (clip?.kind === 'blob') URL.revokeObjectURL(clip.url)
+  }
+
   const finished = (async () => {
     let i = 0
     let played = 0
-    while (!cancelled) {
+    const announce = () => {
+      if (played > 1) return
+      onFirstPlay?.()
+    }
+    while (!cancellation.cancelled) {
       if (i >= pending.length) {
         if (closed) break
         await new Promise<void>((resolve) => {
@@ -179,28 +301,46 @@ export function createPlaybackQueue(
         })
         continue
       }
-      const url = await pending[i++]
-      if (!url) continue // this segment failed to fetch — skip it, not fatal
-      if (cancelled) {
-        URL.revokeObjectURL(url)
+      const clip = await pending[i++]
+      if (!clip) continue // this segment failed to fetch — skip it, not fatal
+      if (cancellation.cancelled) {
+        release(clip)
         break
       }
-      if (played === 0) onFirstPlay?.()
       played += 1
-      await playOne(audio, url)
-      URL.revokeObjectURL(url)
+      if (clip.kind === 'blob') {
+        await playOne(audio, clip.url, cancellation, announce)
+        release(clip)
+        continue
+      }
+      const result = await playDirect(audio, clip.url, cancellation, announce)
+      if (result === 'played' || cancellation.cancelled) continue
+      // Nothing was heard — download it the slow way rather than skipping a
+      // sentence of Coach's answer.
+      const fallback = await fetchSentenceAudio(clip.sentence, voice)
+      if (!fallback || cancellation.cancelled) {
+        if (fallback) URL.revokeObjectURL(fallback)
+        continue
+      }
+      await playOne(audio, fallback, cancellation, announce)
+      URL.revokeObjectURL(fallback)
     }
     // Anything fetched but never played still holds an object URL.
-    for (; i < pending.length; i++) {
-      const url = await pending[i].catch(() => null)
-      if (url) URL.revokeObjectURL(url)
-    }
+    for (; i < pending.length; i++) release(await pending[i].catch(() => null))
   })()
 
   return {
     push(sentence: string) {
-      if (closed || cancelled || !sentence.trim()) return
-      pending.push(fetchSentenceAudio(sentence, voice))
+      if (closed || cancellation.cancelled || !sentence.trim()) return
+      // Only the first sentence is worth streaming live: it is the one
+      // nothing can be prefetched behind, so its download time is heard as
+      // silence. Later sentences are fetched now and played from memory
+      // once the ones ahead of them finish.
+      pending.push(
+        pending.length === 0
+          ? Promise.resolve({ kind: 'direct' as const, url: buildSpeechUrl(sentence, voice), sentence })
+          : fetchSentenceAudio(sentence, voice).then((url) => (url ? { kind: 'blob' as const, url } : null)),
+      )
       nudge()
     },
     end() {
@@ -208,9 +348,14 @@ export function createPlaybackQueue(
       nudge()
     },
     cancel() {
-      cancelled = true
+      cancellation.cancelled = true
       closed = true
       audio.pause()
+      // Settles whatever is loading or playing right now, so `finished`
+      // resolves immediately instead of waiting out a guard timeout for an
+      // `ended` event that a paused element will never fire.
+      cancellation.onAbort?.()
+      cancellation.onAbort = null
       nudge()
     },
     finished,
