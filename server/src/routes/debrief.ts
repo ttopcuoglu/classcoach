@@ -1,7 +1,7 @@
 import { Router, type Response } from 'express'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
-import { hasActivePlan } from '../lib/billing.ts'
+import { hasActivePlan, hasActivePlanFor, PLAN_USER_SELECT } from '../lib/billing.ts'
 import {
   applyMemoryUpdate,
   buildMemoryContextBlock,
@@ -18,7 +18,7 @@ import { SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
 import { reconcileTail, takeCompleteSentences, visibleSoFar } from '../lib/sentenceStream.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
 import { startTiming } from '../lib/turnTiming.ts'
-import { checkAndLogUsage } from '../lib/usageLimit.ts'
+import { checkAndLogUsage, checkUsage, logUsage } from '../lib/usageLimit.ts'
 
 export const debriefRouter = Router()
 
@@ -240,6 +240,11 @@ type StreamOptions = {
   // The raw text including the hidden <memory_update> block, for callers
   // that maintain coach memory. Runs after persist, off the spoken path.
   afterPersist?: (rawText: string) => Promise<void>
+  // Time already spent on lookups and limit checks before this was called.
+  // Logged alongside the rest so the database work ahead of Claude stays
+  // visible — it is latency the teacher waits through just the same, and it
+  // is invisible in a timer that only starts once the reply does.
+  gateMs?: number
 }
 
 async function streamCoachReply(res: Response, label: string, opts: StreamOptions) {
@@ -310,7 +315,7 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
     timing.mark('persist')
     send({ type: 'done', debrief: record })
     res.end()
-    timing.end({ sentences: spoken.length + (tail ? 1 : 0), chars: reply.length })
+    timing.end({ gate: `${opts.gateMs ?? 0}ms`, sentences: spoken.length + (tail ? 1 : 0), chars: reply.length })
 
     // Deliberately after res.end(): memory is bookkeeping for the NEXT turn,
     // so making this turn wait on another write would be pure added latency.
@@ -330,20 +335,30 @@ debriefRouter.post('/talk/stream', async (req, res) => {
     res.status(400).json({ error: 'message is required' })
     return
   }
-  if (!(await checkAndLogUsage(req.user!.userId, 'talk_to_me'))) {
+
+  const gateStart = Date.now()
+  const trimmed = message.trim()
+  const userId = req.user!.userId
+  // One row covers the usage exemption, the plan check and coach memory —
+  // these used to be three separate lookups of the same user, run one after
+  // another while the teacher waited.
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { ...PLAN_USER_SELECT, coachMemory: true, coachMemoryEnabled: true },
+  })
+  if (!(await checkUsage(userId, 'talk_to_me', user))) {
     res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
     return
   }
+  // Recording the call is accounting, not a precondition. Started here and
+  // deliberately not awaited, so it overlaps the Claude request rather than
+  // delaying it; logUsage swallows its own failures for the same reason.
+  void logUsage(userId, 'talk_to_me')
 
-  const trimmed = message.trim()
-  const userId = req.user!.userId
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { coachMemory: true, coachMemoryEnabled: true },
-  })
-  const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(userId))
+  const memoryOn = (user?.coachMemoryEnabled ?? false) && hasActivePlanFor(user)
 
   await streamCoachReply(res, 'talk_start', {
+    gateMs: Date.now() - gateStart,
     systemPrompt: memoryOn
       ? `${TALK_SYSTEM_PROMPT}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
       : TALK_SYSTEM_PROMPT,
@@ -377,8 +392,16 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
     return
   }
 
+  const gateStart = Date.now()
   const userId = req.user!.userId
-  const debrief = await prisma.debrief.findFirst({ where: { id: req.params.id, userId } })
+  // Independent reads, so they go together rather than one after the other.
+  const [debrief, user] = await Promise.all([
+    prisma.debrief.findFirst({ where: { id: req.params.id, userId } }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { ...PLAN_USER_SELECT, coachMemory: true, coachMemoryEnabled: true },
+    }),
+  ])
   if (!debrief) {
     res.status(404).json({ error: 'Debrief not found' })
     return
@@ -391,21 +414,21 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
   }
 
   const isTalk = debrief.source === 'talk_to_me'
-  if (!(await checkAndLogUsage(userId, isTalk ? 'talk_to_me_chat' : 'debrief_chat'))) {
+  const action = isTalk ? 'talk_to_me_chat' : 'debrief_chat'
+  if (!(await checkUsage(userId, action, user))) {
     res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
     return
   }
+  // Accounting, overlapped with the reply rather than run ahead of it.
+  void logUsage(userId, action)
 
   const trimmed = message.trim()
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { coachMemory: true, coachMemoryEnabled: true },
-  })
-  const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(userId))
+  const memoryOn = (user?.coachMemoryEnabled ?? false) && hasActivePlanFor(user)
   const basePrompt = isTalk ? TALK_SYSTEM_PROMPT : ASK_CHAT_SYSTEM_PROMPT
   const baseMaxTokens = isTalk ? 110 : 300
 
   await streamCoachReply(res, isTalk ? 'talk_chat' : 'debrief_chat', {
+    gateMs: Date.now() - gateStart,
     systemPrompt: memoryOn
       ? `${basePrompt}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
       : basePrompt,

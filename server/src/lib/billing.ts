@@ -95,19 +95,28 @@ export function isDemoAccount(email: string | null | undefined): boolean {
 // to restore the normal free/paid split below.
 const LIMITS_LIFTED_FOR_EVERYONE = true
 
-export async function hasActivePlan(userId: string): Promise<boolean> {
-  if (LIMITS_LIFTED_FOR_EVERYONE) return true
+// The fields a plan decision needs. Callers that have already loaded the
+// user — the live coaching turns, which cannot afford a second round trip to
+// Postgres just to re-read the same row — select this shape and answer the
+// question without going back to the database.
+export const PLAN_USER_SELECT = {
+  role: true,
+  email: true,
+  plan: true,
+  planStatus: true,
+  organization: { select: { plan: true, pilotEndsAt: true } },
+} as const
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      role: true,
-      email: true,
-      plan: true,
-      planStatus: true,
-      organization: { select: { plan: true, pilotEndsAt: true } },
-    },
-  })
+export type PlanUser = {
+  role: string | null
+  email: string | null
+  plan: string | null
+  planStatus: string | null
+  organization: { plan: string | null; pilotEndsAt: Date | null } | null
+}
+
+export function hasActivePlanFor(user: PlanUser | null): boolean {
+  if (LIMITS_LIFTED_FOR_EVERYONE) return true
   if (!user) return false
   // App Store review demo logins get full access without superadmin.
   if (isDemoAccount(user.email)) return true
@@ -118,6 +127,16 @@ export async function hasActivePlan(userId: string): Promise<boolean> {
   if (user.organization?.plan === 'district') return true
   if (user.organization?.pilotEndsAt && user.organization.pilotEndsAt > new Date()) return true
   return false
+}
+
+export async function hasActivePlan(userId: string): Promise<boolean> {
+  if (LIMITS_LIFTED_FOR_EVERYONE) return true
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: PLAN_USER_SELECT,
+  })
+  return hasActivePlanFor(user)
 }
 
 export async function checkFeatureAccess(

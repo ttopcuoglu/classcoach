@@ -1,4 +1,4 @@
-import { hasActivePlan, isDemoAccount } from './billing.ts'
+import { hasActivePlanFor, isDemoAccount, PLAN_USER_SELECT, type PlanUser } from './billing.ts'
 import { prisma } from './prisma.ts'
 
 const DAILY_ACTION_LIMIT = Number(process.env.DAILY_ACTION_LIMIT) || 50
@@ -63,22 +63,26 @@ const CONVERSATIONAL_ACTIONS: readonly UsageAction[] = [
   'attempt_chat',
 ]
 
-// Counts today's Claude-costing calls for this user and logs this one if
-// they're still under the applicable daily cap. One shared API key funds every
-// teacher's usage, so this is the cost-protection backstop for a public app.
-export async function checkAndLogUsage(userId: string, action: UsageAction): Promise<boolean> {
-  // Superadmin needs to exercise every feature to support/verify the
-  // platform — never blocked behind the shared-cost daily ceiling meant for
-  // teachers. Usage is still logged, just never counted against the cap.
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { role: true, email: true },
-  })
+// A user already loaded by the caller. The live coaching turns select this
+// once and hand it to both the usage check and the plan check, rather than
+// each of them fetching the same row again — six serial round trips to
+// Postgres used to run before Claude was even asked for a reply, and the
+// teacher waits through every one of them.
+export type UsageUser = PlanUser
+
+// Reads only. Says whether this call is allowed, without recording it —
+// separated from the write so a caller on a latency-sensitive path can let
+// the recording happen alongside the Claude request instead of ahead of it.
+export async function checkUsage(userId: string, action: UsageAction, user?: UsageUser | null): Promise<boolean> {
+  // One row, selected once, answers both the exemption check below and the
+  // plan check further down. Callers that already have it pass it in; the
+  // rest get a single query where there used to be two.
+  const loaded: UsageUser | null =
+    user !== undefined
+      ? user
+      : await prisma.user.findUnique({ where: { id: userId }, select: PLAN_USER_SELECT })
   // Superadmin and App Store review demo logins are logged but never capped.
-  if (user?.role === 'superadmin' || isDemoAccount(user?.email)) {
-    await prisma.usageLog.create({ data: { userId, action } })
-    return true
-  }
+  if (loaded?.role === 'superadmin' || isDemoAccount(loaded?.email)) return true
 
   const startOfDay = new Date()
   startOfDay.setHours(0, 0, 0, 0)
@@ -98,11 +102,30 @@ export async function checkAndLogUsage(userId: string, action: UsageAction): Pro
 
   const limit = conversational
     ? DAILY_CONVERSATION_LIMIT
-    : (await hasActivePlan(userId))
+    : hasActivePlanFor(loaded)
       ? PAID_DAILY_ACTION_LIMIT
       : DAILY_ACTION_LIMIT
-  if (countToday >= limit) return false
+  return countToday < limit
+}
 
-  await prisma.usageLog.create({ data: { userId, action } })
+// The write half. Failing to record a call must never fail the call itself:
+// the cap exists to protect a shared API key from sustained overuse, and one
+// unrecorded turn cannot threaten that, while a teacher losing a reply
+// because an accounting insert failed very much matters to them.
+export async function logUsage(userId: string, action: UsageAction): Promise<void> {
+  try {
+    await prisma.usageLog.create({ data: { userId, action } })
+  } catch (error) {
+    console.error('[usage] could not record usage:', error)
+  }
+}
+
+// Counts today's Claude-costing calls for this user and logs this one if
+// they're still under the applicable daily cap. One shared API key funds every
+// teacher's usage, so this is the cost-protection backstop for a public app.
+export async function checkAndLogUsage(userId: string, action: UsageAction): Promise<boolean> {
+  const allowed = await checkUsage(userId, action)
+  if (!allowed) return false
+  await logUsage(userId, action)
   return true
 }
