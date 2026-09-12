@@ -62,6 +62,10 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void) {
   // How long this turn has actually been speech, accumulated frame by frame
   // — the signal the wait length is derived from.
   const speechMsRef = useRef(0)
+  // Whether any frame this turn was loud enough to be speech. Kept separately
+  // from speechMsRef, which can legitimately still read 0 after a single
+  // loud first frame (there is no previous frame to measure a gap from).
+  const heardSpeechRef = useRef(false)
 
   function scheduleEnd() {
     if (timerRef.current) window.clearTimeout(timerRef.current)
@@ -165,13 +169,35 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void) {
       // speak stretch that follows, when nothing is actually listening.
       streamRef.current?.getAudioTracks().forEach((t) => (t.enabled = false))
       setListening(false)
+
+      const live = liveRef.current
+      liveRef.current = null
+
+      // Nothing crossed the speech threshold this turn, so there is nothing
+      // to transcribe. Skip both paths entirely.
+      //
+      // This is most turns, not an edge case: while a teacher is gathering
+      // their thoughts the silence timer ends a turn every couple of seconds
+      // and immediately starts another. Every one of those used to be
+      // uploaded and transcribed — paying Deepgram to confirm silence the
+      // level meter had already measured. Live transcription made it worse:
+      // an empty live transcript deliberately falls back to the upload (see
+      // the next block), so each silent turn was billed twice.
+      //
+      // The threshold is low enough that any real speech crosses it, and it
+      // is the same one that decides when a turn ends — a teacher who never
+      // crossed it would already have been cut off regardless.
+      if (!heardSpeechRef.current) {
+        live?.abandon()
+        onTurnComplete('')
+        return
+      }
+
       setTranscribing(true)
       // If live transcription was running, the words are already there and
       // the recording never has to be uploaded at all. Anything less than a
       // usable transcript falls through to the batch path below, which still
       // holds the complete turn.
-      const live = liveRef.current
-      liveRef.current = null
       if (live) {
         const transcript = await live.finish()
         live.abandon()
@@ -214,6 +240,7 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void) {
         // Capped per frame so a backgrounded tab, where rAF stops firing,
         // cannot come back and count the whole gap as speech.
         speechMsRef.current += Math.min(sinceLastFrame, 100)
+        heardSpeechRef.current = true
         scheduleEnd()
         // Restarted on every frame the teacher is still audible, so the
         // clock ends up starting at the last instant they were actually
@@ -224,6 +251,7 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void) {
     }
 
     speechMsRef.current = 0
+    heardSpeechRef.current = false
     lastFrameRef.current = 0
     turnIdRef.current += 1
 
