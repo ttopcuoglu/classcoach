@@ -8,7 +8,7 @@ import {
   MEMORY_UPDATE_INSTRUCTION,
   MEMORY_UPDATE_TOKEN_BUFFER,
 } from '../lib/coachMemory.ts'
-import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
+import { appendTurn, CHAT_TURN_CAP, countUserTurns, TALK_TURN_CAP, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
 import { transcribeAudio } from '../lib/deepgram.ts'
@@ -35,6 +35,16 @@ function trimIfTruncated(text: string, stopReason: string | null): string {
   if (matches.length === 0) return text
   const last = matches[matches.length - 1]
   return text.slice(0, (last.index ?? 0) + last[0].length).trim()
+}
+
+// This used to say "You've reached today's practice limit", which was wrong
+// twice over: the limit is per conversation, not per day, and it sent a
+// teacher off to wait until tomorrow for something a new conversation fixes
+// right now.
+function conversationFullMessage(isTalk: boolean): string {
+  return isTalk
+    ? 'This conversation has reached its length limit. Finish the session to save your takeaway, or start a new conversation.'
+    : 'This conversation has reached its length limit. Start a new one to keep going.'
 }
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } })
@@ -408,12 +418,12 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
   }
 
   const existing = (debrief.conversation as unknown as ChatMessage[] | null) ?? []
-  if (countUserTurns(existing) >= CHAT_TURN_CAP) {
-    res.status(409).json({ error: "You've reached today's practice limit for this conversation." })
+  const isTalk = debrief.source === 'talk_to_me'
+  if (countUserTurns(existing) >= (isTalk ? TALK_TURN_CAP : CHAT_TURN_CAP)) {
+    res.status(409).json({ error: conversationFullMessage(isTalk) })
     return
   }
 
-  const isTalk = debrief.source === 'talk_to_me'
   const action = isTalk ? 'talk_to_me_chat' : 'debrief_chat'
   if (!(await checkUsage(userId, action, user))) {
     res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
@@ -528,12 +538,12 @@ debriefRouter.post('/:id/chat', async (req, res) => {
   }
 
   const existing = (debrief.conversation as unknown as ChatMessage[] | null) ?? []
-  if (countUserTurns(existing) >= CHAT_TURN_CAP) {
-    res.status(409).json({ error: "You've reached today's practice limit for this conversation." })
+  const isTalk = debrief.source === 'talk_to_me'
+  if (countUserTurns(existing) >= (isTalk ? TALK_TURN_CAP : CHAT_TURN_CAP)) {
+    res.status(409).json({ error: conversationFullMessage(isTalk) })
     return
   }
 
-  const isTalk = debrief.source === 'talk_to_me'
   const allowed = await checkAndLogUsage(req.user!.userId, isTalk ? 'talk_to_me_chat' : 'debrief_chat')
   if (!allowed) {
     res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })

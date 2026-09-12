@@ -659,9 +659,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     const body = await res.json().catch(() => null)
-    throw new Error(body?.error ?? `Request failed with status ${res.status}`)
+    throw apiError(body?.error ?? `Request failed with status ${res.status}`, res.status)
   }
   return res.json()
+}
+
+// An Error that remembers the HTTP status it came from. Most callers only
+// ever show the message, and they keep working unchanged; the few that need
+// to tell an expected refusal from a real failure — a full conversation
+// (409) is not "something went wrong" — can read `status`.
+export type ApiError = Error & { status?: number }
+
+function apiError(message: string, status: number): ApiError {
+  return Object.assign(new Error(message), { status })
 }
 
 export function signInWithGoogle(credential: string): Promise<UserProfile> {
@@ -942,7 +952,7 @@ export async function streamCoachReply(
   // before the stream starts, so it still arrives as a normal status code.
   if (!res.ok) {
     const body = await res.json().catch(() => null)
-    throw new Error(body?.error ?? `Request failed with status ${res.status}`)
+    throw apiError(body?.error ?? `Request failed with status ${res.status}`, res.status)
   }
   if (!res.body) throw new Error('Could not reach Coach. Please try again.')
 

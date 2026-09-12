@@ -11,6 +11,7 @@ import {
   setDebriefSaved,
   startTalkToMe,
   streamCoachReply,
+  type ApiError,
   type ChatMessage,
   type Debrief,
   type TalkTakeaway,
@@ -70,6 +71,12 @@ type Phase = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
 // `visualState` below) means the orb, the dot, and the caption can never
 // disagree about which state is showing, unlike before, when the icon and
 // the caption text were computed by separate, inconsistent conditions.
+// Mirrors TALK_TURN_CAP in server/src/lib/coachingChat.ts. Only used to mark
+// a saved conversation as full before the teacher taps Continue on it; the
+// server enforces the real limit either way, so if these ever drift apart
+// the worst case is a Continue that ends with the length-limit message.
+const TALK_TURN_CAP = 30
+
 type VisualState = 'idle' | 'error' | 'listening' | 'thinking' | 'speaking'
 
 // Listening, waiting and speaking share one colour. They used to be mint,
@@ -127,6 +134,10 @@ export default function TalkToMe() {
   const [takeawayLoading, setTakeawayLoading] = useState(false)
   const [takeawayError, setTakeawayError] = useState<string | null>(null)
   const [savedTalks, setSavedTalks] = useState<Debrief[]>([])
+  // Set when the server refuses a turn because this conversation is at its
+  // length limit (see TALK_TURN_CAP) — distinct from an error, see
+  // handleTurnFailed.
+  const [conversationFull, setConversationFull] = useState(false)
   // Debrief-mode only: the "Set a Next Step" note, persisted as the
   // conversation's reflectionNote (the same field Ask and Practice already
   // use for "what happened when you tried it").
@@ -260,8 +271,7 @@ export default function TalkToMe() {
         resumeListeningIfActive()
       } catch (err) {
         if (!sessionActiveRef.current) return
-        setError((err as Error).message || 'Could not reach Coach. Please try again.')
-        setPhase('error')
+        handleTurnFailed(err as ApiError)
       }
       return
     }
@@ -295,9 +305,24 @@ export default function TalkToMe() {
       queue.cancel()
       queueRef.current = null
       if (!sessionActiveRef.current) return
-      setError((err as Error).message || 'Could not reach Coach. Please try again.')
-      setPhase('error')
+      handleTurnFailed(err as ApiError)
     }
+  }
+
+  // A full conversation is an expected ending, not a fault. Showing it as an
+  // error offered "Try Again", which could only ever hit the same limit, so
+  // it stops the mic instead and leaves Finish as the obvious next step.
+  function handleTurnFailed(err: ApiError) {
+    if (err.status === 409) {
+      sessionActiveRef.current = false
+      close()
+      setConversationFull(true)
+      setError(err.message)
+      setPhase('idle')
+      return
+    }
+    setError(err.message || 'Could not reach Coach. Please try again.')
+    setPhase('error')
   }
 
   function handleStop() {
@@ -386,6 +411,25 @@ export default function TalkToMe() {
     beginListening()
   }
 
+  // Picks a saved conversation back up. It becomes the live conversation, so
+  // every turn from here goes to the same record and Coach receives the whole
+  // history — the same path "Continue This Conversation" above already takes
+  // from the takeaway screen, entered from the start screen instead.
+  //
+  // The teacher's last line is put back on screen next to Coach's (which
+  // shows on its own, from the conversation), so it is obvious where they
+  // left off before they start speaking.
+  function handleContinuePast(past: Debrief) {
+    const lastUser = [...(past.conversation ?? [])].reverse().find((m) => m.role === 'user')
+    setDebrief(past)
+    setUserTranscript(lastUser?.text ?? null)
+    setTakeaway(null)
+    setTakeawayError(null)
+    setNextStepOpen(false)
+    setConversationFull(false)
+    beginListening()
+  }
+
   function handleStartOver() {
     sessionActiveRef.current = false
     close()
@@ -394,10 +438,17 @@ export default function TalkToMe() {
     setTakeaway(null)
     setTakeawayError(null)
     setUserTranscript(null)
+    setConversationFull(false)
     setError(null)
     setNextStepOpen(false)
     setNextStepDraft('')
     setPhase('idle')
+    // The saved list was loaded when the page opened. A conversation resumed
+    // since then has more turns and possibly a newer takeaway, and a stale
+    // copy would offer Continue on one that is actually full.
+    getDebriefs({ source: 'talk_to_me' })
+      .then((all) => setSavedTalks(all.filter((d) => d.saved)))
+      .catch(() => {})
     // Also clears ?mode=debrief: starting over from a debrief means an
     // ordinary new conversation, not another debrief of the same plan.
     navigate('/talk-to-me', { replace: true })
@@ -417,6 +468,10 @@ export default function TalkToMe() {
 
   const messages: ChatMessage[] = debrief?.conversation ?? []
   const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
+  // Full either because the server just said so, or because the count says
+  // so already — a conversation can be resumed from its takeaway screen
+  // without ever having hit the refusal in this session.
+  const atCap = conversationFull || messages.filter((m) => m.role === 'user').length >= TALK_TURN_CAP
   const finishing = takeawayLoading || takeaway != null || takeawayError != null
 
   return (
@@ -545,6 +600,7 @@ export default function TalkToMe() {
                   <div className="flex flex-wrap gap-2.5">
                     <button
                       type="button"
+                      hidden={atCap}
                       onClick={handleContinueTalking}
                       className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
                     >
@@ -740,7 +796,7 @@ export default function TalkToMe() {
                     </p>
                     <div className="flex flex-col gap-2">
                       {savedTalks.map((d) => (
-                        <SavedTalkCard key={d.id} debrief={d} />
+                        <SavedTalkCard key={d.id} debrief={d} onContinue={() => handleContinuePast(d)} />
                       ))}
                     </div>
                   </div>
@@ -797,7 +853,7 @@ export default function TalkToMe() {
               </form>
             ) : (
               <div className="flex flex-wrap items-center justify-center gap-3">
-                {phase === 'idle' || phase === 'error' ? (
+                {atCap ? null : phase === 'idle' || phase === 'error' ? (
                   <button
                     type="button"
                     onClick={beginListening}
@@ -828,6 +884,7 @@ export default function TalkToMe() {
                 </button>
                 <button
                   type="button"
+                  hidden={atCap}
                   onClick={handleOpenTypeInput}
                   className="rounded-full border-2 border-hairline bg-cream-card px-5 py-3 text-sm font-semibold text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
                 >
@@ -858,19 +915,44 @@ export default function TalkToMe() {
 // A saved conversation only ever gets bookmarked from its takeaway screen
 // (see handleToggleSaved), so talkTakeaway is expected to be set here —
 // still guarded defensively in case that ever changes.
-function SavedTalkCard({ debrief }: { debrief: Debrief }) {
+function SavedTalkCard({ debrief, onContinue }: { debrief: Debrief; onContinue: () => void }) {
   const [expanded, setExpanded] = useState(false)
   const takeaway = debrief.talkTakeaway
+  const turnsUsed = (debrief.conversation ?? []).filter((m) => m.role === 'user').length
+  const full = turnsUsed >= TALK_TURN_CAP
   return (
     <div className="rounded-xl border border-hairline bg-cream-card p-4">
-      <button
-        type="button"
-        onClick={() => setExpanded((e) => !e)}
-        className="flex w-full items-start justify-between gap-3 text-left"
-      >
-        <p className="text-sm text-ink">{debrief.incidentText}</p>
-        <span className="shrink-0 text-xs font-medium text-ink-soft">{expanded ? 'Hide' : 'Show'}</span>
-      </button>
+      <div className="flex w-full items-start justify-between gap-3 text-left">
+        <button type="button" onClick={() => setExpanded((e) => !e)} className="flex-1 text-left">
+          <p className="text-sm text-ink">{debrief.incidentText}</p>
+        </button>
+        <div className="flex shrink-0 items-center gap-3">
+          {/* Two separate actions rather than one card-wide tap target:
+              reading a takeaway should never accidentally switch the
+              microphone on. */}
+          <button
+            type="button"
+            onClick={() => setExpanded((e) => !e)}
+            className="text-xs font-medium text-ink-soft hover:text-ink"
+          >
+            {expanded ? 'Hide' : 'Show'}
+          </button>
+          {full ? (
+            <span className="text-xs font-medium text-ink-soft" title="This conversation has reached its length limit.">
+              Full
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={onContinue}
+              className="flex items-center gap-1 rounded-full bg-terracotta px-3 py-1 text-xs font-semibold text-cream transition-opacity hover:opacity-90"
+            >
+              <MicIcon className="h-3 w-3" />
+              Continue
+            </button>
+          )}
+        </div>
+      </div>
       {expanded && (
         <div className="mt-3 flex flex-col gap-3 border-t border-hairline pt-3 text-left">
           {takeaway ? (

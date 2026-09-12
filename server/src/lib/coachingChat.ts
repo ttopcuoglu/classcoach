@@ -9,6 +9,19 @@ export type ChatMessage = { role: 'user' | 'assistant'; text: string; createdAt:
 
 export const CHAT_TURN_CAP = 8
 
+// Talk It Through gets its own, much higher ceiling. The 8 above suits the
+// typed follow-up threads it was made for, where each turn is a considered
+// paragraph. A spoken conversation is a different shape: Coach answers in
+// about a sentence, so eight turns is a couple of minutes, and the teacher
+// hits the wall mid-thought — which got more likely, not less, once replies
+// started arriving fast enough to feel like a real conversation.
+//
+// This is still a real cap, not a formality. Every turn re-sends the whole
+// conversation, so cost per turn grows as a conversation gets longer, and
+// the daily conversational budget in usageLimit.ts is the backstop across
+// conversations rather than within one.
+export const TALK_TURN_CAP = 30
+
 export function countUserTurns(conversation: ChatMessage[]): number {
   return conversation.filter((m) => m.role === 'user').length
 }
