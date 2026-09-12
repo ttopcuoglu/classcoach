@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { transcribeTalkToMeAudio } from '../lib/api'
+import { beginTurn, markTurn } from '../lib/turnTiming'
 
 const MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
 
@@ -119,6 +120,7 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs =
       if (e.data.size > 0) chunksRef.current.push(e.data)
     }
     recorder.onstop = async () => {
+      markTurn('silence_wait')
       stopTurnLoop()
       // Disabling (not stopping) the track leaves the stream alive for the
       // next turn — no re-prompt for mic permission — while removing
@@ -150,7 +152,13 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs =
       }
       const pct = Math.min(100, Math.round(Math.sqrt(sumSquares / data.length) * 300))
       setLevel(pct)
-      if (pct > SPEECH_LEVEL_THRESHOLD) scheduleEnd()
+      if (pct > SPEECH_LEVEL_THRESHOLD) {
+        scheduleEnd()
+        // Restarted on every frame the teacher is still audible, so the
+        // clock ends up starting at the last instant they were actually
+        // speaking — which is when the wait starts from their side.
+        beginTurn()
+      }
       rafIdRef.current = requestAnimationFrame(tick)
     }
 

@@ -10,12 +10,14 @@ import {
   sendDebriefChat,
   setDebriefSaved,
   startTalkToMe,
+  streamCoachReply,
   type ChatMessage,
   type Debrief,
   type TalkTakeaway,
   type TalkVoice,
 } from '../lib/api'
-import { playQueue, primeAudioElement, splitIntoSentences } from '../lib/voicePlayback'
+import { endTurn, markTurn } from '../lib/turnTiming'
+import { createPlaybackQueue, primeAudioElement, type PlaybackQueue } from '../lib/voicePlayback'
 
 // First-person, concrete — things a teacher could plausibly say out loud,
 // not generic placeholders. Tapping one starts a real conversation
@@ -139,6 +141,11 @@ export default function TalkToMe() {
   // the tap. A ref (not state) so the current value is visible inside
   // async callbacks without waiting on a re-render.
   const sessionActiveRef = useRef(false)
+  // The in-flight reply's playback queue, so Stop/Close can silence a reply
+  // that is still arriving sentence by sentence — pausing the <audio>
+  // element alone would only stop the clip currently playing, and the next
+  // queued sentence would start moments later.
+  const queueRef = useRef<PlaybackQueue | null>(null)
 
   const { supported, level, fatalError, transcribing, start, close } = useVoiceTurn(handleTurnComplete)
 
@@ -249,41 +256,65 @@ export default function TalkToMe() {
       resumeListeningIfActive()
       return
     }
+    markTurn('transcribe')
     setUserTranscript(text)
     setPhase('thinking')
+
+    // Muted: there is nothing to speak, so there is nothing to overlap —
+    // take the plain request and skip the streaming machinery entirely.
+    if (mutedRef.current) {
+      try {
+        const current = debriefRef.current
+        const result = current ? await sendDebriefChat(current.id, text) : await startTalkToMe(text)
+        setDebrief(result)
+        resumeListeningIfActive()
+      } catch (err) {
+        if (!sessionActiveRef.current) return
+        setError((err as Error).message || 'Could not reach Coach. Please try again.')
+        setPhase('error')
+      }
+      return
+    }
+
+    const audio = audioRef.current
+    if (!audio) {
+      resumeListeningIfActive()
+      return
+    }
+    // Each sentence starts synthesizing the instant Claude finishes writing
+    // it, so Coach starts speaking while the rest of the reply is still
+    // being generated rather than after all of it is.
+    const queue = createPlaybackQueue(audio, talkVoiceRef.current, () => {
+      markTurn('speak')
+      endTurn()
+      setPhase('speaking')
+    })
+    queueRef.current = queue
     try {
       const current = debriefRef.current
-      const result = current ? await sendDebriefChat(current.id, text) : await startTalkToMe(text)
+      const result = await streamCoachReply(current ? current.id : null, text, (sentence) => {
+        if (!sessionActiveRef.current) return
+        queue.push(sentence)
+      })
       setDebrief(result)
-      const conv = result.conversation
-      const reply = conv[conv.length - 1]?.text ?? ''
-      await speak(reply)
+      queue.end()
+      await queue.finished
+      queueRef.current = null
+      resumeListeningIfActive()
     } catch (err) {
+      queue.cancel()
+      queueRef.current = null
       if (!sessionActiveRef.current) return
       setError((err as Error).message || 'Could not reach Coach. Please try again.')
       setPhase('error')
     }
   }
 
-  async function speak(text: string) {
-    if (!sessionActiveRef.current) return
-    setPhase('speaking')
-    if (mutedRef.current || !text) {
-      resumeListeningIfActive()
-      return
-    }
-    const sentences = splitIntoSentences(text)
-    if (sentences.length === 0 || !audioRef.current) {
-      resumeListeningIfActive()
-      return
-    }
-    await playQueue(audioRef.current, sentences, talkVoiceRef.current)
-    resumeListeningIfActive()
-  }
-
   function handleStop() {
     sessionActiveRef.current = false
     close()
+    queueRef.current?.cancel()
+    queueRef.current = null
     audioRef.current?.pause()
     setPhase('idle')
   }
@@ -291,13 +322,15 @@ export default function TalkToMe() {
   function handleClose() {
     sessionActiveRef.current = false
     close()
+    queueRef.current?.cancel()
+    queueRef.current = null
     audioRef.current?.pause()
     navigate('/')
   }
 
   // Shared entry point for both an example-prompt tap and a typed
   // submission — exactly the same path a real transcribed turn already
-  // uses, so sendDebriefChat/startTalkToMe and speak() need no changes.
+  // uses, streamed reply and all.
   function submitText(text: string) {
     const trimmed = text.trim()
     if (!trimmed) return

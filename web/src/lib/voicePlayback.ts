@@ -93,65 +93,141 @@ export async function fetchSentenceAudio(sentence: string, voice: TalkVoice | nu
   }
 }
 
-// Plays a queue of sentences back to back on ONE persistent <audio>
-// element, reused for the whole conversation. This has to be the same
-// element every time: mobile Safari only allows script-triggered
-// playback on a media element that was previously played successfully
-// from a real user gesture — a brand-new Audio() object created deep
-// inside an async chain gets its play() silently rejected there, which
-// .catch() then swallows as if the clip had simply finished, producing
-// total silence with no visible error.
+// Plays one clip on the shared element and resolves when it finishes.
 //
-// TTS synthesis takes real time per sentence, so naively fetching each
-// one only after the last finished playing left an audible gap between
-// every sentence. A first attempt at fixing this only started fetching
-// sentence N+1 once sentence N's audio arrived — giving it a head start
-// equal to sentence N's playback duration, which usually isn't enough,
-// since synthesizing one sentence typically takes about as long (or
-// longer) than *speaking* one. Fixed properly by firing off every
-// sentence's fetch in parallel up front, the moment the full reply is
-// known, so all of them are synthesizing concurrently while the first
-// one plays. This doesn't fight the single-<audio>-element constraint
-// above — prefetching is just a network request; only the actual
-// assigned `src`/`play()` needs to be the one persistent, gesture-
-// unlocked element.
-export async function playQueue(audio: HTMLAudioElement, sentences: string[], voice: TalkVoice | null): Promise<void> {
-  if (sentences.length === 0) return
-  const audioUrls = sentences.map((sentence) => fetchSentenceAudio(sentence, voice))
-  for (let i = 0; i < sentences.length; i++) {
-    const url = await audioUrls[i]
-    if (!url) continue // this segment failed to fetch — skip it, not fatal to the turn
-    await new Promise<void>((resolve) => {
-      // Chrome has a known quirk with streamed audio blobs (which is what
-      // this pipeline always produces) where `ended` can simply never
-      // fire, even though the file played and finished fine — Safari
-      // doesn't share this quirk, which is exactly the "works on Safari,
-      // gets stuck on Chrome" symptom this timeout exists to catch. A
-      // single sentence's TTS clip should never legitimately run anywhere
-      // near this long, so hitting it always means something's wrong,
-      // not that the reply is genuinely still speaking.
-      let settled = false
-      const settle = () => {
-        if (settled) return
-        settled = true
-        window.clearTimeout(timeoutId)
-        resolve()
-      }
-      const timeoutId = window.setTimeout(() => {
-        console.warn('[voicePlayback] audio playback timed out waiting for "ended" — advancing anyway')
-        settle()
-      }, 20000)
-      audio.onended = () => settle()
-      audio.onerror = () => {
-        console.warn('[voicePlayback] <audio> element error', audio.error?.code, audio.error?.message)
-        settle()
-      }
-      audio.src = url
-      audio.play().catch((err) => {
-        console.warn('[voicePlayback] audio.play() rejected', err?.name, err?.message)
-        settle()
-      })
+// Chrome has a known quirk with streamed audio blobs (which is what this
+// pipeline always produces) where `ended` can simply never fire, even though
+// the file played and finished fine — Safari doesn't share this quirk, which
+// is exactly the "works on Safari, gets stuck on Chrome" symptom this timeout
+// exists to catch. A single sentence's TTS clip should never legitimately run
+// anywhere near this long, so hitting it always means something's wrong, not
+// that the reply is genuinely still speaking.
+function playOne(audio: HTMLAudioElement, url: string): Promise<void> {
+  return new Promise<void>((resolve) => {
+    let settled = false
+    const settle = () => {
+      if (settled) return
+      settled = true
+      window.clearTimeout(timeoutId)
+      resolve()
+    }
+    const timeoutId = window.setTimeout(() => {
+      console.warn('[voicePlayback] audio playback timed out waiting for "ended" — advancing anyway')
+      settle()
+    }, 20000)
+    audio.onended = () => settle()
+    audio.onerror = () => {
+      console.warn('[voicePlayback] <audio> element error', audio.error?.code, audio.error?.message)
+      settle()
+    }
+    audio.src = url
+    audio.play().catch((err) => {
+      console.warn('[voicePlayback] audio.play() rejected', err?.name, err?.message)
+      settle()
     })
-    URL.revokeObjectURL(url)
+  })
+}
+
+// A queue that can be fed while it is already playing — which is the whole
+// point. Coach's reply is streamed sentence by sentence as Claude writes it,
+// so sentence one can be synthesizing and playing while sentence three does
+// not exist yet. Previously nothing could start until the entire reply had
+// been generated, which was most of the silence a teacher heard after
+// finishing their own sentence.
+//
+// Everything here has to keep using ONE persistent <audio> element: mobile
+// Safari only allows script-triggered playback on a media element that was
+// previously played successfully from a real user gesture — a brand-new
+// Audio() object created deep inside an async chain gets its play() silently
+// rejected there, which .catch() then swallows as if the clip had simply
+// finished, producing total silence with no visible error.
+//
+// Each sentence's fetch starts the instant it is pushed, so synthesis of
+// later sentences overlaps playback of earlier ones. Prefetching does not
+// fight the single-element constraint — it is just a network request; only
+// the assigned `src`/`play()` needs the gesture-unlocked element.
+export type PlaybackQueue = {
+  push: (sentence: string) => void
+  end: () => void
+  cancel: () => void
+  finished: Promise<void>
+}
+
+export function createPlaybackQueue(
+  audio: HTMLAudioElement,
+  voice: TalkVoice | null,
+  onFirstPlay?: () => void,
+): PlaybackQueue {
+  const pending: Promise<string | null>[] = []
+  let closed = false
+  let cancelled = false
+  let wake: (() => void) | null = null
+  const nudge = () => {
+    const w = wake
+    wake = null
+    w?.()
   }
+
+  const finished = (async () => {
+    let i = 0
+    let played = 0
+    while (!cancelled) {
+      if (i >= pending.length) {
+        if (closed) break
+        await new Promise<void>((resolve) => {
+          wake = resolve
+        })
+        continue
+      }
+      const url = await pending[i++]
+      if (!url) continue // this segment failed to fetch — skip it, not fatal
+      if (cancelled) {
+        URL.revokeObjectURL(url)
+        break
+      }
+      if (played === 0) onFirstPlay?.()
+      played += 1
+      await playOne(audio, url)
+      URL.revokeObjectURL(url)
+    }
+    // Anything fetched but never played still holds an object URL.
+    for (; i < pending.length; i++) {
+      const url = await pending[i].catch(() => null)
+      if (url) URL.revokeObjectURL(url)
+    }
+  })()
+
+  return {
+    push(sentence: string) {
+      if (closed || cancelled || !sentence.trim()) return
+      pending.push(fetchSentenceAudio(sentence, voice))
+      nudge()
+    },
+    end() {
+      closed = true
+      nudge()
+    },
+    cancel() {
+      cancelled = true
+      closed = true
+      audio.pause()
+      nudge()
+    },
+    finished,
+  }
+}
+
+// The all-at-once form, for callers that already have the complete text
+// (Lesson Debrief's Reflect tab, and Talk It Through's typed path). Same
+// queue underneath, so there is only one copy of the playback behaviour.
+export async function playQueue(
+  audio: HTMLAudioElement,
+  sentences: string[],
+  voice: TalkVoice | null,
+): Promise<void> {
+  if (sentences.length === 0) return
+  const queue = createPlaybackQueue(audio, voice)
+  for (const sentence of sentences) queue.push(sentence)
+  queue.end()
+  await queue.finished
 }

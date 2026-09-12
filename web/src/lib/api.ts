@@ -917,6 +917,63 @@ export function sendDebriefChat(id: string, message: string): Promise<Debrief> {
   return request(`/api/debriefs/${id}/chat`, { method: 'POST', body: JSON.stringify({ message }) })
 }
 
+// Streams a spoken coaching reply sentence by sentence (see the NDJSON
+// contract in server/src/routes/debrief.ts). `onSentence` fires the moment
+// each sentence is complete, so speech synthesis can start on sentence one
+// while Claude is still writing the rest; the promise resolves with the
+// saved Debrief once the whole reply has been generated and persisted.
+//
+// Pass no `id` to start a new Talk It Through; pass one to continue it.
+export async function streamCoachReply(
+  id: string | null,
+  message: string,
+  onSentence: (sentence: string) => void,
+): Promise<Debrief> {
+  const path = id ? `/api/debriefs/${id}/chat/stream` : '/api/debriefs/talk/stream'
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ message }),
+  })
+  // Everything the caller can act on (turn cap, daily limit) is rejected
+  // before the stream starts, so it still arrives as a normal status code.
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error ?? `Request failed with status ${res.status}`)
+  }
+  if (!res.body) throw new Error('Could not reach Coach. Please try again.')
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let debrief: Debrief | null = null
+
+  // Frames are newline-delimited, and a chunk can split one anywhere, so
+  // only whole lines are parsed and the remainder carries to the next read.
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    let newline: number
+    while ((newline = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, newline).trim()
+      buffer = buffer.slice(newline + 1)
+      if (!line) continue
+      const frame = JSON.parse(line) as
+        | { type: 'sentence'; text: string }
+        | { type: 'done'; debrief: Debrief }
+        | { type: 'error'; error: string }
+      if (frame.type === 'sentence') onSentence(frame.text)
+      else if (frame.type === 'done') debrief = frame.debrief
+      else throw new Error(frame.error)
+    }
+  }
+
+  if (!debrief) throw new Error('Could not reach Coach. Please try again.')
+  return debrief
+}
+
 export function startTalkToMe(message: string): Promise<Debrief> {
   return request('/api/debriefs/talk', { method: 'POST', body: JSON.stringify({ message }) })
 }

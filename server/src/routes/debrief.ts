@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, type Response } from 'express'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { hasActivePlan } from '../lib/billing.ts'
@@ -15,7 +15,9 @@ import { transcribeAudio } from '../lib/deepgram.ts'
 import { extractTag, stripTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
 import { SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
+import { reconcileTail, takeCompleteSentences, visibleSoFar } from '../lib/sentenceStream.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
+import { startTiming } from '../lib/turnTiming.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const debriefRouter = Router()
@@ -47,14 +49,17 @@ debriefRouter.post('/transcribe', upload.single('audio'), async (req, res) => {
     res.status(400).json({ error: 'No audio file received' })
     return
   }
+  const timing = startTiming('transcribe')
   try {
     const utterances = await transcribeAudio(req.file.buffer, req.file.mimetype)
+    timing.mark('deepgram')
     const transcript = utterances
       .slice()
       .sort((a, b) => a.start - b.start)
       .map((u) => u.transcript)
       .join(' ')
       .trim()
+    timing.end({ bytes: req.file.size, chars: transcript.length })
     res.json({ transcript })
   } catch (error) {
     console.error('[debrief] transcription failed:', error)
@@ -199,6 +204,228 @@ debriefRouter.post('/', async (req, res) => {
     console.error('[debrief] feedback generation failed:', error)
     res.status(502).json({ error: 'Claude request failed' })
   }
+})
+
+// ---------------------------------------------------------------------------
+// Streamed spoken replies
+// ---------------------------------------------------------------------------
+//
+// The non-streaming /talk and /:id/chat below stay exactly as they are —
+// they back the typed paths and Lesson Debrief's Reflect tab, where nothing
+// is spoken and waiting for the whole reply costs nothing. The spoken path
+// gets these instead, because there the wait is the product: the teacher
+// stops talking and hears silence until the LAST token is generated, even
+// though the FIRST sentence could have been synthesized seconds earlier.
+//
+// Emits newline-delimited JSON rather than Server-Sent Events: this is a
+// POST with credentials, which EventSource cannot do, so the client reads
+// the body stream directly either way and NDJSON is the simpler framing.
+//
+//   {"type":"sentence","text":"..."}   one per sentence, as it completes
+//   {"type":"done","debrief":{...}}    the saved record, identical to /talk
+//   {"type":"error","error":"..."}
+//
+// Every rejection a caller can act on (auth, turn cap, usage limit) is
+// checked BEFORE the first byte goes out, because once the stream has begun
+// the status code is already sent and can no longer say 429.
+type StreamOptions = {
+  systemPrompt: string
+  maxTokens: number
+  messages: { role: 'user' | 'assistant'; content: string }[]
+  safetyLabel: string
+  // Saves the finished reply and returns the record the client should get —
+  // the same shape the non-streaming endpoint returns, so the client's state
+  // handling is unchanged.
+  persist: (reply: string) => Promise<unknown>
+  // The raw text including the hidden <memory_update> block, for callers
+  // that maintain coach memory. Runs after persist, off the spoken path.
+  afterPersist?: (rawText: string) => Promise<void>
+}
+
+async function streamCoachReply(res: Response, label: string, opts: StreamOptions) {
+  const timing = startTiming(label)
+  res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8')
+  res.setHeader('Cache-Control', 'no-cache, no-transform')
+  // Render's proxy would otherwise sit on a response this small until enough
+  // accumulated, which undoes the entire point of streaming it.
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.flushHeaders()
+
+  const send = (obj: unknown) => res.write(JSON.stringify(obj) + '\n')
+
+  let raw = ''
+  // How far into the visible (memory-tag-free) text has already been sent.
+  let consumed = 0
+  const spoken: string[] = []
+
+  try {
+    const stream = anthropic.messages.stream({
+      model: CLAUDE_MODEL,
+      max_tokens: opts.maxTokens,
+      thinking: { type: 'disabled' },
+      system: opts.systemPrompt,
+      messages: opts.messages,
+    })
+
+    stream.on('text', (delta) => {
+      raw += delta
+      const visible = visibleSoFar(raw)
+      const { sentences, rest } = takeCompleteSentences(visible.slice(consumed))
+      if (sentences.length === 0) return
+      if (spoken.length === 0) timing.mark('first_sentence')
+      for (const sentence of sentences) {
+        spoken.push(sentence)
+        send({ type: 'sentence', text: sentence })
+      }
+      consumed = visible.length - rest.length
+    })
+
+    const message = await stream.finalMessage()
+    timing.mark('claude_done')
+
+    const text = message.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+    flagIfUnsafe(text, opts.safetyLabel)
+    const reply = trimIfTruncated(stripTag(text, 'memory_update'), message.stop_reason)
+
+    if (!reply) {
+      send({ type: 'error', error: 'Could not reach Coach. Please try again.' })
+      res.end()
+      return
+    }
+
+    // The spoken reply and the saved one must be the same words. Sentence
+    // boundaries need a following character to be recognised, so the last
+    // sentence of a reply never streams out — it is sent here, along with
+    // anything else the boundary rule did not catch.
+    const tail = reconcileTail(spoken, reply)
+    if (tail) {
+      if (spoken.length === 0) timing.mark('first_sentence')
+      send({ type: 'sentence', text: tail })
+    }
+
+    const record = await opts.persist(reply)
+    timing.mark('persist')
+    send({ type: 'done', debrief: record })
+    res.end()
+    timing.end({ sentences: spoken.length + (tail ? 1 : 0), chars: reply.length })
+
+    // Deliberately after res.end(): memory is bookkeeping for the NEXT turn,
+    // so making this turn wait on another write would be pure added latency.
+    if (opts.afterPersist) await opts.afterPersist(text)
+  } catch (error) {
+    console.error(`[debrief] ${label} failed:`, error)
+    // Headers are long gone, so this cannot be a 502 — the client treats a
+    // terminal error frame the same way it treats a failed request.
+    send({ type: 'error', error: 'Could not reach Coach. Please try again.' })
+    res.end()
+  }
+}
+
+debriefRouter.post('/talk/stream', async (req, res) => {
+  const { message } = req.body ?? {}
+  if (typeof message !== 'string' || !message.trim()) {
+    res.status(400).json({ error: 'message is required' })
+    return
+  }
+  if (!(await checkAndLogUsage(req.user!.userId, 'talk_to_me'))) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  const trimmed = message.trim()
+  const userId = req.user!.userId
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { coachMemory: true, coachMemoryEnabled: true },
+  })
+  const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(userId))
+
+  await streamCoachReply(res, 'talk_start', {
+    systemPrompt: memoryOn
+      ? `${TALK_SYSTEM_PROMPT}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+      : TALK_SYSTEM_PROMPT,
+    maxTokens: memoryOn ? 110 + MEMORY_UPDATE_TOKEN_BUFFER : 110,
+    messages: [{ role: 'user', content: trimmed }],
+    safetyLabel: 'debrief.talk',
+    persist: (reply) =>
+      prisma.debrief.create({
+        data: {
+          userId,
+          incidentText: trimmed,
+          source: 'talk_to_me',
+          conversation: appendTurn([], trimmed, reply),
+        },
+      }),
+    afterPersist: memoryOn
+      ? async (rawText) => {
+          const updated = applyMemoryUpdate(extractTag(rawText, 'memory_update'), user!.coachMemory)
+          if (updated !== user!.coachMemory) {
+            await prisma.user.update({ where: { id: userId }, data: { coachMemory: updated } })
+          }
+        }
+      : undefined,
+  })
+})
+
+debriefRouter.post('/:id/chat/stream', async (req, res) => {
+  const { message } = req.body ?? {}
+  if (typeof message !== 'string' || !message.trim()) {
+    res.status(400).json({ error: 'message is required' })
+    return
+  }
+
+  const userId = req.user!.userId
+  const debrief = await prisma.debrief.findFirst({ where: { id: req.params.id, userId } })
+  if (!debrief) {
+    res.status(404).json({ error: 'Debrief not found' })
+    return
+  }
+
+  const existing = (debrief.conversation as unknown as ChatMessage[] | null) ?? []
+  if (countUserTurns(existing) >= CHAT_TURN_CAP) {
+    res.status(409).json({ error: "You've reached today's practice limit for this conversation." })
+    return
+  }
+
+  const isTalk = debrief.source === 'talk_to_me'
+  if (!(await checkAndLogUsage(userId, isTalk ? 'talk_to_me_chat' : 'debrief_chat'))) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  const trimmed = message.trim()
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { coachMemory: true, coachMemoryEnabled: true },
+  })
+  const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(userId))
+  const basePrompt = isTalk ? TALK_SYSTEM_PROMPT : ASK_CHAT_SYSTEM_PROMPT
+  const baseMaxTokens = isTalk ? 110 : 300
+
+  await streamCoachReply(res, isTalk ? 'talk_chat' : 'debrief_chat', {
+    systemPrompt: memoryOn
+      ? `${basePrompt}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+      : basePrompt,
+    maxTokens: memoryOn ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
+    messages: toClaudeMessages(existing, trimmed),
+    safetyLabel: isTalk ? 'debrief.talk.chat' : 'debrief.ask.chat',
+    persist: (reply) =>
+      prisma.debrief.update({
+        where: { id: debrief.id },
+        data: { conversation: appendTurn(existing, trimmed, reply) },
+      }),
+    afterPersist: memoryOn
+      ? async (rawText) => {
+          const updated = applyMemoryUpdate(extractTag(rawText, 'memory_update'), user!.coachMemory)
+          if (updated !== user!.coachMemory) {
+            await prisma.user.update({ where: { id: userId }, data: { coachMemory: updated } })
+          }
+        }
+      : undefined,
+  })
 })
 
 debriefRouter.post('/talk', async (req, res) => {
