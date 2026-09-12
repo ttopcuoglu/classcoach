@@ -64,3 +64,12 @@ body {
   print-color-adjust: exact;
   -webkit-print-color-adjust: exact;
 }
+
+/* The rule above is what makes the body's cream print too, so paper ends up
+   with a full-bleed tint wherever a page is not covered by content — most
+   visibly as a slab under the last page's footer. Paper is white. */
+@media print {
+  body {
+    background: #fff;
+  }
+}
