@@ -9,8 +9,9 @@ import { Link } from 'react-router-dom'
 // NOT each force a new page, and are not kept whole either — both were tried,
 // and printing all thirteen reports measured the cost: page-per-section ran
 // 71 pages at about a third full, and keeping tall sections unbroken still
-// left half-blank sheets wherever one did not fit. And it has to stay honest: where a value could not be
-// determined, print a dash and its reason rather than a zero.
+// left half-blank sheets wherever one did not fit. And it has to stay honest:
+// where a value could not be determined, print a dash and its reason rather
+// than a zero.
 
 export type Accent = { band: string; chip: string; tint: string; ink: string }
 
