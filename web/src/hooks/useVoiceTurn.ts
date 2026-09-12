@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react'
 import { transcribeTalkToMeAudio } from '../lib/api'
+import { liveTranscriptionEnabled, openLiveSession, type LiveSession } from '../lib/liveTranscription'
+import { silenceWindowFor } from '../lib/turnEndpointing'
 import { beginTurn, markTurn } from '../lib/turnTiming'
 
 const MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
@@ -22,10 +24,12 @@ const FATAL_ERROR_MESSAGES: Record<string, string> = {
 // talking) moves to a live volume reading via Web Audio's AnalyserNode,
 // the same RMS technique MicLevelMeter.tsx already uses — a silence timer
 // arms the moment listening starts and resets every time the level crosses
-// the speech threshold, ending the turn on the first uninterrupted
-// silenceMs stretch, whether the teacher never spoke at all or spoke and
-// then paused.
-export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs = 1400) {
+// the speech threshold, ending the turn on the first uninterrupted stretch
+// of quiet, whether the teacher never spoke at all or spoke and then
+// paused. How long that stretch has to be is not fixed: see
+// silenceWindowFor, which reads it off how long they have just been
+// talking.
+export function useVoiceTurn(onTurnComplete: (text: string) => void) {
   const [listening, setListening] = useState(false)
   const [level, setLevel] = useState(0)
   const [fatalError, setFatalError] = useState<string | null>(null)
@@ -43,17 +47,41 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs =
   const mimeTypeRef = useRef('')
   const timerRef = useRef<number | null>(null)
   const rafIdRef = useRef<number | null>(null)
+  const lastFrameRef = useRef(0)
+  // Bumped per turn so a socket that opens after its turn ended is dropped
+  // rather than attached to the next one.
+  const turnIdRef = useRef(0)
+  // Live transcription, when it is switched on: a ScriptProcessor tap on the
+  // same AudioContext the level meter already uses, feeding PCM to the
+  // server while the teacher talks. Both are null when it is off or failed,
+  // and the batch upload below then runs exactly as it always has.
+  const liveRef = useRef<LiveSession | null>(null)
+  const tapRef = useRef<ScriptProcessorNode | null>(null)
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null)
+
+  // How long this turn has actually been speech, accumulated frame by frame
+  // — the signal the wait length is derived from.
+  const speechMsRef = useRef(0)
 
   function scheduleEnd() {
     if (timerRef.current) window.clearTimeout(timerRef.current)
     timerRef.current = window.setTimeout(() => {
       recorderRef.current?.stop()
-    }, silenceMs)
+    }, silenceWindowFor(speechMsRef.current))
   }
 
   // Ends the current turn's level/silence-detection loop only — the
   // underlying stream stays open for the next turn.
+  function stopLiveTap() {
+    if (tapRef.current) {
+      tapRef.current.onaudioprocess = null
+      tapRef.current.disconnect()
+      tapRef.current = null
+    }
+  }
+
   function stopTurnLoop() {
+    stopLiveTap()
     if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current)
     rafIdRef.current = null
     if (timerRef.current) window.clearTimeout(timerRef.current)
@@ -66,8 +94,13 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs =
   // entirely (closing/stopping the conversation), not between turns.
   function close() {
     stopTurnLoop()
+    // Dropped without asking for a transcript: closing means the teacher is
+    // done, so there is nothing left to transcribe and nothing to wait for.
+    liveRef.current?.abandon()
+    liveRef.current = null
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
+    sourceRef.current = null
     audioCtxRef.current?.close()
     audioCtxRef.current = null
     analyserRef.current = null
@@ -94,6 +127,7 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs =
       const audioCtx = new AudioContext()
       audioCtxRef.current = audioCtx
       const source = audioCtx.createMediaStreamSource(stream)
+      sourceRef.current = source
       const analyser = audioCtx.createAnalyser()
       analyser.fftSize = 256
       source.connect(analyser)
@@ -121,6 +155,9 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs =
     }
     recorder.onstop = async () => {
       markTurn('silence_wait')
+      // Any live socket still opening belongs to a turn that is now over;
+      // bumping the id makes it abandon itself rather than linger open.
+      turnIdRef.current += 1
       stopTurnLoop()
       // Disabling (not stopping) the track leaves the stream alive for the
       // next turn — no re-prompt for mic permission — while removing
@@ -129,6 +166,24 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs =
       streamRef.current?.getAudioTracks().forEach((t) => (t.enabled = false))
       setListening(false)
       setTranscribing(true)
+      // If live transcription was running, the words are already there and
+      // the recording never has to be uploaded at all. Anything less than a
+      // usable transcript falls through to the batch path below, which still
+      // holds the complete turn.
+      const live = liveRef.current
+      liveRef.current = null
+      if (live) {
+        const transcript = await live.finish()
+        live.abandon()
+        if (transcript) {
+          markTurn('transcribe_live')
+          setTranscribing(false)
+          onTurnComplete(transcript.trim())
+          return
+        }
+        console.warn('[useVoiceTurn] live transcription returned nothing — falling back to the upload')
+      }
+
       const blob = new Blob(chunksRef.current, { type: mimeTypeRef.current || 'audio/webm' })
       try {
         const { transcript } = await transcribeTalkToMeAudio(blob)
@@ -152,7 +207,13 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs =
       }
       const pct = Math.min(100, Math.round(Math.sqrt(sumSquares / data.length) * 300))
       setLevel(pct)
+      const now = performance.now()
+      const sinceLastFrame = lastFrameRef.current ? now - lastFrameRef.current : 0
+      lastFrameRef.current = now
       if (pct > SPEECH_LEVEL_THRESHOLD) {
+        // Capped per frame so a backgrounded tab, where rAF stops firing,
+        // cannot come back and count the whole gap as speech.
+        speechMsRef.current += Math.min(sinceLastFrame, 100)
         scheduleEnd()
         // Restarted on every frame the teacher is still audible, so the
         // clock ends up starting at the last instant they were actually
@@ -162,10 +223,66 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void, silenceMs =
       rafIdRef.current = requestAnimationFrame(tick)
     }
 
+    speechMsRef.current = 0
+    lastFrameRef.current = 0
+    turnIdRef.current += 1
+
     recorder.start()
     setListening(true)
     scheduleEnd()
     tick()
+
+    // Opened alongside recording rather than before it. Waiting for the
+    // socket first would mean the microphone was not yet recording while it
+    // connected, so the teacher's opening words would be missing from both
+    // the live stream and the fallback recording. Audio captured before the
+    // socket is ready is held and flushed the moment it opens, so the live
+    // transcript starts at the same word the recording does.
+    if (liveTranscriptionEnabled() && sourceRef.current && audioCtxRef.current) {
+      const ctx = audioCtxRef.current
+      const turnId = turnIdRef.current
+      const backlog: Float32Array[] = []
+      let live: LiveSession | null = null
+
+      // ScriptProcessorNode is deprecated in favour of AudioWorklet, but it
+      // needs no separately served module file and is supported everywhere
+      // this app runs, including iOS Safari. One mono channel does little
+      // enough work per block to stay off the main thread's critical path.
+      const tap = ctx.createScriptProcessor(4096, 1, 1)
+      tap.onaudioprocess = (event) => {
+        const block = event.inputBuffer.getChannelData(0)
+        if (live) live.send(block)
+        // The buffer behind that view is reused for the next block, so
+        // anything held rather than sent immediately has to be copied.
+        else backlog.push(new Float32Array(block))
+      }
+      sourceRef.current.connect(tap)
+      // A ScriptProcessor only runs while it is connected to a destination.
+      // Routing it through a silent gain node keeps it processing without
+      // the teacher hearing their own microphone played back at them.
+      const sink = ctx.createGain()
+      sink.gain.value = 0
+      tap.connect(sink)
+      sink.connect(ctx.destination)
+      tapRef.current = tap
+
+      void openLiveSession(ctx.sampleRate).then((session) => {
+        // The turn can easily end before the socket finishes opening —
+        // Stop, Close, or simply a very short answer.
+        if (!session) {
+          stopLiveTap()
+          return
+        }
+        if (turnId !== turnIdRef.current) {
+          session.abandon()
+          return
+        }
+        for (const block of backlog) session.send(block)
+        backlog.length = 0
+        live = session
+        liveRef.current = session
+      })
+    }
   }
 
   function stop() {

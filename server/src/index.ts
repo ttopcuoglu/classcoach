@@ -21,6 +21,7 @@ import { shareRouter } from './routes/share.ts'
 import { ttsRouter } from './routes/tts.ts'
 import { supportRouter } from './routes/support.ts'
 import { requireAuth } from './lib/auth.ts'
+import { attachLiveSttServer } from './routes/sttLive.ts'
 
 const app = express()
 
@@ -67,6 +68,11 @@ app.use('/api/tts', requireAuth, ttsRouter)
 app.use('/api/onboarding', requireAuth, onboardingRouter)
 
 const port = Number(process.env.PORT) || 3001
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Wivoza API listening on http://localhost:${port}`)
 })
+
+// Live transcription runs over a WebSocket rather than a route, so it
+// attaches to the server rather than the Express app. It authenticates the
+// upgrade itself with the same session token the HTTP middleware checks.
+attachLiveSttServer(server)

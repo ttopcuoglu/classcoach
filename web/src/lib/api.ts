@@ -647,7 +647,9 @@ export type AudioSessionWithSegments = AudioSession & { segments: TranscriptSegm
 
 export type SpeakerSample = { rawSpeakerTag: string; sample: string }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? ''
+// Exported so the live-transcription socket can derive its own ws:// origin
+// from the same setting rather than assuming the API is same-origin.
+export const API_BASE_URL = import.meta.env.VITE_API_URL ?? ''
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${path}`, {

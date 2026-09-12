@@ -2962,7 +2962,7 @@ function ReflectTab({
     transcribing,
     start,
     close,
-  } = useVoiceTurn(handleVoiceTurnComplete, 1400)
+  } = useVoiceTurn(handleVoiceTurnComplete)
 
   useEffect(() => {
     if (voiceFatalError) setVoiceMode(false)
