@@ -22,7 +22,7 @@ const MIN_SAMPLE_RATE = 8000
 
 type ClientMessage = { type: 'finish' }
 
-export function attachLiveSttServer(server: Server): void {
+export function attachLiveSttServer(server: Server, allowedOrigins: string[]): void {
   const wss = new WebSocketServer({ noServer: true })
 
   server.on('upgrade', (req, socket, head) => {
@@ -34,7 +34,31 @@ export function attachLiveSttServer(server: Server): void {
     // has to ride in the query string, because a browser WebSocket cannot
     // set request headers).
     const cookies = parseCookie(req.headers.cookie ?? '')
-    const token = cookies[SESSION_COOKIE] ?? searchParams.get('token') ?? ''
+    const cookieToken = cookies[SESSION_COOKIE]
+    const queryToken = searchParams.get('token')
+    const token = cookieToken ?? queryToken ?? ''
+
+    // WebSockets are not covered by CORS, so the cors() middleware protecting
+    // every HTTP route does nothing here. And because the session cookie is
+    // SameSite=None (the API is a different origin from the site), the
+    // browser attaches it to a socket opened by ANY page a signed-in teacher
+    // happens to visit. That page could not reach their microphone — that
+    // permission belongs to the site that asked — but it could stream audio
+    // through our Deepgram key on their account.
+    //
+    // So a cookie is only honoured from our own front end. A token in the
+    // query string needs no such check: a hostile page has no way to know
+    // it, and the iOS app, which is the thing that sends one, may not send
+    // an Origin header at all.
+    if (cookieToken) {
+      const origin = req.headers.origin
+      if (!origin || !allowedOrigins.includes(origin)) {
+        socket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+        socket.destroy()
+        return
+      }
+    }
+
     const session = token ? verifySession(token) : null
     if (!session) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')

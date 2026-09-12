@@ -4,24 +4,28 @@ import { API_BASE_URL } from './api'
 // teacher is still talking, so the transcript is ready the moment they stop
 // instead of being requested then.
 //
-// OFF BY DEFAULT. Enable per-browser:
+// On by default. Turn it off per-browser to compare against, or to rule it
+// out while diagnosing a bad session:
 //
-//   localStorage.wivozaLiveStt = '1'    (or open the page with ?livestt=1)
+//   localStorage.wivozaLiveStt = '0'    (or open the page with ?livestt=0)
 //
-// The flag exists because this replaces a request that either works or
-// returns an error with a live connection that can also stall, half-connect,
-// or lose audio — failure modes worth meeting deliberately rather than
-// discovering during a teacher's first conversation. Whatever happens here,
-// useVoiceTurn still has the full recording and still falls back to the
-// batch upload, so the worst outcome is the latency we have today.
+// It shipped behind an opt-in first because it replaces a request that
+// either works or errors with a live connection that can also stall,
+// half-connect or lose audio. It is safe to default on because none of that
+// can cost a turn: useVoiceTurn keeps the full recording regardless, and
+// every failure path here returns null, which means "upload it the old
+// way". The worst case is the latency the batch path always had.
 export function liveTranscriptionEnabled(): boolean {
   try {
-    return (
-      localStorage.getItem('wivozaLiveStt') === '1' ||
-      new URLSearchParams(location.search).get('livestt') === '1'
-    )
+    const query = new URLSearchParams(location.search).get('livestt')
+    if (query === '0') return false
+    if (query === '1') return true
+    return localStorage.getItem('wivozaLiveStt') !== '0'
   } catch {
-    return false
+    // Storage blocked (private mode, strict settings). Transcription does not
+    // depend on anything stored, so there is no reason to fall back to the
+    // slower path just because the preference cannot be read.
+    return true
   }
 }
 

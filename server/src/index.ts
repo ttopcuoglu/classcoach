@@ -75,4 +75,4 @@ const server = app.listen(port, () => {
 // Live transcription runs over a WebSocket rather than a route, so it
 // attaches to the server rather than the Express app. It authenticates the
 // upgrade itself with the same session token the HTTP middleware checks.
-attachLiveSttServer(server)
+attachLiveSttServer(server, FRONTEND_ORIGINS)
