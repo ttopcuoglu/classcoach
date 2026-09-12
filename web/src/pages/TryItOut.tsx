@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import CoachingChat from '../components/CoachingChat'
 import ReflectionTimeline from '../components/ReflectionTimeline'
 import ShareButton from '../components/ShareButton'
@@ -495,6 +496,12 @@ export default function TryItOut() {
                     <StarIcon className="h-4 w-4" filled={attempt.saved} />
                     {attempt.saved ? 'Saved' : 'Save for later'}
                   </button>
+                  <Link
+                    to={`/ask-practice/practice/${attempt.id}/export`}
+                    className="text-sm font-medium text-ink-soft transition-colors hover:text-brand-600"
+                  >
+                    Export / Print
+                  </Link>
                   <div className="flex items-center gap-2">
                     {!sessionState && (
                       <button

@@ -558,6 +558,14 @@ export default function TalkToMe() {
                     >
                       Start a New Talk It Through
                     </button>
+                    {debrief && (
+                      <Link
+                        to={`/talk-to-me/${debrief.id}/export`}
+                        className="rounded-full border-2 border-hairline bg-cream-card px-5 py-2.5 text-sm font-semibold text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
+                      >
+                        Export / Print
+                      </Link>
+                    )}
                   </div>
                 )}
                 {debrief?.reflectionNote && !nextStepOpen && (

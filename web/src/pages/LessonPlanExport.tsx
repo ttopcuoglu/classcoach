@@ -1,6 +1,29 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
+import {
+  ACCENTS,
+  Callout,
+  ChipRow,
+  Prose,
+  ReportCover,
+  ReportFooter,
+  ReportSection,
+  ReportShell,
+  ReportState,
+  StatTile,
+  TurnBubble,
+  formatReportDate,
+} from '../components/report'
 import { getLessonPlan, type LessonPlan } from '../lib/api'
+
+// Printable report for all three Lesson Planning modes. They share a data
+// model but produce genuinely different documents, so the sections are
+// chosen per mode rather than rendering empty shells for the others.
+const MODE_LABEL: Record<string, string> = {
+  generated: 'Generate Ideas',
+  feedback: 'Get Feedback',
+  presentation: 'Review a Presentation',
+}
 
 export default function LessonPlanExport() {
   const { id } = useParams<{ id: string }>()
@@ -9,201 +32,136 @@ export default function LessonPlanExport() {
 
   useEffect(() => {
     if (!id) return
-    getLessonPlan(id)
-      .then(setPlan)
-      .catch(() => {})
-      .finally(() => setLoading(false))
+    getLessonPlan(id).then(setPlan).catch(() => {}).finally(() => setLoading(false))
   }, [id])
 
+  if (loading) return <ReportState text="Loading…" />
+  if (!plan) return <ReportState text="Plan not found." />
+
+  const A = ACCENTS
+  const isPresentation = plan.mode === 'presentation'
+  const review = plan.presentationReview
+  const delivery = plan.deliveryCoaching
+  const chat = (plan.conversation ?? []).filter((m) => m.text?.trim())
+  const context = [plan.subject, plan.gradeLevel, plan.unitName, plan.standard].filter(Boolean) as string[]
+  let n = 0
+
   return (
-    <div className="min-h-screen bg-canvas px-6 py-8">
-      <div className="mx-auto max-w-2xl">
-        <div className="mb-6 flex items-center justify-between print:hidden">
-          <Link to="/lesson-planning" className="text-sm font-medium text-ink-soft hover:text-ink">
-            ← Back
-          </Link>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
-          >
-            Print / Save as PDF
-          </button>
+    <ReportShell backTo="/lesson-planning">
+      <ReportCover
+        eyebrow={`Wivoza · ${MODE_LABEL[plan.mode] ?? 'Lesson Planning'}`}
+        title={plan.objective || (isPresentation ? plan.fileName || 'Presentation review' : 'Lesson plan')}
+        meta={[
+          formatReportDate(plan.createdAt),
+          plan.slideCount ? `${plan.slideCount} slides` : null,
+          plan.fileName && !isPresentation ? plan.fileName : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+      />
+
+      {plan.essentialQuestion && (
+        <div className="mt-5 break-inside-avoid rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-6">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-terracotta-600">Essential question</p>
+          <p className="mt-2 text-base leading-relaxed text-ink">{plan.essentialQuestion}</p>
         </div>
+      )}
 
-        {loading ? (
-          <p className="mt-8 text-sm text-ink-soft">Loading...</p>
-        ) : !plan ? (
-          <p className="mt-8 text-sm text-ink-soft">Lesson plan not found.</p>
-        ) : (
-          <>
-            <h1 className="text-2xl font-semibold text-ink">
-              Wivoza —{' '}
-              {plan.mode === 'generated'
-                ? 'Sample Lesson Plan'
-                : plan.mode === 'presentation'
-                  ? 'Presentation Review'
-                  : 'Lesson Plan Feedback'}
-            </h1>
-            <p className="mt-1 text-sm text-ink-soft">
-              {plan.mode === 'presentation' ? (plan.fileName ? `${plan.fileName} · ` : '') : plan.unitName ? `${plan.unitName} · ` : ''}
-              {plan.subject ? `${plan.subject} · ` : ''}
-              {plan.gradeLevel ? `${plan.gradeLevel}` : ''}
-              {plan.mode === 'presentation' && plan.slideCount != null
-                ? `${plan.subject || plan.gradeLevel ? ' · ' : ''}${plan.slideCount} slide${plan.slideCount === 1 ? '' : 's'}`
-                : ''}
-            </p>
+      {context.length > 0 && (
+        <div className="mt-5">
+          <ChipRow items={context} accent={A.mint} />
+        </div>
+      )}
 
-            {plan.objective && (
-              <section className="mt-6 break-inside-avoid rounded-xl border border-border p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                  {plan.mode === 'presentation' ? 'About this presentation' : 'Objective'}
-                </p>
-                <p className="mt-1 text-sm text-ink">{plan.objective}</p>
-                {plan.standard && (
-                  <p className="mt-2 text-xs text-ink-soft">
-                    <span className="font-semibold">Standard:</span> {plan.standard}
-                  </p>
-                )}
-                {plan.essentialQuestion && (
-                  <p className="mt-1 text-xs text-ink-soft">
-                    <span className="font-semibold">Essential question:</span> {plan.essentialQuestion}
-                  </p>
-                )}
-              </section>
-            )}
+      {/* Generate Ideas — the sample day, one section per template part. */}
+      {plan.mode === 'generated' && (
+        <>
+          <ReportSection n={++n} title="The Lesson" blurb="A sample day to adapt — not a script to follow." accent={A.terracotta}>
+            {plan.doNow && <Callout label="Do Now" body={plan.doNow} accent={A.terracotta} />}
+            {plan.agenda && <Callout label="Agenda · I Do / We Do / You Do" body={plan.agenda} accent={A.gold} />}
+            {plan.closure && <Callout label="Closure" body={plan.closure} accent={A.mint} />}
+          </ReportSection>
 
-            {plan.mode === 'feedback' ? (
-              <>
-                {plan.planText && (
-                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Plan</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.planText}</p>
-                  </section>
-                )}
-                {plan.feedback && (
-                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Coaching</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.feedback}</p>
-                  </section>
-                )}
-              </>
-            ) : plan.mode === 'presentation' ? (
-              <>
-                {plan.presentationReview?.gradeLevelFit && (
-                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Grade-level fit</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.presentationReview.gradeLevelFit}</p>
-                  </section>
-                )}
-                {plan.presentationReview?.visuals && (
-                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Visuals</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.presentationReview.visuals}</p>
-                  </section>
-                )}
-                {plan.presentationReview?.ideas && (
-                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Ideas</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.presentationReview.ideas}</p>
-                  </section>
-                )}
-                {plan.presentationReview?.length && (
-                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Length</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.presentationReview.length}</p>
-                  </section>
-                )}
-                {plan.presentationReview?.implementation && (
-                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Implementation</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.presentationReview.implementation}</p>
-                  </section>
-                )}
-                {plan.planText && (
-                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Slide text</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.planText}</p>
-                  </section>
-                )}
-              </>
-            ) : (
-              <>
-                {plan.doNow && (
-                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Do Now</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.doNow}</p>
-                  </section>
-                )}
-                {plan.agenda && (
-                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Agenda</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.agenda}</p>
-                  </section>
-                )}
-                {plan.closure && (
-                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Closure</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.closure}</p>
-                  </section>
-                )}
-                {plan.hots && (
-                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                      Higher-order thinking
-                    </p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.hots}</p>
-                  </section>
-                )}
-                {plan.homework && (
-                  <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Homework</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.homework}</p>
-                  </section>
-                )}
-                <p className="mt-6 break-inside-avoid text-xs text-ink-soft">
-                  This is a sample plan generated for ideas — not a plan you're required to follow.
-                </p>
-              </>
-            )}
+          {(plan.hots || plan.homework) && (
+            <ReportSection n={++n} title="Thinking & Follow-Up" blurb="The part that asks for more than recall." accent={A.gold}>
+              {plan.hots && <Callout label="Higher-order thinking" body={plan.hots} accent={A.gold} />}
+              {plan.homework && <Callout label="Homework" body={plan.homework} accent={A.forest} />}
+            </ReportSection>
+          )}
+        </>
+      )}
 
-            {plan.deliveryCoaching && (
-              <section className="mt-4 break-inside-avoid rounded-xl border border-border p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                  Presentation & Delivery
-                </p>
-                {plan.deliveryCoaching.openingHook && (
-                  <p className="mt-2 text-sm text-ink">
-                    <span className="font-semibold">Opening hook:</span> {plan.deliveryCoaching.openingHook}
-                  </p>
-                )}
-                {plan.deliveryCoaching.pacing && (
-                  <p className="mt-2 text-sm text-ink">
-                    <span className="font-semibold">Pacing & timing:</span> {plan.deliveryCoaching.pacing}
-                  </p>
-                )}
-                {plan.deliveryCoaching.engagementCheckpoints && (
-                  <p className="mt-2 text-sm text-ink">
-                    <span className="font-semibold">Engagement checkpoints:</span>{' '}
-                    {plan.deliveryCoaching.engagementCheckpoints}
-                  </p>
-                )}
-                {plan.deliveryCoaching.explainingTheHardPart && (
-                  <p className="mt-2 text-sm text-ink">
-                    <span className="font-semibold">Explaining the hard part:</span>{' '}
-                    {plan.deliveryCoaching.explainingTheHardPart}
-                  </p>
-                )}
-                {plan.deliveryCoaching.closing && (
-                  <p className="mt-2 text-sm text-ink">
-                    <span className="font-semibold">Closing:</span> {plan.deliveryCoaching.closing}
-                  </p>
-                )}
-              </section>
-            )}
-          </>
-        )}
-      </div>
-    </div>
+      {/* Get Feedback — the teacher's own plan, then the coaching on it. */}
+      {plan.mode === 'feedback' && (
+        <>
+          {plan.planText && (
+            <ReportSection n={++n} title="Your Plan" blurb="As you submitted it." accent={A.forest}>
+              <Prose body={plan.planText} />
+            </ReportSection>
+          )}
+          {plan.feedback && (
+            <ReportSection n={++n} title="Coaching" blurb="What's working, and where it will wobble." accent={A.terracotta}>
+              <Prose body={plan.feedback} />
+            </ReportSection>
+          )}
+        </>
+      )}
+
+      {/* Review a Presentation — five named reads. */}
+      {isPresentation && review && (
+        <ReportSection n={++n} title="Presentation Review" blurb="Five reads on the deck you built." accent={A.terracotta}>
+          {([
+            ['Grade-level fit', review.gradeLevelFit, A.mint],
+            ['Visuals', review.visuals, A.gold],
+            ['Ideas', review.ideas, A.terracotta],
+            ['Length', review.length, A.mint],
+            ['Implementation', review.implementation, A.forest],
+          ] as const).map(([label, body, accent]) => (body ? <Callout key={label} label={label} body={body} accent={accent} /> : null))}
+        </ReportSection>
+      )}
+
+      {isPresentation && plan.planText && (
+        <ReportSection n={++n} title="Slide Text" blurb="The extracted text the review was based on." accent={A.forest}>
+          <Prose body={plan.planText} />
+        </ReportSection>
+      )}
+
+      {/* Delivery coaching — generated and feedback modes only. */}
+      {delivery && (
+        <ReportSection n={++n} title="Presentation & Delivery" blurb="How to actually teach it, not just what is in it." accent={A.gold}>
+          {([
+            ['Opening hook', delivery.openingHook],
+            ['Pacing & timing', delivery.pacing],
+            ['Engagement checkpoints', delivery.engagementCheckpoints],
+            ['Explaining the hard part', delivery.explainingTheHardPart],
+            ['Closing', delivery.closing],
+          ] as const).map(([label, body]) => (body ? <Callout key={label} label={label} body={body} accent={A.gold} /> : null))}
+        </ReportSection>
+      )}
+
+      {plan.suggestedRevision && (
+        <ReportSection n={++n} title="Suggested Revision" blurb="Offered, never applied. Take the parts that fit your class." accent={A.mint}>
+          <Prose body={plan.suggestedRevision} />
+        </ReportSection>
+      )}
+
+      {chat.length > 0 && (
+        <ReportSection n={++n} title="The Conversation" blurb="Your follow-up questions and the answers." accent={A.forest}>
+          <div className="flex flex-col gap-3">
+            {chat.map((m, i) => (
+              <TurnBubble key={i} role={m.role} text={m.text} />
+            ))}
+          </div>
+        </ReportSection>
+      )}
+
+      {plan.mode === 'generated' && (
+        <div className="mt-6 break-inside-avoid rounded-2xl bg-gold-tint/50 p-5 text-center">
+          <StatTile label="Remember" value="A starting point" hint="This is a sample for ideas. It has never met your class — adjust it." accent={A.gold} />
+        </div>
+      )}
+
+      <ReportFooter />
+    </ReportShell>
   )
 }

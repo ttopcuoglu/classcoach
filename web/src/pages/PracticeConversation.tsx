@@ -378,6 +378,12 @@ export default function PracticeConversation() {
             >
               Practice Again
             </button>
+            <Link
+              to={`/communications/practice/${prep.id}/export`}
+              className="text-sm font-medium text-ink-soft transition-colors hover:text-brand-600"
+            >
+              Export / Print
+            </Link>
           </div>
         ) : null}
         {error && (

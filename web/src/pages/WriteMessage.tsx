@@ -388,6 +388,12 @@ export default function WriteMessage() {
                   <StarIcon className="h-4 w-4" filled={current.saved} />
                   {current.saved ? 'Saved' : 'Save for later'}
                 </button>
+                <Link
+                  to={`/communications/message/${current.id}/export`}
+                  className="text-sm font-medium text-ink-soft transition-colors hover:text-brand-600"
+                >
+                  Export / Print
+                </Link>
                 <button
                   type="button"
                   onClick={handleCopy}

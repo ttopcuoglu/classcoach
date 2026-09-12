@@ -230,6 +230,12 @@ export default function ReviewCommunication() {
                   <StarIcon className="h-4 w-4" filled={prep.saved} />
                   {prep.saved ? 'Saved' : 'Save for later'}
                 </button>
+                <Link
+                  to={`/communications/practice/${prep.id}/export`}
+                  className="text-sm font-medium text-ink-soft transition-colors hover:text-brand-600"
+                >
+                  Export / Print
+                </Link>
                 <ShareButton type="conversation-prep" onShare={() => shareConversationPrep(prep.id)} />
               </div>
               <button

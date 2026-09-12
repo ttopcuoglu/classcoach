@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ProgressRing } from '../components/ProgressRing'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import CoachingChat from '../components/CoachingChat'
@@ -284,6 +284,12 @@ export default function Ask() {
                 <StarIcon className="h-4 w-4" filled={debrief.saved} />
                 {debrief.saved ? 'Saved' : 'Save for later'}
               </button>
+              <Link
+                to={`/ask-practice/ask/${debrief.id}/export`}
+                className="text-sm font-medium text-ink-soft transition-colors hover:text-brand-600"
+              >
+                Export / Print
+              </Link>
               <div className="flex items-center gap-2">
                 <button
                   type="button"

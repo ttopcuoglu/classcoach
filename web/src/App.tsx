@@ -25,6 +25,9 @@ const LessonPlanning = lazy(() => import('./pages/LessonPlanning'))
 const AssignmentCoach = lazy(() => import('./pages/AssignmentCoach'))
 const AssignmentCoachExport = lazy(() => import('./pages/AssignmentCoachExport'))
 const LessonPlanExport = lazy(() => import('./pages/LessonPlanExport'))
+const TalkItThroughExport = lazy(() => import('./pages/TalkItThroughExport'))
+const AskPracticeExport = lazy(() => import('./pages/AskPracticeExport'))
+const CommunicationExport = lazy(() => import('./pages/CommunicationExport'))
 const TalkToMe = lazy(() => import('./pages/TalkToMe'))
 const Onboarding = lazy(() => import('./pages/Onboarding'))
 const Terms = lazy(() => import('./pages/Terms'))
@@ -161,6 +164,30 @@ export default function App() {
               element={
                 <RequireAuth user={user} loading={loading} onSignedIn={refreshUser}>
                   <LessonPlanExport />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="talk-to-me/:id/export"
+              element={
+                <RequireAuth user={user} loading={loading} onSignedIn={refreshUser}>
+                  <TalkItThroughExport />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="ask-practice/:kind/:id/export"
+              element={
+                <RequireAuth user={user} loading={loading} onSignedIn={refreshUser}>
+                  <AskPracticeExport />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="communications/:kind/:id/export"
+              element={
+                <RequireAuth user={user} loading={loading} onSignedIn={refreshUser}>
+                  <CommunicationExport />
                 </RequireAuth>
               }
             />

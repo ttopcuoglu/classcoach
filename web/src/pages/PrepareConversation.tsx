@@ -435,9 +435,12 @@ export default function PrepareConversation() {
                 >
                   Create a Follow-Up Message
                 </button>
-                <button type="button" onClick={() => window.print()} className="text-sm font-medium text-ink-soft hover:text-ink">
-                  Print
-                </button>
+                <Link
+                  to={`/communications/meeting/${plan.id}/export`}
+                  className="text-sm font-medium text-ink-soft hover:text-ink"
+                >
+                  Export / Print
+                </Link>
               </div>
               <button
                 type="button"
