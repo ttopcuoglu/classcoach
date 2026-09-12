@@ -98,6 +98,11 @@ export const CONVERSATION_DIFFICULTY_LEVELS: { label: string; value: Conversatio
   { label: 'Highly escalated', value: 'highly_escalated' },
 ]
 
+export function conversationDifficultyLabel(value: string | null) {
+  if (!value) return null
+  return CONVERSATION_DIFFICULTY_LEVELS.find((d) => d.value === value)?.label ?? value
+}
+
 export type MeetingFormat = 'in_person' | 'phone' | 'video' | 'formal_meeting'
 export const MEETING_FORMATS: { label: string; value: MeetingFormat }[] = [
   { label: 'In person', value: 'in_person' },

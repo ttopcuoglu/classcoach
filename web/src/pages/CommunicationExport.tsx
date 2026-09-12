@@ -16,7 +16,9 @@ import {
 } from '../components/report'
 import {
   challengeLabel,
+  conversationDifficultyLabel,
   formatLabel,
+  meetingFormatLabel,
   meetingTypeLabel,
   purposeLabel,
   recipientLabel,
@@ -75,7 +77,14 @@ export default function CommunicationExport() {
         />
         <div className="mt-5">
           <ChipRow
-            items={[meetingTypeLabel(plan.meetingType), plan.attendees].filter(Boolean) as string[]}
+            // Format belongs on paper next to the type: together they are what
+            // tells you which meeting a printed plan is for. PrepareConversation
+            // deliberately printed both pills, so the report must carry both.
+            items={
+              [meetingTypeLabel(plan.meetingType), meetingFormatLabel(plan.meetingFormat), plan.attendees].filter(
+                Boolean,
+              ) as string[]
+            }
             accent={A.mint}
           />
         </div>
@@ -150,7 +159,9 @@ export default function CommunicationExport() {
             items={[
               recipientLabel(prep.personType),
               challengeLabel(prep.category),
-              prep.difficulty,
+              // Stored as the validated enum, so printing it raw put
+              // "highly_escalated" on paper.
+              conversationDifficultyLabel(prep.difficulty),
               prep.gradeBand,
             ].filter(Boolean) as string[]}
             accent={A.mint}

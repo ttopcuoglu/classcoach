@@ -42,7 +42,13 @@ export default function LessonPlanExport() {
   const isPresentation = plan.mode === 'presentation'
   const review = plan.presentationReview
   const delivery = plan.deliveryCoaching
-  const chat = (plan.conversation ?? []).filter((m) => m.text?.trim())
+  // Feedback and presentation modes seed the conversation with the submitted
+  // plan (or extracted slide text) and the first reply — both of which already
+  // print above as their own sections. Printing them again doubled the length
+  // of the report. Generated mode seeds nothing, so its first turns are real.
+  // Matches LessonPlanning.tsx, which slices the same two turns in-app.
+  const seeded = plan.mode === 'feedback' || plan.mode === 'presentation'
+  const chat = (plan.conversation ?? []).slice(seeded ? 2 : 0).filter((m) => m.text?.trim())
   const context = [plan.subject, plan.gradeLevel, plan.unitName, plan.standard].filter(Boolean) as string[]
   let n = 0
 

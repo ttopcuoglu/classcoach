@@ -19,6 +19,8 @@ import { getAttempts, getDebriefs, type Debrief, type ScenarioAttempt } from '..
 // One printable report for both halves of Ask & Practice. They are different
 // models — an Ask answer is a Debrief, a rehearsal is a ScenarioAttempt — so
 // the route carries which kind to load rather than guessing from the id.
+const capitalize = (v: string | null) => (v ? v.charAt(0).toUpperCase() + v.slice(1) : null)
+
 export default function AskPracticeExport() {
   const { kind, id } = useParams<{ kind: string; id: string }>()
   const [ask, setAsk] = useState<Debrief | null>(null)
@@ -52,7 +54,15 @@ export default function AskPracticeExport() {
         />
         <div className="mt-5">
           <ChipRow
-            items={[categoryLabel(attempt.scenario.category), attempt.scenario.gradeBand, attempt.scenario.difficulty].filter(Boolean) as string[]}
+            // Scenario difficulty is stored lowercase; TryItOut capitalises it
+            // for display and the printed chip has to match.
+            items={
+              [
+                categoryLabel(attempt.scenario.category),
+                attempt.scenario.gradeBand,
+                capitalize(attempt.scenario.difficulty),
+              ].filter(Boolean) as string[]
+            }
             accent={A.mint}
           />
         </div>
