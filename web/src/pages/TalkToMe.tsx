@@ -72,20 +72,29 @@ type Phase = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
 // the caption text were computed by separate, inconsistent conditions.
 type VisualState = 'idle' | 'error' | 'listening' | 'thinking' | 'speaking'
 
-const STATE_STYLES: Record<VisualState, { glow: string; orb: string; pill: string; dot: string }> = {
-  listening: { glow: 'bg-mint-tint', orb: 'border-mint-tint bg-mint-tint/80', pill: 'bg-mint-tint text-forest', dot: 'bg-forest' },
-  thinking: { glow: 'bg-gold-tint', orb: 'border-gold-tint bg-gold-tint/80', pill: 'bg-gold-tint text-terracotta-600', dot: 'bg-terracotta-600' },
-  speaking: { glow: 'bg-peach-tint', orb: 'border-peach-tint bg-peach-tint/80', pill: 'bg-peach-tint text-terracotta', dot: 'bg-terracotta' },
-  idle: { glow: 'bg-cream-card', orb: 'border-hairline bg-cream-card', pill: 'border border-hairline bg-cream-card text-ink-soft', dot: 'bg-ink-soft' },
-  error: { glow: 'bg-warm-100', orb: 'border-warm-100 bg-warm-100', pill: 'bg-warm-100 text-warm-500', dot: 'bg-warm-500' },
+// Listening, waiting and speaking share one colour. They used to be mint,
+// gold and peach, which turned a two-second exchange into three full colour
+// changes and made the machinery — rather than the conversation — the thing
+// the eye tracked. A person you are talking to does not change colour when
+// it is their turn. Only error still breaks the palette, because that one
+// genuinely needs to interrupt.
+const STATE_STYLES: Record<VisualState, { glow: string; orb: string; dot: string }> = {
+  listening: { glow: 'bg-mint-tint', orb: 'border-mint-tint bg-mint-tint/80', dot: 'bg-forest' },
+  thinking: { glow: 'bg-mint-tint/60', orb: 'border-mint-tint/70 bg-mint-tint/50', dot: 'bg-forest/60' },
+  speaking: { glow: 'bg-mint-tint/80', orb: 'border-mint-tint bg-mint-tint/65', dot: 'bg-forest' },
+  idle: { glow: 'bg-cream-card', orb: 'border-hairline bg-cream-card', dot: 'bg-ink-soft' },
+  error: { glow: 'bg-warm-100', orb: 'border-warm-100 bg-warm-100', dot: 'bg-warm-500' },
 }
 
-function statusLabel(state: VisualState, level: number, hasConversation: boolean): string {
+function statusLabel(state: VisualState, hasConversation: boolean): string {
   switch (state) {
     case 'listening':
-      return level > 8 ? 'Listening…' : "I'm listening — go ahead"
+      // One stable string rather than swapping on volume — the caption used
+      // to flicker between two phrasings every time the teacher paused for
+      // breath, which drew the eye to the label instead of the conversation.
+      return "I'm listening"
     case 'thinking':
-      return 'Coach is thinking…'
+      return 'One moment'
     case 'speaking':
       return 'Coach is speaking'
     case 'idle':
@@ -106,7 +115,6 @@ export default function TalkToMe() {
   const [debrief, setDebrief] = useState<Debrief | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [muted, setMuted] = useState(false)
-  const [thinkingProgress, setThinkingProgress] = useState(0)
   // Set the instant transcription finishes, independent of `debrief` —
   // `debrief.conversation` only updates once the ENTIRE round trip
   // (transcribe -> reply) finishes, so deriving "what you said" from it
@@ -195,24 +203,6 @@ export default function TalkToMe() {
       document.removeEventListener('keydown', primeAudio)
     }
   }, [])
-
-  // There's no real signal from the reply request for "% done generating"
-  // — this is a simulated estimate, not a measurement. It climbs quickly
-  // at first and eases off, asymptotically approaching (but never
-  // reaching) 92% on its own; the bar only ever hits 100% implicitly, by
-  // disappearing the instant the real reply arrives and phase moves on.
-  useEffect(() => {
-    if (phase !== 'thinking') {
-      setThinkingProgress(0)
-      return
-    }
-    const start = Date.now()
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - start
-      setThinkingProgress(92 * (1 - Math.exp(-elapsed / 1800)))
-    }, 100)
-    return () => clearInterval(interval)
-  }, [phase])
 
   useEffect(() => {
     if (fatalError) {
@@ -645,17 +635,18 @@ export default function TalkToMe() {
                 >
                   {visualState === 'listening' && <MicIcon className="h-10 w-10 text-forest" />}
                   {visualState === 'thinking' && (
-                    <span className="flex flex-col items-center gap-2.5">
-                      <BrainIcon className="h-9 w-9 animate-pulse text-terracotta-600" />
-                      <span className="flex items-center gap-1" aria-hidden="true">
-                        {[0, 150, 300].map((delay) => (
-                          <span
-                            key={delay}
-                            className="h-1.5 w-1.5 animate-bounce rounded-full bg-terracotta-600/70"
-                            style={{ animationDelay: `${delay}ms` }}
-                          />
-                        ))}
-                      </span>
+                    // Three settling dots, the same shape every messaging app
+                    // uses for "they are typing" — it reads as the other side
+                    // of a conversation composing a reply. The brain icon it
+                    // replaces read as a machine processing a job.
+                    <span className="flex items-center gap-1.5" aria-hidden="true">
+                      {[0, 160, 320].map((delay) => (
+                        <span
+                          key={delay}
+                          className="h-2 w-2 animate-bounce rounded-full bg-forest/50"
+                          style={{ animationDelay: `${delay}ms` }}
+                        />
+                      ))}
                     </span>
                   )}
                   {visualState === 'speaking' && (
@@ -663,7 +654,7 @@ export default function TalkToMe() {
                       {[10, 22, 14, 28, 16].map((barHeight, i) => (
                         <span
                           key={barHeight}
-                          className="w-1.5 animate-pulse rounded-full bg-terracotta"
+                          className="w-1.5 animate-pulse rounded-full bg-forest/70"
                           style={{ height: `${barHeight}px`, animationDelay: `${i * 120}ms` }}
                         />
                       ))}
@@ -673,29 +664,27 @@ export default function TalkToMe() {
                   {visualState === 'error' && <WarningIcon className="h-10 w-10 text-warm-500" />}
                 </div>
               </div>
+              {/* A filled chip that changed colour on every turn was competing
+                  with the orb for attention. Quiet text carries the same
+                  information and stops the status from being the loudest
+                  thing on screen. aria-live keeps it doing the job it was
+                  silently already doing for sighted users only: saying whose
+                  turn it is. */}
               <div
-                className={`flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors duration-500 ${STATE_STYLES[visualState].pill}`}
+                aria-live="polite"
+                className={`flex items-center gap-2 text-xs font-medium transition-colors duration-500 ${
+                  visualState === 'error' ? 'text-warm-500' : 'text-ink-soft'
+                }`}
               >
                 <span
+                  aria-hidden="true"
                   className={`h-1.5 w-1.5 rounded-full ${STATE_STYLES[visualState].dot} ${
                     visualState === 'thinking' || visualState === 'speaking' ? 'animate-pulse' : ''
                   }`}
                 />
-                {statusLabel(visualState, level, debrief != null)}
+                {statusLabel(visualState, debrief != null)}
               </div>
-              {visualState === 'thinking' && (
-                // Simulated, not measured — see the thinkingProgress effect's
-                // comment. Disappears the instant the real reply arrives.
-                <div className="flex w-40 flex-col items-center gap-1">
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-gold-tint/50">
-                    <div
-                      className="h-full rounded-full bg-terracotta-600 transition-[width] duration-150 ease-out"
-                      style={{ width: `${thinkingProgress}%` }}
-                    />
-                  </div>
-                  <span className="text-[11px] font-medium text-terracotta-600">{Math.round(thinkingProgress)}%</span>
-                </div>
-              )}
+
             </div>
 
             {!debrief && phase === 'idle' && !showTypeInput ? (
