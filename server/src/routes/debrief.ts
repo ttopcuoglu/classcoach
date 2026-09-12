@@ -8,7 +8,15 @@ import {
   MEMORY_UPDATE_INSTRUCTION,
   MEMORY_UPDATE_TOKEN_BUFFER,
 } from '../lib/coachMemory.ts'
-import { appendTurn, CHAT_TURN_CAP, countUserTurns, TALK_TURN_CAP, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
+import {
+  appendTurn,
+  CHAT_TURN_CAP,
+  CONVERSATION_FULL_MESSAGE,
+  countUserTurns,
+  TALK_TURN_CAP,
+  toClaudeMessages,
+  type ChatMessage,
+} from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
 import { transcribeAudio } from '../lib/deepgram.ts'
@@ -37,14 +45,12 @@ function trimIfTruncated(text: string, stopReason: string | null): string {
   return text.slice(0, (last.index ?? 0) + last[0].length).trim()
 }
 
-// This used to say "You've reached today's practice limit", which was wrong
-// twice over: the limit is per conversation, not per day, and it sent a
-// teacher off to wait until tomorrow for something a new conversation fixes
-// right now.
+// Talk It Through adds the takeaway, which only it has; everything else uses
+// the shared wording (see CONVERSATION_FULL_MESSAGE for why it changed).
 function conversationFullMessage(isTalk: boolean): string {
   return isTalk
     ? 'This conversation has reached its length limit. Finish the session to save your takeaway, or start a new conversation.'
-    : 'This conversation has reached its length limit. Start a new one to keep going.'
+    : CONVERSATION_FULL_MESSAGE
 }
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } })

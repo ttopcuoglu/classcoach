@@ -4,7 +4,7 @@ import multer from 'multer'
 import { PDFParse } from 'pdf-parse'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { checkFeatureAccess, countUsageLogActionsThisMonth, LESSON_PLANNING_ACTIONS } from '../lib/billing.ts'
-import { appendTurn, CHAT_TURN_CAP, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
+import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES, INSTRUCTION_PRIORITY_NOTICE } from '../lib/coachPersona.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
@@ -484,7 +484,7 @@ lessonPlansRouter.post('/:id/chat', async (req, res) => {
 
   const existing = (lessonPlan.conversation as unknown as ChatMessage[] | null) ?? []
   if (countUserTurns(existing) >= CHAT_TURN_CAP) {
-    res.status(409).json({ error: "You've reached today's practice limit for this conversation." })
+    res.status(409).json({ error: CONVERSATION_FULL_MESSAGE })
     return
   }
 

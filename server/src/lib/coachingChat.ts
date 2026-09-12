@@ -9,6 +9,13 @@ export type ChatMessage = { role: 'user' | 'assistant'; text: string; createdAt:
 
 export const CHAT_TURN_CAP = 8
 
+// What every thread says when it hits its cap. It used to read "You've
+// reached today's practice limit for this conversation", which was wrong
+// twice over: the limit is per conversation, not per day, and it sent a
+// teacher off to wait until tomorrow for something a new conversation fixes
+// right away. One shared string so the features cannot drift apart again.
+export const CONVERSATION_FULL_MESSAGE = 'This conversation has reached its length limit. Start a new one to keep going.'
+
 // Talk It Through gets its own, much higher ceiling. The 8 above suits the
 // typed follow-up threads it was made for, where each turn is a considered
 // paragraph. A spoken conversation is a different shape: Coach answers in
