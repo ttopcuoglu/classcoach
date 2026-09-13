@@ -173,7 +173,7 @@ const TALK_IT_THROUGH: Feature = {
   intro: 'A live, spoken back-and-forth with Coach — the mic arms itself the moment you open it, no typing at all.',
   specs: [
     { label: 'Listening', body: 'a mic icon with a ring that visibly pulses in real time with your actual volume.' },
-    { label: 'Thinking', body: 'a pulsing brain icon with bouncing dots — covers both transcribing what you said and Coach composing its reply, shown as one continuous state rather than two confusing ones.' },
+    { label: 'Thinking', body: 'three gently bouncing dots and "One moment" — covers both transcribing what you said and Coach composing its reply, shown as one continuous state rather than two confusing ones.' },
     { label: 'Speaking', body: 'an animated equalizer plays while Coach\'s reply is read aloud.' },
     { label: 'Mute', body: 'silences Coach\'s voice without ending the conversation — replies still appear as text.' },
     { label: 'Stop / Close', body: 'end the session at any point; the mic releases immediately.' },
