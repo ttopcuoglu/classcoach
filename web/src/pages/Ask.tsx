@@ -27,16 +27,37 @@ const STARTER_QUESTIONS = [
   'How do I de-escalate two students arguing in class?',
 ]
 
-const STARTING_POINTS: { label: string; placeholder: string }[] = [
-  { label: 'Find the words', placeholder: 'Describe the moment — what would you like to say next time?' },
-  { label: 'Reflect on a moment', placeholder: 'What happened, and how do you feel about how it went?' },
-  { label: 'Build a routine', placeholder: 'What routine or expectation are you trying to set up?' },
+// Each starting point carries one of the report's accent colours, so the
+// three read as distinct choices on the dark card rather than a row of
+// identical pills.
+const STARTING_POINTS: { label: string; placeholder: string; dot: string; selected: string }[] = [
+  {
+    label: 'Find the words',
+    placeholder: 'Describe the moment — what would you like to say next time?',
+    dot: 'bg-terracotta',
+    selected: 'border-terracotta bg-terracotta text-cream',
+  },
+  {
+    label: 'Reflect on a moment',
+    placeholder: 'What happened, and how do you feel about how it went?',
+    dot: 'bg-gold',
+    selected: 'border-gold bg-gold text-forest',
+  },
+  {
+    label: 'Build a routine',
+    placeholder: 'What routine or expectation are you trying to set up?',
+    dot: 'bg-mint-tint',
+    selected: 'border-mint-tint bg-mint-tint text-forest',
+  },
 ]
+
+const STARTER_TINTS = ['bg-peach-tint/60', 'bg-gold-tint/60', 'bg-mint-tint/60', 'bg-peach-tint/30']
 
 export default function Ask() {
   const navigate = useNavigate()
   const [incidentText, setIncidentText] = useState('')
   const [placeholder, setPlaceholder] = useState('Describe what happened, or ask a question...')
+  const [startingPoint, setStartingPoint] = useState<string | null>(null)
   const [debrief, setDebrief] = useState<Debrief | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const askProgress = useSimulatedProgress(submitting, 9000)
@@ -145,82 +166,86 @@ export default function Ask() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+      <div className={debrief ? 'rounded-2xl border border-hairline bg-cream-card p-6' : 'rounded-3xl bg-forest p-6 text-cream sm:p-8'}>
         {!debrief ? (
-          <div className="flex flex-col gap-3">
-            <p className="text-sm text-ink-soft">
-              Describe something that happened, or ask a classroom management question — you'll get
-              practical coaching either way.
-            </p>
-
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              {STARTING_POINTS.map((point) => (
-                <button
-                  key={point.label}
-                  type="button"
-                  onClick={() => setPlaceholder(point.placeholder)}
-                  disabled={submitting}
-                  className="rounded-full border border-hairline bg-cream px-3.5 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-60"
-                >
-                  {point.label}
-                </button>
-              ))}
+          <div className="flex flex-col gap-4">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Ask your coach</p>
+              <p className="mt-2 max-w-2xl text-sm text-cream/70">
+                Describe something that happened, or ask a classroom management question — you'll get
+                practical coaching either way.
+              </p>
             </div>
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-ink">What's going on?</span>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              {STARTING_POINTS.map((point) => {
+                const selected = startingPoint === point.label
+                return (
+                  <button
+                    key={point.label}
+                    type="button"
+                    onClick={() => {
+                      setStartingPoint(point.label)
+                      setPlaceholder(point.placeholder)
+                    }}
+                    disabled={submitting}
+                    aria-pressed={selected}
+                    className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-60 ${
+                      selected ? point.selected : 'border-cream/20 bg-cream/5 text-cream hover:bg-cream/10'
+                    }`}
+                  >
+                    {!selected && <span className={`h-2 w-2 rounded-full ${point.dot}`} />}
+                    {point.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            <label className="flex flex-col gap-2">
+              <span className="font-heading text-2xl font-bold text-cream">What's going on?</span>
               <textarea
                 value={incidentText}
                 onChange={(e) => setIncidentText(e.target.value)}
                 disabled={submitting}
                 rows={5}
                 placeholder={placeholder}
-                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
+                className="rounded-2xl border-0 bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:outline-none focus:ring-2 focus:ring-gold disabled:opacity-60"
               />
             </label>
-            {speechSupported && (
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {speechSupported ? (
+                <button
+                  type="button"
+                  onClick={toggleListening}
+                  disabled={submitting}
+                  className={`flex w-fit items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                    listening
+                      ? 'border-terracotta bg-terracotta text-cream'
+                      : 'border-cream/25 text-cream/80 hover:border-cream/60 hover:text-cream'
+                  }`}
+                >
+                  <MicIcon className="h-3.5 w-3.5" />
+                  {listening ? 'Listening... tap to stop' : 'Speak instead'}
+                </button>
+              ) : (
+                <span />
+              )}
               <button
                 type="button"
-                onClick={toggleListening}
-                disabled={submitting}
-                className={`flex w-fit items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  listening
-                    ? 'border-terracotta bg-peach-tint text-terracotta-600'
-                    : 'border-hairline text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
-                }`}
+                onClick={() => handleSubmit()}
+                disabled={submitting || !incidentText.trim()}
+                className="rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90 disabled:bg-cream/10 disabled:text-cream/40 disabled:shadow-none"
               >
-                <MicIcon className="h-3.5 w-3.5" />
-                {listening ? 'Listening... tap to stop' : 'Speak instead'}
+                {submitting ? 'Getting coaching...' : 'Get coaching'}
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => handleSubmit()}
-              disabled={submitting || !incidentText.trim()}
-              className="self-end rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
-            >
-              {submitting ? 'Getting coaching...' : 'Get coaching'}
-            </button>
+            </div>
 
             {submitting && (
-              <div className="flex justify-center py-2 text-forest">
+              <div className="flex justify-center py-2 text-gold">
                 <ProgressRing progress={askProgress} label="Reading what you wrote" hint="Usually about ten seconds." />
               </div>
             )}
-
-            <div className="flex flex-col gap-2 border-t border-hairline pt-3 sm:flex-row sm:flex-wrap">
-              {STARTER_QUESTIONS.map((starter) => (
-                <button
-                  key={starter}
-                  type="button"
-                  onClick={() => handleSubmit(starter)}
-                  disabled={submitting}
-                  className="rounded-full border border-hairline bg-cream px-4 py-2 text-left text-sm text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-60"
-                >
-                  {starter}
-                </button>
-              ))}
-            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-4">
@@ -230,15 +255,15 @@ export default function Ask() {
                   {categoryLabel(debrief.category)}
                 </span>
               )}
-              <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">
+              <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">
                 What happened
               </p>
               <p className="mt-1 text-sm text-ink">{debrief.incidentText}</p>
             </div>
 
             {debrief.feedback && (
-              <div className="rounded-xl border border-hairline bg-peach-tint/60 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">
+              <div className="rounded-2xl bg-peach-tint/50 p-5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
                   What may be happening
                 </p>
                 <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink">{debrief.feedback}</p>
@@ -246,8 +271,8 @@ export default function Ask() {
             )}
 
             {debrief.wordsToTry && (
-              <div className="rounded-xl border border-hairline bg-cream-card p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+              <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
                   Words to try
                 </p>
                 <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink">{debrief.wordsToTry}</p>
@@ -255,8 +280,8 @@ export default function Ask() {
             )}
 
             {debrief.followUp && (
-              <div className="rounded-xl border border-hairline bg-mint-tint/60 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-forest">
+              <div className="rounded-2xl bg-mint-tint/50 p-5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">
                   One next step
                 </p>
                 <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink">{debrief.followUp}</p>
@@ -309,17 +334,37 @@ export default function Ask() {
             </div>
           </div>
         )}
-        {error && <p className="mt-4 text-center text-sm text-terracotta-600">{error}</p>}
+        {error && (
+          <p className={`mt-4 text-center text-sm ${debrief ? 'text-terracotta-600' : 'text-peach-tint'}`}>{error}</p>
+        )}
       </div>
+
+      {!debrief && (
+        <div>
+          <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Or start with one of these</h2>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {STARTER_QUESTIONS.map((starter, i) => (
+              <button
+                key={starter}
+                type="button"
+                onClick={() => handleSubmit(starter)}
+                disabled={submitting}
+                className={`group flex items-center justify-between gap-3 rounded-2xl p-4 text-left text-sm font-medium text-forest transition-shadow hover:shadow-md disabled:opacity-60 ${STARTER_TINTS[i % STARTER_TINTS.length]}`}
+              >
+                {starter}
+                <span aria-hidden="true" className="text-terracotta transition-transform group-hover:translate-x-0.5">→</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div>
         <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Saved</h2>
         {historyLoading ? (
           <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
         ) : savedDebriefs.length === 0 ? (
-          <div className="mt-3 rounded-2xl border border-dashed border-hairline p-6 text-center text-sm text-ink-soft">
-            Answers you save will show up here.
-          </div>
+          <p className="mt-2 text-sm text-ink-soft">Nothing saved yet. Tap "Save for later" on an answer to keep it here.</p>
         ) : (
           <div className="mt-3 flex flex-col gap-3">
             {savedDebriefs.map((d) => (

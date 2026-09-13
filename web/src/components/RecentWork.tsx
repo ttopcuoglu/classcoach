@@ -194,7 +194,7 @@ export default function RecentWork() {
             onClick={() => setFilter(f.value)}
             className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
               filter === f.value
-                ? 'border-terracotta bg-mint-tint/60 text-forest'
+                ? 'border-forest bg-forest text-cream'
                 : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
             }`}
           >
@@ -206,7 +206,7 @@ export default function RecentWork() {
       {loading ? (
         <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
       ) : visible.length === 0 ? (
-        <div className="mt-3 rounded-2xl border border-dashed border-hairline p-6 text-center text-sm text-ink-soft">
+        <div className="mt-2 text-sm text-ink-soft">
           Work you create in any of the four tools will show up here.
         </div>
       ) : (

@@ -46,7 +46,7 @@ export default function CoachingChat({
               key={i}
               className={
                 m.role === 'user'
-                  ? 'ml-auto max-w-[85%] rounded-2xl rounded-br-sm bg-terracotta px-4 py-2.5 text-sm text-white'
+                  ? 'ml-auto max-w-[85%] rounded-2xl rounded-br-sm bg-terracotta px-4 py-2.5 text-sm text-cream'
                   : 'max-w-[85%] rounded-2xl rounded-bl-sm border border-hairline bg-cream px-4 py-2.5 text-sm whitespace-pre-wrap text-ink'
               }
             >
@@ -82,7 +82,7 @@ export default function CoachingChat({
           <button
             type="submit"
             disabled={sending || disabled || !draft.trim()}
-            className="rounded-lg bg-terracotta px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
+            className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
           >
             Send
           </button>

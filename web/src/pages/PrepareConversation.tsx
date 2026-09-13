@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PanelHeader } from '../components/PanelHeader'
 import { Link, useNavigate } from 'react-router-dom'
 import CoachingChat from '../components/CoachingChat'
 import { StarIcon } from '../components/icons'
@@ -45,8 +46,8 @@ const PLAN_SECTIONS_AFTER_MODEL: { key: keyof NonNullable<ConversationPlan['plan
 
 function PlanSectionCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-hairline bg-cream p-4 print:border-ink/20">
-      <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
+    <div className="rounded-2xl bg-mint-tint/40 p-5 print:border print:border-ink/20">
+      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">{label}</p>
       <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{value}</p>
     </div>
   )
@@ -185,19 +186,14 @@ export default function PrepareConversation() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <Link to="/communications" className="w-fit text-sm font-medium text-ink-soft hover:text-ink">
-          ← Communication Coach
-        </Link>
-        <div className="flex flex-col gap-1">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Communication Coach</p>
-          <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
-            Prepare for a Meeting<span className="text-gold">.</span>
-          </h1>
-        </div>
-      </div>
+      <Link to="/communications" className="w-fit text-sm font-medium text-ink-soft hover:text-ink">
+        ← Communication Coach
+      </Link>
 
-      <div className="rounded-2xl border border-hairline bg-cream-card p-6 print:border-0 print:p-0">
+      <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6 print:border-0 print:p-0">
+        <PanelHeader as="h1" eyebrow="Wivoza · Communication Coach" title="Prepare for a Meeting" className="mb-6 print:hidden">
+          Build an agenda, talking points, and a plan for an upcoming meeting.
+        </PanelHeader>
         {!plan ? (
           <div className="flex flex-col gap-4">
             <label className="flex flex-col gap-1.5">
@@ -211,7 +207,7 @@ export default function PrepareConversation() {
                     disabled={submitting}
                     className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                       meetingType === m.value
-                        ? 'border-terracotta bg-mint-tint/60 text-forest'
+                        ? 'border-forest bg-forest text-cream'
                         : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                     }`}
                   >
@@ -238,7 +234,7 @@ export default function PrepareConversation() {
                     aria-pressed={meetingFormat === f.value}
                     className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                       meetingFormat === f.value
-                        ? 'border-terracotta bg-mint-tint/60 text-forest'
+                        ? 'border-forest bg-forest text-cream'
                         : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                     }`}
                   >
@@ -255,7 +251,7 @@ export default function PrepareConversation() {
                 onChange={(e) => setSituationText(e.target.value)}
                 disabled={submitting}
                 rows={3}
-                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
+                className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
             </label>
 
@@ -269,7 +265,7 @@ export default function PrepareConversation() {
                 onChange={(e) => setAttendees(e.target.value)}
                 disabled={submitting}
                 placeholder="e.g. Mom, Dad, the school counselor"
-                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
+                className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
             </label>
 
@@ -282,7 +278,7 @@ export default function PrepareConversation() {
                 onChange={(e) => setDesiredOutcome(e.target.value)}
                 disabled={submitting}
                 rows={2}
-                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
+                className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
             </label>
 
@@ -295,7 +291,7 @@ export default function PrepareConversation() {
                 onChange={(e) => setConcerns(e.target.value)}
                 disabled={submitting}
                 rows={2}
-                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
+                className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
             </label>
 
@@ -308,7 +304,7 @@ export default function PrepareConversation() {
                 onChange={(e) => setBackground(e.target.value)}
                 disabled={submitting}
                 rows={2}
-                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
+                className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
               <div className="flex items-center gap-3">
                 <label className="cursor-pointer text-sm font-medium text-ink-soft hover:text-terracotta-600">
@@ -348,7 +344,7 @@ export default function PrepareConversation() {
               type="button"
               onClick={handleSubmit}
               disabled={!canSubmit}
-              className="self-end rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
+              className="self-end rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
             >
               {submitting ? (
                 <span className="flex items-center gap-2">
@@ -401,8 +397,8 @@ export default function PrepareConversation() {
                 })}
 
               {plan.planContent?.modelResponse && (
-                <div className="rounded-xl border border-hairline bg-mint-tint/60 p-4 print:border-ink/20">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-forest">A model response</p>
+                <div className="rounded-2xl bg-mint-tint/50 p-5 print:border-ink/20">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">A model response</p>
                   <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{plan.planContent.modelResponse}</p>
                 </div>
               )}
@@ -453,7 +449,7 @@ export default function PrepareConversation() {
               <button
                 type="button"
                 onClick={handleNewPlan}
-                className="rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
+                className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90"
               >
                 New Plan
               </button>

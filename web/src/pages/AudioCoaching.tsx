@@ -640,7 +640,7 @@ function TagSpeakersPanel({
                 type="button"
                 onClick={() => handleTag(s.rawSpeakerTag)}
                 disabled={tagging !== null}
-                className="shrink-0 rounded-lg bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:opacity-60"
+                className="shrink-0 rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
               >
                 {tagging === s.rawSpeakerTag ? 'Analyzing...' : 'This is the Teacher'}
               </button>
@@ -3318,7 +3318,7 @@ function ReflectTab({
                       type="button"
                       onClick={onSave}
                       disabled={saving}
-                      className="rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-60"
+                      className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
                     >
                       {saving ? 'Saving...' : 'Save notes'}
                     </button>
@@ -3433,7 +3433,7 @@ function ReflectTab({
                 type="button"
                 onClick={handleStartVoice}
                 disabled={sending}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-terracotta px-5 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-60"
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-terracotta px-5 py-3.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
               >
                 <MicIcon className="h-4 w-4" />
                 {sending ? 'Starting...' : 'Start Talking'}
@@ -3634,7 +3634,7 @@ function ReflectTab({
                     <button
                       type="submit"
                       disabled={sending || locked || turnCapHit || sessionPaused || !draft.trim()}
-                      className="rounded-lg bg-terracotta px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
+                      className="rounded-full bg-terracotta px-4 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
                     >
                       Send
                     </button>
@@ -3883,7 +3883,7 @@ function LessonContentTab({
             type="button"
             onClick={onGenerate}
             disabled={sending}
-            className="self-start rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-60"
+            className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
           >
             {sending ? 'Generating...' : 'Generate content specialist notes'}
           </button>

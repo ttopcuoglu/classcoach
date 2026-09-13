@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ShareIcon, StarIcon } from '../components/icons'
 import CoachingChat from '../components/CoachingChat'
+import { PanelHeader } from '../components/PanelHeader'
 import { ProgressRing } from '../components/ProgressRing'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { Spinner } from '../components/Spinner'
@@ -121,7 +122,7 @@ function ContextFields({
     onChange({ ...context, [key]: value })
   }
   const inputClass =
-    'rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60'
+    'rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60'
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -191,14 +192,14 @@ function ContextFields({
 
 function PlanHeader({ plan }: { plan: LessonPlan }) {
   return (
-    <div>
-      <span className="rounded-full bg-mint-tint/60 px-2.5 py-1 text-xs font-semibold text-forest">
+    <div className="-mx-6 -mt-6 bg-forest px-6 py-6 text-cream sm:px-8">
+      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">
         {plan.mode === 'generated' ? 'Sample plan' : 'Feedback'}
         {plan.subject ? ` · ${plan.subject}` : ''}
         {plan.gradeLevel ? ` · ${plan.gradeLevel}` : ''}
-      </span>
-      {plan.objective && <p className="mt-2 text-sm font-medium text-ink">{plan.objective}</p>}
-      {plan.standard && <p className="mt-0.5 text-xs text-ink-soft">Standard: {plan.standard}</p>}
+      </p>
+      {plan.objective && <p className="mt-2 font-heading text-xl font-bold leading-snug text-cream">{plan.objective}</p>}
+      {plan.standard && <p className="mt-1 text-xs text-cream/70">Standard: {plan.standard}</p>}
     </div>
   )
 }
@@ -206,9 +207,9 @@ function PlanHeader({ plan }: { plan: LessonPlan }) {
 function PlanSection({ label, value, accent }: { label: string; value: string | null; accent?: boolean }) {
   if (!value) return null
   return (
-    <div className="rounded-xl border border-hairline bg-cream p-4">
+    <div className={accent ? 'rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5' : 'rounded-2xl bg-mint-tint/40 p-5'}>
       <p
-        className={`text-xs font-semibold uppercase tracking-wide ${accent ? 'text-forest' : 'text-ink-soft'}`}
+        className={`text-[11px] font-bold uppercase tracking-[0.14em] ${accent ? 'text-terracotta-600' : 'text-forest'}`}
       >
         {label}
       </p>
@@ -226,13 +227,13 @@ function DeliveryCoachingCard({ coaching }: { coaching: LessonPlanDeliveryCoachi
     ['Closing', coaching.closing],
   ]
   return (
-    <div className="rounded-xl border border-hairline bg-cream p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-forest">Presentation & Delivery</p>
+    <div className="rounded-2xl bg-peach-tint/50 p-5">
+      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Presentation & Delivery</p>
       <div className="mt-2 flex flex-col gap-3">
         {rows.map(([label, value]) =>
           value ? (
             <div key={label}>
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">{label}</p>
               <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{value}</p>
             </div>
           ) : null,
@@ -252,10 +253,10 @@ function PresentationReviewCard({ review }: { review: LessonPlanPresentationRevi
   ]
   return (
     <div className="flex flex-col gap-3">
-      {rows.map(([label, value]) =>
+      {rows.map(([label, value], i) =>
         value ? (
-          <div key={label} className="rounded-xl border border-hairline bg-cream p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-forest">{label}</p>
+          <div key={label} className={`rounded-2xl p-5 ${['bg-peach-tint/50', 'bg-gold-tint/50', 'bg-mint-tint/50'][i % 3]}`}>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">{label}</p>
             <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{value}</p>
           </div>
         ) : null,
@@ -330,7 +331,7 @@ function HistoryList({
       {loading ? (
         <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
       ) : plans.length === 0 ? (
-        <div className="mt-3 rounded-2xl border border-dashed border-hairline p-6 text-center text-sm text-ink-soft">
+        <div className="mt-2 text-sm text-ink-soft">
           Plans you save will show up here.
         </div>
       ) : (
@@ -369,13 +370,13 @@ function SavedPlanCard({ plan }: { plan: LessonPlan }) {
             <>
               {plan.planText && (
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Plan</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Plan</p>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.planText}</p>
                 </div>
               )}
               {plan.feedback && (
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coaching</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Coaching</p>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.feedback}</p>
                 </div>
               )}
@@ -386,25 +387,25 @@ function SavedPlanCard({ plan }: { plan: LessonPlan }) {
             <>
               {plan.doNow && (
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Do Now</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Do Now</p>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.doNow}</p>
                 </div>
               )}
               {plan.agenda && (
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Agenda</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Agenda</p>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.agenda}</p>
                 </div>
               )}
               {plan.closure && (
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Closure</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Closure</p>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.closure}</p>
                 </div>
               )}
               {plan.hots && (
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-forest">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">
                     Higher-order thinking
                   </p>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.hots}</p>
@@ -412,7 +413,7 @@ function SavedPlanCard({ plan }: { plan: LessonPlan }) {
               )}
               {plan.homework && (
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Homework</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Homework</p>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.homework}</p>
                 </div>
               )}
@@ -506,13 +507,13 @@ function GeneratePanel() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+      <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6">
         {!plan ? (
           <div className="flex flex-col gap-4">
-            <p className="text-sm text-ink-soft">
+            <PanelHeader eyebrow="Lesson Planning" title="Generate ideas">
               Give a clear objective and any context you have — get a sample single-day plan modeled on a
               gradual-release template, for ideas. Not a plan you have to follow.
-            </p>
+            </PanelHeader>
             <ContextFields context={context} onChange={setContext} disabled={generating} />
             {generating && (
               <div className="flex justify-center py-1 text-forest">
@@ -523,7 +524,7 @@ function GeneratePanel() {
               type="button"
               onClick={handleGenerate}
               disabled={generating || !context.objective.trim()}
-              className="self-end rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
+              className="self-end rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
             >
               {generating ? (
                 <span className="flex items-center gap-2">
@@ -578,7 +579,7 @@ function GeneratePanel() {
               <button
                 type="button"
                 onClick={handleNew}
-                className="rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
+                className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90"
               >
                 New Sample Plan
               </button>
@@ -718,9 +719,12 @@ function FeedbackPanel() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+      <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6">
         {!plan ? (
           <div className="flex flex-col gap-4">
+            <PanelHeader eyebrow="Lesson Planning" title="Get feedback">
+              Paste or write a plan you already have and get coaching feedback on it.
+            </PanelHeader>
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-ink">Your lesson plan</span>
               <textarea
@@ -729,7 +733,7 @@ function FeedbackPanel() {
                 disabled={submitting}
                 rows={8}
                 placeholder="Paste or write your plan — Do Now, main activities, closure, etc."
-                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
+                className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
             </label>
 
@@ -744,7 +748,7 @@ function FeedbackPanel() {
               onClick={handleSubmit}
               disabled={submitting || !canSubmit}
 
-              className="self-end rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
+              className="self-end rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
             >
               {submitting ? (
                 <span className="flex items-center gap-2">
@@ -758,13 +762,13 @@ function FeedbackPanel() {
         ) : (
           <div className="flex flex-col gap-4">
             <PlanHeader plan={plan} />
-            <div className="rounded-xl border border-hairline bg-cream p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Your plan</p>
+            <div className="rounded-2xl bg-cream p-5">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Your plan</p>
               <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{plan.planText}</p>
             </div>
             {plan.feedback && (
-              <div className="rounded-xl border border-hairline bg-peach-tint/60 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coaching</p>
+              <div className="rounded-2xl bg-peach-tint/50 p-5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Coaching</p>
                 <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{plan.feedback}</p>
               </div>
             )}
@@ -778,15 +782,15 @@ function FeedbackPanel() {
               placeholder="Ask a follow-up, or ask the coach to revise your plan..."
             />
             {plan.suggestedRevision && !revisionDismissed && (
-              <div className="rounded-xl border border-mint-tint bg-mint-tint/60 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-forest">Suggested Revision</p>
+              <div className="rounded-2xl bg-mint-tint/50 p-5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">Suggested Revision</p>
                 <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{plan.suggestedRevision}</p>
                 <div className="mt-3 flex items-center gap-3">
                   <button
                     type="button"
                     onClick={handleApplyRevision}
                     disabled={applyingRevision}
-                    className="rounded-lg bg-terracotta px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
+                    className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
                   >
                     {applyingRevision ? (
                       <span className="flex items-center gap-2">
@@ -839,7 +843,7 @@ function FeedbackPanel() {
               <button
                 type="button"
                 onClick={handleNew}
-                className="rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
+                className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90"
               >
                 New Plan
               </button>
@@ -1004,16 +1008,16 @@ function PresentationPanel() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+      <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6">
         {!plan ? (
           <div className="flex flex-col gap-4">
-            <p className="text-sm text-ink-soft">
+            <PanelHeader eyebrow="Lesson Planning" title="Review a presentation">
               Upload a presentation you've already built — get feedback on grade-level fit, visuals, ideas, length,
               and how to actually run it in class.
-            </p>
+            </PanelHeader>
 
             {!extractedText ? (
-              <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-hairline bg-cream px-4 py-8 text-center transition-colors hover:border-terracotta/40">
+              <label className="flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-terracotta/30 bg-peach-tint/30 px-4 py-8 text-center transition-colors hover:border-terracotta/40">
                 <span className="flex items-center gap-2 text-sm font-medium text-ink">
                   {extracting ? (
                     <>
@@ -1065,7 +1069,7 @@ function PresentationPanel() {
                   onChange={(e) => setGradeLevel(e.target.value)}
                   disabled={submitting}
                   placeholder="e.g. 9th grade"
-                  className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
+                  className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
                 />
               </label>
               <label className="flex flex-col gap-1.5">
@@ -1076,7 +1080,7 @@ function PresentationPanel() {
                   onChange={(e) => setSubject(e.target.value)}
                   disabled={submitting}
                   placeholder="e.g. Biology"
-                  className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
+                  className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
                 />
               </label>
             </div>
@@ -1088,7 +1092,7 @@ function PresentationPanel() {
                 onChange={(e) => setObjective(e.target.value)}
                 disabled={submitting}
                 placeholder="e.g. Introducing photosynthesis"
-                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
+                className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
             </label>
 
@@ -1103,7 +1107,7 @@ function PresentationPanel() {
               onClick={handleSubmit}
               disabled={submitting || !extractedText}
 
-              className="self-end rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
+              className="self-end rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
             >
               {submitting ? (
                 <span className="flex items-center gap-2">
@@ -1116,17 +1120,17 @@ function PresentationPanel() {
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            <div>
-              <span className="rounded-full bg-mint-tint/60 px-2.5 py-1 text-xs font-semibold text-forest">
+            <div className="-mx-6 -mt-6 bg-forest px-6 py-6 text-cream sm:px-8">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">
                 Presentation review
                 {plan.subject ? ` · ${plan.subject}` : ''}
                 {plan.gradeLevel ? ` · ${plan.gradeLevel}` : ''}
-              </span>
-              <p className="mt-2 text-sm font-medium text-ink">
+              </p>
+              <p className="mt-2 font-heading text-xl font-bold leading-snug text-cream">
                 {plan.objective || plan.fileName || 'Your presentation'}
               </p>
               {plan.slideCount != null && (
-                <p className="mt-0.5 text-xs text-ink-soft">
+                <p className="mt-1 text-xs text-cream/70">
                   {plan.slideCount} slide{plan.slideCount === 1 ? '' : 's'}
                 </p>
               )}
@@ -1144,15 +1148,15 @@ function PresentationPanel() {
               placeholder="Ask a follow-up, or ask the coach to revise a slide..."
             />
             {plan.suggestedRevision && !revisionDismissed && (
-              <div className="rounded-xl border border-mint-tint bg-mint-tint/60 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-forest">Suggested Revision</p>
+              <div className="rounded-2xl bg-mint-tint/50 p-5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">Suggested Revision</p>
                 <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{plan.suggestedRevision}</p>
                 <div className="mt-3 flex items-center gap-3">
                   <button
                     type="button"
                     onClick={handleApplyRevision}
                     disabled={applyingRevision}
-                    className="rounded-lg bg-terracotta px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
+                    className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
                   >
                     {applyingRevision ? (
                       <span className="flex items-center gap-2">
@@ -1188,7 +1192,7 @@ function PresentationPanel() {
               <button
                 type="button"
                 onClick={handleNew}
-                className="rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
+                className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90"
               >
                 New Presentation
               </button>

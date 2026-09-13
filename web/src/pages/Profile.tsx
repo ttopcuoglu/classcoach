@@ -219,7 +219,7 @@ export default function Profile() {
               type="button"
               onClick={handleUpgrade}
               disabled={billingLoading}
-              className="rounded-lg bg-terracotta px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-60"
+              className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
             >
               {billingLoading ? 'Please wait...' : 'Upgrade to Wivoza Plus — $9/month'}
             </button>
@@ -275,7 +275,7 @@ export default function Profile() {
           <button
             type="submit"
             disabled={saving}
-            className="self-start rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-60"
+            className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
           >
             {saving ? 'Saving...' : 'Save changes'}
           </button>
@@ -374,7 +374,7 @@ export default function Profile() {
               <button
                 type="submit"
                 disabled={joining || !joinCode.trim()}
-                className="rounded-lg bg-terracotta px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
+                className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
               >
                 {joining ? 'Joining...' : 'Join'}
               </button>
@@ -447,7 +447,7 @@ export default function Profile() {
             type="button"
             onClick={handleDeleteAccount}
             disabled={deletingAccount}
-            className="rounded-lg bg-terracotta px-4 py-2 text-sm font-semibold text-white transition-colors hover:opacity-90 disabled:opacity-60"
+            className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:opacity-90 disabled:bg-hairline disabled:text-ink-soft"
           >
             {deletingAccount ? 'Deleting...' : 'Delete account'}
           </button>

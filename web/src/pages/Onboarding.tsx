@@ -35,7 +35,7 @@ function pillClass(active: boolean) {
 }
 
 const primaryButtonClass =
-  'rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50'
+  'rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft'
 
 export default function Onboarding({ onDone }: { onDone: () => Promise<unknown> }) {
   const navigate = useNavigate()

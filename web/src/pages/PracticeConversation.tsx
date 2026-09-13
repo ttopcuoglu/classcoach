@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PanelHeader } from '../components/PanelHeader'
 import { Link } from 'react-router-dom'
 import { MicIcon } from '../components/icons'
 import SafetyAdvisoryBanner, { PrivacyReminder } from '../components/SafetyAdvisoryBanner'
@@ -31,9 +32,9 @@ function RatingPill({ rating }: { rating: string }) {
 
 function ReportDimension({ label, rating, feedback }: { label: string; rating: string; feedback: string }) {
   return (
-    <div className="rounded-xl border border-hairline bg-cream p-4">
+    <div className="rounded-2xl bg-gold-tint/40 p-5">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">{label}</p>
         <RatingPill rating={rating} />
       </div>
       <p className="mt-1.5 text-sm text-ink">{feedback}</p>
@@ -127,19 +128,14 @@ export default function PracticeConversation() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <Link to="/communications" className="w-fit text-sm font-medium text-ink-soft hover:text-ink">
-          ← Communication Coach
-        </Link>
-        <div className="flex flex-col gap-1">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Communication Coach</p>
-          <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
-            Practice a Conversation<span className="text-gold">.</span>
-          </h1>
-        </div>
-      </div>
+      <Link to="/communications" className="w-fit text-sm font-medium text-ink-soft hover:text-ink">
+        ← Communication Coach
+      </Link>
 
-      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+      <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6">
+        <PanelHeader as="h1" eyebrow="Wivoza · Communication Coach" title="Practice a Conversation" className="mb-6">
+          Role-play with a parent, student, colleague, or administrator.
+        </PanelHeader>
         {!prep ? (
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
@@ -153,7 +149,7 @@ export default function PracticeConversation() {
                     disabled={generating || submitting}
                     className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                       personType === r.value
-                        ? 'border-terracotta bg-mint-tint/60 text-forest'
+                        ? 'border-forest bg-forest text-cream'
                         : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                     }`}
                   >
@@ -174,7 +170,7 @@ export default function PracticeConversation() {
                     disabled={generating || submitting}
                     className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                       challenge === c.value
-                        ? 'border-terracotta bg-mint-tint/60 text-forest'
+                        ? 'border-forest bg-forest text-cream'
                         : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                     }`}
                   >
@@ -186,7 +182,7 @@ export default function PracticeConversation() {
 
             {personType === 'student' && (
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Grade band</span>
+                <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Grade band</span>
                 <div className="flex flex-wrap gap-1.5">
                   {GRADE_BANDS.map((band) => (
                     <button
@@ -196,7 +192,7 @@ export default function PracticeConversation() {
                       disabled={generating || submitting}
                       className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                         gradeBand === band
-                          ? 'border-terracotta bg-mint-tint/60 text-forest'
+                          ? 'border-forest bg-forest text-cream'
                           : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                       }`}
                     >
@@ -218,7 +214,7 @@ export default function PracticeConversation() {
                     disabled={generating || submitting}
                     className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                       difficulty === d.value
-                        ? 'border-terracotta bg-mint-tint/60 text-forest'
+                        ? 'border-forest bg-forest text-cream'
                         : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                     }`}
                   >
@@ -236,7 +232,7 @@ export default function PracticeConversation() {
                     type="button"
                     onClick={handleGenerate}
                     disabled={!canGenerate}
-                    className="rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-60"
+                    className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
                   >
                     {generating ? 'Generating...' : 'Generate a Scenario'}
                   </button>
@@ -255,16 +251,16 @@ export default function PracticeConversation() {
                       value={customSituation}
                       onChange={(e) => setCustomSituation(e.target.value)}
                       rows={3}
-                      className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none"
+                      className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none"
                     />
                   </label>
                 )}
               </div>
             ) : (
               <>
-                <div className="rounded-xl border border-hairline bg-cream p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Situation</p>
-                  <p className="mt-1.5 text-sm text-ink">{activeSituation}</p>
+                <div className="rounded-3xl bg-forest p-6 text-cream">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Situation</p>
+                  <p className="mt-3 text-base leading-relaxed text-cream">{activeSituation}</p>
                 </div>
                 <label className="flex flex-col gap-1.5">
                   <span className="text-sm font-medium text-ink">How would you respond?</span>
@@ -274,7 +270,7 @@ export default function PracticeConversation() {
                     disabled={submitting}
                     rows={5}
                     placeholder="Draft what you'd say or write..."
-                    className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
+                    className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
                   />
                 </label>
                 {speechSupported && (
@@ -318,7 +314,7 @@ export default function PracticeConversation() {
                     type="button"
                     onClick={handleSubmit}
                     disabled={!canSubmit}
-                    className="rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
+                    className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
                   >
                     {submitting ? 'Getting feedback...' : 'Get Coaching Report'}
                   </button>
@@ -329,9 +325,9 @@ export default function PracticeConversation() {
         ) : report ? (
           <div className="flex flex-col gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Situation</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Situation</p>
               <p className="mt-1 text-sm text-ink">{prep.situationText}</p>
-              <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-ink-soft">Your response</p>
+              <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Your response</p>
               <p className="mt-1 text-sm text-ink">{prep.responseText}</p>
             </div>
 
@@ -356,33 +352,33 @@ export default function PracticeConversation() {
               />
             </div>
 
-            <div className="rounded-xl border border-hairline bg-peach-tint/60 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">What you did well</p>
+            <div className="rounded-2xl bg-peach-tint/50 p-5">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">What you did well</p>
               <p className="mt-1.5 text-sm text-ink">{report.didWell}</p>
             </div>
-            <div className="rounded-xl border border-hairline bg-mint-tint/60 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-forest">Priority for improvement</p>
+            <div className="rounded-2xl bg-mint-tint/50 p-5">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">Priority for improvement</p>
               <p className="mt-1.5 text-sm text-ink">{report.priority}</p>
             </div>
-            <div className="rounded-xl border border-hairline bg-cream p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">A stronger phrase</p>
+            <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">A stronger phrase</p>
               <p className="mt-1.5 text-sm text-ink">{report.strongerPhrase}</p>
             </div>
             {report.modelResponse && (
-              <div className="rounded-xl border border-hairline bg-mint-tint/60 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-forest">A model response</p>
+              <div className="rounded-2xl bg-mint-tint/50 p-5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">A model response</p>
                 <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{report.modelResponse}</p>
               </div>
             )}
-            <div className="rounded-xl border border-hairline bg-cream p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Suggested next step</p>
+            <div className="rounded-2xl bg-peach-tint/30 p-5">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Suggested next step</p>
               <p className="mt-1.5 text-sm text-ink">{report.nextStep}</p>
             </div>
 
             <button
               type="button"
               onClick={handlePracticeAgain}
-              className="self-end rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
+              className="self-end rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90"
             >
               Practice Again
             </button>

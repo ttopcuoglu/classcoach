@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PanelHeader } from '../components/PanelHeader'
 import { Link } from 'react-router-dom'
 import CoachingChat from '../components/CoachingChat'
 import ShareButton from '../components/ShareButton'
@@ -103,19 +104,14 @@ export default function ReviewCommunication() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <Link to="/communications" className="w-fit text-sm font-medium text-ink-soft hover:text-ink">
-          ← Communication Coach
-        </Link>
-        <div className="flex flex-col gap-1">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Communication Coach</p>
-          <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
-            Review My Communication<span className="text-gold">.</span>
-          </h1>
-        </div>
-      </div>
+      <Link to="/communications" className="w-fit text-sm font-medium text-ink-soft hover:text-ink">
+        ← Communication Coach
+      </Link>
 
-      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+      <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6">
+        <PanelHeader as="h1" eyebrow="Wivoza · Communication Coach" title="Review My Communication" className="mb-6">
+          Get feedback on something already written.
+        </PanelHeader>
         {!prep ? (
           <div className="flex flex-col gap-4">
             <label className="flex flex-col gap-1.5">
@@ -125,7 +121,7 @@ export default function ReviewCommunication() {
                 onChange={(e) => setSituationText(e.target.value)}
                 disabled={submitting}
                 rows={4}
-                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
+                className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
             </label>
             <label className="flex flex-col gap-1.5">
@@ -135,7 +131,7 @@ export default function ReviewCommunication() {
                 onChange={(e) => setResponseText(e.target.value)}
                 disabled={submitting}
                 rows={4}
-                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
+                className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
             </label>
 
@@ -151,7 +147,7 @@ export default function ReviewCommunication() {
                     title={m.description}
                     className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                       reviewMode === m.value
-                        ? 'border-terracotta bg-mint-tint/60 text-forest'
+                        ? 'border-forest bg-forest text-cream'
                         : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                     }`}
                   >
@@ -174,7 +170,7 @@ export default function ReviewCommunication() {
               type="button"
               onClick={handleSubmit}
               disabled={!canSubmit}
-              className="self-end rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
+              className="self-end rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
             >
               {submitting ? 'Reviewing...' : 'Review My Communication'}
             </button>
@@ -182,22 +178,22 @@ export default function ReviewCommunication() {
         ) : (
           <div className="flex flex-col gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Message received</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Message received</p>
               <p className="mt-1 text-sm text-ink">{prep.situationText}</p>
-              <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-ink-soft">Your planned response</p>
+              <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Your planned response</p>
               <p className="mt-1 text-sm text-ink">{prep.responseText}</p>
             </div>
 
             {prep.feedback && (
-              <div className="rounded-xl border border-hairline bg-peach-tint/60 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coaching</p>
+              <div className="rounded-2xl bg-peach-tint/50 p-5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Coaching</p>
                 <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{prep.feedback}</p>
               </div>
             )}
 
             {prep.modelResponse && (
-              <div className="rounded-xl border border-hairline bg-mint-tint/60 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-forest">Revised response</p>
+              <div className="rounded-2xl bg-mint-tint/50 p-5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">Revised response</p>
                 <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{prep.modelResponse}</p>
               </div>
             )}
@@ -249,7 +245,7 @@ export default function ReviewCommunication() {
               <button
                 type="button"
                 onClick={handleStartOver}
-                className="rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
+                className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90"
               >
                 Start Over
               </button>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PanelHeader } from '../components/PanelHeader'
 import { Link } from 'react-router-dom'
 import CoachingChat from '../components/CoachingChat'
 import { MicIcon, StarIcon } from '../components/icons'
@@ -183,19 +184,14 @@ export default function WriteMessage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <Link to="/communications" className="w-fit text-sm font-medium text-ink-soft hover:text-ink">
-          ← Communication Coach
-        </Link>
-        <div className="flex flex-col gap-1">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Communication Coach</p>
-          <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
-            Write a Message<span className="text-gold">.</span>
-          </h1>
-        </div>
-      </div>
+      <Link to="/communications" className="w-fit text-sm font-medium text-ink-soft hover:text-ink">
+        ← Communication Coach
+      </Link>
 
-      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+      <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6">
+        <PanelHeader as="h1" eyebrow="Wivoza · Communication Coach" title="Write a Message" className="mb-6">
+          Create a professional message or response.
+        </PanelHeader>
         {!current ? (
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap gap-2">
@@ -208,7 +204,7 @@ export default function WriteMessage() {
                   title={a.description}
                   className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                     startingAction === a.value
-                      ? 'border-terracotta bg-mint-tint/60 text-forest'
+                      ? 'border-forest bg-forest text-cream'
                       : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                   }`}
                 >
@@ -224,7 +220,7 @@ export default function WriteMessage() {
                   value={recipientType ?? ''}
                   onChange={(e) => setRecipientType((e.target.value || undefined) as RecipientType | undefined)}
                   disabled={drafting}
-                  className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
+                  className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
                 >
                   <option value="">Choose...</option>
                   {RECIPIENT_TYPES.map((r) => (
@@ -240,7 +236,7 @@ export default function WriteMessage() {
                   value={purpose ?? ''}
                   onChange={(e) => setPurpose((e.target.value || undefined) as MessagePurpose | undefined)}
                   disabled={drafting}
-                  className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
+                  className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
                 >
                   <option value="">Choose...</option>
                   {MESSAGE_PURPOSES.map((p) => (
@@ -256,7 +252,7 @@ export default function WriteMessage() {
                   value={format ?? ''}
                   onChange={(e) => setFormat((e.target.value || undefined) as MessageFormat | undefined)}
                   disabled={drafting}
-                  className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
+                  className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
                 >
                   <option value="">Choose...</option>
                   {MESSAGE_FORMATS.map((f) => (
@@ -277,7 +273,7 @@ export default function WriteMessage() {
                       disabled={drafting}
                       className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
                         tone === t.value
-                          ? 'border-terracotta bg-mint-tint/60 text-forest'
+                          ? 'border-forest bg-forest text-cream'
                           : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                       }`}
                     >
@@ -298,7 +294,7 @@ export default function WriteMessage() {
                   onChange={(e) => setIncidentSummary(e.target.value)}
                   disabled={drafting}
                   rows={4}
-                  className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
+                  className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
                 />
               </label>
             )}
@@ -311,7 +307,7 @@ export default function WriteMessage() {
                     onChange={(e) => setReceivedMessage(e.target.value)}
                     disabled={drafting}
                     rows={4}
-                    className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
+                    className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
                   />
                 </label>
                 <label className="flex flex-col gap-1.5">
@@ -323,7 +319,7 @@ export default function WriteMessage() {
                     onChange={(e) => setContextNotes(e.target.value)}
                     disabled={drafting}
                     rows={2}
-                    className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
+                    className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
                   />
                 </label>
               </>
@@ -336,7 +332,7 @@ export default function WriteMessage() {
                   onChange={(e) => setExistingDraft(e.target.value)}
                   disabled={drafting}
                   rows={5}
-                  className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
+                  className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
                 />
               </label>
             )}
@@ -370,7 +366,7 @@ export default function WriteMessage() {
               type="button"
               onClick={handleDraft}
               disabled={!canDraft}
-              className="self-end rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
+              className="self-end rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
             >
               {drafting ? 'Drafting...' : 'Generate Message'}
             </button>
@@ -383,8 +379,9 @@ export default function WriteMessage() {
               <span>· {toneLabel(current.tone)}</span>
               {formatLabel(current.format) && <span>· {formatLabel(current.format)}</span>}
             </div>
-            <div className="rounded-xl border border-hairline bg-cream p-4">
-              <p className="text-sm whitespace-pre-wrap text-ink">{current.draftText}</p>
+            <div className="rounded-2xl border border-hairline bg-cream p-5 shadow-sm">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Your draft</p>
+              <p className="mt-2 text-sm whitespace-pre-wrap text-ink">{current.draftText}</p>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                 <button
                   type="button"
@@ -431,7 +428,7 @@ export default function WriteMessage() {
                   disabled={chatSending}
                   className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ${
                     translateOpen
-                      ? 'border-terracotta bg-mint-tint/60 text-forest'
+                      ? 'border-forest bg-forest text-cream'
                       : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                   }`}
                 >
@@ -464,7 +461,7 @@ export default function WriteMessage() {
                         type="button"
                         onClick={() => handleTranslate(customLanguage)}
                         disabled={!customLanguage.trim()}
-                        className="rounded-md bg-terracotta px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                        className="rounded-full bg-terracotta px-2.5 py-1 text-xs font-semibold text-cream disabled:bg-hairline disabled:text-ink-soft"
                       >
                         Go
                       </button>
@@ -487,7 +484,7 @@ export default function WriteMessage() {
             <button
               type="button"
               onClick={handleStartOver}
-              className="self-end rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
+              className="self-end rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90"
             >
               Start a New Message
             </button>

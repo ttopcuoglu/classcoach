@@ -63,7 +63,7 @@ const inputClass =
   'rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60'
 
 const primaryButtonClass =
-  'rounded-lg bg-terracotta px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50'
+  'rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft'
 
 type AnalyticsTab = 'dashboard' | 'engagement' | 'insights'
 type Tab = AnalyticsTab | 'professionalLearning' | 'people' | 'organizations' | 'platformUsers'
