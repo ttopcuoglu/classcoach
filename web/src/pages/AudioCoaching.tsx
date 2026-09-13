@@ -182,7 +182,10 @@ export default function AudioCoaching() {
     <div className="flex flex-col gap-6">
       {!active && (
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold text-ink md:text-3xl">Lesson Debrief</h1>
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Coaching</p>
+          <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
+            Lesson Debrief<span className="text-gold">.</span>
+          </h1>
           <p className="text-ink-soft">
             Record a class period, get a transcript, and see a coaching report. Audio is never saved — only
             the text.
@@ -196,7 +199,7 @@ export default function AudioCoaching() {
         </div>
       )}
 
-      {error && <p className="text-sm text-warm-500">{error}</p>}
+      {error && <p className="text-sm text-terracotta-600">{error}</p>}
 
       {!active && showFreeCapLine && (
         <p className="text-sm text-ink-soft">
@@ -214,11 +217,11 @@ export default function AudioCoaching() {
 
       {!active && (
         <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Past sessions</h2>
+          <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Past sessions</h2>
           {historyLoading ? (
             <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
           ) : sessions.length === 0 ? (
-            <div className="mt-3 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
+            <div className="mt-3 rounded-2xl border border-dashed border-hairline bg-cream-card/60 p-6 text-center text-sm text-ink-soft">
               Sessions you record will show up here.
             </div>
           ) : (
@@ -260,8 +263,8 @@ function SessionFlow({
 }) {
   if (session.status === 'transcribing') {
     return (
-      <div className="rounded-2xl border border-border bg-surface p-8 text-center">
-        <p className="text-sm text-ink-soft">Transcribing your session...</p>
+      <div className="rounded-3xl bg-forest p-8 text-center">
+        <p className="text-sm text-cream/80">Transcribing your session...</p>
       </div>
     )
   }
@@ -448,17 +451,18 @@ function RecordingPanel({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="rounded-3xl bg-forest p-6 text-cream sm:p-8">
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Record a lesson</p>
         {session && (
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold text-ink">
+              <p className="mt-2 font-heading text-xl font-bold text-cream">
                 {session.classSubject || teacherName || 'Recording'} {session.period ? `· ${session.period}` : ''}
               </p>
-              <p className="text-xs text-ink-soft">{formatSessionDateTime(session.sessionDate)}</p>
+              <p className="text-xs text-cream/70">{formatSessionDateTime(session.sessionDate)}</p>
             </div>
             {phase === 'idle' && (
-              <button type="button" onClick={onExit} className="text-sm font-medium text-ink-soft hover:text-ink">
+              <button type="button" onClick={onExit} className="text-sm font-medium text-cream/70 hover:text-cream">
                 Cancel
               </button>
             )}
@@ -469,14 +473,14 @@ function RecordingPanel({
           <div className="flex items-center gap-2.5">
             {phase === 'recording' && (
               <span className="relative flex h-2.5 w-2.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-warm-500 opacity-75" />
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-warm-500" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-terracotta opacity-75" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-terracotta" />
               </span>
             )}
-            {phase === 'paused' && <span className="h-2.5 w-2.5 rounded-full bg-ink-soft" />}
-            <span className="font-mono text-4xl font-semibold text-ink">{timeLabel}</span>
+            {phase === 'paused' && <span className="h-2.5 w-2.5 rounded-full bg-gold" />}
+            <span className="font-mono text-5xl font-semibold text-cream">{timeLabel}</span>
           </div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cream/70">
             {phase === 'idle' && 'Ready to record'}
             {phase === 'recording' && 'Recording'}
             {phase === 'paused' && 'Paused'}
@@ -488,7 +492,7 @@ function RecordingPanel({
               <button
                 type="button"
                 onClick={handleRecord}
-                className="flex items-center gap-3 rounded-full bg-warm-500 px-10 py-6 text-lg font-semibold text-white transition-opacity hover:opacity-90"
+                className="flex items-center gap-3 rounded-full bg-terracotta px-10 py-6 text-lg font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90"
               >
                 <MicIcon className="h-6 w-6" />
                 Record
@@ -499,14 +503,14 @@ function RecordingPanel({
                 <button
                   type="button"
                   onClick={handlePause}
-                  className="rounded-full border border-border px-8 py-5 text-base font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+                  className="rounded-full border border-cream/40 px-8 py-5 text-base font-semibold text-cream transition-colors hover:border-cream hover:bg-cream/10"
                 >
                   Pause
                 </button>
                 <button
                   type="button"
                   onClick={handleStop}
-                  className="rounded-full bg-ink px-8 py-5 text-base font-semibold text-white transition-opacity hover:opacity-90"
+                  className="rounded-full bg-cream px-8 py-5 text-base font-semibold text-forest transition-opacity hover:opacity-90"
                 >
                   Stop
                 </button>
@@ -517,21 +521,21 @@ function RecordingPanel({
                 <button
                   type="button"
                   onClick={handleResume}
-                  className="rounded-full bg-brand-500 px-8 py-5 text-base font-semibold text-white transition-colors hover:bg-brand-600"
+                  className="rounded-full bg-terracotta px-8 py-5 text-base font-semibold text-cream transition-colors hover:bg-terracotta/90"
                 >
                   Resume
                 </button>
                 <button
                   type="button"
                   onClick={handleStop}
-                  className="rounded-full bg-ink px-8 py-5 text-base font-semibold text-white transition-opacity hover:opacity-90"
+                  className="rounded-full bg-cream px-8 py-5 text-base font-semibold text-forest transition-opacity hover:opacity-90"
                 >
                   Stop
                 </button>
               </>
             )}
             {phase === 'uploading' && (
-              <div className="text-brand-600">
+              <div className="text-gold">
                 <ProgressRing
                   progress={uploadProgress}
                   size={88}
@@ -544,7 +548,7 @@ function RecordingPanel({
         </div>
 
         {error && (
-          <p className="mt-4 text-center text-sm text-warm-500">
+          <p className="mt-4 text-center text-sm text-peach-tint">
             <UpgradeMessage text={error} />
           </p>
         )}
@@ -601,8 +605,8 @@ function TagSpeakersPanel({
   }
 
   return (
-    <div className="rounded-2xl border border-border bg-surface p-6">
-      <h2 className="text-sm font-semibold text-ink">Which voice is the teacher?</h2>
+    <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+      <h2 className="font-heading text-xl font-bold text-forest">Which voice is the teacher?</h2>
       <p className="mt-1 text-sm text-ink-soft">
         Automatic diarization can tell voices apart, but it can't reliably tell who's the teacher. Pick it
         below — everyone else will be grouped as Student.
@@ -617,7 +621,7 @@ function TagSpeakersPanel({
               type="button"
               onClick={handleDeleteAndRetry}
               disabled={deleting}
-              className="rounded-lg border border-warm-500 px-4 py-2 text-sm font-semibold text-warm-500 transition-colors hover:bg-warm-100 disabled:opacity-60"
+              className="rounded-lg border border-terracotta px-4 py-2 text-sm font-semibold text-terracotta-600 transition-colors hover:bg-peach-tint disabled:opacity-60"
             >
               {deleting ? 'Deleting...' : 'Delete this session and try recording again'}
             </button>
@@ -626,7 +630,7 @@ function TagSpeakersPanel({
           speakers.map((s) => (
             <div
               key={s.rawSpeakerTag}
-              className="flex items-center justify-between gap-4 rounded-xl border border-border bg-canvas p-4"
+              className="flex items-center justify-between gap-4 rounded-xl bg-mint-tint/50 p-4"
             >
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{s.rawSpeakerTag}</p>
@@ -636,7 +640,7 @@ function TagSpeakersPanel({
                 type="button"
                 onClick={() => handleTag(s.rawSpeakerTag)}
                 disabled={tagging !== null}
-                className="shrink-0 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+                className="shrink-0 rounded-lg bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:opacity-60"
               >
                 {tagging === s.rawSpeakerTag ? 'Analyzing...' : 'This is the Teacher'}
               </button>
@@ -644,7 +648,7 @@ function TagSpeakersPanel({
           ))
         )}
       </div>
-      {error && <p className="mt-4 text-sm text-warm-500">{error}</p>}
+      {error && <p className="mt-4 text-sm text-terracotta-600">{error}</p>}
     </div>
   )
 }
@@ -5039,26 +5043,34 @@ function SessionCard({
   onOpen: () => void
   onDelete: () => void
 }) {
+  const status =
+    session.status === 'locked'
+      ? { label: 'Locked', className: 'bg-cream text-ink-soft' }
+      : session.status === 'analyzed'
+        ? { label: 'Ready to review', className: 'bg-mint-tint text-forest' }
+        : { label: 'In progress', className: 'bg-gold-tint text-forest' }
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-surface p-4">
-      <button type="button" onClick={onOpen} className="flex-1 text-left">
-        <p className="text-sm font-semibold text-ink">
-          {session.classSubject || 'New Recording'} {session.period ? `· ${session.period}` : ''}
-        </p>
-        <p className="mt-0.5 text-xs text-ink-soft">
-          {formatSessionDateTime(session.sessionDate)} ·{' '}
-          {session.status === 'locked'
-            ? 'Locked'
-            : session.status === 'analyzed'
-              ? 'Ready to review'
-              : 'In progress'}
-          {session.teacherTalkPct != null ? ` · ${session.teacherTalkPct}% teacher talk` : ''}
-        </p>
+    <div className="group flex items-center justify-between gap-4 rounded-2xl border border-hairline bg-cream-card p-4 transition-colors hover:border-terracotta/40 sm:p-5">
+      <button type="button" onClick={onOpen} className="flex flex-1 items-center gap-4 text-left">
+        <span className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-forest text-gold sm:flex">
+          <MicIcon className="h-5 w-5" />
+        </span>
+        <span className="min-w-0">
+          <span className="block font-heading text-base font-bold text-forest">
+            {session.classSubject || 'New Recording'}
+            {session.period ? <span className="text-terracotta"> · {session.period}</span> : ''}
+          </span>
+          <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-soft">
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${status.className}`}>{status.label}</span>
+            <span>{formatSessionDateTime(session.sessionDate)}</span>
+            {session.teacherTalkPct != null && <span>· {session.teacherTalkPct}% teacher talk</span>}
+          </span>
+        </span>
       </button>
       <button
         type="button"
         onClick={onDelete}
-        className="shrink-0 text-xs font-medium text-ink-soft hover:text-warm-500"
+        className="shrink-0 text-xs font-medium text-ink-soft hover:text-terracotta-600"
       >
         Delete
       </button>
