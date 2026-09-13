@@ -7,7 +7,6 @@ import {
   ArrowUpIcon,
   BookIcon,
   BrainIcon,
-  ChartBarIcon,
   ChatBubbleIcon,
   CheckIcon,
   ChecklistIcon,
@@ -24,6 +23,30 @@ import {
   UserIcon,
   WaveformIcon,
 } from '../components/icons'
+
+// Old pastel icon tints mapped onto the app's solid badges.
+const TINT_BADGES: Record<string, string> = {
+  'bg-mint-tint text-forest': 'bg-forest text-gold',
+  'bg-peach-tint text-terracotta': 'bg-terracotta text-cream',
+  'bg-gold-tint text-terracotta-600': 'bg-gold text-forest',
+  'bg-lavender-tint text-[#6B5FA0]': 'bg-forest text-gold',
+}
+const SECTION_BADGES = ['bg-gold text-forest', 'bg-terracotta text-cream', 'bg-forest text-gold']
+
+function SectionLabel({ n, label }: { n: number; label: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl font-heading text-base font-bold ${
+          SECTION_BADGES[(n - 1) % SECTION_BADGES.length]
+        }`}
+      >
+        {n}
+      </span>
+      <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">{label}</span>
+    </div>
+  )
+}
 
 type IconComponent = (props: { className?: string }) => React.ReactElement
 type SpecItem = { label: string; body: string }
@@ -60,15 +83,15 @@ function SpecList({ items }: { items: SpecItem[] }) {
 function FeatureBlock({ feature }: { feature: Feature }) {
   const Icon = feature.icon
   return (
-    <div id={feature.id} className="scroll-mt-24 rounded-2xl border border-hairline bg-cream-card p-7">
+    <div id={feature.id} className="scroll-mt-24 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-3.5">
-          <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${feature.tint}`}>
+          <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${TINT_BADGES[feature.tint] ?? 'bg-forest text-gold'}`}>
             <Icon className="h-5 w-5" />
           </span>
           <h3 className="font-heading text-xl font-bold text-forest">{feature.title}</h3>
         </div>
-        <span className="rounded-full border border-hairline bg-cream px-2.5 py-1 text-[11px] font-medium text-ink-soft">
+        <span className="rounded-full bg-mint-tint/60 px-2.5 py-1 text-[11px] font-semibold text-forest">
           {feature.nav}
         </span>
       </div>
@@ -378,10 +401,7 @@ export default function Guide() {
       <header className="border-b border-hairline bg-cream-card">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
           <Link to="/" className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold text-forest">
-              <ChartBarIcon className="h-4 w-4" />
-            </span>
-            <span className="font-heading text-base font-bold text-forest">Wivoza</span>
+            <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-10 w-auto" />
           </Link>
           <div className="flex items-center gap-5">
             <Link to="/" className="hidden text-sm font-medium text-ink-soft hover:text-ink sm:inline">
@@ -399,18 +419,20 @@ export default function Guide() {
       </header>
 
       {/* Hero */}
-      <section className="mx-auto w-full max-w-4xl px-6 pb-14 pt-16 text-center">
-        <span className="mx-auto inline-flex items-center gap-2 rounded-full bg-mint-tint px-4 py-2 text-sm font-semibold text-forest">
+      <section className="mx-auto w-full max-w-6xl px-6 pb-12 pt-10">
+        <div className="rounded-3xl bg-forest px-6 py-12 text-center text-cream sm:px-12 sm:py-16">
+        <span className="mx-auto inline-flex items-center gap-2 rounded-full bg-cream/10 px-4 py-2 text-sm font-semibold text-gold">
           <SparkleIcon className="h-4 w-4" />
           The complete Wivoza guide
         </span>
-        <h1 className="mt-6 font-heading text-4xl font-extrabold leading-[1.1] tracking-tight text-forest sm:text-5xl">
-          Every feature, in full.
+        <h1 className="mt-6 font-heading text-4xl font-extrabold leading-[1.1] tracking-tight text-cream sm:text-5xl">
+          Every feature, in full<span className="text-gold">.</span>
         </h1>
-        <p className="mx-auto mt-5 max-w-2xl text-lg text-ink-soft">
+        <p className="mx-auto mt-5 max-w-2xl text-lg text-cream/70">
           Not a highlight reel — every field, tab, and button in every Wivoza tool, organized the same way
           you'll find them in the app.
         </p>
+        </div>
       </section>
 
       {/* Quick nav */}
@@ -430,9 +452,7 @@ export default function Guide() {
 
       {/* Training videos — the full library, moved here from the home page */}
       <section id="videos" className="mx-auto w-full max-w-6xl scroll-mt-20 px-6 pt-16">
-        <span className="rounded-full bg-gold-tint px-3 py-1 text-xs font-bold uppercase tracking-wide text-terracotta-600">
-          Training videos
-        </span>
+        <SectionLabel n={1} label="Training videos" />
         <p className="mt-4 max-w-xl text-lg text-ink-soft">
           Short walkthroughs of every feature. Start with setup, or jump to the one you need.
         </p>
@@ -444,9 +464,7 @@ export default function Guide() {
       <div className="mx-auto w-full max-w-5xl px-6 py-16">
         {/* Getting started */}
         <section id={GETTING_STARTED.id} className="scroll-mt-20 border-b border-hairline pb-16">
-          <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${GETTING_STARTED.tint}`}>
-            {GETTING_STARTED.label}
-          </span>
+          <SectionLabel n={2} label={GETTING_STARTED.label} />
           <p className="mt-4 max-w-xl text-lg text-ink-soft">{GETTING_STARTED.intro}</p>
           <div className="mt-8 flex flex-col gap-5">
             {GETTING_STARTED.features.map((f) => (
@@ -457,9 +475,7 @@ export default function Guide() {
 
         {/* Coaching */}
         <section id="coaching" className="scroll-mt-20 border-b border-hairline py-16">
-          <span className="rounded-full bg-mint-tint px-3 py-1 text-xs font-bold uppercase tracking-wide text-forest">
-            Coaching
-          </span>
+          <SectionLabel n={3} label="Coaching" />
           <p className="mt-4 max-w-xl text-lg text-ink-soft">
             Three ways to get real coaching, from a thirty-second check-in to a full recorded lesson.
           </p>
@@ -467,12 +483,12 @@ export default function Guide() {
             <FeatureBlock feature={TALK_IT_THROUGH} />
             <FeatureBlock feature={LESSON_DEBRIEF} />
 
-            <div className="rounded-2xl border border-hairline bg-cream-card p-7">
+            <div className="rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
               <h4 className="font-heading text-lg font-bold text-forest">Inside a Lesson Debrief report — all four tabs</h4>
               <SpecList items={REPORT_TABS} />
               <h4 className="mt-7 font-heading text-lg font-bold text-forest">The five Insights sections</h4>
               <SpecList items={INSIGHTS_SECTIONS} />
-              <div className="mt-5 flex items-start gap-3 rounded-xl border-l-4 border-mint-text bg-mint-tint/40 p-4">
+              <div className="mt-5 flex items-start gap-3 rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
                 <BrainIcon className="mt-0.5 h-5 w-5 shrink-0 text-forest" />
                 <p className="text-sm text-forest">
                   Every number is honest about its own confidence — something Wivoza couldn't reliably
@@ -488,18 +504,16 @@ export default function Guide() {
 
         {/* Plan */}
         <section id="plan" className="scroll-mt-20 border-b border-hairline py-16">
-          <span className="rounded-full bg-peach-tint px-3 py-1 text-xs font-bold uppercase tracking-wide text-terracotta">
-            Plan
-          </span>
+          <SectionLabel n={4} label="Plan" />
           <p className="mt-4 max-w-xl text-lg text-ink-soft">Get ready for what's ahead — a lesson to teach, work to hand out, or a conversation to have.</p>
           <div className="mt-8 flex flex-col gap-5">
             <FeatureBlock feature={LESSON_PLANNING} />
             <FeatureBlock feature={ASSIGNMENT_COACH} />
             {/* The four message tools are one nav item, so the deep guide
                 covers all four together rather than each block linking to it. */}
-            <div className="rounded-2xl border border-hairline bg-cream-card p-7">
+            <div className="rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
               <div className="flex items-center gap-3.5">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-peach-tint text-terracotta">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-terracotta text-cream">
                   <MailIcon className="h-5 w-5" />
                 </span>
                 <h4 className="font-heading text-xl font-bold text-forest">Communication Coach</h4>
@@ -525,7 +539,7 @@ export default function Guide() {
 
         {/* Grow */}
         <section id={GROW.id} className="scroll-mt-20 border-b border-hairline py-16">
-          <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${GROW.tint}`}>{GROW.label}</span>
+          <SectionLabel n={5} label={GROW.label} />
           <p className="mt-4 max-w-xl text-lg text-ink-soft">{GROW.intro}</p>
           <div className="mt-8 flex flex-col gap-5">
             {GROW.features.map((f) => (
@@ -536,11 +550,9 @@ export default function Guide() {
 
         {/* Across the app */}
         <section id="across-the-app" className="scroll-mt-20 border-b border-hairline py-16">
-          <span className="rounded-full bg-gold-tint px-3 py-1 text-xs font-bold uppercase tracking-wide text-terracotta-600">
-            Across the app
-          </span>
+          <SectionLabel n={6} label="Across the app" />
           <p className="mt-4 max-w-xl text-lg text-ink-soft">Three things that work the same way almost everywhere in Wivoza.</p>
-          <div className="mt-8 rounded-2xl border border-hairline bg-cream-card p-7">
+          <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
             <SpecList
               items={[
                 { label: 'Save', body: 'a star toggle on practice attempts, answers, messages, and plans — keeps the good ones out of the noise and feeds your Cheat Sheet.' },
@@ -553,14 +565,14 @@ export default function Guide() {
 
         {/* Privacy */}
         <section id="privacy" className="scroll-mt-20 border-b border-hairline py-16">
-          <span className="rounded-full bg-mint-tint px-3 py-1 text-xs font-bold uppercase tracking-wide text-forest">Privacy</span>
+          <SectionLabel n={7} label="Privacy" />
           <h2 className="mt-4 font-heading text-2xl font-extrabold text-forest sm:text-3xl">Privacy & what Coach remembers</h2>
           <p className="mt-3 max-w-2xl text-lg text-ink-soft">
             Wivoza is built to be honest with you about evidence, and careful with what it keeps about you and your students.
           </p>
           <div className="mt-8 grid gap-8 lg:grid-cols-2">
-            <div className="rounded-2xl border border-hairline bg-cream-card p-7">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-mint-tint text-forest">
+            <div className="rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-forest text-gold">
                 <BrainIcon className="h-5 w-5" />
               </span>
               <h3 className="mt-4 font-heading text-lg font-bold text-forest">Coach's memory</h3>
@@ -570,7 +582,7 @@ export default function Guide() {
                 default, but entirely yours: read it, turn it off, or clear it anytime.
               </p>
             </div>
-            <div className="rounded-2xl border border-hairline bg-cream-card p-7">
+            <div className="rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
               <SpecList
                 items={[
                   { label: 'Your voice is never kept', body: 'audio is discarded right after transcription — only text and metrics remain.' },
@@ -584,14 +596,12 @@ export default function Guide() {
 
         {/* For schools */}
         <section id="for-schools" className="scroll-mt-20 pt-16">
-          <span className="rounded-full bg-peach-tint px-3 py-1 text-xs font-bold uppercase tracking-wide text-terracotta">
-            For schools & districts
-          </span>
+          <SectionLabel n={8} label="For schools & districts" />
           <h2 className="mt-4 font-heading text-2xl font-extrabold text-forest sm:text-3xl">Admin dashboard</h2>
           <p className="mt-3 max-w-2xl text-lg text-ink-soft">
             Visible only to school and district admins — built around aggregate trends, never an individual teacher's attempts or ratings.
           </p>
-          <div className="mt-8 rounded-2xl border border-hairline bg-cream-card p-7">
+          <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
             <SpecList
               items={[
                 { label: 'Overview', body: 'total and active-this-week teacher counts, a staff-wide growth signal, a weekly activity chart, practice-by-category breakdown, and a member list — each row with Remove from org, Suspend, and (for platform admins) Delete. Every admin sees this.' },
@@ -600,7 +610,7 @@ export default function Guide() {
                 { label: 'Joining a school', body: 'a teacher enters a short code during onboarding or later from Profile & Settings; whoever\'s email is listed as that school\'s admin becomes its admin automatically.' },
               ]}
             />
-            <div className="mt-5 flex items-start gap-3 rounded-xl border-l-4 border-terracotta bg-peach-tint/40 p-4">
+            <div className="mt-5 flex items-start gap-3 rounded-2xl border-l-8 border-terracotta bg-peach-tint/50 p-5">
               <HeadsetIcon className="mt-0.5 h-5 w-5 shrink-0 text-terracotta" />
               <p className="text-sm text-forest">
                 A banner on every admin view says it plainly: only aggregate trends are ever shown here —
@@ -614,9 +624,7 @@ export default function Guide() {
       {/* Closing CTA */}
       <section className="bg-forest py-20">
         <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-6 px-6 text-center">
-          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gold text-forest">
-            <ChartBarIcon className="h-6 w-6" />
-          </span>
+          <img src="/logo/wivoza-lockup-dark.png" alt="Wivoza" className="h-12 w-auto" />
           <h2 className="font-heading text-3xl font-extrabold leading-tight text-cream sm:text-4xl">
             Ready to see it for yourself?
           </h2>
@@ -634,10 +642,7 @@ export default function Guide() {
       <footer className="bg-cream py-10">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-6 text-sm text-ink-soft sm:flex-row">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gold text-forest">
-              <ChartBarIcon className="h-3.5 w-3.5" />
-            </span>
-            <p className="font-heading font-bold text-forest">Wivoza</p>
+            <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-6 w-auto" />
             <span className="hidden sm:inline">Practice. Reflect. Grow.</span>
           </div>
           <div className="flex items-center gap-5">

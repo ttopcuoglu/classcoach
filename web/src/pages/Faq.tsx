@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import SupportChat from '../components/SupportChat'
-import { ArrowRightIcon, ChartBarIcon, SparkleIcon } from '../components/icons'
+import { ArrowRightIcon, SparkleIcon } from '../components/icons'
 
 type QA = { q: string; a: React.ReactNode }
 type Category = { id: string; label: string; tint: string; items: QA[] }
@@ -106,10 +106,10 @@ const CATEGORIES: Category[] = [
 
 function FaqItem({ q, a }: QA) {
   return (
-    <details className="group rounded-2xl border border-hairline bg-cream-card p-5 open:shadow-sm">
+    <details className="group rounded-2xl border border-hairline bg-cream-card p-5 transition-colors open:border-gold/60 open:bg-gold-tint/30">
       <summary className="flex cursor-pointer list-none items-start justify-between gap-4 font-heading text-base font-bold text-forest marker:content-none [&::-webkit-details-marker]:hidden">
         <span>{q}</span>
-        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-mint-tint text-lg font-bold leading-none text-forest transition-transform duration-200 group-open:rotate-45">
+        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gold text-lg font-bold leading-none text-forest transition-transform duration-200 group-open:rotate-45 group-open:bg-terracotta group-open:text-cream">
           +
         </span>
       </summary>
@@ -124,10 +124,7 @@ export default function Faq() {
       <header className="border-b border-hairline bg-cream-card">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
           <Link to="/" className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold text-forest">
-              <ChartBarIcon className="h-4 w-4" />
-            </span>
-            <span className="font-heading text-base font-bold text-forest">Wivoza</span>
+            <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-10 w-auto" />
           </Link>
           <div className="flex items-center gap-5">
             <Link to="/guide" className="hidden text-sm font-medium text-ink-soft hover:text-ink sm:inline">
@@ -145,18 +142,20 @@ export default function Faq() {
       </header>
 
       {/* Hero */}
-      <section className="mx-auto w-full max-w-3xl px-6 pb-14 pt-16 text-center">
-        <span className="mx-auto inline-flex items-center gap-2 rounded-full bg-mint-tint px-4 py-2 text-sm font-semibold text-forest">
+      <section className="mx-auto w-full max-w-6xl px-6 pb-12 pt-10">
+        <div className="rounded-3xl bg-forest px-6 py-12 text-center text-cream sm:px-12 sm:py-16">
+        <span className="mx-auto inline-flex items-center gap-2 rounded-full bg-cream/10 px-4 py-2 text-sm font-semibold text-gold">
           <SparkleIcon className="h-4 w-4" />
           Frequently asked questions
         </span>
-        <h1 className="mt-6 font-heading text-4xl font-extrabold leading-[1.1] tracking-tight text-forest sm:text-5xl">
-          Good questions.
+        <h1 className="mt-6 font-heading text-4xl font-extrabold leading-[1.1] tracking-tight text-cream sm:text-5xl">
+          Good questions<span className="text-gold">.</span>
         </h1>
-        <p className="mx-auto mt-5 max-w-xl text-lg text-ink-soft">
+        <p className="mx-auto mt-5 max-w-xl text-lg text-cream/70">
           The things teachers and school leaders actually ask before trying Wivoza — on privacy, evaluation,
           and how it works.
         </p>
+        </div>
       </section>
 
       {/* Quick nav */}
@@ -175,11 +174,18 @@ export default function Faq() {
       </nav>
 
       <div className="mx-auto w-full max-w-3xl px-6 py-16">
-        {CATEGORIES.map((category) => (
+        {CATEGORIES.map((category, i) => (
           <section key={category.id} id={category.id} className="scroll-mt-20 pb-14">
-            <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${category.tint}`}>
-              {category.label}
-            </span>
+            <div className="flex items-center gap-3">
+              <span
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl font-heading text-base font-bold ${
+                  ['bg-gold text-forest', 'bg-terracotta text-cream', 'bg-forest text-gold'][i % 3]
+                }`}
+              >
+                {i + 1}
+              </span>
+              <h2 className="font-heading text-2xl font-extrabold text-forest">{category.label}</h2>
+            </div>
             <div className="mt-6 flex flex-col gap-3">
               {category.items.map((item) => (
                 <FaqItem key={item.q} q={item.q} a={item.a} />
@@ -188,7 +194,7 @@ export default function Faq() {
           </section>
         ))}
 
-        <div className="rounded-2xl border border-hairline bg-cream-card p-7 text-center">
+        <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-7 text-center">
           <p className="font-heading text-lg font-bold text-forest">Still have a question?</p>
           <p className="mt-1.5 text-sm text-ink-soft">
             Take a look at the <Link to="/guide" className="font-semibold text-terracotta-600 hover:underline">full feature guide</Link>, or reach out through the app once you're signed in.
@@ -199,9 +205,7 @@ export default function Faq() {
       {/* Closing CTA */}
       <section className="bg-forest py-20">
         <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-6 px-6 text-center">
-          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gold text-forest">
-            <ChartBarIcon className="h-6 w-6" />
-          </span>
+          <img src="/logo/wivoza-lockup-dark.png" alt="Wivoza" className="h-12 w-auto" />
           <h2 className="font-heading text-3xl font-extrabold leading-tight text-cream sm:text-4xl">
             Ready to try it yourself?
           </h2>
@@ -219,10 +223,7 @@ export default function Faq() {
       <footer className="bg-cream py-10">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-6 text-sm text-ink-soft sm:flex-row">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gold text-forest">
-              <ChartBarIcon className="h-3.5 w-3.5" />
-            </span>
-            <p className="font-heading font-bold text-forest">Wivoza</p>
+            <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-6 w-auto" />
             <span className="hidden sm:inline">Practice. Reflect. Grow.</span>
           </div>
           <div className="flex items-center gap-5">

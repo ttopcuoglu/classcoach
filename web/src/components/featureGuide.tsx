@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import SupportChat from './SupportChat'
-import { ArrowRightIcon, ChartBarIcon } from './icons'
+import { ArrowRightIcon } from './icons'
 
 // The shared chrome for every teacher-facing feature guide (/guide/<feature>).
 // /guide is the complete reference — every field, tab, and button. These are
@@ -22,11 +22,19 @@ export const GUIDE_PATHWAY: PathwayStep[] = [
   { id: 'debrief', label: 'Debrief' },
 ]
 
+const STEP_BADGES = ['bg-gold text-forest', 'bg-terracotta text-cream', 'bg-forest text-gold']
+
+// A guide section's number is its position on the pathway strip, so "3" in a
+// heading is the same "3" the strip at the top points to.
+function stepBadge(index: number) {
+  return STEP_BADGES[index % STEP_BADGES.length]
+}
+
 export function GuidePrimaryButton({ to, children }: { to: string; children: React.ReactNode }) {
   return (
     <Link
       to={to}
-      className="inline-flex items-center gap-2 rounded-full bg-terracotta px-6 py-3.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
+      className="inline-flex items-center gap-2 rounded-full bg-terracotta px-6 py-3.5 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90"
     >
       {children}
       <ArrowRightIcon className="h-4 w-4" />
@@ -47,11 +55,19 @@ export function GuideSection({
   lede?: string
   children: React.ReactNode
 }) {
+  const stepIndex = GUIDE_PATHWAY.findIndex((step) => step.id === id)
   return (
     <section id={id} className="scroll-mt-24 border-b border-hairline py-14">
-      <span className="rounded-full bg-mint-tint px-3 py-1 text-xs font-bold uppercase tracking-wide text-forest">
-        {eyebrow}
-      </span>
+      <div className="flex items-center gap-3">
+        {stepIndex >= 0 && (
+          <span
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl font-heading text-base font-bold ${stepBadge(stepIndex)}`}
+          >
+            {stepIndex + 1}
+          </span>
+        )}
+        <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">{eyebrow}</span>
+      </div>
       <h2 className="mt-4 font-heading text-2xl font-extrabold text-forest sm:text-3xl">{title}</h2>
       {lede && <p className="mt-3 max-w-2xl text-lg text-ink-soft">{lede}</p>}
       {children}
@@ -69,19 +85,22 @@ export function GuideHero({
   paragraphs: string[]
 }) {
   return (
-    <section className="mx-auto w-full max-w-3xl px-6 pb-12 pt-14 text-center">
-      <span className="mx-auto inline-flex items-center gap-2 rounded-full bg-mint-tint px-4 py-2 text-sm font-semibold text-forest">
-        <Icon className="h-4 w-4" />
-        Teacher's guide
-      </span>
-      <h1 className="mt-6 font-heading text-4xl font-extrabold leading-[1.1] tracking-tight text-forest sm:text-5xl">
-        {title}
-      </h1>
-      {paragraphs.map((text) => (
-        <p key={text.slice(0, 24)} className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-ink-soft">
-          {text}
-        </p>
-      ))}
+    <section className="mx-auto w-full max-w-5xl px-6 pb-12 pt-10">
+      <div className="rounded-3xl bg-forest px-6 py-12 text-center text-cream sm:px-12 sm:py-14">
+        <span className="mx-auto inline-flex items-center gap-2 rounded-full bg-cream/10 px-4 py-2 text-sm font-semibold text-gold">
+          <Icon className="h-4 w-4" />
+          Teacher's guide
+        </span>
+        <h1 className="mt-6 font-heading text-4xl font-extrabold leading-[1.1] tracking-tight text-cream sm:text-5xl">
+          {title}
+          {!/[.?!]$/.test(title) && <span className="text-gold">.</span>}
+        </h1>
+        {paragraphs.map((text) => (
+          <p key={text.slice(0, 24)} className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-cream/75">
+            {text}
+          </p>
+        ))}
+      </div>
     </section>
   )
 }
@@ -98,7 +117,7 @@ export function GuidePathway({ steps = GUIDE_PATHWAY }: { steps?: PathwayStep[] 
               href={`#${step.id}`}
               className="flex items-center gap-2 rounded-full border border-hairline bg-cream px-4 py-2 text-sm font-semibold text-forest transition-colors hover:border-terracotta/50 hover:text-terracotta-600"
             >
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gold text-[11px] font-bold text-forest">
+              <span className={`flex h-6 w-6 items-center justify-center rounded-lg text-[11px] font-bold ${stepBadge(i)}`}>
                 {i + 1}
               </span>
               {step.label}
@@ -128,10 +147,10 @@ export function GuideSample({
 }) {
   return (
     <figure className="m-0">
-      <div className="overflow-hidden rounded-2xl border border-hairline bg-cream">
-        <div className="flex items-center justify-between gap-3 border-b border-hairline bg-cream-card px-4 py-2.5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{title}</p>
-          <span className="shrink-0 rounded-full bg-gold-tint px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-terracotta-600">
+      <div className="overflow-hidden rounded-2xl border border-hairline bg-cream shadow-sm">
+        <div className="flex items-center justify-between gap-3 bg-forest px-4 py-2.5">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-cream/85">{title}</p>
+          <span className="shrink-0 rounded-full bg-gold px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-forest">
             Sample
           </span>
         </div>
@@ -181,10 +200,7 @@ export function GuideShell({ appTo, children }: { appTo: string; children: React
       <header className="border-b border-hairline bg-cream-card">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-4">
           <Link to="/" className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold text-forest">
-              <ChartBarIcon className="h-4 w-4" />
-            </span>
-            <span className="font-heading text-base font-bold text-forest">Wivoza</span>
+            <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-10 w-auto" />
           </Link>
           <div className="flex items-center gap-5">
             <Link to="/guide" className="hidden text-sm font-medium text-ink-soft hover:text-ink sm:inline">
@@ -206,10 +222,7 @@ export function GuideShell({ appTo, children }: { appTo: string; children: React
       <footer className="bg-cream py-10">
         <div className="mx-auto flex w-full max-w-5xl flex-col items-center justify-between gap-4 px-6 text-sm text-ink-soft sm:flex-row">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gold text-forest">
-              <ChartBarIcon className="h-3.5 w-3.5" />
-            </span>
-            <p className="font-heading font-bold text-forest">Wivoza</p>
+            <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-6 w-auto" />
             <span className="hidden sm:inline">Practice. Reflect. Grow.</span>
           </div>
           <div className="flex items-center gap-5">

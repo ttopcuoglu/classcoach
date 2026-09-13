@@ -182,7 +182,7 @@ export default function GuideAskPractice() {
             ))}
           </div>
 
-          <div className="mt-5 flex items-start gap-3 rounded-2xl border-l-4 border-gold bg-gold-tint/40 p-5">
+          <div className="mt-5 flex items-start gap-3 rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
             <ArrowUpIcon className="mt-0.5 h-5 w-5 shrink-0 text-terracotta-600" />
             <p className="text-sm leading-relaxed text-forest">
               Practice attempts are never scored to your face and never shown to anyone. Wivoza keeps a private
@@ -215,7 +215,7 @@ export default function GuideAskPractice() {
         >
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             {LANES.map((lane) => (
-              <div key={lane.name} className="rounded-2xl border border-hairline bg-cream-card p-6">
+              <div key={lane.name} className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-mint-tint text-forest">
                   <lane.icon className="h-5 w-5" />
                 </span>
@@ -228,7 +228,7 @@ export default function GuideAskPractice() {
 
           <ol className="mt-6 flex flex-col gap-4">
             {STEPS.map((step, i) => (
-              <li key={step.title} className="flex items-start gap-4 rounded-2xl border border-hairline bg-cream-card p-6">
+              <li key={step.title} className="flex items-start gap-4 rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-mint-tint font-heading text-base font-bold text-forest">
                   {i + 1}
                 </span>
@@ -269,7 +269,7 @@ export default function GuideAskPractice() {
           title="Ms. Ruiz’s story"
           lede="A phone, an audience, and a sentence she wished she hadn’t said."
         >
-          <div className="mt-8 rounded-2xl border border-hairline bg-cream-card p-7 sm:p-9">
+          <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm sm:p-9">
             <QuoteIcon className="h-7 w-7 text-gold" />
             <div className="mt-4 flex flex-col gap-4">
               {STORY.map((para, i) => (
@@ -299,7 +299,7 @@ export default function GuideAskPractice() {
           title="Five minutes is a real session"
           lede="This is the one that fits in a passing period. There’s nothing to set up and nothing to schedule."
         >
-          <div className="mt-8 rounded-2xl border border-hairline bg-cream-card p-7">
+          <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
             <div className="grid gap-6 sm:grid-cols-3">
               {[
                 {
@@ -328,7 +328,7 @@ export default function GuideAskPractice() {
               ))}
             </div>
 
-            <p className="mt-6 rounded-xl bg-mint-tint/40 p-4 text-sm leading-relaxed text-forest">
+            <p className="mt-6 rounded-2xl bg-mint-tint/50 p-5 text-sm leading-relaxed text-forest">
               Every filter in Practice is optional. Skipping all three and hitting{' '}
               <strong className="font-semibold">New Scenario</strong> is a perfectly good way to start — you
               can always narrow it down once you know what you want to work on.
@@ -356,7 +356,7 @@ export default function GuideAskPractice() {
             </p>
           </div>
 
-          <div className="mt-5 rounded-2xl border border-hairline bg-cream-card p-7">
+          <div className="mt-5 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
             <h3 className="flex items-center gap-2.5 font-heading text-lg font-bold text-forest">
               <TargetIcon className="h-5 w-5 text-terracotta-600" />
               Five questions, that’s all
@@ -374,7 +374,7 @@ export default function GuideAskPractice() {
               <p className="font-heading text-base font-bold text-forest">What you get back</p>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 {DEBRIEF_RETURNS.map((r) => (
-                  <div key={r.title} className="rounded-xl bg-mint-tint/40 p-4">
+                  <div key={r.title} className="rounded-2xl bg-mint-tint/50 p-5">
                     <p className="text-sm font-semibold text-forest">{r.title}</p>
                     <p className="mt-1 text-sm leading-relaxed text-ink-soft">{r.body}</p>
                   </div>

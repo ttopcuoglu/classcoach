@@ -195,7 +195,7 @@ export default function GuideLessonPlanning() {
             ))}
           </div>
 
-          <div className="mt-5 flex items-start gap-3 rounded-2xl border-l-4 border-gold bg-gold-tint/40 p-5">
+          <div className="mt-5 flex items-start gap-3 rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
             <TargetIcon className="mt-0.5 h-5 w-5 shrink-0 text-terracotta-600" />
             <p className="text-sm leading-relaxed text-forest">
               A generated plan is a starting point, and the card says so out loud — it doesn’t know your
@@ -228,7 +228,7 @@ export default function GuideLessonPlanning() {
         >
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
             {LANES.map((lane) => (
-              <div key={lane.name} className="rounded-2xl border border-hairline bg-cream-card p-6">
+              <div key={lane.name} className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-mint-tint text-forest">
                   <lane.icon className="h-5 w-5" />
                 </span>
@@ -241,7 +241,7 @@ export default function GuideLessonPlanning() {
 
           <ol className="mt-6 flex flex-col gap-4">
             {STEPS.map((step, i) => (
-              <li key={step.title} className="flex items-start gap-4 rounded-2xl border border-hairline bg-cream-card p-6">
+              <li key={step.title} className="flex items-start gap-4 rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-mint-tint font-heading text-base font-bold text-forest">
                   {i + 1}
                 </span>
@@ -253,7 +253,7 @@ export default function GuideLessonPlanning() {
             ))}
           </ol>
 
-          <div className="mt-6 rounded-2xl border border-hairline bg-cream-card p-6">
+          <div className="mt-6 rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
             <h3 className="flex items-center gap-2.5 font-heading text-base font-bold text-forest">
               <PlayIcon className="h-4 w-4 text-terracotta-600" />
               The part most planning tools skip
@@ -292,7 +292,7 @@ export default function GuideLessonPlanning() {
           title="Ms. Park’s story"
           lede="A plan that looked fine, one gap she couldn’t see, and a revision she only half took."
         >
-          <div className="mt-8 rounded-2xl border border-hairline bg-cream-card p-7 sm:p-9">
+          <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm sm:p-9">
             <QuoteIcon className="h-7 w-7 text-gold" />
             <div className="mt-4 flex flex-col gap-4">
               {STORY.map((para, i) => (
@@ -322,7 +322,7 @@ export default function GuideLessonPlanning() {
           title="Bring whatever you’ve got"
           lede="Half a plan, a messy list, or one sentence about what students should be able to do. All of it is enough to start."
         >
-          <div className="mt-8 rounded-2xl border border-hairline bg-cream-card p-7">
+          <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
             <div className="grid gap-6 sm:grid-cols-3">
               {[
                 {
@@ -351,7 +351,7 @@ export default function GuideLessonPlanning() {
               ))}
             </div>
 
-            <p className="mt-6 rounded-xl bg-mint-tint/40 p-4 text-sm leading-relaxed text-forest">
+            <p className="mt-6 rounded-2xl bg-mint-tint/50 p-5 text-sm leading-relaxed text-forest">
               In the follow-up chat you can just ask — “make the You Do shorter,” “this won’t work with 32
               kids,” “give me a version without the group work.” Asking for a revision is how you get one.
             </p>
@@ -377,7 +377,7 @@ export default function GuideLessonPlanning() {
             </p>
           </div>
 
-          <div className="mt-5 rounded-2xl border border-hairline bg-cream-card p-7">
+          <div className="mt-5 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
             <h3 className="flex items-center gap-2.5 font-heading text-lg font-bold text-forest">
               <TargetIcon className="h-5 w-5 text-terracotta-600" />
               Five questions, that’s all
@@ -395,7 +395,7 @@ export default function GuideLessonPlanning() {
               <p className="font-heading text-base font-bold text-forest">What you get back</p>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 {DEBRIEF_RETURNS.map((r) => (
-                  <div key={r.title} className="rounded-xl bg-mint-tint/40 p-4">
+                  <div key={r.title} className="rounded-2xl bg-mint-tint/50 p-5">
                     <p className="text-sm font-semibold text-forest">{r.title}</p>
                     <p className="mt-1 text-sm leading-relaxed text-ink-soft">{r.body}</p>
                   </div>

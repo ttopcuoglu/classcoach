@@ -166,7 +166,7 @@ export default function GuideCheatSheet() {
             ))}
           </div>
 
-          <div className="mt-5 flex items-start gap-3 rounded-2xl border-l-4 border-gold bg-gold-tint/40 p-5">
+          <div className="mt-5 flex items-start gap-3 rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
             <SparkleIcon className="mt-0.5 h-5 w-5 shrink-0 text-terracotta-600" />
             <p className="text-sm leading-relaxed text-forest">
               <strong className="font-semibold">It’s empty when you first open it, and that’s deliberate.</strong>{' '}
@@ -199,7 +199,7 @@ export default function GuideCheatSheet() {
         >
           <ol className="mt-8 flex flex-col gap-4">
             {STEPS.map((step, i) => (
-              <li key={step.title} className="flex items-start gap-4 rounded-2xl border border-hairline bg-cream-card p-6">
+              <li key={step.title} className="flex items-start gap-4 rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-mint-tint font-heading text-base font-bold text-forest">
                   {i + 1}
                 </span>
@@ -212,7 +212,7 @@ export default function GuideCheatSheet() {
           </ol>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+            <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-mint-tint text-forest">
                 <ScenarioIcon className="h-5 w-5" />
               </span>
@@ -221,7 +221,7 @@ export default function GuideCheatSheet() {
                 Star an attempt and its model response joins your sheet, filed under that scenario’s situation.
               </p>
             </div>
-            <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+            <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-mint-tint text-forest">
                 <ChatBubbleIcon className="h-5 w-5" />
               </span>
@@ -252,7 +252,7 @@ export default function GuideCheatSheet() {
           title="Ms. Adeyemi’s story"
           lede="Three things saved in September, entirely forgotten, and one of them exactly right in January."
         >
-          <div className="mt-8 rounded-2xl border border-hairline bg-cream-card p-7 sm:p-9">
+          <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm sm:p-9">
             <QuoteIcon className="h-7 w-7 text-gold" />
             <div className="mt-4 flex flex-col gap-4">
               {STORY.map((para, i) => (
@@ -282,7 +282,7 @@ export default function GuideCheatSheet() {
           title="Star three things this week"
           lede="That’s the entire assignment. A sheet with three good phrases on it beats an empty one by an enormous margin."
         >
-          <div className="mt-8 rounded-2xl border border-hairline bg-cream-card p-7">
+          <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
             <div className="grid gap-6 sm:grid-cols-3">
               {[
                 {
@@ -311,7 +311,7 @@ export default function GuideCheatSheet() {
               ))}
             </div>
 
-            <p className="mt-6 rounded-xl bg-mint-tint/40 p-4 text-sm leading-relaxed text-forest">
+            <p className="mt-6 rounded-2xl bg-mint-tint/50 p-5 text-sm leading-relaxed text-forest">
               A heading only appears once you’ve saved something into it, so the page stays short and reads as
               yours — never a list of empty categories waiting to be filled in.
             </p>
@@ -337,7 +337,7 @@ export default function GuideCheatSheet() {
             </p>
           </div>
 
-          <div className="mt-5 rounded-2xl border border-hairline bg-cream-card p-7">
+          <div className="mt-5 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
             <h3 className="flex items-center gap-2.5 font-heading text-lg font-bold text-forest">
               <TargetIcon className="h-5 w-5 text-terracotta-600" />
               Five questions, that’s all
@@ -355,7 +355,7 @@ export default function GuideCheatSheet() {
               <p className="font-heading text-base font-bold text-forest">What you get back</p>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 {DEBRIEF_RETURNS.map((r) => (
-                  <div key={r.title} className="rounded-xl bg-mint-tint/40 p-4">
+                  <div key={r.title} className="rounded-2xl bg-mint-tint/50 p-5">
                     <p className="text-sm font-semibold text-forest">{r.title}</p>
                     <p className="mt-1 text-sm leading-relaxed text-ink-soft">{r.body}</p>
                   </div>

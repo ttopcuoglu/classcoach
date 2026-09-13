@@ -195,7 +195,7 @@ export default function GuideAssignmentCoach() {
             ))}
           </div>
 
-          <div className="mt-5 flex items-start gap-3 rounded-2xl border-l-4 border-gold bg-gold-tint/40 p-5">
+          <div className="mt-5 flex items-start gap-3 rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
             <ShieldIcon className="mt-0.5 h-5 w-5 shrink-0 text-terracotta-600" />
             <p className="text-sm leading-relaxed text-forest">
               Nothing here is scored. There are no numbers anywhere in the snapshot — every finding is a plain
@@ -228,7 +228,7 @@ export default function GuideAssignmentCoach() {
         >
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             {LANES.map((lane) => (
-              <div key={lane.name} className="rounded-2xl border border-hairline bg-cream-card p-6">
+              <div key={lane.name} className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-mint-tint text-forest">
                   <lane.icon className="h-5 w-5" />
                 </span>
@@ -241,7 +241,7 @@ export default function GuideAssignmentCoach() {
 
           <ol className="mt-6 flex flex-col gap-4">
             {STEPS.map((step, i) => (
-              <li key={step.title} className="flex items-start gap-4 rounded-2xl border border-hairline bg-cream-card p-6">
+              <li key={step.title} className="flex items-start gap-4 rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-mint-tint font-heading text-base font-bold text-forest">
                   {i + 1}
                 </span>
@@ -253,7 +253,7 @@ export default function GuideAssignmentCoach() {
             ))}
           </ol>
 
-          <div className="mt-6 rounded-2xl border border-hairline bg-cream-card p-6">
+          <div className="mt-6 rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
             <h3 className="flex items-center gap-2.5 font-heading text-base font-bold text-forest">
               <RobotIcon className="h-4 w-4 text-terracotta-600" />
               The AI policy is your call, not the tool’s
@@ -278,7 +278,7 @@ export default function GuideAssignmentCoach() {
             </p>
           </div>
 
-          <div className="mt-6 rounded-2xl border border-hairline bg-cream-card p-6">
+          <div className="mt-6 rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
             <h3 className="flex items-center gap-2.5 font-heading text-base font-bold text-forest">
               <TargetIcon className="h-4 w-4 text-terracotta-600" />
               One-tap ways to push on it
@@ -315,7 +315,7 @@ export default function GuideAssignmentCoach() {
           title="Mr. Nowak’s story"
           lede="A four-year-old essay prompt, a chatbot that could finish it in one go, and a fix that took an afternoon."
         >
-          <div className="mt-8 rounded-2xl border border-hairline bg-cream-card p-7 sm:p-9">
+          <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm sm:p-9">
             <QuoteIcon className="h-7 w-7 text-gold" />
             <div className="mt-4 flex flex-col gap-4">
               {STORY.map((para, i) => (
@@ -345,7 +345,7 @@ export default function GuideAssignmentCoach() {
           title="Start with the one you already suspect"
           lede="Not your best assignment. The one you’ve had a bad feeling about since last spring."
         >
-          <div className="mt-8 rounded-2xl border border-hairline bg-cream-card p-7">
+          <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
             <div className="grid gap-6 sm:grid-cols-3">
               {[
                 {
@@ -374,7 +374,7 @@ export default function GuideAssignmentCoach() {
               ))}
             </div>
 
-            <p className="mt-6 rounded-xl bg-mint-tint/40 p-4 text-sm leading-relaxed text-forest">
+            <p className="mt-6 rounded-2xl bg-mint-tint/50 p-5 text-sm leading-relaxed text-forest">
               If one detail genuinely changes the read — how long students get, whether it’s done in class —
               you’ll get a single clarifying question with options rather than a guess presented as fact.
               Answering it takes a tap.
@@ -402,7 +402,7 @@ export default function GuideAssignmentCoach() {
             </p>
           </div>
 
-          <div className="mt-5 rounded-2xl border border-hairline bg-cream-card p-7">
+          <div className="mt-5 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
             <h3 className="flex items-center gap-2.5 font-heading text-lg font-bold text-forest">
               <TargetIcon className="h-5 w-5 text-terracotta-600" />
               Five questions, that’s all
@@ -420,7 +420,7 @@ export default function GuideAssignmentCoach() {
               <p className="font-heading text-base font-bold text-forest">What you get back</p>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 {DEBRIEF_RETURNS.map((r) => (
-                  <div key={r.title} className="rounded-xl bg-mint-tint/40 p-4">
+                  <div key={r.title} className="rounded-2xl bg-mint-tint/50 p-5">
                     <p className="text-sm font-semibold text-forest">{r.title}</p>
                     <p className="mt-1 text-sm leading-relaxed text-ink-soft">{r.body}</p>
                   </div>

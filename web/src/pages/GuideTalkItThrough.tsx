@@ -162,7 +162,7 @@ export default function GuideTalkItThrough() {
             ))}
           </div>
 
-          <div className="mt-5 flex items-start gap-3 rounded-2xl border-l-4 border-gold bg-gold-tint/40 p-5">
+          <div className="mt-5 flex items-start gap-3 rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
             <HeartIcon className="mt-0.5 h-5 w-5 shrink-0 text-terracotta-600" />
             <p className="text-sm leading-relaxed text-forest">
               Coach is here to support your thinking, not to replace it. You know your students, your room, and
@@ -197,7 +197,7 @@ export default function GuideTalkItThrough() {
         >
           <ol className="mt-8 flex flex-col gap-4">
             {STEPS.map((step, i) => (
-              <li key={step.title} className="flex items-start gap-4 rounded-2xl border border-hairline bg-cream-card p-6">
+              <li key={step.title} className="flex items-start gap-4 rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-mint-tint font-heading text-base font-bold text-forest">
                   {i + 1}
                 </span>
@@ -228,7 +228,7 @@ export default function GuideTalkItThrough() {
           title="Ms. Alvarez’s story"
           lede="One prep period, one honest conversation, one change worth trying."
         >
-          <div className="mt-8 rounded-2xl border border-hairline bg-cream-card p-7 sm:p-9">
+          <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm sm:p-9">
             <QuoteIcon className="h-7 w-7 text-gold" />
             <div className="mt-4 flex flex-col gap-4">
               {STORY.map((para, i) => (
@@ -258,7 +258,7 @@ export default function GuideTalkItThrough() {
           title="Start with whatever’s on your mind"
           lede="You don’t need the problem figured out first. Starting messy is the normal way in."
         >
-          <div className="mt-8 rounded-2xl border border-hairline bg-cream-card p-7">
+          <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
             <div className="grid gap-6 sm:grid-cols-3">
               {[
                 { icon: WaveformIcon, title: 'Tap Start Talking', body: 'The mic opens and Coach waits. What you said appears on screen as you go, so you can see it heard you right.' },
@@ -292,7 +292,7 @@ export default function GuideTalkItThrough() {
           title="Come back after you’ve tried it"
           lede="Optional, and short. The conversation is only half of it — the learning is in what happened next."
         >
-          <div className="mt-8 rounded-2xl border border-hairline bg-cream-card p-7">
+          <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
             <h3 className="flex items-center gap-2.5 font-heading text-lg font-bold text-forest">
               <TargetIcon className="h-5 w-5 text-terracotta-600" />
               Five questions, that’s all
@@ -310,7 +310,7 @@ export default function GuideTalkItThrough() {
               <p className="font-heading text-base font-bold text-forest">What you get back</p>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 {DEBRIEF_RETURNS.map((r) => (
-                  <div key={r.title} className="rounded-xl bg-mint-tint/40 p-4">
+                  <div key={r.title} className="rounded-2xl bg-mint-tint/50 p-5">
                     <p className="text-sm font-semibold text-forest">{r.title}</p>
                     <p className="mt-1 text-sm leading-relaxed text-ink-soft">{r.body}</p>
                   </div>

@@ -220,7 +220,7 @@ export default function GuideCommunicationCoach() {
             ))}
           </div>
 
-          <div className="mt-5 flex items-start gap-3 rounded-2xl border-l-4 border-gold bg-gold-tint/40 p-5">
+          <div className="mt-5 flex items-start gap-3 rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
             <ShieldIcon className="mt-0.5 h-5 w-5 shrink-0 text-terracotta-600" />
             <p className="text-sm leading-relaxed text-forest">
               Coach refers to people by role — “a student,” “the parent,” “your colleague” — even when you use
@@ -253,7 +253,7 @@ export default function GuideCommunicationCoach() {
         >
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             {LANES.map((lane) => (
-              <div key={lane.name} className="rounded-2xl border border-hairline bg-cream-card p-6">
+              <div key={lane.name} className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-mint-tint text-forest">
                   <lane.icon className="h-5 w-5" />
                 </span>
@@ -266,7 +266,7 @@ export default function GuideCommunicationCoach() {
 
           <ol className="mt-6 flex flex-col gap-4">
             {STEPS.map((step, i) => (
-              <li key={step.title} className="flex items-start gap-4 rounded-2xl border border-hairline bg-cream-card p-6">
+              <li key={step.title} className="flex items-start gap-4 rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-mint-tint font-heading text-base font-bold text-forest">
                   {i + 1}
                 </span>
@@ -279,7 +279,7 @@ export default function GuideCommunicationCoach() {
           </ol>
 
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+            <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
               <h3 className="flex items-center gap-2.5 font-heading text-base font-bold text-forest">
                 <ChecklistIcon className="h-4 w-4 text-terracotta-600" />
                 What a meeting plan contains
@@ -297,7 +297,7 @@ export default function GuideCommunicationCoach() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+            <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
               <h3 className="flex items-center gap-2.5 font-heading text-base font-bold text-forest">
                 <ScenarioIcon className="h-4 w-4 text-terracotta-600" />
                 How a rehearsal is read back
@@ -337,7 +337,7 @@ export default function GuideCommunicationCoach() {
           title="Ms. Iyer’s story"
           lede="One angry email, one reply she didn’t send, and a meeting that ended with a plan."
         >
-          <div className="mt-8 rounded-2xl border border-hairline bg-cream-card p-7 sm:p-9">
+          <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm sm:p-9">
             <QuoteIcon className="h-7 w-7 text-gold" />
             <div className="mt-4 flex flex-col gap-4">
               {STORY.map((para, i) => (
@@ -367,7 +367,7 @@ export default function GuideCommunicationCoach() {
           title="Start with the one you’re avoiding"
           lede="You already know which conversation it is. It’s been on your mind since Friday."
         >
-          <div className="mt-8 rounded-2xl border border-hairline bg-cream-card p-7">
+          <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
             <div className="grid gap-6 sm:grid-cols-3">
               {[
                 {
@@ -396,7 +396,7 @@ export default function GuideCommunicationCoach() {
               ))}
             </div>
 
-            <p className="mt-6 rounded-xl bg-mint-tint/40 p-4 text-sm leading-relaxed text-forest">
+            <p className="mt-6 rounded-2xl bg-mint-tint/50 p-5 text-sm leading-relaxed text-forest">
               Every field except “what’s going on” is optional. You can skip straight past recipient, purpose,
               tone, and format and still get something useful back — then adjust it with a quick action once
               you see it.
@@ -424,7 +424,7 @@ export default function GuideCommunicationCoach() {
             </p>
           </div>
 
-          <div className="mt-5 rounded-2xl border border-hairline bg-cream-card p-7">
+          <div className="mt-5 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
             <h3 className="flex items-center gap-2.5 font-heading text-lg font-bold text-forest">
               <TargetIcon className="h-5 w-5 text-terracotta-600" />
               Five questions, that’s all
@@ -442,7 +442,7 @@ export default function GuideCommunicationCoach() {
               <p className="font-heading text-base font-bold text-forest">What you get back</p>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 {DEBRIEF_RETURNS.map((r) => (
-                  <div key={r.title} className="rounded-xl bg-mint-tint/40 p-4">
+                  <div key={r.title} className="rounded-2xl bg-mint-tint/50 p-5">
                     <p className="text-sm font-semibold text-forest">{r.title}</p>
                     <p className="mt-1 text-sm leading-relaxed text-ink-soft">{r.body}</p>
                   </div>
