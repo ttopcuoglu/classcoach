@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, LockIcon, MicIcon, PlayIcon } from '../components/icons'
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import { ProgressRing } from '../components/ProgressRing'
+import { ACCENTS, StatTile, type Accent } from '../components/report'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { HATCH_STYLE } from '../lib/chartPatterns'
@@ -662,8 +663,8 @@ const REFLECT_PATH_CARDS: {
 }[] = [
   {
     key: 'full_report',
-    icon: <ChecklistIcon className="h-5 w-5 text-brand-600" />,
-    iconBg: 'bg-brand-50',
+    icon: <ChecklistIcon className="h-5 w-5 text-forest" />,
+    iconBg: 'bg-mint-tint/60',
     title: "Talk through today's highlights",
     description: 'A strength to keep, and a moment worth revisiting',
     recommended: true,
@@ -684,7 +685,7 @@ const REFLECT_PATH_CARDS: {
   },
   {
     key: 'ask_question',
-    icon: <ChatBubbleIcon className="h-5 w-5 text-brand-600" />,
+    icon: <ChatBubbleIcon className="h-5 w-5 text-forest" />,
     iconBg: 'bg-mint-tint',
     title: 'Ask the coach a question',
     description: "Start with what's on your mind",
@@ -706,9 +707,65 @@ const INSIGHTS_SECTIONS: { key: InsightsSection; label: string }[] = [
   { key: 'routines', label: 'Climate & Routines' },
 ]
 
+// The printed report's numbers, one-line descriptions and colours for these
+// five sections (see AudioCoachingExport), so the screen and the paper look
+// like one report and a teacher holding the printout can find "section 3" here.
+//
+// One honest gap: the printout skips Clarity & Content when a lesson produced
+// no content quotes, so on those lessons its Climate & Routines is numbered 4
+// while this screen, which always lists all five, still says 5.
+const INSIGHTS_SECTION_META: Record<InsightsSection, { n: number; blurb: string; accent: Accent }> = {
+  talk: { n: 1, blurb: 'Who was heard, and for how long.', accent: ACCENTS.terracotta },
+  questions: { n: 2, blurb: 'What you asked, and how long you left for an answer.', accent: ACCENTS.gold },
+  understanding: {
+    n: 3,
+    blurb: 'How you checked they were with you, and how specific your feedback was.',
+    accent: ACCENTS.mint,
+  },
+  content: { n: 4, blurb: 'What the lesson said it was about, in its own words.', accent: ACCENTS.forest },
+  routines: { n: 5, blurb: 'Counts, not scores. There is no such thing as a correct number here.', accent: ACCENTS.terracotta },
+}
+
+// Lets the stat groups inside a section tint themselves with that section's
+// colour without every Insights tab having to pass it down by hand.
+const SectionAccentContext = createContext<Accent>(ACCENTS.mint)
+
+function InsightsSectionHeader({ section }: { section: InsightsSection }) {
+  const meta = INSIGHTS_SECTION_META[section]
+  const label = INSIGHTS_SECTIONS.find((s) => s.key === section)?.label ?? ''
+  return (
+    <div className="mb-6 flex items-center gap-4">
+      <span
+        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${meta.accent.band} font-heading text-xl font-bold text-cream`}
+      >
+        {meta.n}
+      </span>
+      <div>
+        <h2 className="font-heading text-2xl font-extrabold leading-tight text-forest">{label}</h2>
+        <p className="mt-0.5 text-sm text-ink-soft">{meta.blurb}</p>
+      </div>
+    </div>
+  )
+}
+
+// Same bridge the printed report uses: an unmeasurable value shows a dash with
+// its reason, never a zero.
+function SummaryStat({ label, metric, unit, accent }: { label: string; metric: ConfidentMetric; unit?: string; accent: Accent }) {
+  const confident = isConfidentState(metric.state)
+  return (
+    <StatTile
+      label={label}
+      value={metric.display}
+      unit={confident ? unit : undefined}
+      hint={confident ? undefined : metric.reason}
+      accent={accent}
+    />
+  )
+}
+
 function insightsNavButtonClass(active: boolean) {
   return `rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
-    active ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:bg-canvas hover:text-ink'
+    active ? 'bg-cream-card font-semibold text-forest shadow-sm' : 'text-ink-soft hover:bg-cream-card/60 hover:text-ink'
   }`
 }
 
@@ -717,7 +774,14 @@ function InsightsNav({ section, onSelect }: { section: InsightsSection; onSelect
     <nav className="flex shrink-0 flex-col gap-0.5 lg:w-52">
       {INSIGHTS_SECTIONS.map(({ key, label }) => (
         <button key={key} type="button" onClick={() => onSelect(key)} className={insightsNavButtonClass(section === key)}>
-          {label}
+          <span className="flex items-center gap-2.5">
+            <span
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${INSIGHTS_SECTION_META[key].accent.band} text-xs font-bold text-cream`}
+            >
+              {INSIGHTS_SECTION_META[key].n}
+            </span>
+            {label}
+          </span>
         </button>
       ))}
     </nav>
@@ -732,8 +796,8 @@ function TabBar({ tab, onSelect }: { tab: ReportTab; onSelect: (t: ReportTab) =>
           key={key}
           type="button"
           onClick={() => onSelect(key)}
-          className={`rounded-full px-3.5 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-brand-400 ${
-            tab === key ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:text-ink'
+          className={`rounded-full px-3.5 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-terracotta/40 ${
+            tab === key ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
           }`}
         >
           {label === 'My Growth' ? (
@@ -1149,8 +1213,8 @@ function buildContentInsight(lessonContent: AudioLessonContent | null): string |
 function CoachNote({ text }: { text: string | null }) {
   if (!text) return null
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-brand-100 bg-brand-50 p-4">
-      <ChatBubbleIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
+    <div className="flex items-start gap-3 rounded-xl border border-mint-tint bg-mint-tint/60 p-4">
+      <ChatBubbleIcon className="mt-0.5 h-4 w-4 shrink-0 text-forest" />
       <p className="text-sm text-ink">{text}</p>
     </div>
   )
@@ -1551,8 +1615,8 @@ function StrengthCard({
   onDiscuss: (candidate: NoticeCandidate) => void
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-surface p-6">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">A strength to keep</h2>
+    <div className="rounded-2xl bg-mint-tint/50 p-6">
+      <h2 className="text-[11px] font-bold uppercase tracking-wide text-forest">A strength to keep</h2>
       {strength ? (
         <div className="mt-3 flex flex-col gap-1.5">
           <p className="text-sm font-semibold text-ink">{formatCandidateHeadline(strength)}</p>
@@ -1561,7 +1625,7 @@ function StrengthCard({
           <button
             type="button"
             onClick={() => onDiscuss(strength)}
-            className="mt-1 self-start text-sm font-medium text-brand-600 hover:text-brand-700"
+            className="mt-1 self-start text-sm font-medium text-forest hover:text-terracotta-600"
           >
             Discuss this →
           </button>
@@ -1575,7 +1639,7 @@ function StrengthCard({
           <button
             type="button"
             onClick={onViewDiscourse}
-            className="self-start text-sm font-medium text-brand-600 hover:text-brand-700"
+            className="self-start text-sm font-medium text-forest hover:text-terracotta-600"
           >
             See the full breakdown in Insights →
           </button>
@@ -1597,15 +1661,15 @@ function EvidenceMomentCard({
   onDiscuss: (candidate: NoticeCandidate) => void
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-surface p-6 md:col-span-2">
-      <span className="text-xs font-semibold uppercase tracking-wide text-warm-500">A moment to revisit</span>
+    <div className="rounded-2xl border border-hairline bg-cream-card p-6 md:col-span-2">
+      <span className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">A moment to revisit</span>
       <p className="mt-1.5 text-sm font-semibold text-ink">{formatCandidateHeadline(moment)}</p>
       {moment.excerpt && <p className="mt-1 text-sm text-ink-soft">"{moment.excerpt}"</p>}
       <p className="mt-1 text-sm text-ink-soft">{moment.whyItMatters}</p>
       <button
         type="button"
         onClick={() => onDiscuss(moment)}
-        className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700"
+        className="mt-2 text-sm font-medium text-forest hover:text-terracotta-600"
       >
         Discuss this →
       </button>
@@ -1638,22 +1702,22 @@ function TalkParticipationBar({
   const remainder = Math.max(0, 100 - teacherPct - (studentPct ?? 0) - (silencePct ?? 0))
   return (
     <div className="flex flex-col gap-3">
-      <div className={`flex w-full overflow-hidden rounded-full bg-canvas ${barHeight}`}>
-        <div className="h-full bg-brand-500" style={{ width: `${teacherPct}%` }} />
-        {studentPct != null && <div className="h-full bg-brand-500/45" style={{ width: `${studentPct}%` }} />}
+      <div className={`flex w-full overflow-hidden rounded-full bg-cream ${barHeight}`}>
+        <div className="h-full bg-terracotta" style={{ width: `${teacherPct}%` }} />
+        {studentPct != null && <div className="h-full bg-gold" style={{ width: `${studentPct}%` }} />}
         {silencePct != null ? (
-          <div className="h-full bg-ink-soft/30" style={{ width: `${silencePct}%` }} />
+          <div className="h-full bg-hairline" style={{ width: `${silencePct}%` }} />
         ) : (
           <div className="h-full" style={{ width: `${remainder}%`, ...HATCH_STYLE }} />
         )}
       </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm text-ink-soft">
         <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 shrink-0 rounded-full bg-brand-500" /> Teacher · {teacherPct}%
+          <span className="h-2 w-2 shrink-0 rounded-full bg-terracotta" /> Teacher · {teacherPct}%
         </span>
         <span className="flex items-center gap-1.5">
           {studentPct != null ? (
-            <span className="h-2 w-2 shrink-0 rounded-full bg-brand-500/45" />
+            <span className="h-2 w-2 shrink-0 rounded-full bg-gold" />
           ) : (
             <HatchedSwatch className="h-2 w-2" />
           )}
@@ -1661,7 +1725,7 @@ function TalkParticipationBar({
         </span>
         <span className="col-span-2 flex items-center gap-1.5">
           {silencePct != null ? (
-            <span className="h-2 w-2 shrink-0 rounded-full bg-ink-soft/30" />
+            <span className="h-2 w-2 shrink-0 rounded-full bg-hairline" />
           ) : (
             <HatchedSwatch className="h-2 w-2" />
           )}
@@ -1686,7 +1750,7 @@ function WhoWasHeardCard({
   onExplore: () => void
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-surface p-6">
+    <div className="rounded-2xl border border-hairline bg-cream-card p-6">
       <h2 className="text-sm font-semibold text-ink">Who was heard?</h2>
       <div className="mt-3">
         <TalkParticipationBar teacherPct={teacherPct} studentPct={studentPct} silencePct={silencePct} compact />
@@ -1695,7 +1759,7 @@ function WhoWasHeardCard({
       <button
         type="button"
         onClick={onExplore}
-        className="mt-3 text-sm font-medium text-brand-600 hover:text-brand-700"
+        className="mt-3 text-sm font-medium text-forest hover:text-terracotta-600"
       >
         Explore talk & participation →
       </button>
@@ -1715,7 +1779,7 @@ function QuestionsOpenedCard({
   onExplore: () => void
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-surface p-6">
+    <div className="rounded-2xl border border-hairline bg-cream-card p-6">
       <h2 className="text-sm font-semibold text-ink">Questions that opened thinking</h2>
       <div className="mt-3 grid grid-cols-2 gap-3">
         <div>
@@ -1730,7 +1794,7 @@ function QuestionsOpenedCard({
       <button
         type="button"
         onClick={onExplore}
-        className="mt-3 text-sm font-medium text-brand-600 hover:text-brand-700"
+        className="mt-3 text-sm font-medium text-forest hover:text-terracotta-600"
       >
         Review the questions →
       </button>
@@ -1753,8 +1817,8 @@ function NextStepCard({
   onGoReflect: () => void
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-surface p-6">
-      <span className="inline-block rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-brand-600">
+    <div className="rounded-2xl bg-peach-tint/50 p-6">
+      <span className="inline-block rounded-full bg-cream-card px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-terracotta-600">
         One next step
       </span>
       {priority && (
@@ -1762,7 +1826,7 @@ function NextStepCard({
           <p className="mt-3 text-base font-semibold text-ink">{formatCandidateHeadline(priority)}</p>
           <p className="mt-1 text-sm text-ink-soft">{priority.whyItMatters}</p>
           {priority.excerpt && (
-            <blockquote className="mt-3 border-l-2 border-warm-500 pl-3 text-sm italic text-ink-soft">
+            <blockquote className="mt-3 border-l-2 border-terracotta pl-3 text-sm italic text-ink-soft">
               "{priority.excerpt}"
             </blockquote>
           )}
@@ -1770,7 +1834,7 @@ function NextStepCard({
             <button
               type="button"
               onClick={() => onSetFocus(priority.focusMetric as FocusMetric)}
-              className="mt-3 rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+              className="mt-3 rounded-lg border border-hairline px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
             >
               Set as my focus → My Growth
             </button>
@@ -1780,7 +1844,7 @@ function NextStepCard({
       <button
         type="button"
         onClick={onGoReflect}
-        className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+        className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-terracotta px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
       >
         <ChatBubbleIcon className="h-4 w-4" />
         Reflect with Wivoza
@@ -1806,6 +1870,7 @@ function ReportPanel({
   onFocusMetricChange: (metric: FocusMetric | null) => void
   talkVoice: TalkVoice | null
 }) {
+  // TEMPORARY preview params — removed before commit.
   const [tab, setTab] = useState<ReportTab>('summary')
   const [insightsSection, setInsightsSection] = useState<InsightsSection>('talk')
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null)
@@ -2105,35 +2170,45 @@ function ReportPanel({
           ← Back to sessions
         </button>
         {locked && (
-          <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-600">Locked</span>
+          <span className="rounded-full bg-mint-tint/60 px-3 py-1 text-xs font-semibold text-forest">Locked</span>
         )}
       </div>
 
       {/* Persistent lesson identity + evidence-quality read — visible on
           every tab, not just Summary, so context never disappears when you
-          navigate away from it. */}
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Lesson report</p>
-        <div className="mt-1 flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-semibold text-ink">
-            {session.classSubject || 'New Recording'} {session.period ? `· ${session.period}` : ''}
-          </h1>
-          {coverage.isTinyRecording && (
-            <span className="rounded-full bg-warm-100 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-warm-500">
-              Short excerpt
-            </span>
-          )}
+          navigate away from it. Styled as the printed report's cover, so the
+          screen and the paper open the same way. */}
+      <header className="overflow-hidden rounded-3xl bg-forest p-7 text-cream sm:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold">Wivoza · Lesson Debrief</p>
+            <h1 className="mt-3 font-heading text-3xl font-extrabold leading-tight sm:text-4xl">
+              {session.classSubject || 'New Recording'}
+              {session.period ? <span className="text-gold"> · {session.period}</span> : null}
+            </h1>
+            <p className="mt-2 text-sm text-cream/70">
+              {session.teacherName ? `${session.teacherName} · ` : ''}
+              {formatSessionDateTime(session.sessionDate)}
+              {session.gradeLevel ? ` · ${session.gradeLevel}` : ''}
+              {session.durationSec ? ` · ${formatTime(session.durationSec)}` : ''}
+            </p>
+            <p className={`mt-3 text-xs ${evidenceQuality.tone === 'warn' ? 'font-semibold text-gold' : 'text-cream/60'}`}>
+              {evidenceQuality.text}
+            </p>
+            {coverage.isTinyRecording && (
+              <span className="mt-4 inline-block rounded-full bg-gold px-3 py-1 text-xs font-bold uppercase tracking-wide text-forest">
+                Short excerpt
+              </span>
+            )}
+          </div>
+          <Link
+            to={`/audio-coaching/${session.id}/export`}
+            className="shrink-0 rounded-full bg-cream px-4 py-2.5 text-sm font-semibold text-forest transition-opacity hover:opacity-90"
+          >
+            Print / Save as PDF
+          </Link>
         </div>
-        <p className="mt-1 text-sm text-ink-soft">
-          {session.teacherName ? `${session.teacherName} · ` : ''}
-          {formatSessionDateTime(session.sessionDate)}
-          {session.gradeLevel ? ` · ${session.gradeLevel}` : ''}
-          {session.durationSec ? ` · ${formatTime(session.durationSec)}` : ''}
-        </p>
-        <p className={`mt-2 text-xs ${evidenceQuality.tone === 'warn' ? 'font-semibold text-warm-500' : 'text-ink-soft'}`}>
-          {evidenceQuality.text}
-        </p>
-      </div>
+      </header>
 
       <TabBar tab={tab} onSelect={setTab} />
 
@@ -2221,6 +2296,8 @@ function ReportPanel({
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
           <InsightsNav section={insightsSection} onSelect={setInsightsSection} />
           <div className="min-w-0 flex-1">
+            <InsightsSectionHeader section={insightsSection} />
+            <SectionAccentContext.Provider value={INSIGHTS_SECTION_META[insightsSection].accent}>
             {insightsSection === 'talk' && (
               <TalkParticipationTab
                 session={session}
@@ -2299,11 +2376,12 @@ function ReportPanel({
                 onDiscussWithCoach={handleDiscussWithCoach}
               />
             )}
+            </SectionAccentContext.Provider>
           </div>
         </div>
       )}
 
-      <div className="rounded-xl border border-dashed border-border p-4 text-xs text-ink-soft">
+      <div className="rounded-xl border border-dashed border-hairline p-4 text-xs text-ink-soft">
         This report reflects what could be heard in your recording — talk patterns, questioning, and classroom
         routines. It doesn't capture lesson planning, materials, physical space, visual engagement, or anything
         outside class time. Automated counts above are suggestions to confirm or edit, not final judgments.
@@ -2311,7 +2389,7 @@ function ReportPanel({
 
       <Link
         to={`/audio-coaching/${session.id}/export`}
-        className="self-start text-sm font-medium text-brand-600 hover:text-brand-700"
+        className="self-start text-sm font-medium text-forest hover:text-terracotta-600"
       >
         Open printable report →
       </Link>
@@ -2384,13 +2462,13 @@ function SummaryTab({
       {/* 1. Lesson at a glance */}
       <div className="flex flex-col gap-6">
         {classSummary ? (
-          <div className="rounded-2xl border border-border bg-surface p-6">
-            <h2 className="text-lg font-semibold text-ink">Lesson at a glance</h2>
-            <p className="mt-2 text-sm text-ink-soft">{classSummary}</p>
+          <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-6">
+            <h2 className="text-[11px] font-bold uppercase tracking-wide text-terracotta-600">Lesson at a glance</h2>
+            <p className="mt-2 text-base leading-relaxed text-ink">{classSummary}</p>
           </div>
         ) : classSummarySending ? (
-          <div className="rounded-2xl border border-border bg-surface p-6">
-            <div className="flex justify-center text-brand-600">
+          <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+            <div className="flex justify-center text-forest">
               <ProgressRing
                 progress={classSummaryProgress}
                 label="Putting together a summary of this lesson"
@@ -2400,12 +2478,20 @@ function SummaryTab({
           </div>
         ) : (
           spotlight && (
-            <div className="rounded-2xl border border-border bg-surface p-6">
-              <h2 className="text-lg font-semibold text-ink">{spotlight.headline}</h2>
-              <p className="mt-2 text-sm text-ink-soft">{spotlight.body}</p>
+            <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-6">
+              <h2 className="text-[11px] font-bold uppercase tracking-wide text-terracotta-600">{spotlight.headline}</h2>
+              <p className="mt-2 text-base leading-relaxed text-ink">{spotlight.body}</p>
             </div>
           )
         )}
+
+        {/* The same four numbers, colours and order as page one of the printout. */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <SummaryStat label="You spoke" metric={getPresenceMetric(session.teacherTalkPct)} unit="%" accent={ACCENTS.terracotta} />
+          <SummaryStat label="Students spoke" metric={getPresenceMetric(session.studentTalkPct)} unit="%" accent={ACCENTS.gold} />
+          <SummaryStat label="Questions" metric={questionsMetric} accent={ACCENTS.mint} />
+          <SummaryStat label="Avg. wait" metric={getPresenceMetric(session.avgWaitTimeSec)} unit="s" accent={ACCENTS.forest} />
+        </div>
       </div>
 
       {/* 2. A strength to keep */}
@@ -2418,17 +2504,17 @@ function SummaryTab({
 
       {/* 3. Your focus */}
       {focusSnapshot && (
-        <div className="rounded-2xl border border-brand-100 bg-brand-50/40 p-6">
+        <div className="rounded-2xl bg-gold-tint/50 p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-600">
+            <h2 className="text-[11px] font-bold uppercase tracking-wide text-terracotta-600">
               My focus · {focusSnapshot.label}
             </h2>
-            <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-brand-600">
+            <span className="rounded-full bg-cream-card px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-terracotta-600">
               {EVIDENCE_TIER_LABELS[focusSnapshot.tier]}
             </span>
           </div>
           {focusMetric === 'talkRatio' && session.teacherTalkPct != null ? (
-            <div className="mt-4 rounded-xl bg-surface/60 p-4">
+            <div className="mt-4 rounded-xl bg-cream-card/60 p-4">
               <TalkParticipationBar
                 teacherPct={session.teacherTalkPct}
                 studentPct={session.studentTalkPct}
@@ -2458,7 +2544,7 @@ function SummaryTab({
                 focusMetric,
               })
             }
-            className="mt-3 text-sm font-medium text-brand-600 hover:text-brand-700"
+            className="mt-3 text-sm font-medium text-forest hover:text-terracotta-600"
           >
             Discuss this focus →
           </button>
@@ -2513,20 +2599,20 @@ function FocusSelector({
           onClick={() => setOpen((o) => !o)}
           className={`flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
             focusMetric
-              ? 'border-brand-500 bg-brand-50 text-brand-600'
-              : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+              ? 'border-terracotta bg-peach-tint/50 text-forest'
+              : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
           }`}
         >
           {focusMetric ? FOCUS_METRIC_LABELS[focusMetric] : 'Choose a focus metric'}
           <span aria-hidden="true">{open ? '▴' : '▾'}</span>
         </button>
         {open && (
-          <div className="absolute z-10 mt-1 w-72 rounded-lg border border-border bg-surface p-1.5 shadow-lg">
+          <div className="absolute z-10 mt-1 w-72 rounded-lg border border-hairline bg-cream-card p-1.5 shadow-lg">
             <button
               type="button"
               onClick={() => handleSelect(null)}
               className={`w-full rounded-lg px-3 py-1.5 text-left text-sm ${
-                focusMetric == null ? 'font-semibold text-brand-600' : 'text-ink-soft hover:bg-canvas'
+                focusMetric == null ? 'font-semibold text-forest' : 'text-ink-soft hover:bg-cream'
               }`}
             >
               No focus
@@ -2542,7 +2628,7 @@ function FocusSelector({
                     type="button"
                     onClick={() => handleSelect(key)}
                     className={`w-full rounded-lg px-3 py-1.5 text-left text-sm ${
-                      focusMetric === key ? 'bg-brand-50 font-semibold text-brand-600' : 'text-ink hover:bg-canvas'
+                      focusMetric === key ? 'bg-mint-tint/60 font-semibold text-forest' : 'text-ink hover:bg-cream'
                     }`}
                   >
                     {FOCUS_METRIC_LABELS[key]}
@@ -2576,7 +2662,7 @@ function MyGrowthTab({
     return (
       <div className="flex flex-col gap-4">
         <FocusSelector focusMetric={focusMetric} onChange={onFocusMetricChange} />
-        <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
+        <div className="rounded-2xl border border-dashed border-hairline p-6 text-center text-sm text-ink-soft">
           Your growth trends will show up here after a couple more sessions. One session — especially a short
           one — is too noisy on its own to read much into.
         </div>
@@ -2642,8 +2728,8 @@ function MyGrowthTab({
           maxValue={100}
           labels={labels}
           series={[
-            { label: 'You', colorVar: '--color-brand-500', values: teacherTalk },
-            { label: 'Students', colorVar: '--color-warm-400', values: studentTalk },
+            { label: 'You', colorVar: '--color-terracotta', values: teacherTalk },
+            { label: 'Students', colorVar: '--color-gold', values: studentTalk },
           ]}
           emptyMessage="Not enough sessions with a measured talk split yet to trend this."
         />
@@ -2657,7 +2743,7 @@ function MyGrowthTab({
           unit="%"
           maxValue={100}
           labels={labels}
-          series={[{ label: 'Higher-order questions', colorVar: '--color-brand-500', values: higherOrder }]}
+          series={[{ label: 'Higher-order questions', colorVar: '--color-terracotta', values: higherOrder }]}
           emptyMessage="Not enough questions asked yet in any single session to trend this reliably."
         />
       ),
@@ -2670,7 +2756,7 @@ function MyGrowthTab({
           unit="s"
           maxValue={waitTimeMax}
           labels={labels}
-          series={[{ label: 'Your avg. wait time', colorVar: '--color-brand-500', values: avgWaitTime }]}
+          series={[{ label: 'Your avg. wait time', colorVar: '--color-terracotta', values: avgWaitTime }]}
           emptyMessage="Not enough sessions with a measured average wait time yet to trend this."
         />
       ),
@@ -2684,7 +2770,7 @@ function MyGrowthTab({
             unit="/10min"
             maxValue={cfuMax}
             labels={labels}
-            series={[{ label: 'CFUs per 10 min', colorVar: '--color-brand-500', values: cfuFrequency }]}
+            series={[{ label: 'CFUs per 10 min', colorVar: '--color-terracotta', values: cfuFrequency }]}
             emptyMessage="Not enough sessions long enough to reliably detect checks for understanding yet."
           />
           {excludedCfuCount > 0 && (
@@ -2705,7 +2791,7 @@ function MyGrowthTab({
           unit="/10min"
           maxValue={followUpMax}
           labels={labels}
-          series={[{ label: 'Follow-ups per 10 min', colorVar: '--color-brand-500', values: followUpFrequency }]}
+          series={[{ label: 'Follow-ups per 10 min', colorVar: '--color-terracotta', values: followUpFrequency }]}
           emptyMessage="Not enough follow-up questions recorded yet to trend this."
         />
       ),
@@ -2718,7 +2804,7 @@ function MyGrowthTab({
           unit="/10min"
           maxValue={redirectionMax}
           labels={labels}
-          series={[{ label: 'Redirections per 10 min', colorVar: '--color-brand-500', values: redirectionFrequency }]}
+          series={[{ label: 'Redirections per 10 min', colorVar: '--color-terracotta', values: redirectionFrequency }]}
           emptyMessage="Not enough redirection language detected yet to trend this."
         />
       ),
@@ -2731,7 +2817,7 @@ function MyGrowthTab({
           unit="%"
           maxValue={100}
           labels={labels}
-          series={[{ label: 'Share positive', colorVar: '--color-brand-500', values: toneRatio }]}
+          series={[{ label: 'Share positive', colorVar: '--color-terracotta', values: toneRatio }]}
           emptyMessage="Not enough tone-language moments in any single session yet to trend this reliably."
         />
       ),
@@ -2744,7 +2830,7 @@ function MyGrowthTab({
           unit="/10min"
           maxValue={directiveMax}
           labels={labels}
-          series={[{ label: 'Directions per 10 min', colorVar: '--color-brand-500', values: directiveFrequency }]}
+          series={[{ label: 'Directions per 10 min', colorVar: '--color-terracotta', values: directiveFrequency }]}
           emptyMessage="Not enough directive language detected yet to trend this."
         />
       ),
@@ -2757,7 +2843,7 @@ function MyGrowthTab({
           unit="/10min"
           maxValue={nameMentionMax}
           labels={labels}
-          series={[{ label: 'Name mentions per 10 min', colorVar: '--color-brand-500', values: nameMentionFrequency }]}
+          series={[{ label: 'Name mentions per 10 min', colorVar: '--color-terracotta', values: nameMentionFrequency }]}
           emptyMessage="Not enough student-name mentions detected yet to trend this."
         />
       ),
@@ -2770,7 +2856,7 @@ function MyGrowthTab({
           unit="%"
           maxValue={100}
           labels={labels}
-          series={[{ label: 'Share specific', colorVar: '--color-brand-500', values: feedbackSpecificity }]}
+          series={[{ label: 'Share specific', colorVar: '--color-terracotta', values: feedbackSpecificity }]}
           emptyMessage="Not enough feedback-after-response moments in any single session yet to trend this reliably."
         />
       ),
@@ -2784,8 +2870,8 @@ function MyGrowthTab({
       <FocusSelector focusMetric={focusMetric} onChange={onFocusMetricChange} />
 
       {insight && (
-        <div className="flex items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50 p-4">
-          <ArrowUpIcon className="h-5 w-5 shrink-0 text-brand-600" />
+        <div className="flex items-center gap-3 rounded-2xl bg-mint-tint/50 p-5">
+          <ArrowUpIcon className="h-5 w-5 shrink-0 text-forest" />
           <p className="text-sm text-ink">{insight}</p>
         </div>
       )}
@@ -2793,12 +2879,12 @@ function MyGrowthTab({
       {/* One chosen focus, across comparable recordings — not all 10 charts
           at once. */}
       {focusedChart ? (
-        <div className="rounded-2xl border border-brand-400 bg-brand-50/40 p-6 ring-1 ring-brand-200">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-brand-600">Your focus</p>
+        <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-6">
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Your focus</p>
           {focusedChart.node}
         </div>
       ) : (
-        <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
+        <div className="rounded-2xl border border-dashed border-hairline p-6 text-center text-sm text-ink-soft">
           Choose a focus above to see your growth trend for that metric.
         </div>
       )}
@@ -3162,23 +3248,23 @@ function ReflectTab({
           </button>
 
           {summarizing ? (
-            <div className="rounded-2xl border border-border bg-surface p-8 text-center">
+            <div className="rounded-2xl border border-hairline bg-cream-card p-8 text-center">
               <p className="text-sm text-ink-soft">Wrapping up your reflection…</p>
             </div>
           ) : (
             <>
-              {summarizeError && <p className="text-sm text-warm-500">{summarizeError}</p>}
+              {summarizeError && <p className="text-sm text-terracotta-600">{summarizeError}</p>}
 
-              <div className="rounded-2xl border border-border bg-surface p-6">
-                <h2 className="text-sm font-semibold text-ink">My next step</h2>
+              <div className="rounded-2xl bg-peach-tint/50 p-6">
+                <h2 className="font-heading text-lg font-bold text-forest">My next step</h2>
                 <p className="mt-1 text-sm text-ink-soft">Choose one focus for your next recording.</p>
                 <div className="mt-3">
                   <FocusSelector focusMetric={focusMetric} onChange={onFocusMetricChange} />
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-border bg-surface p-6">
-                <h2 className="text-sm font-semibold text-ink">Your reflection</h2>
+              <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+                <h2 className="font-heading text-lg font-bold text-forest">Your reflection</h2>
                 <div className="mt-4 flex flex-col gap-4">
                   <label className="flex flex-col gap-1.5">
                     <span className="text-sm font-medium text-ink">What I noticed</span>
@@ -3187,7 +3273,7 @@ function ReflectTab({
                       onChange={(e) => onStrengthsChange(e.target.value)}
                       disabled={locked}
                       rows={3}
-                      className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
+                      className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
                     />
                   </label>
                   <label className="flex flex-col gap-1.5">
@@ -3197,7 +3283,7 @@ function ReflectTab({
                       onChange={(e) => onGrowthAreasChange(e.target.value)}
                       disabled={locked}
                       rows={3}
-                      className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
+                      className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
                     />
                   </label>
                   <label className="flex flex-col gap-1.5">
@@ -3207,7 +3293,7 @@ function ReflectTab({
                       onChange={(e) => onNextStepChange(e.target.value)}
                       disabled={locked}
                       rows={2}
-                      className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
+                      className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
                     />
                   </label>
                   <label className="flex flex-col gap-1.5">
@@ -3217,7 +3303,7 @@ function ReflectTab({
                       value={followUpDate}
                       onChange={(e) => onFollowUpDateChange(e.target.value)}
                       disabled={locked}
-                      className="w-fit rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-70"
+                      className="w-fit rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
                     />
                   </label>
                 </div>
@@ -3228,49 +3314,49 @@ function ReflectTab({
                       type="button"
                       onClick={onSave}
                       disabled={saving}
-                      className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+                      className="rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-60"
                     >
                       {saving ? 'Saving...' : 'Save notes'}
                     </button>
-                    {saved && <span className="text-sm text-brand-600">Saved.</span>}
+                    {saved && <span className="text-sm text-forest">Saved.</span>}
                     <button
                       type="button"
                       onClick={onLock}
                       disabled={locking}
-                      className="ml-auto rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
+                      className="ml-auto rounded-lg border border-hairline px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-60"
                     >
                       {locking ? 'Locking...' : 'Lock report'}
                     </button>
                   </div>
                 )}
-                {error && <p className="mt-3 text-sm text-warm-500">{error}</p>}
+                {error && <p className="mt-3 text-sm text-terracotta-600">{error}</p>}
               </div>
             </>
           )}
         </div>
       ) : showStartScreen ? (
-        <div className="relative mx-auto w-full max-w-2xl rounded-2xl border border-border bg-surface p-6 sm:p-8">
+        <div className="relative mx-auto w-full max-w-2xl rounded-2xl border border-hairline bg-cream-card p-6 sm:p-8">
           {started && (
             <div className="absolute right-5 top-5 sm:right-6 sm:top-6">
               <button
                 type="button"
                 onClick={() => setMenuOpen((o) => !o)}
                 aria-label="Debrief options"
-                className="rounded-full p-1.5 text-ink-soft transition-colors hover:bg-canvas hover:text-ink"
+                className="rounded-full p-1.5 text-ink-soft transition-colors hover:bg-cream hover:text-ink"
               >
                 <KebabIcon className="h-5 w-5" />
               </button>
               {menuOpen && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-                  <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-xl border border-border bg-surface p-1.5 shadow-lg">
+                  <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-xl border border-hairline bg-cream-card p-1.5 shadow-lg">
                     <button
                       type="button"
                       onClick={() => {
                         setMenuOpen(false)
                         setShowStartScreen(false)
                       }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-ink transition-colors hover:bg-canvas"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-ink transition-colors hover:bg-cream"
                     >
                       <ChatBubbleIcon className="h-4 w-4 text-ink-soft" />
                       Continue previous debrief
@@ -3281,10 +3367,10 @@ function ReflectTab({
             </div>
           )}
 
-          <span className="inline-block rounded-full bg-warm-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-warm-500">
+          <span className="inline-block rounded-full bg-peach-tint px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-terracotta-600">
             Interactive Debrief
           </span>
-          <h2 className="mt-3 text-xl font-semibold text-ink sm:text-2xl">Let's debrief your lesson</h2>
+          <h2 className="mt-3 font-heading text-2xl font-extrabold text-forest sm:text-3xl">Let's debrief your lesson</h2>
           <p className="mt-1.5 max-w-lg text-sm text-ink-soft">
             Your coach will use your report, ask one question at a time, and help you choose a practical next
             step.
@@ -3298,12 +3384,12 @@ function ReflectTab({
                 onClick={() => setSelectedPath(path.key)}
                 className={`relative flex flex-col items-start gap-3 rounded-2xl border p-4 text-left transition-colors ${
                   selectedPath === path.key
-                    ? 'border-brand-500 bg-brand-50/60'
-                    : 'border-border bg-canvas hover:border-brand-300'
+                    ? 'border-terracotta bg-peach-tint/50'
+                    : 'border-hairline bg-cream hover:border-terracotta/40'
                 }`}
               >
                 {path.recommended && (
-                  <span className="absolute right-4 top-4 rounded-full bg-brand-600 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                  <span className="absolute right-4 top-4 rounded-full bg-forest px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
                     Recommended
                   </span>
                 )}
@@ -3327,8 +3413,8 @@ function ReflectTab({
                   onClick={() => setSelectedMomentIndex(i)}
                   className={`rounded-xl border px-4 py-2.5 text-left text-sm transition-colors ${
                     selectedMomentIndex === i
-                      ? 'border-brand-500 bg-brand-50/60 text-brand-600'
-                      : 'border-border bg-canvas text-ink hover:border-brand-300'
+                      ? 'border-terracotta bg-peach-tint/50 text-forest'
+                      : 'border-hairline bg-cream text-ink hover:border-terracotta/40'
                   }`}
                 >
                   {p.label}
@@ -3343,7 +3429,7 @@ function ReflectTab({
                 type="button"
                 onClick={handleStartVoice}
                 disabled={sending}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-terracotta px-5 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-60"
               >
                 <MicIcon className="h-4 w-4" />
                 {sending ? 'Starting...' : 'Start Talking'}
@@ -3362,12 +3448,12 @@ function ReflectTab({
         </div>
       ) : (
         <div className="flex flex-col gap-4">
-          <div className="rounded-2xl border border-border bg-surface p-6">
-            <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
+          <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+            <div className="mb-4 flex items-center justify-between border-b border-hairline pb-3">
               <div className="flex items-center gap-2">
                 <span
                   className={`h-2 w-2 rounded-full ${
-                    locked || sessionPaused ? 'bg-ink-soft' : 'animate-pulse bg-brand-500'
+                    locked || sessionPaused ? 'bg-ink-soft' : 'animate-pulse bg-terracotta'
                   }`}
                 />
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
@@ -3380,14 +3466,14 @@ function ReflectTab({
                   <button
                     type="button"
                     onClick={handleTogglePause}
-                    className="rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600"
+                    className="rounded-full border border-hairline px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
                   >
                     {sessionPaused ? 'Resume' : 'Pause'}
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowFinishConfirm(true)}
-                    className="rounded-full bg-brand-500 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-600"
+                    className="rounded-full bg-terracotta px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-terracotta/90"
                   >
                     Finish Debrief
                   </button>
@@ -3416,13 +3502,13 @@ function ReflectTab({
 
             <div className="flex flex-col gap-3">
               {userTranscript && (
-                <div className="rounded-xl bg-brand-50 px-4 py-2.5 text-sm text-ink">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">You</p>
+                <div className="rounded-xl bg-mint-tint/60 px-4 py-2.5 text-sm text-ink">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-forest">You</p>
                   <p className="mt-1">{userTranscript}</p>
                 </div>
               )}
               {lastAssistant && (
-                <div className="rounded-xl border border-border bg-canvas px-4 py-2.5 text-sm whitespace-pre-wrap text-ink">
+                <div className="rounded-xl border border-hairline bg-cream px-4 py-2.5 text-sm whitespace-pre-wrap text-ink">
                   <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Coach</p>
                   <p className="mt-1">{lastAssistant.text}</p>
                 </div>
@@ -3435,7 +3521,7 @@ function ReflectTab({
                     type="button"
                     onClick={() => onSend('Tell me more about that.')}
                     disabled={locked || turnCapHit}
-                    className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-50"
+                    className="rounded-full border border-hairline px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-50"
                   >
                     Tell me more
                   </button>
@@ -3443,7 +3529,7 @@ function ReflectTab({
                     <button
                       type="button"
                       onClick={() => setShowTranscriptWindow((v) => !v)}
-                      className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600"
+                      className="rounded-full border border-hairline px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
                     >
                       {showTranscriptWindow ? 'Hide the evidence' : 'Show me the evidence'}
                     </button>
@@ -3452,7 +3538,7 @@ function ReflectTab({
                     type="button"
                     onClick={() => onSend('How could I improve this?')}
                     disabled={locked || turnCapHit}
-                    className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-50"
+                    className="rounded-full border border-hairline px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-50"
                   >
                     Help me improve this
                   </button>
@@ -3460,7 +3546,7 @@ function ReflectTab({
                     type="button"
                     onClick={handleChangeTopic}
                     disabled={locked}
-                    className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-50"
+                    className="rounded-full border border-hairline px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-50"
                   >
                     Let's discuss another moment
                   </button>
@@ -3468,7 +3554,7 @@ function ReflectTab({
               )}
 
               {showTranscriptWindow && currentTimestampSec != null && (
-                <div className="rounded-xl border border-border bg-canvas p-4">
+                <div className="rounded-xl border border-hairline bg-cream p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
                     Transcript around {formatTime(currentTimestampSec)}
                   </p>
@@ -3484,15 +3570,15 @@ function ReflectTab({
             </div>
 
             {(reflectError || voiceFatalError) && (
-              <p className="mt-3 text-sm text-warm-500">{reflectError?.message ?? voiceFatalError}</p>
+              <p className="mt-3 text-sm text-terracotta-600">{reflectError?.message ?? voiceFatalError}</p>
             )}
 
             {voiceMode ? (
-              <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4">
+              <div className="mt-4 flex flex-col gap-3 border-t border-hairline pt-4">
                 <div className="flex items-center gap-2">
                   <span
                     className={`h-2 w-2 shrink-0 rounded-full ${
-                      isSpeaking || sending || transcribing ? 'animate-pulse bg-brand-500' : 'bg-ink-soft'
+                      isSpeaking || sending || transcribing ? 'animate-pulse bg-terracotta' : 'bg-ink-soft'
                     }`}
                   />
                   <p className="text-sm text-ink-soft">{sessionPaused ? 'Paused' : voiceStatus}</p>
@@ -3503,8 +3589,8 @@ function ReflectTab({
                     onClick={() => setMuted((m) => !m)}
                     className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
                       muted
-                        ? 'border-warm-500 bg-warm-100 text-warm-500'
-                        : 'border-border text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                        ? 'border-terracotta bg-peach-tint text-terracotta-600'
+                        : 'border-hairline text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                     }`}
                   >
                     {muted ? 'Unmute coach' : 'Mute coach'}
@@ -3512,7 +3598,7 @@ function ReflectTab({
                   <button
                     type="button"
                     onClick={handleSwitchToTyping}
-                    className="rounded-full border border-border px-3.5 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600"
+                    className="rounded-full border border-hairline px-3.5 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
                   >
                     Type instead
                   </button>
@@ -3524,7 +3610,7 @@ function ReflectTab({
                 ) : null}
               </div>
             ) : (
-              <div className="mt-4 border-t border-border pt-4">
+              <div className="mt-4 border-t border-hairline pt-4">
                 <form
                   onSubmit={(e) => {
                     e.preventDefault()
@@ -3539,12 +3625,12 @@ function ReflectTab({
                       onChange={(e) => onDraftChange(e.target.value)}
                       placeholder="Say what's on your mind..."
                       disabled={sending || locked || turnCapHit || sessionPaused}
-                      className="flex-1 rounded-lg border border-border bg-canvas px-4 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                      className="flex-1 rounded-lg border border-hairline bg-cream px-4 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
                     />
                     <button
                       type="submit"
                       disabled={sending || locked || turnCapHit || sessionPaused || !draft.trim()}
-                      className="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                      className="rounded-lg bg-terracotta px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
                     >
                       Send
                     </button>
@@ -3555,7 +3641,7 @@ function ReflectTab({
                     <button
                       type="button"
                       onClick={handleSwitchToVoice}
-                      className="flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:text-brand-700"
+                      className="flex items-center gap-1.5 text-xs font-semibold text-forest hover:text-terracotta-600"
                     >
                       <MicIcon className="h-3.5 w-3.5" />
                       Talk instead
@@ -3585,10 +3671,10 @@ function ReflectTab({
           onClick={() => setShowFinishConfirm(false)}
         >
           <div
-            className="w-full max-w-sm rounded-2xl bg-surface p-6 shadow-lg"
+            className="w-full max-w-sm rounded-2xl bg-cream-card p-6 shadow-lg"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-base font-semibold text-ink">Finish this debrief?</h3>
+            <h3 className="font-heading text-lg font-bold text-forest">Finish this debrief?</h3>
             <p className="mt-1.5 text-sm text-ink-soft">
               Your coach will create a summary of your reflection and next step.
             </p>
@@ -3596,14 +3682,14 @@ function ReflectTab({
               <button
                 type="button"
                 onClick={() => setShowFinishConfirm(false)}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+                className="rounded-lg border border-hairline px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
               >
                 Continue Debrief
               </button>
               <button
                 type="button"
                 onClick={handleFinish}
-                className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+                className="rounded-lg bg-terracotta px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
               >
                 Finish and Create Summary
               </button>
@@ -3616,10 +3702,10 @@ function ReflectTab({
 }
 
 const CONTENT_NOTE_LABEL_STYLES: Record<string, string> = {
-  Clarity: 'bg-brand-50 text-brand-600',
-  Vocabulary: 'bg-brand-50 text-brand-600',
-  'Engagement with content': 'bg-brand-50 text-brand-600',
-  'Worth double-checking': 'bg-warm-100 text-warm-500',
+  Clarity: 'bg-mint-tint/60 text-forest',
+  Vocabulary: 'bg-mint-tint/60 text-forest',
+  'Engagement with content': 'bg-mint-tint/60 text-forest',
+  'Worth double-checking': 'bg-peach-tint text-terracotta-600',
 }
 
 function WordCloud({ words, colorClassName }: { words: AudioTopicTerm[]; colorClassName: string }) {
@@ -3679,7 +3765,7 @@ function LessonContentTab({
     <div className="flex flex-col gap-3">
       <p className="text-xs font-normal italic text-ink-soft">Flags & quotes only — not scored</p>
       <CoachNote text={contentInsight} />
-      <div className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-6">
+      <div className="flex flex-col gap-4 rounded-2xl border border-hairline bg-cream-card p-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Topic terms detected</p>
           {!lessonContent ? (
@@ -3688,7 +3774,7 @@ function LessonContentTab({
             lessonContent.topicTerms.length > 0 ? (
               <div className="mt-2 flex flex-wrap gap-2">
                 {lessonContent.topicTerms.map((term) => (
-                  <span key={term} className="rounded-full border border-border bg-canvas px-3 py-1 text-xs text-ink">
+                  <span key={term} className="rounded-full border border-hairline bg-cream px-3 py-1 text-xs text-ink">
                     {term}
                   </span>
                 ))}
@@ -3700,10 +3786,10 @@ function LessonContentTab({
             <>
               <div className={`mt-2 ${showStudentCloud ? 'grid grid-cols-1 gap-6 sm:grid-cols-2' : ''}`}>
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-600">Teacher</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-forest">Teacher</p>
                   {lessonContent.topicTerms.teacher.length > 0 ? (
                     <div className="mt-1.5">
-                      <WordCloud words={lessonContent.topicTerms.teacher} colorClassName="text-brand-600" />
+                      <WordCloud words={lessonContent.topicTerms.teacher} colorClassName="text-forest" />
                     </div>
                   ) : (
                     <p className="mt-1 text-sm text-ink-soft">No recurring terms detected.</p>
@@ -3711,10 +3797,10 @@ function LessonContentTab({
                 </div>
                 {showStudentCloud && (
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-warm-500">Student</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-terracotta-600">Student</p>
                     {lessonContent.topicTerms.student.length > 0 ? (
                       <div className="mt-1.5">
-                        <WordCloud words={lessonContent.topicTerms.student} colorClassName="text-warm-500" />
+                        <WordCloud words={lessonContent.topicTerms.student} colorClassName="text-terracotta-600" />
                       </div>
                     ) : (
                       <p className="mt-1 text-sm text-ink-soft">No recurring terms detected.</p>
@@ -3793,7 +3879,7 @@ function LessonContentTab({
             type="button"
             onClick={onGenerate}
             disabled={sending}
-            className="self-start rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+            className="self-start rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-60"
           >
             {sending ? 'Generating...' : 'Generate content specialist notes'}
           </button>
@@ -3805,7 +3891,7 @@ function LessonContentTab({
               expertise as the final word.
             </p>
             {isShort && (
-              <p className="text-xs font-semibold text-warm-500">
+              <p className="text-xs font-semibold text-terracotta-600">
                 This session is under {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes — content feedback
                 from a short sample is especially limited.
               </p>
@@ -3814,10 +3900,10 @@ function LessonContentTab({
               <p className="text-sm text-ink-soft">No notes to show.</p>
             ) : (
               visibleNotes.map((note) => (
-                <div key={note.id} className="rounded-xl border border-border bg-surface p-4">
+                <div key={note.id} className="rounded-xl border border-hairline bg-cream-card p-4">
                   <div className="flex items-start justify-between gap-3">
                     <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${CONTENT_NOTE_LABEL_STYLES[note.label] ?? 'bg-canvas text-ink-soft'}`}
+                      className={`rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${CONTENT_NOTE_LABEL_STYLES[note.label] ?? 'bg-cream text-ink-soft'}`}
                     >
                       {note.label}
                     </span>
@@ -3839,7 +3925,7 @@ function LessonContentTab({
             )}
           </div>
         )}
-        {error && <p className="text-sm text-warm-500">{error}</p>}
+        {error && <p className="text-sm text-terracotta-600">{error}</p>}
       </div>
     </div>
   )
@@ -4020,7 +4106,7 @@ function ClimateRoutinesTab({
             <button
               type="button"
               onClick={() => setShowAllEvidence((v) => !v)}
-              className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700"
+              className="mt-2 text-sm font-medium text-forest hover:text-terracotta-600"
             >
               {showAllEvidence ? 'Show less' : `View all routine and climate moments (${evidenceCandidates.length})`}
             </button>
@@ -4030,14 +4116,14 @@ function ClimateRoutinesTab({
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         {strengthText && (
-          <div className="rounded-2xl border border-border bg-surface p-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Strength to keep</p>
+          <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-forest">Strength to keep</p>
             <p className="mt-2 text-sm text-ink">{strengthText}</p>
           </div>
         )}
 
-        <div className="rounded-2xl border border-border bg-surface p-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">One next step</p>
+        <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-forest">One next step</p>
           <p className="mt-2 text-sm text-ink">
             At one transition, give students three pieces of information: what to do, how long they have, and what
             should be ready when time ends.
@@ -4061,7 +4147,7 @@ function ClimateRoutinesTab({
                 focusMetric: 'directiveCount',
               })
             }
-            className="mt-3 text-sm font-medium text-brand-600 hover:text-brand-700"
+            className="mt-3 text-sm font-medium text-forest hover:text-terracotta-600"
           >
             Plan a transition with Wivoza →
           </button>
@@ -4103,7 +4189,7 @@ function buildPacingTimeline(segments: TranscriptSegment[], durationSec: number)
 function PacingTimeline({ segments, durationSec }: { segments: TranscriptSegment[]; durationSec: number | null }) {
   if (durationSec == null || durationSec <= 0 || segments.length === 0) {
     return (
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
         <h3 className="text-sm font-semibold text-ink">Talk flow across the lesson</h3>
         <div className="mt-3">
           <HatchedBar label="Talk flow unavailable this session." className="h-6 rounded-lg" />
@@ -4113,7 +4199,7 @@ function PacingTimeline({ segments, durationSec }: { segments: TranscriptSegment
   }
   const bins = buildPacingTimeline(segments, durationSec)
   return (
-    <div className="rounded-2xl border border-border bg-surface p-6">
+    <div className="rounded-2xl border border-hairline bg-cream-card p-6">
       <h3 className="text-sm font-semibold text-ink">Talk flow across the lesson</h3>
       <div className="mt-3 flex h-6 w-full overflow-hidden rounded-lg">
         {bins.map((bin, i) =>
@@ -4123,7 +4209,7 @@ function PacingTimeline({ segments, durationSec }: { segments: TranscriptSegment
             // Same teacher/student colors as TalkParticipationBar below, so
             // the timeline and the distribution bar read as one consistent
             // color language rather than two different "student" colors.
-            <div key={i} className={`h-full flex-1 ${bin === 'teacher' ? 'bg-brand-500' : 'bg-brand-500/45'}`} />
+            <div key={i} className={`h-full flex-1 ${bin === 'teacher' ? 'bg-terracotta' : 'bg-gold'}`} />
           ),
         )}
       </div>
@@ -4133,10 +4219,10 @@ function PacingTimeline({ segments, durationSec }: { segments: TranscriptSegment
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-soft">
         <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-brand-500" /> Teacher-heavy
+          <span className="h-2 w-2 rounded-full bg-terracotta" /> Teacher-heavy
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-brand-500/45" /> Student-heavy
+          <span className="h-2 w-2 rounded-full bg-gold" /> Student-heavy
         </span>
         <span className="flex items-center gap-1.5">
           {/* Not labeled "unclear audio" — this bucket also covers genuine
@@ -4210,16 +4296,16 @@ function QuestioningMixChart({
         </p>
       ) : (
         <div className="mt-3">
-          <div className="flex h-4 w-full overflow-hidden rounded-full bg-canvas">
-            <div className="h-full bg-brand-500/45" style={{ width: `${recallPct}%` }} />
-            <div className="h-full bg-brand-500" style={{ width: `${higherOrderPct}%` }} />
+          <div className="flex h-4 w-full overflow-hidden rounded-full bg-cream">
+            <div className="h-full bg-gold" style={{ width: `${recallPct}%` }} />
+            <div className="h-full bg-terracotta" style={{ width: `${higherOrderPct}%` }} />
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-soft">
             <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-brand-500/45" /> Recall · {recallCount} · {recallPct}%
+              <span className="h-2 w-2 shrink-0 rounded-full bg-gold" /> Recall · {recallCount} · {recallPct}%
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-brand-500" /> Higher-order · {higherOrderCount} ·{' '}
+              <span className="h-2 w-2 shrink-0 rounded-full bg-terracotta" /> Higher-order · {higherOrderCount} ·{' '}
               {higherOrderPct}%
             </span>
           </div>
@@ -4258,8 +4344,8 @@ function TranscriptEvidenceCard({
           ? buildFollowUpExchange(segments, questionLog, candidate.timestampSec)
           : buildTranscriptWindow(segments, candidate.timestampSec)
   return (
-    <div className="rounded-2xl border border-border bg-surface p-6">
-      <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+    <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+      <p className="text-xs font-semibold uppercase tracking-wide text-forest">
         {formatCandidateHeadline(candidate)}
       </p>
       {window.length > 0 ? (
@@ -4277,7 +4363,7 @@ function TranscriptEvidenceCard({
       <button
         type="button"
         onClick={() => onDiscuss(candidate)}
-        className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700"
+        className="mt-2 text-sm font-medium text-forest hover:text-terracotta-600"
       >
         Discuss with Wivoza →
       </button>
@@ -4323,7 +4409,7 @@ function TalkParticipationTab({
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="flex items-center gap-2 rounded-xl border border-border bg-canvas px-4 py-2.5 text-xs text-ink-soft">
+      <p className="flex items-center gap-2 rounded-xl border border-hairline bg-cream px-4 py-2.5 text-xs text-ink-soft">
         <LockIcon className="h-3.5 w-3.5 shrink-0" />
         Audio is never saved — it's sent once for transcription and discarded immediately. Only the transcript and
         these insights are kept.
@@ -4333,7 +4419,7 @@ function TalkParticipationTab({
 
       {/* Talk distribution — the stats and the bar used to show the same
           three percentages twice, once as text and once as a bar+legend. */}
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
         <h2 className="flex items-baseline justify-between text-sm font-semibold uppercase tracking-wide text-ink-soft">
           <span>Talk distribution</span>
           <span className="text-xs font-normal normal-case text-ink-soft">
@@ -4376,7 +4462,7 @@ function TalkParticipationTab({
             silencePct={silencePct}
           />
         </div>
-        <p className="mt-4 border-t border-border pt-3 text-xs text-ink-soft">
+        <p className="mt-4 border-t border-hairline pt-3 text-xs text-ink-soft">
           "Student speaking moments" counts separate moments student voice was detected — not the number of
           individual students who participated. Talk time describes the recording; it doesn't show how many
           students took part or whether they were engaged.
@@ -4400,7 +4486,7 @@ function TalkParticipationTab({
                 focusMetric: 'talkRatio',
               })
             }
-            className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700"
+            className="mt-2 text-sm font-medium text-forest hover:text-terracotta-600"
           >
             Reflect on talk balance →
           </button>
@@ -4442,7 +4528,7 @@ function WaitTimeChips({ questionLog }: { questionLog: AudioQuestionLogEntry[] |
       <h3 className="text-sm font-semibold text-ink">Measured wait times</h3>
       <div className="mt-2 flex flex-wrap gap-2">
         {waits.map((w, i) => (
-          <span key={i} className="rounded-lg border border-border bg-canvas px-3 py-1.5 text-sm font-medium text-ink">
+          <span key={i} className="rounded-lg border border-hairline bg-cream px-3 py-1.5 text-sm font-medium text-ink">
             {w}s
           </span>
         ))}
@@ -4497,7 +4583,7 @@ function QuestionsThinkingTab({
       </p>
 
       <CategorySection
-        title="Questioning & Thinking"
+        title="The numbers"
         coverage={categoryCoverage([questionsMetric, followUpMetric, waitTimeMetric])}
       >
         <div id="stat-higherOrderPct">
@@ -4542,8 +4628,8 @@ function QuestionsThinkingTab({
       <div>
         <CoachNote text={questioningInsight} />
         {strengthCandidate && (
-          <div className="mt-3 rounded-xl border border-border bg-surface p-4">
-            <span className="text-xs font-semibold uppercase tracking-wide text-brand-600">Strength to keep</span>
+          <div className="mt-3 rounded-xl border border-hairline bg-cream-card p-4">
+            <span className="text-xs font-semibold uppercase tracking-wide text-forest">Strength to keep</span>
             <p className="mt-1 text-sm text-ink">{formatCandidateHeadline(strengthCandidate)}</p>
             {strengthCandidate.excerpt && (
               <p className="mt-1 text-sm text-ink-soft">"{strengthCandidate.excerpt}"</p>
@@ -4555,14 +4641,14 @@ function QuestionsThinkingTab({
       <WaitTimeChips questionLog={questionLog} />
 
       {questionLog === null ? (
-        <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
+        <div className="rounded-2xl border border-dashed border-hairline p-6 text-center text-sm text-ink-soft">
           Not available for this session — analyzed before per-question detail was tracked.
         </div>
       ) : !expanded ? (
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="self-start rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+          className="self-start rounded-lg border border-hairline px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
         >
           Show question sequences
         </button>
@@ -4582,13 +4668,13 @@ function QuestionsThinkingTab({
             <p className="text-sm text-ink-soft">No individual questions were detected this session.</p>
           ) : (
             questionLog.map((q, i) => (
-              <div key={i} className="rounded-xl border border-border bg-surface p-4">
+              <div key={i} className="rounded-xl border border-hairline bg-cream-card p-4">
                 <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">
                   <span>Initial question</span>
                   <span>{formatTime(q.timestampSec)}</span>
                   <span
                     className={`rounded-full px-2 py-0.5 ${
-                      q.type === 'higher_order' ? 'bg-brand-50 text-brand-600' : 'bg-canvas text-ink-soft'
+                      q.type === 'higher_order' ? 'bg-mint-tint/60 text-forest' : 'bg-cream text-ink-soft'
                     }`}
                   >
                     {q.type === 'higher_order' ? 'Higher-order' : 'Recall'}
@@ -4599,7 +4685,7 @@ function QuestionsThinkingTab({
                 </div>
                 <p className="mt-1.5 text-sm text-ink">"{q.text}"</p>
                 {q.followUps.length > 0 && (
-                  <div className="mt-2 flex flex-col gap-1.5 border-l-2 border-border pl-3">
+                  <div className="mt-2 flex flex-col gap-1.5 border-l-2 border-hairline pl-3">
                     {q.followUps.map((f, j) => (
                       <p key={j} className="text-sm text-ink-soft">
                         <span className="text-xs font-semibold uppercase tracking-wide">
@@ -4616,8 +4702,8 @@ function QuestionsThinkingTab({
         </div>
       )}
 
-      <div className="rounded-2xl border border-border bg-surface p-6">
-        <span className="inline-block rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-brand-600">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+        <span className="inline-block rounded-full bg-mint-tint/60 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-forest">
           One next step
         </span>
         <p className="mt-3 text-sm text-ink">
@@ -4702,8 +4788,8 @@ function EvidenceItemCard({
         ? buildFeedbackExchange(segments, candidate.timestampSec)
         : buildSingleTurnExchange(segments, candidate.timestampSec)
   return (
-    <div className="rounded-2xl border border-border bg-surface p-6">
-      <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+    <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+      <p className="text-xs font-semibold uppercase tracking-wide text-forest">
         {formatCandidateHeadline(candidate)}
       </p>
       {window.length > 0 ? (
@@ -4722,7 +4808,7 @@ function EvidenceItemCard({
         <button
           type="button"
           onClick={() => onDiscuss(candidate)}
-          className="text-sm font-medium text-brand-600 hover:text-brand-700"
+          className="text-sm font-medium text-forest hover:text-terracotta-600"
         >
           Discuss with Wivoza →
         </button>
@@ -4791,7 +4877,7 @@ function UnderstandingFeedbackTab({
   return (
     <div className="flex flex-col gap-6">
       <CategorySection
-        title="Checks for Understanding & Feedback"
+        title="The numbers"
         coverage={categoryCoverage([cfuMetric, feedbackRatio])}
       >
         <div id="stat-cfu">
@@ -4832,7 +4918,7 @@ function UnderstandingFeedbackTab({
             <button
               type="button"
               onClick={() => setShowAllEvidence((v) => !v)}
-              className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700"
+              className="mt-2 text-sm font-medium text-forest hover:text-terracotta-600"
             >
               {showAllEvidence ? 'Show less' : `View all evidence (${evidenceCandidates.length})`}
             </button>
@@ -4842,8 +4928,8 @@ function UnderstandingFeedbackTab({
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         {showStrengthToKeep && (
-          <div className="rounded-2xl border border-border bg-surface p-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+          <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-forest">
               Strength to keep · {specificFeedbackCount} of {feedbackTotal} moments
             </p>
             <p className="mt-2 text-sm text-ink">
@@ -4853,8 +4939,8 @@ function UnderstandingFeedbackTab({
           </div>
         )}
 
-        <div className="rounded-2xl border border-border bg-surface p-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">One next step</p>
+        <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-forest">One next step</p>
           <p className="mt-2 text-sm text-ink">{nextStep.headline}</p>
           <p className="mt-1 text-sm text-ink-soft">{nextStep.example}</p>
           <button
@@ -4871,7 +4957,7 @@ function UnderstandingFeedbackTab({
                 focusMetric: 'cfuCount',
               })
             }
-            className="mt-3 text-sm font-medium text-brand-600 hover:text-brand-700"
+            className="mt-3 text-sm font-medium text-forest hover:text-terracotta-600"
           >
             {nextStep.buttonLabel}
           </button>
@@ -4890,13 +4976,14 @@ function CategorySection({
   coverage: string
   children: React.ReactNode
 }) {
+  const accent = useContext(SectionAccentContext)
   return (
     <div>
       <h2 className="flex items-baseline justify-between text-sm font-semibold uppercase tracking-wide text-ink-soft">
         <span>{title}</span>
         <span className="text-xs font-normal normal-case text-ink-soft">{coverage}</span>
       </h2>
-      <div className="mt-3 grid grid-cols-2 gap-4 rounded-2xl border border-border bg-surface p-6 sm:grid-cols-3">
+      <div className={`mt-3 grid grid-cols-2 gap-4 rounded-2xl ${accent.chip} p-6 sm:grid-cols-3`}>
         {children}
       </div>
     </div>
@@ -4923,7 +5010,7 @@ function Stat({
       <div className="flex items-center gap-1.5">
         <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
         {focused && (
-          <span className="rounded-full bg-brand-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
+          <span className="rounded-full bg-mint-tint/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-forest">
             Your focus
           </span>
         )}
