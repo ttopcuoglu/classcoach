@@ -88,12 +88,16 @@ export function isDemoAccount(email: string | null | undefined): boolean {
 // True if the user's own subscription is active, OR their organization
 // grants paid access (a signed district contract, or a still-open free
 // pilot window) — either path grants the same Plus-equivalent access.
-// TEMPORARY (2026-09-06): limits lifted for everyone, not just superadmin —
-// every teacher gets Plus-equivalent access (the generous paid monthly
-// limits below, plus the higher daily cost-protection ceiling in
-// usageLimit.ts) while this early-access period lasts. Flip back to false
-// to restore the normal free/paid split below.
-const LIMITS_LIFTED_FOR_EVERYONE = true
+// Limits were lifted for everyone during early access (2026-09-06). They are
+// back on, matching the plans as the home page describes them: Free gets
+// Talk It Through, Ask & Practice and 3 Lesson Debriefs a month; Lesson
+// Planning, Assignment Coach and Communication Coach are Plus.
+//
+// App Store review depends on DEMO_ACCOUNT_EMAILS being set wherever this
+// runs. With limits on, a reviewer account that is not listed there is just a
+// free teacher, and every Plus feature it opens answers with an upgrade
+// message pointing at wivoza.com.
+const LIMITS_LIFTED_FOR_EVERYONE = false
 
 // The fields a plan decision needs. Callers that have already loaded the
 // user — the live coaching turns, which cannot afford a second round trip to
