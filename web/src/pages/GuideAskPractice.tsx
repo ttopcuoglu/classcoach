@@ -116,30 +116,30 @@ function SampleAnswer() {
       title="Ask · Your coaching"
       caption="An illustration of an Ask answer. A Practice attempt looks similar, with your own response and a model one side by side."
     >
-      <div className="rounded-xl border border-border bg-canvas p-4">
+      <div className="rounded-xl border border-hairline bg-cream p-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">What&apos;s going on</p>
         <p className="mt-1.5 text-sm text-ink">
           A student told me &quot;you can&apos;t make me&quot; in front of the whole class when I asked him to put his
           phone away.
         </p>
       </div>
-      <div className="rounded-xl border border-border bg-warm-100/60 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-warm-500">Coaching</p>
+      <div className="rounded-xl border border-hairline bg-peach-tint/60 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coaching</p>
         <p className="mt-1.5 text-sm text-ink">
           The hard part here isn&apos;t the phone — it&apos;s the audience. Once twenty-eight people are watching,
           any request becomes a test of whether you can enforce it, and winning that test costs more than the
           phone is worth.
         </p>
       </div>
-      <div className="rounded-xl border border-border bg-canvas p-4">
+      <div className="rounded-xl border border-hairline bg-cream p-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Words to try</p>
         <p className="mt-1.5 text-sm text-ink">
           &quot;I&apos;m not going to argue about it in front of everyone. Hang on to it for now and see me at the
           end.&quot;
         </p>
       </div>
-      <div className="rounded-xl border border-brand-100 bg-brand-50 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">One next step</p>
+      <div className="rounded-xl border border-mint-tint bg-mint-tint/60 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-forest">One next step</p>
         <p className="mt-1.5 text-sm text-ink">
           Handle the phone privately after the transition, not in front of the room.
         </p>

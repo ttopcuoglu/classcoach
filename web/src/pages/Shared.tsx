@@ -38,18 +38,18 @@ export default function Shared() {
   }, [type, token])
 
   return (
-    <div className="min-h-screen bg-canvas px-6 py-8">
+    <div className="min-h-screen bg-cream px-6 py-8">
       <div className="mx-auto max-w-2xl">
         <p className="text-sm font-semibold text-ink-soft">Wivoza</p>
-        <h1 className="mt-1 text-2xl font-semibold text-ink">Shared from a colleague</h1>
+        <h1 className="mt-1 font-heading text-3xl font-extrabold text-forest">Shared from a colleague</h1>
 
         {loading ? (
           <p className="mt-8 text-sm text-ink-soft">Loading...</p>
         ) : error || !content ? (
-          <p className="mt-8 text-sm text-warm-500">{error ?? 'Nothing to show.'}</p>
+          <p className="mt-8 text-sm text-terracotta-600">{error ?? 'Nothing to show.'}</p>
         ) : content.type === 'attempt' ? (
-          <div className="mt-6 rounded-2xl border border-border bg-surface p-6">
-            <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600">
+          <div className="mt-6 rounded-2xl border border-hairline bg-cream-card p-6">
+            <span className="rounded-full bg-mint-tint/60 px-2.5 py-1 text-xs font-semibold text-forest">
               {categoryLabel(content.scenario.category)} · Grades {content.scenario.gradeBand}
             </span>
             <p className="mt-3 text-sm text-ink">{content.scenario.text}</p>
@@ -59,13 +59,13 @@ export default function Shared() {
 
             {content.feedback && (
               <>
-                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-warm-500">Coaching</p>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coaching</p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{content.feedback}</p>
               </>
             )}
             {content.modelResponse && (
               <>
-                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-brand-600">
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-forest">
                   Model response
                 </p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{content.modelResponse}</p>
@@ -73,9 +73,9 @@ export default function Shared() {
             )}
           </div>
         ) : content.type === 'debrief' ? (
-          <div className="mt-6 rounded-2xl border border-border bg-surface p-6">
+          <div className="mt-6 rounded-2xl border border-hairline bg-cream-card p-6">
             {content.category && (
-              <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600">
+              <span className="rounded-full bg-mint-tint/60 px-2.5 py-1 text-xs font-semibold text-forest">
                 {categoryLabel(content.category)}
               </span>
             )}
@@ -86,13 +86,13 @@ export default function Shared() {
 
             {content.feedback && (
               <>
-                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-warm-500">Coaching</p>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coaching</p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{content.feedback}</p>
               </>
             )}
             {content.followUp && (
               <>
-                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-brand-600">
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-forest">
                   Following up
                 </p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{content.followUp}</p>
@@ -100,8 +100,8 @@ export default function Shared() {
             )}
           </div>
         ) : content.type === 'lesson-plan' ? (
-          <div className="mt-6 rounded-2xl border border-border bg-surface p-6">
-            <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600">
+          <div className="mt-6 rounded-2xl border border-hairline bg-cream-card p-6">
+            <span className="rounded-full bg-mint-tint/60 px-2.5 py-1 text-xs font-semibold text-forest">
               {content.mode === 'generated' ? 'Sample lesson plan' : 'Lesson plan feedback'}
             </span>
             <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-ink-soft">Objective</p>
@@ -115,7 +115,7 @@ export default function Shared() {
             )}
             {content.feedback && (
               <>
-                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-warm-500">Coaching</p>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coaching</p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{content.feedback}</p>
               </>
             )}
@@ -139,7 +139,7 @@ export default function Shared() {
             )}
             {content.hots && (
               <>
-                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-brand-600">
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-forest">
                   Higher-order thinking
                 </p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{content.hots}</p>
@@ -153,9 +153,9 @@ export default function Shared() {
             )}
           </div>
         ) : (
-          <div className="mt-6 rounded-2xl border border-border bg-surface p-6">
+          <div className="mt-6 rounded-2xl border border-hairline bg-cream-card p-6">
             {content.category && (
-              <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600">
+              <span className="rounded-full bg-mint-tint/60 px-2.5 py-1 text-xs font-semibold text-forest">
                 {challengeLabel(content.category)}
               </span>
             )}
@@ -167,13 +167,13 @@ export default function Shared() {
 
             {content.feedback && (
               <>
-                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-warm-500">Coaching</p>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coaching</p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{content.feedback}</p>
               </>
             )}
             {content.modelResponse && (
               <>
-                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-brand-600">
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-forest">
                   Model response
                 </p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{content.modelResponse}</p>

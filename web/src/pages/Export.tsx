@@ -19,7 +19,7 @@ export default function Export() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-canvas px-6 py-8">
+    <div className="min-h-screen bg-cream px-6 py-8">
       <div className="mx-auto max-w-2xl">
         <div className="mb-6 flex items-center justify-between print:hidden">
           <Link to="/profile" className="text-sm font-medium text-ink-soft hover:text-ink">
@@ -28,13 +28,13 @@ export default function Export() {
           <button
             type="button"
             onClick={() => window.print()}
-            className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+            className="rounded-lg bg-terracotta px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
           >
             Print / Save as PDF
           </button>
         </div>
 
-        <h1 className="text-2xl font-semibold text-ink">Wivoza — Your Playbook</h1>
+        <h1 className="font-heading text-3xl font-extrabold text-forest">Wivoza — Your Playbook</h1>
         <p className="mt-1 text-sm text-ink-soft">Saved scenarios and saved Ask answers, exported for offline reference.</p>
 
         {loading ? (
@@ -48,8 +48,8 @@ export default function Export() {
               ) : (
                 <div className="mt-3 flex flex-col gap-4">
                   {attempts.map((a) => (
-                    <article key={a.id} className="break-inside-avoid rounded-xl border border-border p-4">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+                    <article key={a.id} className="break-inside-avoid rounded-xl border border-hairline p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-forest">
                         {categoryLabel(a.scenario.category)} · Grades {a.scenario.gradeBand}
                       </p>
                       <p className="mt-1.5 text-sm text-ink">{a.scenario.text}</p>
@@ -86,7 +86,7 @@ export default function Export() {
               ) : (
                 <div className="mt-3 flex flex-col gap-4">
                   {debriefs.map((d) => (
-                    <article key={d.id} className="break-inside-avoid rounded-xl border border-border p-4">
+                    <article key={d.id} className="break-inside-avoid rounded-xl border border-hairline p-4">
                       <p className="text-sm font-semibold text-ink">{d.incidentText}</p>
                       {d.feedback && (
                         <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink-soft">{d.feedback}</p>

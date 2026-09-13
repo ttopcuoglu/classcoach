@@ -141,7 +141,7 @@ function SamplePlan() {
         </p>
       </div>
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Higher-order thinking</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-forest">Higher-order thinking</p>
         <p className="mt-1.5 text-sm text-ink">
           Ask students to find the step where a common mistake happens, and explain why it&apos;s tempting.
         </p>
@@ -150,8 +150,8 @@ function SamplePlan() {
         <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Closure</p>
         <p className="mt-1.5 text-sm text-ink">Exit ticket: one problem, plus a sentence on which step was hardest.</p>
       </div>
-      <div className="rounded-xl border border-border bg-canvas p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Presentation &amp; Delivery</p>
+      <div className="rounded-xl border border-hairline bg-cream p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-forest">Presentation &amp; Delivery</p>
         <p className="mt-1.5 text-sm text-ink-soft">
           <strong className="font-semibold text-ink">Pacing &amp; timing</strong> — the We Do usually runs long.
           If you&apos;re past 25 minutes, cut to one pair problem rather than shortening the close.

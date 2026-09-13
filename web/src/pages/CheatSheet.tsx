@@ -42,13 +42,16 @@ export default function CheatSheet() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Your Cheat Sheet</h1>
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Grow</p>
+        <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
+          Your Cheat Sheet<span className="text-gold">.</span>
+        </h1>
         <p className="text-ink-soft">
           Go-to phrases and tips, auto-built from what you've saved.
         </p>
         <Link
           to="/guide/cheat-sheet"
-          className="mt-1 w-fit text-xs font-medium text-ink-soft underline decoration-border underline-offset-4 hover:text-terracotta"
+          className="mt-1 w-fit text-xs font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta"
         >
           New to this? Read the teacher's guide
         </Link>
@@ -57,17 +60,17 @@ export default function CheatSheet() {
       {loading ? (
         <p className="text-center text-sm text-ink-soft">Loading...</p>
       ) : isEmpty ? (
-        <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
+        <div className="rounded-2xl border border-dashed border-hairline p-6 text-center text-sm text-ink-soft">
           Save a scenario response or an answer from Ask, and it'll show up here.
         </div>
       ) : (
         <div className="flex flex-col gap-5">
           {CATEGORIES.filter((c) => c.value && byCategory.has(c.value)).map(({ label, value }) => (
             <div key={value}>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">{label}</h2>
+              <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">{label}</h2>
               <div className="mt-2 flex flex-col gap-2">
                 {byCategory.get(value!)!.map((phrase, i) => (
-                  <div key={i} className="rounded-xl border border-border bg-surface p-4">
+                  <div key={i} className="rounded-xl border border-hairline bg-cream-card p-4">
                     <p className="text-sm whitespace-pre-wrap text-ink">{phrase.text}</p>
                     <p className="mt-2 text-xs text-ink-soft">For: {phrase.source}</p>
                   </div>
@@ -78,10 +81,10 @@ export default function CheatSheet() {
 
           {generalTips.length > 0 && (
             <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">General tips</h2>
+              <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">General tips</h2>
               <div className="mt-2 flex flex-col gap-2">
                 {generalTips.map((d) => (
-                  <div key={d.id} className="rounded-xl border border-border bg-surface p-4">
+                  <div key={d.id} className="rounded-xl border border-hairline bg-cream-card p-4">
                     <p className="text-sm font-semibold text-ink">{d.incidentText}</p>
                     <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink-soft">{d.followUp ?? d.feedback}</p>
                   </div>

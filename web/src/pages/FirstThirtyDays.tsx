@@ -39,7 +39,10 @@ export default function FirstThirtyDays() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Your First 30 Days</h1>
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Grow</p>
+        <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
+          Your First 30 Days<span className="text-gold">.</span>
+        </h1>
         <p className="text-ink-soft">A short guided track to help you get grounded early.</p>
       </div>
 
@@ -57,7 +60,7 @@ export default function FirstThirtyDays() {
                 <div
                   key={step.id}
                   className={`flex items-start gap-3 rounded-xl border p-4 ${
-                    done ? 'border-brand-100 bg-brand-50' : 'border-border bg-surface'
+                    done ? 'border-mint-tint bg-mint-tint/60' : 'border-hairline bg-cream-card'
                   }`}
                 >
                   <button
@@ -65,13 +68,13 @@ export default function FirstThirtyDays() {
                     onClick={() => toggleStep(step.id)}
                     aria-label={done ? 'Mark incomplete' : 'Mark complete'}
                     className={`mt-0.5 h-5 w-5 shrink-0 rounded-md border-2 transition-colors ${
-                      done ? 'border-brand-500 bg-brand-500' : 'border-border bg-surface'
+                      done ? 'border-terracotta bg-terracotta' : 'border-hairline bg-cream-card'
                     }`}
                   >
                     {done && <span className="block text-xs leading-none text-white">✓</span>}
                   </button>
                   <div className="flex-1">
-                    <p className={`text-sm font-semibold ${done ? 'text-brand-600' : 'text-ink'}`}>
+                    <p className={`text-sm font-semibold ${done ? 'text-forest' : 'text-ink'}`}>
                       {step.title}
                     </p>
                     <p className="mt-0.5 text-sm text-ink-soft">{step.description}</p>
@@ -79,7 +82,7 @@ export default function FirstThirtyDays() {
                       <Link
                         to={step.linkTo}
                         onClick={() => handleStepLink(step.suggestedCategory)}
-                        className="mt-2 inline-block text-sm font-semibold text-brand-600 underline underline-offset-2"
+                        className="mt-2 inline-block text-sm font-semibold text-forest underline underline-offset-2"
                       >
                         {step.linkLabel}
                       </Link>

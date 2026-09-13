@@ -171,13 +171,13 @@ function SamplePlanExcerpt() {
     >
       <div className="flex flex-wrap items-center gap-1.5">
         {['Parent or family conference', 'Video call'].map((pill) => (
-          <span key={pill} className="rounded-full border border-border bg-canvas px-2.5 py-0.5 text-xs font-medium text-ink-soft">
+          <span key={pill} className="rounded-full border border-hairline bg-cream px-2.5 py-0.5 text-xs font-medium text-ink-soft">
             {pill}
           </span>
         ))}
       </div>
       {sections.map((s) => (
-        <div key={s.label} className="rounded-xl border border-border bg-canvas p-4">
+        <div key={s.label} className="rounded-xl border border-hairline bg-cream p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{s.label}</p>
           <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{s.value}</p>
         </div>

@@ -128,8 +128,8 @@ export function GuideSample({
 }) {
   return (
     <figure className="m-0">
-      <div className="overflow-hidden rounded-2xl border border-hairline bg-canvas">
-        <div className="flex items-center justify-between gap-3 border-b border-border bg-surface px-4 py-2.5">
+      <div className="overflow-hidden rounded-2xl border border-hairline bg-cream">
+        <div className="flex items-center justify-between gap-3 border-b border-hairline bg-cream-card px-4 py-2.5">
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{title}</p>
           <span className="shrink-0 rounded-full bg-gold-tint px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-terracotta-600">
             Sample

@@ -112,7 +112,7 @@ function SampleSheet() {
         <p className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Responding to resistance</p>
         <div className="mt-2 flex flex-col gap-2">
           {entries.map((e) => (
-            <div key={e.source} className="rounded-xl border border-border bg-surface p-4">
+            <div key={e.source} className="rounded-xl border border-hairline bg-cream-card p-4">
               <p className="text-sm text-ink">{e.text}</p>
               <p className="mt-2 text-xs text-ink-soft">For: {e.source}</p>
             </div>
@@ -121,7 +121,7 @@ function SampleSheet() {
       </div>
       <div>
         <p className="text-sm font-semibold uppercase tracking-wide text-ink-soft">General tips</p>
-        <div className="mt-2 rounded-xl border border-border bg-surface p-4">
+        <div className="mt-2 rounded-xl border border-hairline bg-cream-card p-4">
           <p className="text-sm font-semibold text-ink">How do I set expectations on day one?</p>
           <p className="mt-1.5 text-sm text-ink-soft">
             Pick three routines, teach them like content, and practise them twice before you rely on them.

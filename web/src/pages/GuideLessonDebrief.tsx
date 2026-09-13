@@ -124,7 +124,7 @@ function SampleReport() {
         <p className="mt-1.5 text-xs text-ink-soft">Full lesson captured — enough evidence for every metric below.</p>
       </div>
 
-      <div className="rounded-xl border border-border bg-surface p-4">
+      <div className="rounded-xl border border-hairline bg-cream-card p-4">
         <p className="text-sm font-semibold text-ink">Lesson at a glance</p>
         <p className="mt-1.5 text-sm text-ink-soft">
           Students worked through cell respiration, moving from a modelled example to small-group analysis.
@@ -133,23 +133,23 @@ function SampleReport() {
         </p>
       </div>
 
-      <div className="rounded-xl border border-brand-100 bg-brand-50/60 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">A strength to keep</p>
+      <div className="rounded-xl border border-mint-tint bg-mint-tint/50 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-forest">A strength to keep</p>
         <p className="mt-1.5 text-sm text-ink">
           You asked 9 higher-order questions — 41% of your questions — well above a typical lesson.
         </p>
       </div>
 
-      <div className="rounded-xl border border-brand-100 bg-brand-50/40 p-4">
+      <div className="rounded-xl border border-mint-tint bg-gold-tint/40 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">My focus · Talk ratio</p>
-          <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand-600">
+          <p className="text-xs font-semibold uppercase tracking-wide text-forest">My focus · Talk ratio</p>
+          <span className="rounded-full bg-mint-tint/60 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-forest">
             Strong evidence
           </span>
         </div>
         <div className="mt-3 flex h-2.5 w-full overflow-hidden rounded-full" role="img" aria-label="Teacher 62 percent, students 27 percent, silence 11 percent">
-          <span className="bg-brand-500" style={{ width: '62%' }} />
-          <span className="bg-warm-400" style={{ width: '27%' }} />
+          <span className="bg-terracotta" style={{ width: '62%' }} />
+          <span className="bg-gold" style={{ width: '27%' }} />
           <span className="bg-border" style={{ width: '11%' }} />
         </div>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-soft">
@@ -164,11 +164,11 @@ function SampleReport() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="rounded-xl border border-border bg-surface p-4">
+        <div className="rounded-xl border border-hairline bg-cream-card p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Who was heard</p>
           <p className="mt-1.5 text-sm text-ink">14 separate student turns, spread across the period.</p>
         </div>
-        <div className="rounded-xl border border-border bg-surface p-4">
+        <div className="rounded-xl border border-hairline bg-cream-card p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Questions opened</p>
           <p className="mt-1.5 text-sm text-ink">22 questions · avg. wait 2.4s · 6 follow-ups.</p>
         </div>

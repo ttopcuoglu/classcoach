@@ -60,10 +60,10 @@ function schoolYearStart(): string {
 }
 
 const inputClass =
-  'rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-60'
+  'rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60'
 
 const primaryButtonClass =
-  'rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50'
+  'rounded-lg bg-terracotta px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50'
 
 type AnalyticsTab = 'dashboard' | 'engagement' | 'insights'
 type Tab = AnalyticsTab | 'professionalLearning' | 'people' | 'organizations' | 'platformUsers'
@@ -76,7 +76,7 @@ const ANALYTICS_META: Record<AnalyticsTab, { title: string; subtitle: string }> 
 
 function navButtonClass(active: boolean) {
   return `flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
-    active ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:bg-canvas hover:text-ink'
+    active ? 'bg-mint-tint/60 text-forest' : 'text-ink-soft hover:bg-cream hover:text-ink'
   }`
 }
 
@@ -247,7 +247,7 @@ export default function AdminDashboard() {
           />
         )}
 
-        {overviewError && <p className="text-sm text-warm-500">{overviewError}</p>}
+        {overviewError && <p className="text-sm text-terracotta-600">{overviewError}</p>}
 
         {isAnalyticsTab && !overview && !overviewError && <p className="text-sm text-ink-soft">Loading...</p>}
 
@@ -317,27 +317,27 @@ function FilterBar({
   const meta = ANALYTICS_META[tab]
   const presetButtonClass = (active: boolean) =>
     `rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
-      active ? 'bg-brand-500 text-white' : 'bg-canvas text-ink-soft hover:text-ink'
+      active ? 'bg-terracotta text-white' : 'bg-cream text-ink-soft hover:text-ink'
     }`
 
   return (
-    <div className="sticky top-0 z-10 -mx-4 flex flex-col gap-4 bg-canvas px-4 pb-4 pt-1 md:-mx-10 md:px-10">
+    <div className="sticky top-0 z-10 -mx-4 flex flex-col gap-4 bg-cream px-4 pb-4 pt-1 md:-mx-10 md:px-10">
       <div>
         {overview?.organizationName ? (
           <p className="text-xs font-semibold text-ink-soft">{overview.organizationName}</p>
         ) : (
           <p className="text-xs font-semibold text-ink-soft">Platform-wide</p>
         )}
-        <h1 className="mt-0.5 text-2xl font-semibold text-ink md:text-[34px]">{meta.title}</h1>
+        <h1 className="mt-0.5 font-heading text-2xl font-extrabold text-forest md:text-[34px]">{meta.title}</h1>
         <p className="mt-1 text-sm text-ink-soft">{meta.subtitle}</p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface p-2.5">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-hairline bg-cream-card p-2.5">
         {isSuperadmin && orgs.length > 0 && (
           <select
             value={selectedOrgId}
             onChange={(e) => onOrgChange(e.target.value)}
-            className="rounded-lg border border-border bg-canvas px-2.5 py-1.5 text-sm text-ink focus:border-brand-400 focus:outline-none"
+            className="rounded-lg border border-hairline bg-cream px-2.5 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
           >
             <option value="">Platform-wide</option>
             {orgs.map((org) => (
@@ -362,7 +362,7 @@ function FilterBar({
             value={startDate}
             max={endDate}
             onChange={(e) => onCustomDateChange('start', e.target.value)}
-            className="rounded-lg border border-border bg-canvas px-2 py-1.5 text-sm text-ink focus:border-brand-400 focus:outline-none"
+            className="rounded-lg border border-hairline bg-cream px-2 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
           />
           <span>to</span>
           <input
@@ -371,14 +371,14 @@ function FilterBar({
             min={startDate}
             max={defaultEndDate()}
             onChange={(e) => onCustomDateChange('end', e.target.value)}
-            className="rounded-lg border border-border bg-canvas px-2 py-1.5 text-sm text-ink focus:border-brand-400 focus:outline-none"
+            className="rounded-lg border border-hairline bg-cream px-2 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
           />
         </div>
 
         <select
           value={gradeBand}
           onChange={(e) => onGradeBandChange(e.target.value)}
-          className="rounded-lg border border-border bg-canvas px-2.5 py-1.5 text-sm text-ink focus:border-brand-400 focus:outline-none"
+          className="rounded-lg border border-hairline bg-cream px-2.5 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
         >
           <option value="">All grade bands</option>
           {GRADE_BAND_OPTIONS.map((g) => (
@@ -391,7 +391,7 @@ function FilterBar({
         <select
           value={subject}
           onChange={(e) => onSubjectChange(e.target.value)}
-          className="rounded-lg border border-border bg-canvas px-2.5 py-1.5 text-sm text-ink focus:border-brand-400 focus:outline-none"
+          className="rounded-lg border border-hairline bg-cream px-2.5 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
         >
           <option value="">All subjects</option>
           {SUBJECT_OPTIONS.map((s) => (
@@ -405,7 +405,7 @@ function FilterBar({
           href={getAdminExportUrl({ organizationId: selectedOrgId || undefined, startDate, endDate, gradeBand: gradeBand || undefined, subject: subject || undefined })}
           target="_blank"
           rel="noreferrer"
-          className="ml-auto rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-ink-soft hover:border-brand-400 hover:text-brand-600"
+          className="ml-auto rounded-lg border border-hairline px-3 py-1.5 text-xs font-semibold text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600"
         >
           Export report
         </a>
@@ -419,7 +419,7 @@ function FilterBar({
       )}
 
       {tab === 'dashboard' && (
-        <div className="flex items-center gap-2.5 rounded-xl border border-brand-100 bg-brand-50 px-4 py-2.5 text-sm text-brand-600">
+        <div className="flex items-center gap-2.5 rounded-xl border border-mint-tint bg-mint-tint/60 px-4 py-2.5 text-sm text-forest">
           <LockIcon className="h-4 w-4 shrink-0" />
           Aggregate reporting · Individual coaching stays private
         </div>
@@ -457,9 +457,9 @@ function WeeklyActivityChart({ data }: { data: { weekStart: string; activeCount:
       <p className="mt-3 text-[10px] text-ink-soft">max {maxCount}</p>
       <div className="relative mt-6">
         <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} preserveAspectRatio="none">
-          <path d={path} fill="none" stroke="var(--color-brand-500)" strokeWidth={2} strokeLinecap="round" />
+          <path d={path} fill="none" stroke="var(--color-terracotta)" strokeWidth={2} strokeLinecap="round" />
           {points.map((p, i) => (
-            <circle key={i} cx={p.x} cy={p.y} r={3} fill="var(--color-brand-500)" />
+            <circle key={i} cx={p.x} cy={p.y} r={3} fill="var(--color-terracotta)" />
           ))}
         </svg>
         {points.map((p, i) => (
@@ -482,7 +482,7 @@ function WeeklyActivityChart({ data }: { data: { weekStart: string; activeCount:
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-surface p-5">
+    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
       <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-ink">{value}</p>
       <p className="mt-1 text-xs text-ink-soft">{sub}</p>
@@ -598,7 +598,7 @@ function MembersList({ organizationId, isSuperadmin }: { organizationId?: string
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">
+        <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
           Members{members ? ` (${members.length})` : ''}
         </h2>
         <input
@@ -609,7 +609,7 @@ function MembersList({ organizationId, isSuperadmin }: { organizationId?: string
           className={`${inputClass} w-full max-w-xs`}
         />
       </div>
-      {error && <p className="mt-2 text-sm text-warm-500">{error}</p>}
+      {error && <p className="mt-2 text-sm text-terracotta-600">{error}</p>}
       {!members ? (
         <p className="mt-3 text-sm text-ink-soft">Loading...</p>
       ) : members.length === 0 ? (
@@ -617,10 +617,10 @@ function MembersList({ organizationId, isSuperadmin }: { organizationId?: string
       ) : sorted.length === 0 ? (
         <p className="mt-3 text-sm text-ink-soft">No members match &ldquo;{search}&rdquo;.</p>
       ) : (
-        <div className="mt-3 overflow-x-auto rounded-xl border border-border">
+        <div className="mt-3 overflow-x-auto rounded-xl border border-hairline">
           <table className="w-full min-w-[720px] border-collapse text-sm">
             <thead>
-              <tr className="border-b border-border bg-canvas">
+              <tr className="border-b border-hairline bg-cream">
                 <SortableTh label="Name" sortKey="name" active={sortKey} dir={sortDir} onSort={handleSort} />
                 <SortableTh label="Role" sortKey="role" active={sortKey} dir={sortDir} onSort={handleSort} />
                 <SortableTh label="Status" sortKey="status" active={sortKey} dir={sortDir} onSort={handleSort} />
@@ -704,7 +704,7 @@ function MemberRow({
   const status = memberStatusLabel(member)
 
   return (
-    <tr className="border-b border-border/60 align-top last:border-0">
+    <tr className="border-b border-hairline/60 align-top last:border-0">
       <td className="px-3.5 py-3">
         <p className="text-sm font-semibold text-ink">{member.name ?? member.email}</p>
         <p className="text-xs text-ink-soft">
@@ -714,7 +714,7 @@ function MemberRow({
       </td>
       <td className="whitespace-nowrap px-3.5 py-3">
         {member.role === 'org_admin' ? (
-          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
+          <span className="rounded-full bg-mint-tint/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-forest">
             Admin
           </span>
         ) : (
@@ -725,7 +725,7 @@ function MemberRow({
         {status === 'Active' ? (
           <span className="text-sm text-ink-soft">Active</span>
         ) : (
-          <span className="rounded-full bg-warm-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warm-500">
+          <span className="rounded-full bg-peach-tint px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-terracotta-600">
             {status}
           </span>
         )}
@@ -762,14 +762,14 @@ function MemberRow({
                 type="button"
                 onClick={handleDelete}
                 disabled={busy}
-                className="text-xs font-medium text-warm-500 hover:text-warm-600 disabled:opacity-50"
+                className="text-xs font-medium text-terracotta-600 hover:text-terracotta-600 disabled:opacity-50"
               >
                 Delete
               </button>
             </>
           )}
         </div>
-        {error && <p className="mt-1 text-xs text-warm-500">{error}</p>}
+        {error && <p className="mt-1 text-xs text-terracotta-600">{error}</p>}
       </td>
     </tr>
   )
@@ -790,8 +790,8 @@ const PRIORITY_LABELS: Record<string, string> = {
 function AdminCoachNote({ text }: { text: string | null }) {
   if (!text) return null
   return (
-    <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-brand-100 bg-brand-50 p-3">
-      <ChatBubbleIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
+    <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-mint-tint bg-mint-tint/60 p-3">
+      <ChatBubbleIcon className="mt-0.5 h-4 w-4 shrink-0 text-forest" />
       <p className="text-sm text-ink">{text}</p>
     </div>
   )
@@ -873,7 +873,7 @@ function buildClimateGroupInsight(data: ClimateAverages): string | null {
 function ConfidenceBadge({ level }: { level: DataConfidence }) {
   if (level !== 'limited') return null
   return (
-    <span className="rounded-full bg-warm-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warm-500">
+    <span className="rounded-full bg-peach-tint px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-terracotta-600">
       Limited data
     </span>
   )
@@ -911,7 +911,7 @@ function StatRow({
 }) {
   const hideValue = confidence === 'none'
   return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-2 last:border-0">
+    <div className="flex items-baseline justify-between gap-3 border-b border-hairline/60 py-2 last:border-0">
       <span className="flex items-center gap-1.5 text-sm text-ink">
         {label}
         {tooltip && <InfoTooltip text={tooltip} />}
@@ -934,7 +934,7 @@ function InstructionalAveragesCard({ data, insight }: { data: InstructionalAvera
       ? Math.max(0, Math.round(100 - data.avgTeacherTalkPct - data.avgStudentTalkPct))
       : null
   return (
-    <div className="rounded-2xl border border-border bg-surface p-5">
+    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Instructional practice averages</h2>
       <div className="mt-2 flex flex-col">
         <StatRow
@@ -997,7 +997,7 @@ function InstructionalAveragesCard({ data, insight }: { data: InstructionalAvera
 function ClimateAveragesCard({ data, insight }: { data: ClimateAverages; insight?: string | null }) {
   const sampleOr = (n: number, unit: string) => (n > 0 ? `based on ${n} ${unit}` : 'not enough data yet')
   return (
-    <div className="rounded-2xl border border-border bg-surface p-5">
+    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
         Classroom climate &amp; management
       </h2>
@@ -1081,19 +1081,19 @@ function BreakdownCard({ selectedOrgId }: { selectedOrgId: string }) {
   const sampleOr = (n: number, unit: string) => (n > 0 ? `based on ${n} ${unit}` : 'not enough data yet')
 
   return (
-    <div className="rounded-2xl border border-border bg-surface p-5">
+    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
           Instructional averages, by grade or subject
         </h2>
-        <div className="flex gap-1 rounded-lg bg-canvas p-1">
+        <div className="flex gap-1 rounded-lg bg-cream p-1">
           {BREAKDOWN_OPTIONS.map((opt) => (
             <button
               key={opt.id}
               type="button"
               onClick={() => setBy(opt.id)}
               className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                by === opt.id ? 'bg-surface text-ink shadow-sm' : 'text-ink-soft hover:text-ink'
+                by === opt.id ? 'bg-cream-card text-ink shadow-sm' : 'text-ink-soft hover:text-ink'
               }`}
             >
               {opt.label}
@@ -1108,14 +1108,14 @@ function BreakdownCard({ selectedOrgId }: { selectedOrgId: string }) {
         </p>
       )}
 
-      {by !== 'none' && error && <p className="mt-3 text-sm text-warm-500">{error}</p>}
+      {by !== 'none' && error && <p className="mt-3 text-sm text-terracotta-600">{error}</p>}
 
       {by !== 'none' && !data && !error && <p className="mt-3 text-sm text-ink-soft">Loading...</p>}
 
       {data && (
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           {data.breakdown.map((entry) => (
-            <div key={entry.bucket} className="rounded-xl border border-border/60 p-3">
+            <div key={entry.bucket} className="rounded-xl border border-hairline/60 p-3">
               <p className="text-sm font-semibold text-ink">{entry.bucket}</p>
               {entry.suppressed ? (
                 <p className="mt-2 text-xs text-ink-soft">
@@ -1191,8 +1191,8 @@ function TallyBarList({
   const row = ([value, { count, teachers }]: [string, TallyEntry]) => (
     <div key={value} className="flex items-center gap-3">
       <span className="w-40 shrink-0 text-sm text-ink">{labelFor(value)}</span>
-      <div className="h-2 flex-1 overflow-hidden rounded-full bg-canvas">
-        <div className="h-full rounded-full bg-brand-500" style={{ width: `${(count / maxCount) * 100}%` }} />
+      <div className="h-2 flex-1 overflow-hidden rounded-full bg-cream">
+        <div className="h-full rounded-full bg-terracotta" style={{ width: `${(count / maxCount) * 100}%` }} />
       </div>
       <span className="w-44 shrink-0 text-right text-sm text-ink-soft">
         {count === 0 ? 'no activity yet' : `${count} · ${teachers} of ${totalTeachers} teachers`}
@@ -1201,7 +1201,7 @@ function TallyBarList({
   )
 
   return (
-    <div className="rounded-2xl border border-border bg-surface p-5">
+    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{title}</h2>
       {comment && <p className="mt-1 text-xs text-ink-soft">{comment}</p>}
       {active.length > 0 ? (
@@ -1211,7 +1211,7 @@ function TallyBarList({
       )}
       {inactive.length > 0 && (
         <details className="mt-2 group">
-          <summary className="cursor-pointer list-none text-xs font-medium text-brand-600 marker:content-none [&::-webkit-details-marker]:hidden">
+          <summary className="cursor-pointer list-none text-xs font-medium text-forest marker:content-none [&::-webkit-details-marker]:hidden">
             Show {inactive.length} {inactive.length === 1 ? 'category' : 'categories'} with no activity
           </summary>
           <div className="mt-2 flex flex-col gap-2">{inactive.map(row)}</div>
@@ -1253,11 +1253,11 @@ function InsightCard({
   onAction?: () => void
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-surface p-5">
+    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
       <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{eyebrow}</p>
       <p className="mt-2 text-sm text-ink">{body}</p>
       {actionLabel && onAction && (
-        <button type="button" onClick={onAction} className="mt-3 text-sm font-semibold text-brand-600 hover:text-brand-500">
+        <button type="button" onClick={onAction} className="mt-3 text-sm font-semibold text-forest hover:text-terracotta">
           {actionLabel} →
         </button>
       )}
@@ -1332,7 +1332,7 @@ function DashboardPanel({ overview, onNavigate }: { overview: AdminOverview; onN
 
       <AdoptionFunnelCard overview={overview} />
 
-      <div className="rounded-2xl border border-border bg-surface p-5">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-5">
         <WeeklyActivityChart data={overview.weeklyActivity} />
       </div>
 
@@ -1354,7 +1354,7 @@ function AdoptionFunnelCard({ overview }: { overview: AdminOverview }) {
   ]
   const total = overview.totalTeachers
   return (
-    <div className="rounded-2xl border border-border bg-surface p-5">
+    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Adoption funnel</h2>
       <p className="text-xs text-ink-soft">Where licensed staff actually stick with Wivoza</p>
       <div className="mt-3 flex flex-col gap-3">
@@ -1368,8 +1368,8 @@ function AdoptionFunnelCard({ overview }: { overview: AdminOverview }) {
                   {pct}% · {count} of {total}
                 </span>
               </div>
-              <div className="mt-1 h-2 overflow-hidden rounded-full bg-canvas">
-                <div className="h-full rounded-full bg-brand-500" style={{ width: `${pct}%` }} />
+              <div className="mt-1 h-2 overflow-hidden rounded-full bg-cream">
+                <div className="h-full rounded-full bg-terracotta" style={{ width: `${pct}%` }} />
               </div>
             </div>
           )
@@ -1382,7 +1382,7 @@ function AdoptionFunnelCard({ overview }: { overview: AdminOverview }) {
 function FeatureAdoptionCard({ data, totalTeachers }: { data: AdminOverview['featureAdoption']; totalTeachers: number }) {
   const entries = (Object.entries(data) as [keyof typeof data, number][]).sort((a, b) => b[1] - a[1])
   return (
-    <div className="rounded-2xl border border-border bg-surface p-5">
+    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Feature adoption</h2>
       <p className="text-xs text-ink-soft">Share of teachers who have tried each feature at least once, ever</p>
       <div className="mt-3 flex flex-col gap-3">
@@ -1396,8 +1396,8 @@ function FeatureAdoptionCard({ data, totalTeachers }: { data: AdminOverview['fea
                   {pct}% · {teacherCount} of {totalTeachers}
                 </span>
               </div>
-              <div className="mt-1 h-2 overflow-hidden rounded-full bg-canvas">
-                <div className="h-full rounded-full bg-brand-500" style={{ width: `${pct}%` }} />
+              <div className="mt-1 h-2 overflow-hidden rounded-full bg-cream">
+                <div className="h-full rounded-full bg-terracotta" style={{ width: `${pct}%` }} />
               </div>
             </div>
           )
@@ -1410,7 +1410,7 @@ function FeatureAdoptionCard({ data, totalTeachers }: { data: AdminOverview['fea
 function EngagementPanel({ overview }: { overview: AdminOverview }) {
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-2xl border border-border bg-surface p-5">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Staff-wide growth signal</p>
         {overview.growth.recentTotal === 0 ? (
           <p className="mt-1 text-sm text-ink-soft">No rated practice this week yet.</p>
@@ -1467,7 +1467,7 @@ function TopNList({
 
 function StrengthsCard({ strengths }: { strengths: Strength[] }) {
   return (
-    <div className="rounded-2xl border border-border bg-surface p-5">
+    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Top shared strengths</h2>
       {strengths.length === 0 ? (
         <p className="mt-2 text-sm text-ink-soft">Not enough data yet to confidently name a staff-wide strength.</p>
@@ -1520,14 +1520,14 @@ function CoachingInsightsPanel({ overview, selectedOrgId }: { overview: AdminOve
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex w-fit gap-1 rounded-xl bg-canvas p-1">
+      <div className="flex w-fit gap-1 rounded-xl bg-cream p-1">
         {INSIGHTS_TABS.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-              tab === t.id ? 'bg-surface text-ink shadow-sm' : 'text-ink-soft hover:text-ink'
+              tab === t.id ? 'bg-cream-card text-ink shadow-sm' : 'text-ink-soft hover:text-ink'
             }`}
           >
             {t.label}
@@ -1539,7 +1539,7 @@ function CoachingInsightsPanel({ overview, selectedOrgId }: { overview: AdminOve
         <>
           <StrengthsCard strengths={overview.strengths} />
 
-          <div className="rounded-2xl border border-border bg-surface p-5">
+          <div className="rounded-2xl border border-hairline bg-cream-card p-5">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Top shared growth areas</h2>
             <TopNList
               tally={overview.priorityTally}
@@ -1549,14 +1549,14 @@ function CoachingInsightsPanel({ overview, selectedOrgId }: { overview: AdminOve
             />
           </div>
 
-          <div className="rounded-2xl border border-border bg-surface p-5">
+          <div className="rounded-2xl border border-hairline bg-cream-card p-5">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
               Most practiced classroom situations
             </h2>
             <TopNList tally={overview.categoryTally} labelFor={categoryLabel} n={3} emptyText="No practice activity yet." />
           </div>
 
-          <div className="rounded-2xl border border-border bg-surface p-5">
+          <div className="rounded-2xl border border-hairline bg-cream-card p-5">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
               Most common communication needs
             </h2>
@@ -1662,14 +1662,14 @@ function PeoplePanel({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-ink md:text-[34px]">People</h1>
+          <h1 className="font-heading text-2xl font-extrabold text-forest md:text-[34px]">People</h1>
           <p className="mt-1 text-sm text-ink-soft">Your school&rsquo;s staff roster.</p>
         </div>
         {isSuperadmin && orgs.length > 0 && (
           <select
             value={selectedOrgId}
             onChange={(e) => onOrgChange(e.target.value)}
-            className="rounded-lg border border-border bg-canvas px-3 py-1.5 text-sm text-ink focus:border-brand-400 focus:outline-none"
+            className="rounded-lg border border-hairline bg-cream px-3 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
           >
             <option value="">Select an organization</option>
             {orgs.map((org) => (
@@ -1683,7 +1683,7 @@ function PeoplePanel({
       {!overview ? (
         <p className="text-sm text-ink-soft">Loading...</p>
       ) : overview.scope === 'organization' ? (
-        <div className="rounded-2xl border border-border bg-surface p-5">
+        <div className="rounded-2xl border border-hairline bg-cream-card p-5">
           <MembersList organizationId={selectedOrgId || undefined} isSuperadmin={isSuperadmin} />
         </div>
       ) : (
@@ -1715,7 +1715,7 @@ function PdFocusAreaPanel({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-ink md:text-[34px]">Professional Learning</h1>
+          <h1 className="font-heading text-2xl font-extrabold text-forest md:text-[34px]">Professional Learning</h1>
           <p className="mt-1 text-sm text-ink-soft">
             Turn a shared coaching theme into something you can track over time.
           </p>
@@ -1724,7 +1724,7 @@ function PdFocusAreaPanel({
           <select
             value={selectedOrgId}
             onChange={(e) => onOrgChange(e.target.value)}
-            className="rounded-lg border border-border bg-canvas px-3 py-1.5 text-sm text-ink focus:border-brand-400 focus:outline-none"
+            className="rounded-lg border border-hairline bg-cream px-3 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
           >
             <option value="">Select an organization</option>
             {orgs.map((org) => (
@@ -1815,12 +1815,12 @@ function PdFocusAreaContent({ organizationId }: { organizationId?: string }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-2.5 rounded-xl border border-brand-100 bg-brand-50 px-4 py-2.5 text-sm text-brand-600">
+      <div className="flex items-center gap-2.5 rounded-xl border border-mint-tint bg-mint-tint/60 px-4 py-2.5 text-sm text-forest">
         <LockIcon className="h-4 w-4 shrink-0" />
         Aggregate reporting · Individual coaching stays private
       </div>
 
-      {error && <p className="text-sm text-warm-500">{error}</p>}
+      {error && <p className="text-sm text-terracotta-600">{error}</p>}
 
       {active.length > 0 && (
         <div className="flex flex-col gap-4">
@@ -1835,7 +1835,7 @@ function PdFocusAreaContent({ organizationId }: { organizationId?: string }) {
         </div>
       )}
 
-      <div className="rounded-2xl border border-border bg-surface p-5">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-5">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">+ Track a new focus area</h2>
         <p className="mt-1 text-xs text-ink-soft">
           Name a shared coaching theme to track over time — Wivoza snapshots the current evidence now, so you can
@@ -1852,7 +1852,7 @@ function PdFocusAreaContent({ organizationId }: { organizationId?: string }) {
                 type="button"
                 disabled={disabled}
                 onClick={() => handleCreate(key)}
-                className="flex items-center justify-between gap-3 rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-left text-sm transition-colors enabled:hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center justify-between gap-3 rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-left text-sm transition-colors enabled:hover:border-terracotta/40 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span className="font-medium text-ink">{PRIORITY_LABELS[key] ?? key}</span>
                 <span className="text-xs text-ink-soft">
@@ -1869,13 +1869,13 @@ function PdFocusAreaContent({ organizationId }: { organizationId?: string }) {
       </div>
 
       {archived.length > 0 && (
-        <details className="rounded-2xl border border-border bg-surface p-5">
+        <details className="rounded-2xl border border-hairline bg-cream-card p-5">
           <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-ink-soft">
             Show {archived.length} archived
           </summary>
           <div className="mt-3 flex flex-col">
             {archived.map((item) => (
-              <div key={item.id} className="border-b border-border/60 py-2.5 text-sm last:border-0">
+              <div key={item.id} className="border-b border-hairline/60 py-2.5 text-sm last:border-0">
                 <p className="font-medium text-ink">{item.title}</p>
                 <p className="mt-0.5 text-xs text-ink-soft">
                   Started {formatShortDate(item.createdAt)}
@@ -1905,7 +1905,7 @@ function FocusAreaCard({
 }) {
   const current = item.currentSnapshot
   return (
-    <div className="rounded-2xl border border-border bg-surface p-5">
+    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold text-ink">{item.title}</h3>
@@ -2001,7 +2001,7 @@ function OrganizationsPanel() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-2xl border border-border bg-surface p-5">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-5">
         <h2 className="text-sm font-semibold text-ink">Create organization</h2>
         <form onSubmit={handleCreate} className="mt-3 flex flex-col gap-3">
           <input
@@ -2023,9 +2023,9 @@ function OrganizationsPanel() {
             placeholder="Join code (optional — auto-generated if left blank)"
             className={inputClass}
           />
-          {createError && <p className="text-sm text-warm-500">{createError}</p>}
+          {createError && <p className="text-sm text-terracotta-600">{createError}</p>}
           {justCreatedCode && (
-            <p className="text-sm text-brand-600">
+            <p className="text-sm text-forest">
               Created — join code: <span className="font-mono font-semibold">{justCreatedCode}</span>
             </p>
           )}
@@ -2036,8 +2036,8 @@ function OrganizationsPanel() {
       </div>
 
       <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Organizations</h2>
-        {error && <p className="mt-2 text-sm text-warm-500">{error}</p>}
+        <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Organizations</h2>
+        {error && <p className="mt-2 text-sm text-terracotta-600">{error}</p>}
         {loading ? (
           <p className="mt-3 text-sm text-ink-soft">Loading...</p>
         ) : orgs.length === 0 ? (
@@ -2086,7 +2086,7 @@ function OrganizationRow({ org, onChanged }: { org: Organization; onChanged: () 
 
   if (editing) {
     return (
-      <div className="rounded-xl border border-border bg-surface p-4">
+      <div className="rounded-xl border border-hairline bg-cream-card p-4">
         <div className="flex flex-col gap-2">
           <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
           <input value={joinCode} onChange={(e) => setJoinCode(e.target.value)} className={inputClass} />
@@ -2096,7 +2096,7 @@ function OrganizationRow({ org, onChanged }: { org: Organization; onChanged: () 
             placeholder="Admin email(s), comma-separated"
             className={inputClass}
           />
-          {error && <p className="text-sm text-warm-500">{error}</p>}
+          {error && <p className="text-sm text-terracotta-600">{error}</p>}
           <div className="flex gap-3">
             <button type="button" onClick={handleSave} disabled={saving} className={primaryButtonClass}>
               {saving ? 'Saving...' : 'Save'}
@@ -2111,7 +2111,7 @@ function OrganizationRow({ org, onChanged }: { org: Organization; onChanged: () 
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface p-4">
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-hairline bg-cream-card p-4">
       <div>
         <p className="text-sm font-semibold text-ink">{org.name}</p>
         <p className="text-xs text-ink-soft">
@@ -2124,7 +2124,7 @@ function OrganizationRow({ org, onChanged }: { org: Organization; onChanged: () 
         <button type="button" onClick={() => setEditing(true)} className="text-xs font-medium text-ink-soft hover:text-ink">
           Edit
         </button>
-        <button type="button" onClick={handleDelete} className="text-xs font-medium text-ink-soft hover:text-warm-500">
+        <button type="button" onClick={handleDelete} className="text-xs font-medium text-ink-soft hover:text-terracotta-600">
           Delete
         </button>
       </div>
@@ -2192,7 +2192,7 @@ function UsersPanel() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">
+          <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
             Platform users{users ? ` (${users.length})` : ''}
           </h2>
           <p className="mt-0.5 text-xs text-ink-soft">
@@ -2208,7 +2208,7 @@ function UsersPanel() {
           className={`${inputClass} w-full max-w-xs`}
         />
       </div>
-      {error && <p className="mt-2 text-sm text-warm-500">{error}</p>}
+      {error && <p className="mt-2 text-sm text-terracotta-600">{error}</p>}
       {!users ? (
         <p className="mt-3 text-sm text-ink-soft">Loading...</p>
       ) : users.length === 0 ? (
@@ -2216,10 +2216,10 @@ function UsersPanel() {
       ) : sorted.length === 0 ? (
         <p className="mt-3 text-sm text-ink-soft">No users match &ldquo;{search}&rdquo;.</p>
       ) : (
-        <div className="mt-3 overflow-x-auto rounded-xl border border-border">
+        <div className="mt-3 overflow-x-auto rounded-xl border border-hairline">
           <table className="w-full min-w-[720px] border-collapse text-sm">
             <thead>
-              <tr className="border-b border-border bg-canvas">
+              <tr className="border-b border-hairline bg-cream">
                 <SortableTh label="Name" sortKey="name" active={sortKey} dir={sortDir} onSort={handleSort} />
                 <SortableTh label="Role" sortKey="role" active={sortKey} dir={sortDir} onSort={handleSort} />
                 <SortableTh
@@ -2282,20 +2282,20 @@ function UserRow({ user, onChanged }: { user: AdminUser; onChanged: () => void }
   }
 
   return (
-    <tr className="border-b border-border/60 align-top last:border-0">
+    <tr className="border-b border-hairline/60 align-top last:border-0">
       <td className="px-3.5 py-3">
         <p className="text-sm font-semibold text-ink">{user.name ?? user.email}</p>
         <p className="text-xs text-ink-soft">{user.email}</p>
       </td>
       <td className="whitespace-nowrap px-3.5 py-3">
-        <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-soft">
+        <span className="rounded-full border border-hairline px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-soft">
           {platformUserRoleLabel(user.role)}
         </span>
       </td>
       <td className="whitespace-nowrap px-3.5 py-3 text-sm text-ink-soft">{user.organizationName ?? 'Independent'}</td>
       <td className="whitespace-nowrap px-3.5 py-3">
         {user.suspendedAt ? (
-          <span className="rounded-full bg-warm-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warm-500">
+          <span className="rounded-full bg-peach-tint px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-terracotta-600">
             Suspended
           </span>
         ) : (
@@ -2319,12 +2319,12 @@ function UserRow({ user, onChanged }: { user: AdminUser; onChanged: () => void }
             type="button"
             onClick={handleDelete}
             disabled={busy}
-            className="text-xs font-medium text-warm-500 hover:text-warm-600 disabled:opacity-50"
+            className="text-xs font-medium text-terracotta-600 hover:text-terracotta-600 disabled:opacity-50"
           >
             Delete
           </button>
         </div>
-        {error && <p className="mt-1 text-xs text-warm-500">{error}</p>}
+        {error && <p className="mt-1 text-xs text-terracotta-600">{error}</p>}
       </td>
     </tr>
   )

@@ -188,11 +188,14 @@ export default function Profile() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Profile & Settings</h1>
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Grow</p>
+        <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
+          Profile & Settings<span className="text-gold">.</span>
+        </h1>
         <p className="text-ink-soft">Tell us about your classroom so coaching can be more relevant.</p>
       </div>
 
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-ink">Plan</h2>
@@ -207,7 +210,7 @@ export default function Profile() {
               type="button"
               onClick={handleManageBilling}
               disabled={billingLoading}
-              className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
+              className="rounded-lg border border-hairline px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-60"
             >
               {billingLoading ? 'Opening...' : 'Manage subscription'}
             </button>
@@ -216,16 +219,16 @@ export default function Profile() {
               type="button"
               onClick={handleUpgrade}
               disabled={billingLoading}
-              className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+              className="rounded-lg bg-terracotta px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-60"
             >
               {billingLoading ? 'Please wait...' : 'Upgrade to Wivoza Plus — $9/month'}
             </button>
           )}
         </div>
-        {billingError && <p className="mt-2 text-sm text-warm-500">{billingError}</p>}
+        {billingError && <p className="mt-2 text-sm text-terracotta-600">{billingError}</p>}
       </div>
 
-      <form onSubmit={handleSave} className="flex flex-col gap-5 rounded-2xl border border-border bg-surface p-6">
+      <form onSubmit={handleSave} className="flex flex-col gap-5 rounded-2xl border border-hairline bg-cream-card p-6">
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-ink">Name</span>
           <input
@@ -236,7 +239,7 @@ export default function Profile() {
               setSaved(false)
             }}
             placeholder="Your name"
-            className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none"
+            className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none"
           />
         </label>
 
@@ -250,7 +253,7 @@ export default function Profile() {
               setSaved(false)
             }}
             placeholder="e.g. 7th, 8th grade"
-            className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none"
+            className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none"
           />
         </label>
 
@@ -264,7 +267,7 @@ export default function Profile() {
               setSaved(false)
             }}
             placeholder="e.g. Math, Science"
-            className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none"
+            className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none"
           />
         </label>
 
@@ -272,16 +275,16 @@ export default function Profile() {
           <button
             type="submit"
             disabled={saving}
-            className="self-start rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+            className="self-start rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-60"
           >
             {saving ? 'Saving...' : 'Save changes'}
           </button>
-          {saved && <span className="text-sm text-brand-600">Saved.</span>}
-          {saveError && <span className="text-sm text-warm-500">{saveError}</span>}
+          {saved && <span className="text-sm text-forest">Saved.</span>}
+          {saveError && <span className="text-sm text-terracotta-600">{saveError}</span>}
         </div>
       </form>
 
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
         <h2 className="text-sm font-semibold text-ink">What Coach remembers</h2>
         <p className="mt-1 text-sm text-ink-soft">
           Coach keeps a short, running note about your recurring strengths and any ongoing challenges, built from
@@ -289,7 +292,7 @@ export default function Profile() {
         </p>
 
         {coachMemory ? (
-          <p className="mt-3 rounded-lg border border-border bg-canvas p-4 text-sm text-ink-soft">{coachMemory}</p>
+          <p className="mt-3 rounded-lg border border-hairline bg-cream p-4 text-sm text-ink-soft">{coachMemory}</p>
         ) : (
           <p className="mt-3 text-sm text-ink-soft">Nothing yet — this builds up as you use these features.</p>
         )}
@@ -302,7 +305,7 @@ export default function Profile() {
               setCoachMemoryEnabled(e.target.checked)
               setSaved(false)
             }}
-            className="h-4 w-4 rounded border-border text-brand-500 focus:ring-brand-400"
+            className="h-4 w-4 rounded border-hairline text-terracotta focus:ring-terracotta/40"
           />
           Let Coach remember things between conversations
         </label>
@@ -314,16 +317,16 @@ export default function Profile() {
               type="button"
               onClick={handleClearMemory}
               disabled={clearingMemory}
-              className="rounded-lg border border-warm-500 px-4 py-2 text-sm font-semibold text-warm-500 transition-colors hover:bg-warm-100 disabled:opacity-60"
+              className="rounded-lg border border-terracotta px-4 py-2 text-sm font-semibold text-terracotta-600 transition-colors hover:bg-peach-tint disabled:opacity-60"
             >
               {clearingMemory ? 'Clearing...' : 'Clear what Coach remembers'}
             </button>
           </div>
         )}
-        {clearMemoryError && <p className="mt-2 text-sm text-warm-500">{clearMemoryError}</p>}
+        {clearMemoryError && <p className="mt-2 text-sm text-terracotta-600">{clearMemoryError}</p>}
       </div>
 
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
         <h2 className="text-sm font-semibold text-ink">Coach's voice</h2>
         <p className="mt-1 text-sm text-ink-soft">Choose which voice Coach speaks with in Talk It Through.</p>
         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -337,8 +340,8 @@ export default function Profile() {
               }}
               className={`rounded-lg border px-3.5 py-2.5 text-left text-sm transition-colors ${
                 (talkVoice ?? 'thalia') === v.value
-                  ? 'border-brand-500 bg-brand-50 text-brand-600'
-                  : 'border-border text-ink hover:border-brand-400'
+                  ? 'border-terracotta bg-mint-tint/60 text-forest'
+                  : 'border-hairline text-ink hover:border-terracotta/40'
               }`}
             >
               <span className="font-semibold">{v.label}</span>
@@ -349,7 +352,7 @@ export default function Profile() {
         <p className="mt-2 text-xs text-ink-soft">Use "Save changes" above to apply this.</p>
       </div>
 
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
         <h2 className="text-sm font-semibold text-ink">School</h2>
         {organizationName ? (
           <p className="mt-2 text-sm text-ink">
@@ -366,40 +369,40 @@ export default function Profile() {
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value)}
                 placeholder="School code"
-                className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none"
+                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none"
               />
               <button
                 type="submit"
                 disabled={joining || !joinCode.trim()}
-                className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                className="rounded-lg bg-terracotta px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
               >
                 {joining ? 'Joining...' : 'Join'}
               </button>
             </form>
-            {joinError && <p className="mt-2 text-sm text-warm-500">{joinError}</p>}
+            {joinError && <p className="mt-2 text-sm text-terracotta-600">{joinError}</p>}
           </>
         )}
       </div>
 
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
         <h2 className="text-sm font-semibold text-ink">More</h2>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <Link
             to="/cheat-sheet"
-            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+            className="rounded-lg border border-hairline px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
           >
             Your Cheat Sheet
           </Link>
           <Link
             to="/first-30-days"
-            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+            className="rounded-lg border border-hairline px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
           >
             First 30 Days
           </Link>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
         <h2 className="text-sm font-semibold text-ink">Data</h2>
         <p className="mt-1 text-sm text-ink-soft">
           Export your saved scenarios and starred Q&A, or clear your data from this device.
@@ -413,7 +416,7 @@ export default function Profile() {
               setAudioRetentionDays(e.target.value)
               setSaved(false)
             }}
-            className="w-fit rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none"
+            className="w-fit rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none"
           >
             <option value="">Keep indefinitely</option>
             <option value="7">Delete after 7 days</option>
@@ -428,7 +431,7 @@ export default function Profile() {
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <Link
             to="/export"
-            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+            className="rounded-lg border border-hairline px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
           >
             Export playbook
           </Link>
@@ -436,7 +439,7 @@ export default function Profile() {
             type="button"
             onClick={handleReset}
             disabled={resetting}
-            className="rounded-lg border border-warm-500 px-4 py-2 text-sm font-semibold text-warm-500 transition-colors hover:bg-warm-100 disabled:opacity-60"
+            className="rounded-lg border border-terracotta px-4 py-2 text-sm font-semibold text-terracotta-600 transition-colors hover:bg-peach-tint disabled:opacity-60"
           >
             {resetting ? 'Resetting...' : 'Reset & clear data'}
           </button>
@@ -444,14 +447,14 @@ export default function Profile() {
             type="button"
             onClick={handleDeleteAccount}
             disabled={deletingAccount}
-            className="rounded-lg bg-warm-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:opacity-90 disabled:opacity-60"
+            className="rounded-lg bg-terracotta px-4 py-2 text-sm font-semibold text-white transition-colors hover:opacity-90 disabled:opacity-60"
           >
             {deletingAccount ? 'Deleting...' : 'Delete account'}
           </button>
         </div>
-        {resetDone && <p className="mt-2 text-sm text-brand-600">Your data has been cleared.</p>}
-        {resetError && <p className="mt-2 text-sm text-warm-500">{resetError}</p>}
-        {deleteAccountError && <p className="mt-2 text-sm text-warm-500">{deleteAccountError}</p>}
+        {resetDone && <p className="mt-2 text-sm text-forest">Your data has been cleared.</p>}
+        {resetError && <p className="mt-2 text-sm text-terracotta-600">{resetError}</p>}
+        {deleteAccountError && <p className="mt-2 text-sm text-terracotta-600">{deleteAccountError}</p>}
       </div>
     </div>
   )

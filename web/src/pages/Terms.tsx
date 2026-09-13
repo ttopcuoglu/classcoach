@@ -3,7 +3,7 @@ import SupportChat from '../components/SupportChat'
 
 export default function Terms() {
   return (
-    <div className="min-h-screen bg-canvas px-6 py-10">
+    <div className="min-h-screen bg-cream px-6 py-10">
       <div className="mx-auto flex max-w-2xl flex-col gap-6">
         <Link to="/" className="text-sm font-medium text-ink-soft hover:text-ink">
           ← Back
