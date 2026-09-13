@@ -114,6 +114,16 @@ const MOMENTS = [
   },
 ]
 
+// Old pastel icon tints mapped onto the app's solid badge + tinted card pairs,
+// so the landing page's feature cards match the cards inside the app.
+const TINT_STYLES: Record<string, { badge: string; card: string; ink: string }> = {
+  'bg-mint-tint text-forest': { badge: 'bg-forest text-gold', card: 'bg-mint-tint/50', ink: 'text-forest' },
+  'bg-peach-tint text-terracotta': { badge: 'bg-terracotta text-cream', card: 'bg-peach-tint/50', ink: 'text-terracotta-600' },
+  'bg-gold-tint text-terracotta-600': { badge: 'bg-gold text-forest', card: 'bg-gold-tint/50', ink: 'text-terracotta-600' },
+  'bg-lavender-tint text-[#6B5FA0]': { badge: 'bg-forest text-gold', card: 'bg-mint-tint/50', ink: 'text-forest' },
+}
+const COLUMN_BADGES = ['bg-gold text-forest', 'bg-terracotta text-cream', 'bg-forest text-gold']
+
 const VALUE_PROPS = ['Private by design', 'Judgment-free', 'Built for busy educators', 'Actionable, not overwhelming']
 
 // Sample reports. A shrunken screenshot of a page shows the shape of a report
@@ -176,7 +186,7 @@ function SampleCard({ feature, eyebrow, title, before, after, pdf }: (typeof SAM
     >
       {/* Title first, held to two lines, so the three cards line up across the
           row no matter how long each excerpt below runs. */}
-      <span className="text-xs font-semibold uppercase tracking-wide text-terracotta">{feature}</span>
+      <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">{feature}</span>
       <h3 className="mt-2 min-h-[3.25rem] font-heading text-lg font-bold leading-snug text-forest">{title}</h3>
 
       {/* A small replica of the printed report: its cover band, then the moment. */}
@@ -225,23 +235,26 @@ function DeviceMockup() {
           <p className="text-xs text-ink-soft">Private coaching session</p>
           <LockIcon className="h-4 w-4 text-ink-soft" />
         </div>
-        <div className="flex flex-col items-center gap-3 rounded-xl bg-cream px-8 py-10 text-center">
-          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-mint-tint">
-            <MicIcon className="h-7 w-7 text-forest" />
+        <div className="flex flex-col items-center gap-3 rounded-xl bg-forest px-8 py-10 text-center text-cream">
+          <span className="relative flex h-16 w-16 items-center justify-center rounded-full border border-gold/50 bg-gold/20">
+            <span aria-hidden="true" className="absolute -inset-3 -z-0 rounded-full bg-gold/15 blur-xl" />
+            <MicIcon className="relative h-7 w-7 text-gold" />
           </span>
-          <p className="text-xs font-semibold uppercase tracking-wide text-terracotta">Wivoza Coach</p>
-          <h3 className="font-heading text-xl font-bold text-forest">What&rsquo;s on your mind?</h3>
-          <p className="text-sm text-ink-soft">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Wivoza Coach</p>
+          <h3 className="font-heading text-xl font-bold text-cream">
+            What&rsquo;s on your mind<span className="text-gold">?</span>
+          </h3>
+          <p className="text-sm text-cream/70">
             Talk through a classroom moment, lesson idea, or conversation you want to prepare for.
           </p>
           <div className="flex items-end gap-1 py-2" aria-hidden="true">
             {[10, 18, 26, 16, 22, 12].map((h, i) => (
-              <span key={i} className="w-1.5 rounded-full bg-forest" style={{ height: `${h}px` }} />
+              <span key={i} className="w-1.5 rounded-full bg-gold" style={{ height: `${h}px` }} />
             ))}
           </div>
           <button
             type="button"
-            className="rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-cream"
+            className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream shadow-lg"
             tabIndex={-1}
           >
             Start a private check-in
@@ -249,9 +262,9 @@ function DeviceMockup() {
         </div>
       </div>
 
-      <div className="absolute -left-8 top-16 flex items-center gap-2 rounded-xl border border-hairline bg-cream-card px-3.5 py-2.5 shadow-lg sm:-left-14">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-mint-tint">
-          <ArrowRightIcon className="h-4 w-4 -rotate-45 text-forest" />
+      <div className="absolute -left-4 -top-6 flex items-center gap-2 rounded-xl border border-hairline bg-cream-card px-3.5 py-2.5 shadow-lg sm:-left-14 sm:top-16">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-forest">
+          <ArrowRightIcon className="h-4 w-4 -rotate-45 text-gold" />
         </span>
         <div className="text-left">
           <p className="text-sm font-bold text-ink">More student voice</p>
@@ -259,9 +272,9 @@ function DeviceMockup() {
         </div>
       </div>
 
-      <div className="absolute -right-6 bottom-10 flex items-center gap-2 rounded-xl border border-hairline bg-cream-card px-3.5 py-2.5 shadow-lg sm:-right-12">
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gold-tint">
-          <CheckIcon className="h-4 w-4 text-terracotta-600" />
+      <div className="absolute -bottom-5 -right-3 flex items-center gap-2 rounded-xl border border-hairline bg-cream-card px-3.5 py-2.5 shadow-lg sm:-right-12 sm:bottom-10">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gold">
+          <CheckIcon className="h-4 w-4 text-forest" />
         </span>
         <p className="text-sm font-medium text-ink">Next step saved</p>
       </div>
@@ -422,7 +435,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             <div className="mt-8 flex flex-wrap items-center gap-6">
               <a
                 href="#get-started"
-                className="flex items-center gap-2 rounded-full bg-terracotta px-6 py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                className="flex items-center gap-2 rounded-full bg-terracotta px-6 py-3.5 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90"
               >
                 Start free
                 <ArrowRightIcon className="h-4 w-4" />
@@ -463,7 +476,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       {/* Intro video */}
       <section id="see-it" className="mx-auto w-full max-w-4xl scroll-mt-20 px-6 pt-16">
         <div className="mx-auto mb-8 max-w-2xl text-center">
-          <span className="text-xs font-semibold uppercase tracking-wide text-terracotta">See it in action</span>
+          <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">See it in action</span>
           <h2 className="mt-3 font-heading text-3xl font-extrabold text-forest sm:text-4xl">
             Meet your coach.
           </h2>
@@ -488,16 +501,16 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
         <div className="grid gap-6 sm:grid-cols-3">
           {PROCESS.map(({ icon: Icon, tint, title, description }, index) => (
             <div key={title} className="relative flex items-start gap-6 sm:block">
-              <div className="flex-1 rounded-2xl border border-hairline bg-cream-card p-7 shadow-sm">
+              <div className={`flex-1 rounded-3xl p-7 ${TINT_STYLES[tint].card}`}>
                 <div className="flex items-start justify-between">
-                  <span className={`flex h-12 w-12 items-center justify-center rounded-xl ${tint}`}>
+                  <span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${TINT_STYLES[tint].badge}`}>
                     <Icon className="h-6 w-6" />
                   </span>
-                  <span className="font-heading text-3xl font-extrabold text-hairline">
+                  <span className="font-heading text-3xl font-extrabold text-forest/15">
                     {String(index + 1).padStart(2, '0')}
                   </span>
                 </div>
-                <h3 className="mt-5 font-heading text-lg font-bold text-forest">{title}</h3>
+                <h3 className="mt-5 font-heading text-xl font-bold text-forest">{title}</h3>
                 <p className="mt-2 text-sm text-ink-soft">{description}</p>
               </div>
               {index < PROCESS.length - 1 && (
@@ -512,7 +525,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       <section id="what-you-can-do" className="bg-mint-tint/50 py-16">
         <div className="mx-auto w-full max-w-6xl px-6">
           <div className="mx-auto mb-11 max-w-2xl text-center">
-            <span className="text-xs font-semibold uppercase tracking-wide text-terracotta">
+            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
               One coach. The whole practice.
             </span>
             <h2 className="mt-3 font-heading text-3xl font-extrabold leading-tight text-forest sm:text-4xl">
@@ -525,17 +538,26 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-3">
-            {MOMENTS.map(({ moment, when, features }) => (
+            {MOMENTS.map(({ moment, when, features }, columnIndex) => (
               <div key={moment} className="flex flex-col">
-                <h3 className="font-heading text-xl font-extrabold text-forest">{moment}</h3>
-                <p className="mt-1 text-sm text-ink-soft">{when}</p>
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl font-heading text-base font-bold ${
+                      COLUMN_BADGES[columnIndex % COLUMN_BADGES.length]
+                    }`}
+                  >
+                    {columnIndex + 1}
+                  </span>
+                  <h3 className="font-heading text-xl font-extrabold text-forest">{moment}</h3>
+                </div>
+                <p className="mt-2 text-sm text-ink-soft">{when}</p>
                 <div className="mt-4 flex flex-1 flex-col gap-3">
                   {features.map(({ icon: Icon, tint, title, slug, description }) => (
                     <div
                       key={title}
-                      className="flex flex-1 items-start gap-4 rounded-2xl border border-hairline bg-cream-card p-5 shadow-sm"
+                      className="flex flex-1 items-start gap-4 rounded-3xl bg-cream-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
                     >
-                      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${tint}`}>
+                      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${TINT_STYLES[tint].badge}`}>
                         <Icon className="h-5 w-5" />
                       </span>
                       <div className="min-w-0 flex-1">
@@ -577,7 +599,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       {/* Sample reports */}
       <section id="samples" className="mx-auto w-full max-w-6xl px-6 pt-16">
         <div className="mx-auto mb-10 max-w-2xl text-center">
-          <span className="text-xs font-semibold uppercase tracking-wide text-terracotta">Example results</span>
+          <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Example results</span>
           <h2 className="mt-3 font-heading text-3xl font-extrabold text-forest sm:text-4xl">
             See what you walk away with.
           </h2>
@@ -651,7 +673,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       <section id="pricing" className="bg-mint-tint/50 py-16">
         <div className="mx-auto w-full max-w-6xl px-6">
           <div className="mx-auto mb-11 max-w-2xl text-center">
-            <span className="text-xs font-semibold uppercase tracking-wide text-terracotta">
+            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
               Simple, honest pricing
             </span>
             <h2 className="mt-3 font-heading text-3xl font-extrabold text-forest sm:text-4xl">
@@ -782,7 +804,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-gold text-forest">
               <ChartBarIcon className="h-5 w-5" />
             </span>
-            <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-terracotta">
+            <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
               Your next great lesson starts here
             </p>
             <h2 className="mt-3 font-heading text-3xl font-extrabold leading-tight text-forest sm:text-4xl">
