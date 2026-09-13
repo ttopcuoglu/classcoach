@@ -85,12 +85,13 @@ type VisualState = 'idle' | 'error' | 'listening' | 'thinking' | 'speaking'
 // the eye tracked. A person you are talking to does not change colour when
 // it is their turn. Only error still breaks the palette, because that one
 // genuinely needs to interrupt.
+// The orb sits on the dark green stage card, so the one shared colour is gold.
 const STATE_STYLES: Record<VisualState, { glow: string; orb: string; dot: string }> = {
-  listening: { glow: 'bg-mint-tint', orb: 'border-mint-tint bg-mint-tint/80', dot: 'bg-forest' },
-  thinking: { glow: 'bg-mint-tint/60', orb: 'border-mint-tint/70 bg-mint-tint/50', dot: 'bg-forest/60' },
-  speaking: { glow: 'bg-mint-tint/80', orb: 'border-mint-tint bg-mint-tint/65', dot: 'bg-forest' },
-  idle: { glow: 'bg-cream-card', orb: 'border-hairline bg-cream-card', dot: 'bg-ink-soft' },
-  error: { glow: 'bg-peach-tint', orb: 'border-peach-tint bg-peach-tint', dot: 'bg-terracotta' },
+  listening: { glow: 'bg-gold/30', orb: 'border-gold/50 bg-gold/20', dot: 'bg-gold' },
+  thinking: { glow: 'bg-gold/15', orb: 'border-gold/30 bg-gold/10', dot: 'bg-gold/70' },
+  speaking: { glow: 'bg-gold/25', orb: 'border-gold/50 bg-gold/15', dot: 'bg-gold' },
+  idle: { glow: 'bg-cream/5', orb: 'border-cream/15 bg-cream/5', dot: 'bg-cream/50' },
+  error: { glow: 'bg-terracotta/30', orb: 'border-terracotta/60 bg-terracotta/20', dot: 'bg-terracotta' },
 }
 
 function statusLabel(state: VisualState, hasConversation: boolean): string {
@@ -495,13 +496,14 @@ export default function TalkToMe() {
         style={{ position: 'fixed', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
       />
 
-      <header className="flex items-center justify-between border-b border-hairline bg-cream-card px-4 py-3">
-        <p className="font-heading text-base font-bold text-forest">
+      <header className="flex items-center justify-between bg-forest px-4 py-3 text-cream sm:px-6">
+        <p className="font-heading text-base font-bold text-cream">
           {isDebrief ? 'Debrief with Coach' : 'Talk to Coach'}
+          <span className="text-gold">.</span>
         </p>
         {/* A fast, no-questions-asked way out — deliberately distinct from
             "Finish session" below: this skips the takeaway entirely. */}
-        <button type="button" onClick={handleClose} className="text-sm font-medium text-ink-soft hover:text-ink">
+        <button type="button" onClick={handleClose} className="text-sm font-medium text-cream/70 hover:text-cream">
           Exit
         </button>
       </header>
@@ -528,36 +530,42 @@ export default function TalkToMe() {
               </div>
             ) : takeaway ? (
               <>
-                <div className="flex items-start justify-between gap-3">
-                  <h1 className="font-heading text-xl font-bold text-forest">
-                    {isDebrief ? "Here's your debrief" : "Here's your takeaway"}
-                  </h1>
+                <div className="flex items-start justify-between gap-3 rounded-3xl bg-forest p-6 text-cream">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">
+                      {isDebrief ? 'Lesson Debrief · Reflect' : 'Talk It Through'}
+                    </p>
+                    <h1 className="mt-2 font-heading text-2xl font-bold text-cream">
+                      {isDebrief ? "Here's your debrief" : "Here's your takeaway"}
+                      <span className="text-gold">.</span>
+                    </h1>
+                  </div>
                   <button
                     type="button"
                     hidden={isDebrief}
                     onClick={handleToggleSaved}
                     className={`flex shrink-0 items-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-xs font-semibold transition-colors ${
                       debrief?.saved
-                        ? 'border-terracotta bg-peach-tint text-terracotta-600'
-                        : 'border-hairline bg-cream-card text-ink-soft hover:border-terracotta hover:text-terracotta-600'
+                        ? 'border-gold bg-gold text-forest'
+                        : 'border-cream/25 text-cream/80 hover:border-cream hover:text-cream'
                     }`}
                   >
                     <StarIcon className="h-3.5 w-3.5" filled={debrief?.saved} />
                     {debrief?.saved ? 'Saved' : 'Save'}
                   </button>
                 </div>
-                <div className="flex flex-col gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-forest">What we explored</p>
-                    <p className="mt-1 text-sm text-ink">{takeaway.explored}</p>
+                <div className="flex flex-col gap-3">
+                  <div className="rounded-2xl bg-mint-tint/50 p-5">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">What we explored</p>
+                    <p className="mt-1.5 text-sm text-ink">{takeaway.explored}</p>
                   </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">What I'll try</p>
-                    <p className="mt-1 text-sm text-ink">{takeaway.tryNext}</p>
+                  <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">What I'll try</p>
+                    <p className="mt-1.5 text-sm text-ink">{takeaway.tryNext}</p>
                   </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">What I'll notice</p>
-                    <p className="mt-1 text-sm text-ink">{takeaway.notice}</p>
+                  <div className="rounded-2xl bg-peach-tint/50 p-5">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">What I'll notice</p>
+                    <p className="mt-1.5 text-sm text-ink">{takeaway.notice}</p>
                   </div>
                 </div>
               </>
@@ -566,7 +574,7 @@ export default function TalkToMe() {
               <div className="flex flex-col gap-3 border-t border-hairline pt-4">
                 {nextStepOpen ? (
                   <div className="flex flex-col gap-2 text-left">
-                    <label htmlFor="next-step" className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">
+                    <label htmlFor="next-step" className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
                       Your next step
                     </label>
                     <textarea
@@ -583,7 +591,7 @@ export default function TalkToMe() {
                         type="button"
                         onClick={handleSaveNextStep}
                         disabled={!nextStepDraft.trim()}
-                        className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+                        className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
                       >
                         Save next step
                       </button>
@@ -648,8 +656,8 @@ export default function TalkToMe() {
                   </div>
                 )}
                 {debrief?.reflectionNote && !nextStepOpen && (
-                  <div className="rounded-xl bg-mint-tint/40 p-4 text-left">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-forest">Your next step</p>
+                  <div className="rounded-2xl bg-mint-tint/50 p-5 text-left">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">Your next step</p>
                     <p className="mt-1 text-sm text-ink">{debrief.reflectionNote}</p>
                   </div>
                 )}
@@ -673,7 +681,7 @@ export default function TalkToMe() {
           </div>
         ) : (
           <>
-            <div className="flex flex-col items-center gap-4">
+            <div className="flex w-full max-w-md flex-col items-center gap-4 rounded-3xl bg-forest px-6 py-8 text-cream shadow-sm">
               <div className="relative flex h-36 w-36 items-center justify-center">
                 <span
                   aria-hidden="true"
@@ -682,14 +690,14 @@ export default function TalkToMe() {
                 {visualState === 'listening' && (
                   <span
                     aria-hidden="true"
-                    className="absolute h-28 w-28 rounded-full border-2 border-forest/30 transition-transform duration-150 ease-out"
+                    className="absolute h-28 w-28 rounded-full border-2 border-gold/40 transition-transform duration-150 ease-out"
                     style={{ transform: `scale(${1 + Math.min(level, 100) / 130})` }}
                   />
                 )}
                 <div
                   className={`relative flex h-28 w-28 items-center justify-center rounded-full border shadow-sm transition-colors duration-500 ${STATE_STYLES[visualState].orb}`}
                 >
-                  {visualState === 'listening' && <MicIcon className="h-10 w-10 text-forest" />}
+                  {visualState === 'listening' && <MicIcon className="h-10 w-10 text-gold" />}
                   {visualState === 'thinking' && (
                     // Three settling dots, the same shape every messaging app
                     // uses for "they are typing" — it reads as the other side
@@ -699,7 +707,7 @@ export default function TalkToMe() {
                       {[0, 160, 320].map((delay) => (
                         <span
                           key={delay}
-                          className="h-2 w-2 animate-bounce rounded-full bg-forest/50"
+                          className="h-2 w-2 animate-bounce rounded-full bg-gold/70"
                           style={{ animationDelay: `${delay}ms` }}
                         />
                       ))}
@@ -710,14 +718,14 @@ export default function TalkToMe() {
                       {[10, 22, 14, 28, 16].map((barHeight, i) => (
                         <span
                           key={barHeight}
-                          className="w-1.5 animate-pulse rounded-full bg-forest/70"
+                          className="w-1.5 animate-pulse rounded-full bg-gold"
                           style={{ height: `${barHeight}px`, animationDelay: `${i * 120}ms` }}
                         />
                       ))}
                     </span>
                   )}
-                  {visualState === 'idle' && <MicIcon className="h-10 w-10 text-ink-soft" />}
-                  {visualState === 'error' && <WarningIcon className="h-10 w-10 text-terracotta-600" />}
+                  {visualState === 'idle' && <MicIcon className="h-10 w-10 text-cream/80" />}
+                  {visualState === 'error' && <WarningIcon className="h-10 w-10 text-peach-tint" />}
                 </div>
               </div>
               {/* A filled chip that changed colour on every turn was competing
@@ -729,7 +737,7 @@ export default function TalkToMe() {
               <div
                 aria-live="polite"
                 className={`flex items-center gap-2 text-xs font-medium transition-colors duration-500 ${
-                  visualState === 'error' ? 'text-terracotta-600' : 'text-ink-soft'
+                  visualState === 'error' ? 'text-peach-tint' : 'text-cream/70'
                 }`}
               >
                 <span
@@ -741,25 +749,27 @@ export default function TalkToMe() {
                 {statusLabel(visualState, debrief != null)}
               </div>
 
-            </div>
-
-            {!debrief && phase === 'idle' && !showTypeInput ? (
-              <div className="flex w-full max-w-md flex-col gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+              {!debrief && phase === 'idle' && !showTypeInput && (
+                <div className="mt-2">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">
                     {isDebrief ? 'Debrief' : 'A moment for your teaching'}
                   </p>
-                  <h1 className="mt-1 font-heading text-2xl font-bold text-forest">
+                  <h1 className="mt-2 font-heading text-2xl font-bold text-cream sm:text-3xl">
                     {isDebrief ? 'How did it go?' : "What's on your mind today?"}
                   </h1>
-                  <p className="mt-1.5 text-sm text-ink-soft">
+                  <p className="mt-1.5 text-sm text-cream/70">
                     {isDebrief
                       ? "Start wherever you like — Coach will walk through the rest with you."
                       : 'Talk through a challenge, find the right words, or reflect on your day.'}
                   </p>
                 </div>
+              )}
+            </div>
+
+            {!debrief && phase === 'idle' && !showTypeInput ? (
+              <div className="flex w-full max-w-md flex-col gap-4">
                 {isDebrief && (
-                  <ul className="flex flex-col gap-1.5 rounded-xl bg-mint-tint/40 p-4 text-left">
+                  <ul className="flex flex-col gap-1.5 rounded-2xl bg-mint-tint/50 p-5 text-left">
                     {DEBRIEF_QUESTIONS.map((question) => (
                       <li key={question} className="text-sm text-forest">
                         {question}
@@ -768,14 +778,17 @@ export default function TalkToMe() {
                   </ul>
                 )}
                 <div className="flex flex-col gap-2">
-                  {(isDebrief ? DEBRIEF_PROMPTS : EXAMPLE_PROMPTS).map((prompt) => (
+                  {(isDebrief ? DEBRIEF_PROMPTS : EXAMPLE_PROMPTS).map((prompt, i) => (
                     <button
                       key={prompt}
                       type="button"
                       onClick={() => submitText(prompt)}
-                      className="rounded-xl border border-hairline bg-cream-card px-4 py-3 text-left text-sm text-ink-soft transition-colors hover:border-terracotta/40 hover:text-ink"
+                      className={`group flex items-center justify-between gap-3 rounded-2xl px-4 py-3.5 text-left text-sm font-medium text-forest transition-shadow hover:shadow-md ${
+                        ['bg-peach-tint/60', 'bg-gold-tint/60', 'bg-mint-tint/60', 'bg-peach-tint/30'][i % 4]
+                      }`}
                     >
                       "{prompt}"
+                      <span aria-hidden="true" className="text-terracotta transition-transform group-hover:translate-x-0.5">→</span>
                     </button>
                   ))}
                 </div>
@@ -791,7 +804,7 @@ export default function TalkToMe() {
 
                 {savedTalks.length > 0 && (
                   <div className="flex flex-col gap-2 text-left">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
                       Past conversations
                     </p>
                     <div className="flex flex-col gap-2">
@@ -805,14 +818,14 @@ export default function TalkToMe() {
             ) : (
               <div className="flex w-full max-w-md flex-col gap-3">
                 {userTranscript && (
-                  <div className="rounded-2xl border border-hairline bg-mint-tint/20 p-4 text-left">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-forest">You</p>
+                  <div className="rounded-2xl border border-hairline bg-cream-card p-5 text-left">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">You</p>
                     <p className="mt-1.5 text-sm text-ink">{userTranscript}</p>
                   </div>
                 )}
                 {lastAssistant && (
-                  <div className="rounded-2xl border border-hairline bg-cream-card p-4 text-left">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coach</p>
+                  <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5 text-left">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Coach</p>
                     <p className="mt-1.5 text-sm text-ink">{lastAssistant.text}</p>
                   </div>
                 )}
@@ -839,7 +852,7 @@ export default function TalkToMe() {
                 <button
                   type="submit"
                   disabled={!typedDraft.trim()}
-                  className="rounded-full bg-terracotta px-5 py-3 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+                  className="rounded-full bg-terracotta px-5 py-3 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
                 >
                   Send
                 </button>
@@ -921,7 +934,7 @@ function SavedTalkCard({ debrief, onContinue }: { debrief: Debrief; onContinue: 
   const turnsUsed = (debrief.conversation ?? []).filter((m) => m.role === 'user').length
   const full = turnsUsed >= TALK_TURN_CAP
   return (
-    <div className="rounded-xl border border-hairline bg-cream-card p-4">
+    <div className="rounded-2xl border border-hairline bg-cream-card p-4 transition-colors hover:border-terracotta/40">
       <div className="flex w-full items-start justify-between gap-3 text-left">
         <button type="button" onClick={() => setExpanded((e) => !e)} className="flex-1 text-left">
           <p className="text-sm text-ink">{debrief.incidentText}</p>
@@ -958,15 +971,15 @@ function SavedTalkCard({ debrief, onContinue }: { debrief: Debrief; onContinue: 
           {takeaway ? (
             <>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-forest">What we explored</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">What we explored</p>
                 <p className="mt-1 text-sm text-ink">{takeaway.explored}</p>
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">What I'll try</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">What I'll try</p>
                 <p className="mt-1 text-sm text-ink">{takeaway.tryNext}</p>
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">What I'll notice</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">What I'll notice</p>
                 <p className="mt-1 text-sm text-ink">{takeaway.notice}</p>
               </div>
             </>
