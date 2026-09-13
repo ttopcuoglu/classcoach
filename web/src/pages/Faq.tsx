@@ -137,7 +137,7 @@ export default function Faq() {
               to="/#get-started"
               className="flex items-center gap-1.5 rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
             >
-              Try Wivoza
+              Start free
               <ArrowRightIcon className="h-3.5 w-3.5" />
             </Link>
           </div>
@@ -210,7 +210,7 @@ export default function Faq() {
             to="/#get-started"
             className="flex items-center gap-2 rounded-full bg-terracotta px-6 py-3.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
           >
-            Start growing—free
+            Start free
             <ArrowRightIcon className="h-4 w-4" />
           </Link>
         </div>

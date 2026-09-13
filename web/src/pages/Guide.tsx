@@ -1,5 +1,7 @@
-import { Link } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import SupportChat from '../components/SupportChat'
+import { TrainingLibrary } from '../components/TrainingVideos'
 import {
   ArrowRightIcon,
   ArrowUpIcon,
@@ -362,6 +364,15 @@ const GROW: Chapter = {
 }
 
 export default function Guide() {
+  // The home page links straight to a video here (/guide#video-lesson-debrief).
+  // Arriving from another page, the browser tries to jump before this page has
+  // rendered, finds nothing, and stays at the top — so jump once it has.
+  const { hash } = useLocation()
+  useEffect(() => {
+    if (!hash) return
+    requestAnimationFrame(() => document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView())
+  }, [hash])
+
   return (
     <div className="min-h-screen bg-cream text-ink">
       <header className="border-b border-hairline bg-cream-card">
@@ -380,7 +391,7 @@ export default function Guide() {
               to="/#get-started"
               className="flex items-center gap-1.5 rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
             >
-              Try Wivoza
+              Start free
               <ArrowRightIcon className="h-3.5 w-3.5" />
             </Link>
           </div>
@@ -405,7 +416,7 @@ export default function Guide() {
       {/* Quick nav */}
       <nav className="border-y border-hairline bg-cream-card">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap justify-center gap-2 px-6 py-4">
-          {['Getting started', 'Coaching', 'Plan', 'Grow', 'Across the app', 'Privacy', 'For schools'].map((label) => (
+          {['Videos', 'Getting started', 'Coaching', 'Plan', 'Grow', 'Across the app', 'Privacy', 'For schools'].map((label) => (
             <a
               key={label}
               href={`#${label.toLowerCase().replace(/\s+/g, '-')}`}
@@ -416,6 +427,19 @@ export default function Guide() {
           ))}
         </div>
       </nav>
+
+      {/* Training videos — the full library, moved here from the home page */}
+      <section id="videos" className="mx-auto w-full max-w-6xl scroll-mt-20 px-6 pt-16">
+        <span className="rounded-full bg-gold-tint px-3 py-1 text-xs font-bold uppercase tracking-wide text-terracotta-600">
+          Training videos
+        </span>
+        <p className="mt-4 max-w-xl text-lg text-ink-soft">
+          Short walkthroughs of every feature. Start with setup, or jump to the one you need.
+        </p>
+        <div className="mt-8">
+          <TrainingLibrary />
+        </div>
+      </section>
 
       <div className="mx-auto w-full max-w-5xl px-6 py-16">
         {/* Getting started */}
@@ -601,7 +625,7 @@ export default function Guide() {
             to="/#get-started"
             className="flex items-center gap-2 rounded-full bg-terracotta px-6 py-3.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
           >
-            Start growing—free
+            Start free
             <ArrowRightIcon className="h-4 w-4" />
           </Link>
         </div>
