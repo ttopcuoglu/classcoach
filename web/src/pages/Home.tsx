@@ -25,6 +25,7 @@ import {
   type ScenarioAttempt,
 } from '../lib/api'
 import { pickDailyTip, type Mood } from '../lib/dailyTips'
+import { ACCENTS, ACCENT_CYCLE } from '../components/report'
 
 type IconComponent = (props: { className?: string }) => React.ReactElement
 
@@ -62,32 +63,29 @@ const ACTION_CARDS = [
   {
     to: '/talk-to-me',
     icon: HeadsetIcon,
-    tint: 'bg-mint-tint text-forest',
+    accent: ACCENTS.forest,
     tag: 'Live coach',
     title: 'Talk It Through',
     description: 'Think out loud. Your coach listens, asks, and helps you find a next step.',
     linkLabel: 'Start voice coaching',
-    linkClass: 'text-forest',
   },
   {
     to: '/audio-coaching',
     icon: MicIcon,
-    tint: 'bg-peach-tint text-terracotta',
+    accent: ACCENTS.terracotta,
     tag: 'Lesson reflection',
     title: 'Lesson Debrief',
     description: 'Record a class and turn classroom talk into focused, judgment-free feedback.',
     linkLabel: 'Record a lesson',
-    linkClass: 'text-terracotta',
   },
   {
     to: '/coach-chat',
     icon: ChatBubbleIcon,
-    tint: 'bg-gold-tint text-terracotta-600',
+    accent: ACCENTS.gold,
     tag: 'Safe practice',
     title: 'Ask & Practice',
     description: 'Ask a straight question, or rehearse a difficult classroom moment before it happens.',
     linkLabel: 'Ask or rehearse',
-    linkClass: 'text-terracotta-600',
   },
 ]
 
@@ -319,20 +317,41 @@ export default function Home() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="grid gap-6 rounded-3xl bg-forest p-6 text-cream sm:p-8 lg:grid-cols-[1.3fr_1fr] lg:items-center">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-terracotta">{dateLabel}</p>
-          <h1 className="mt-1 font-heading text-3xl font-extrabold text-forest sm:text-4xl">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">{dateLabel}</p>
+          <h1 className="mt-2 font-heading text-3xl font-extrabold text-cream sm:text-4xl">
             {greeting}
-            {firstName ? `, ${firstName}` : ''}.
+            {firstName ? `, ${firstName}` : ''}
+            <span className="text-gold">.</span>
           </h1>
-          <p className="mt-1 text-ink-soft">What would help you feel more prepared today?</p>
+          <p className="mt-1.5 text-cream/70">What would help you feel more prepared today?</p>
+        </div>
+        <div className="flex flex-col gap-4 rounded-2xl bg-cream/5 p-5 ring-1 ring-cream/10">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gold text-forest">
+              <nextStep.icon className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">
+                {isWelcomeBack ? 'Welcome back' : 'Your next step'}
+              </p>
+              <p className="mt-0.5 font-heading text-lg font-bold text-cream">{nextStep.title}</p>
+              <p className="text-sm text-cream/70">{nextStep.description}</p>
+            </div>
+          </div>
+          <Link
+            to={nextStep.to}
+            className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90"
+          >
+            {nextStep.linkLabel} →
+          </Link>
         </div>
       </div>
 
       {needsOnboarding && (
-        <div className="rounded-2xl border border-hairline bg-mint-tint/60 p-5">
-          <p className="text-sm font-semibold text-forest">Get more relevant coaching</p>
+        <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Get more relevant coaching</p>
           <p className="mt-1 text-sm text-ink">
             Add your grade level and subject to your profile so scenarios and advice fit your classroom.
           </p>
@@ -343,29 +362,39 @@ export default function Home() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-3">
-        {ACTION_CARDS.map(({ to, icon: Icon, tint, tag, title, description, linkLabel, linkClass }) => (
+        {ACTION_CARDS.map(({ to, icon: Icon, accent, tag, title, description, linkLabel }, i) => (
           <Link
             key={to}
             to={to}
-            className="group relative overflow-hidden rounded-2xl border border-hairline bg-cream-card p-6 shadow-sm transition-shadow hover:shadow-md"
+            className={`group flex flex-col rounded-3xl p-6 transition-all hover:-translate-y-0.5 hover:shadow-md ${accent.tint}`}
           >
-            <div className={`absolute -right-6 -top-6 h-20 w-20 rounded-full ${tint} opacity-60`} aria-hidden="true" />
-            <span className={`relative flex h-11 w-11 items-center justify-center rounded-xl ${tint}`}>
-              <Icon className="h-5 w-5" />
-            </span>
-            <p className="relative mt-4 text-xs font-semibold uppercase tracking-wide text-terracotta">{tag}</p>
-            <h2 className="relative mt-1.5 font-heading text-lg font-bold text-forest">{title}</h2>
-            <p className="relative mt-1.5 text-sm text-ink-soft">{description}</p>
-            <p className={`relative mt-4 text-sm font-semibold ${linkClass}`}>{linkLabel} ↗</p>
+            <div className="flex items-start justify-between">
+              <span
+                className={`flex h-12 w-12 items-center justify-center rounded-2xl ${accent.band} ${
+                  accent === ACCENTS.gold ? 'text-forest' : 'text-cream'
+                }`}
+              >
+                <Icon className="h-6 w-6" />
+              </span>
+              <span aria-hidden="true" className="font-heading text-3xl font-extrabold text-forest/15">
+                {String(i + 1).padStart(2, '0')}
+              </span>
+            </div>
+            <p className={`mt-5 text-[11px] font-bold uppercase tracking-[0.14em] ${accent.ink}`}>{tag}</p>
+            <h2 className="mt-1 font-heading text-xl font-bold text-forest">{title}</h2>
+            <p className="mt-1.5 flex-1 text-sm text-ink-soft">{description}</p>
+            <p className={`mt-4 text-sm font-semibold ${accent.ink}`}>
+              {linkLabel} <span className="inline-block transition-transform group-hover:translate-x-0.5">→</span>
+            </p>
           </Link>
         ))}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-        <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+        <div className="rounded-3xl border border-hairline bg-cream-card p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-terracotta">Your coaching path</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Your coaching path</p>
               <h2 className="mt-1 font-heading text-lg font-bold text-forest">One clear step at a time</h2>
             </div>
           </div>
@@ -373,40 +402,24 @@ export default function Home() {
             {COACHING_PATH.map((step, i) => (
               <div key={step.label} className="flex flex-1 items-start">
                 <div className="flex flex-col items-center text-center">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-hairline text-sm font-bold text-ink-soft">
+                  <span
+                    className={`flex h-10 w-10 items-center justify-center rounded-2xl font-heading text-base font-bold ${
+                      ACCENT_CYCLE[i % ACCENT_CYCLE.length].band
+                    } ${ACCENT_CYCLE[i % ACCENT_CYCLE.length] === ACCENTS.gold ? 'text-forest' : 'text-cream'}`}
+                  >
                     {i + 1}
                   </span>
                   <p className="mt-2 text-sm font-semibold text-forest">{step.label}</p>
-                  <p className="mt-0.5 max-w-[7rem] text-xs text-ink-soft">{step.description}</p>
+                  <p className="mt-0.5 hidden max-w-[7rem] text-xs text-ink-soft sm:block">{step.description}</p>
                 </div>
-                {i < COACHING_PATH.length - 1 && <div className="mt-4.5 h-px flex-1 bg-hairline" />}
+                {i < COACHING_PATH.length - 1 && <div className="mt-5 h-0.5 flex-1 rounded-full bg-hairline" />}
               </div>
             ))}
           </div>
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-cream p-4">
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-forest text-cream">
-                <nextStep.icon className="h-4 w-4" />
-              </span>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                  {isWelcomeBack ? 'Welcome back' : 'Next'}
-                </p>
-                <p className="text-sm font-semibold text-forest">{nextStep.title}</p>
-                <p className="text-xs text-ink-soft">{nextStep.description}</p>
-              </div>
-            </div>
-            <Link
-              to={nextStep.to}
-              className="rounded-full bg-forest px-4 py-2 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
-            >
-              {nextStep.linkLabel}
-            </Link>
-          </div>
         </div>
 
-        <div className="rounded-2xl border border-hairline bg-cream-card p-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-terracotta">This week</p>
+        <div className="rounded-3xl bg-mint-tint/50 p-6">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">This week</p>
           <h2 className="mt-1 font-heading text-lg font-bold text-forest">Your classroom pulse</h2>
           {latest?.studentTalkPct == null ? (
             <p className="mt-6 text-sm text-ink-soft">
@@ -430,7 +443,7 @@ export default function Home() {
                   {sparkline.map((s, i) => (
                     <div
                       key={s.id}
-                      className={`flex-1 rounded-t ${i === sparkline.length - 1 ? 'bg-forest' : 'bg-mint-tint'}`}
+                      className={`flex-1 rounded-t ${i === sparkline.length - 1 ? 'bg-forest' : 'bg-gold'}`}
                       style={{ height: `${Math.max(6, ((s.studentTalkPct ?? 0) / maxSpark) * 40)}px` }}
                     />
                   ))}
@@ -441,9 +454,10 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">How are you feeling today?</p>
-        <div className="mt-2.5 flex flex-wrap gap-2">
+      <div className="rounded-3xl border border-hairline bg-cream-card p-6">
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Check in</p>
+        <h2 className="mt-1 font-heading text-lg font-bold text-forest">How are you feeling today?</h2>
+        <div className="mt-3 flex flex-wrap gap-2">
           {MOODS.map(({ label, value }) => (
             <button
               key={value}
@@ -451,7 +465,7 @@ export default function Home() {
               onClick={() => handleMoodSelect(value)}
               className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                 mood === value
-                  ? 'border-terracotta bg-peach-tint text-terracotta-600'
+                  ? 'border-forest bg-forest text-cream'
                   : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
               }`}
             >
@@ -461,33 +475,33 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-hairline bg-gold-tint/50 p-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Daily tip</p>
-        <p className="mt-2 text-sm text-ink">{tip}</p>
+      <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-6">
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Daily tip</p>
+        <p className="mt-2 text-base text-ink">{tip}</p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Link
           to="/cheat-sheet"
-          className="flex items-center gap-3 rounded-xl border border-hairline bg-cream-card p-4 transition-shadow hover:shadow-sm"
+          className="group flex items-center gap-4 rounded-2xl bg-peach-tint/50 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gold-tint text-terracotta-600">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-terracotta text-cream">
             <StarIcon className="h-5 w-5" />
           </span>
           <div>
-            <p className="text-sm font-semibold text-forest">Your Cheat Sheet</p>
+            <p className="font-heading text-base font-bold text-forest">Your Cheat Sheet</p>
             <p className="text-xs text-ink-soft">Go-to phrases, auto-built from your saved content.</p>
           </div>
         </Link>
         <Link
           to="/first-30-days"
-          className="flex items-center gap-3 rounded-xl border border-hairline bg-cream-card p-4 transition-shadow hover:shadow-sm"
+          className="group flex items-center gap-4 rounded-2xl bg-mint-tint/50 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-lavender-tint text-[#6B5FA0]">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-forest text-gold">
             <ChecklistIcon className="h-5 w-5" />
           </span>
           <div>
-            <p className="text-sm font-semibold text-forest">First 30 Days</p>
+            <p className="font-heading text-base font-bold text-forest">First 30 Days</p>
             <p className="text-xs text-ink-soft">New teacher? Start your guided track.</p>
           </div>
         </Link>
@@ -495,26 +509,24 @@ export default function Home() {
 
       <div>
         <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wide text-terracotta">Pick up where you left off</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Pick up where you left off</p>
         </div>
         <h2 className="mt-1 font-heading text-lg font-bold text-forest">Recent work</h2>
         {loading ? (
           <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
         ) : activity.length === 0 ? (
-          <div className="mt-3 rounded-2xl border border-dashed border-hairline p-6 text-center text-sm text-ink-soft">
-            Nothing yet — completed scenarios and saved answers will show up here.
-          </div>
+          <p className="mt-2 text-sm text-ink-soft">Nothing yet — completed scenarios and saved answers will show up here.</p>
         ) : (
           <div className="mt-3 flex flex-col gap-2">
             {activity.map((item) => (
               <Link
                 key={item.id}
                 to={item.type === 'scenario' ? '/coach-chat' : '/coach-chat?tab=ask'}
-                className="flex items-start gap-3 rounded-xl border border-hairline bg-cream-card p-3.5 transition-shadow hover:shadow-sm"
+                className="flex items-start gap-3 rounded-2xl border border-hairline bg-cream-card p-4 transition-colors hover:border-terracotta/40"
               >
                 <span
-                  className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
-                    item.type === 'scenario' ? 'bg-gold-tint text-terracotta-600' : 'bg-mint-tint text-forest'
+                  className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
+                    item.type === 'scenario' ? 'bg-gold text-forest' : 'bg-forest text-gold'
                   }`}
                 >
                   {item.type === 'scenario' ? <BrainIcon className="h-3.5 w-3.5" /> : <ChatBubbleIcon className="h-3.5 w-3.5" />}
