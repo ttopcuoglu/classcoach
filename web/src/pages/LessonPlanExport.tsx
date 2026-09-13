@@ -25,6 +25,21 @@ const MODE_LABEL: Record<string, string> = {
   presentation: 'Review a Presentation',
 }
 
+// The extracted slide text is written for Claude, not for the teacher: image
+// slides carry a note telling the model it cannot see the picture, so it does
+// not invent what the picture shows (see formatSlidesAsText in
+// server/src/routes/lessonPlans.ts). That text is what gets saved, so a
+// printed review repeated "its visual content is not visible to you" on every
+// image slide — a sentence addressed to an AI, printed for a teacher.
+//
+// Rewritten here rather than at the source because the model still needs the
+// note in follow-up questions, and because it fixes reviews already saved.
+const AI_IMAGE_NOTE = /^(Slide \d+): \[This slide also contains at least one image — its visual content is not visible to you\.\]$/gm
+
+function slideTextForTeacher(text: string): string {
+  return text.replace(AI_IMAGE_NOTE, '$1 (includes an image):')
+}
+
 export default function LessonPlanExport() {
   const { id } = useParams<{ id: string }>()
   const [plan, setPlan] = useState<LessonPlan | null>(null)
@@ -128,7 +143,7 @@ export default function LessonPlanExport() {
 
       {isPresentation && plan.planText && (
         <ReportSection n={++n} title="Slide Text" blurb="The extracted text the review was based on." accent={A.forest}>
-          <Prose body={plan.planText} />
+          <Prose body={slideTextForTeacher(plan.planText)} />
         </ReportSection>
       )}
 

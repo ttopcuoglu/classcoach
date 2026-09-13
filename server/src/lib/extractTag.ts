@@ -1,6 +1,23 @@
+// The model sometimes misplaces a closing tag from a sibling field inside the
+// field it is writing — a real Assignment Coach review printed
+// "...rather than demonstrating deeper understanding. </meaningful_work_suggestion>"
+// to a teacher. The match itself was correct; the stray fragment was simply
+// inside it. So extracted content is cleaned of anything shaped like one of
+// our structural tags.
+//
+// Deliberately narrow: only snake_case names (every multi-field prompt uses
+// them, and sibling fields sharing a prefix are exactly the ones that get
+// confused), plus the requested tag itself. A plain <p> or <div> is left
+// alone, because a computer-science lesson can legitimately be about them.
+const STRUCTURAL_TAG = /<\/?[a-z]+(?:_[a-z]+)+>/g
+
 export function extractTag(text: string, tag: string): string | null {
   const match = text.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`))
-  return match ? match[1].trim() : null
+  if (!match) return null
+  return match[1]
+    .replace(STRUCTURAL_TAG, '')
+    .replace(new RegExp(`</?${tag}>`, 'g'), '')
+    .trim()
 }
 
 // For a route that treats Claude's whole raw response as the visible

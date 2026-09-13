@@ -26,9 +26,31 @@ export const ACCENTS: Record<'terracotta' | 'gold' | 'mint' | 'forest', Accent> 
 // teacher tells which page they are holding.
 export const ACCENT_CYCLE: Accent[] = [ACCENTS.terracotta, ACCENTS.gold, ACCENTS.mint, ACCENTS.forest]
 
+// Chrome prints its own header and footer — the date, the page title, and the
+// page's URL including the record's id — in the page margin, and every teacher
+// who prints with default settings gets them. It only omits them when the page
+// margin is zero. A zero margin alone puts page two's first line 0.6mm from the
+// paper edge, inside the area most printers cannot reach, so the report's own
+// padding is repeated on every page with box-decoration-break: clone.
+//
+// Wrapped in @supports so a browser that cannot repeat the padding (Safari)
+// skips the whole thing and prints exactly as it did before — never worse.
+// Rendered by the shell rather than put in index.css so the zero margin
+// applies only while a report is on screen, not to anything else printed.
+// Measured in Chrome: no header or footer, 14.6mm at the top of page two.
+const PRINT_PAGE_CSS = `
+@supports (box-decoration-break: clone) {
+  @page { margin: 0; }
+  @media print {
+    .report-print-page { padding: 14mm 12mm; box-decoration-break: clone; }
+  }
+}
+`
+
 export function ReportShell({ backTo, children }: { backTo: string; children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-cream px-6 py-8 text-ink print:bg-white print:p-0">
+    <div className="report-print-page min-h-screen bg-cream px-6 py-8 text-ink print:bg-white print:p-0">
+      <style>{PRINT_PAGE_CSS}</style>
       <div className="mx-auto w-full max-w-3xl">
         <div className="mb-6 flex items-center justify-between print:hidden">
           <Link to={backTo} className="text-sm font-medium text-ink-soft hover:text-ink">
@@ -150,11 +172,17 @@ export function Callout({ label, body, accent }: { label: string; body: string; 
   )
 }
 
-// Long free text (a lesson plan, a drafted message, a transcript turn). Kept
+// Long free text (a lesson plan, a drafted message, extracted slide text). Kept
 // on white so a full page of it stays readable in print.
+//
+// Unlike the cards, this one is allowed to break across pages. Keeping it whole
+// meant a submitted lesson plan too long for the space left on page one was
+// pushed entirely onto page two, leaving page one blank beneath the cover —
+// and anything longer than a page gets split regardless, so the rule bought
+// nothing in exchange.
 export function Prose({ body }: { body: string }) {
   return (
-    <div className="break-inside-avoid rounded-2xl border border-hairline bg-white p-5">
+    <div className="rounded-2xl border border-hairline bg-white p-5">
       <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{body}</p>
     </div>
   )
