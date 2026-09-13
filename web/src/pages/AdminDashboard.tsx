@@ -60,7 +60,7 @@ function schoolYearStart(): string {
 }
 
 const inputClass =
-  'rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60'
+  'rounded-xl border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60'
 
 const primaryButtonClass =
   'rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft'
@@ -76,7 +76,7 @@ const ANALYTICS_META: Record<AnalyticsTab, { title: string; subtitle: string }> 
 
 function navButtonClass(active: boolean) {
   return `flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
-    active ? 'bg-mint-tint/60 text-forest' : 'text-ink-soft hover:bg-cream hover:text-ink'
+    active ? 'bg-forest font-semibold text-cream' : 'text-ink-soft hover:bg-cream hover:text-ink'
   }`
 }
 
@@ -317,27 +317,30 @@ function FilterBar({
   const meta = ANALYTICS_META[tab]
   const presetButtonClass = (active: boolean) =>
     `rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
-      active ? 'bg-terracotta text-white' : 'bg-cream text-ink-soft hover:text-ink'
+      active ? 'bg-forest text-cream' : 'bg-cream text-ink-soft hover:text-ink'
     }`
 
   return (
     <div className="sticky top-0 z-10 -mx-4 flex flex-col gap-4 bg-cream px-4 pb-4 pt-1 md:-mx-10 md:px-10">
       <div>
         {overview?.organizationName ? (
-          <p className="text-xs font-semibold text-ink-soft">{overview.organizationName}</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">{overview.organizationName}</p>
         ) : (
-          <p className="text-xs font-semibold text-ink-soft">Platform-wide</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Platform-wide</p>
         )}
-        <h1 className="mt-0.5 font-heading text-2xl font-extrabold text-forest md:text-[34px]">{meta.title}</h1>
+        <h1 className="mt-0.5 font-heading text-2xl font-extrabold text-forest md:text-[34px]">
+          {meta.title}
+          <span className="text-gold">.</span>
+        </h1>
         <p className="mt-1 text-sm text-ink-soft">{meta.subtitle}</p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-hairline bg-cream-card p-2.5">
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-hairline bg-cream-card p-2.5 shadow-sm">
         {isSuperadmin && orgs.length > 0 && (
           <select
             value={selectedOrgId}
             onChange={(e) => onOrgChange(e.target.value)}
-            className="rounded-lg border border-hairline bg-cream px-2.5 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
+            className="rounded-xl border border-hairline bg-cream px-2.5 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
           >
             <option value="">Platform-wide</option>
             {orgs.map((org) => (
@@ -362,7 +365,7 @@ function FilterBar({
             value={startDate}
             max={endDate}
             onChange={(e) => onCustomDateChange('start', e.target.value)}
-            className="rounded-lg border border-hairline bg-cream px-2 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
+            className="rounded-xl border border-hairline bg-cream px-2 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
           />
           <span>to</span>
           <input
@@ -371,14 +374,14 @@ function FilterBar({
             min={startDate}
             max={defaultEndDate()}
             onChange={(e) => onCustomDateChange('end', e.target.value)}
-            className="rounded-lg border border-hairline bg-cream px-2 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
+            className="rounded-xl border border-hairline bg-cream px-2 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
           />
         </div>
 
         <select
           value={gradeBand}
           onChange={(e) => onGradeBandChange(e.target.value)}
-          className="rounded-lg border border-hairline bg-cream px-2.5 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
+          className="rounded-xl border border-hairline bg-cream px-2.5 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
         >
           <option value="">All grade bands</option>
           {GRADE_BAND_OPTIONS.map((g) => (
@@ -391,7 +394,7 @@ function FilterBar({
         <select
           value={subject}
           onChange={(e) => onSubjectChange(e.target.value)}
-          className="rounded-lg border border-hairline bg-cream px-2.5 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
+          className="rounded-xl border border-hairline bg-cream px-2.5 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
         >
           <option value="">All subjects</option>
           {SUBJECT_OPTIONS.map((s) => (
@@ -452,7 +455,7 @@ function WeeklyActivityChart({ data }: { data: { weekStart: string; activeCount:
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-ink">Weekly participation</h3>
+      <h3 className="font-heading text-base font-bold text-forest">Weekly participation</h3>
       <p className="text-xs text-ink-soft">Active teachers per week, last {n} weeks — count of teachers, not a percentage</p>
       <p className="mt-3 text-[10px] text-ink-soft">max {maxCount}</p>
       <div className="relative mt-6">
@@ -480,11 +483,25 @@ function WeeklyActivityChart({ data }: { data: { weekStart: string; activeCount:
   )
 }
 
+// Tinted like the report's stat tiles. The colour is picked from the label so
+// a given number keeps the same colour wherever it appears.
+const STAT_TINTS = [
+  { card: 'bg-peach-tint/60', ink: 'text-terracotta-600' },
+  { card: 'bg-gold-tint/60', ink: 'text-terracotta-600' },
+  { card: 'bg-mint-tint/60', ink: 'text-forest' },
+]
+function tintFor(label: string) {
+  let h = 0
+  for (const ch of label) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return STAT_TINTS[h % STAT_TINTS.length]
+}
+
 function StatCard({ label, value, sub }: { label: string; value: string; sub: string }) {
+  const tint = tintFor(label)
   return (
-    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-ink">{value}</p>
+    <div className={`rounded-2xl p-5 ${tint.card}`}>
+      <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${tint.ink}`}>{label}</p>
+      <p className="mt-1.5 font-heading text-3xl font-extrabold text-forest">{value}</p>
       <p className="mt-1 text-xs text-ink-soft">{sub}</p>
     </div>
   )
@@ -790,7 +807,7 @@ const PRIORITY_LABELS: Record<string, string> = {
 function AdminCoachNote({ text }: { text: string | null }) {
   if (!text) return null
   return (
-    <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-mint-tint bg-mint-tint/60 p-3">
+    <div className="mt-3 flex items-start gap-2.5 rounded-2xl bg-mint-tint/50 p-4">
       <ChatBubbleIcon className="mt-0.5 h-4 w-4 shrink-0 text-forest" />
       <p className="text-sm text-ink">{text}</p>
     </div>
@@ -934,8 +951,8 @@ function InstructionalAveragesCard({ data, insight }: { data: InstructionalAvera
       ? Math.max(0, Math.round(100 - data.avgTeacherTalkPct - data.avgStudentTalkPct))
       : null
   return (
-    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Instructional practice averages</h2>
+    <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+      <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Instructional practice averages</h2>
       <div className="mt-2 flex flex-col">
         <StatRow
           label="Average wait time after a question"
@@ -997,8 +1014,8 @@ function InstructionalAveragesCard({ data, insight }: { data: InstructionalAvera
 function ClimateAveragesCard({ data, insight }: { data: ClimateAverages; insight?: string | null }) {
   const sampleOr = (n: number, unit: string) => (n > 0 ? `based on ${n} ${unit}` : 'not enough data yet')
   return (
-    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+    <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+      <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
         Classroom climate &amp; management
       </h2>
       <div className="mt-2 flex flex-col">
@@ -1081,9 +1098,9 @@ function BreakdownCard({ selectedOrgId }: { selectedOrgId: string }) {
   const sampleOr = (n: number, unit: string) => (n > 0 ? `based on ${n} ${unit}` : 'not enough data yet')
 
   return (
-    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
+    <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+        <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
           Instructional averages, by grade or subject
         </h2>
         <div className="flex gap-1 rounded-lg bg-cream p-1">
@@ -1201,8 +1218,8 @@ function TallyBarList({
   )
 
   return (
-    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{title}</h2>
+    <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+      <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">{title}</h2>
       {comment && <p className="mt-1 text-xs text-ink-soft">{comment}</p>}
       {active.length > 0 ? (
         <div className="mt-3 flex flex-col gap-2">{active.map(row)}</div>
@@ -1253,11 +1270,11 @@ function InsightCard({
   onAction?: () => void
 }) {
   return (
-    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{eyebrow}</p>
+    <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
+      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">{eyebrow}</p>
       <p className="mt-2 text-sm text-ink">{body}</p>
       {actionLabel && onAction && (
-        <button type="button" onClick={onAction} className="mt-3 text-sm font-semibold text-forest hover:text-terracotta">
+        <button type="button" onClick={onAction} className="mt-3 text-sm font-semibold text-terracotta-600 hover:text-terracotta">
           {actionLabel} →
         </button>
       )}
@@ -1332,7 +1349,7 @@ function DashboardPanel({ overview, onNavigate }: { overview: AdminOverview; onN
 
       <AdoptionFunnelCard overview={overview} />
 
-      <div className="rounded-2xl border border-hairline bg-cream-card p-5">
+      <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
         <WeeklyActivityChart data={overview.weeklyActivity} />
       </div>
 
@@ -1354,8 +1371,8 @@ function AdoptionFunnelCard({ overview }: { overview: AdminOverview }) {
   ]
   const total = overview.totalTeachers
   return (
-    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Adoption funnel</h2>
+    <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+      <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Adoption funnel</h2>
       <p className="text-xs text-ink-soft">Where licensed staff actually stick with Wivoza</p>
       <div className="mt-3 flex flex-col gap-3">
         {stages.map(({ label, count }) => {
@@ -1382,8 +1399,8 @@ function AdoptionFunnelCard({ overview }: { overview: AdminOverview }) {
 function FeatureAdoptionCard({ data, totalTeachers }: { data: AdminOverview['featureAdoption']; totalTeachers: number }) {
   const entries = (Object.entries(data) as [keyof typeof data, number][]).sort((a, b) => b[1] - a[1])
   return (
-    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Feature adoption</h2>
+    <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+      <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Feature adoption</h2>
       <p className="text-xs text-ink-soft">Share of teachers who have tried each feature at least once, ever</p>
       <div className="mt-3 flex flex-col gap-3">
         {entries.map(([key, teacherCount]) => {
@@ -1410,8 +1427,8 @@ function FeatureAdoptionCard({ data, totalTeachers }: { data: AdminOverview['fea
 function EngagementPanel({ overview }: { overview: AdminOverview }) {
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Staff-wide growth signal</p>
+      <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Staff-wide growth signal</p>
         {overview.growth.recentTotal === 0 ? (
           <p className="mt-1 text-sm text-ink-soft">No rated practice this week yet.</p>
         ) : (
@@ -1467,8 +1484,8 @@ function TopNList({
 
 function StrengthsCard({ strengths }: { strengths: Strength[] }) {
   return (
-    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Top shared strengths</h2>
+    <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+      <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Top shared strengths</h2>
       {strengths.length === 0 ? (
         <p className="mt-2 text-sm text-ink-soft">Not enough data yet to confidently name a staff-wide strength.</p>
       ) : (
@@ -1539,8 +1556,8 @@ function CoachingInsightsPanel({ overview, selectedOrgId }: { overview: AdminOve
         <>
           <StrengthsCard strengths={overview.strengths} />
 
-          <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Top shared growth areas</h2>
+          <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Top shared growth areas</h2>
             <TopNList
               tally={overview.priorityTally}
               labelFor={(v) => PRIORITY_LABELS[v] ?? v}
@@ -1549,15 +1566,15 @@ function CoachingInsightsPanel({ overview, selectedOrgId }: { overview: AdminOve
             />
           </div>
 
-          <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+          <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
               Most practiced classroom situations
             </h2>
             <TopNList tally={overview.categoryTally} labelFor={categoryLabel} n={3} emptyText="No practice activity yet." />
           </div>
 
-          <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+          <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
               Most common communication needs
             </h2>
             <TopNList
@@ -1662,14 +1679,14 @@ function PeoplePanel({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-heading text-2xl font-extrabold text-forest md:text-[34px]">People</h1>
+          <h1 className="font-heading text-2xl font-extrabold text-forest md:text-[34px]">People<span className="text-gold">.</span></h1>
           <p className="mt-1 text-sm text-ink-soft">Your school&rsquo;s staff roster.</p>
         </div>
         {isSuperadmin && orgs.length > 0 && (
           <select
             value={selectedOrgId}
             onChange={(e) => onOrgChange(e.target.value)}
-            className="rounded-lg border border-hairline bg-cream px-3 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
+            className="rounded-xl border border-hairline bg-cream px-3 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
           >
             <option value="">Select an organization</option>
             {orgs.map((org) => (
@@ -1683,7 +1700,7 @@ function PeoplePanel({
       {!overview ? (
         <p className="text-sm text-ink-soft">Loading...</p>
       ) : overview.scope === 'organization' ? (
-        <div className="rounded-2xl border border-hairline bg-cream-card p-5">
+        <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
           <MembersList organizationId={selectedOrgId || undefined} isSuperadmin={isSuperadmin} />
         </div>
       ) : (
@@ -1715,7 +1732,7 @@ function PdFocusAreaPanel({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-heading text-2xl font-extrabold text-forest md:text-[34px]">Professional Learning</h1>
+          <h1 className="font-heading text-2xl font-extrabold text-forest md:text-[34px]">Professional Learning<span className="text-gold">.</span></h1>
           <p className="mt-1 text-sm text-ink-soft">
             Turn a shared coaching theme into something you can track over time.
           </p>
@@ -1724,7 +1741,7 @@ function PdFocusAreaPanel({
           <select
             value={selectedOrgId}
             onChange={(e) => onOrgChange(e.target.value)}
-            className="rounded-lg border border-hairline bg-cream px-3 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
+            className="rounded-xl border border-hairline bg-cream px-3 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
           >
             <option value="">Select an organization</option>
             {orgs.map((org) => (
@@ -1835,8 +1852,8 @@ function PdFocusAreaContent({ organizationId }: { organizationId?: string }) {
         </div>
       )}
 
-      <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">+ Track a new focus area</h2>
+      <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+        <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">+ Track a new focus area</h2>
         <p className="mt-1 text-xs text-ink-soft">
           Name a shared coaching theme to track over time — Wivoza snapshots the current evidence now, so you can
           check back against it later.
@@ -1869,7 +1886,7 @@ function PdFocusAreaContent({ organizationId }: { organizationId?: string }) {
       </div>
 
       {archived.length > 0 && (
-        <details className="rounded-2xl border border-hairline bg-cream-card p-5">
+        <details className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
           <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-ink-soft">
             Show {archived.length} archived
           </summary>
@@ -1905,10 +1922,10 @@ function FocusAreaCard({
 }) {
   const current = item.currentSnapshot
   return (
-    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
+    <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold text-ink">{item.title}</h3>
+          <h3 className="font-heading text-lg font-bold text-forest">{item.title}</h3>
           <p className="text-xs text-ink-soft">Started {formatShortDate(item.createdAt)}</p>
         </div>
         <button
@@ -1923,7 +1940,7 @@ function FocusAreaCard({
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">When you started</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">When you started</p>
           <p className="mt-1 flex items-center gap-1.5 text-sm text-ink">
             <span className="font-semibold">
               {item.baselineSnapshot.count}× · {item.baselineSnapshot.teachers} teacher
@@ -1933,7 +1950,7 @@ function FocusAreaCard({
           </p>
         </div>
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Now</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Now</p>
           {current == null || current.confidence === 'none' ? (
             <p className="mt-1 text-sm text-ink-soft">Not enough evidence yet</p>
           ) : (
@@ -2001,8 +2018,8 @@ function OrganizationsPanel() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-        <h2 className="text-sm font-semibold text-ink">Create organization</h2>
+      <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+        <h2 className="font-heading text-lg font-bold text-forest">Create organization</h2>
         <form onSubmit={handleCreate} className="mt-3 flex flex-col gap-3">
           <input
             value={name}
