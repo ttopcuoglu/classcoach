@@ -45,7 +45,7 @@ const PLAN_SECTIONS_AFTER_MODEL: { key: keyof NonNullable<ConversationPlan['plan
 
 function PlanSectionCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border bg-canvas p-4 print:border-ink/20">
+    <div className="rounded-xl border border-hairline bg-cream p-4 print:border-ink/20">
       <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
       <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{value}</p>
     </div>
@@ -185,11 +185,19 @@ export default function PrepareConversation() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Link to="/communications" className="text-sm font-medium text-ink-soft hover:text-ink">
-        ← Communication Coach
-      </Link>
+      <div className="flex flex-col gap-3">
+        <Link to="/communications" className="w-fit text-sm font-medium text-ink-soft hover:text-ink">
+          ← Communication Coach
+        </Link>
+        <div className="flex flex-col gap-1">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Communication Coach</p>
+          <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
+            Prepare for a Meeting<span className="text-gold">.</span>
+          </h1>
+        </div>
+      </div>
 
-      <div className="rounded-2xl border border-border bg-surface p-6 print:border-0 print:p-0">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-6 print:border-0 print:p-0">
         {!plan ? (
           <div className="flex flex-col gap-4">
             <label className="flex flex-col gap-1.5">
@@ -203,8 +211,8 @@ export default function PrepareConversation() {
                     disabled={submitting}
                     className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                       meetingType === m.value
-                        ? 'border-brand-500 bg-brand-50 text-brand-600'
-                        : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                        ? 'border-terracotta bg-mint-tint/60 text-forest'
+                        : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                     }`}
                   >
                     {m.label}
@@ -230,8 +238,8 @@ export default function PrepareConversation() {
                     aria-pressed={meetingFormat === f.value}
                     className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                       meetingFormat === f.value
-                        ? 'border-brand-500 bg-brand-50 text-brand-600'
-                        : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                        ? 'border-terracotta bg-mint-tint/60 text-forest'
+                        : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                     }`}
                   >
                     {f.label}
@@ -247,7 +255,7 @@ export default function PrepareConversation() {
                 onChange={(e) => setSituationText(e.target.value)}
                 disabled={submitting}
                 rows={3}
-                className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
             </label>
 
@@ -261,7 +269,7 @@ export default function PrepareConversation() {
                 onChange={(e) => setAttendees(e.target.value)}
                 disabled={submitting}
                 placeholder="e.g. Mom, Dad, the school counselor"
-                className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
             </label>
 
@@ -274,7 +282,7 @@ export default function PrepareConversation() {
                 onChange={(e) => setDesiredOutcome(e.target.value)}
                 disabled={submitting}
                 rows={2}
-                className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
             </label>
 
@@ -287,7 +295,7 @@ export default function PrepareConversation() {
                 onChange={(e) => setConcerns(e.target.value)}
                 disabled={submitting}
                 rows={2}
-                className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
             </label>
 
@@ -300,10 +308,10 @@ export default function PrepareConversation() {
                 onChange={(e) => setBackground(e.target.value)}
                 disabled={submitting}
                 rows={2}
-                className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
               <div className="flex items-center gap-3">
-                <label className="cursor-pointer text-sm font-medium text-ink-soft hover:text-brand-600">
+                <label className="cursor-pointer text-sm font-medium text-ink-soft hover:text-terracotta-600">
                   {uploading ? (
                     <span className="flex items-center gap-2">
                       <Spinner /> Reading file...
@@ -323,7 +331,7 @@ export default function PrepareConversation() {
                     }}
                   />
                 </label>
-                {uploadError && <p className="text-sm text-warm-500">{uploadError}</p>}
+                {uploadError && <p className="text-sm text-terracotta-600">{uploadError}</p>}
               </div>
             </label>
 
@@ -331,7 +339,7 @@ export default function PrepareConversation() {
             <PrivacyReminder />
 
             {submitting && (
-              <div className="flex justify-center py-1 text-brand-600">
+              <div className="flex justify-center py-1 text-forest">
                 <ProgressRing progress={workProgress} label="Building your meeting plan" hint="Twelve sections — usually about twenty seconds." />
               </div>
             )}
@@ -340,7 +348,7 @@ export default function PrepareConversation() {
               type="button"
               onClick={handleSubmit}
               disabled={!canSubmit}
-              className="self-end rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+              className="self-end rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
             >
               {submitting ? (
                 <span className="flex items-center gap-2">
@@ -363,7 +371,7 @@ export default function PrepareConversation() {
                     {[typePill, formatPill].filter(Boolean).map((pill) => (
                       <span
                         key={pill}
-                        className="rounded-full border border-border bg-canvas px-2.5 py-0.5 text-xs font-medium text-ink-soft print:border-ink/20"
+                        className="rounded-full border border-hairline bg-cream px-2.5 py-0.5 text-xs font-medium text-ink-soft print:border-ink/20"
                       >
                         {pill}
                       </span>
@@ -376,7 +384,7 @@ export default function PrepareConversation() {
                 type="button"
                 onClick={handleToggleSaved}
                 className={`flex shrink-0 items-center gap-1.5 text-sm font-medium print:hidden ${
-                  plan.saved ? 'text-warm-500' : 'text-ink-soft hover:text-warm-500'
+                  plan.saved ? 'text-terracotta-600' : 'text-ink-soft hover:text-terracotta-600'
                 }`}
               >
                 <StarIcon className="h-4 w-4" filled={plan.saved} />
@@ -393,8 +401,8 @@ export default function PrepareConversation() {
                 })}
 
               {plan.planContent?.modelResponse && (
-                <div className="rounded-xl border border-border bg-brand-50 p-4 print:border-ink/20">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">A model response</p>
+                <div className="rounded-xl border border-hairline bg-mint-tint/60 p-4 print:border-ink/20">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-forest">A model response</p>
                   <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{plan.planContent.modelResponse}</p>
                 </div>
               )}
@@ -445,7 +453,7 @@ export default function PrepareConversation() {
               <button
                 type="button"
                 onClick={handleNewPlan}
-                className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+                className="rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
               >
                 New Plan
               </button>
@@ -453,7 +461,7 @@ export default function PrepareConversation() {
           </div>
         )}
         {error && (
-          <p className="mt-4 text-center text-sm text-warm-500 print:hidden">
+          <p className="mt-4 text-center text-sm text-terracotta-600 print:hidden">
             <UpgradeMessage text={error} />
           </p>
         )}

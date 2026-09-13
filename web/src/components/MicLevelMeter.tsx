@@ -60,12 +60,12 @@ export default function MicLevelMeter({ onSignalDetected }: { onSignalDetected?:
   }, [])
 
   if (error) {
-    return <p className="text-sm text-warm-500">{error}</p>
+    return <p className="text-sm text-terracotta-600">{error}</p>
   }
 
   return (
-    <div className="h-3 w-full overflow-hidden rounded-full bg-canvas">
-      <div className="h-full rounded-full bg-brand-500 transition-[width]" style={{ width: `${level}%` }} />
+    <div className="h-3 w-full overflow-hidden rounded-full bg-cream">
+      <div className="h-full rounded-full bg-terracotta transition-[width]" style={{ width: `${level}%` }} />
     </div>
   )
 }

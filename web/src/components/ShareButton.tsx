@@ -35,7 +35,7 @@ export default function ShareButton({
       type="button"
       onClick={handleClick}
       disabled={busy}
-      className="flex items-center gap-1.5 text-sm font-medium text-ink-soft hover:text-brand-600 disabled:opacity-60"
+      className="flex items-center gap-1.5 text-sm font-medium text-ink-soft hover:text-terracotta-600 disabled:opacity-60"
     >
       <ShareIcon className="h-4 w-4" />
       {copied ? 'Link copied' : url ? 'Copy link' : busy ? 'Sharing...' : 'Share'}

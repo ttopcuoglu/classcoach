@@ -275,8 +275,8 @@ export default function TryItOut() {
               onClick={() => setCategory(value)}
               className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                 isActive
-                  ? 'border-brand-500 bg-brand-50 text-brand-600'
-                  : 'border-border bg-surface text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                  ? 'border-terracotta bg-mint-tint/60 text-forest'
+                  : 'border-hairline bg-cream-card text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
               }`}
             >
               {label}
@@ -293,7 +293,7 @@ export default function TryItOut() {
             type="button"
             onClick={() => setGradeBand(band)}
             className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-              gradeBand === band ? 'bg-ink text-white' : 'bg-canvas text-ink-soft hover:text-ink'
+              gradeBand === band ? 'bg-ink text-white' : 'bg-cream text-ink-soft hover:text-ink'
             }`}
           >
             Grades {band}
@@ -308,7 +308,7 @@ export default function TryItOut() {
             type="button"
             onClick={() => setDifficulty(value)}
             className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-              difficulty === value ? 'bg-ink text-white' : 'bg-canvas text-ink-soft hover:text-ink'
+              difficulty === value ? 'bg-ink text-white' : 'bg-cream text-ink-soft hover:text-ink'
             }`}
           >
             {label}
@@ -316,7 +316,7 @@ export default function TryItOut() {
         ))}
       </div>
 
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
         {sessionState?.done ? (
           <div className="p-2 text-center">
             <p className="text-lg font-semibold text-ink">Session complete!</p>
@@ -326,7 +326,7 @@ export default function TryItOut() {
             <button
               type="button"
               onClick={handleEndSession}
-              className="mt-4 rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+              className="mt-4 rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
             >
               Back to practice
             </button>
@@ -344,9 +344,9 @@ export default function TryItOut() {
                     handleNewScenario(s.category)
                   }}
                   disabled={generating}
-                  className="rounded-xl border border-border bg-canvas p-4 text-left text-sm text-ink transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
+                  className="rounded-xl border border-hairline bg-cream p-4 text-left text-sm text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-60"
                 >
-                  <span className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-forest">
                     {categoryLabel(s.category)}
                   </span>
                   <p className="mt-1.5">{s.label}</p>
@@ -354,7 +354,7 @@ export default function TryItOut() {
               ))}
             </div>
             {(generating || submitting) && (
-              <div className="mt-4 flex justify-center text-brand-600">
+              <div className="mt-4 flex justify-center text-forest">
                 <ProgressRing
                   progress={workingProgress}
                   label={generating ? 'Building a scenario' : 'Reading your response'}
@@ -367,7 +367,7 @@ export default function TryItOut() {
                 type="button"
                 onClick={() => handleNewScenario()}
                 disabled={generating}
-                className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+                className="rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-60"
               >
                 {generating ? 'Generating...' : 'New Scenario'}
               </button>
@@ -375,7 +375,7 @@ export default function TryItOut() {
                 type="button"
                 onClick={handleStartSession}
                 disabled={generating}
-                className="rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
+                className="rounded-lg border border-hairline px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-60"
               >
                 Quick Session ({SESSION_LENGTH} scenarios)
               </button>
@@ -389,7 +389,7 @@ export default function TryItOut() {
                   Quick Session — scenario {sessionState.index} of {sessionState.total}
                 </p>
               )}
-              <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600">
+              <span className="rounded-full bg-mint-tint/60 px-2.5 py-1 text-xs font-semibold text-forest">
                 {categoryLabel(attempt.scenario.category)} · Grades {attempt.scenario.gradeBand} ·{' '}
                 {difficultyLabel(attempt.scenario.difficulty)}
               </span>
@@ -411,7 +411,7 @@ export default function TryItOut() {
                     disabled={submitting}
                     rows={4}
                     placeholder="Describe what you'd say or do..."
-                    className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                    className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
                   />
                 </label>
                 {speechSupported && (
@@ -421,8 +421,8 @@ export default function TryItOut() {
                     disabled={submitting}
                     className={`flex w-fit items-center gap-2 rounded-full border-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
                       listening
-                        ? 'border-warm-500 bg-warm-100 text-warm-500'
-                        : 'border-brand-300 bg-brand-50 text-brand-600 hover:border-brand-400 hover:bg-brand-100'
+                        ? 'border-terracotta bg-peach-tint text-terracotta-600'
+                        : 'border-mint-tint bg-mint-tint/60 text-forest hover:border-terracotta/40 hover:bg-mint-tint'
                     }`}
                   >
                     <MicIcon className="h-5 w-5" />
@@ -444,7 +444,7 @@ export default function TryItOut() {
                     type="button"
                     onClick={handleSubmitResponse}
                     disabled={submitting || !responseText.trim()}
-                    className="ml-auto rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                    className="ml-auto rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
                   >
                     {submitting ? 'Getting feedback...' : 'Get Feedback'}
                   </button>
@@ -452,7 +452,7 @@ export default function TryItOut() {
               </div>
             ) : (
               <div className="flex flex-col gap-4">
-                <div className="rounded-xl border border-border bg-canvas p-4">
+                <div className="rounded-xl border border-hairline bg-cream p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
                     Your response
                   </p>
@@ -460,15 +460,15 @@ export default function TryItOut() {
                 </div>
 
                 {attempt.feedback && (
-                  <div className="rounded-xl border border-border bg-warm-100/60 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-warm-500">Coaching</p>
+                  <div className="rounded-xl border border-hairline bg-peach-tint/60 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coaching</p>
                     <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink">{attempt.feedback}</p>
                   </div>
                 )}
 
                 {attempt.modelResponse && (
-                  <div className="rounded-xl border border-border bg-brand-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+                  <div className="rounded-xl border border-hairline bg-mint-tint/60 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-forest">
                       A model response to compare against
                     </p>
                     <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink">{attempt.modelResponse}</p>
@@ -490,7 +490,7 @@ export default function TryItOut() {
                     type="button"
                     onClick={() => handleToggleSaved(attempt)}
                     className={`flex items-center gap-1.5 text-sm font-medium ${
-                      attempt.saved ? 'text-warm-500' : 'text-ink-soft hover:text-warm-500'
+                      attempt.saved ? 'text-terracotta-600' : 'text-ink-soft hover:text-terracotta-600'
                     }`}
                   >
                     <StarIcon className="h-4 w-4" filled={attempt.saved} />
@@ -498,7 +498,7 @@ export default function TryItOut() {
                   </button>
                   <Link
                     to={`/ask-practice/practice/${attempt.id}/export`}
-                    className="text-sm font-medium text-ink-soft transition-colors hover:text-brand-600"
+                    className="text-sm font-medium text-ink-soft transition-colors hover:text-terracotta-600"
                   >
                     Export / Print
                   </Link>
@@ -507,7 +507,7 @@ export default function TryItOut() {
                       <button
                         type="button"
                         onClick={handleTryAgain}
-                        className="rounded-lg border border-border px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+                        className="rounded-lg border border-hairline px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
                       >
                         Try again
                       </button>
@@ -516,7 +516,7 @@ export default function TryItOut() {
                       type="button"
                       onClick={sessionState ? handleSessionAdvance : () => handleNewScenario()}
                       disabled={generating}
-                      className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+                      className="rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-60"
                     >
                       {generating
                         ? 'Generating...'
@@ -533,25 +533,25 @@ export default function TryItOut() {
           </div>
         )}
 
-        {error && <p className="mt-4 text-center text-sm text-warm-500">{error}</p>}
+        {error && <p className="mt-4 text-center text-sm text-terracotta-600">{error}</p>}
       </div>
 
       {growthInsight && (
-        <div className="flex items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50 p-4">
-          <ArrowUpIcon className="h-5 w-5 shrink-0 text-brand-600" />
+        <div className="flex items-center gap-3 rounded-2xl border border-mint-tint bg-mint-tint/60 p-4">
+          <ArrowUpIcon className="h-5 w-5 shrink-0 text-forest" />
           <p className="text-sm text-ink">
-            <span className="font-semibold text-brand-600">You're showing growth</span> in{' '}
+            <span className="font-semibold text-forest">You're showing growth</span> in{' '}
             {categoryLabel(growthInsight.category)} scenarios.
           </p>
         </div>
       )}
 
       <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Saved scenarios</h2>
+        <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Saved scenarios</h2>
         {historyLoading ? (
           <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
         ) : savedAttempts.length === 0 ? (
-          <div className="mt-3 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
+          <div className="mt-3 rounded-2xl border border-dashed border-hairline p-6 text-center text-sm text-ink-soft">
             Scenarios you save will show up here.
           </div>
         ) : (
@@ -577,14 +577,14 @@ function SavedAttemptCard({
 }) {
   const [expanded, setExpanded] = useState(false)
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
+    <div className="rounded-xl border border-hairline bg-cream-card p-4">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         className="flex w-full items-start justify-between gap-4 text-left"
       >
         <div>
-          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-600">
+          <span className="rounded-full bg-mint-tint/60 px-2 py-0.5 text-xs font-semibold text-forest">
             {categoryLabel(attempt.scenario.category)}
           </span>
           <p className="mt-1.5 text-sm text-ink">{attempt.scenario.text}</p>
@@ -592,20 +592,20 @@ function SavedAttemptCard({
         <span className="shrink-0 text-xs font-medium text-ink-soft">{expanded ? 'Hide' : 'Show'}</span>
       </button>
       {expanded && (
-        <div className="mt-3 flex flex-col gap-3 border-t border-border pt-3">
+        <div className="mt-3 flex flex-col gap-3 border-t border-hairline pt-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Your response</p>
             <p className="mt-1 text-sm text-ink">{attempt.responseText}</p>
           </div>
           {attempt.feedback && (
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-warm-500">Coaching</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coaching</p>
               <p className="mt-1 text-sm whitespace-pre-wrap text-ink">{attempt.feedback}</p>
             </div>
           )}
           {attempt.modelResponse && (
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+              <p className="text-xs font-semibold uppercase tracking-wide text-forest">
                 Model response
               </p>
               <p className="mt-1 text-sm whitespace-pre-wrap text-ink">{attempt.modelResponse}</p>

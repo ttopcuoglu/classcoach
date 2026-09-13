@@ -58,13 +58,16 @@ export default function LessonPlanning() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Lesson Planning</h1>
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Plan</p>
+        <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
+          Lesson Planning<span className="text-gold">.</span>
+        </h1>
         <p className="text-ink-soft">
           Get feedback on a plan you wrote, generate a sample plan for ideas, or get feedback on a presentation.
         </p>
         <Link
           to="/guide/lesson-planning"
-          className="mt-1 w-fit text-xs font-medium text-ink-soft underline decoration-border underline-offset-4 hover:text-terracotta"
+          className="mt-1 w-fit text-xs font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta"
         >
           New to this? Read the teacher's guide
         </Link>
@@ -75,7 +78,7 @@ export default function LessonPlanning() {
           type="button"
           onClick={() => setTab('generate')}
           className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-            tab === 'generate' ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:text-ink'
+            tab === 'generate' ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
           }`}
         >
           Generate Ideas
@@ -84,7 +87,7 @@ export default function LessonPlanning() {
           type="button"
           onClick={() => setTab('feedback')}
           className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-            tab === 'feedback' ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:text-ink'
+            tab === 'feedback' ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
           }`}
         >
           Get Feedback
@@ -93,7 +96,7 @@ export default function LessonPlanning() {
           type="button"
           onClick={() => setTab('presentation')}
           className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-            tab === 'presentation' ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:text-ink'
+            tab === 'presentation' ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
           }`}
         >
           Review a Presentation
@@ -118,7 +121,7 @@ function ContextFields({
     onChange({ ...context, [key]: value })
   }
   const inputClass =
-    'rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60'
+    'rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60'
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -189,7 +192,7 @@ function ContextFields({
 function PlanHeader({ plan }: { plan: LessonPlan }) {
   return (
     <div>
-      <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600">
+      <span className="rounded-full bg-mint-tint/60 px-2.5 py-1 text-xs font-semibold text-forest">
         {plan.mode === 'generated' ? 'Sample plan' : 'Feedback'}
         {plan.subject ? ` · ${plan.subject}` : ''}
         {plan.gradeLevel ? ` · ${plan.gradeLevel}` : ''}
@@ -203,9 +206,9 @@ function PlanHeader({ plan }: { plan: LessonPlan }) {
 function PlanSection({ label, value, accent }: { label: string; value: string | null; accent?: boolean }) {
   if (!value) return null
   return (
-    <div className="rounded-xl border border-border bg-canvas p-4">
+    <div className="rounded-xl border border-hairline bg-cream p-4">
       <p
-        className={`text-xs font-semibold uppercase tracking-wide ${accent ? 'text-brand-600' : 'text-ink-soft'}`}
+        className={`text-xs font-semibold uppercase tracking-wide ${accent ? 'text-forest' : 'text-ink-soft'}`}
       >
         {label}
       </p>
@@ -223,8 +226,8 @@ function DeliveryCoachingCard({ coaching }: { coaching: LessonPlanDeliveryCoachi
     ['Closing', coaching.closing],
   ]
   return (
-    <div className="rounded-xl border border-border bg-canvas p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Presentation & Delivery</p>
+    <div className="rounded-xl border border-hairline bg-cream p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-forest">Presentation & Delivery</p>
       <div className="mt-2 flex flex-col gap-3">
         {rows.map(([label, value]) =>
           value ? (
@@ -251,8 +254,8 @@ function PresentationReviewCard({ review }: { review: LessonPlanPresentationRevi
     <div className="flex flex-col gap-3">
       {rows.map(([label, value]) =>
         value ? (
-          <div key={label} className="rounded-xl border border-border bg-canvas p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">{label}</p>
+          <div key={label} className="rounded-xl border border-hairline bg-cream p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-forest">{label}</p>
             <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{value}</p>
           </div>
         ) : null,
@@ -267,7 +270,7 @@ function SaveButton({ plan, onToggle }: { plan: LessonPlan; onToggle: (plan: Les
       type="button"
       onClick={() => onToggle(plan)}
       className={`flex items-center gap-1.5 text-sm font-medium ${
-        plan.saved ? 'text-warm-500' : 'text-ink-soft hover:text-warm-500'
+        plan.saved ? 'text-terracotta-600' : 'text-ink-soft hover:text-terracotta-600'
       }`}
     >
       <StarIcon className="h-4 w-4" filled={plan.saved} />
@@ -304,7 +307,7 @@ function ShareButton({ onShare }: { onShare: () => Promise<{ shareToken: string 
       type="button"
       onClick={handleClick}
       disabled={busy}
-      className="flex items-center gap-1.5 text-sm font-medium text-ink-soft hover:text-brand-600 disabled:opacity-60"
+      className="flex items-center gap-1.5 text-sm font-medium text-ink-soft hover:text-terracotta-600 disabled:opacity-60"
     >
       <ShareIcon className="h-4 w-4" />
       {copied ? 'Link copied' : url ? 'Copy link' : busy ? 'Sharing...' : 'Share'}
@@ -323,11 +326,11 @@ function HistoryList({
 }) {
   return (
     <div>
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">{title}</h2>
+      <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">{title}</h2>
       {loading ? (
         <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
       ) : plans.length === 0 ? (
-        <div className="mt-3 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
+        <div className="mt-3 rounded-2xl border border-dashed border-hairline p-6 text-center text-sm text-ink-soft">
           Plans you save will show up here.
         </div>
       ) : (
@@ -344,14 +347,14 @@ function HistoryList({
 function SavedPlanCard({ plan }: { plan: LessonPlan }) {
   const [expanded, setExpanded] = useState(false)
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
+    <div className="rounded-xl border border-hairline bg-cream-card p-4">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         className="flex w-full items-start justify-between gap-4 text-left"
       >
         <div>
-          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-600">
+          <span className="rounded-full bg-mint-tint/60 px-2 py-0.5 text-xs font-semibold text-forest">
             {plan.mode === 'generated' ? 'Sample plan' : plan.mode === 'presentation' ? 'Presentation review' : 'Feedback'}
           </span>
           <p className="mt-1.5 text-sm text-ink">
@@ -361,7 +364,7 @@ function SavedPlanCard({ plan }: { plan: LessonPlan }) {
         <span className="shrink-0 text-xs font-medium text-ink-soft">{expanded ? 'Hide' : 'Show'}</span>
       </button>
       {expanded && (
-        <div className="mt-3 flex flex-col gap-3 border-t border-border pt-3">
+        <div className="mt-3 flex flex-col gap-3 border-t border-hairline pt-3">
           {plan.mode === 'feedback' ? (
             <>
               {plan.planText && (
@@ -372,7 +375,7 @@ function SavedPlanCard({ plan }: { plan: LessonPlan }) {
               )}
               {plan.feedback && (
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-warm-500">Coaching</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coaching</p>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.feedback}</p>
                 </div>
               )}
@@ -401,7 +404,7 @@ function SavedPlanCard({ plan }: { plan: LessonPlan }) {
               )}
               {plan.hots && (
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-forest">
                     Higher-order thinking
                   </p>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.hots}</p>
@@ -419,7 +422,7 @@ function SavedPlanCard({ plan }: { plan: LessonPlan }) {
             <ShareButton onShare={() => shareLessonPlan(plan.id)} />
             <Link
               to={`/lesson-planning/${plan.id}/export`}
-              className="text-sm font-medium text-ink-soft hover:text-brand-600"
+              className="text-sm font-medium text-ink-soft hover:text-terracotta-600"
             >
               Download
             </Link>
@@ -503,7 +506,7 @@ function GeneratePanel() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
         {!plan ? (
           <div className="flex flex-col gap-4">
             <p className="text-sm text-ink-soft">
@@ -512,7 +515,7 @@ function GeneratePanel() {
             </p>
             <ContextFields context={context} onChange={setContext} disabled={generating} />
             {generating && (
-              <div className="flex justify-center py-1 text-brand-600">
+              <div className="flex justify-center py-1 text-forest">
                 <ProgressRing progress={generateProgress} label="Drafting a sample day" hint="Usually about fifteen seconds." />
               </div>
             )}
@@ -520,7 +523,7 @@ function GeneratePanel() {
               type="button"
               onClick={handleGenerate}
               disabled={generating || !context.objective.trim()}
-              className="self-end rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+              className="self-end rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
             >
               {generating ? (
                 <span className="flex items-center gap-2">
@@ -543,7 +546,7 @@ function GeneratePanel() {
             <p className="text-xs text-ink-soft">This is a sample for ideas — adjust it to fit your class.</p>
 
             {plan.deliveryCoaching && <DeliveryCoachingCard coaching={plan.deliveryCoaching} />}
-            {deliveryError && <p className="text-sm text-warm-500">{deliveryError}</p>}
+            {deliveryError && <p className="text-sm text-terracotta-600">{deliveryError}</p>}
 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
@@ -551,7 +554,7 @@ function GeneratePanel() {
                 <ShareButton onShare={() => shareLessonPlan(plan.id)} />
                 <Link
                   to={`/lesson-planning/${plan.id}/export`}
-                  className="text-sm font-medium text-ink-soft hover:text-brand-600"
+                  className="text-sm font-medium text-ink-soft hover:text-terracotta-600"
                 >
                   Download
                 </Link>
@@ -559,7 +562,7 @@ function GeneratePanel() {
                   type="button"
                   onClick={handlePresentationFeedback}
                   disabled={deliveryLoading}
-                  className="text-sm font-medium text-ink-soft hover:text-brand-600 disabled:opacity-60"
+                  className="text-sm font-medium text-ink-soft hover:text-terracotta-600 disabled:opacity-60"
                 >
                   {deliveryLoading ? (
                     <span className="flex items-center gap-2">
@@ -575,7 +578,7 @@ function GeneratePanel() {
               <button
                 type="button"
                 onClick={handleNew}
-                className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+                className="rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
               >
                 New Sample Plan
               </button>
@@ -583,7 +586,7 @@ function GeneratePanel() {
           </div>
         )}
         {error && (
-          <p className="mt-4 text-center text-sm text-warm-500">
+          <p className="mt-4 text-center text-sm text-terracotta-600">
             <UpgradeMessage text={error} />
           </p>
         )}
@@ -715,7 +718,7 @@ function FeedbackPanel() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
         {!plan ? (
           <div className="flex flex-col gap-4">
             <label className="flex flex-col gap-1.5">
@@ -726,12 +729,12 @@ function FeedbackPanel() {
                 disabled={submitting}
                 rows={8}
                 placeholder="Paste or write your plan — Do Now, main activities, closure, etc."
-                className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
             </label>
 
             {submitting && (
-              <div className="flex justify-center py-1 text-brand-600">
+              <div className="flex justify-center py-1 text-forest">
                 <ProgressRing progress={feedbackProgress} label="Reading your plan" hint="Usually about fifteen seconds." />
               </div>
             )}
@@ -741,7 +744,7 @@ function FeedbackPanel() {
               onClick={handleSubmit}
               disabled={submitting || !canSubmit}
 
-              className="self-end rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+              className="self-end rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
             >
               {submitting ? (
                 <span className="flex items-center gap-2">
@@ -755,13 +758,13 @@ function FeedbackPanel() {
         ) : (
           <div className="flex flex-col gap-4">
             <PlanHeader plan={plan} />
-            <div className="rounded-xl border border-border bg-canvas p-4">
+            <div className="rounded-xl border border-hairline bg-cream p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Your plan</p>
               <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{plan.planText}</p>
             </div>
             {plan.feedback && (
-              <div className="rounded-xl border border-border bg-warm-100/60 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-warm-500">Coaching</p>
+              <div className="rounded-xl border border-hairline bg-peach-tint/60 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coaching</p>
                 <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{plan.feedback}</p>
               </div>
             )}
@@ -775,15 +778,15 @@ function FeedbackPanel() {
               placeholder="Ask a follow-up, or ask the coach to revise your plan..."
             />
             {plan.suggestedRevision && !revisionDismissed && (
-              <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Suggested Revision</p>
+              <div className="rounded-xl border border-mint-tint bg-mint-tint/60 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-forest">Suggested Revision</p>
                 <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{plan.suggestedRevision}</p>
                 <div className="mt-3 flex items-center gap-3">
                   <button
                     type="button"
                     onClick={handleApplyRevision}
                     disabled={applyingRevision}
-                    className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                    className="rounded-lg bg-terracotta px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
                   >
                     {applyingRevision ? (
                       <span className="flex items-center gap-2">
@@ -805,14 +808,14 @@ function FeedbackPanel() {
               </div>
             )}
             {plan.deliveryCoaching && <DeliveryCoachingCard coaching={plan.deliveryCoaching} />}
-            {deliveryError && <p className="text-sm text-warm-500">{deliveryError}</p>}
+            {deliveryError && <p className="text-sm text-terracotta-600">{deliveryError}</p>}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <SaveButton plan={plan} onToggle={handleToggleSaved} />
                 <ShareButton onShare={() => shareLessonPlan(plan.id)} />
                 <Link
                   to={`/lesson-planning/${plan.id}/export`}
-                  className="text-sm font-medium text-ink-soft hover:text-brand-600"
+                  className="text-sm font-medium text-ink-soft hover:text-terracotta-600"
                 >
                   Download
                 </Link>
@@ -820,7 +823,7 @@ function FeedbackPanel() {
                   type="button"
                   onClick={handlePresentationFeedback}
                   disabled={deliveryLoading}
-                  className="text-sm font-medium text-ink-soft hover:text-brand-600 disabled:opacity-60"
+                  className="text-sm font-medium text-ink-soft hover:text-terracotta-600 disabled:opacity-60"
                 >
                   {deliveryLoading ? (
                     <span className="flex items-center gap-2">
@@ -836,7 +839,7 @@ function FeedbackPanel() {
               <button
                 type="button"
                 onClick={handleNew}
-                className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+                className="rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
               >
                 New Plan
               </button>
@@ -844,7 +847,7 @@ function FeedbackPanel() {
           </div>
         )}
         {error && (
-          <p className="mt-4 text-center text-sm text-warm-500">
+          <p className="mt-4 text-center text-sm text-terracotta-600">
             <UpgradeMessage text={error} />
           </p>
         )}
@@ -1001,7 +1004,7 @@ function PresentationPanel() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
         {!plan ? (
           <div className="flex flex-col gap-4">
             <p className="text-sm text-ink-soft">
@@ -1010,7 +1013,7 @@ function PresentationPanel() {
             </p>
 
             {!extractedText ? (
-              <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border bg-canvas px-4 py-8 text-center transition-colors hover:border-brand-300">
+              <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-hairline bg-cream px-4 py-8 text-center transition-colors hover:border-terracotta/40">
                 <span className="flex items-center gap-2 text-sm font-medium text-ink">
                   {extracting ? (
                     <>
@@ -1034,7 +1037,7 @@ function PresentationPanel() {
                 />
               </label>
             ) : (
-              <div className="flex items-center justify-between rounded-xl border border-border bg-canvas px-4 py-3">
+              <div className="flex items-center justify-between rounded-xl border border-hairline bg-cream px-4 py-3">
                 <div>
                   <p className="text-sm font-medium text-ink">{file?.name}</p>
                   <p className="text-xs text-ink-soft">
@@ -1045,13 +1048,13 @@ function PresentationPanel() {
                   type="button"
                   onClick={handleRemoveFile}
                   disabled={submitting}
-                  className="text-sm font-medium text-ink-soft hover:text-warm-500 disabled:opacity-60"
+                  className="text-sm font-medium text-ink-soft hover:text-terracotta-600 disabled:opacity-60"
                 >
                   Remove
                 </button>
               </div>
             )}
-            {extractError && <p className="text-sm text-warm-500">{extractError}</p>}
+            {extractError && <p className="text-sm text-terracotta-600">{extractError}</p>}
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <label className="flex flex-col gap-1.5">
@@ -1062,7 +1065,7 @@ function PresentationPanel() {
                   onChange={(e) => setGradeLevel(e.target.value)}
                   disabled={submitting}
                   placeholder="e.g. 9th grade"
-                  className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                  className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
                 />
               </label>
               <label className="flex flex-col gap-1.5">
@@ -1073,7 +1076,7 @@ function PresentationPanel() {
                   onChange={(e) => setSubject(e.target.value)}
                   disabled={submitting}
                   placeholder="e.g. Biology"
-                  className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                  className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
                 />
               </label>
             </div>
@@ -1085,12 +1088,12 @@ function PresentationPanel() {
                 onChange={(e) => setObjective(e.target.value)}
                 disabled={submitting}
                 placeholder="e.g. Introducing photosynthesis"
-                className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
             </label>
 
             {submitting && (
-              <div className="flex justify-center py-1 text-brand-600">
+              <div className="flex justify-center py-1 text-forest">
                 <ProgressRing progress={reviewProgress} label="Reading your presentation" hint="Usually about twenty seconds." />
               </div>
             )}
@@ -1100,7 +1103,7 @@ function PresentationPanel() {
               onClick={handleSubmit}
               disabled={submitting || !extractedText}
 
-              className="self-end rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+              className="self-end rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
             >
               {submitting ? (
                 <span className="flex items-center gap-2">
@@ -1114,7 +1117,7 @@ function PresentationPanel() {
         ) : (
           <div className="flex flex-col gap-4">
             <div>
-              <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600">
+              <span className="rounded-full bg-mint-tint/60 px-2.5 py-1 text-xs font-semibold text-forest">
                 Presentation review
                 {plan.subject ? ` · ${plan.subject}` : ''}
                 {plan.gradeLevel ? ` · ${plan.gradeLevel}` : ''}
@@ -1141,15 +1144,15 @@ function PresentationPanel() {
               placeholder="Ask a follow-up, or ask the coach to revise a slide..."
             />
             {plan.suggestedRevision && !revisionDismissed && (
-              <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Suggested Revision</p>
+              <div className="rounded-xl border border-mint-tint bg-mint-tint/60 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-forest">Suggested Revision</p>
                 <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{plan.suggestedRevision}</p>
                 <div className="mt-3 flex items-center gap-3">
                   <button
                     type="button"
                     onClick={handleApplyRevision}
                     disabled={applyingRevision}
-                    className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                    className="rounded-lg bg-terracotta px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
                   >
                     {applyingRevision ? (
                       <span className="flex items-center gap-2">
@@ -1177,7 +1180,7 @@ function PresentationPanel() {
                 <ShareButton onShare={() => shareLessonPlan(plan.id)} />
                 <Link
                   to={`/lesson-planning/${plan.id}/export`}
-                  className="text-sm font-medium text-ink-soft hover:text-brand-600"
+                  className="text-sm font-medium text-ink-soft hover:text-terracotta-600"
                 >
                   Download
                 </Link>
@@ -1185,7 +1188,7 @@ function PresentationPanel() {
               <button
                 type="button"
                 onClick={handleNew}
-                className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+                className="rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
               >
                 New Presentation
               </button>
@@ -1193,7 +1196,7 @@ function PresentationPanel() {
           </div>
         )}
         {error && (
-          <p className="mt-4 text-center text-sm text-warm-500">
+          <p className="mt-4 text-center text-sm text-terracotta-600">
             <UpgradeMessage text={error} />
           </p>
         )}

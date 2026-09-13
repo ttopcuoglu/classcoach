@@ -53,11 +53,14 @@ export default function Communications() {
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Communication Coach</h1>
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Plan</p>
+        <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
+          Communication Coach<span className="text-gold">.</span>
+        </h1>
         <p className="text-ink-soft">Prepare, write, practice, and improve important communication.</p>
         <Link
           to="/guide/communication-coach"
-          className="mt-1 w-fit text-xs font-medium text-ink-soft underline decoration-border underline-offset-4 hover:text-terracotta"
+          className="mt-1 w-fit text-xs font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta"
         >
           New to this? Read the teacher's guide
         </Link>
@@ -68,10 +71,10 @@ export default function Communications() {
           <Link
             key={value}
             to={`/communications?tool=${value}`}
-            className="group rounded-2xl border border-border bg-surface p-6 transition-shadow hover:shadow-md"
+            className="group rounded-2xl border border-hairline bg-cream-card p-6 transition-all hover:border-terracotta/40 hover:shadow-md"
           >
-            <Icon className="h-8 w-8 text-brand-500" />
-            <h2 className="mt-4 text-lg font-semibold text-ink">{label}</h2>
+            <Icon className="h-8 w-8 text-terracotta" />
+            <h2 className="mt-4 font-heading text-lg font-semibold text-forest">{label}</h2>
             <p className="mt-1 text-sm text-ink-soft">{description}</p>
           </Link>
         ))}

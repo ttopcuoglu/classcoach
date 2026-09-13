@@ -103,11 +103,19 @@ export default function ReviewCommunication() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Link to="/communications" className="text-sm font-medium text-ink-soft hover:text-ink">
-        ← Communication Coach
-      </Link>
+      <div className="flex flex-col gap-3">
+        <Link to="/communications" className="w-fit text-sm font-medium text-ink-soft hover:text-ink">
+          ← Communication Coach
+        </Link>
+        <div className="flex flex-col gap-1">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Communication Coach</p>
+          <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
+            Review My Communication<span className="text-gold">.</span>
+          </h1>
+        </div>
+      </div>
 
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
         {!prep ? (
           <div className="flex flex-col gap-4">
             <label className="flex flex-col gap-1.5">
@@ -117,7 +125,7 @@ export default function ReviewCommunication() {
                 onChange={(e) => setSituationText(e.target.value)}
                 disabled={submitting}
                 rows={4}
-                className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
             </label>
             <label className="flex flex-col gap-1.5">
@@ -127,7 +135,7 @@ export default function ReviewCommunication() {
                 onChange={(e) => setResponseText(e.target.value)}
                 disabled={submitting}
                 rows={4}
-                className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
             </label>
 
@@ -143,8 +151,8 @@ export default function ReviewCommunication() {
                     title={m.description}
                     className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                       reviewMode === m.value
-                        ? 'border-brand-500 bg-brand-50 text-brand-600'
-                        : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                        ? 'border-terracotta bg-mint-tint/60 text-forest'
+                        : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                     }`}
                   >
                     {m.label}
@@ -157,7 +165,7 @@ export default function ReviewCommunication() {
             <PrivacyReminder />
 
             {submitting && (
-              <div className="flex justify-center py-1 text-brand-600">
+              <div className="flex justify-center py-1 text-forest">
                 <ProgressRing progress={workProgress} label="Reading both messages" hint="Usually about fifteen seconds." />
               </div>
             )}
@@ -166,7 +174,7 @@ export default function ReviewCommunication() {
               type="button"
               onClick={handleSubmit}
               disabled={!canSubmit}
-              className="self-end rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+              className="self-end rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
             >
               {submitting ? 'Reviewing...' : 'Review My Communication'}
             </button>
@@ -181,15 +189,15 @@ export default function ReviewCommunication() {
             </div>
 
             {prep.feedback && (
-              <div className="rounded-xl border border-border bg-warm-100/60 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-warm-500">Coaching</p>
+              <div className="rounded-xl border border-hairline bg-peach-tint/60 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coaching</p>
                 <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{prep.feedback}</p>
               </div>
             )}
 
             {prep.modelResponse && (
-              <div className="rounded-xl border border-border bg-brand-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Revised response</p>
+              <div className="rounded-xl border border-hairline bg-mint-tint/60 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-forest">Revised response</p>
                 <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{prep.modelResponse}</p>
               </div>
             )}
@@ -201,7 +209,7 @@ export default function ReviewCommunication() {
                   type="button"
                   onClick={() => sendChatMessage(action.instruction)}
                   disabled={chatSending}
-                  className="rounded-full border border-border bg-canvas px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-50"
+                  className="rounded-full border border-hairline bg-cream px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-50"
                 >
                   {action.label}
                 </button>
@@ -224,7 +232,7 @@ export default function ReviewCommunication() {
                   type="button"
                   onClick={handleToggleSaved}
                   className={`flex items-center gap-1.5 text-sm font-medium ${
-                    prep.saved ? 'text-warm-500' : 'text-ink-soft hover:text-warm-500'
+                    prep.saved ? 'text-terracotta-600' : 'text-ink-soft hover:text-terracotta-600'
                   }`}
                 >
                   <StarIcon className="h-4 w-4" filled={prep.saved} />
@@ -232,7 +240,7 @@ export default function ReviewCommunication() {
                 </button>
                 <Link
                   to={`/communications/practice/${prep.id}/export`}
-                  className="text-sm font-medium text-ink-soft transition-colors hover:text-brand-600"
+                  className="text-sm font-medium text-ink-soft transition-colors hover:text-terracotta-600"
                 >
                   Export / Print
                 </Link>
@@ -241,7 +249,7 @@ export default function ReviewCommunication() {
               <button
                 type="button"
                 onClick={handleStartOver}
-                className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+                className="rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
               >
                 Start Over
               </button>
@@ -249,7 +257,7 @@ export default function ReviewCommunication() {
           </div>
         )}
         {error && (
-          <p className="mt-4 text-center text-sm text-warm-500">
+          <p className="mt-4 text-center text-sm text-terracotta-600">
             <UpgradeMessage text={error} />
           </p>
         )}

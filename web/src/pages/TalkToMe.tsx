@@ -90,7 +90,7 @@ const STATE_STYLES: Record<VisualState, { glow: string; orb: string; dot: string
   thinking: { glow: 'bg-mint-tint/60', orb: 'border-mint-tint/70 bg-mint-tint/50', dot: 'bg-forest/60' },
   speaking: { glow: 'bg-mint-tint/80', orb: 'border-mint-tint bg-mint-tint/65', dot: 'bg-forest' },
   idle: { glow: 'bg-cream-card', orb: 'border-hairline bg-cream-card', dot: 'bg-ink-soft' },
-  error: { glow: 'bg-warm-100', orb: 'border-warm-100 bg-warm-100', dot: 'bg-warm-500' },
+  error: { glow: 'bg-peach-tint', orb: 'border-peach-tint bg-peach-tint', dot: 'bg-terracotta' },
 }
 
 function statusLabel(state: VisualState, hasConversation: boolean): string {
@@ -509,7 +509,7 @@ export default function TalkToMe() {
       <main className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-10 text-center">
         {!supported ? (
           <div className="flex flex-col items-center gap-3">
-            <WarningIcon className="h-8 w-8 text-warm-500" />
+            <WarningIcon className="h-8 w-8 text-terracotta-600" />
             <p className="max-w-sm text-sm text-ink-soft">
               Voice conversation isn't available in this browser. Try a different browser or device.
             </p>
@@ -523,8 +523,8 @@ export default function TalkToMe() {
               </div>
             ) : takeawayError ? (
               <div className="flex flex-col items-center gap-3 text-center">
-                <WarningIcon className="h-8 w-8 text-warm-500" />
-                <p className="text-sm text-warm-500">{takeawayError}</p>
+                <WarningIcon className="h-8 w-8 text-terracotta-600" />
+                <p className="text-sm text-terracotta-600">{takeawayError}</p>
               </div>
             ) : takeaway ? (
               <>
@@ -538,8 +538,8 @@ export default function TalkToMe() {
                     onClick={handleToggleSaved}
                     className={`flex shrink-0 items-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-xs font-semibold transition-colors ${
                       debrief?.saved
-                        ? 'border-warm-500 bg-warm-100 text-warm-500'
-                        : 'border-hairline bg-cream-card text-ink-soft hover:border-warm-500 hover:text-warm-500'
+                        ? 'border-terracotta bg-peach-tint text-terracotta-600'
+                        : 'border-hairline bg-cream-card text-ink-soft hover:border-terracotta hover:text-terracotta-600'
                     }`}
                   >
                     <StarIcon className="h-3.5 w-3.5" filled={debrief?.saved} />
@@ -623,7 +623,7 @@ export default function TalkToMe() {
                       onClick={handleToggleSaved}
                       className={`flex items-center gap-1.5 rounded-full border-2 px-5 py-2.5 text-sm font-semibold transition-colors ${
                         debrief?.saved
-                          ? 'border-warm-500 bg-warm-100 text-warm-500'
+                          ? 'border-terracotta bg-peach-tint text-terracotta-600'
                           : 'border-hairline bg-cream-card text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                       }`}
                     >
@@ -717,7 +717,7 @@ export default function TalkToMe() {
                     </span>
                   )}
                   {visualState === 'idle' && <MicIcon className="h-10 w-10 text-ink-soft" />}
-                  {visualState === 'error' && <WarningIcon className="h-10 w-10 text-warm-500" />}
+                  {visualState === 'error' && <WarningIcon className="h-10 w-10 text-terracotta-600" />}
                 </div>
               </div>
               {/* A filled chip that changed colour on every turn was competing
@@ -729,7 +729,7 @@ export default function TalkToMe() {
               <div
                 aria-live="polite"
                 className={`flex items-center gap-2 text-xs font-medium transition-colors duration-500 ${
-                  visualState === 'error' ? 'text-warm-500' : 'text-ink-soft'
+                  visualState === 'error' ? 'text-terracotta-600' : 'text-ink-soft'
                 }`}
               >
                 <span
@@ -816,7 +816,7 @@ export default function TalkToMe() {
                     <p className="mt-1.5 text-sm text-ink">{lastAssistant.text}</p>
                   </div>
                 )}
-                {error && <p className="text-sm text-warm-500">{error}</p>}
+                {error && <p className="text-sm text-terracotta-600">{error}</p>}
               </div>
             )}
 
@@ -876,7 +876,7 @@ export default function TalkToMe() {
                   onClick={() => setMuted((m) => !m)}
                   className={`rounded-full border-2 px-5 py-3 text-sm font-semibold transition-colors ${
                     muted
-                      ? 'border-warm-500 bg-warm-100 text-warm-500'
+                      ? 'border-terracotta bg-peach-tint text-terracotta-600'
                       : 'border-hairline bg-cream-card text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                   }`}
                 >

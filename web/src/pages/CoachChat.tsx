@@ -13,11 +13,14 @@ export default function CoachChat() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-ink md:text-3xl">Ask & Practice</h1>
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Coaching</p>
+        <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
+          Ask & Practice<span className="text-gold">.</span>
+        </h1>
         <p className="text-ink-soft">Ask a question or describe what happened, or practice a scenario.</p>
         <Link
           to="/guide/ask-practice"
-          className="mt-1 w-fit text-xs font-medium text-ink-soft underline decoration-border underline-offset-4 hover:text-terracotta"
+          className="mt-1 w-fit text-xs font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta"
         >
           New to this? Read the teacher's guide
         </Link>
@@ -28,7 +31,7 @@ export default function CoachChat() {
           type="button"
           onClick={() => setTab('ask')}
           className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-            tab === 'ask' ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:text-ink'
+            tab === 'ask' ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
           }`}
         >
           Ask
@@ -37,7 +40,7 @@ export default function CoachChat() {
           type="button"
           onClick={() => setTab('practice')}
           className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-            tab === 'practice' ? 'bg-brand-50 text-brand-600' : 'text-ink-soft hover:text-ink'
+            tab === 'practice' ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
           }`}
         >
           Practice

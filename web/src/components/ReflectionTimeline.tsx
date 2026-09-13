@@ -22,23 +22,23 @@ export default function ReflectionTimeline({
   }
 
   return (
-    <div className="flex flex-col gap-2 border-t border-border pt-3">
+    <div className="flex flex-col gap-2 border-t border-hairline pt-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Reflection</p>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
-        <span className="flex items-center gap-1.5 font-medium text-brand-600">
-          <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+        <span className="flex items-center gap-1.5 font-medium text-forest">
+          <span className="h-1.5 w-1.5 rounded-full bg-terracotta" />
           Practiced
         </span>
         {triedAt ? (
-          <span className="flex items-center gap-1.5 font-medium text-brand-600">
-            <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+          <span className="flex items-center gap-1.5 font-medium text-forest">
+            <span className="h-1.5 w-1.5 rounded-full bg-terracotta" />
             Tried in class
           </span>
         ) : (
           <button
             type="button"
             onClick={onMarkTried}
-            className="flex items-center gap-1.5 font-medium text-ink-soft hover:text-brand-600"
+            className="flex items-center gap-1.5 font-medium text-ink-soft hover:text-terracotta-600"
           >
             <span className="h-1.5 w-1.5 rounded-full border border-ink-soft" />
             Mark as tried
@@ -54,7 +54,7 @@ export default function ReflectionTimeline({
               setDraft(reflectionNote)
               setEditing(true)
             }}
-            className="mt-1 text-xs font-medium text-ink-soft hover:text-brand-600"
+            className="mt-1 text-xs font-medium text-ink-soft hover:text-terracotta-600"
           >
             Edit reflection
           </button>
@@ -67,13 +67,13 @@ export default function ReflectionTimeline({
             onChange={(e) => setDraft(e.target.value)}
             rows={2}
             placeholder="A quick note for yourself..."
-            className="rounded-lg border border-border bg-canvas px-3 py-2 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none"
+            className="rounded-lg border border-hairline bg-cream px-3 py-2 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none"
           />
           <button
             type="button"
             onClick={handleSave}
             disabled={!draft.trim()}
-            className="self-start rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-50"
+            className="self-start rounded-lg border border-hairline px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-50"
           >
             Save reflection
           </button>

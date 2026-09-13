@@ -185,7 +185,7 @@ export default function RecentWork() {
 
   return (
     <div>
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Recent Work</h2>
+      <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Recent Work</h2>
       <div className="mt-3 flex flex-wrap gap-2">
         {FILTERS.map((f) => (
           <button
@@ -194,8 +194,8 @@ export default function RecentWork() {
             onClick={() => setFilter(f.value)}
             className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
               filter === f.value
-                ? 'border-brand-500 bg-brand-50 text-brand-600'
-                : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                ? 'border-terracotta bg-mint-tint/60 text-forest'
+                : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
             }`}
           >
             {f.label}
@@ -206,13 +206,13 @@ export default function RecentWork() {
       {loading ? (
         <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
       ) : visible.length === 0 ? (
-        <div className="mt-3 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-ink-soft">
+        <div className="mt-3 rounded-2xl border border-dashed border-hairline p-6 text-center text-sm text-ink-soft">
           Work you create in any of the four tools will show up here.
         </div>
       ) : (
         <div className="mt-3 flex flex-col gap-3">
           {visible.map((item) => (
-            <div key={item.id} className="rounded-xl border border-border bg-surface p-4">
+            <div key={item.id} className="rounded-xl border border-hairline bg-cream-card p-4">
               <div className="flex items-start justify-between gap-4">
                 <button type="button" onClick={() => setExpandedId((id) => (id === item.id ? null : item.id))} className="min-w-0 flex-1 text-left">
                   {renamingId === item.id ? (
@@ -223,7 +223,7 @@ export default function RecentWork() {
                       onChange={(e) => setRenameDraft(e.target.value)}
                       onBlur={() => commitRename(item)}
                       onKeyDown={(e) => e.key === 'Enter' && commitRename(item)}
-                      className="w-full rounded border border-brand-400 bg-canvas px-2 py-1 text-sm text-ink focus:outline-none"
+                      className="w-full rounded border border-gold bg-cream px-2 py-1 text-sm text-ink focus:outline-none"
                     />
                   ) : (
                     <p className="line-clamp-1 text-sm font-medium text-ink">{item.title}</p>
@@ -263,7 +263,7 @@ export default function RecentWork() {
                       e.stopPropagation()
                       handleDelete(item)
                     }}
-                    className="text-warm-500 hover:text-warm-600"
+                    className="text-terracotta-600 hover:text-terracotta-600"
                   >
                     Delete
                   </button>
@@ -271,7 +271,7 @@ export default function RecentWork() {
               </div>
 
               {expandedId === item.id && (
-                <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3 text-sm text-ink">
+                <div className="mt-3 flex flex-col gap-2 border-t border-hairline pt-3 text-sm text-ink">
                   {item.kind === 'message' && <p className="whitespace-pre-wrap">{(item.raw as ParentMessage).draftText}</p>}
                   {item.kind === 'plan' && (
                     <p className="whitespace-pre-wrap">

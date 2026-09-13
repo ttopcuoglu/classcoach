@@ -183,11 +183,19 @@ export default function WriteMessage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Link to="/communications" className="text-sm font-medium text-ink-soft hover:text-ink">
-        ← Communication Coach
-      </Link>
+      <div className="flex flex-col gap-3">
+        <Link to="/communications" className="w-fit text-sm font-medium text-ink-soft hover:text-ink">
+          ← Communication Coach
+        </Link>
+        <div className="flex flex-col gap-1">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Communication Coach</p>
+          <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
+            Write a Message<span className="text-gold">.</span>
+          </h1>
+        </div>
+      </div>
 
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
         {!current ? (
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap gap-2">
@@ -200,8 +208,8 @@ export default function WriteMessage() {
                   title={a.description}
                   className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                     startingAction === a.value
-                      ? 'border-brand-500 bg-brand-50 text-brand-600'
-                      : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                      ? 'border-terracotta bg-mint-tint/60 text-forest'
+                      : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                   }`}
                 >
                   {a.label}
@@ -216,7 +224,7 @@ export default function WriteMessage() {
                   value={recipientType ?? ''}
                   onChange={(e) => setRecipientType((e.target.value || undefined) as RecipientType | undefined)}
                   disabled={drafting}
-                  className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                  className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
                 >
                   <option value="">Choose...</option>
                   {RECIPIENT_TYPES.map((r) => (
@@ -232,7 +240,7 @@ export default function WriteMessage() {
                   value={purpose ?? ''}
                   onChange={(e) => setPurpose((e.target.value || undefined) as MessagePurpose | undefined)}
                   disabled={drafting}
-                  className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                  className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
                 >
                   <option value="">Choose...</option>
                   {MESSAGE_PURPOSES.map((p) => (
@@ -248,7 +256,7 @@ export default function WriteMessage() {
                   value={format ?? ''}
                   onChange={(e) => setFormat((e.target.value || undefined) as MessageFormat | undefined)}
                   disabled={drafting}
-                  className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                  className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
                 >
                   <option value="">Choose...</option>
                   {MESSAGE_FORMATS.map((f) => (
@@ -269,8 +277,8 @@ export default function WriteMessage() {
                       disabled={drafting}
                       className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
                         tone === t.value
-                          ? 'border-brand-500 bg-brand-50 text-brand-600'
-                          : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                          ? 'border-terracotta bg-mint-tint/60 text-forest'
+                          : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                       }`}
                     >
                       {t.label}
@@ -290,7 +298,7 @@ export default function WriteMessage() {
                   onChange={(e) => setIncidentSummary(e.target.value)}
                   disabled={drafting}
                   rows={4}
-                  className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                  className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
                 />
               </label>
             )}
@@ -303,7 +311,7 @@ export default function WriteMessage() {
                     onChange={(e) => setReceivedMessage(e.target.value)}
                     disabled={drafting}
                     rows={4}
-                    className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                    className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
                   />
                 </label>
                 <label className="flex flex-col gap-1.5">
@@ -315,7 +323,7 @@ export default function WriteMessage() {
                     onChange={(e) => setContextNotes(e.target.value)}
                     disabled={drafting}
                     rows={2}
-                    className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                    className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
                   />
                 </label>
               </>
@@ -328,7 +336,7 @@ export default function WriteMessage() {
                   onChange={(e) => setExistingDraft(e.target.value)}
                   disabled={drafting}
                   rows={5}
-                  className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                  className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
                 />
               </label>
             )}
@@ -340,8 +348,8 @@ export default function WriteMessage() {
                 disabled={drafting}
                 className={`flex w-fit items-center gap-2 rounded-full border-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
                   listening
-                    ? 'border-warm-500 bg-warm-100 text-warm-500'
-                    : 'border-brand-300 bg-brand-50 text-brand-600 hover:border-brand-400 hover:bg-brand-100'
+                    ? 'border-terracotta bg-peach-tint text-terracotta-600'
+                    : 'border-mint-tint bg-mint-tint/60 text-forest hover:border-terracotta/40 hover:bg-mint-tint'
                 }`}
               >
                 <MicIcon className="h-5 w-5" />
@@ -353,7 +361,7 @@ export default function WriteMessage() {
             <PrivacyReminder />
 
             {drafting && (
-              <div className="flex justify-center py-1 text-brand-600">
+              <div className="flex justify-center py-1 text-forest">
                 <ProgressRing progress={draftProgress} label="Drafting your message" hint="Usually about ten seconds." />
               </div>
             )}
@@ -362,7 +370,7 @@ export default function WriteMessage() {
               type="button"
               onClick={handleDraft}
               disabled={!canDraft}
-              className="self-end rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+              className="self-end rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
             >
               {drafting ? 'Drafting...' : 'Generate Message'}
             </button>
@@ -375,14 +383,14 @@ export default function WriteMessage() {
               <span>· {toneLabel(current.tone)}</span>
               {formatLabel(current.format) && <span>· {formatLabel(current.format)}</span>}
             </div>
-            <div className="rounded-xl border border-border bg-canvas p-4">
+            <div className="rounded-xl border border-hairline bg-cream p-4">
               <p className="text-sm whitespace-pre-wrap text-ink">{current.draftText}</p>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={handleToggleSaved}
                   className={`flex items-center gap-1.5 text-sm font-medium ${
-                    current.saved ? 'text-warm-500' : 'text-ink-soft hover:text-warm-500'
+                    current.saved ? 'text-terracotta-600' : 'text-ink-soft hover:text-terracotta-600'
                   }`}
                 >
                   <StarIcon className="h-4 w-4" filled={current.saved} />
@@ -390,14 +398,14 @@ export default function WriteMessage() {
                 </button>
                 <Link
                   to={`/communications/message/${current.id}/export`}
-                  className="text-sm font-medium text-ink-soft transition-colors hover:text-brand-600"
+                  className="text-sm font-medium text-ink-soft transition-colors hover:text-terracotta-600"
                 >
                   Export / Print
                 </Link>
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+                  className="rounded-lg border border-hairline px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
                 >
                   {copied ? 'Copied' : 'Copy'}
                 </button>
@@ -411,7 +419,7 @@ export default function WriteMessage() {
                   type="button"
                   onClick={() => sendChatMessage(action.instruction)}
                   disabled={chatSending}
-                  className="rounded-full border border-border bg-canvas px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-50"
+                  className="rounded-full border border-hairline bg-cream px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-50"
                 >
                   {action.label}
                 </button>
@@ -423,25 +431,25 @@ export default function WriteMessage() {
                   disabled={chatSending}
                   className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ${
                     translateOpen
-                      ? 'border-brand-500 bg-brand-50 text-brand-600'
-                      : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                      ? 'border-terracotta bg-mint-tint/60 text-forest'
+                      : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                   }`}
                 >
                   Translate
                 </button>
                 {translateOpen && (
-                  <div className="absolute left-0 top-full z-10 mt-2 w-56 rounded-lg border border-border bg-surface p-1.5 shadow-lg">
+                  <div className="absolute left-0 top-full z-10 mt-2 w-56 rounded-lg border border-hairline bg-cream-card p-1.5 shadow-lg">
                     {TRANSLATE_LANGUAGES.map((language) => (
                       <button
                         key={language}
                         type="button"
                         onClick={() => handleTranslate(language)}
-                        className="block w-full rounded-md px-3 py-1.5 text-left text-sm text-ink hover:bg-canvas"
+                        className="block w-full rounded-md px-3 py-1.5 text-left text-sm text-ink hover:bg-cream"
                       >
                         {language}
                       </button>
                     ))}
-                    <div className="mt-1 flex items-center gap-1.5 border-t border-border px-1 pt-1.5">
+                    <div className="mt-1 flex items-center gap-1.5 border-t border-hairline px-1 pt-1.5">
                       <input
                         type="text"
                         value={customLanguage}
@@ -450,13 +458,13 @@ export default function WriteMessage() {
                           if (e.key === 'Enter') handleTranslate(customLanguage)
                         }}
                         placeholder="Other language..."
-                        className="min-w-0 flex-1 rounded-md border border-border bg-canvas px-2 py-1 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none"
+                        className="min-w-0 flex-1 rounded-md border border-hairline bg-cream px-2 py-1 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none"
                       />
                       <button
                         type="button"
                         onClick={() => handleTranslate(customLanguage)}
                         disabled={!customLanguage.trim()}
-                        className="rounded-md bg-brand-500 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                        className="rounded-md bg-terracotta px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
                       >
                         Go
                       </button>
@@ -479,14 +487,14 @@ export default function WriteMessage() {
             <button
               type="button"
               onClick={handleStartOver}
-              className="self-end rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+              className="self-end rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
             >
               Start a New Message
             </button>
           </div>
         )}
         {error && (
-          <p className="mt-4 text-center text-sm text-warm-500">
+          <p className="mt-4 text-center text-sm text-terracotta-600">
             <UpgradeMessage text={error} />
           </p>
         )}

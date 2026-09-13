@@ -200,7 +200,10 @@ export default function AssignmentCoach() {
   return (
     <div className="flex min-h-full flex-col gap-8 bg-cream px-1 py-2 text-ink">
       <div className="flex flex-col gap-1.5">
-        <h1 className="font-heading text-2xl font-bold text-forest md:text-3xl">Assignment Coach</h1>
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Plan</p>
+        <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
+          Assignment Coach<span className="text-gold">.</span>
+        </h1>
         <p className="text-ink-soft">Design, review, and refine meaningful student work—with a coach beside you.</p>
         <Link
           to="/guide/assignment-coach"
@@ -249,7 +252,7 @@ export default function AssignmentCoach() {
       </div>
 
       <div>
-        <h2 className="font-heading text-sm font-semibold uppercase tracking-wide text-ink-soft">My Assignments</h2>
+        <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">My Assignments</h2>
         {historyLoading ? (
           <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
         ) : sessions.length === 0 ? (

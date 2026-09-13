@@ -19,19 +19,19 @@ import { takePracticePrefill } from '../lib/communicationsPrefill'
 import { generateConversationScenario, submitConversationPrep, type ConversationPrep } from '../lib/api'
 
 const RATING_STYLES: Record<string, string> = {
-  strong: 'bg-brand-50 text-brand-600',
-  developing: 'bg-warm-100 text-warm-500',
-  'needs work': 'bg-warm-100 text-warm-500',
+  strong: 'bg-mint-tint/60 text-forest',
+  developing: 'bg-peach-tint text-terracotta-600',
+  'needs work': 'bg-peach-tint text-terracotta-600',
 }
 
 function RatingPill({ rating }: { rating: string }) {
-  const style = RATING_STYLES[rating.toLowerCase()] ?? 'bg-canvas text-ink-soft'
+  const style = RATING_STYLES[rating.toLowerCase()] ?? 'bg-cream text-ink-soft'
   return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${style}`}>{rating || '—'}</span>
 }
 
 function ReportDimension({ label, rating, feedback }: { label: string; rating: string; feedback: string }) {
   return (
-    <div className="rounded-xl border border-border bg-canvas p-4">
+    <div className="rounded-xl border border-hairline bg-cream p-4">
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
         <RatingPill rating={rating} />
@@ -127,11 +127,19 @@ export default function PracticeConversation() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Link to="/communications" className="text-sm font-medium text-ink-soft hover:text-ink">
-        ← Communication Coach
-      </Link>
+      <div className="flex flex-col gap-3">
+        <Link to="/communications" className="w-fit text-sm font-medium text-ink-soft hover:text-ink">
+          ← Communication Coach
+        </Link>
+        <div className="flex flex-col gap-1">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Communication Coach</p>
+          <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
+            Practice a Conversation<span className="text-gold">.</span>
+          </h1>
+        </div>
+      </div>
 
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="rounded-2xl border border-hairline bg-cream-card p-6">
         {!prep ? (
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
@@ -145,8 +153,8 @@ export default function PracticeConversation() {
                     disabled={generating || submitting}
                     className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                       personType === r.value
-                        ? 'border-brand-500 bg-brand-50 text-brand-600'
-                        : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                        ? 'border-terracotta bg-mint-tint/60 text-forest'
+                        : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                     }`}
                   >
                     {r.label}
@@ -166,8 +174,8 @@ export default function PracticeConversation() {
                     disabled={generating || submitting}
                     className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                       challenge === c.value
-                        ? 'border-brand-500 bg-brand-50 text-brand-600'
-                        : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                        ? 'border-terracotta bg-mint-tint/60 text-forest'
+                        : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                     }`}
                   >
                     {c.label}
@@ -188,8 +196,8 @@ export default function PracticeConversation() {
                       disabled={generating || submitting}
                       className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                         gradeBand === band
-                          ? 'border-brand-500 bg-brand-50 text-brand-600'
-                          : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                          ? 'border-terracotta bg-mint-tint/60 text-forest'
+                          : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                       }`}
                     >
                       {band}
@@ -210,8 +218,8 @@ export default function PracticeConversation() {
                     disabled={generating || submitting}
                     className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                       difficulty === d.value
-                        ? 'border-brand-500 bg-brand-50 text-brand-600'
-                        : 'border-border bg-canvas text-ink-soft hover:border-brand-400 hover:text-brand-600'
+                        ? 'border-terracotta bg-mint-tint/60 text-forest'
+                        : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
                     }`}
                   >
                     {d.label}
@@ -228,7 +236,7 @@ export default function PracticeConversation() {
                     type="button"
                     onClick={handleGenerate}
                     disabled={!canGenerate}
-                    className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+                    className="rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-60"
                   >
                     {generating ? 'Generating...' : 'Generate a Scenario'}
                   </button>
@@ -247,14 +255,14 @@ export default function PracticeConversation() {
                       value={customSituation}
                       onChange={(e) => setCustomSituation(e.target.value)}
                       rows={3}
-                      className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none"
+                      className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none"
                     />
                   </label>
                 )}
               </div>
             ) : (
               <>
-                <div className="rounded-xl border border-border bg-canvas p-4">
+                <div className="rounded-xl border border-hairline bg-cream p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Situation</p>
                   <p className="mt-1.5 text-sm text-ink">{activeSituation}</p>
                 </div>
@@ -266,7 +274,7 @@ export default function PracticeConversation() {
                     disabled={submitting}
                     rows={5}
                     placeholder="Draft what you'd say or write..."
-                    className="rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                    className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
                   />
                 </label>
                 {speechSupported && (
@@ -276,8 +284,8 @@ export default function PracticeConversation() {
                     disabled={submitting}
                     className={`flex w-fit items-center gap-2 rounded-full border-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
                       listening
-                        ? 'border-warm-500 bg-warm-100 text-warm-500'
-                        : 'border-brand-300 bg-brand-50 text-brand-600 hover:border-brand-400 hover:bg-brand-100'
+                        ? 'border-terracotta bg-peach-tint text-terracotta-600'
+                        : 'border-mint-tint bg-mint-tint/60 text-forest hover:border-terracotta/40 hover:bg-mint-tint'
                     }`}
                   >
                     <MicIcon className="h-5 w-5" />
@@ -301,7 +309,7 @@ export default function PracticeConversation() {
                     Try a different scenario
                   </button>
                   {submitting && (
-                    <div className="flex justify-center py-1 text-brand-600">
+                    <div className="flex justify-center py-1 text-forest">
                       <ProgressRing progress={workProgress} label="Reading your response" hint="Usually about fifteen seconds." />
                     </div>
                   )}
@@ -310,7 +318,7 @@ export default function PracticeConversation() {
                     type="button"
                     onClick={handleSubmit}
                     disabled={!canSubmit}
-                    className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                    className="rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90 disabled:opacity-50"
                   >
                     {submitting ? 'Getting feedback...' : 'Get Coaching Report'}
                   </button>
@@ -348,25 +356,25 @@ export default function PracticeConversation() {
               />
             </div>
 
-            <div className="rounded-xl border border-border bg-warm-100/60 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-warm-500">What you did well</p>
+            <div className="rounded-xl border border-hairline bg-peach-tint/60 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">What you did well</p>
               <p className="mt-1.5 text-sm text-ink">{report.didWell}</p>
             </div>
-            <div className="rounded-xl border border-border bg-brand-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Priority for improvement</p>
+            <div className="rounded-xl border border-hairline bg-mint-tint/60 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-forest">Priority for improvement</p>
               <p className="mt-1.5 text-sm text-ink">{report.priority}</p>
             </div>
-            <div className="rounded-xl border border-border bg-canvas p-4">
+            <div className="rounded-xl border border-hairline bg-cream p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">A stronger phrase</p>
               <p className="mt-1.5 text-sm text-ink">{report.strongerPhrase}</p>
             </div>
             {report.modelResponse && (
-              <div className="rounded-xl border border-border bg-brand-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">A model response</p>
+              <div className="rounded-xl border border-hairline bg-mint-tint/60 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-forest">A model response</p>
                 <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{report.modelResponse}</p>
               </div>
             )}
-            <div className="rounded-xl border border-border bg-canvas p-4">
+            <div className="rounded-xl border border-hairline bg-cream p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Suggested next step</p>
               <p className="mt-1.5 text-sm text-ink">{report.nextStep}</p>
             </div>
@@ -374,20 +382,20 @@ export default function PracticeConversation() {
             <button
               type="button"
               onClick={handlePracticeAgain}
-              className="self-end rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+              className="self-end rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
             >
               Practice Again
             </button>
             <Link
               to={`/communications/practice/${prep.id}/export`}
-              className="text-sm font-medium text-ink-soft transition-colors hover:text-brand-600"
+              className="text-sm font-medium text-ink-soft transition-colors hover:text-terracotta-600"
             >
               Export / Print
             </Link>
           </div>
         ) : null}
         {error && (
-          <p className="mt-4 text-center text-sm text-warm-500">
+          <p className="mt-4 text-center text-sm text-terracotta-600">
             <UpgradeMessage text={error} />
           </p>
         )}

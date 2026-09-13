@@ -13,7 +13,7 @@ export default function SafetyAdvisoryBanner({ text }: { text: string }) {
   return (
     <div
       className={`flex items-start gap-2.5 rounded-xl border p-3.5 text-sm ${
-        isUrgent ? 'border-warm-300 bg-warm-100/60 text-warm-500' : 'border-brand-200 bg-brand-50 text-brand-600'
+        isUrgent ? 'border-terracotta/40 bg-peach-tint/60 text-terracotta-600' : 'border-mint-tint bg-mint-tint/60 text-forest'
       }`}
     >
       <WarningIcon className="mt-0.5 h-4 w-4 shrink-0" />
