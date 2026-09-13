@@ -723,6 +723,25 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                   Optional coaching memory you control
                 </li>
               </ul>
+              {/* Lesson Debrief is what Plus unlocks, so its report is the proof.
+                  A staged recording — no real class or student. */}
+              <a
+                href="/samples/lesson-debrief.pdf"
+                target="_blank"
+                rel="noreferrer"
+                className="group mt-6 flex items-center gap-3 rounded-xl border border-hairline bg-cream p-3 transition-colors hover:border-terracotta/40"
+              >
+                <img
+                  src="/samples/lesson-debrief.png"
+                  alt=""
+                  className="h-14 w-12 shrink-0 rounded-md border border-hairline object-cover object-top"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-forest">See a sample Lesson Debrief</p>
+                  <p className="text-xs text-ink-soft">What you get after every recorded lesson</p>
+                </div>
+                <ArrowRightIcon className="h-4 w-4 shrink-0 text-ink-soft transition-transform group-hover:translate-x-0.5" />
+              </a>
               <a
                 href="#get-started"
                 className="mt-8 block rounded-full bg-terracotta px-5 py-3 text-center text-sm font-semibold text-white transition-opacity hover:opacity-90"
