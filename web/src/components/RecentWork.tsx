@@ -212,7 +212,7 @@ export default function RecentWork() {
       ) : (
         <div className="mt-3 flex flex-col gap-3">
           {visible.map((item) => (
-            <div key={item.id} className="rounded-xl border border-hairline bg-cream-card p-4">
+            <div key={item.id} className="rounded-2xl border border-hairline bg-cream-card p-4 transition-colors hover:border-terracotta/40">
               <div className="flex items-start justify-between gap-4">
                 <button type="button" onClick={() => setExpandedId((id) => (id === item.id ? null : item.id))} className="min-w-0 flex-1 text-left">
                   {renamingId === item.id ? (

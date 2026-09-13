@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import RecentWork from '../components/RecentWork'
+import { ACCENTS, ACCENT_CYCLE } from '../components/report'
 import { ChatBubbleIcon, ChecklistIcon, MailIcon, ScenarioIcon } from '../components/icons'
 import PracticeConversation from './PracticeConversation'
 import PrepareConversation from './PrepareConversation'
@@ -67,17 +68,34 @@ export default function Communications() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {TOOLS.map(({ value, label, description, icon: Icon }) => (
-          <Link
-            key={value}
-            to={`/communications?tool=${value}`}
-            className="group rounded-2xl border border-hairline bg-cream-card p-6 transition-all hover:border-terracotta/40 hover:shadow-md"
-          >
-            <Icon className="h-8 w-8 text-terracotta" />
-            <h2 className="mt-4 font-heading text-lg font-semibold text-forest">{label}</h2>
-            <p className="mt-1 text-sm text-ink-soft">{description}</p>
-          </Link>
-        ))}
+        {TOOLS.map(({ value, label, description, icon: Icon }, i) => {
+          const accent = ACCENT_CYCLE[i % ACCENT_CYCLE.length]
+          return (
+            <Link
+              key={value}
+              to={`/communications?tool=${value}`}
+              className={`group flex flex-col rounded-3xl p-6 transition-all hover:-translate-y-0.5 hover:shadow-md ${accent.tint}`}
+            >
+              <div className="flex items-start justify-between">
+                <span
+                  className={`flex h-12 w-12 items-center justify-center rounded-2xl ${accent.band} ${
+                    accent === ACCENTS.gold ? 'text-forest' : 'text-cream'
+                  }`}
+                >
+                  <Icon className="h-6 w-6" />
+                </span>
+                <span aria-hidden="true" className="font-heading text-3xl font-extrabold text-forest/15">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+              </div>
+              <h2 className="mt-5 font-heading text-xl font-bold text-forest">{label}</h2>
+              <p className="mt-1 flex-1 text-sm text-ink-soft">{description}</p>
+              <span className={`mt-4 text-sm font-semibold ${accent.ink}`}>
+                Start <span className="inline-block transition-transform group-hover:translate-x-0.5">→</span>
+              </span>
+            </Link>
+          )
+        })}
       </div>
 
       <RecentWork />

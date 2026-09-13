@@ -217,37 +217,45 @@ export default function AssignmentCoach() {
         <button
           type="button"
           onClick={() => setPendingMode('review')}
-          className="group relative rounded-2xl border border-hairline bg-cream-card p-6 text-left transition-shadow hover:shadow-md"
+          className="group flex flex-col rounded-3xl bg-peach-tint/50 p-6 text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
         >
-          <ChecklistIcon className="h-8 w-8 text-terracotta" />
-          <h2 className="mt-4 font-heading text-lg font-semibold text-forest">Review an assignment</h2>
-          <p className="mt-1 text-sm text-ink-soft">
+          <div className="flex items-start justify-between">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-terracotta text-cream">
+              <ChecklistIcon className="h-6 w-6" />
+            </span>
+            <span aria-hidden="true" className="font-heading text-3xl font-extrabold text-forest/15">01</span>
+          </div>
+          <h2 className="mt-5 font-heading text-xl font-bold text-forest">Review an assignment</h2>
+          <p className="mt-1 flex-1 text-sm text-ink-soft">
             Get coaching feedback on clarity, rigor, student thinking, accessibility, differentiation, and
             assessment alignment.
           </p>
-          <p className="mt-3 text-xs font-semibold text-terracotta">Start review</p>
-          <ArrowRightIcon className="absolute bottom-5 right-5 h-4 w-4 text-ink-soft transition-transform group-hover:translate-x-0.5 group-hover:text-terracotta" />
+          <span className="mt-4 text-sm font-semibold text-terracotta-600">
+            Start review <ArrowRightIcon className="inline h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+          </span>
         </button>
         <button
           type="button"
           onClick={() => setPendingMode('redesign_ai')}
-          className="group relative rounded-2xl border border-hairline bg-cream-card p-6 text-left transition-shadow hover:shadow-md"
+          className="group flex flex-col rounded-3xl bg-forest p-6 text-left text-cream transition-all hover:-translate-y-0.5 hover:shadow-md"
         >
-          <div className="relative inline-block">
-            <span className="flex h-8 w-8 items-center justify-center text-terracotta">
-              <ClipboardIcon className="h-8 w-8" />
+          <div className="flex items-start justify-between">
+            <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gold text-forest">
+              <ClipboardIcon className="h-6 w-6" />
+              <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-terracotta text-cream">
+                <SparkleIcon className="h-3 w-3" />
+              </span>
             </span>
-            <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-gold text-forest">
-              <SparkleIcon className="h-2.5 w-2.5" />
-            </span>
+            <span aria-hidden="true" className="font-heading text-3xl font-extrabold text-cream/15">02</span>
           </div>
-          <h2 className="mt-4 font-heading text-lg font-semibold text-forest">Redesign for meaningful AI use</h2>
-          <p className="mt-1 text-sm text-ink-soft">
+          <h2 className="mt-5 font-heading text-xl font-bold text-cream">Redesign for meaningful AI use</h2>
+          <p className="mt-1 flex-1 text-sm text-cream/70">
             Adapt an assignment so students must demonstrate their own thinking—whether AI is allowed, limited, or
             not allowed.
           </p>
-          <p className="mt-3 text-xs font-semibold text-terracotta">Start redesign</p>
-          <ArrowRightIcon className="absolute bottom-5 right-5 h-4 w-4 text-ink-soft transition-transform group-hover:translate-x-0.5 group-hover:text-terracotta" />
+          <span className="mt-4 text-sm font-semibold text-gold">
+            Start redesign <ArrowRightIcon className="inline h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+          </span>
         </button>
       </div>
 
@@ -256,9 +264,7 @@ export default function AssignmentCoach() {
         {historyLoading ? (
           <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
         ) : sessions.length === 0 ? (
-          <div className="mt-3 rounded-2xl border border-dashed border-hairline p-6 text-center text-sm text-ink-soft">
-            Assignments you review or redesign will show up here.
-          </div>
+          <p className="mt-2 text-sm text-ink-soft">Assignments you review or redesign will show up here.</p>
         ) : (
           <div className="mt-3 flex flex-col gap-3">
             {sessions.map((s) => (
@@ -283,7 +289,7 @@ function AssignmentRow({
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border border-hairline bg-cream-card p-4">
+    <div className="flex items-center justify-between gap-4 rounded-2xl border border-hairline bg-cream-card p-4 transition-colors hover:border-terracotta/40">
       <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-full bg-mint-tint px-2 py-0.5 text-xs font-semibold text-forest">
