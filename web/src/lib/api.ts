@@ -1464,3 +1464,41 @@ export async function sendSupportChat(message: string, history: SupportTurn[]): 
     'Sorry — something went wrong. Email hello@wivoza.com and a person will reply.'
   )
 }
+
+// Public /for-schools form, and the superadmin inbox that reads it.
+export type SchoolInquiryInput = {
+  name: string
+  email: string
+  role: string
+  organizationName: string
+  organizationType: 'school' | 'district' | 'network' | 'other'
+  state?: string
+  teacherCount?: '1-25' | '26-100' | '101-500' | '500+'
+  interests: ('pilot' | 'license' | 'demo' | 'pd')[]
+  message?: string
+  // Honeypot — always empty from a real visitor.
+  website?: string
+}
+
+export type SchoolInquiry = Omit<SchoolInquiryInput, 'interests' | 'website' | 'state' | 'teacherCount' | 'message'> & {
+  id: string
+  state: string | null
+  teacherCount: string | null
+  interests: string | null
+  message: string | null
+  status: 'new' | 'contacted' | 'closed'
+  createdAt: string
+  updatedAt: string
+}
+
+export function submitSchoolInquiry(data: SchoolInquiryInput): Promise<{ ok: true }> {
+  return request('/api/school-inquiries', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function getSchoolInquiries(): Promise<SchoolInquiry[]> {
+  return request('/api/school-inquiries')
+}
+
+export function updateSchoolInquiryStatus(id: string, status: SchoolInquiry['status']): Promise<SchoolInquiry> {
+  return request(`/api/school-inquiries/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
+}

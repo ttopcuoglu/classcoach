@@ -618,6 +618,13 @@ export default function Guide() {
               </p>
             </div>
           </div>
+          <Link
+            to="/for-schools"
+            className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-terracotta-600 hover:text-terracotta"
+          >
+            Bringing Wivoza to your school or district? Get in touch
+            <ArrowRightIcon className="h-3.5 w-3.5" />
+          </Link>
         </section>
       </div>
 

@@ -28,6 +28,9 @@ import {
   type Strength,
   type TallyEntry,
   type UserProfile,
+  getSchoolInquiries,
+  updateSchoolInquiryStatus,
+  type SchoolInquiry,
 } from '../lib/api'
 import { categoryLabel } from '../lib/categories'
 import { CHALLENGE_TYPES, MESSAGE_PURPOSES, challengeLabel, purposeLabel } from '../lib/communicationOptions'
@@ -66,7 +69,7 @@ const primaryButtonClass =
   'rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft'
 
 type AnalyticsTab = 'dashboard' | 'engagement' | 'insights'
-type Tab = AnalyticsTab | 'professionalLearning' | 'people' | 'organizations' | 'platformUsers'
+type Tab = AnalyticsTab | 'professionalLearning' | 'people' | 'organizations' | 'platformUsers' | 'schoolInquiries'
 
 const ANALYTICS_META: Record<AnalyticsTab, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'Are teachers using Wivoza, and what should you do next.' },
@@ -221,6 +224,13 @@ export default function AdminDashboard() {
               >
                 Platform users
               </button>
+              <button
+                type="button"
+                onClick={() => setTab('schoolInquiries')}
+                className={navButtonClass(tab === 'schoolInquiries')}
+              >
+                School inquiries
+              </button>
             </div>
           </div>
         )}
@@ -276,6 +286,7 @@ export default function AdminDashboard() {
         )}
         {tab === 'organizations' && <OrganizationsPanel />}
         {tab === 'platformUsers' && <UsersPanel />}
+        {tab === 'schoolInquiries' && <SchoolInquiriesPanel />}
       </div>
     </div>
   )
@@ -2344,5 +2355,149 @@ function UserRow({ user, onChanged }: { user: AdminUser; onChanged: () => void }
         {error && <p className="mt-1 text-xs text-terracotta-600">{error}</p>}
       </td>
     </tr>
+  )
+}
+
+const INQUIRY_TYPE_LABELS: Record<string, string> = {
+  school: 'School',
+  district: 'District',
+  network: 'Charter network',
+  other: 'Other',
+}
+const INQUIRY_INTEREST_LABELS: Record<string, string> = {
+  pilot: 'Pilot',
+  license: 'License for all teachers',
+  demo: 'Walkthrough',
+  pd: 'Professional learning',
+}
+const INQUIRY_STATUS_STYLES: Record<SchoolInquiry['status'], string> = {
+  new: 'bg-terracotta text-cream',
+  contacted: 'bg-gold text-forest',
+  closed: 'bg-mint-tint text-forest',
+}
+
+// Superadmin inbox for the public /for-schools form. Everything shown here
+// was typed by an unauthenticated visitor, so it is rendered as plain text.
+function SchoolInquiriesPanel() {
+  const [inquiries, setInquiries] = useState<SchoolInquiry[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [filter, setFilter] = useState<'open' | 'all'>('open')
+
+  useEffect(() => {
+    getSchoolInquiries()
+      .then(setInquiries)
+      .catch(() => setError('Could not load school inquiries.'))
+  }, [])
+
+  async function handleStatus(id: string, status: SchoolInquiry['status']) {
+    setInquiries((prev) => prev?.map((i) => (i.id === id ? { ...i, status } : i)) ?? prev)
+    try {
+      await updateSchoolInquiryStatus(id, status)
+    } catch {
+      setError('Could not update that inquiry. Refresh and try again.')
+    }
+  }
+
+  const visible = (inquiries ?? []).filter((i) => filter === 'all' || i.status !== 'closed')
+  const newCount = (inquiries ?? []).filter((i) => i.status === 'new').length
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza internal</p>
+        <h1 className="font-heading text-2xl font-extrabold text-forest md:text-[34px]">
+          School inquiries<span className="text-gold">.</span>
+        </h1>
+        <p className="mt-1 text-sm text-ink-soft">
+          Requests from the For Schools page{inquiries ? ` — ${newCount} new` : ''}.
+        </p>
+      </div>
+
+      <div className="flex gap-2">
+        {(['open', 'all'] as const).map((f) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => setFilter(f)}
+            className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+              filter === f ? 'bg-forest text-cream' : 'bg-cream-card text-ink-soft hover:text-ink'
+            }`}
+          >
+            {f === 'open' ? 'Open' : 'All'}
+          </button>
+        ))}
+      </div>
+
+      {error && <p className="text-sm text-terracotta-600">{error}</p>}
+      {!inquiries && !error && <p className="text-sm text-ink-soft">Loading...</p>}
+      {inquiries && visible.length === 0 && (
+        <p className="text-sm text-ink-soft">{filter === 'open' ? 'No open inquiries.' : 'No inquiries yet.'}</p>
+      )}
+
+      <div className="flex flex-col gap-4">
+        {visible.map((inq) => (
+          <div key={inq.id} className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ${INQUIRY_STATUS_STYLES[inq.status]}`}>
+                    {inq.status}
+                  </span>
+                  <span className="text-xs text-ink-soft">{new Date(inq.createdAt).toLocaleString()}</span>
+                </div>
+                <h2 className="mt-2 font-heading text-lg font-bold text-forest">{inq.organizationName}</h2>
+                <p className="text-sm text-ink-soft">
+                  {[INQUIRY_TYPE_LABELS[inq.organizationType] ?? inq.organizationType, inq.state, inq.teacherCount ? `${inq.teacherCount} teachers` : null]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+              </div>
+              <select
+                value={inq.status}
+                onChange={(e) => handleStatus(inq.id, e.target.value as SchoolInquiry['status'])}
+                aria-label="Inquiry status"
+                className="rounded-xl border border-hairline bg-cream px-3 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
+              >
+                <option value="new">New</option>
+                <option value="contacted">Contacted</option>
+                <option value="closed">Closed</option>
+              </select>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl bg-mint-tint/50 p-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">Contact</p>
+                <p className="mt-1 text-sm font-semibold text-ink">{inq.name}</p>
+                <p className="text-sm text-ink-soft">{inq.role}</p>
+                <a
+                  href={`mailto:${inq.email}?subject=${encodeURIComponent(`Wivoza for ${inq.organizationName}`)}`}
+                  className="mt-1 inline-block break-all text-sm font-semibold text-terracotta-600 hover:underline"
+                >
+                  {inq.email}
+                </a>
+              </div>
+              <div className="rounded-2xl bg-gold-tint/50 p-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Interested in</p>
+                {inq.interests ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {inq.interests.split(',').map((i) => (
+                      <span key={i} className="rounded-full bg-cream-card px-2.5 py-0.5 text-xs font-semibold text-forest">
+                        {INQUIRY_INTEREST_LABELS[i] ?? i}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-sm text-ink-soft">Not specified</p>
+                )}
+              </div>
+            </div>
+
+            {inq.message && (
+              <p className="mt-4 whitespace-pre-wrap rounded-2xl border-l-8 border-gold bg-cream p-4 text-sm text-ink">{inq.message}</p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }

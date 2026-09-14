@@ -538,3 +538,28 @@ model TranscriptSegment {
   text          String
   createdAt     DateTime     @default(now())
 }
+
+// A school or district asking about Wivoza from the public /for-schools
+// page. Unauthenticated, so everything here is whatever the visitor typed —
+// shown only to superadmins, never used to create an account or org.
+model SchoolInquiry {
+  id               String    @id @default(cuid())
+  name             String
+  email            String
+  role             String
+  organizationName String
+  // "school" | "district" | "network" | "other"
+  organizationType String
+  state            String?
+  // A range chosen from a fixed list ("1-25", "26-100", ...), not a count.
+  teacherCount     String?
+  // Comma-separated: pilot, license, demo, pd
+  interests        String?
+  message          String?
+  // "new" | "contacted" | "closed"
+  status           String    @default("new")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([createdAt])
+}

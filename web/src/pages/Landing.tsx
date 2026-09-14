@@ -307,9 +307,9 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             <a href="#pricing" className="hover:text-ink">
               Pricing
             </a>
-            <a href="#for-schools" className="hover:text-ink">
+            <Link to="/for-schools" className="hover:text-ink">
               For Schools
-            </a>
+            </Link>
             <Link to="/guide" className="hover:text-ink">
               Guide
             </Link>
@@ -375,13 +375,13 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             >
               Pricing
             </a>
-            <a
-              href="#for-schools"
+            <Link
+              to="/for-schools"
               onClick={() => setMobileNavOpen(false)}
               className="rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-cream hover:text-ink"
             >
               For Schools
-            </a>
+            </Link>
             <Link
               to="/guide"
               onClick={() => setMobileNavOpen(false)}
@@ -786,13 +786,13 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                 your rollout.
               </p>
             </div>
-            <a
-              href="mailto:hello@wivoza.com?subject=Wivoza%20for%20our%20district"
+            <Link
+              to="/for-schools"
               className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-gold px-5 py-3 text-sm font-semibold text-forest transition-opacity hover:opacity-90"
             >
-              Request a quote
+              See how it works for schools
               <ArrowRightIcon className="h-4 w-4" />
-            </a>
+            </Link>
           </div>
         </div>
       </section>

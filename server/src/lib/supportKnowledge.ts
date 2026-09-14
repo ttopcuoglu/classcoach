@@ -61,7 +61,8 @@ PRICING
   Communication Coach, and Coach's memory.
 - Districts can license Plus-level access for every teacher. A teacher enters
   a short join code (during onboarding, or later from Profile & Settings) and
-  everything unlocks. For a quote, email hello@wivoza.com
+  everything unlocks. Schools and districts can request a license or pilot
+  through the short form at wivoza.com/for-schools (or email hello@wivoza.com).
 
 GETTING STARTED
 - Sign up with Apple, Google, or email and password. Before any sign-in

@@ -32,6 +32,7 @@ const TalkToMe = lazy(() => import('./pages/TalkToMe'))
 const Onboarding = lazy(() => import('./pages/Onboarding'))
 const Terms = lazy(() => import('./pages/Terms'))
 const Guide = lazy(() => import('./pages/Guide'))
+const ForSchools = lazy(() => import('./pages/ForSchools'))
 const GuideTalkItThrough = lazy(() => import('./pages/GuideTalkItThrough'))
 const GuideLessonDebrief = lazy(() => import('./pages/GuideLessonDebrief'))
 const GuideAskPractice = lazy(() => import('./pages/GuideAskPractice'))
@@ -135,6 +136,7 @@ export default function App() {
             <Route path="guide/communication-coach" element={<GuideCommunicationCoach />} />
             <Route path="guide/cheat-sheet" element={<GuideCheatSheet />} />
             <Route path="faq" element={<Faq />} />
+            <Route path="for-schools" element={<ForSchools />} />
             <Route
               path="onboarding"
               element={
