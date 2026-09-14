@@ -119,18 +119,34 @@ export type PlanUser = {
   organization: { plan: string | null; pilotEndsAt: Date | null } | null
 }
 
-export function hasActivePlanFor(user: PlanUser | null): boolean {
-  if (LIMITS_LIFTED_FOR_EVERYONE) return true
-  if (!user) return false
+// Why a user has Plus-equivalent access, or null for a free teacher. The
+// client shows this instead of the raw `plan` field, which only reflects a
+// personal subscription — so a superadmin, a review demo login, or a teacher
+// on a district plan isn't told to upgrade.
+export type PlusAccess = 'subscription' | 'school' | 'admin' | 'demo'
+
+export function plusAccessFor(user: PlanUser | null): PlusAccess | null {
+  if (!user) return null
   // App Store review demo logins get full access without superadmin.
-  if (isDemoAccount(user.email)) return true
+  if (isDemoAccount(user.email)) return 'demo'
   // Superadmin needs to exercise every feature area to support/verify the
   // platform — never blocked behind a paywall meant for teachers.
-  if (user.role === 'superadmin') return true
-  if (user.plan === 'plus' && user.planStatus === 'active') return true
-  if (user.organization?.plan === 'district') return true
-  if (user.organization?.pilotEndsAt && user.organization.pilotEndsAt > new Date()) return true
-  return false
+  if (user.role === 'superadmin') return 'admin'
+  if (user.plan === 'plus' && user.planStatus === 'active') return 'subscription'
+  if (user.organization?.plan === 'district') return 'school'
+  if (user.organization?.pilotEndsAt && user.organization.pilotEndsAt > new Date()) return 'school'
+  return null
+}
+
+export function hasActivePlanFor(user: PlanUser | null): boolean {
+  if (LIMITS_LIFTED_FOR_EVERYONE) return true
+  return plusAccessFor(user) !== null
+}
+
+// Adds `plusAccess` to a user object headed for the client.
+export async function withPlusAccess<T extends { id: string }>(user: T): Promise<T & { plusAccess: PlusAccess | null }> {
+  const planUser = await prisma.user.findUnique({ where: { id: user.id }, select: PLAN_USER_SELECT })
+  return { ...user, plusAccess: plusAccessFor(planUser) }
 }
 
 export async function hasActivePlan(userId: string): Promise<boolean> {

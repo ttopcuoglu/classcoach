@@ -10,6 +10,7 @@ import {
   USER_INCLUDE_ORG,
 } from '../lib/auth.ts'
 import { verifyAppleIdentityToken } from '../lib/appleAuth.ts'
+import { withPlusAccess } from '../lib/billing.ts'
 import { resolveSignInRole } from '../lib/organization.ts'
 import { prisma } from '../lib/prisma.ts'
 
@@ -324,7 +325,7 @@ authRouter.get('/me', requireAuth, async (req, res) => {
     res.status(401).json({ error: 'Not signed in' })
     return
   }
-  res.json(user)
+  res.json(await withPlusAccess(user))
 })
 
 authRouter.post('/logout', (_req, res) => {

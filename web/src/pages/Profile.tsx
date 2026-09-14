@@ -9,6 +9,7 @@ import {
   TALK_VOICES,
   updateProfile,
   type ExperienceLevel,
+  type UserProfile,
   type TalkVoice,
 } from '../lib/api'
 import { EXPERIENCE_OPTIONS } from '../lib/experience'
@@ -45,6 +46,7 @@ export default function Profile() {
   const [coachMemoryEnabled, setCoachMemoryEnabled] = useState(true)
   const [talkVoice, setTalkVoice] = useState<TalkVoice | null>(null)
   const [plan, setPlan] = useState<'free' | 'plus'>('free')
+  const [plusAccess, setPlusAccess] = useState<UserProfile['plusAccess']>(null)
 
   const [billingLoading, setBillingLoading] = useState(false)
   const [billingError, setBillingError] = useState<string | null>(null)
@@ -67,6 +69,8 @@ export default function Profile() {
   const [deletingAccount, setDeletingAccount] = useState(false)
   const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null)
 
+  const hasPlus = plusAccess != null || plan === 'plus'
+
   useEffect(() => {
     getProfile()
       .then((profile) => {
@@ -80,6 +84,7 @@ export default function Profile() {
         setCoachMemoryEnabled(profile.coachMemoryEnabled)
         setTalkVoice(profile.talkVoice)
         setPlan(profile.plan)
+        setPlusAccess(profile.plusAccess ?? null)
       })
       .catch(() => setSaveError('Could not load your profile.'))
       .finally(() => setLoading(false))
@@ -225,18 +230,22 @@ export default function Profile() {
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Your plan</p>
             <span
               className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
-                plan === 'plus' ? 'bg-gold text-forest' : 'bg-cream/15 text-cream'
+                hasPlus ? 'bg-gold text-forest' : 'bg-cream/15 text-cream'
               }`}
             >
-              {plan === 'plus' ? 'Wivoza Plus' : 'Free'}
+              {plusAccess === 'admin' ? 'Full access' : hasPlus ? 'Wivoza Plus' : 'Free'}
             </span>
           </div>
           <p className="text-sm text-cream/75">
-            {plan === 'plus'
-              ? 'Unlimited Lesson Debrief, Lesson Planning, Messages, and Coach\'s memory.'
-              : 'Unlimited Talk It Through and Ask & Practice, 3 Lesson Debrief recordings a month.'}
+            {plusAccess === 'admin'
+              ? 'Platform admin — every feature is unlocked, with no limits.'
+              : plusAccess === 'school'
+                ? `Included through ${organizationName ?? 'your school'} — unlimited Lesson Debrief, Lesson Planning, Messages, and Coach's memory.`
+                : hasPlus
+                  ? 'Unlimited Lesson Debrief, Lesson Planning, Messages, and Coach\'s memory.'
+                  : 'Unlimited Talk It Through and Ask & Practice, 3 Lesson Debrief recordings a month.'}
           </p>
-          {plan === 'plus' ? (
+          {plusAccess === 'admin' || plusAccess === 'school' || plusAccess === 'demo' ? null : plan === 'plus' ? (
             <button
               type="button"
               onClick={handleManageBilling}

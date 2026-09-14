@@ -106,7 +106,7 @@ export default function AudioCoaching() {
         setFocusMetric(p.focusMetric)
         setTeacherName(p.name)
         setTalkVoice(p.talkVoice)
-        setShowFreeCapLine(p.plan === 'free' && p.organizationId == null)
+        setShowFreeCapLine(!p.plusAccess && p.organizationId == null)
       })
       .catch(() => {})
   }, [])

@@ -89,6 +89,9 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
   }
 
   const focusMetric = user?.focusMetric as FocusMetric | null | undefined
+  // Covers a school plan, admins and review accounts too — `plan` alone only
+  // reflects a personal subscription.
+  const hasPlus = user?.plusAccess != null || user?.plan === 'plus'
   // First 30 Days is a new-teacher track; experienced teachers can still
   // reach it from Profile, it just doesn't take up a spot in their nav.
   const navGroups = isExperienced(user?.experienceLevel)
@@ -142,7 +145,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
           </Link>
         </div>
 
-        {user != null && user.plan !== 'plus' && (
+        {user != null && !hasPlus && (
           <div className="mx-3 mb-3 rounded-2xl bg-gold-tint p-4">
             <p className="text-sm font-semibold text-terracotta-600">Wivoza Plus</p>
             <p className="mt-1 text-xs text-forest/70">
@@ -188,7 +191,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
           </button>
         </header>
 
-        {user != null && user.plan !== 'plus' && (
+        {user != null && !hasPlus && (
           <Link
             to="/profile"
             className="block bg-gold-tint px-4 py-2 text-center text-xs font-semibold text-terracotta-600 md:hidden"

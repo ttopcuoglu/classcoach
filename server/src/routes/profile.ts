@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { SAFE_USER_OMIT, SESSION_COOKIE, USER_INCLUDE_ORG } from '../lib/auth.ts'
+import { withPlusAccess } from '../lib/billing.ts'
 import { resolveJoinCode } from '../lib/organization.ts'
 import { prisma } from '../lib/prisma.ts'
 import { isValidExperienceLevel } from '../lib/experience.ts'
@@ -17,7 +18,7 @@ profileRouter.get('/', async (req, res) => {
     res.status(401).json({ error: 'Not signed in' })
     return
   }
-  res.json(user)
+  res.json(await withPlusAccess(user))
 })
 
 // Self-service account deletion — Apple Guideline 5.1.1(v) requires any
@@ -165,7 +166,7 @@ profileRouter.put('/', async (req, res) => {
     omit: SAFE_USER_OMIT,
     include: USER_INCLUDE_ORG,
   })
-  res.json(updated)
+  res.json(await withPlusAccess(updated))
 })
 
 // Clears the teacher's own data (saved scenarios, attempts, debriefs, parent

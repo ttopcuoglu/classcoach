@@ -91,6 +91,9 @@ export type UserProfile = {
   coachMemoryEnabled: boolean
   plan: 'free' | 'plus'
   planStatus: string | null
+  // Why this account has Plus-level access, or null on the Free plan — covers
+  // a school plan, admins and review accounts, not just a personal subscription.
+  plusAccess?: 'subscription' | 'school' | 'admin' | 'demo' | null
   organizationId: string | null
   organization: { name: string } | null
   createdAt: string
