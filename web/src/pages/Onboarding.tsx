@@ -26,16 +26,43 @@ const GOAL_SUGGESTIONS = [
 ]
 
 const inputClass =
-  'rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60'
+  'rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60'
 
 function pillClass(active: boolean) {
   return `rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-    active ? 'border-terracotta bg-mint-tint/60 text-forest' : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
+    active ? 'border-forest bg-forest text-cream' : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
   }`
 }
 
 const primaryButtonClass =
   'rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft'
+
+// The numbered steps a teacher actually fills in — 'done' is the finish line,
+// not a step, so it is left out of "Step N of 6".
+const COUNTED_STEPS: WizardStep[] = STEPS.filter((s) => s !== 'done')
+
+// Dark green header that opens every step, with the progress bar folded into
+// it. Bleeds to the card's edges (the card is p-6 and overflow-hidden).
+function StepHeader({ step, title, children }: { step: WizardStep; title: string; children?: React.ReactNode }) {
+  const index = COUNTED_STEPS.indexOf(step)
+  return (
+    <div className="-mx-6 -mt-6 mb-2 bg-forest px-6 pb-6 pt-5 text-cream">
+      <div className="flex gap-1.5" aria-hidden="true">
+        {COUNTED_STEPS.map((s, i) => (
+          <div key={s} className={`h-1.5 flex-1 rounded-full ${i <= index ? 'bg-gold' : 'bg-cream/15'}`} />
+        ))}
+      </div>
+      <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.18em] text-gold">
+        Step {index + 1} of {COUNTED_STEPS.length}
+      </p>
+      <h1 className="mt-1.5 font-heading text-2xl font-bold text-cream sm:text-3xl">
+        {title}
+        <span className="text-gold">.</span>
+      </h1>
+      {children && <p className="mt-1.5 text-sm text-cream/70">{children}</p>}
+    </div>
+  )
+}
 
 export default function Onboarding({ onDone }: { onDone: () => Promise<unknown> }) {
   const navigate = useNavigate()
@@ -125,24 +152,21 @@ export default function Onboarding({ onDone }: { onDone: () => Promise<unknown> 
     }
   }
 
-  const stepIndex = STEPS.indexOf(step)
-
   return (
     <div className="flex min-h-screen flex-col items-center bg-cream px-6 py-10">
       <div className="w-full max-w-lg">
-        <div className="mb-6 flex gap-1.5">
-          {STEPS.map((s, i) => (
-            <div key={s} className={`h-1.5 flex-1 rounded-full ${i <= stepIndex ? 'bg-terracotta' : 'bg-border'}`} />
-          ))}
-        </div>
+        <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="mx-auto mb-6 h-10 w-auto" />
 
-        <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+        <div
+          className={`overflow-hidden rounded-3xl p-6 shadow-sm ${
+            step === 'done' ? 'bg-forest text-cream' : 'border border-hairline bg-cream-card'
+          }`}
+        >
           {step === 'about-you' && (
             <div className="flex flex-col gap-4">
-              <div>
-                <h1 className="font-heading text-2xl font-bold text-forest">Tell us about yourself</h1>
-                <p className="mt-1 text-sm text-ink-soft">A quick intro before we get started.</p>
-              </div>
+              <StepHeader step="about-you" title="Tell us about yourself">
+                A quick intro before we get started.
+              </StepHeader>
               <div className="grid grid-cols-2 gap-3">
                 <input
                   value={firstName}
@@ -158,7 +182,7 @@ export default function Onboarding({ onDone }: { onDone: () => Promise<unknown> 
                 />
               </div>
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">Your role</p>
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Your role</p>
                 <div className="flex flex-wrap gap-2">
                   {JOB_TITLES.map((title) => (
                     <button
@@ -186,10 +210,9 @@ export default function Onboarding({ onDone }: { onDone: () => Promise<unknown> 
 
           {step === 'classroom' && (
             <div className="flex flex-col gap-4">
-              <div>
-                <h1 className="font-heading text-2xl font-bold text-forest">Your classroom</h1>
-                <p className="mt-1 text-sm text-ink-soft">This helps us get a sense of what matters to you.</p>
-              </div>
+              <StepHeader step="classroom" title="Your classroom">
+                This helps us get a sense of what matters to you.
+              </StepHeader>
               <input
                 value={schoolName}
                 onChange={(e) => setSchoolName(e.target.value)}
@@ -228,14 +251,11 @@ export default function Onboarding({ onDone }: { onDone: () => Promise<unknown> 
 
           {step === 'mic-check' && (
             <div className="flex flex-col gap-4">
-              <div>
-                <h1 className="font-heading text-2xl font-bold text-forest">Test your microphone</h1>
-                <p className="mt-1 text-sm text-ink-soft">
-                  Wivoza records your lesson audio. Let's make sure we can hear you.
-                </p>
-              </div>
-              <div className="rounded-xl border border-hairline bg-cream p-5">
-                <p className="mb-3 text-sm font-semibold text-ink">Do you see the bar move when you speak?</p>
+              <StepHeader step="mic-check" title="Test your microphone">
+                Wivoza records your lesson audio. Let's make sure we can hear you.
+              </StepHeader>
+              <div className="rounded-2xl bg-mint-tint/50 p-5">
+                <p className="mb-3 font-heading text-base font-bold text-forest">Do you see the bar move when you speak?</p>
                 <MicLevelMeter onSignalDetected={() => setMicSignalSeen(true)} />
               </div>
               <p className="text-xs text-ink-soft">
@@ -260,12 +280,9 @@ export default function Onboarding({ onDone }: { onDone: () => Promise<unknown> 
 
           {step === 'live-demo' && (
             <div className="flex flex-col gap-4">
-              <div>
-                <h1 className="font-heading text-2xl font-bold text-forest">See it in action</h1>
-                <p className="mt-1 text-sm text-ink-soft">
-                  Read the line below out loud, and watch Wivoza pick out a real coaching moment.
-                </p>
-              </div>
+              <StepHeader step="live-demo" title="See it in action">
+                Read the line below out loud, and watch Wivoza pick out a real coaching moment.
+              </StepHeader>
               <DemoRecorder />
               <div className="flex justify-end">
                 <button type="button" onClick={() => goTo('your-goal')} className={primaryButtonClass}>
@@ -277,18 +294,17 @@ export default function Onboarding({ onDone }: { onDone: () => Promise<unknown> 
 
           {step === 'your-goal' && (
             <div className="flex flex-col gap-4">
-              <div>
-                <h1 className="font-heading text-2xl font-bold text-forest">Tell us about your classroom</h1>
-                <p className="mt-1 text-sm text-ink-soft">This helps us get a sense of what matters to you as a teacher.</p>
-              </div>
-              <div className="rounded-xl border border-hairline bg-cream p-4">
-                <p className="font-semibold text-ink">
+              <StepHeader step="your-goal" title="Tell us about your classroom">
+                This helps us get a sense of what matters to you as a teacher.
+              </StepHeader>
+              <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
+                <p className="font-heading text-lg font-bold text-forest">
                   I'd like my students to{' '}
                   <input
                     value={teachingGoal}
                     onChange={(e) => setTeachingGoal(e.target.value)}
                     placeholder="___"
-                    className="w-56 border-b border-hairline bg-transparent px-1 focus:border-terracotta focus:outline-none"
+                    className="w-56 border-b-2 border-terracotta/40 bg-transparent px-1 font-sans text-base font-medium text-ink focus:border-terracotta focus:outline-none"
                   />
                   .
                 </p>
@@ -314,16 +330,13 @@ export default function Onboarding({ onDone }: { onDone: () => Promise<unknown> 
 
           {step === 'initial-focus' && (
             <div className="flex flex-col gap-4">
-              <div>
-                <h1 className="font-heading text-2xl font-bold text-forest">Pick a focus to start</h1>
-                <p className="mt-1 text-sm text-ink-soft">
-                  You can always change this later from your growth trends.
-                </p>
-              </div>
+              <StepHeader step="initial-focus" title="Pick a focus to start">
+                You can always change this later from your growth trends.
+              </StepHeader>
               <div className="flex flex-col gap-3">
                 {FOCUS_METRIC_GROUPS.map((group) => (
                   <div key={group.category}>
-                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
+                    <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
                       {group.category}
                     </p>
                     <div className="flex flex-wrap gap-2">
@@ -354,12 +367,17 @@ export default function Onboarding({ onDone }: { onDone: () => Promise<unknown> 
           )}
 
           {step === 'done' && (
-            <div className="flex flex-col gap-4 text-center">
-              <h1 className="font-heading text-2xl font-bold text-forest">You're all set.</h1>
-              <p className="text-sm text-ink-soft">
+            <div className="flex flex-col items-center gap-4 py-4 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold font-heading text-2xl font-bold text-forest">
+                ✓
+              </span>
+              <h1 className="font-heading text-3xl font-extrabold text-cream">
+                You're all set<span className="text-gold">.</span>
+              </h1>
+              <p className="text-sm text-cream/70">
                 Your first recording is a click away whenever you're ready.
               </p>
-              {error && <p className="text-sm text-terracotta-600">{error}</p>}
+              {error && <p className="text-sm text-peach-tint">{error}</p>}
               <button type="button" onClick={finish} disabled={saving} className={`self-center ${primaryButtonClass}`}>
                 {saving ? 'Please wait...' : 'Go to Wivoza'}
               </button>

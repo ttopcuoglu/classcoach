@@ -64,7 +64,7 @@ export default function MicLevelMeter({ onSignalDetected }: { onSignalDetected?:
   }
 
   return (
-    <div className="h-3 w-full overflow-hidden rounded-full bg-cream">
+    <div className="h-3 w-full overflow-hidden rounded-full bg-cream-card">
       <div className="h-full rounded-full bg-terracotta transition-[width]" style={{ width: `${level}%` }} />
     </div>
   )

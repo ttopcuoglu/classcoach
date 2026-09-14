@@ -74,8 +74,8 @@ export default function DemoRecorder() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Read this aloud</p>
+      <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Read this aloud</p>
         <p className="mt-2 font-display text-lg italic leading-relaxed text-ink">"{DEMO_SCRIPT}"</p>
       </div>
 
@@ -83,7 +83,7 @@ export default function DemoRecorder() {
         <button
           type="button"
           onClick={handleRecord}
-          className="flex items-center justify-center gap-2 self-start rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
+          className="flex items-center justify-center gap-2 self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90"
         >
           <MicIcon className="h-4 w-4" />
           Start recording
@@ -94,7 +94,7 @@ export default function DemoRecorder() {
         <button
           type="button"
           onClick={handleStop}
-          className="flex items-center justify-center gap-2 self-start rounded-lg bg-ink px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:opacity-90"
+          className="flex items-center justify-center gap-2 self-start rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:opacity-90"
         >
           Stop recording
         </button>
@@ -105,8 +105,8 @@ export default function DemoRecorder() {
       {error && <p className="text-sm text-terracotta-600">{error}</p>}
 
       {phase === 'result' && result && (
-        <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Here's what we found</p>
+        <div className="rounded-2xl bg-mint-tint/50 p-5">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">Here's what we found</p>
           {result.tag && result.highlightedText ? (
             <>
               <p className="mt-2 text-sm text-ink">
@@ -119,7 +119,7 @@ export default function DemoRecorder() {
                   </span>
                 ))}
               </p>
-              <span className="mt-3 inline-block rounded-full border border-terracotta bg-mint-tint/60 px-3 py-1 text-xs font-semibold text-forest">
+              <span className="mt-3 inline-block rounded-full bg-forest px-3 py-1 text-xs font-semibold text-cream">
                 {TAG_LABELS[result.tag]}
               </span>
             </>
@@ -133,7 +133,7 @@ export default function DemoRecorder() {
             <button
               type="button"
               onClick={handleTryAgain}
-              className="rounded-lg border border-hairline px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
+              className="rounded-full border border-hairline bg-cream px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
             >
               Try again
             </button>
