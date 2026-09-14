@@ -8,7 +8,7 @@
 const SITE = 'https://www.wivoza.com'
 const DEFAULT_TITLE = 'Wivoza — AI coaching for K-12 teachers'
 const DEFAULT_DESCRIPTION =
-  'Private, judgment-free AI coaching for teachers. Prepare for hard conversations, reflect on real lessons, and grow — one practical next step at a time.'
+  'Wivoza is a private, judgment-free AI coaching app for K-12 teachers. Prepare for hard conversations, reflect on real lessons, and grow — one practical next step at a time.'
 
 type Meta = { title: string; description: string }
 
