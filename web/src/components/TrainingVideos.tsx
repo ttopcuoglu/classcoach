@@ -26,8 +26,8 @@ export const GET_STARTED_VIDEO = {
 // `slug` is also the anchor — /guide#video-<slug> — that the home page's
 // "Watch how it works" links land on.
 export const FEATURE_VIDEOS = [
-  { slug: 'talk-it-through', id: '-Xhmj0F7n_o', title: 'Talk It Through', blurb: 'Process a rough lesson in five minutes.' },
   { slug: 'lesson-debrief', id: 'lLnZhrtiAIw', title: 'Lesson Debrief', blurb: 'Record a class, see what it sounded like.' },
+  { slug: 'talk-it-through', id: '-Xhmj0F7n_o', title: 'Talk It Through', blurb: 'Process a rough lesson in five minutes.' },
   { slug: 'ask-practice', id: 'yyYz795vFRg', title: 'Ask & Practice', blurb: 'Get the words, or rehearse the hard part.' },
   { slug: 'lesson-planning', id: '-LNj8wyhk2I', title: 'Lesson Planning', blurb: 'Beat the blank page.' },
   { slug: 'assignment-coach', id: 'HrlsBYrjmV4', title: 'Assignment Coach', blurb: 'What does your assignment really ask?' },

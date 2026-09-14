@@ -153,8 +153,9 @@ const GETTING_STARTED: Chapter = {
       title: 'Home',
       intro: 'Your dashboard — built entirely from your own activity, never a generic template.',
       specs: [
-        { label: 'Quick actions', body: 'three large one-tap buttons to Talk It Through, Lesson Debrief, and Ask & Practice.' },
-        { label: 'Your coaching path', body: 'a static Notice → Practice → Try → Reflect explainer, with a "Practice now" shortcut.' },
+        { label: 'Your next step', body: 'the greeting at the top suggests one concrete thing to do next — reflect on your last lesson, record your first one, or try a tool you haven\'t opened yet — with a button that takes you straight there.' },
+        { label: 'Quick actions', body: 'three large one-tap cards for Lesson Debrief, Talk It Through, and Ask & Practice.' },
+        { label: 'Your coaching path', body: 'a static Notice → Practice → Try → Reflect explainer.' },
         { label: 'Classroom pulse', body: 'a donut chart of your latest lesson\'s student-talk %, plus a sparkline once you have a few sessions.' },
         { label: 'Mood check-in', body: 'tap Good / Okay / Stressed / Overwhelmed and Wivoza quietly suggests a relevant practice category.' },
         { label: 'Daily tip, quick links, and recent work', body: 'a tip box, shortcuts to Cheat Sheet and First 30 Days, and a feed of your last few sessions.' },
@@ -477,10 +478,9 @@ export default function Guide() {
         <section id="coaching" className="scroll-mt-20 border-b border-hairline py-16">
           <SectionLabel n={3} label="Coaching" />
           <p className="mt-4 max-w-xl text-lg text-ink-soft">
-            Three ways to get real coaching, from a thirty-second check-in to a full recorded lesson.
+            Three ways to get real coaching, from a full recorded lesson to a thirty-second check-in.
           </p>
           <div className="mt-8 flex flex-col gap-5">
-            <FeatureBlock feature={TALK_IT_THROUGH} />
             <FeatureBlock feature={LESSON_DEBRIEF} />
 
             <div className="rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
@@ -498,6 +498,7 @@ export default function Guide() {
               </div>
             </div>
 
+            <FeatureBlock feature={TALK_IT_THROUGH} />
             <FeatureBlock feature={ASK_PRACTICE} />
           </div>
         </section>
