@@ -11,19 +11,6 @@ struct HomeView: View {
                         .padding(.horizontal)
                         .padding(.top, 8)
 
-                    NavigationLink { TalkToMeView() } label: {
-                        FeatureCard(
-                            eyebrow: "Live Coach",
-                            title: "Talk It Through",
-                            description: "Think out loud. Your coach listens, asks, and helps you find a next step.",
-                            actionLabel: "Start voice coaching",
-                            systemImage: "headphones",
-                            iconTint: AppTheme.primary
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal)
-
                     NavigationLink { AudioCoachingView() } label: {
                         FeatureCard(
                             eyebrow: "Lesson Reflection",
@@ -32,6 +19,19 @@ struct HomeView: View {
                             actionLabel: "Record a lesson",
                             systemImage: "mic.fill",
                             iconTint: AppTheme.accent
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal)
+
+                    NavigationLink { TalkToMeView() } label: {
+                        FeatureCard(
+                            eyebrow: "Live Coach",
+                            title: "Talk It Through",
+                            description: "Think out loud. Your coach listens, asks, and helps you find a next step.",
+                            actionLabel: "Start voice coaching",
+                            systemImage: "headphones",
+                            iconTint: AppTheme.primary
                         )
                     }
                     .buttonStyle(.plain)

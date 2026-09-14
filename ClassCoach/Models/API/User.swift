@@ -16,6 +16,12 @@ struct User: Codable, Identifiable {
     let gradeLevels: String?
     let subjects: String?
     let onboardingProgress: String?
+    /// One of `TalkVoice.all`'s ids, or nil for the default voice.
+    let talkVoice: String?
+    /// Coach's short running note about the teacher — nil until built up.
+    let coachMemory: String?
+    /// Optional so an older server response without the field still decodes.
+    let coachMemoryEnabled: Bool?
 
     struct Organization: Codable {
         let name: String

@@ -8,40 +8,39 @@ struct RootTabView: View {
             if authManager.isRestoringSession {
                 ProgressView()
             } else if authManager.currentUser != nil {
-                // Order mirrors the Home dashboard's 4 feature cards exactly
-                // (Home, then the cards in their on-screen order) — Try It
-                // Out and Ask an Expert no longer get their own tabs since
-                // their content lives inside the combined Ask & Practice
-                // tab now (see AskAndPracticeView).
+                // Same names and order as the web app's menu, with Lesson
+                // Debrief first. Home's feature cards follow the same order.
+                // Try It Out and Ask an Expert live inside the combined
+                // Ask & Practice tab (see AskAndPracticeView).
                 TabView {
                     HomeView()
                         .tabItem {
                             Label("Home", systemImage: "house.fill")
                         }
 
-                    TalkToMeView()
-                        .tabItem {
-                            Label("Live Coach", systemImage: "waveform.circle.fill")
-                        }
-
                     AudioCoachingView()
                         .tabItem {
-                            Label("Record a Lesson", systemImage: "waveform")
+                            Label("Lesson Debrief", systemImage: "mic.fill")
+                        }
+
+                    TalkToMeView()
+                        .tabItem {
+                            Label("Talk It Through", systemImage: "waveform.circle.fill")
                         }
 
                     AskAndPracticeView()
                         .tabItem {
-                            Label("Ask an Expert", systemImage: "bubble.left.and.bubble.right.fill")
+                            Label("Ask & Practice", systemImage: "bubble.left.and.bubble.right.fill")
                         }
 
                     LessonPlanningView()
                         .tabItem {
-                            Label("Plan a Lesson", systemImage: "doc.text.fill")
+                            Label("Lesson Planning", systemImage: "doc.text.fill")
                         }
 
                     MessagesHubView()
                         .tabItem {
-                            Label("Messages", systemImage: "envelope.fill")
+                            Label("Communication Coach", systemImage: "envelope.fill")
                         }
 
                     ProfileView()

@@ -45,7 +45,51 @@ final class SpeechPlayer: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Streaming queue
+    //
+    // For replies that arrive a sentence at a time: each sentence's speech
+    // starts synthesizing the moment it's enqueued, and playback walks the
+    // queue in order. The first sentence can be speaking while Coach is
+    // still writing the third.
+
+    private var pending: [Task<Data?, Never>] = []
+    private var drainTask: Task<Void, Never>?
+    /// Bumped by `stop()`, so a drain loop from before the stop can't keep
+    /// playing sentences that arrive after it.
+    private var generation = 0
+
+    func enqueue(_ sentence: String, voice: String?) {
+        let text = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        pending.append(Task { try? await TalkToMeService.fetchSpeech(text: text, voice: voice) })
+        if drainTask == nil { startDrain() }
+    }
+
+    /// Waits until everything enqueued so far has finished playing.
+    func waitUntilDone() async {
+        while let task = drainTask {
+            await task.value
+            if drainTask == task { drainTask = nil }
+        }
+    }
+
+    private func startDrain() {
+        let gen = generation
+        drainTask = Task { [weak self] in
+            while let self, gen == self.generation, !self.pending.isEmpty {
+                let next = self.pending.removeFirst()
+                guard let data = await next.value, gen == self.generation else { continue }
+                await self.playOne(data: data)
+            }
+            if let self, gen == self.generation { self.drainTask = nil }
+        }
+    }
+
     func stop() {
+        generation += 1
+        pending.forEach { $0.cancel() }
+        pending.removeAll()
+        drainTask = nil
         player?.stop()
         continuation?.resume()
         continuation = nil

@@ -35,6 +35,19 @@ enum ProfileService {
         )
     }
 
+    /// Only the fields that are set get sent — Swift omits nil optionals when
+    /// encoding — so the server's per-field PUT leaves everything else alone.
+    struct SettingsBody: Encodable {
+        var talkVoice: String?
+        var coachMemoryEnabled: Bool?
+        var clearCoachMemory: Bool?
+        var joinCode: String?
+    }
+
+    static func updateSettings(_ body: SettingsBody) async throws -> User {
+        try await APIClient.shared.request("/api/profile", method: "PUT", body: body)
+    }
+
     private struct ResetResponse: Decodable {
         let status: String
     }

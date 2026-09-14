@@ -1,8 +1,8 @@
 import Foundation
 
 /// Mirrors the server's `Debrief` shape (see `web/src/lib/api.ts`) — backs
-/// the "Ask an Expert" flow (`source: "ask_tab"`). Talk to Me
-/// (`source: "talk_to_me"`, audio-based) isn't built on iOS yet.
+/// both Ask & Practice (`source: "ask_tab"`) and Talk It Through
+/// (`source: "talk_to_me"`).
 struct Debrief: Codable, Identifiable {
     let id: String
     let incidentText: String
@@ -15,4 +15,13 @@ struct Debrief: Codable, Identifiable {
     let shareToken: String?
     let createdAt: String
     let conversation: [ChatMessage]
+    /// Talk It Through's end-of-conversation summary — nil until the teacher
+    /// finishes a session (see `POST /api/debriefs/:id/takeaway`).
+    let talkTakeaway: TalkTakeaway?
+}
+
+struct TalkTakeaway: Codable {
+    let explored: String
+    let tryNext: String
+    let notice: String
 }

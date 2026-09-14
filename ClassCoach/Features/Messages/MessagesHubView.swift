@@ -48,7 +48,7 @@ struct MessagesHubView: View {
                 .padding()
             }
             .background(AppTheme.background)
-            .navigationTitle("Messages")
+            .navigationTitle("Communication Coach")
         }
     }
 

@@ -34,12 +34,23 @@ final class APIClient {
 
     private init() {}
 
+    /// Joins the base URL and a path that may carry its own query string
+    /// ("/api/debriefs?saved=true"). `appendingPathComponent` escapes the "?"
+    /// to "%3F", which silently turned every such call into a request for a
+    /// path that doesn't exist.
+    private func url(for path: String) -> URL {
+        if path.contains("?"), let joined = URL(string: baseURL.absoluteString + path) {
+            return joined
+        }
+        return baseURL.appendingPathComponent(path)
+    }
+
     func request<Response: Decodable>(
         _ path: String,
         method: String = "GET",
         body: Encodable? = nil
     ) async throws -> Response {
-        var urlRequest = URLRequest(url: baseURL.appendingPathComponent(path))
+        var urlRequest = URLRequest(url: url(for: path))
         urlRequest.httpMethod = method
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let token = await AuthManager.shared.token {
@@ -138,6 +149,58 @@ final class APIClient {
             throw APIError.server(status: statusCode, message: message)
         }
         return data
+    }
+
+    /// POSTs JSON and hands back each line of a newline-delimited JSON
+    /// response as it arrives — the native side of the server's streamed
+    /// coach replies (`/api/debriefs/talk/stream`), where the first sentence
+    /// is worth playing before the whole reply exists. Anything the server
+    /// rejects up front (turn cap, daily limit) still arrives as a normal
+    /// error status, before any line is sent.
+    func streamLines(
+        _ path: String,
+        body: Encodable,
+        onLine: (String) async throws -> Void
+    ) async throws {
+        var urlRequest = URLRequest(url: url(for: path))
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = await AuthManager.shared.token {
+            urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        urlRequest.httpBody = try encodeJSONBody(body)
+
+        let bytes: URLSession.AsyncBytes
+        let response: URLResponse
+        do {
+            (bytes, response) = try await URLSession.shared.bytes(for: urlRequest)
+        } catch {
+            throw APIError.transport(error)
+        }
+
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(statusCode) else {
+            var data = Data()
+            for try await byte in bytes {
+                data.append(byte)
+                if data.count > 64_000 { break }
+            }
+            let message = (try? JSONDecoder().decode(ServerErrorBody.self, from: data))?.error
+                ?? "Request failed (\(statusCode))."
+            throw APIError.server(status: statusCode, message: message)
+        }
+
+        do {
+            for try await line in bytes.lines {
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty { continue }
+                try await onLine(trimmed)
+            }
+        } catch let error as APIError {
+            throw error
+        } catch {
+            throw APIError.transport(error)
+        }
     }
 
     private struct ServerErrorBody: Decodable {
