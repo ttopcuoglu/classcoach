@@ -13,7 +13,7 @@ export default function Terms() {
         <p className="-mt-4 text-xs text-ink-soft">Effective as of the date first published on this page.</p>
 
         <p className="text-sm text-ink-soft">
-          Wivoza is operated by Wivoza, LLC, doing business as Wivoza (&ldquo;Wivoza,&rdquo; &ldquo;we,&rdquo;
+          Wivoza is a product of Edinexa Technologies LLC (&ldquo;Edinexa Technologies,&rdquo; &ldquo;we,&rdquo;
           &ldquo;us,&rdquo; or &ldquo;our&rdquo;). These Terms govern your use of our website, app, and related
           services throughout the United States. Our Privacy Notice below explains how we handle personal
           information. By creating an account or otherwise affirmatively accepting these Terms, you agree to them.
@@ -49,11 +49,11 @@ export default function Terms() {
             <p className="mt-1">
               You retain any ownership rights you hold in recordings, transcripts, practice responses, lesson
               materials, drafts, notes, and other content you submit. These Terms do not give you ownership of
-              someone else&rsquo;s materials or student records, and Wivoza does not claim ownership of your
+              someone else&rsquo;s materials or student records, and we do not claim ownership of your
               submitted content.
             </p>
             <p className="mt-2">
-              You give Wivoza a limited, nonexclusive permission to host, copy, transmit, transcribe, analyze, and
+              You give us a limited, nonexclusive permission to host, copy, transmit, transcribe, analyze, and
               display your content as needed to provide and secure the service, respond to your support requests,
               and carry out sharing you authorize. This permission does not independently authorize advertising or
               general-purpose AI model training. Data uses and retention are explained in the Privacy Notice.
@@ -94,7 +94,7 @@ export default function Terms() {
             <p className="mt-2">
               You may use generated materials for lawful personal and professional purposes, including adapting
               lesson plans and communications, subject to these Terms and any third-party rights. Outputs may
-              resemble material generated for others; Wivoza does not guarantee that outputs are unique or eligible
+              resemble material generated for others; we do not guarantee that outputs are unique or eligible
               for copyright protection.
             </p>
           </section>
@@ -143,7 +143,7 @@ export default function Terms() {
           <section>
             <h2 className="text-sm font-semibold uppercase tracking-wide text-ink">8. Wivoza&rsquo;s intellectual property</h2>
             <p className="mt-1">
-              Wivoza&rsquo;s software, design, branding, and other service materials belong to Wivoza or its
+              Wivoza&rsquo;s software, design, branding, and other service materials belong to Edinexa Technologies or its
               licensors. We grant you a limited, nonexclusive, nontransferable right to use the service while you
               comply with these Terms and any applicable subscription agreement. No ownership of Wivoza&rsquo;s
               technology or branding transfers to you.
@@ -204,9 +204,9 @@ export default function Terms() {
             </p>
             <p className="mt-2">
               To the extent permitted by law, neither party is liable to the other for indirect, incidental,
-              special, or consequential damages arising from these Terms or the service. Wivoza&rsquo;s total
+              special, or consequential damages arising from these Terms or the service. our total
               liability for claims arising from these Terms or the service is limited to the greater of $100 or the
-              amount you paid Wivoza during the 12 months before the event giving rise to the claim. These exclusions
+              amount you paid us during the 12 months before the event giving rise to the claim. These exclusions
               and limits do not apply to fraud, willful misconduct, gross negligence, or liability that cannot
               lawfully be excluded or limited. A separate signed agreement may provide different limits.
             </p>
@@ -215,7 +215,7 @@ export default function Terms() {
           <section>
             <h2 className="text-sm font-semibold uppercase tracking-wide text-ink">12. Governing law and disputes</h2>
             <p className="mt-1">
-              Wivoza is based in Massachusetts and serves eligible users throughout the United States. These Terms
+              Edinexa Technologies is based in Massachusetts and serves eligible users throughout the United States. These Terms
               are governed by Massachusetts law, without regard to its conflict-of-law principles, and applicable
               federal law. Unless applicable law requires otherwise or a separate written agreement provides
               otherwise, disputes will be brought in state or federal courts located in Massachusetts, and both
@@ -243,7 +243,7 @@ export default function Terms() {
         <p className="-mt-4 text-xs text-ink-soft">Effective as of the date first published on this page.</p>
 
         <p className="text-sm text-ink-soft">
-          This Notice explains how Wivoza, LLC, operating as Wivoza, handles personal information when providing its
+          This Notice explains how Edinexa Technologies LLC, the company behind Wivoza, handles personal information when providing its
           website, app, and related services to users across the United States. It also covers information about
           other people contained in authorized uploads. A school agreement may impose additional protections and
           identify when we process education records on the school&rsquo;s behalf.
@@ -268,7 +268,7 @@ export default function Terms() {
               IP address, browser type, device information, and error/usage logs. We use one essential cookie to
               keep you signed in — we do not use analytics, advertising, or tracking cookies. When you subscribe to
               a paid plan, our payment processor provides us confirmation of your subscription status; we do not
-              receive or store your full card number. If your school has a district agreement with Wivoza, an
+              receive or store your full card number. If your school has a district agreement with us, an
               administrator may provide your school affiliation.
             </p>
           </section>
@@ -292,7 +292,7 @@ export default function Terms() {
               3. AI Processing, Training, and Human Access
             </h2>
             <p className="mt-1">
-              Wivoza sends your submitted content to the following named third-party AI providers to power specific
+              We send your submitted content to the following named third-party AI providers to power specific
               features. Before you create an account, the app discloses this and asks you to affirmatively agree;
               you can withdraw that agreement at any time by deleting your account.
             </p>
@@ -306,7 +306,7 @@ export default function Terms() {
               <strong>Deepgram:</strong> audio you record or upload is sent to Deepgram to generate a text transcript,
               and text is sent to Deepgram to generate the spoken audio used in voice features like Talk It Through.
               Deepgram may use submitted audio to improve its models unless that use is disabled through account
-              settings; Wivoza maintains account-level controls to restrict that use.
+              settings; we maintain account-level controls to restrict that use.
             </p>
             <p className="mt-2">
               These providers receive only the content you submit for the features above — never your account
@@ -314,7 +314,7 @@ export default function Terms() {
               with this Notice.
             </p>
             <p className="mt-2">
-              Wivoza employees do not routinely review individual coaching content. Processing is primarily
+              Our employees do not routinely review individual coaching content. Processing is primarily
               automated. If you request support involving specific content, authorized staff may access that
               content as needed to assist you.
             </p>
@@ -323,7 +323,7 @@ export default function Terms() {
           <section>
             <h2 className="text-sm font-semibold uppercase tracking-wide text-ink">4. Sale, advertising, and cookies</h2>
             <p className="mt-1">
-              Wivoza does not sell personal information, does not use it for cross-context behavioral advertising,
+              We do not sell personal information, does not use it for cross-context behavioral advertising,
               and does not use targeted advertising. We use one essential cookie (to keep you signed in) and no
               analytics or advertising cookies. Signing in with Google may involve cookies set by Google as part of
               that sign-in process, governed by Google&rsquo;s own privacy practices.
@@ -392,7 +392,7 @@ export default function Terms() {
               A teacher&rsquo;s account registration alone does not establish that a school has authorized disclosure
               of education records or that a legal exception to parental consent applies. Before using Wivoza for
               protected education records, the school must establish an appropriate legal basis and any necessary
-              provider agreement. Wivoza must meet its own applicable obligations as a service provider. Contact us
+              provider agreement. We must meet our own applicable obligations as a service provider. Contact us
               if you believe a child has created an account or that student information was submitted without
               appropriate authorization.
             </p>
@@ -410,7 +410,7 @@ export default function Terms() {
 
           <section>
             <h2 className="text-sm font-semibold uppercase tracking-wide text-ink">10. Contact us</h2>
-            <p className="mt-1">Business operator: Wivoza, LLC, doing business as Wivoza</p>
+            <p className="mt-1">Business operator: Edinexa Technologies LLC</p>
             <p className="mt-1">Privacy requests: hello@wivoza.com</p>
             <p className="mt-1">Account and billing support: support@wivoza.com</p>
           </section>
