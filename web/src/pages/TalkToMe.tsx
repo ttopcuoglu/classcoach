@@ -17,6 +17,7 @@ import {
   type TalkTakeaway,
   type TalkVoice,
 } from '../lib/api'
+import { isExperienced } from '../lib/experience'
 import { endTurn, markTurn } from '../lib/turnTiming'
 import { createPlaybackQueue, primeAudioElement, type PlaybackQueue } from '../lib/voicePlayback'
 
@@ -28,6 +29,15 @@ const EXAMPLE_PROMPTS = [
   'I want to reflect on today’s lesson.',
   'A parent email is stressing me out.',
   'I’m feeling overwhelmed this week.',
+]
+
+// Same idea for teachers six or more years in — refining what already
+// works rather than getting through the week.
+const EXPERIENCED_PROMPTS = [
+  'I want to think through why a strong lesson fell flat.',
+  'My discussions could go deeper.',
+  'I’m mentoring a newer teacher and want to help well.',
+  'I want to try something new this unit.',
 ]
 
 // Flipped to false: auto-starting the mic on open meant a teacher could
@@ -145,6 +155,7 @@ export default function TalkToMe() {
   const [nextStepOpen, setNextStepOpen] = useState(false)
   const [nextStepDraft, setNextStepDraft] = useState('')
   const [talkVoice, setTalkVoice] = useState<TalkVoice | null>(null)
+  const [examplePrompts, setExamplePrompts] = useState<string[] | null>(null)
   const talkVoiceRef = useRef<TalkVoice | null>(null)
   talkVoiceRef.current = talkVoice
 
@@ -233,8 +244,11 @@ export default function TalkToMe() {
 
   useEffect(() => {
     getProfile()
-      .then((profile) => setTalkVoice(profile.talkVoice))
-      .catch(() => {})
+      .then((profile) => {
+        setTalkVoice(profile.talkVoice)
+        setExamplePrompts(isExperienced(profile.experienceLevel) ? EXPERIENCED_PROMPTS : EXAMPLE_PROMPTS)
+      })
+      .catch(() => setExamplePrompts(EXAMPLE_PROMPTS))
   }, [])
 
   function beginListening() {
@@ -778,7 +792,7 @@ export default function TalkToMe() {
                   </ul>
                 )}
                 <div className="flex flex-col gap-2">
-                  {(isDebrief ? DEBRIEF_PROMPTS : EXAMPLE_PROMPTS).map((prompt, i) => (
+                  {(isDebrief ? DEBRIEF_PROMPTS : (examplePrompts ?? [])).map((prompt, i) => (
                     <button
                       key={prompt}
                       type="button"

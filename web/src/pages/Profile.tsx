@@ -8,8 +8,10 @@ import {
   resetData,
   TALK_VOICES,
   updateProfile,
+  type ExperienceLevel,
   type TalkVoice,
 } from '../lib/api'
+import { EXPERIENCE_OPTIONS } from '../lib/experience'
 
 const SECTION_BADGES = ['bg-gold text-forest', 'bg-terracotta text-cream', 'bg-forest text-gold']
 
@@ -35,6 +37,7 @@ export default function Profile() {
   const [loading, setLoading] = useState(true)
   const [name, setName] = useState('')
   const [gradeLevels, setGradeLevels] = useState('')
+  const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel | null>(null)
   const [subjects, setSubjects] = useState('')
   const [audioRetentionDays, setAudioRetentionDays] = useState<string>('')
   const [organizationName, setOrganizationName] = useState<string | null>(null)
@@ -69,6 +72,7 @@ export default function Profile() {
       .then((profile) => {
         setName(profile.name ?? '')
         setGradeLevels(profile.gradeLevels ?? '')
+        setExperienceLevel(profile.experienceLevel)
         setSubjects(profile.subjects ?? '')
         setAudioRetentionDays(profile.audioRetentionDays != null ? String(profile.audioRetentionDays) : '')
         setOrganizationName(profile.organization?.name ?? null)
@@ -91,6 +95,7 @@ export default function Profile() {
         name,
         gradeLevels,
         subjects,
+        experienceLevel,
         audioRetentionDays: audioRetentionDays ? Number(audioRetentionDays) : null,
         coachMemoryEnabled,
         talkVoice,
@@ -269,6 +274,29 @@ export default function Profile() {
             className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none"
           />
         </label>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-ink">Years in the classroom</span>
+          <div className="flex flex-wrap gap-2">
+            {EXPERIENCE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  setExperienceLevel(option.value)
+                  setSaved(false)
+                }}
+                className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                  experienceLevel === option.value
+                    ? 'border-forest bg-forest text-cream'
+                    : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-ink">Grade level(s)</span>

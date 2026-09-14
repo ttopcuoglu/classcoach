@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { logout, type FocusMetric } from '../lib/api'
 import type { UserProfile } from '../lib/api'
+import { isExperienced } from '../lib/experience'
 import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import {
   ArrowUpIcon,
@@ -84,6 +85,11 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
   }
 
   const focusMetric = user?.focusMetric as FocusMetric | null | undefined
+  // First 30 Days is a new-teacher track; experienced teachers can still
+  // reach it from Profile, it just doesn't take up a spot in their nav.
+  const navGroups = isExperienced(user?.experienceLevel)
+    ? NAV_GROUPS.map((group) => ({ ...group, items: group.items.filter((item) => item.to !== '/first-30-days') }))
+    : NAV_GROUPS
 
   return (
     <div className="flex min-h-screen bg-cream text-ink">
@@ -99,7 +105,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             Home
           </NavLink>
 
-          {NAV_GROUPS.map((group) => (
+          {navGroups.map((group) => (
             <div key={group.label}>
               <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-cream/40">{group.label}</p>
               <div className="mt-1.5 flex flex-col gap-1">
@@ -203,7 +209,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             Home
           </NavLink>
 
-          {NAV_GROUPS.map((group) => {
+          {navGroups.map((group) => {
             const GroupIcon = group.icon
             if (group.items.length === 1) {
               const item = group.items[0]

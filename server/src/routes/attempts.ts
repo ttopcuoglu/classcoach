@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
+import { buildExperienceContextBlock } from '../lib/experience.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
@@ -62,11 +63,12 @@ attemptsRouter.post('/', async (req, res) => {
   }
 
   try {
+    const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { experienceLevel: true } })
     const context = `Scenario: ${scenario.text}\n\nTeacher's response: ${responseText}`
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 1024,
-      system: FEEDBACK_SYSTEM_PROMPT,
+      system: `${FEEDBACK_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}`,
       messages: [{ role: 'user', content: context }],
     })
 
@@ -124,10 +126,11 @@ attemptsRouter.post('/:id/chat', async (req, res) => {
 
   const trimmed = message.trim()
   try {
+    const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { experienceLevel: true } })
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 300,
-      system: ATTEMPT_CHAT_SYSTEM_PROMPT,
+      system: `${ATTEMPT_CHAT_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}`,
       messages: toClaudeMessages(existing, trimmed),
     })
     const reply = response.content

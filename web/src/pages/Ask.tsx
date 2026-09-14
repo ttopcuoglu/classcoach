@@ -8,9 +8,11 @@ import ShareButton from '../components/ShareButton'
 import { MicIcon, StarIcon } from '../components/icons'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { categoryLabel } from '../lib/categories'
+import { isExperienced } from '../lib/experience'
 import { takeAskPrefill } from '../lib/communicationsPrefill'
 import {
   getDebriefs,
+  getProfile,
   markDebriefTried,
   saveDebriefReflection,
   sendDebriefChat,
@@ -20,11 +22,19 @@ import {
   type Debrief,
 } from '../lib/api'
 
-const STARTER_QUESTIONS = [
+const NEW_TEACHER_STARTERS = [
   'How do I handle a student who constantly interrupts?',
   "What's a good way to set expectations on day one?",
   'A student refuses to put their phone away — what now?',
   'How do I de-escalate two students arguing in class?',
+]
+
+// For teachers with six or more years in: refinement, not survival.
+const EXPERIENCED_STARTERS = [
+  'My discussions are fine — how do I get students building on each other, not just answering me?',
+  'How do I push my strongest students without leaving others behind?',
+  'My routines work, but they’ve gone stale. How do I refresh them mid-year?',
+  'How can I tell whether my questions are really making students think?',
 ]
 
 // Each starting point carries one of the report's accent colours, so the
@@ -65,6 +75,9 @@ export default function Ask() {
 
   const [allDebriefs, setAllDebriefs] = useState<Debrief[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
+  // Null until the profile loads, so an experienced teacher never sees the
+  // new-teacher starters flash up first.
+  const [starters, setStarters] = useState<string[] | null>(null)
 
   const [chatDraft, setChatDraft] = useState('')
   const [chatSending, setChatSending] = useState(false)
@@ -73,6 +86,12 @@ export default function Ask() {
   const { supported: speechSupported, listening, toggleListening } = useSpeechToText((text) =>
     setIncidentText((prev) => (prev ? `${prev} ${text}` : text)),
   )
+
+  useEffect(() => {
+    getProfile()
+      .then((profile) => setStarters(isExperienced(profile.experienceLevel) ? EXPERIENCED_STARTERS : NEW_TEACHER_STARTERS))
+      .catch(() => setStarters(NEW_TEACHER_STARTERS))
+  }, [])
 
   useEffect(() => {
     getDebriefs({ source: 'ask_tab' })
@@ -343,7 +362,7 @@ export default function Ask() {
         <div>
           <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Or start with one of these</h2>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {STARTER_QUESTIONS.map((starter, i) => (
+            {(starters ?? []).map((starter, i) => (
               <button
                 key={starter}
                 type="button"

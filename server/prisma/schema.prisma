@@ -29,6 +29,7 @@ model User {
   teachingGoal          String? // "I'd like my students to ___", set during onboarding
   gradeLevels           String? // comma-separated, e.g. "7th,8th"
   subjects              String? // comma-separated, e.g. "Math,Science"
+  experienceLevel       String? // "first_year" | "early" (2-5 yrs) | "established" (6-15) | "veteran" (15+) — see server/src/lib/experience.ts, null = not answered
   onboardingProgress    String? // comma-separated completed First-30-Days step ids
   onboardingCompletedAt DateTime? // server-set only, when the onboarding wizard finishes or is skipped
   termsAcceptedAt       DateTime?

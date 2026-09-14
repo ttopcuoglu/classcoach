@@ -8,6 +8,7 @@ import { ProgressRing } from '../components/ProgressRing'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { CATEGORIES, categoryLabel } from '../lib/categories'
+import { isExperienced } from '../lib/experience'
 import { GRADE_BANDS } from '../lib/gradeBands'
 import {
   generateScenario,
@@ -29,10 +30,19 @@ const DIFFICULTIES: { label: string; value?: string }[] = [
   { label: 'Challenge', value: 'advanced' },
 ]
 
-const STARTER_SCENARIOS: { label: string; category: string }[] = [
+type StarterScenario = { label: string; category: string }
+
+const STARTER_SCENARIOS: StarterScenario[] = [
   { label: 'A student is checked out and not participating', category: 'disengagement' },
   { label: 'A student pushes back when you ask them to do something', category: 'defiance' },
   { label: 'The class is slow to settle into a routine', category: 'transitions' },
+]
+
+// Harder, less textbook moments for teachers six or more years in.
+const EXPERIENCED_SCENARIOS: StarterScenario[] = [
+  { label: 'A capable student has quietly stopped trying', category: 'disengagement' },
+  { label: 'A student challenges you in front of the class — and has a point', category: 'defiance' },
+  { label: 'A conflict between students has spilled in from outside class', category: 'peer_conflict' },
 ]
 
 const SESSION_LENGTH = 3
@@ -46,6 +56,7 @@ export default function TryItOut() {
   const [gradeBand, setGradeBand] = useState<(typeof GRADE_BANDS)[number]>('6-8')
   const [difficulty, setDifficulty] = useState<string | undefined>(undefined)
   const [subject, setSubject] = useState<string | undefined>(undefined)
+  const [starterScenarios, setStarterScenarios] = useState<StarterScenario[] | null>(null)
 
   const [attempt, setAttempt] = useState<ScenarioAttempt | null>(null)
   const [responseText, setResponseText] = useState('')
@@ -81,8 +92,9 @@ export default function TryItOut() {
         else if (/\bk\b|kindergarten|\b[1-5](st|nd|rd|th)?\b|elementary|k-5/.test(levels)) setGradeBand('K-5')
         const firstSubject = profile.subjects?.split(',')[0]?.trim()
         if (firstSubject) setSubject(firstSubject)
+        setStarterScenarios(isExperienced(profile.experienceLevel) ? EXPERIENCED_SCENARIOS : STARTER_SCENARIOS)
       })
-      .catch(() => {})
+      .catch(() => setStarterScenarios(STARTER_SCENARIOS))
 
     const suggested = sessionStorage.getItem('classcoach.suggestedCategory')
     if (suggested) setCategory(suggested)
@@ -343,7 +355,7 @@ export default function TryItOut() {
             <p className="mt-2 font-heading text-2xl font-bold text-cream">Ready when you are.</p>
             <p className="mt-1 text-sm text-cream/70">Pick a moment to rehearse, or let Wivoza build one from the filters above.</p>
             <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {STARTER_SCENARIOS.map((s, i) => (
+              {(starterScenarios ?? []).map((s, i) => (
                 <button
                   key={s.label}
                   type="button"

@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import DemoRecorder from '../components/DemoRecorder'
 import MicLevelMeter from '../components/MicLevelMeter'
-import { updateProfile, type FocusMetric, type JobTitle } from '../lib/api'
+import { updateProfile, type ExperienceLevel, type FocusMetric, type JobTitle } from '../lib/api'
+import { EXPERIENCE_OPTIONS } from '../lib/experience'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 
 type WizardStep = 'about-you' | 'classroom' | 'mic-check' | 'live-demo' | 'your-goal' | 'initial-focus' | 'done'
@@ -73,6 +74,7 @@ export default function Onboarding({ onDone }: { onDone: () => Promise<unknown> 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [jobTitle, setJobTitle] = useState<JobTitle | null>(null)
+  const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel | null>(null)
   const [schoolName, setSchoolName] = useState('')
   const [joinCode, setJoinCode] = useState('')
   const [gradeLevels, setGradeLevels] = useState('')
@@ -104,7 +106,11 @@ export default function Onboarding({ onDone }: { onDone: () => Promise<unknown> 
     setError(null)
     try {
       const name = `${firstName.trim()} ${lastName.trim()}`.trim()
-      await updateProfile({ ...(name ? { name } : {}), jobTitle: jobTitle ?? undefined })
+      await updateProfile({
+        ...(name ? { name } : {}),
+        jobTitle: jobTitle ?? undefined,
+        experienceLevel: experienceLevel ?? undefined,
+      })
       goTo('classroom')
     } catch {
       setError('Could not save. Please try again.')
@@ -195,6 +201,24 @@ export default function Onboarding({ onDone }: { onDone: () => Promise<unknown> 
                     </button>
                   ))}
                 </div>
+              </div>
+              <div>
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
+                  Years in the classroom
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {EXPERIENCE_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setExperienceLevel(option.value)}
+                      className={pillClass(experienceLevel === option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-ink-soft">Your coach adjusts to where you are — no beginner advice if you don't need it.</p>
               </div>
               {error && <p className="text-sm text-terracotta-600">{error}</p>}
               <div className="flex items-center justify-between">

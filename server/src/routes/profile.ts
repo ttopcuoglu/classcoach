@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { SAFE_USER_OMIT, SESSION_COOKIE, USER_INCLUDE_ORG } from '../lib/auth.ts'
 import { resolveJoinCode } from '../lib/organization.ts'
 import { prisma } from '../lib/prisma.ts'
+import { isValidExperienceLevel } from '../lib/experience.ts'
 import { isValidTalkVoice } from '../lib/talkVoices.ts'
 
 export const profileRouter = Router()
@@ -50,6 +51,7 @@ profileRouter.put('/', async (req, res) => {
     name,
     gradeLevels,
     subjects,
+    experienceLevel,
     onboardingProgress,
     audioRetentionDays,
     focusMetric,
@@ -72,6 +74,10 @@ profileRouter.put('/', async (req, res) => {
   }
   if (subjects !== undefined && typeof subjects !== 'string') {
     res.status(400).json({ error: 'subjects must be a string' })
+    return
+  }
+  if (experienceLevel !== undefined && experienceLevel !== null && !isValidExperienceLevel(experienceLevel)) {
+    res.status(400).json({ error: 'experienceLevel must be one of the supported levels, or null' })
     return
   }
   if (onboardingProgress !== undefined && typeof onboardingProgress !== 'string') {
@@ -142,6 +148,7 @@ profileRouter.put('/', async (req, res) => {
       name,
       gradeLevels,
       subjects,
+      experienceLevel,
       onboardingProgress,
       audioRetentionDays,
       focusMetric,
@@ -177,6 +184,7 @@ profileRouter.post('/reset', async (req, res) => {
       name: null,
       gradeLevels: null,
       subjects: null,
+      experienceLevel: null,
       onboardingProgress: null,
       focusMetric: null,
       talkVoice: null,

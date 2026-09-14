@@ -21,10 +21,12 @@ import {
   getLessonPlans,
   getProfile,
   type AudioSession,
+  type ExperienceLevel,
   type Debrief,
   type ScenarioAttempt,
 } from '../lib/api'
 import { pickDailyTip, type Mood } from '../lib/dailyTips'
+import { isExperienced } from '../lib/experience'
 import { ACCENTS, ACCENT_CYCLE } from '../components/report'
 
 type IconComponent = (props: { className?: string }) => React.ReactElement
@@ -130,6 +132,7 @@ function Donut({ pct }: { pct: number }) {
 export default function Home() {
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [name, setName] = useState<string | null>(null)
+  const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel | null>(null)
   const [activity, setActivity] = useState<Activity[]>([])
   const [sessions, setSessions] = useState<AudioSession[]>([])
   // Unfiltered, newest-first — used only to drive the "Next" card's
@@ -152,6 +155,7 @@ export default function Home() {
     getProfile()
       .then((profile) => {
         setName(profile.name)
+        setExperienceLevel(profile.experienceLevel)
         setNeedsOnboarding(!profile.name && !profile.gradeLevels && !profile.subjects)
       })
       .catch(() => {})
@@ -244,7 +248,20 @@ export default function Home() {
     (!latestCompletedSession.reflectConversation || latestCompletedSession.reflectConversation.length === 0)
   const hasAnyActivity = activity.length > 0 || allSessions.length > 0
 
+  const experienced = isExperienced(experienceLevel)
+
   function computeNextStep(): NextStep {
+    // An experienced teacher gets more from seeing their own classroom than
+    // from a rehearsal scenario, so their first step is a recording.
+    if (!hasAnyActivity && experienced) {
+      return {
+        icon: MicIcon,
+        title: 'See what’s really happening in your room',
+        description: 'Record a class and get an honest picture — talk time, questions, wait time, who was heard.',
+        linkLabel: 'Record a lesson',
+        to: '/audio-coaching',
+      }
+    }
     if (!hasAnyActivity) {
       return {
         icon: PlayIcon,
@@ -493,18 +510,33 @@ export default function Home() {
             <p className="text-xs text-ink-soft">Go-to phrases, auto-built from your saved content.</p>
           </div>
         </Link>
-        <Link
-          to="/first-30-days"
-          className="group flex items-center gap-4 rounded-2xl bg-mint-tint/50 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
-        >
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-forest text-gold">
-            <ChecklistIcon className="h-5 w-5" />
-          </span>
-          <div>
-            <p className="font-heading text-base font-bold text-forest">First 30 Days</p>
-            <p className="text-xs text-ink-soft">New teacher? Start your guided track.</p>
-          </div>
-        </Link>
+        {experienced ? (
+          <Link
+            to="/audio-coaching"
+            className="group flex items-center gap-4 rounded-2xl bg-mint-tint/50 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-forest text-gold">
+              <MicIcon className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="font-heading text-base font-bold text-forest">Your growth</p>
+              <p className="text-xs text-ink-soft">Pick one thing to sharpen and track it across your lessons.</p>
+            </div>
+          </Link>
+        ) : (
+          <Link
+            to="/first-30-days"
+            className="group flex items-center gap-4 rounded-2xl bg-mint-tint/50 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-forest text-gold">
+              <ChecklistIcon className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="font-heading text-base font-bold text-forest">First 30 Days</p>
+              <p className="text-xs text-ink-soft">New teacher? Start your guided track.</p>
+            </div>
+          </Link>
+        )}
       </div>
 
       <div>

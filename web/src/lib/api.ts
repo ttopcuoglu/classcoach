@@ -67,6 +67,8 @@ export type JobTitle =
   | 'District Leader'
   | 'Other'
 
+export type ExperienceLevel = 'first_year' | 'early' | 'established' | 'veteran'
+
 export type UserProfile = {
   id: string
   email: string
@@ -77,6 +79,7 @@ export type UserProfile = {
   teachingGoal: string | null
   gradeLevels: string | null
   subjects: string | null
+  experienceLevel: ExperienceLevel | null
   onboardingProgress: string | null
   onboardingCompletedAt: string | null
   termsAcceptedAt: string | null
@@ -859,6 +862,7 @@ export function updateProfile(data: {
   name?: string
   gradeLevels?: string
   subjects?: string
+  experienceLevel?: ExperienceLevel | null
   onboardingProgress?: string
   audioRetentionDays?: number | null
   focusMetric?: FocusMetric | null

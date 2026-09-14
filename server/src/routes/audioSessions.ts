@@ -9,6 +9,7 @@ import {
   MEMORY_UPDATE_INSTRUCTION,
   MEMORY_UPDATE_TOKEN_BUFFER,
 } from '../lib/coachMemory.ts'
+import { buildExperienceContextBlock } from '../lib/experience.ts'
 import { CORE_COACHING_RULES, TRANSCRIPT_RELIABILITY_NOTICE } from '../lib/coachPersona.ts'
 import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
 import { transcribeAudio } from '../lib/deepgram.ts'
@@ -437,7 +438,7 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.userId },
-      select: { coachMemory: true, coachMemoryEnabled: true },
+      select: { coachMemory: true, coachMemoryEnabled: true, experienceLevel: true },
     })
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
 
@@ -450,8 +451,8 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
       model: CLAUDE_MODEL,
       max_tokens: memoryOn ? 300 + MEMORY_UPDATE_TOKEN_BUFFER : 300,
       system: memoryOn
-        ? `${buildReflectSystemPrompt(safeContext, session.teacherName)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
-        : buildReflectSystemPrompt(safeContext, session.teacherName),
+        ? `${buildReflectSystemPrompt(safeContext, session.teacherName)}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+        : `${buildReflectSystemPrompt(safeContext, session.teacherName)}${buildExperienceContextBlock(user?.experienceLevel)}`,
       messages,
     })
     const text = response.content

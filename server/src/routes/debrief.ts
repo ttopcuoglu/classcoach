@@ -8,6 +8,7 @@ import {
   MEMORY_UPDATE_INSTRUCTION,
   MEMORY_UPDATE_TOKEN_BUFFER,
 } from '../lib/coachMemory.ts'
+import { buildExperienceContextBlock } from '../lib/experience.ts'
 import {
   appendTurn,
   CHAT_TURN_CAP,
@@ -171,7 +172,7 @@ debriefRouter.post('/', async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.userId },
-      select: { coachMemory: true, coachMemoryEnabled: true },
+      select: { coachMemory: true, coachMemoryEnabled: true, experienceLevel: true },
     })
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
 
@@ -181,8 +182,8 @@ debriefRouter.post('/', async (req, res) => {
       max_tokens: 1024,
       thinking: { type: 'disabled' },
       system: memoryOn
-        ? `${ASK_SYSTEM_PROMPT}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
-        : ASK_SYSTEM_PROMPT,
+        ? `${ASK_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+        : `${ASK_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}`,
       messages: [{ role: 'user', content: context }],
     })
 
@@ -360,7 +361,7 @@ debriefRouter.post('/talk/stream', async (req, res) => {
   // another while the teacher waited.
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { ...PLAN_USER_SELECT, coachMemory: true, coachMemoryEnabled: true },
+    select: { ...PLAN_USER_SELECT, coachMemory: true, coachMemoryEnabled: true, experienceLevel: true },
   })
   if (!(await checkUsage(userId, 'talk_to_me', user))) {
     res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
@@ -376,8 +377,8 @@ debriefRouter.post('/talk/stream', async (req, res) => {
   await streamCoachReply(res, 'talk_start', {
     gateMs: Date.now() - gateStart,
     systemPrompt: memoryOn
-      ? `${TALK_SYSTEM_PROMPT}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
-      : TALK_SYSTEM_PROMPT,
+      ? `${TALK_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+      : `${TALK_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}`,
     maxTokens: memoryOn ? 110 + MEMORY_UPDATE_TOKEN_BUFFER : 110,
     messages: [{ role: 'user', content: trimmed }],
     safetyLabel: 'debrief.talk',
@@ -415,7 +416,7 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
     prisma.debrief.findFirst({ where: { id: req.params.id, userId } }),
     prisma.user.findUnique({
       where: { id: userId },
-      select: { ...PLAN_USER_SELECT, coachMemory: true, coachMemoryEnabled: true },
+      select: { ...PLAN_USER_SELECT, coachMemory: true, coachMemoryEnabled: true, experienceLevel: true },
     }),
   ])
   if (!debrief) {
@@ -446,8 +447,8 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
   await streamCoachReply(res, isTalk ? 'talk_chat' : 'debrief_chat', {
     gateMs: Date.now() - gateStart,
     systemPrompt: memoryOn
-      ? `${basePrompt}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
-      : basePrompt,
+      ? `${basePrompt}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+      : `${basePrompt}${buildExperienceContextBlock(user?.experienceLevel)}`,
     maxTokens: memoryOn ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
     messages: toClaudeMessages(existing, trimmed),
     safetyLabel: isTalk ? 'debrief.talk.chat' : 'debrief.ask.chat',
@@ -484,7 +485,7 @@ debriefRouter.post('/talk', async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.userId },
-      select: { coachMemory: true, coachMemoryEnabled: true },
+      select: { coachMemory: true, coachMemoryEnabled: true, experienceLevel: true },
     })
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
 
@@ -493,8 +494,8 @@ debriefRouter.post('/talk', async (req, res) => {
       max_tokens: memoryOn ? 110 + MEMORY_UPDATE_TOKEN_BUFFER : 110,
       thinking: { type: 'disabled' },
       system: memoryOn
-        ? `${TALK_SYSTEM_PROMPT}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
-        : TALK_SYSTEM_PROMPT,
+        ? `${TALK_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+        : `${TALK_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}`,
       messages: [{ role: 'user', content: trimmed }],
     })
     const text = response.content
@@ -560,7 +561,7 @@ debriefRouter.post('/:id/chat', async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.userId },
-      select: { coachMemory: true, coachMemoryEnabled: true },
+      select: { coachMemory: true, coachMemoryEnabled: true, experienceLevel: true },
     })
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
 
@@ -571,8 +572,8 @@ debriefRouter.post('/:id/chat', async (req, res) => {
       max_tokens: memoryOn ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
       thinking: { type: 'disabled' },
       system: memoryOn
-        ? `${basePrompt}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
-        : basePrompt,
+        ? `${basePrompt}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+        : `${basePrompt}${buildExperienceContextBlock(user?.experienceLevel)}`,
       messages: toClaudeMessages(existing, trimmed),
     })
     const text = response.content
