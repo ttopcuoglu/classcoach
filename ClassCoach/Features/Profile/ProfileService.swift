@@ -39,6 +39,7 @@ enum ProfileService {
     /// encoding — so the server's per-field PUT leaves everything else alone.
     struct SettingsBody: Encodable {
         var talkVoice: String?
+        var experienceLevel: String?
         var coachMemoryEnabled: Bool?
         var clearCoachMemory: Bool?
         var joinCode: String?

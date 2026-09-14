@@ -86,6 +86,27 @@ struct ProfileView: View {
             }
 
             Section {
+                ForEach(ExperienceLevel.all, id: \.id) { option in
+                    Button {
+                        Task { await updateSettings(ProfileService.SettingsBody(experienceLevel: option.id)) }
+                    } label: {
+                        HStack {
+                            Text(option.label).foregroundStyle(AppTheme.textPrimary)
+                            Spacer()
+                            if authManager.currentUser?.experienceLevel == option.id {
+                                Image(systemName: "checkmark").foregroundStyle(AppTheme.accent)
+                            }
+                        }
+                    }
+                    .disabled(updatingSettings)
+                }
+            } header: {
+                Text("Years in the Classroom")
+            } footer: {
+                Text("Your coach adjusts to where you are — no beginner advice if you don't need it.")
+            }
+
+            Section {
                 if let memory = authManager.currentUser?.coachMemory, !memory.isEmpty {
                     Text(memory)
                         .font(.subheadline)
@@ -170,7 +191,10 @@ struct ProfileView: View {
             }
 
             Section {
-                NavigationLink("Your First 30 Days") { FirstThirtyDaysView() }
+                // A new-teacher track — left out for teachers six or more years in.
+                if !ExperienceLevel.isExperienced(authManager.currentUser?.experienceLevel) {
+                    NavigationLink("Your First 30 Days") { FirstThirtyDaysView() }
+                }
                 NavigationLink("Cheat Sheet") { CheatSheetView() }
             }
 

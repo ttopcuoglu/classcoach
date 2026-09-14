@@ -13,6 +13,20 @@ private func difficultyLabel(_ value: String) -> String {
 
 private let gradeBands = ["K-5", "6-8", "9-12"]
 
+/// Quick ways into a scenario — same lists as `STARTER_SCENARIOS` and
+/// `EXPERIENCED_SCENARIOS` in web/src/pages/TryItOut.tsx.
+private let starterScenarios: [(label: String, category: String)] = [
+    ("A student is checked out and not participating", "disengagement"),
+    ("A student pushes back when you ask them to do something", "defiance"),
+    ("The class is slow to settle into a routine", "transitions"),
+]
+
+private let experiencedScenarios: [(label: String, category: String)] = [
+    ("A capable student has quietly stopped trying", "disengagement"),
+    ("A student challenges you in front of the class — and has a point", "defiance"),
+    ("A conflict between students has spilled in from outside class", "peer_conflict"),
+]
+
 /// Thin wrapper for standalone tab use — `TryItOutContent` is reused
 /// without this `NavigationStack` inside the combined Ask & Practice view,
 /// since nesting `NavigationStack`s causes duplicate/broken back buttons
@@ -27,6 +41,7 @@ struct TryItOutView: View {
 }
 
 struct TryItOutContent: View {
+    @EnvironmentObject private var authManager: AuthManager
     @State private var category: String?
     @State private var gradeBand = "6-8"
     @State private var difficulty: String?
@@ -106,9 +121,32 @@ struct TryItOutContent: View {
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            Text("No scenario loaded yet.")
+            Text("Pick a moment to rehearse, or build a new one from the filters above.")
                 .font(.subheadline)
                 .foregroundStyle(AppTheme.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            let starters = ExperienceLevel.isExperienced(authManager.currentUser?.experienceLevel) ? experiencedScenarios : starterScenarios
+            ForEach(Array(starters.enumerated()), id: \.offset) { index, starter in
+                Button {
+                    category = starter.category
+                    Task { await generateScenario() }
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(categoryLabel(starter.category).uppercased())
+                            .font(.caption2.weight(.bold)).tracking(0.8)
+                            .foregroundStyle(AppTheme.terracotta600)
+                        Text(starter.label)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(AppTheme.forest)
+                            .multilineTextAlignment(.leading)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background([AppTheme.peachTint, AppTheme.goldTint, AppTheme.mintTint][index % 3], in: RoundedRectangle(cornerRadius: 14))
+                }
+                .buttonStyle(.plain)
+                .disabled(generating)
+            }
             Button {
                 Task { await generateScenario() }
             } label: {
@@ -410,4 +448,5 @@ private struct SavedAttemptRow: View {
 
 #Preview {
     TryItOutView()
+        .environmentObject(AuthManager.shared)
 }

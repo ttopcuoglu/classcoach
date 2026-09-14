@@ -11,6 +11,15 @@ private let examplePrompts = [
     "I'm feeling overwhelmed this week.",
 ]
 
+/// For teachers six or more years in — same list as `EXPERIENCED_PROMPTS` in
+/// web/src/pages/TalkToMe.tsx.
+private let experiencedPrompts = [
+    "I want to think through why a strong lesson fell flat.",
+    "My discussions could go deeper.",
+    "I'm mentoring a newer teacher and want to help well.",
+    "I want to try something new this unit.",
+]
+
 /// Mirrors `web/src/pages/TalkToMe.tsx` — a voice conversation with Coach:
 /// record a turn → transcribe → stream Coach's reply, speaking each sentence
 /// as it arrives → listen again, until the teacher pauses or finishes. A
@@ -220,7 +229,7 @@ struct TalkToMeView: View {
             }
 
             VStack(spacing: 8) {
-                ForEach(examplePrompts, id: \.self) { prompt in
+                ForEach(ExperienceLevel.isExperienced(authManager.currentUser?.experienceLevel) ? experiencedPrompts : examplePrompts, id: \.self) { prompt in
                     Button {
                         submit(prompt, typed: true)
                     } label: {

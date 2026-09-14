@@ -15,6 +15,8 @@ struct User: Codable, Identifiable {
     /// plain strings (see server/src/routes/profile.ts).
     let gradeLevels: String?
     let subjects: String?
+    /// One of `ExperienceLevel.all`'s ids, or nil if never answered.
+    let experienceLevel: String?
     let onboardingProgress: String?
     /// One of `TalkVoice.all`'s ids, or nil for the default voice.
     let talkVoice: String?
@@ -42,5 +44,23 @@ struct AuthResponse: Codable {
         user = try User(from: decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         token = try container.decode(String.self, forKey: .token)
+    }
+}
+
+/// Mirrors `EXPERIENCE_OPTIONS` in web/src/lib/experience.ts. The server uses
+/// the answer to adjust the coach's tone and depth; the app uses it to pick
+/// starting points (see `isExperienced`).
+enum ExperienceLevel {
+    static let all: [(id: String, label: String)] = [
+        ("first_year", "First year"),
+        ("early", "2–5 years"),
+        ("established", "6–15 years"),
+        ("veteran", "15+ years"),
+    ]
+
+    /// Six or more years in — refinement-focused starters and no First 30
+    /// Days. Anyone who hasn't answered keeps the original experience.
+    static func isExperienced(_ id: String?) -> Bool {
+        id == "established" || id == "veteran"
     }
 }

@@ -7,6 +7,15 @@ private let starterQuestions = [
     "How do I de-escalate two students arguing in class?",
 ]
 
+/// For teachers six or more years in: refinement, not survival. Same list as
+/// `EXPERIENCED_STARTERS` in web/src/pages/Ask.tsx.
+private let experiencedStarterQuestions = [
+    "My discussions are fine — how do I get students building on each other, not just answering me?",
+    "How do I push my strongest students without leaving others behind?",
+    "My routines work, but they've gone stale. How do I refresh them mid-year?",
+    "How can I tell whether my questions are really making students think?",
+]
+
 /// Thin wrapper for standalone tab use — see `TryItOutView`'s matching
 /// comment for why `AskExpertContent` is separated out.
 struct AskExpertView: View {
@@ -19,6 +28,7 @@ struct AskExpertView: View {
 }
 
 struct AskExpertContent: View {
+    @EnvironmentObject private var authManager: AuthManager
     @State private var incidentText = ""
     @State private var debrief: Debrief?
     @State private var submitting = false
@@ -32,6 +42,9 @@ struct AskExpertContent: View {
     @State private var chatError: String?
 
     private var savedDebriefs: [Debrief] { allDebriefs.filter(\.saved) }
+    private var starters: [String] {
+        ExperienceLevel.isExperienced(authManager.currentUser?.experienceLevel) ? experiencedStarterQuestions : starterQuestions
+    }
 
     var body: some View {
         ScrollView {
@@ -80,25 +93,6 @@ struct AskExpertContent: View {
 
     private var askForm: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(starterQuestions, id: \.self) { starter in
-                        Button {
-                            Task { await submit(starter) }
-                        } label: {
-                            Text(starter)
-                                .font(.caption)
-                                .foregroundStyle(AppTheme.textPrimary)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .frame(maxWidth: 220, alignment: .leading)
-                                .background(AppTheme.background, in: Capsule())
-                        }
-                        .disabled(submitting)
-                    }
-                }
-            }
-
             Text("In your own words")
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(AppTheme.textPrimary)
@@ -123,6 +117,32 @@ struct AskExpertContent: View {
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
             .disabled(submitting || incidentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+            Text("OR START WITH ONE OF THESE")
+                .font(.caption2.weight(.bold)).tracking(0.8)
+                .foregroundStyle(AppTheme.terracotta600)
+                .padding(.top, 4)
+            ForEach(Array(starters.enumerated()), id: \.offset) { index, starter in
+                Button {
+                    Task { await submit(starter) }
+                } label: {
+                    HStack(alignment: .top, spacing: 10) {
+                        Text(starter)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(AppTheme.forest)
+                            .multilineTextAlignment(.leading)
+                        Spacer(minLength: 0)
+                        Image(systemName: "arrow.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AppTheme.terracotta)
+                            .padding(.top, 3)
+                    }
+                    .padding(12)
+                    .background([AppTheme.peachTint, AppTheme.goldTint, AppTheme.mintTint][index % 3], in: RoundedRectangle(cornerRadius: 14))
+                }
+                .buttonStyle(.plain)
+                .disabled(submitting)
+            }
         }
     }
 
@@ -344,4 +364,5 @@ private struct SavedDebriefRow: View {
 
 #Preview {
     AskExpertView()
+        .environmentObject(AuthManager.shared)
 }

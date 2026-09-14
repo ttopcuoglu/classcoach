@@ -31,4 +31,5 @@ struct AskAndPracticeView: View {
 
 #Preview {
     AskAndPracticeView()
+        .environmentObject(AuthManager.shared)
 }
