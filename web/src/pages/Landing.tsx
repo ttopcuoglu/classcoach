@@ -901,7 +901,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-6 w-auto" />
             <span className="hidden sm:inline">Practice. Reflect. Grow.</span>
           </div>
-          <div className="flex items-center gap-5">
+          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
             <Link to="/guide" className="hover:text-ink">
               Guide
             </Link>
@@ -914,7 +914,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             <a href="/terms" className="hover:text-ink">
               Terms
             </a>
-            <span>&copy; 2026 Wivoza. All rights reserved.</span>
+            <span>&copy; 2026 Edinexa Technologies LLC. All rights reserved.</span>
           </div>
         </div>
       </footer>
