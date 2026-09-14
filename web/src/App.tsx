@@ -237,8 +237,14 @@ export default function App() {
               <Route path="profile" element={<Profile />} />
               <Route path="cheat-sheet" element={<CheatSheet />} />
               <Route path="first-30-days" element={<FirstThirtyDays />} />
-              {user != null && user.role !== 'teacher' && <Route path="admin" element={<AdminDashboard />} />}
+              {/* Always registered, so /admin never falls through to a blank page
+                  (e.g. right after logging out on it) — a teacher is sent home. */}
+              <Route
+                path="admin"
+                element={user != null && user.role !== 'teacher' ? <AdminDashboard /> : <Navigate to="/" replace />}
+              />
             </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
       </BrowserRouter>

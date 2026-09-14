@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { logout, type FocusMetric } from '../lib/api'
 import type { UserProfile } from '../lib/api'
 import { isExperienced } from '../lib/experience'
@@ -69,6 +69,7 @@ function mobileNavClasses(isActive: boolean) {
 
 export default function Layout({ user, onLogout }: { user: UserProfile | null; onLogout: () => void }) {
   const location = useLocation()
+  const navigate = useNavigate()
   const [openGroup, setOpenGroup] = useState<string | null>(null)
 
   useEffect(() => {
@@ -77,6 +78,9 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
 
   async function handleLogout() {
     await logout().catch(() => {})
+    // Land on the home page rather than leaving the signed-out visitor on
+    // whatever app URL they were on (/admin, /profile...).
+    navigate('/', { replace: true })
     onLogout()
   }
 
