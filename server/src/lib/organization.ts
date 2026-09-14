@@ -58,6 +58,40 @@ export async function syncOrganizationRoles(organizationId: string, adminEmails:
   }
 }
 
+function listsAdmin(adminEmails: string | null, email: string): boolean {
+  return (adminEmails ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+    .includes(email.toLowerCase())
+}
+
+// The role and organization a user should have at sign-in. The global
+// ADMIN_EMAILS allowlist wins; otherwise a user whose email is listed on an
+// organization's adminEmails is that org's admin — their current org if it
+// lists them, or (for an independent user) whichever org does, so a school
+// admin who creates their account after the org was set up is adopted on
+// their first sign-in instead of landing as a plain teacher. Everyone else
+// is a teacher and keeps whatever organization they already joined.
+export async function resolveSignInRole(
+  email: string,
+  isSuperadmin: boolean,
+  current: { organizationId: string | null } | null,
+): Promise<{ role: 'superadmin' | 'org_admin' | 'teacher'; organizationId?: string }> {
+  if (isSuperadmin) return { role: 'superadmin' }
+  const normalized = email.toLowerCase()
+  if (current?.organizationId) {
+    const org = await prisma.organization.findUnique({ where: { id: current.organizationId } })
+    return { role: org && listsAdmin(org.adminEmails, normalized) ? 'org_admin' : 'teacher' }
+  }
+  const candidates = await prisma.organization.findMany({
+    where: { adminEmails: { contains: normalized, mode: 'insensitive' } },
+    orderBy: { createdAt: 'asc' },
+  })
+  const org = candidates.find((o) => listsAdmin(o.adminEmails, normalized))
+  return org ? { role: 'org_admin', organizationId: org.id } : { role: 'teacher' }
+}
+
 export async function generateUniqueJoinCode(): Promise<string> {
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = Math.random().toString(36).slice(2, 8).toUpperCase()

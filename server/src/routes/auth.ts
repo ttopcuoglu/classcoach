@@ -10,6 +10,7 @@ import {
   USER_INCLUDE_ORG,
 } from '../lib/auth.ts'
 import { verifyAppleIdentityToken } from '../lib/appleAuth.ts'
+import { resolveSignInRole } from '../lib/organization.ts'
 import { prisma } from '../lib/prisma.ts'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -83,7 +84,7 @@ authRouter.post('/google', async (req, res) => {
       return
     }
 
-    const role = ADMIN_EMAILS.has(payload.email.toLowerCase()) ? 'superadmin' : 'teacher'
+    const isSuperadmin = ADMIN_EMAILS.has(payload.email.toLowerCase())
 
     // Find by googleId first; if this Google account has never signed in
     // here, check whether a password account already owns this email and
@@ -102,19 +103,22 @@ authRouter.post('/google', async (req, res) => {
         include: USER_INCLUDE_ORG,
       })
       if (byEmail) {
+        const { role, organizationId } = await resolveSignInRole(payload.email, isSuperadmin, byEmail)
         user = await prisma.user.update({
           where: { id: byEmail.id },
-          data: { googleId: payload.sub, name: byEmail.name ?? payload.name ?? null, role },
+          data: { googleId: payload.sub, name: byEmail.name ?? payload.name ?? null, role, organizationId },
           omit: SAFE_USER_OMIT,
           include: USER_INCLUDE_ORG,
         })
       } else {
+        const { role, organizationId } = await resolveSignInRole(payload.email, isSuperadmin, null)
         user = await prisma.user.create({
           data: {
             googleId: payload.sub,
             email: payload.email,
             name: payload.name ?? null,
             role,
+            organizationId,
             termsAcceptedAt: new Date(),
           },
           omit: SAFE_USER_OMIT,
@@ -122,9 +126,13 @@ authRouter.post('/google', async (req, res) => {
         })
       }
     } else {
+      // Re-derived on every sign-in so a change to ADMIN_EMAILS or an org's
+      // adminEmails takes effect — without flattening a school admin back
+      // to "teacher", which is what a bare superadmin/teacher check did.
+      const { role, organizationId } = await resolveSignInRole(payload.email, isSuperadmin, user)
       user = await prisma.user.update({
         where: { id: user.id },
-        data: { email: payload.email, name: payload.name ?? null, role },
+        data: { email: payload.email, name: payload.name ?? null, role, organizationId },
         omit: SAFE_USER_OMIT,
         include: USER_INCLUDE_ORG,
       })
@@ -159,7 +167,7 @@ authRouter.post('/apple', async (req, res) => {
     }
 
     const email = (payload.email as string).toLowerCase()
-    const role = ADMIN_EMAILS.has(email) ? 'superadmin' : 'teacher'
+    const isSuperadmin = ADMIN_EMAILS.has(email)
 
     // No stable Apple-account column exists (unlike googleId) — matching
     // by email keeps this migration-free, same tradeoff the Google route
@@ -170,15 +178,27 @@ authRouter.post('/apple', async (req, res) => {
       include: USER_INCLUDE_ORG,
     })
     if (!user) {
+      const { role, organizationId } = await resolveSignInRole(email, isSuperadmin, null)
       user = await prisma.user.create({
         data: {
           email,
           role,
+          organizationId,
           termsAcceptedAt: new Date(),
         },
         omit: SAFE_USER_OMIT,
         include: USER_INCLUDE_ORG,
       })
+    } else {
+      const { role, organizationId } = await resolveSignInRole(email, isSuperadmin, user)
+      if (role !== user.role || (organizationId && organizationId !== user.organizationId)) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { role, organizationId },
+          omit: SAFE_USER_OMIT,
+          include: USER_INCLUDE_ORG,
+        })
+      }
     }
 
     if (user.suspendedAt) {
@@ -237,7 +257,7 @@ authRouter.post('/signup', async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(password, PASSWORD_SALT_ROUNDS)
-  const role = ADMIN_EMAILS.has(normalizedEmail) ? 'superadmin' : 'teacher'
+  const { role, organizationId } = await resolveSignInRole(normalizedEmail, ADMIN_EMAILS.has(normalizedEmail), null)
 
   const user = await prisma.user.create({
     data: {
@@ -245,6 +265,7 @@ authRouter.post('/signup', async (req, res) => {
       passwordHash,
       name: name.trim(),
       role,
+      organizationId,
       termsAcceptedAt: new Date(),
       ageConfirmedAt: new Date(),
     },
@@ -270,7 +291,7 @@ authRouter.post('/login', async (req, res) => {
     return
   }
 
-  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() }, include: USER_INCLUDE_ORG })
+  let user = await prisma.user.findUnique({ where: { email: email.toLowerCase() }, include: USER_INCLUDE_ORG })
   // Same generic message whether the account doesn't exist, has no password
   // (Google-only), or the password is wrong — never leak which case fired.
   if (!user || !user.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) {
@@ -280,6 +301,11 @@ authRouter.post('/login', async (req, res) => {
   if (user.suspendedAt) {
     res.status(403).json({ error: 'This account has been suspended. Contact your administrator.' })
     return
+  }
+
+  const { role, organizationId } = await resolveSignInRole(user.email, ADMIN_EMAILS.has(user.email), user)
+  if (role !== user.role || (organizationId && organizationId !== user.organizationId)) {
+    user = await prisma.user.update({ where: { id: user.id }, data: { role, organizationId }, include: USER_INCLUDE_ORG })
   }
 
   const token = signSession({ userId: user.id, role: user.role })
