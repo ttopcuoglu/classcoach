@@ -28,7 +28,7 @@ struct LessonContentTab: View {
             }
 
             if let error {
-                Text(error).font(.footnote).foregroundStyle(.red)
+                Text(error).font(.footnote).foregroundStyle(AppTheme.terracotta600)
             }
         }
     }
@@ -114,7 +114,7 @@ struct LessonContentTab: View {
     }
 
     private static let noteLabelColors: [String: Color] = [
-        "Clarity": .blue, "Vocabulary": .blue, "Engagement with content": .blue, "Worth double-checking": .orange,
+        "Clarity": AppTheme.teal, "Vocabulary": AppTheme.teal, "Engagement with content": AppTheme.teal, "Worth double-checking": AppTheme.terracotta,
     ]
 
     @ViewBuilder

@@ -1,15 +1,45 @@
 import SwiftUI
 
 struct HomeView: View {
+    @EnvironmentObject private var authManager: AuthManager
+
+    private var greeting: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        let base = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
+        // Skip a leading honorific ("Ms. Rivera") so the greeting doesn't
+        // address someone by a bare title — same rule as the web home page.
+        let honorifics: Set<String> = ["mr", "mrs", "ms", "miss", "dr", "prof", "mx"]
+        let first = (authManager.currentUser?.name ?? "")
+            .split(separator: " ")
+            .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ".")) }
+            .first { !$0.isEmpty && !honorifics.contains($0.lowercased()) }
+        return first.map { "\(base), \($0)" } ?? base
+    }
+
+    private var dateLabel: String {
+        Date().formatted(.dateTime.weekday(.wide).month(.wide).day()).uppercased()
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Explore your coaching space")
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .padding(.horizontal)
-                        .padding(.top, 8)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(dateLabel)
+                            .font(.caption2.weight(.bold)).tracking(1.4)
+                            .foregroundStyle(AppTheme.gold)
+                        (Text(greeting) + Text(".").foregroundColor(AppTheme.gold))
+                            .font(.heading(.title))
+                            .foregroundStyle(.white)
+                        Text("What would help you feel more prepared today?")
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .padding(20)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppTheme.forest, in: RoundedRectangle(cornerRadius: 24))
+                    .padding(.horizontal)
+                    .padding(.top, 8)
 
                     NavigationLink { AudioCoachingView() } label: {
                         FeatureCard(
@@ -71,10 +101,9 @@ struct HomeView: View {
     }
 }
 
-/// Matches the web home page's feature-card design: a soft icon badge, a
-/// small bold eyebrow label, a title, a short description, and a bold
-/// "action →" prompt at the bottom, on a white card with a decorative
-/// tinted blob in the corner.
+/// Matches the web home page's feature cards: a tinted card with a solid
+/// icon badge, a small eyebrow, a title, a short description and an
+/// "action →" prompt.
 struct FeatureCard: View {
     let eyebrow: String
     let title: String
@@ -83,48 +112,48 @@ struct FeatureCard: View {
     let systemImage: String
     let iconTint: Color
 
+    private var cardTint: Color {
+        switch iconTint {
+        case AppTheme.accent: return AppTheme.peachTint.opacity(0.6)
+        case AppTheme.Category.disruption: return AppTheme.goldTint.opacity(0.7)
+        default: return AppTheme.mintTint.opacity(0.6)
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Image(systemName: systemImage)
-                .font(.title2)
-                .foregroundStyle(iconTint)
-                .frame(width: 52, height: 52)
-                .background(iconTint.opacity(0.15), in: RoundedRectangle(cornerRadius: 14))
+                .font(.title3)
+                .foregroundStyle(.white)
+                .frame(width: 50, height: 50)
+                .background(iconTint, in: RoundedRectangle(cornerRadius: 15))
 
             Text(eyebrow.uppercased())
-                .font(.caption.weight(.bold))
-                .foregroundStyle(AppTheme.accent)
+                .font(.caption2.weight(.bold)).tracking(1.1)
+                .foregroundStyle(AppTheme.terracotta600)
+                .padding(.top, 4)
 
             Text(title)
-                .font(.title3.weight(.bold))
-                .foregroundStyle(AppTheme.textPrimary)
+                .font(.heading(.title3))
+                .foregroundStyle(AppTheme.forest)
 
             Text(description)
                 .font(.subheadline)
                 .foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("\(actionLabel) ↗")
+            Text("\(actionLabel) →")
                 .font(.subheadline.weight(.bold))
-                .foregroundStyle(AppTheme.accent)
+                .foregroundStyle(AppTheme.terracotta600)
                 .padding(.top, 2)
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            ZStack(alignment: .topTrailing) {
-                Color.white
-                Circle()
-                    .fill(iconTint.opacity(0.12))
-                    .frame(width: 100, height: 100)
-                    .offset(x: 35, y: -35)
-            }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.black.opacity(0.06)))
+        .background(cardTint, in: RoundedRectangle(cornerRadius: 24))
     }
 }
 
 #Preview {
     HomeView()
+        .environmentObject(AuthManager.shared)
 }

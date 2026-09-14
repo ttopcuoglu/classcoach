@@ -69,7 +69,7 @@ struct TagSpeakersView: View {
             }
 
             if let error {
-                Text(error).font(.footnote).foregroundStyle(.red)
+                Text(error).font(.footnote).foregroundStyle(AppTheme.terracotta600)
             }
         }
     }

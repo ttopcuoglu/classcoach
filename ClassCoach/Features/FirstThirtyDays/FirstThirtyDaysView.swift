@@ -64,15 +64,31 @@ struct FirstThirtyDaysView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("A short guided track to help you get grounded early.")
-                    .font(.subheadline)
-                    .foregroundStyle(AppTheme.textSecondary)
+                PanelHeader(
+                    eyebrow: "Wivoza · Grow",
+                    title: "Your First 30 Days",
+                    subtitle: "A short guided track to help you get grounded early."
+                ) {
+                    if !loading {
+                        let fraction = Double(completed.count) / Double(max(onboardingTrack.count, 1))
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("\(completed.count) of \(onboardingTrack.count) steps complete")
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(Color.white.opacity(0.12))
+                                    Capsule().fill(AppTheme.gold).frame(width: geo.size.width * fraction)
+                                }
+                            }
+                            .frame(height: 10)
+                        }
+                        .padding(.top, 10)
+                    }
+                }
 
                 if loading {
                     Text("Loading...").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                 } else {
-                    Text("\(completed.count) of \(onboardingTrack.count) steps complete")
-                        .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
 
                     ForEach(onboardingTrack, id: \.id) { step in
                         let done = completed.contains(step.id)
@@ -80,9 +96,13 @@ struct FirstThirtyDaysView: View {
                             Button {
                                 Task { await toggleStep(step.id) }
                             } label: {
-                                Image(systemName: done ? "checkmark.square.fill" : "square")
-                                    .font(.title3)
-                                    .foregroundStyle(done ? AppTheme.primary : AppTheme.textSecondary)
+                                Image(systemName: "checkmark")
+                                    .opacity(done ? 1 : 0)
+                                    .font(.subheadline.weight(.bold))
+                                    .foregroundStyle(AppTheme.gold)
+                                    .frame(width: 34, height: 34)
+                                    .background(done ? AppTheme.forest : Color.clear, in: RoundedRectangle(cornerRadius: 10))
+                                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(done ? .clear : AppTheme.textSecondary.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [4])))
                             }
                             .buttonStyle(.plain)
                             .padding(.top, 2)
@@ -90,19 +110,21 @@ struct FirstThirtyDaysView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(step.title)
                                     .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(done ? AppTheme.primary : AppTheme.textPrimary)
+                                    .foregroundStyle(AppTheme.forest)
+                                    .strikethrough(done, color: AppTheme.forest.opacity(0.3))
                                 Text(step.description)
                                     .font(.subheadline)
                                     .foregroundStyle(AppTheme.textSecondary)
                                 if let hint = step.hint {
                                     Text(hint)
                                         .font(.caption.weight(.semibold))
-                                        .foregroundStyle(AppTheme.primary)
+                                        .foregroundStyle(AppTheme.terracotta600)
                                 }
                             }
                         }
-                        .padding(12)
-                        .background(done ? AppTheme.primary.opacity(0.08) : AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(done ? AppTheme.mintTint.opacity(0.6) : AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
                     }
                 }
             }

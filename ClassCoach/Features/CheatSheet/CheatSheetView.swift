@@ -42,9 +42,11 @@ struct CheatSheetView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Go-to phrases and tips, auto-built from what you've saved.")
-                    .font(.subheadline)
-                    .foregroundStyle(AppTheme.textSecondary)
+                PanelHeader(
+                    eyebrow: "Wivoza · Grow",
+                    title: "Your Cheat Sheet",
+                    subtitle: "Go-to phrases and tips, auto-built from what you've saved."
+                )
 
                 if loading {
                     Text("Loading...").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
@@ -54,7 +56,7 @@ struct CheatSheetView: View {
                         .foregroundStyle(AppTheme.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding()
-                        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
                 } else {
                     ForEach(byCategory, id: \.category) { group in
                         VStack(alignment: .leading, spacing: 8) {
@@ -67,7 +69,7 @@ struct CheatSheetView: View {
                                     Text("For: \(phrase.source)").font(.caption).foregroundStyle(AppTheme.textSecondary)
                                 }
                                 .padding(12)
-                                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                                .background(AppTheme.cream, in: RoundedRectangle(cornerRadius: 16))
                             }
                         }
                     }
@@ -83,7 +85,7 @@ struct CheatSheetView: View {
                                         .foregroundStyle(AppTheme.textSecondary)
                                 }
                                 .padding(12)
-                                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                                .background(AppTheme.cream, in: RoundedRectangle(cornerRadius: 16))
                             }
                         }
                     }

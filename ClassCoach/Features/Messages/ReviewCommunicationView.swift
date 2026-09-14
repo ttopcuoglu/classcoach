@@ -23,6 +23,7 @@ struct ReviewCommunicationView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                PanelHeader(eyebrow: "Wivoza · Communication Coach", title: "Review My Communication", subtitle: "Get feedback on something already written.")
                 if let prep {
                     resultView(prep)
                 } else {
@@ -30,7 +31,7 @@ struct ReviewCommunicationView: View {
                 }
 
                 if let error {
-                    Text(error).font(.footnote).foregroundStyle(.red).frame(maxWidth: .infinity, alignment: .center)
+                    Text(error).font(.footnote).foregroundStyle(AppTheme.terracotta600).frame(maxWidth: .infinity, alignment: .center)
                 }
             }
             .padding()
@@ -45,17 +46,21 @@ struct ReviewCommunicationView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Message or communication you received").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
                 TextEditor(text: $situationText)
+                    .scrollContentBackground(.hidden)
                     .frame(minHeight: 90)
                     .padding(8)
-                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+                    .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
                     .disabled(submitting)
             }
             VStack(alignment: .leading, spacing: 6) {
                 Text("Your planned response").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
                 TextEditor(text: $responseText)
+                    .scrollContentBackground(.hidden)
                     .frame(minHeight: 90)
                     .padding(8)
-                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+                    .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
                     .disabled(submitting)
             }
 
@@ -70,7 +75,7 @@ struct ReviewCommunicationView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 10)
-                    .background(AppTheme.primary, in: Capsule())
+                    .background(AppTheme.terracotta, in: Capsule())
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
             .disabled(!canSubmit)
@@ -110,7 +115,7 @@ struct ReviewCommunicationView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 10)
-                    .background(AppTheme.primary, in: Capsule())
+                    .background(AppTheme.terracotta, in: Capsule())
             }
         }
     }
@@ -122,7 +127,7 @@ struct ReviewCommunicationView: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+        .background((tint == AppTheme.textSecondary ? AppTheme.gold : tint).opacity(0.16), in: RoundedRectangle(cornerRadius: 16))
     }
 
     private func followUpChat(_ prep: ConversationPrep) -> some View {

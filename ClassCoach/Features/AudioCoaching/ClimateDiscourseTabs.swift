@@ -3,7 +3,6 @@ import SwiftUI
 /// Mirrors `AudioCoaching.tsx`'s `ClimateRoutinesTab`.
 struct ClimateRoutinesTab: View {
     let session: AudioSessionWithSegments
-    let onNavigateDiscourse: () -> Void
 
     private var m: OverviewMetrics { OverviewMetrics(session) }
     private var recordedSec: Double { m.coverage.recordedSec }
@@ -23,10 +22,6 @@ struct ClimateRoutinesTab: View {
                 StatView(label: "Clear directions given", metric: withDefaultReason(m.directiveMetric, "Count only — clarity isn't judged automatically."))
             }
             CoachNoteView(text: AudioInsights.buildRoutinesInsight(m.directiveMetric, hasRepeatedInstructionHighlight: hasHighlight("Repeated instruction")))
-            if let phases = session.phases, !phases.isEmpty {
-                Button("\(phases.count) phase(s) detected — see Discourse Details for the full breakdown →", action: onNavigateDiscourse)
-                    .font(.caption.weight(.medium)).foregroundStyle(AppTheme.primary)
-            }
         }
     }
 
@@ -54,9 +49,15 @@ struct ClimateRoutinesTab: View {
     }
 }
 
-/// Mirrors `AudioCoaching.tsx`'s `DiscourseDetailsTab`.
+enum DiscoursePart {
+    case talk, questions, understanding
+}
+
+/// The first three Insights sections — Talk & Participation, Questions &
+/// Thinking, and Checks & Feedback — which share the same session metrics.
 struct DiscourseDetailsTab: View {
     let session: AudioSessionWithSegments
+    let part: DiscoursePart
     @State private var showBreakdown = false
 
     private var m: OverviewMetrics { OverviewMetrics(session) }
@@ -64,23 +65,21 @@ struct DiscourseDetailsTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if let count = session.questionCount, count > 0 {
-                Text("You asked \(count) question\(count == 1 ? "" : "s") this session.").font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-            } else {
-                Text("No question data for this session.").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+            switch part {
+            case .talk:
+                PacingTimelineView(segments: session.segments, durationSec: session.durationSec)
+                talkSection
+            case .questions:
+                if let count = session.questionCount, count > 0 {
+                    Text("You asked \(count) question\(count == 1 ? "" : "s") this session.").font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                } else {
+                    Text("No question data for this session.").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                }
+                questioningSection
+                questionLogSection
+            case .understanding:
+                cfuSection
             }
-
-            PacingTimelineView(segments: session.segments, durationSec: session.durationSec)
-
-            talkSection
-            questioningSection
-            cfuSection
-
-            if let phases = session.phases, !phases.isEmpty {
-                phasesSection(phases)
-            }
-
-            questionLogSection
         }
     }
 
@@ -90,7 +89,7 @@ struct DiscourseDetailsTab: View {
             return max(0, 100 - t - s)
         }()
         return VStack(alignment: .leading, spacing: 10) {
-            CategorySectionView(title: "Talk & Participation", coverage: ReportConfidence.categoryCoverage([
+            CategorySectionView(title: "Talk distribution", coverage: ReportConfidence.categoryCoverage([
                 ReportConfidence.getPresenceMetric(session.teacherTalkPct).state, ReportConfidence.getPresenceMetric(session.studentTalkPct).state,
             ])) {
                 StatView(label: "Your talk time", metric: percentMetric(session.teacherTalkPct))
@@ -104,7 +103,7 @@ struct DiscourseDetailsTab: View {
 
     private var questioningSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            CategorySectionView(title: "Questioning & Thinking", coverage: ReportConfidence.categoryCoverage([
+            CategorySectionView(title: "The numbers", coverage: ReportConfidence.categoryCoverage([
                 (m.higherOrderRatio ?? m.cfuMetric).state, m.followUpMetric.state, ReportConfidence.getPresenceMetric(session.avgWaitTimeSec).state,
             ])) {
                 StatView(label: "Questions you asked", metric: ReportConfidence.getCountMetric(count: session.questionCount, recordedSec: recordedSec))
@@ -132,7 +131,7 @@ struct DiscourseDetailsTab: View {
 
     private var cfuSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            CategorySectionView(title: "Checking Understanding", coverage: ReportConfidence.categoryCoverage([m.cfuMetric.state, m.feedbackRatio.state])) {
+            CategorySectionView(title: "The numbers", coverage: ReportConfidence.categoryCoverage([m.cfuMetric.state, m.feedbackRatio.state])) {
                 StatView(label: "Your checks for understanding", metric: m.cfuMetric)
                 StatView(label: "Your feedback specificity", metric: m.feedbackRatio)
             }
@@ -212,8 +211,8 @@ private struct QuestioningMixView: View {
             if total == 0 {
                 Text("Question-type mix unavailable this session.").font(.caption).foregroundStyle(AppTheme.textSecondary)
             } else {
-                mixBar(label: "Recall", count: recall, total: total, color: AppTheme.textSecondary)
-                mixBar(label: "Higher-order", count: higherOrder, total: total, color: AppTheme.primary)
+                mixBar(label: "Recall", count: recall, total: total, color: AppTheme.gold)
+                mixBar(label: "Higher-order", count: higherOrder, total: total, color: AppTheme.terracotta)
             }
         }
     }
@@ -261,8 +260,8 @@ private struct PacingTimelineView: View {
                 }
                 .font(.caption2).foregroundStyle(AppTheme.textSecondary)
                 HStack(spacing: 12) {
-                    legend("Teacher", AppTheme.primary)
-                    legend("Student", AppTheme.accent)
+                    legend("Teacher", AppTheme.terracotta)
+                    legend("Student", AppTheme.gold)
                     legend("Unavailable", AppTheme.textSecondary.opacity(0.3))
                 }
                 .font(.caption2)
@@ -290,6 +289,6 @@ private struct PacingTimelineView: View {
             .reduce(0.0) { $0 + (min($1.endSec, binEnd) - max($1.startSec, binStart)) }
         let studentDuration = overlapping.filter { $0.speakerLabel != "Teacher" }
             .reduce(0.0) { $0 + (min($1.endSec, binEnd) - max($1.startSec, binStart)) }
-        return teacherDuration >= studentDuration ? AppTheme.primary : AppTheme.accent
+        return teacherDuration >= studentDuration ? AppTheme.terracotta : AppTheme.gold
     }
 }

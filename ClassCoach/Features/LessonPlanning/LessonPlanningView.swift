@@ -4,28 +4,28 @@ struct LessonPlanningView: View {
     @State private var tab = "generate"
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Get feedback on a plan you wrote, or generate a sample plan for ideas.")
-                        .font(.subheadline)
-                        .foregroundStyle(AppTheme.textSecondary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                PanelHeader(
+                    eyebrow: "Wivoza · Plan",
+                    title: "Lesson Planning",
+                    subtitle: "Get feedback on a plan you wrote, or generate a sample plan for ideas."
+                )
 
-                    ChipRow(items: [("Generate Ideas", "generate"), ("Get Feedback", "feedback")], selection: tab) {
-                        tab = $0 ?? "generate"
-                    }
-
-                    if tab == "generate" {
-                        GeneratePanel()
-                    } else {
-                        FeedbackPanel()
-                    }
+                ChipRow(items: [("Generate Ideas", "generate"), ("Get Feedback", "feedback")], selection: tab) {
+                    tab = $0 ?? "generate"
                 }
-                .padding()
+
+                if tab == "generate" {
+                    GeneratePanel()
+                } else {
+                    FeedbackPanel()
+                }
             }
-            .background(AppTheme.background)
-            .navigationTitle("Lesson Planning")
+            .padding()
         }
+        .background(AppTheme.background)
+        .navigationTitle("Lesson Planning")
     }
 }
 
@@ -36,7 +36,7 @@ private func labeledBlock(_ title: String, _ text: String, _ tint: Color) -> som
     }
     .padding(10)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+    .background((tint == AppTheme.textSecondary ? AppTheme.gold : tint).opacity(0.16), in: RoundedRectangle(cornerRadius: 16))
 }
 
 private struct GeneratePanel: View {
@@ -63,7 +63,7 @@ private struct GeneratePanel: View {
                 form
             }
             if let error {
-                Text(error).font(.footnote).foregroundStyle(.red).frame(maxWidth: .infinity, alignment: .center)
+                Text(error).font(.footnote).foregroundStyle(AppTheme.terracotta600).frame(maxWidth: .infinity, alignment: .center)
             }
 
             historySection(title: "Saved sample plans", plans: savedPlans, loading: historyLoading)
@@ -91,7 +91,7 @@ private struct GeneratePanel: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 20).padding(.vertical, 10)
-                    .background(AppTheme.primary, in: Capsule())
+                    .background(AppTheme.terracotta, in: Capsule())
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
             .disabled(objective.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || generating)
@@ -131,21 +131,21 @@ private struct GeneratePanel: View {
                 Button("New Sample Plan") { self.plan = nil; error = nil }
                     .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
                     .padding(.horizontal, 18).padding(.vertical, 9)
-                    .background(AppTheme.primary, in: Capsule())
+                    .background(AppTheme.terracotta, in: Capsule())
             }
         }
     }
 
     private func historySection(title: String, plans: [LessonPlan], loading: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+            Text(title.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
             if loading {
                 Text("Loading...").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
             } else if plans.isEmpty {
                 Text("Plans you save will show up here.")
                     .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .center).padding()
-                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                    .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
             } else {
                 ForEach(plans) { LessonPlanRow(plan: $0) }
             }
@@ -209,18 +209,18 @@ private struct FeedbackPanel: View {
                 form
             }
             if let error {
-                Text(error).font(.footnote).foregroundStyle(.red).frame(maxWidth: .infinity, alignment: .center)
+                Text(error).font(.footnote).foregroundStyle(AppTheme.terracotta600).frame(maxWidth: .infinity, alignment: .center)
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("SAVED FEEDBACK").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+                Text("SAVED FEEDBACK").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
                 if historyLoading {
                     Text("Loading...").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                 } else if savedPlans.isEmpty {
                     Text("Plans you save will show up here.")
                         .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .center).padding()
-                        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
                 } else {
                     ForEach(savedPlans) { LessonPlanRow(plan: $0) }
                 }
@@ -233,9 +233,11 @@ private struct FeedbackPanel: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Your lesson plan").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
             TextEditor(text: $planText)
+                .scrollContentBackground(.hidden)
                 .frame(minHeight: 160)
                 .padding(8)
-                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+                .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
                 .disabled(submitting)
 
             Button {
@@ -245,7 +247,7 @@ private struct FeedbackPanel: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 20).padding(.vertical, 10)
-                    .background(AppTheme.primary, in: Capsule())
+                    .background(AppTheme.terracotta, in: Capsule())
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
             .disabled(planText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || submitting)
@@ -272,7 +274,7 @@ private struct FeedbackPanel: View {
                         }
                         .font(.caption.weight(.semibold)).foregroundStyle(.white)
                         .padding(.horizontal, 14).padding(.vertical, 7)
-                        .background(AppTheme.primary, in: Capsule())
+                        .background(AppTheme.terracotta, in: Capsule())
                         .disabled(applyingRevision)
 
                         Button("Dismiss") { revisionDismissed = true }
@@ -289,7 +291,7 @@ private struct FeedbackPanel: View {
                 Button("New Plan") { startOver() }
                     .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
                     .padding(.horizontal, 18).padding(.vertical, 9)
-                    .background(AppTheme.primary, in: Capsule())
+                    .background(AppTheme.terracotta, in: Capsule())
             }
         }
     }
@@ -411,7 +413,8 @@ private struct LessonPlanRow: View {
             }
         }
         .padding()
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
     }
 }
 

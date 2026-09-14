@@ -73,8 +73,14 @@ struct TalkToMeView: View {
                     if finishing {
                         takeawayView
                     } else {
-                        orb
-                        statusLabel
+                        VStack(spacing: 14) {
+                            orb
+                            statusLabel
+                        }
+                        .padding(.vertical, 22)
+                        .frame(maxWidth: .infinity)
+                        .background(AppTheme.forest, in: RoundedRectangle(cornerRadius: 28))
+                        .padding(.horizontal)
 
                         if onStartScreen {
                             startScreen
@@ -85,7 +91,7 @@ struct TalkToMeView: View {
                         if let errorMessage {
                             Text(errorMessage)
                                 .font(.subheadline)
-                                .foregroundStyle(.red)
+                                .foregroundStyle(AppTheme.terracotta600)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal)
                         }
@@ -143,11 +149,13 @@ struct TalkToMeView: View {
 
     private var visualState: (color: Color, icon: String) {
         switch phase {
-        case .error: return (.red, "exclamationmark.triangle.fill")
-        case .idle: return (AppTheme.textSecondary, "mic.fill")
-        case .thinking: return (AppTheme.primary, "ellipsis")
-        case .speaking: return (AppTheme.primary, "waveform")
-        case .listening: return (AppTheme.primary, "mic.fill")
+        case .error: return (AppTheme.terracotta, "exclamationmark.triangle.fill")
+        case .idle: return (AppTheme.cream.opacity(0.8), "mic.fill")
+        // One colour across listening, thinking and speaking, as on web — the
+        // conversation, not the machinery, should hold the eye.
+        case .thinking: return (AppTheme.gold, "ellipsis")
+        case .speaking: return (AppTheme.gold, "waveform")
+        case .listening: return (AppTheme.gold, "mic.fill")
         }
     }
 
@@ -163,8 +171,8 @@ struct TalkToMeView: View {
                     .animation(.easeOut(duration: 0.15), value: recorder.level)
             }
             Circle()
-                .fill(AppTheme.surface)
-                .overlay(Circle().strokeBorder(visualState.color, lineWidth: 2))
+                .fill(visualState.color.opacity(0.14))
+                .overlay(Circle().strokeBorder(visualState.color.opacity(0.6), lineWidth: 1.5))
                 .frame(width: 112, height: 112)
             Image(systemName: visualState.icon)
                 .font(.system(size: 36))
@@ -180,7 +188,7 @@ struct TalkToMeView: View {
             Text(statusText)
         }
         .font(.caption.weight(.medium))
-        .foregroundStyle(phase == .error ? .red : AppTheme.textSecondary)
+        .foregroundStyle(phase == .error ? AppTheme.peachTint : AppTheme.cream.opacity(0.75))
         .accessibilityElement(children: .combine)
     }
 
@@ -204,8 +212,8 @@ struct TalkToMeView: View {
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(AppTheme.accent)
                 Text("What's on your mind today?")
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(AppTheme.textPrimary)
+                    .font(.heading(.title2))
+                    .foregroundStyle(AppTheme.forest)
                 Text("Talk through a challenge, find the right words, or reflect on your day.")
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.textSecondary)
@@ -277,7 +285,7 @@ struct TalkToMeView: View {
                     }
                 }
 
-                pillButton(muted ? "Unmute coach" : "Mute coach", outlined: muted ? .red : AppTheme.textSecondary) {
+                pillButton(muted ? "Unmute coach" : "Mute coach", outlined: muted ? AppTheme.terracotta : AppTheme.textSecondary) {
                     muted.toggle()
                     if muted { player.stop() }
                 }
@@ -425,7 +433,7 @@ struct TalkToMeView: View {
                 .padding(.vertical, 60)
             } else if let takeawayError {
                 VStack(spacing: 12) {
-                    Text(takeawayError).font(.subheadline).foregroundStyle(.red).multilineTextAlignment(.center)
+                    Text(takeawayError).font(.subheadline).foregroundStyle(AppTheme.terracotta600).multilineTextAlignment(.center)
                     pillButton("Try Again", filled: AppTheme.accent) { Task { await finishSession() } }
                     pillButton("Back to the conversation", outlined: AppTheme.textSecondary) {
                         finishing = false
@@ -437,8 +445,8 @@ struct TalkToMeView: View {
             } else if let debrief, let takeaway = debrief.talkTakeaway {
                 HStack(alignment: .top) {
                     Text("Here's your takeaway")
-                        .font(.title2.weight(.bold))
-                        .foregroundStyle(AppTheme.textPrimary)
+                        .font(.heading(.title2))
+                        .foregroundStyle(AppTheme.forest)
                     Spacer()
                     Button {
                         Task { await toggleSaved() }
@@ -451,9 +459,9 @@ struct TalkToMeView: View {
                     }
                 }
 
-                takeawaySection("WHAT WE EXPLORED", takeaway.explored, AppTheme.primary)
-                takeawaySection("WHAT I'LL TRY", takeaway.tryNext, AppTheme.accent)
-                takeawaySection("WHAT I'LL NOTICE", takeaway.notice, AppTheme.textSecondary)
+                takeawaySection("WHAT WE EXPLORED", takeaway.explored, AppTheme.forest, fill: AppTheme.mintTint.opacity(0.7))
+                takeawaySection("WHAT I'LL TRY", takeaway.tryNext, AppTheme.terracotta600, fill: AppTheme.goldTint.opacity(0.7))
+                takeawaySection("WHAT I'LL NOTICE", takeaway.notice, AppTheme.terracotta600, fill: AppTheme.peachTint.opacity(0.55))
 
                 VStack(spacing: 10) {
                     if !atCap {
@@ -473,12 +481,14 @@ struct TalkToMeView: View {
         .padding(.horizontal)
     }
 
-    private func takeawaySection(_ label: String, _ text: String, _ color: Color) -> some View {
+    private func takeawaySection(_ label: String, _ text: String, _ color: Color, fill: Color? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(.caption2.weight(.bold)).foregroundStyle(color)
             Text(text).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(fill == nil ? 0 : 14)
+        .background(fill ?? .clear, in: RoundedRectangle(cornerRadius: 16))
     }
 
     // MARK: - Turn loop

@@ -33,6 +33,9 @@ struct RootTabView: View {
                             Label("Ask & Practice", systemImage: "bubble.left.and.bubble.right.fill")
                         }
 
+                    // These three always sit under More, which supplies its own
+                    // navigation bar — wrapping them in another stack drew a
+                    // second back button on every pushed screen.
                     LessonPlanningView()
                         .tabItem {
                             Label("Lesson Planning", systemImage: "doc.text.fill")

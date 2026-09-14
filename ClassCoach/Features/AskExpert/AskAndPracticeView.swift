@@ -23,6 +23,7 @@ struct AskAndPracticeView: View {
                     AskExpertContent()
                 }
             }
+            .background(AppTheme.background)
             .navigationTitle("Ask & Practice")
         }
     }

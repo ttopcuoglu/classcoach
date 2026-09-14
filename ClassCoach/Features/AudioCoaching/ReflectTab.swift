@@ -7,6 +7,16 @@ struct ReflectTab: View {
     let locked: Bool
     let onUpdate: (AudioSessionWithSegments) -> Void
 
+    @EnvironmentObject private var authManager: AuthManager
+    @StateObject private var recorder = VoiceTurnRecorder()
+    @StateObject private var player = SpeechPlayer()
+    /// Voice mode: each spoken turn is sent, Coach's reply is read aloud, and
+    /// the mic reopens — the same loop Talk It Through uses.
+    @State private var voiceMode = false
+    @State private var voicePaused = false
+    @State private var muted = false
+    @State private var speaking = false
+
     @State private var conversation: [AudioReflectMessage]
     @State private var draft = ""
     @State private var sending = false
@@ -42,11 +52,21 @@ struct ReflectTab: View {
             chatSection
             reflectionCard
         }
+        .onAppear {
+            recorder.configure(onTurnComplete: { text in Task { await handleVoiceTurn(text) } })
+        }
+        .onDisappear { stopVoice() }
+        .onChange(of: recorder.fatalError) { _, newValue in
+            if let newValue {
+                error = newValue
+                stopVoice()
+            }
+        }
     }
 
     private var standoutSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("WHAT STOOD OUT THIS SESSION").font(.caption.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
+            Text("WHAT STOOD OUT THIS SESSION").font(.caption.weight(.bold)).foregroundStyle(AppTheme.terracotta600)
             let highlights = session.highlights ?? []
             if highlights.isEmpty {
                 Text("Nothing stood out enough this session to flag here.")
@@ -58,8 +78,9 @@ struct ReflectTab: View {
                             .font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
                         Text("\"\(h.excerpt)\"").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                     }
-                    .padding(10)
-                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppTheme.goldTint.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
                 }
             }
         }
@@ -73,11 +94,25 @@ struct ReflectTab: View {
                         .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                         .multilineTextAlignment(.center)
                     if !locked {
-                        Button("Start reflecting") { Task { await startReflect() } }
-                            .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
-                            .padding(.horizontal, 20).padding(.vertical, 10)
-                            .background(AppTheme.primary, in: Capsule())
-                            .disabled(sending)
+                        HStack(spacing: 10) {
+                            Button {
+                                Task { await startReflect(voice: true) }
+                            } label: {
+                                Label("Start talking", systemImage: "mic.fill")
+                                    .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                                    .padding(.horizontal, 18).padding(.vertical, 10)
+                                    .background(AppTheme.terracotta, in: Capsule())
+                            }
+                            Button {
+                                Task { await startReflect(voice: false) }
+                            } label: {
+                                Text("Type instead")
+                                    .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+                                    .padding(.horizontal, 18).padding(.vertical, 10)
+                                    .overlay(Capsule().strokeBorder(AppTheme.textSecondary.opacity(0.4)))
+                            }
+                        }
+                        .disabled(sending)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -87,24 +122,26 @@ struct ReflectTab: View {
                     ForEach(Array(conversation.enumerated()), id: \.offset) { _, message in
                         Text(message.text)
                             .font(.subheadline)
-                            .foregroundStyle(message.role == "user" ? Color.white : AppTheme.textPrimary)
-                            .padding(10)
-                            .background(message.role == "user" ? AppTheme.primary : AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+                            .foregroundStyle(message.role == "user" ? AppTheme.cream : AppTheme.textPrimary)
+                            .padding(12)
+                            .background(message.role == "user" ? AppTheme.forest : AppTheme.mintTint.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
                             .frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
                     }
                     if sending {
-                        Text("Thinking...").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                        Text("One moment…").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                     }
                 }
 
                 if let error {
-                    Text(error).font(.caption).foregroundStyle(.red)
+                    Text(error).font(.caption).foregroundStyle(AppTheme.terracotta600)
                 }
 
                 if locked {
                     Text("This report is locked — the conversation is read-only.").font(.caption).foregroundStyle(AppTheme.textSecondary)
                 } else if turnCapHit {
                     Text("You've reached today's reflection limit for this session.").font(.caption).foregroundStyle(AppTheme.textSecondary)
+                } else if voiceMode {
+                    voiceControls
                 } else {
                     HStack {
                         TextField("Say what's on your mind...", text: $draft)
@@ -113,12 +150,126 @@ struct ReflectTab: View {
                         Button("Send") { Task { await sendMessage() } }
                             .disabled(sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
+                    Button {
+                        voiceMode = true
+                        voicePaused = false
+                        listen()
+                    } label: {
+                        Label("Talk instead", systemImage: "mic.fill")
+                            .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
+                    }
                 }
             }
         }
         .padding()
-        .background(AppTheme.background)
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.textSecondary.opacity(0.2)))
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(AppTheme.hairline))
+    }
+
+    // MARK: - Voice
+
+    private var voiceStatus: String {
+        if voicePaused { return "Paused" }
+        if recorder.transcribing || sending { return "One moment" }
+        if speaking { return "Coach is speaking" }
+        if recorder.listening { return "I'm listening" }
+        return "Ready"
+    }
+
+    private var voiceControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(recorder.listening ? AppTheme.terracotta : AppTheme.textSecondary)
+                    .frame(width: 8, height: 8)
+                    .scaleEffect(recorder.listening ? 1 + recorder.level / 200 : 1)
+                    .animation(.easeOut(duration: 0.15), value: recorder.level)
+                Text(voiceStatus).font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+            }
+            HStack(spacing: 8) {
+                voiceButton(voicePaused ? "Resume" : "Pause mic", filled: true) {
+                    if voicePaused {
+                        voicePaused = false
+                        listen()
+                    } else {
+                        voicePaused = true
+                        recorder.close()
+                        player.stop()
+                        speaking = false
+                    }
+                }
+                voiceButton(muted ? "Unmute coach" : "Mute coach") {
+                    muted.toggle()
+                    if muted {
+                        player.stop()
+                        speaking = false
+                    }
+                }
+                voiceButton("Type instead") { stopVoice() }
+            }
+        }
+    }
+
+    private func voiceButton(_ title: String, filled: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(filled ? .white : AppTheme.textSecondary)
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background {
+                    if filled {
+                        Capsule().fill(AppTheme.forest)
+                    } else {
+                        Capsule().strokeBorder(AppTheme.textSecondary.opacity(0.4))
+                    }
+                }
+        }
+    }
+
+    private func listen() {
+        guard voiceMode, !voicePaused, !locked, !turnCapHit else { return }
+        Task { await recorder.start() }
+    }
+
+    private func stopVoice() {
+        voiceMode = false
+        voicePaused = false
+        speaking = false
+        recorder.close()
+        player.stop()
+    }
+
+    private func handleVoiceTurn(_ text: String) async {
+        guard voiceMode, !voicePaused else { return }
+        guard !text.isEmpty else {
+            listen()
+            return
+        }
+        let before = conversation.count
+        draft = text
+        await sendMessage()
+        guard conversation.count > before else {
+            // The send failed (the error is already showing) — don't re-read
+            // the previous reply as if it were new.
+            voicePaused = true
+            return
+        }
+        await speakLatestReply()
+    }
+
+    /// Reads Coach's latest reply aloud, then reopens the mic.
+    private func speakLatestReply() async {
+        guard voiceMode, !voicePaused else { return }
+        if !muted, let reply = conversation.last(where: { $0.role == "assistant" })?.text {
+            speaking = true
+            let voice = authManager.currentUser?.talkVoice
+            for sentence in splitIntoSentences(reply) {
+                player.enqueue(sentence, voice: voice)
+            }
+            await player.waitUntilDone()
+            speaking = false
+        }
+        listen()
     }
 
     private var reflectionCard: some View {
@@ -156,22 +307,24 @@ struct ReflectTab: View {
                     }
                     .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
                     .padding(.horizontal, 16).padding(.vertical, 8)
-                    .background(AppTheme.textPrimary, in: Capsule())
+                    .background(AppTheme.forest, in: Capsule())
                     .disabled(locking)
                 }
             }
         }
         .padding()
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 14))
+        .background(AppTheme.peachTint.opacity(0.5), in: RoundedRectangle(cornerRadius: 20))
     }
 
     private func labeledField(_ title: String, text: Binding<String>, minHeight: CGFloat = 40) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
             TextEditor(text: text)
+                .scrollContentBackground(.hidden)
                 .frame(minHeight: minHeight)
                 .padding(6)
-                .background(AppTheme.background, in: RoundedRectangle(cornerRadius: 8))
+                .scrollContentBackground(.hidden)
+                .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
                 .disabled(locked)
         }
     }
@@ -183,17 +336,22 @@ struct ReflectTab: View {
         return AudioInsights.buildReflectContext(session, cfuMetric: m.cfuMetric, redirectionMetric: m.redirectionMetric, directiveMetric: m.directiveMetric, coverage: m.coverage)
     }
 
-    private func startReflect() async {
+    private func startReflect(voice: Bool) async {
         sending = true
         error = nil
+        voiceMode = voice
+        voicePaused = false
         do {
             let updated = try await AudioCoachingService.sendReflectMessage(sessionId: session.id, message: nil, context: reflectContext)
             conversation = updated.reflectConversation ?? []
             onUpdate(AudioSessionWithSegments(session: updated, segments: session.segments))
+            sending = false
+            if voice { await speakLatestReply() }
         } catch {
             self.error = error.localizedDescription
+            sending = false
+            stopVoice()
         }
-        sending = false
     }
 
     private func sendMessage() async {

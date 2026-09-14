@@ -36,6 +36,14 @@ struct AskExpertContent: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                if debrief == nil {
+                    PanelHeader(
+                        eyebrow: "Ask your coach",
+                        title: "What's going on?",
+                        subtitle: "Describe something that happened, or ask a classroom management question — you'll get practical coaching either way."
+                    )
+                }
+
                 card
 
                 savedSection
@@ -60,21 +68,18 @@ struct AskExpertContent: View {
             if let error {
                 Text(error)
                     .font(.footnote)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(AppTheme.terracotta600)
                     .frame(maxWidth: .infinity, alignment: .center)
             }
         }
         .padding()
         .frame(maxWidth: .infinity)
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 22))
+        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(AppTheme.hairline))
     }
 
     private var askForm: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Describe something that happened, or ask a classroom management question — you'll get practical coaching either way.")
-                .font(.subheadline)
-                .foregroundStyle(AppTheme.textSecondary)
-
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(starterQuestions, id: \.self) { starter in
@@ -94,14 +99,16 @@ struct AskExpertContent: View {
                 }
             }
 
-            Text("What's going on?")
+            Text("In your own words")
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(AppTheme.textPrimary)
 
             TextEditor(text: $incidentText)
+                .scrollContentBackground(.hidden)
                 .frame(minHeight: 120)
                 .padding(8)
-                .background(AppTheme.background, in: RoundedRectangle(cornerRadius: 10))
+                .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
                 .disabled(submitting)
 
             Button {
@@ -112,8 +119,7 @@ struct AskExpertContent: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 10)
-                    .background(AppTheme.primary, in: Capsule())
-                    .opacity(incidentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
+                    .background(incidentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? AppTheme.textSecondary.opacity(0.35) : AppTheme.terracotta, in: Capsule())
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
             .disabled(submitting || incidentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -130,7 +136,7 @@ struct AskExpertContent: View {
                         .foregroundStyle(AppTheme.primary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background(AppTheme.primary.opacity(0.1), in: Capsule())
+                        .background(AppTheme.mintTint, in: Capsule())
                 }
                 Text("WHAT HAPPENED")
                     .font(.caption2.weight(.bold))
@@ -167,7 +173,7 @@ struct AskExpertContent: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 10)
-                .background(AppTheme.primary, in: Capsule())
+                .background(AppTheme.terracotta, in: Capsule())
             }
         }
     }
@@ -205,7 +211,7 @@ struct AskExpertContent: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("SAVED")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(AppTheme.textSecondary)
+                .foregroundStyle(AppTheme.terracotta600)
 
             if historyLoading {
                 Text("Loading...").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
@@ -215,7 +221,7 @@ struct AskExpertContent: View {
                     .foregroundStyle(AppTheme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding()
-                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                    .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
             } else {
                 ForEach(savedDebriefs) { saved in
                     SavedDebriefRow(debrief: saved)
@@ -331,7 +337,8 @@ private struct SavedDebriefRow: View {
             }
         }
         .padding()
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
     }
 }
 

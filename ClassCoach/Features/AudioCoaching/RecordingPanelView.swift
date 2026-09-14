@@ -19,31 +19,36 @@ struct RecordingPanelView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(localSession.classSubject ?? localSession.teacherName ?? "Recording")
-                            .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
+                            .font(.heading(.headline)).foregroundStyle(.white)
                         Text(formattedDate(localSession.sessionDate))
-                            .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                            .font(.caption).foregroundStyle(.white.opacity(0.7))
                     }
                     Spacer()
-                    Button("Cancel", action: onExit).font(.caption.weight(.medium)).foregroundStyle(AppTheme.textSecondary)
+                    Button("Cancel", action: onExit).font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.7))
                 }
             }
+
+            Text("RECORD A LESSON")
+                .font(.caption2.weight(.bold)).tracking(1.4)
+                .foregroundStyle(AppTheme.gold)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(spacing: 10) {
                 if recorder.phase == .recording {
                     HStack(spacing: 6) {
-                        Circle().fill(.red).frame(width: 8, height: 8)
-                        Text("RECORDING").font(.caption2.weight(.bold)).foregroundStyle(.red)
+                        Circle().fill(AppTheme.terracotta).frame(width: 8, height: 8)
+                        Text("RECORDING").font(.caption2.weight(.bold)).foregroundStyle(AppTheme.gold)
                     }
                 } else if recorder.phase == .paused {
                     HStack(spacing: 6) {
-                        Circle().fill(AppTheme.textSecondary).frame(width: 8, height: 8)
-                        Text("PAUSED").font(.caption2.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
+                        Circle().fill(AppTheme.gold).frame(width: 8, height: 8)
+                        Text("PAUSED").font(.caption2.weight(.bold)).foregroundStyle(.white.opacity(0.7))
                     }
                 }
 
                 Text(formatTimerDisplay(recorder.elapsedSec))
-                    .font(.system(size: 44, weight: .bold, design: .monospaced))
-                    .foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(size: 48, weight: .bold, design: .monospaced))
+                    .foregroundStyle(AppTheme.cream)
 
                 statusCaption
                 buttonRow
@@ -52,15 +57,15 @@ struct RecordingPanelView: View {
             .padding(.vertical, 16)
 
             if let error {
-                Text(error).font(.footnote).foregroundStyle(.red)
+                Text(error).font(.footnote).foregroundStyle(AppTheme.peachTint)
             }
 
             Text("Audio is never saved — it's sent once for transcription and discarded immediately. Only the text transcript is kept.")
                 .font(.caption)
-                .foregroundStyle(AppTheme.textSecondary)
+                .foregroundStyle(.white.opacity(0.6))
         }
-        .padding()
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+        .padding(20)
+        .background(AppTheme.forest, in: RoundedRectangle(cornerRadius: 24))
         .onAppear { localSession = session?.session }
         .alert("Microphone access needed", isPresented: $recorder.permissionDenied) {
             Button("OK", role: .cancel) {}
@@ -79,7 +84,7 @@ struct RecordingPanelView: View {
             }
         }
         .font(.caption.weight(.semibold))
-        .foregroundStyle(AppTheme.textSecondary)
+        .foregroundStyle(.white.opacity(0.7))
         .textCase(.uppercase)
     }
 
@@ -95,15 +100,15 @@ struct RecordingPanelView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 30)
                     .padding(.vertical, 16)
-                    .background(Color.red, in: Capsule())
+                    .background(AppTheme.terracotta, in: Capsule())
             }
         case .recording:
             HStack(spacing: 12) {
                 Button("Pause") { recorder.pause() }
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
+                    .foregroundStyle(AppTheme.cream)
                     .padding(.horizontal, 20).padding(.vertical, 10)
-                    .overlay(Capsule().strokeBorder(AppTheme.textSecondary))
+                    .overlay(Capsule().strokeBorder(AppTheme.cream.opacity(0.4)))
                 stopButton
             }
         case .paused:
@@ -112,13 +117,13 @@ struct RecordingPanelView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 20).padding(.vertical, 10)
-                    .background(AppTheme.primary, in: Capsule())
+                    .background(AppTheme.terracotta, in: Capsule())
                 stopButton
             }
         case .uploading:
             Text("This can take a minute for a full class period.")
                 .font(.caption)
-                .foregroundStyle(AppTheme.textSecondary)
+                .foregroundStyle(.white.opacity(0.7))
         }
     }
 
@@ -128,9 +133,9 @@ struct RecordingPanelView: View {
         } label: {
             Text("Stop")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(AppTheme.forest)
                 .padding(.horizontal, 20).padding(.vertical, 10)
-                .background(AppTheme.textPrimary, in: Capsule())
+                .background(AppTheme.cream, in: Capsule())
         }
     }
 

@@ -17,9 +17,11 @@ struct AudioCoachingView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("Record a class period, get a transcript, and see a coaching report. Audio is never saved — only the text.")
-                        .font(.subheadline)
-                        .foregroundStyle(AppTheme.textSecondary)
+                    if active == nil {
+                        Text("Record a class period, get a transcript, and see a coaching report. Audio is never saved — only the text.")
+                            .font(.subheadline)
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
 
                     if isRecordingPhase {
                         RecordingPanelView(session: active, onSessionUpdate: { updated, spk in
@@ -39,7 +41,7 @@ struct AudioCoachingView: View {
                     }
 
                     if let error {
-                        Text(error).font(.footnote).foregroundStyle(.red)
+                        Text(error).font(.footnote).foregroundStyle(AppTheme.terracotta600)
                     }
 
                     if active == nil {
@@ -56,14 +58,14 @@ struct AudioCoachingView: View {
 
     private var historySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("PAST SESSIONS").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+            Text("PAST SESSIONS").font(.caption.weight(.bold)).tracking(1.1).foregroundStyle(AppTheme.terracotta600)
             if historyLoading {
                 Text("Loading...").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
             } else if sessions.isEmpty {
                 Text("Sessions you record will show up here.")
                     .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .center).padding()
-                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                    .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
             } else {
                 ForEach(sessions) { session in
                     SessionCardView(
@@ -117,18 +119,40 @@ private struct SessionCardView: View {
         }
     }
 
+    private var statusStyle: (fill: Color, ink: Color) {
+        switch session.status {
+        case "locked": return (AppTheme.cream, AppTheme.textSecondary)
+        case "analyzed": return (AppTheme.mintTint, AppTheme.forest)
+        default: return (AppTheme.goldTint, AppTheme.forest)
+        }
+    }
+
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
             Button(action: onOpen) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(session.classSubject ?? "New Recording")\(session.period.map { " · \($0)" } ?? "")")
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
-                    HStack(spacing: 4) {
+                HStack(spacing: 12) {
+                    Image(systemName: "mic.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.gold)
+                        .frame(width: 40, height: 40)
+                        .background(AppTheme.forest, in: RoundedRectangle(cornerRadius: 12))
+                    VStack(alignment: .leading, spacing: 5) {
+                        (Text(session.classSubject ?? "New Recording")
+                            + Text(session.period.map { " · \($0)" } ?? "").foregroundColor(AppTheme.terracotta))
+                            .font(.heading(.subheadline)).foregroundStyle(AppTheme.forest)
                         Text(formattedDate(session.sessionDate))
-                        Text("· \(statusLabel)")
-                        if let pct = session.teacherTalkPct { Text("· \(Int(pct))% you") }
+                            .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                        HStack(spacing: 6) {
+                            Text(statusLabel)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(statusStyle.ink)
+                                .padding(.horizontal, 8).padding(.vertical, 3)
+                                .background(statusStyle.fill, in: Capsule())
+                            if let pct = session.teacherTalkPct {
+                                Text("\(Int(pct))% you").font(.caption).foregroundStyle(AppTheme.textSecondary)
+                            }
+                        }
                     }
-                    .font(.caption).foregroundStyle(AppTheme.textSecondary)
                 }
             }
             .buttonStyle(.plain)
@@ -136,12 +160,14 @@ private struct SessionCardView: View {
             if isLoading {
                 ProgressView()
             } else {
-                Button("Delete", role: .destructive) { showDeleteConfirm = true }
+                Button("Delete") { showDeleteConfirm = true }
                     .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppTheme.terracotta600)
             }
         }
-        .padding()
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+        .padding(14)
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
         .alert("Delete this recording?", isPresented: $showDeleteConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive, action: onDelete)

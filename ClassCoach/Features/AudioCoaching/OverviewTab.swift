@@ -15,7 +15,9 @@ struct OverviewMetrics {
     let toneRatio: ReportConfidence.ConfidentMetric
 
     init(_ session: AudioSessionWithSegments) {
-        coverage = ReportConfidence.getCoverage(durationSec: session.durationSec, phases: session.phases)
+        // Phase boundaries are no longer used to judge coverage — the web report
+        // dropped them as unreliable, so the phone matches.
+        coverage = ReportConfidence.getCoverage(durationSec: session.durationSec, phases: nil)
         let recordedSec = coverage.recordedSec
         let detail = session.metricsDetail ?? [:]
 
@@ -45,11 +47,14 @@ struct OverviewMetrics {
     }
 }
 
+/// The Summary tab — mirrors `AudioCoaching.tsx`'s `SummaryTab`: the lesson
+/// at a glance, four headline numbers, one strength, one focus, who was
+/// heard, and one next step. Everything else lives in Insights.
 struct OverviewTab: View {
     let session: AudioSessionWithSegments
     let onSetFocus: (FocusMetric) -> Void
     let onNavigateReflect: () -> Void
-    let onNavigateDiscourse: () -> Void
+    let onNavigateInsights: (InsightsSection) -> Void
 
     private var m: OverviewMetrics { OverviewMetrics(session) }
 
@@ -67,91 +72,104 @@ struct OverviewTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            snapshotHeader
-
-            let evidence = ReportConfidence.buildEvidenceQualityLine(
-                coverage: m.coverage,
-                metrics: [m.cfuMetric, m.redirectionMetric, m.directiveMetric, m.nameMentionMetric, m.followUpMetric,
-                          m.higherOrderRatio, m.feedbackRatio, ReportConfidence.getPresenceMetric(session.teacherTalkPct),
-                          ReportConfidence.getPresenceMetric(session.avgWaitTimeSec)].compactMap { $0 }
-            )
-            evidenceQualityLine(evidence)
-
-            if let noticedSummary {
-                card(title: "What Wivoza noticed", tint: AppTheme.textSecondary) {
-                    Text(noticedSummary).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+            if let glance = session.classSummary ?? noticedSummary {
+                VStack(alignment: .leading, spacing: 6) {
+                    eyebrow("Lesson at a glance", AppTheme.terracotta600)
+                    Text(glance).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
                 }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppTheme.goldTint.opacity(0.6), in: RoundedRectangle(cornerRadius: 18))
+                .overlay(alignment: .leading) {
+                    UnevenRoundedRectangle(topLeadingRadius: 18, bottomLeadingRadius: 18)
+                        .fill(AppTheme.gold)
+                        .frame(width: 7)
+                }
+            }
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                tile("You spoke", percent(session.teacherTalkPct), .terracotta)
+                tile("Students spoke", percent(session.studentTalkPct), .gold)
+                tile("Questions", ReportConfidence.getCountMetric(count: session.questionCount, recordedSec: m.coverage.recordedSec), .teal)
+                tile("Avg. wait", waitMetric, .forest)
             }
 
             strengthCard
             priorityCard
-            voiceBalanceCard
-            tryThisNext
+            whoWasHeardCard
+            nextStepCard
         }
     }
 
-    private var snapshotHeader: some View {
+    // MARK: Pieces
+
+    private func eyebrow(_ text: String, _ color: Color) -> some View {
+        Text(text.uppercased()).font(.caption2.weight(.bold)).tracking(1.1).foregroundStyle(color)
+    }
+
+    private func tile(_ label: String, _ metric: ReportConfidence.ConfidentMetric, _ accent: ReportAccent) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("\(session.classSubject ?? "New Recording")\(session.period.map { " · \($0)" } ?? "")")
-                .font(.title3.bold()).foregroundStyle(AppTheme.textPrimary)
-            Text([session.teacherName, formattedDate(session.sessionDate), session.gradeLevel,
-                  session.durationSec.map { ReportConfidence.formatDuration($0) }]
-                .compactMap { $0 }.joined(separator: " · "))
-                .font(.caption).foregroundStyle(AppTheme.textSecondary)
-        }
-    }
-
-    private func evidenceQualityLine(_ evidence: (text: String, warn: Bool)) -> some View {
-        Group {
-            if evidence.warn {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                    Text(evidence.text).font(.subheadline.weight(.semibold)).foregroundStyle(.orange)
-                }
-                .padding(10)
-                .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
-            } else {
-                Text(evidence.text.uppercased()).font(.caption2.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+            Text(label.uppercased()).font(.caption2.weight(.bold)).foregroundStyle(accent.ink)
+            Text(metric.display)
+                .font(.heading(.title))
+                .foregroundStyle(metric.state.isMissing ? AppTheme.textSecondary : AppTheme.forest)
+            if metric.state.isMissing, let reason = metric.reason {
+                Text(reason).font(.caption2).foregroundStyle(AppTheme.textSecondary).fixedSize(horizontal: false, vertical: true)
             }
         }
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
+        .background(accent.tint, in: RoundedRectangle(cornerRadius: 18))
     }
 
-    private func card(title: String, tint: Color, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title.uppercased()).font(.caption.weight(.bold)).foregroundStyle(tint)
-            content()
+    private func percent(_ value: Double?) -> ReportConfidence.ConfidentMetric {
+        guard let value else {
+            return ReportConfidence.ConfidentMetric(state: .notMeasurable, display: "—", reason: "Not enough data in this session to compute this.")
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 14))
+        return ReportConfidence.ConfidentMetric(state: .measured, display: "\(ReportConfidence.formatNumber(value))%")
+    }
+
+    private var waitMetric: ReportConfidence.ConfidentMetric {
+        guard let wait = session.avgWaitTimeSec else {
+            return ReportConfidence.ConfidentMetric(state: .notMeasurable, display: "—", reason: "Not enough data in this session to compute this.")
+        }
+        return ReportConfidence.ConfidentMetric(state: .measured, display: "\(ReportConfidence.formatNumber(wait))s")
+    }
+
+    private func tintedCard(_ fill: Color, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 6) { content() }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(fill, in: RoundedRectangle(cornerRadius: 18))
     }
 
     private var strengthCard: some View {
-        card(title: "Strength", tint: AppTheme.primary) {
+        tintedCard(AppTheme.mintTint.opacity(0.7)) {
+            eyebrow("A strength to keep", AppTheme.forest)
             if let c = strengthCandidate {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(AudioInsights.formatCandidateHeadline(c)).font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
-                    if let excerpt = c.excerpt { Text("\"\(excerpt)\"").font(.subheadline).foregroundStyle(AppTheme.textSecondary) }
-                    Text(c.whyItMatters).font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-                }
+                Text(AudioInsights.formatCandidateHeadline(c)).font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
+                if let excerpt = c.excerpt { Text("\u{201C}\(excerpt)\u{201D}").font(.subheadline).foregroundStyle(AppTheme.textSecondary) }
+                Text(c.whyItMatters).font(.subheadline).foregroundStyle(AppTheme.textSecondary)
             } else {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Not enough measured evidence yet for a stand-out strength this session.")
-                        .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-                    Button("See the full breakdown in Discourse Details →", action: onNavigateDiscourse)
-                        .font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.primary)
-                }
+                Text("Not enough measured evidence yet for a stand-out strength this session.")
+                    .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                Button("See the full breakdown in Insights →") { onNavigateInsights(.talk) }
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
             }
         }
     }
 
     private var priorityCard: some View {
-        card(title: "Coaching priority", tint: AppTheme.accent) {
+        tintedCard(AppTheme.goldTint.opacity(0.7)) {
+            eyebrow("Coaching priority", AppTheme.terracotta600)
             if let c = priorityCandidate {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(AudioInsights.formatCandidateHeadline(c)).font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
-                    if let excerpt = c.excerpt { Text("\"\(excerpt)\"").font(.subheadline).foregroundStyle(AppTheme.textSecondary) }
-                    Text(c.whyItMatters).font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                Text(AudioInsights.formatCandidateHeadline(c)).font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
+                if let excerpt = c.excerpt { Text("\u{201C}\(excerpt)\u{201D}").font(.subheadline).foregroundStyle(AppTheme.textSecondary) }
+                Text(c.whyItMatters).font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                if let metric = c.focusMetric {
+                    Button("Set as my focus →") { onSetFocus(metric) }
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
+                        .padding(.top, 2)
                 }
             } else {
                 Text("This recording was \(ReportConfidence.formatDuration(m.coverage.recordedSec)) — coaching-priority signals need more length to surface reliably. Aim for at least \(Int(ReportConfidence.shortSessionThresholdSec / 60)) minutes next time.")
@@ -160,20 +178,39 @@ struct OverviewTab: View {
         }
     }
 
-    private var voiceBalanceCard: some View {
-        card(title: "Classroom voice balance", tint: AppTheme.textSecondary) {
-            VStack(alignment: .leading, spacing: 8) {
-                balanceBar(label: "You", pct: session.teacherTalkPct, color: AppTheme.primary)
-                balanceBar(label: "Students", pct: session.studentTalkPct, color: AppTheme.primary.opacity(0.45))
-                if let caption = AudioInsights.buildVoiceBalanceCaption(ReportConfidence.judgeTalkBalance(teacherPct: session.teacherTalkPct, studentPct: session.studentTalkPct)) {
-                    Text(caption).font(.caption).foregroundStyle(AppTheme.textSecondary)
-                }
+    private var whoWasHeardCard: some View {
+        tintedCard(AppTheme.card) {
+            Text("Who was heard?").font(.heading(.headline)).foregroundStyle(AppTheme.forest)
+            balanceBar(label: "You", pct: session.teacherTalkPct, color: AppTheme.terracotta)
+            balanceBar(label: "Students", pct: session.studentTalkPct, color: AppTheme.gold)
+            if let caption = AudioInsights.buildVoiceBalanceCaption(ReportConfidence.judgeTalkBalance(teacherPct: session.teacherTalkPct, studentPct: session.studentTalkPct)) {
+                Text(caption).font(.caption).foregroundStyle(AppTheme.textSecondary)
             }
+            Button("Explore talk & participation →") { onNavigateInsights(.talk) }
+                .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
+                .padding(.top, 2)
+        }
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
+    }
+
+    private var nextStepCard: some View {
+        tintedCard(AppTheme.peachTint.opacity(0.6)) {
+            eyebrow("One next step", AppTheme.terracotta600)
+            Text("Talk this lesson through with your coach, and leave with one thing to try next time.")
+                .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+            Button(action: onNavigateReflect) {
+                Label("Reflect with Wivoza", systemImage: "bubble.left.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .background(AppTheme.terracotta, in: Capsule())
+            }
+            .padding(.top, 4)
         }
     }
 
     private func balanceBar(label: String, pct: Double?, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 3) {
             HStack {
                 Text(label).font(.caption.weight(.medium))
                 Spacer()
@@ -181,32 +218,12 @@ struct OverviewTab: View {
             }
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4).fill(AppTheme.background)
-                    RoundedRectangle(cornerRadius: 4).fill(color)
+                    RoundedRectangle(cornerRadius: 5).fill(AppTheme.hairline)
+                    RoundedRectangle(cornerRadius: 5).fill(color)
                         .frame(width: geo.size.width * CGFloat((pct ?? 0) / 100))
                 }
             }
             .frame(height: 10)
-        }
-    }
-
-    private var tryThisNext: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("TRY THIS NEXT").font(.caption.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
-            HStack(spacing: 8) {
-                if let metric = priorityCandidate?.focusMetric {
-                    chip("Set as my focus →") { onSetFocus(metric) }
-                }
-                chip("Reflect on this →", action: onNavigateReflect)
-            }
-        }
-    }
-
-    private func chip(_ label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label).font(.caption.weight(.semibold)).foregroundStyle(AppTheme.primary)
-                .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(AppTheme.primary.opacity(0.1), in: Capsule())
         }
     }
 }

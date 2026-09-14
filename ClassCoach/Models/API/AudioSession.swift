@@ -130,6 +130,8 @@ struct AudioSession: Decodable, Identifiable {
     let reflectConversation: [AudioReflectMessage]?
     let lessonContent: AudioLessonContent?
     let contentNotes: AudioContentNotes?
+    /// A plain-language "Lesson at a glance" paragraph, generated after analysis.
+    let classSummary: String?
     let strengths: String?
     let growthAreas: String?
     let nextStep: String?
@@ -141,7 +143,7 @@ struct AudioSession: Decodable, Identifiable {
         case id, teacherName, classSubject, period, gradeLevel, sessionDate, consentConfirmed, status,
              durationSec, teacherTalkPct, studentTalkPct, questionCount, higherOrderPct, avgWaitTimeSec,
              cfuCount, metricsDetail, highlights, phases, questionLog, reflectConversation, lessonContent,
-             contentNotes, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
+             contentNotes, classSummary, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -178,6 +180,7 @@ struct AudioSession: Decodable, Identifiable {
         reflectConversation = try container.decodeIfPresent([AudioReflectMessage].self, forKey: .reflectConversation)
         lessonContent = try container.decodeIfPresent(AudioLessonContent.self, forKey: .lessonContent)
         contentNotes = try container.decodeIfPresent(AudioContentNotes.self, forKey: .contentNotes)
+        classSummary = try? container.decodeIfPresent(String.self, forKey: .classSummary)
         strengths = try container.decodeIfPresent(String.self, forKey: .strengths)
         growthAreas = try container.decodeIfPresent(String.self, forKey: .growthAreas)
         nextStep = try container.decodeIfPresent(String.self, forKey: .nextStep)
@@ -223,6 +226,7 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
     var reflectConversation: [AudioReflectMessage]? { session.reflectConversation }
     var lessonContent: AudioLessonContent? { session.lessonContent }
     var contentNotes: AudioContentNotes? { session.contentNotes }
+    var classSummary: String? { session.classSummary }
     var strengths: String? { session.strengths }
     var growthAreas: String? { session.growthAreas }
     var nextStep: String? { session.nextStep }

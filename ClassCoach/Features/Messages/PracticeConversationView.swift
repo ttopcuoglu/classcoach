@@ -34,6 +34,7 @@ struct PracticeConversationView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                PanelHeader(eyebrow: "Wivoza · Communication Coach", title: "Practice a Conversation", subtitle: "Role-play with a parent, student, colleague, or administrator.")
                 if let prep, let report = prep.coachingReport {
                     reportView(prep, report)
                 } else {
@@ -41,7 +42,7 @@ struct PracticeConversationView: View {
                 }
 
                 if let error {
-                    Text(error).font(.footnote).foregroundStyle(.red).frame(maxWidth: .infinity, alignment: .center)
+                    Text(error).font(.footnote).foregroundStyle(AppTheme.terracotta600).frame(maxWidth: .infinity, alignment: .center)
                 }
             }
             .padding()
@@ -73,14 +74,16 @@ struct PracticeConversationView: View {
                     Text(activeSituation).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
                 }
                 .padding(10)
-                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+                .background(AppTheme.cream, in: RoundedRectangle(cornerRadius: 14))
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("How would you respond?").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
                     TextEditor(text: $responseText)
+                        .scrollContentBackground(.hidden)
                         .frame(minHeight: 110)
                         .padding(8)
-                        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+                        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
+                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
                         .disabled(submitting)
                 }
 
@@ -105,7 +108,7 @@ struct PracticeConversationView: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 20)
                             .padding(.vertical, 10)
-                            .background(AppTheme.primary, in: Capsule())
+                            .background(AppTheme.terracotta, in: Capsule())
                     }
                     .disabled(!canSubmit)
                 }
@@ -121,7 +124,7 @@ struct PracticeConversationView: View {
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 18)
                                 .padding(.vertical, 10)
-                                .background(AppTheme.primary, in: Capsule())
+                                .background(AppTheme.terracotta, in: Capsule())
                         }
                         .disabled(!canGenerate)
 
@@ -131,9 +134,11 @@ struct PracticeConversationView: View {
                     }
                     if useCustom {
                         TextEditor(text: $customSituation)
+                            .scrollContentBackground(.hidden)
                             .frame(minHeight: 80)
                             .padding(8)
-                            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+                            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
+                            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -171,7 +176,7 @@ struct PracticeConversationView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 10)
-                .background(AppTheme.primary, in: Capsule())
+                .background(AppTheme.terracotta, in: Capsule())
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
@@ -184,13 +189,13 @@ struct PracticeConversationView: View {
                 Text(dimension.rating)
                     .font(.caption2.weight(.semibold))
                     .padding(.horizontal, 8).padding(.vertical, 3)
-                    .background(AppTheme.primary.opacity(0.1), in: Capsule())
+                    .background(AppTheme.mintTint, in: Capsule())
                     .foregroundStyle(AppTheme.primary)
             }
             Text(dimension.feedback).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
         }
         .padding(10)
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+        .background(AppTheme.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
     private func labeledBlock(_ title: String, _ text: String, _ tint: Color) -> some View {
@@ -200,7 +205,7 @@ struct PracticeConversationView: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+        .background((tint == AppTheme.textSecondary ? AppTheme.gold : tint).opacity(0.16), in: RoundedRectangle(cornerRadius: 16))
     }
 
     // MARK: - Actions

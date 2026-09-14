@@ -48,177 +48,190 @@ struct ProfileView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section("About You") {
-                    LabeledContent("Email", value: authManager.currentUser?.email ?? "—")
-                    TextField("Name", text: $name)
-                    TextField("Grade Level(s), e.g. 6, 7, 8", text: $gradeLevels)
-                    TextField("Subject(s), e.g. Math, Science", text: $subjects)
-                }
+        List {
+            Section {
+                PanelHeader(
+                    eyebrow: "Wivoza · Grow",
+                    title: "Profile & Settings",
+                    subtitle: authManager.currentUser?.plan == "plus"
+                        ? "You're on Wivoza Plus."
+                        : "Tell us about your classroom so coaching can be more relevant."
+                )
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            }
 
-                Section {
-                    Button {
-                        Task { await save() }
-                    } label: {
-                        if saving {
-                            ProgressView()
-                        } else {
-                            Text(saveConfirmed ? "Saved" : "Save Changes")
-                        }
-                    }
-                    .disabled(saving || !isDirty)
+            Section("About You") {
+                LabeledContent("Email", value: authManager.currentUser?.email ?? "—")
+                TextField("Name", text: $name)
+                TextField("Grade Level(s), e.g. 6, 7, 8", text: $gradeLevels)
+                TextField("Subject(s), e.g. Math, Science", text: $subjects)
+            }
 
-                    if let saveError {
-                        Text(saveError).font(.footnote).foregroundStyle(.red)
-                    }
-                }
-
-                Section {
-                    if let memory = authManager.currentUser?.coachMemory, !memory.isEmpty {
-                        Text(memory)
-                            .font(.subheadline)
-                            .foregroundStyle(AppTheme.textPrimary)
+            Section {
+                Button {
+                    Task { await save() }
+                } label: {
+                    if saving {
+                        ProgressView()
                     } else {
-                        Text("Nothing yet — this builds up as you use Wivoza.")
-                            .font(.subheadline)
-                            .foregroundStyle(AppTheme.textSecondary)
+                        Text(saveConfirmed ? "Saved" : "Save Changes")
                     }
-                    Toggle("Let Coach remember things between conversations", isOn: Binding(
-                        get: { authManager.currentUser?.coachMemoryEnabled ?? true },
-                        set: { enabled in
-                            Task { await updateSettings(ProfileService.SettingsBody(coachMemoryEnabled: enabled)) }
-                        }
-                    ))
-                    .disabled(updatingSettings)
-                    if let memory = authManager.currentUser?.coachMemory, !memory.isEmpty {
-                        Button("Clear What Coach Remembers", role: .destructive) {
-                            showClearMemoryConfirm = true
-                        }
-                        .disabled(updatingSettings)
-                    }
-                } header: {
-                    Text("What Coach Remembers")
-                } footer: {
-                    Text("A short, running note about your recurring strengths and ongoing challenges, built from your Ask, Talk It Through, and Lesson Debrief Reflect conversations. It's never shown to anyone else.")
                 }
+                .disabled(saving || !isDirty)
 
-                Section {
-                    ForEach(TalkVoice.all, id: \.id) { option in
-                        Button {
-                            Task { await updateSettings(ProfileService.SettingsBody(talkVoice: option.id)) }
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(option.label).foregroundStyle(AppTheme.textPrimary)
-                                    Text(option.description).font(.caption).foregroundStyle(AppTheme.textSecondary)
-                                }
-                                Spacer()
-                                if (authManager.currentUser?.talkVoice ?? TalkVoice.defaultId) == option.id {
-                                    Image(systemName: "checkmark").foregroundStyle(AppTheme.accent)
-                                }
+                if let saveError {
+                    Text(saveError).font(.footnote).foregroundStyle(AppTheme.terracotta600)
+                }
+            }
+
+            Section {
+                if let memory = authManager.currentUser?.coachMemory, !memory.isEmpty {
+                    Text(memory)
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.textPrimary)
+                } else {
+                    Text("Nothing yet — this builds up as you use Wivoza.")
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                Toggle("Let Coach remember things between conversations", isOn: Binding(
+                    get: { authManager.currentUser?.coachMemoryEnabled ?? true },
+                    set: { enabled in
+                        Task { await updateSettings(ProfileService.SettingsBody(coachMemoryEnabled: enabled)) }
+                    }
+                ))
+                .disabled(updatingSettings)
+                if let memory = authManager.currentUser?.coachMemory, !memory.isEmpty {
+                    Button("Clear What Coach Remembers", role: .destructive) {
+                        showClearMemoryConfirm = true
+                    }
+                    .disabled(updatingSettings)
+                }
+            } header: {
+                Text("What Coach Remembers")
+            } footer: {
+                Text("A short, running note about your recurring strengths and ongoing challenges, built from your Ask, Talk It Through, and Lesson Debrief Reflect conversations. It's never shown to anyone else.")
+            }
+
+            Section {
+                ForEach(TalkVoice.all, id: \.id) { option in
+                    Button {
+                        Task { await updateSettings(ProfileService.SettingsBody(talkVoice: option.id)) }
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(option.label).foregroundStyle(AppTheme.textPrimary)
+                                Text(option.description).font(.caption).foregroundStyle(AppTheme.textSecondary)
+                            }
+                            Spacer()
+                            if (authManager.currentUser?.talkVoice ?? TalkVoice.defaultId) == option.id {
+                                Image(systemName: "checkmark").foregroundStyle(AppTheme.accent)
                             }
                         }
-                        .disabled(updatingSettings)
                     }
-                } header: {
-                    Text("Coach's Voice")
-                } footer: {
-                    Text("The voice Coach speaks with in Talk It Through.")
+                    .disabled(updatingSettings)
                 }
+            } header: {
+                Text("Coach's Voice")
+            } footer: {
+                Text("The voice Coach speaks with in Talk It Through.")
+            }
 
-                Section {
-                    if let organization = authManager.currentUser?.organization {
-                        LabeledContent("Part of", value: organization.name)
-                    } else {
-                        TextField("School code", text: $joinCode)
-                            .textInputAutocapitalization(.characters)
-                            .autocorrectionDisabled()
-                        Button {
-                            Task { await join() }
-                        } label: {
-                            if joining { ProgressView() } else { Text("Join School") }
-                        }
-                        .disabled(joining || joinCode.trimmingCharacters(in: .whitespaces).isEmpty)
-                        if let joinError {
-                            Text(joinError).font(.footnote).foregroundStyle(.red)
-                        }
+            Section {
+                if let organization = authManager.currentUser?.organization {
+                    LabeledContent("Part of", value: organization.name)
+                } else {
+                    TextField("School code", text: $joinCode)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                    Button {
+                        Task { await join() }
+                    } label: {
+                        if joining { ProgressView() } else { Text("Join School") }
                     }
-                } header: {
-                    Text("School")
-                } footer: {
-                    if authManager.currentUser?.organization == nil {
-                        Text("If your school or district has a Wivoza agreement, enter its code to join.")
+                    .disabled(joining || joinCode.trimmingCharacters(in: .whitespaces).isEmpty)
+                    if let joinError {
+                        Text(joinError).font(.footnote).foregroundStyle(AppTheme.terracotta600)
                     }
                 }
-
-                if let settingsError {
-                    Section {
-                        Text(settingsError).font(.footnote).foregroundStyle(.red)
-                    }
-                }
-
-                Section {
-                    NavigationLink("Your First 30 Days") { FirstThirtyDaysView() }
-                    NavigationLink("Cheat Sheet") { CheatSheetView() }
-                }
-
-                Section {
-                    Button("Reset & Clear Data", role: .destructive) {
-                        showResetConfirm = true
-                    }
-                    .disabled(resetting)
-
-                    if let resetError {
-                        Text(resetError).font(.footnote).foregroundStyle(.red)
-                    }
-                }
-
-                Section {
-                    Button("Sign Out", role: .destructive) {
-                        authManager.signOut()
-                    }
-                }
-
-                Section {
-                    Button("Delete Account", role: .destructive) {
-                        showDeleteAccountConfirm = true
-                    }
-                    .disabled(deletingAccount)
-
-                    if let deleteAccountError {
-                        Text(deleteAccountError).font(.footnote).foregroundStyle(.red)
-                    }
-                } footer: {
-                    Text("Permanently deletes your account and everything in it — profile, conversations, lesson recordings and reports. This can't be undone.")
+            } header: {
+                Text("School")
+            } footer: {
+                if authManager.currentUser?.organization == nil {
+                    Text("If your school or district has a Wivoza agreement, enter its code to join.")
                 }
             }
-            .navigationTitle("Profile")
-            .task { await load() }
-            .alert("Reset & Clear Data?", isPresented: $showResetConfirm) {
-                Button("Cancel", role: .cancel) {}
-                Button("Reset", role: .destructive) {
-                    Task { await reset() }
+
+            if let settingsError {
+                Section {
+                    Text(settingsError).font(.footnote).foregroundStyle(AppTheme.terracotta600)
                 }
-            } message: {
-                Text("This deletes your saved scenarios, attempts, and Q&A history, and clears your profile fields. This can't be undone.")
             }
-            .alert("Clear what Coach remembers?", isPresented: $showClearMemoryConfirm) {
-                Button("Cancel", role: .cancel) {}
-                Button("Clear", role: .destructive) {
-                    Task { await updateSettings(ProfileService.SettingsBody(clearCoachMemory: true)) }
+
+            Section {
+                NavigationLink("Your First 30 Days") { FirstThirtyDaysView() }
+                NavigationLink("Cheat Sheet") { CheatSheetView() }
+            }
+
+            Section {
+                Button("Reset & Clear Data", role: .destructive) {
+                    showResetConfirm = true
                 }
-            } message: {
-                Text("Coach will start fresh. This can't be undone.")
+                .disabled(resetting)
+
+                if let resetError {
+                    Text(resetError).font(.footnote).foregroundStyle(AppTheme.terracotta600)
+                }
             }
-            .alert("Delete your account?", isPresented: $showDeleteAccountConfirm) {
-                Button("Cancel", role: .cancel) {}
+
+            Section {
+                Button("Sign Out", role: .destructive) {
+                    authManager.signOut()
+                }
+            }
+
+            Section {
                 Button("Delete Account", role: .destructive) {
-                    Task { await deleteAccount() }
+                    showDeleteAccountConfirm = true
                 }
-            } message: {
-                Text("This permanently deletes your account and everything in it — profile, conversations, lesson recordings, and reports. This can't be undone.")
+                .disabled(deletingAccount)
+
+                if let deleteAccountError {
+                    Text(deleteAccountError).font(.footnote).foregroundStyle(AppTheme.terracotta600)
+                }
+            } footer: {
+                Text("Permanently deletes your account and everything in it — profile, conversations, lesson recordings and reports. This can't be undone.")
             }
+        }
+        .scrollContentBackground(.hidden)
+        .background(AppTheme.background)
+        .tint(AppTheme.forest)
+        .navigationTitle("Profile")
+        .task { await load() }
+        .alert("Reset & Clear Data?", isPresented: $showResetConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Reset", role: .destructive) {
+                Task { await reset() }
+            }
+        } message: {
+            Text("This deletes your saved scenarios, attempts, and Q&A history, and clears your profile fields. This can't be undone.")
+        }
+        .alert("Clear what Coach remembers?", isPresented: $showClearMemoryConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Clear", role: .destructive) {
+                Task { await updateSettings(ProfileService.SettingsBody(clearCoachMemory: true)) }
+            }
+        } message: {
+            Text("Coach will start fresh. This can't be undone.")
+        }
+        .alert("Delete your account?", isPresented: $showDeleteAccountConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete Account", role: .destructive) {
+                Task { await deleteAccount() }
+            }
+        } message: {
+            Text("This permanently deletes your account and everything in it — profile, conversations, lesson recordings, and reports. This can't be undone.")
         }
     }
 

@@ -49,6 +49,7 @@ struct WriteMessageView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                PanelHeader(eyebrow: "Wivoza · Communication Coach", title: "Write a Message", subtitle: "Create a professional message or response.")
                 if let current {
                     resultView(current)
                 } else {
@@ -56,7 +57,7 @@ struct WriteMessageView: View {
                 }
 
                 if let error {
-                    Text(error).font(.footnote).foregroundStyle(.red).frame(maxWidth: .infinity, alignment: .center)
+                    Text(error).font(.footnote).foregroundStyle(AppTheme.terracotta600).frame(maxWidth: .infinity, alignment: .center)
                 }
             }
             .padding()
@@ -93,7 +94,7 @@ struct WriteMessageView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 10)
-                    .background(AppTheme.primary, in: Capsule())
+                    .background(AppTheme.terracotta, in: Capsule())
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
             .disabled(!canDraft)
@@ -104,9 +105,11 @@ struct WriteMessageView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title).font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
             TextEditor(text: text)
+                .scrollContentBackground(.hidden)
                 .frame(minHeight: minHeight)
                 .padding(8)
-                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+                .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
                 .disabled(drafting)
         }
     }
@@ -149,7 +152,7 @@ struct WriteMessageView: View {
                 }
             }
             .padding(12)
-            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+            .background(AppTheme.cream, in: RoundedRectangle(cornerRadius: 16))
 
             followUpChat(message)
 
@@ -158,7 +161,7 @@ struct WriteMessageView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 10)
-                .background(AppTheme.primary, in: Capsule())
+                .background(AppTheme.terracotta, in: Capsule())
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }

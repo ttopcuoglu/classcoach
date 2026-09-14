@@ -99,7 +99,7 @@ struct WelcomeView: View {
                 if let errorMessage {
                     Text(errorMessage)
                         .font(.footnote)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(AppTheme.terracotta600)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                 }

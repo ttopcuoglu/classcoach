@@ -18,12 +18,14 @@ struct FollowUpChatView: View {
             ForEach(Array(messages.enumerated()), id: \.offset) { _, message in
                 Text(message.text)
                     .font(.subheadline)
-                    .foregroundStyle(message.role == "user" ? AppTheme.textPrimary : AppTheme.textSecondary)
+                    .foregroundStyle(message.role == "user" ? AppTheme.cream : AppTheme.textPrimary)
+                    .padding(12)
+                    .background(message.role == "user" ? AppTheme.forest : AppTheme.mintTint.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
                     .frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
             }
 
             if let error {
-                Text(error).font(.caption).foregroundStyle(.red)
+                Text(error).font(.caption).foregroundStyle(AppTheme.terracotta600)
             }
 
             HStack {
@@ -31,7 +33,7 @@ struct FollowUpChatView: View {
                     .textFieldStyle(.roundedBorder)
                     .disabled(sending)
                 Button(action: onSend) {
-                    Image(systemName: "arrow.up.circle.fill").font(.title2)
+                    Image(systemName: "arrow.up.circle.fill").font(.title2).foregroundStyle(AppTheme.terracotta)
                 }
                 .disabled(sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }

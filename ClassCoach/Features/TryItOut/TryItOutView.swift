@@ -50,6 +50,11 @@ struct TryItOutContent: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                PanelHeader(
+                    eyebrow: "Practice a scenario",
+                    title: "Rehearse a hard moment",
+                    subtitle: "Pick a topic, difficulty, and grade band, then practice what you'd say."
+                )
                 ChipRow(items: scenarioCategories, selection: category) { category = $0 }
                 ChipRow(items: difficulties, selection: difficulty) { difficulty = $0 }
                 gradeBandPicker
@@ -89,13 +94,14 @@ struct TryItOutContent: View {
             if let error {
                 Text(error)
                     .font(.footnote)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(AppTheme.terracotta600)
                     .frame(maxWidth: .infinity, alignment: .center)
             }
         }
         .padding()
         .frame(maxWidth: .infinity)
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 22))
+        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(AppTheme.hairline))
     }
 
     private var emptyState: some View {
@@ -111,7 +117,7 @@ struct TryItOutContent: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 10)
-                    .background(AppTheme.primary, in: Capsule())
+                    .background(AppTheme.terracotta, in: Capsule())
             }
             .disabled(generating)
         }
@@ -127,7 +133,7 @@ struct TryItOutContent: View {
                 .foregroundStyle(AppTheme.primary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
-                .background(AppTheme.primary.opacity(0.1), in: Capsule())
+                .background(AppTheme.mintTint, in: Capsule())
 
             Text(attempt.scenario.text)
                 .font(.subheadline)
@@ -154,9 +160,11 @@ struct TryItOutContent: View {
                 .foregroundStyle(AppTheme.textPrimary)
 
             TextEditor(text: $responseText)
+                .scrollContentBackground(.hidden)
                 .frame(minHeight: 100)
                 .padding(8)
-                .background(AppTheme.background, in: RoundedRectangle(cornerRadius: 10))
+                .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
                 .disabled(submitting)
 
             HStack {
@@ -177,8 +185,7 @@ struct TryItOutContent: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
-                        .background(AppTheme.primary, in: Capsule())
-                        .opacity(responseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
+                        .background(responseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? AppTheme.textSecondary.opacity(0.35) : AppTheme.terracotta, in: Capsule())
                 }
                 .disabled(submitting || responseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
@@ -218,7 +225,7 @@ struct TryItOutContent: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
-                        .background(AppTheme.primary, in: Capsule())
+                        .background(AppTheme.terracotta, in: Capsule())
                 }
                 .disabled(generating)
             }
@@ -258,7 +265,7 @@ struct TryItOutContent: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("SAVED SCENARIOS")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(AppTheme.textSecondary)
+                .foregroundStyle(AppTheme.terracotta600)
 
             if historyLoading {
                 Text("Loading...").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
@@ -268,7 +275,7 @@ struct TryItOutContent: View {
                     .foregroundStyle(AppTheme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding()
-                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                    .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
             } else {
                 ForEach(savedAttempts) { saved in
                     SavedAttemptRow(attempt: saved)
@@ -396,7 +403,8 @@ private struct SavedAttemptRow: View {
             }
         }
         .padding()
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
     }
 }
 
