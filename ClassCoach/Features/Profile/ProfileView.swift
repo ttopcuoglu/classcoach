@@ -203,6 +203,18 @@ struct ProfileView: View {
             } footer: {
                 Text("Permanently deletes your account and everything in it — profile, conversations, lesson recordings and reports. This can't be undone.")
             }
+
+            Section {
+                Link("Terms of Service", destination: URL(string: "https://www.wivoza.com/terms")!)
+                Link("Privacy Policy", destination: URL(string: "https://www.wivoza.com/terms")!)
+            } header: {
+                Text("About")
+            } footer: {
+                Text("Wivoza \(AppInfo.version)\nA product of \(AppInfo.company)\n\(AppInfo.copyright). All rights reserved.")
+                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 8)
+            }
         }
         .scrollContentBackground(.hidden)
         .background(AppTheme.background)

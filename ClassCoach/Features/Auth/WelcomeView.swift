@@ -104,10 +104,14 @@ struct WelcomeView: View {
                         .padding(.horizontal)
                 }
 
-                HStack(spacing: 6) {
-                    Link("Terms of Service", destination: URL(string: "https://www.wivoza.com/terms")!)
-                    Text("·").foregroundStyle(AppTheme.textSecondary)
-                    Link("Privacy Policy", destination: URL(string: "https://www.wivoza.com/terms")!)
+                VStack(spacing: 6) {
+                    HStack(spacing: 6) {
+                        Link("Terms of Service", destination: URL(string: "https://www.wivoza.com/terms")!)
+                        Text("·").foregroundStyle(AppTheme.textSecondary)
+                        Link("Privacy Policy", destination: URL(string: "https://www.wivoza.com/terms")!)
+                    }
+                    Text(AppInfo.copyright)
+                        .foregroundStyle(AppTheme.textSecondary)
                 }
                 .font(.caption)
                 .padding(.top, 12)

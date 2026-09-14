@@ -63,3 +63,17 @@ extension Color {
         self.init(.sRGB, red: red, green: green, blue: blue, opacity: opacity)
     }
 }
+
+/// Company details shown in the app's legal footers. Wivoza is a product of
+/// Edinexa Technologies LLC — keep this in step with the website footer.
+enum AppInfo {
+    static let company = "Edinexa Technologies LLC"
+    static let copyright = "© 2026 Edinexa Technologies LLC"
+
+    static var version: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? ""
+        let build = info?["CFBundleVersion"] as? String ?? ""
+        return build.isEmpty ? short : "\(short) (\(build))"
+    }
+}
