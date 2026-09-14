@@ -61,15 +61,6 @@ const MOOD_SUGGESTED_CATEGORY: Partial<Record<Mood, string>> = {
 
 const ACTION_CARDS = [
   {
-    to: '/talk-to-me',
-    icon: HeadsetIcon,
-    accent: ACCENTS.forest,
-    tag: 'Live coach',
-    title: 'Talk It Through',
-    description: 'Think out loud. Your coach listens, asks, and helps you find a next step.',
-    linkLabel: 'Start voice coaching',
-  },
-  {
     to: '/audio-coaching',
     icon: MicIcon,
     accent: ACCENTS.terracotta,
@@ -77,6 +68,15 @@ const ACTION_CARDS = [
     title: 'Lesson Debrief',
     description: 'Record a class and turn classroom talk into focused, judgment-free feedback.',
     linkLabel: 'Record a lesson',
+  },
+  {
+    to: '/talk-to-me',
+    icon: HeadsetIcon,
+    accent: ACCENTS.forest,
+    tag: 'Live coach',
+    title: 'Talk It Through',
+    description: 'Think out loud. Your coach listens, asks, and helps you find a next step.',
+    linkLabel: 'Start voice coaching',
   },
   {
     to: '/coach-chat',

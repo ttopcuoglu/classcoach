@@ -16,7 +16,6 @@ import {
   LockIcon,
   MailIcon,
   MenuIcon,
-  MicIcon,
   PlayIcon,
   QuoteIcon,
   SparkleIcon,
@@ -218,13 +217,22 @@ function SampleCard({ feature, eyebrow, title, before, after, pdf }: (typeof SAM
   )
 }
 
-function DeviceMockup() {
+// The hero shows Lesson Debrief, the feature that sets Wivoza apart: a
+// miniature of the real report's cover and numbers. The figures are the ones
+// in the published sample report (/samples/lesson-debrief.pdf) — a staged
+// recording, not a real class — and the frame says "Sample" so nobody reads
+// them as someone's results.
+const HERO_TILES = [
+  { label: 'You spoke', value: '42.6', unit: '%', card: 'bg-peach-tint', ink: 'text-terracotta-600' },
+  { label: 'Students spoke', value: '15.9', unit: '%', card: 'bg-gold-tint', ink: 'text-terracotta-600' },
+  { label: 'Questions', value: '15', unit: '', card: 'bg-mint-tint', ink: 'text-forest' },
+  { label: 'Avg. wait', value: '3.07', unit: 's', card: 'bg-mint-tint', ink: 'text-forest' },
+]
+
+function ReportMockup() {
   return (
     <div className="relative w-full max-w-md">
-      <div
-        aria-hidden="true"
-        className="absolute -inset-16 -z-10 rounded-full bg-gold-tint/60 blur-3xl"
-      />
+      <div aria-hidden="true" className="absolute -inset-16 -z-10 rounded-full bg-gold-tint/60 blur-3xl" />
       <div className="rounded-2xl border border-hairline bg-cream-card p-2 shadow-xl">
         <div className="flex items-center justify-between px-3 py-2">
           <div className="flex gap-1.5">
@@ -232,47 +240,56 @@ function DeviceMockup() {
             <span className="h-2.5 w-2.5 rounded-full bg-gold/70" />
             <span className="h-2.5 w-2.5 rounded-full bg-forest/30" />
           </div>
-          <p className="text-xs text-ink-soft">Private coaching session</p>
+          <p className="text-xs text-ink-soft">Your Lesson Debrief</p>
           <LockIcon className="h-4 w-4 text-ink-soft" />
         </div>
-        <div className="flex flex-col items-center gap-3 rounded-xl bg-forest px-8 py-10 text-center text-cream">
-          <span className="relative flex h-16 w-16 items-center justify-center rounded-full border border-gold/50 bg-gold/20">
-            <span aria-hidden="true" className="absolute -inset-3 -z-0 rounded-full bg-gold/15 blur-xl" />
-            <MicIcon className="relative h-7 w-7 text-gold" />
-          </span>
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Wivoza Coach</p>
-          <h3 className="font-heading text-xl font-bold text-cream">
-            What&rsquo;s on your mind<span className="text-gold">?</span>
-          </h3>
-          <p className="text-sm text-cream/70">
-            Talk through a classroom moment, lesson idea, or conversation you want to prepare for.
-          </p>
-          <div className="flex items-end gap-1 py-2" aria-hidden="true">
-            {[10, 18, 26, 16, 22, 12].map((h, i) => (
-              <span key={i} className="w-1.5 rounded-full bg-gold" style={{ height: `${h}px` }} />
+
+        <div className="flex flex-col gap-2.5 rounded-xl bg-cream p-3 text-left">
+          <div className="rounded-xl bg-forest px-4 py-4 text-cream">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gold">Wivoza · Lesson Debrief</p>
+              <span className="rounded-full bg-cream/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cream">
+                Sample
+              </span>
+            </div>
+            <p className="mt-1.5 font-heading text-xl font-bold">
+              ELA 7 <span className="text-gold">·</span> 4th period
+            </p>
+            <p className="text-xs text-cream/60">7th grade · 12:02 recorded</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {HERO_TILES.map((t) => (
+              <div key={t.label} className={`rounded-xl px-3 py-2.5 ${t.card}`}>
+                <p className={`text-[10px] font-bold uppercase tracking-[0.12em] ${t.ink}`}>{t.label}</p>
+                <p className="font-heading text-2xl font-extrabold leading-tight text-forest">
+                  {t.value}
+                  {t.unit && <span className="ml-0.5 text-sm font-bold">{t.unit}</span>}
+                </p>
+              </div>
             ))}
           </div>
-          <button
-            type="button"
-            className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream shadow-lg"
-            tabIndex={-1}
-          >
-            Start a private check-in
-          </button>
+
+          <div className="rounded-xl border-l-4 border-gold bg-gold-tint/60 px-3 py-2.5">
+            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-terracotta-600">A strength to keep · 1:42</p>
+            <p className="mt-0.5 text-sm leading-snug text-ink">
+              “What are the two traits Marcus shows at the beginning of the story?”
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="absolute -left-4 -top-6 flex items-center gap-2 rounded-xl border border-hairline bg-cream-card px-3.5 py-2.5 shadow-lg sm:-left-14 sm:top-16">
+      <div className="absolute -bottom-12 -left-3 flex items-center gap-2 rounded-xl border border-hairline bg-cream-card px-3.5 py-2.5 shadow-lg sm:-bottom-6 sm:-left-12">
         <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-forest">
-          <ArrowRightIcon className="h-4 w-4 -rotate-45 text-gold" />
+          <LockIcon className="h-4 w-4 text-gold" />
         </span>
         <div className="text-left">
-          <p className="text-sm font-bold text-ink">More student voice</p>
-          <p className="text-xs text-ink-soft">spotted in your debrief</p>
+          <p className="text-sm font-bold text-ink">Only you see this</p>
+          <p className="text-xs text-ink-soft">never scored, never shared</p>
         </div>
       </div>
 
-      <div className="absolute -bottom-5 -right-3 flex items-center gap-2 rounded-xl border border-hairline bg-cream-card px-3.5 py-2.5 shadow-lg sm:-right-12 sm:bottom-10">
+      <div className="absolute -right-3 -top-6 flex items-center gap-2 rounded-xl border border-hairline bg-cream-card px-3.5 py-2.5 shadow-lg sm:-right-10">
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gold">
           <CheckIcon className="h-4 w-4 text-forest" />
         </span>
@@ -428,7 +445,8 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               </span>
             </h1>
             <p className="mt-6 max-w-md text-lg text-ink-soft">
-              Prepare for hard moments, reflect on real lessons, and grow with a private AI coach
+              Record a lesson and see what your class really sounded like — who talked, what you
+              asked, how long you waited. Then plan, prepare, and practice with a private AI coach
               that understands classrooms.
             </p>
 
@@ -449,14 +467,33 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             {/* The stars and initials that sat here read as reviews from real
                 teachers, which they were not. This makes only a claim that is
                 true. */}
-            <p className="mt-9 flex items-center gap-2.5 text-sm text-ink-soft">
+            <p className="mt-5 text-sm text-ink-soft">
+              No class to record yet?{' '}
+              <a href="#get-started" className="font-semibold text-terracotta-600 hover:underline">
+                Start with Talk It Through
+              </a>{' '}
+              — two minutes, nothing to set up.
+            </p>
+
+            <div className="mt-7 flex flex-wrap gap-2">
+              {['Only you see your reports', 'Never scored', 'Audio never kept'].map((label) => (
+                <span
+                  key={label}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-mint-tint px-3 py-1.5 text-xs font-semibold text-forest"
+                >
+                  <LockIcon className="h-3.5 w-3.5" />
+                  {label}
+                </span>
+              ))}
+            </div>
+            <p className="mt-4 flex items-center gap-2.5 text-sm text-ink-soft">
               <GraduationCapIcon className="h-5 w-5 text-forest" />
               Built with educators, for educators
             </p>
           </div>
 
           <div className="flex justify-center py-6 lg:justify-end lg:py-0">
-            <DeviceMockup />
+            <ReportMockup />
           </div>
         </div>
       </section>
@@ -608,6 +645,45 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             invented scenario.
           </p>
         </div>
+        <a
+          href="/samples/lesson-debrief.pdf"
+          target="_blank"
+          rel="noreferrer"
+          className="group mb-6 grid gap-6 rounded-3xl bg-forest p-6 text-cream shadow-sm transition-shadow hover:shadow-md sm:p-8 lg:grid-cols-[1fr_1.1fr] lg:items-center"
+        >
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Lesson Debrief · Sample report</span>
+            <h3 className="mt-2 font-heading text-2xl font-bold leading-snug sm:text-3xl">
+              Twelve minutes of class, seen clearly<span className="text-gold">.</span>
+            </h3>
+            <p className="mt-3 text-sm leading-relaxed text-cream/75">
+              Who was heard and for how long, what was asked and how long students had to think, how
+              checks for understanding went — with the exact moments, timestamps, and one next step. A
+              staged recording; no real class or student.
+            </p>
+            <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-gold">
+              View the full sample report
+              <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 rounded-2xl bg-cream p-4 text-left sm:grid-cols-4 lg:grid-cols-2">
+            {HERO_TILES.map((t) => (
+              <div key={t.label} className={`rounded-xl px-3 py-3 ${t.card}`}>
+                <p className={`text-[10px] font-bold uppercase tracking-[0.12em] ${t.ink}`}>{t.label}</p>
+                <p className="font-heading text-2xl font-extrabold leading-tight text-forest">
+                  {t.value}
+                  {t.unit && <span className="ml-0.5 text-sm font-bold">{t.unit}</span>}
+                </p>
+              </div>
+            ))}
+            <div className="col-span-2 rounded-xl border-l-4 border-gold bg-gold-tint/60 px-3 py-2.5 sm:col-span-4 lg:col-span-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-terracotta-600">Why wait time matters</p>
+              <p className="mt-0.5 text-sm leading-snug text-ink">
+                Three to five seconds of silence after a question is the single cheapest change most teachers can make.
+              </p>
+            </div>
+          </div>
+        </a>
         <div className="grid gap-6 md:grid-cols-3">
           {SAMPLES.map((sample) => (
             <SampleCard key={sample.title} {...sample} />
