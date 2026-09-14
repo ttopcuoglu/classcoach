@@ -247,7 +247,7 @@ export default function Profile() {
               disabled={billingLoading}
               className="self-start rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90 disabled:opacity-60"
             >
-              {billingLoading ? 'Please wait...' : 'Upgrade to Wivoza Plus — $9/month'}
+              {billingLoading ? 'Please wait...' : 'Upgrade to Wivoza Plus — $9.99/month'}
             </button>
           )}
           {billingError && <p className="text-sm text-peach-tint">{billingError}</p>}

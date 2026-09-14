@@ -716,7 +716,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               <h3 className="font-heading text-xl font-bold text-forest">Wivoza Plus</h3>
               <p className="mt-1 text-sm text-ink-soft">For teachers who want it all</p>
               <p className="mt-6 flex items-baseline gap-1">
-                <span className="font-heading text-4xl font-extrabold text-forest">$9</span>
+                <span className="font-heading text-4xl font-extrabold text-forest">$9.99</span>
                 <span className="text-sm text-ink-soft">/month</span>
               </p>
               <ul className="mt-6 space-y-3 text-sm text-ink-soft">

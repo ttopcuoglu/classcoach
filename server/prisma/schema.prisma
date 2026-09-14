@@ -550,10 +550,11 @@ model SchoolInquiry {
   organizationName String
   // "school" | "district" | "network" | "other"
   organizationType String
+  // No longer asked on the form; kept so the column matches the database.
   state            String?
   // A range chosen from a fixed list ("1-25", "26-100", ...), not a count.
   teacherCount     String?
-  // Comma-separated: pilot, license, demo, pd
+  // No longer asked on the form; kept so the column matches the database.
   interests        String?
   message          String?
   // "new" | "contacted" | "closed"

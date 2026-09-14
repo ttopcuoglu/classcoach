@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { requireAuth, requireSuperadmin } from '../lib/auth.ts'
+import { sendInquiryAlert } from '../lib/inquiryAlert.ts'
 import { prisma } from '../lib/prisma.ts'
 
 export const schoolInquiriesRouter = Router()
@@ -13,7 +14,6 @@ const GLOBAL_PER_DAY = 200
 
 const ORGANIZATION_TYPES = ['school', 'district', 'network', 'other'] as const
 const TEACHER_COUNTS = ['1-25', '26-100', '101-500', '500+'] as const
-const INTERESTS = ['pilot', 'license', 'demo', 'pd'] as const
 const STATUSES = ['new', 'contacted', 'closed'] as const
 
 const ipHits = new Map<string, number[]>()
@@ -58,12 +58,8 @@ schoolInquiriesRouter.post('/', async (req, res) => {
   const role = text(body.role, 120)
   const organizationName = text(body.organizationName, 200)
   const organizationType = text(body.organizationType, 20)
-  const state = text(body.state, 80) || null
   const teacherCount = text(body.teacherCount, 20) || null
   const message = text(body.message, 2000) || null
-  const interests = Array.isArray(body.interests)
-    ? body.interests.filter((i: unknown): i is string => typeof i === 'string' && (INTERESTS as readonly string[]).includes(i))
-    : []
 
   if (!name || !role || !organizationName) {
     res.status(400).json({ error: 'Please fill in your name, role, and school or district.' })
@@ -89,22 +85,14 @@ schoolInquiriesRouter.post('/', async (req, res) => {
   }
 
   try {
-    await prisma.schoolInquiry.create({
-      data: {
-        name,
-        email,
-        role,
-        organizationName,
-        organizationType,
-        state,
-        teacherCount,
-        interests: interests.length ? [...new Set(interests)].join(',') : null,
-        message,
-      },
+    const inquiry = await prisma.schoolInquiry.create({
+      data: { name, email, role, organizationName, organizationType, teacherCount, message },
     })
     ipHits.set(ip, [...(ipHits.get(ip) ?? []), Date.now()])
     globalCount += 1
     res.status(201).json({ ok: true })
+    // After responding: the visitor never waits on, or sees, the email.
+    void sendInquiryAlert(inquiry)
   } catch (err) {
     console.error('[school-inquiries] create failed', err)
     res.status(500).json({ error: 'Something went wrong sending your request. Please email hello@wivoza.com instead.' })

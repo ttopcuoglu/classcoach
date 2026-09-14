@@ -1472,15 +1472,13 @@ export type SchoolInquiryInput = {
   role: string
   organizationName: string
   organizationType: 'school' | 'district' | 'network' | 'other'
-  state?: string
   teacherCount?: '1-25' | '26-100' | '101-500' | '500+'
-  interests: ('pilot' | 'license' | 'demo' | 'pd')[]
   message?: string
   // Honeypot — always empty from a real visitor.
   website?: string
 }
 
-export type SchoolInquiry = Omit<SchoolInquiryInput, 'interests' | 'website' | 'state' | 'teacherCount' | 'message'> & {
+export type SchoolInquiry = Omit<SchoolInquiryInput, 'website' | 'teacherCount' | 'message'> & {
   id: string
   state: string | null
   teacherCount: string | null

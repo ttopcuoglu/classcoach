@@ -58,13 +58,6 @@ const ORGANIZATION_TYPES: { value: SchoolInquiryInput['organizationType']; label
 
 const TEACHER_COUNTS: NonNullable<SchoolInquiryInput['teacherCount']>[] = ['1-25', '26-100', '101-500', '500+']
 
-const INTERESTS: { value: SchoolInquiryInput['interests'][number]; label: string }[] = [
-  { value: 'pilot', label: 'Starting with a pilot' },
-  { value: 'license', label: 'A license for all our teachers' },
-  { value: 'demo', label: 'A walkthrough of Wivoza' },
-  { value: 'pd', label: 'Using it for professional learning' },
-]
-
 const ROLES = ['Principal', 'Assistant Principal', 'Instructional Coach', 'District Leader', 'Teacher', 'Other']
 
 const inputClass =
@@ -96,18 +89,12 @@ function InquiryForm() {
   const [role, setRole] = useState('')
   const [organizationName, setOrganizationName] = useState('')
   const [organizationType, setOrganizationType] = useState<SchoolInquiryInput['organizationType'] | null>(null)
-  const [state, setState] = useState('')
   const [teacherCount, setTeacherCount] = useState<SchoolInquiryInput['teacherCount'] | null>(null)
-  const [interests, setInterests] = useState<SchoolInquiryInput['interests']>([])
   const [message, setMessage] = useState('')
   const [website, setWebsite] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sentTo, setSentTo] = useState<string | null>(null)
-
-  function toggleInterest(value: SchoolInquiryInput['interests'][number]) {
-    setInterests((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]))
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -124,9 +111,7 @@ function InquiryForm() {
         role,
         organizationName,
         organizationType,
-        state: state || undefined,
         teacherCount: teacherCount ?? undefined,
-        interests,
         message: message || undefined,
         website,
       })
@@ -224,58 +209,22 @@ function InquiryForm() {
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="State" optional>
-            <input value={state} onChange={(e) => setState(e.target.value)} autoComplete="address-level1" className={inputClass} />
-          </Field>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-ink">
-              Number of teachers <span className="font-normal text-ink-soft">(optional)</span>
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {TEACHER_COUNTS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  aria-pressed={teacherCount === c}
-                  onClick={() => setTeacherCount(teacherCount === c ? null : c)}
-                  className={chipClass(teacherCount === c)}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
         <div className="flex flex-col gap-2">
           <span className="text-sm font-medium text-ink">
-            What are you interested in? <span className="font-normal text-ink-soft">(choose any)</span>
+            Number of teachers <span className="font-normal text-ink-soft">(optional)</span>
           </span>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {INTERESTS.map((i) => {
-              const active = interests.includes(i.value)
-              return (
-                <button
-                  key={i.value}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => toggleInterest(i.value)}
-                  className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm font-medium transition-colors ${
-                    active ? 'border-gold bg-gold-tint/60 text-forest' : 'border-hairline bg-cream text-ink hover:border-terracotta/40'
-                  }`}
-                >
-                  <span
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${
-                      active ? 'bg-forest text-gold' : 'border-2 border-hairline bg-cream-card'
-                    }`}
-                  >
-                    {active && <CheckIcon className="h-3.5 w-3.5" />}
-                  </span>
-                  {i.label}
-                </button>
-              )
-            })}
+          <div className="flex flex-wrap gap-2">
+            {TEACHER_COUNTS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                aria-pressed={teacherCount === c}
+                onClick={() => setTeacherCount(teacherCount === c ? null : c)}
+                className={chipClass(teacherCount === c)}
+              >
+                {c}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -285,7 +234,7 @@ function InquiryForm() {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             maxLength={2000}
-            placeholder="Your goals, timeline, or questions."
+            placeholder="What you're hoping for — a pilot, a license for all teachers, a walkthrough — plus your goals, timeline, or questions."
             className={inputClass}
           />
         </Field>

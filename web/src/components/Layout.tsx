@@ -142,7 +142,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
               to="/profile"
               className="mt-2.5 inline-block rounded-lg bg-terracotta-600 px-3 py-1.5 text-xs font-semibold text-cream hover:bg-terracotta"
             >
-              Upgrade — $9/month
+              Upgrade — $9.99/month
             </Link>
           </div>
         )}

@@ -2364,12 +2364,6 @@ const INQUIRY_TYPE_LABELS: Record<string, string> = {
   network: 'Charter network',
   other: 'Other',
 }
-const INQUIRY_INTEREST_LABELS: Record<string, string> = {
-  pilot: 'Pilot',
-  license: 'License for all teachers',
-  demo: 'Walkthrough',
-  pd: 'Professional learning',
-}
 const INQUIRY_STATUS_STYLES: Record<SchoolInquiry['status'], string> = {
   new: 'bg-terracotta text-cream',
   contacted: 'bg-gold text-forest',
@@ -2447,7 +2441,7 @@ function SchoolInquiriesPanel() {
                 </div>
                 <h2 className="mt-2 font-heading text-lg font-bold text-forest">{inq.organizationName}</h2>
                 <p className="text-sm text-ink-soft">
-                  {[INQUIRY_TYPE_LABELS[inq.organizationType] ?? inq.organizationType, inq.state, inq.teacherCount ? `${inq.teacherCount} teachers` : null]
+                  {[INQUIRY_TYPE_LABELS[inq.organizationType] ?? inq.organizationType, inq.teacherCount ? `${inq.teacherCount} teachers` : null]
                     .filter(Boolean)
                     .join(' · ')}
                 </p>
@@ -2464,34 +2458,17 @@ function SchoolInquiriesPanel() {
               </select>
             </div>
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-2xl bg-mint-tint/50 p-4">
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">Contact</p>
-                <p className="mt-1 text-sm font-semibold text-ink">{inq.name}</p>
-                <p className="text-sm text-ink-soft">{inq.role}</p>
-                <a
-                  href={`mailto:${inq.email}?subject=${encodeURIComponent(`Wivoza for ${inq.organizationName}`)}`}
-                  className="mt-1 inline-block break-all text-sm font-semibold text-terracotta-600 hover:underline"
-                >
-                  {inq.email}
-                </a>
-              </div>
-              <div className="rounded-2xl bg-gold-tint/50 p-4">
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Interested in</p>
-                {inq.interests ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {inq.interests.split(',').map((i) => (
-                      <span key={i} className="rounded-full bg-cream-card px-2.5 py-0.5 text-xs font-semibold text-forest">
-                        {INQUIRY_INTEREST_LABELS[i] ?? i}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-1 text-sm text-ink-soft">Not specified</p>
-                )}
-              </div>
+            <div className="mt-4 rounded-2xl bg-mint-tint/50 p-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">Contact</p>
+              <p className="mt-1 text-sm font-semibold text-ink">{inq.name}</p>
+              <p className="text-sm text-ink-soft">{inq.role}</p>
+              <a
+                href={`mailto:${inq.email}?subject=${encodeURIComponent(`Wivoza for ${inq.organizationName}`)}`}
+                className="mt-1 inline-block break-all text-sm font-semibold text-terracotta-600 hover:underline"
+              >
+                {inq.email}
+              </a>
             </div>
-
             {inq.message && (
               <p className="mt-4 whitespace-pre-wrap rounded-2xl border-l-8 border-gold bg-cream p-4 text-sm text-ink">{inq.message}</p>
             )}
