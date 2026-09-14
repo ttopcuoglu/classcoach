@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import Layout from './components/Layout'
 import Landing from './pages/Landing'
 import { getMe, type UserProfile } from './lib/api'
+import { applyPageMeta } from './lib/pageMeta'
 
 // Landing and Layout stay eager — Landing is the first thing every signed-out
 // visitor sees (rendered directly by RequireAuth below, not just its own
@@ -86,6 +87,16 @@ function RequireAuth({
   return <>{children}</>
 }
 
+// Keeps the document title, description and canonical link in step with the
+// current route (see lib/pageMeta.ts).
+function PageMeta() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    applyPageMeta(pathname)
+  }, [pathname])
+  return null
+}
+
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -123,6 +134,7 @@ export default function App() {
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <BrowserRouter>
+        <PageMeta />
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="shared/:type/:token" element={<Shared />} />
