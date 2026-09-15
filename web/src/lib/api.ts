@@ -1020,6 +1020,11 @@ export function getFollowUp(id: string): Promise<CoachFollowUp> {
   return request(`/api/follow-ups/${id}`)
 }
 
+// "Don't check in on this" on a Talk It Through takeaway.
+export function dismissFollowUpForDebrief(debriefId: string): Promise<{ count: number }> {
+  return request(`/api/follow-ups/by-debrief/${debriefId}/dismiss`, { method: 'POST' })
+}
+
 // Superadmin testing only — see POST /api/follow-ups/test/due-now.
 export function makeFollowUpsDueNow(): Promise<{ count: number }> {
   return request('/api/follow-ups/test/due-now', { method: 'POST' })

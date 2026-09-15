@@ -359,7 +359,13 @@ export default function Home() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="grid gap-6 rounded-3xl bg-forest p-6 text-cream sm:p-8 lg:grid-cols-[1.3fr_1fr] lg:items-center">
+      {/* While Coach's check-in is waiting, it is the one thing Home asks for —
+          the "next step" suggestion steps aside until it's handled. */}
+      <div
+        className={`grid gap-6 rounded-3xl bg-forest p-6 text-cream sm:p-8 lg:items-center ${
+          checkIn ? '' : 'lg:grid-cols-[1.3fr_1fr]'
+        }`}
+      >
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">{dateLabel}</p>
           <h1 className="mt-2 font-heading text-3xl font-extrabold text-cream sm:text-4xl">
@@ -369,26 +375,28 @@ export default function Home() {
           </h1>
           <p className="mt-1.5 text-cream/70">What would help you feel more prepared today?</p>
         </div>
-        <div className="flex flex-col gap-4 rounded-2xl bg-cream/5 p-5 ring-1 ring-cream/10">
-          <div className="flex items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gold text-forest">
-              <nextStep.icon className="h-5 w-5" />
-            </span>
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">
-                {isWelcomeBack ? 'Welcome back' : 'Your next step'}
-              </p>
-              <p className="mt-0.5 font-heading text-lg font-bold text-cream">{nextStep.title}</p>
-              <p className="text-sm text-cream/70">{nextStep.description}</p>
+        {!checkIn && (
+          <div className="flex flex-col gap-4 rounded-2xl bg-cream/5 p-5 ring-1 ring-cream/10">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gold text-forest">
+                <nextStep.icon className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">
+                  {isWelcomeBack ? 'Welcome back' : 'Your next step'}
+                </p>
+                <p className="mt-0.5 font-heading text-lg font-bold text-cream">{nextStep.title}</p>
+                <p className="text-sm text-cream/70">{nextStep.description}</p>
+              </div>
             </div>
+            <Link
+              to={nextStep.to}
+              className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90"
+            >
+              {nextStep.linkLabel} →
+            </Link>
           </div>
-          <Link
-            to={nextStep.to}
-            className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90"
-          >
-            {nextStep.linkLabel} →
-          </Link>
-        </div>
+        )}
       </div>
 
       {checkIn && (
@@ -529,8 +537,8 @@ export default function Home() {
       </div>
 
       <div className="rounded-3xl border border-hairline bg-cream-card p-6">
-        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Check in</p>
-        <h2 className="mt-1 font-heading text-lg font-bold text-forest">How are you feeling today?</h2>
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Your day</p>
+        <h2 className="mt-1 font-heading text-lg font-bold text-forest">How are you today?</h2>
         <div className="mt-3 flex flex-wrap gap-2">
           {MOODS.map(({ label, value }) => (
             <button

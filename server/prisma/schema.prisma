@@ -222,7 +222,8 @@ model Debrief {
 // Through takeaway's "try next"; shown on Home once dueAt passes, and opens
 // Talk It Through with the plan as context. status: "pending" (not yet
 // answered) | "talked" (the teacher started a check-in conversation) |
-// "dismissed". Snoozing just moves dueAt.
+// "dismissed" (by the teacher) | "replaced" (a newer session's check-in took
+// its place — only one is ever pending). Snoozing just moves dueAt.
 model CoachFollowUp {
   id                 String   @id @default(cuid())
   userId             String

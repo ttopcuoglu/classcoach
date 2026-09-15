@@ -5,6 +5,7 @@ import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import {
   generateTalkTakeaway,
   getDebriefs,
+  dismissFollowUpForDebrief,
   getFollowUp,
   getProfile,
   makeFollowUpsDueNow,
@@ -176,6 +177,8 @@ export default function TalkToMe() {
   const [examplePrompts, setExamplePrompts] = useState<string[] | null>(null)
   const [isSuperadmin, setIsSuperadmin] = useState(false)
   const [testCheckInError, setTestCheckInError] = useState<string | null>(null)
+  // Per takeaway: the teacher opted out of the check-in on this one.
+  const [checkInOff, setCheckInOff] = useState(false)
   const talkVoiceRef = useRef<TalkVoice | null>(null)
   talkVoiceRef.current = talkVoice
 
@@ -472,6 +475,16 @@ export default function TalkToMe() {
   // The teacher's last line is put back on screen next to Coach's (which
   // shows on its own, from the conversation), so it is obvious where they
   // left off before they start speaking.
+  async function handleCheckInOff() {
+    if (!debrief) return
+    setCheckInOff(true)
+    try {
+      await dismissFollowUpForDebrief(debrief.id)
+    } catch {
+      setCheckInOff(false)
+    }
+  }
+
   // Superadmin test switch: skip the three-day wait and go see the card.
   async function handleTestCheckInNow() {
     setTestCheckInError(null)
@@ -495,6 +508,7 @@ export default function TalkToMe() {
     setDebrief(past)
     setUserTranscript(lastUser?.text ?? null)
     setTakeaway(null)
+    setCheckInOff(false)
     setTakeawayError(null)
     setNextStepOpen(false)
     setConversationFull(false)
@@ -509,6 +523,7 @@ export default function TalkToMe() {
     setTakeaway(null)
     setTakeawayError(null)
     setUserTranscript(null)
+    setCheckInOff(false)
     setConversationFull(false)
     setError(null)
     setNextStepOpen(false)
@@ -640,10 +655,23 @@ export default function TalkToMe() {
                   </div>
                   {!isDebrief && (
                     <p className="text-center text-xs text-ink-soft">
-                      Coach will check in with you about this in a few days.
+                      {checkInOff ? (
+                        'Okay — no check-in for this one.'
+                      ) : (
+                        <>
+                          Coach will check in with you about this in a few days ·{' '}
+                          <button
+                            type="button"
+                            onClick={handleCheckInOff}
+                            className="font-medium underline decoration-hairline underline-offset-2 hover:text-terracotta-600"
+                          >
+                            Don't check in on this
+                          </button>
+                        </>
+                      )}
                     </p>
                   )}
-                  {!isDebrief && isSuperadmin && (
+                  {!isDebrief && isSuperadmin && !checkInOff && (
                     <div className="flex flex-col items-center gap-1">
                       <button
                         type="button"

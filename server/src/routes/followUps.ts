@@ -40,6 +40,16 @@ followUpsRouter.post('/test/due-now', async (req, res) => {
   res.json({ count })
 })
 
+// "Don't check in on this" on a takeaway — the client knows the conversation,
+// not the check-in, so it's addressed by source conversation.
+followUpsRouter.post('/by-debrief/:debriefId/dismiss', async (req, res) => {
+  const { count } = await prisma.coachFollowUp.updateMany({
+    where: { sourceDebriefId: req.params.debriefId, userId: req.user!.userId, status: 'pending' },
+    data: { status: 'dismissed' },
+  })
+  res.json({ count })
+})
+
 followUpsRouter.get('/:id', async (req, res) => {
   const followUp = await prisma.coachFollowUp.findFirst({
     where: { id: req.params.id, userId: req.user!.userId },

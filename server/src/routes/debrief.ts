@@ -691,6 +691,14 @@ debriefRouter.post('/:id/takeaway', async (req, res) => {
     // clock, unless they already answered or dismissed the earlier one.
     const checkInQuestion = checkInQuestionFor(extractTag(text, 'check_in'), tryNext)
     const existingFollowUp = await prisma.coachFollowUp.findUnique({ where: { sourceDebriefId: debrief.id } })
+    if (!existingFollowUp || existingFollowUp.status === 'pending') {
+      // One check-in at a time: the newest plan replaces any older one still
+      // waiting, rather than lining up a queue of "how did it go?"s.
+      await prisma.coachFollowUp.updateMany({
+        where: { userId: req.user!.userId, status: 'pending', sourceDebriefId: { not: debrief.id } },
+        data: { status: 'replaced' },
+      })
+    }
     if (!existingFollowUp) {
       await prisma.coachFollowUp.create({
         data: {
