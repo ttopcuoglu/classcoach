@@ -372,6 +372,9 @@ struct ReflectTab: View {
     }
 
     private func summarize() async {
+        // Wrapping up the conversation ends it: Coach stops mid-sentence and
+        // the mic stays closed while the teacher works on their notes.
+        stopVoice()
         summarizing = true
         do {
             let summary = try await AudioCoachingService.summarizeReflectConversation(sessionId: session.id)
@@ -385,6 +388,7 @@ struct ReflectTab: View {
     }
 
     private func saveNotes() async {
+        stopVoice()
         saving = true
         savedConfirmed = false
         do {
