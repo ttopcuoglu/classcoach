@@ -25,6 +25,21 @@ followUpsRouter.get('/due', async (req, res) => {
   res.json(followUps)
 })
 
+// Superadmin-only test switch: makes the caller's own pending check-ins due
+// immediately, so the flow can be tried without waiting three days. Never
+// touches anyone else's.
+followUpsRouter.post('/test/due-now', async (req, res) => {
+  if (req.user!.role !== 'superadmin') {
+    res.status(403).json({ error: 'Superadmin access required' })
+    return
+  }
+  const { count } = await prisma.coachFollowUp.updateMany({
+    where: { userId: req.user!.userId, status: 'pending' },
+    data: { dueAt: new Date() },
+  })
+  res.json({ count })
+})
+
 followUpsRouter.get('/:id', async (req, res) => {
   const followUp = await prisma.coachFollowUp.findFirst({
     where: { id: req.params.id, userId: req.user!.userId },

@@ -1020,6 +1020,11 @@ export function getFollowUp(id: string): Promise<CoachFollowUp> {
   return request(`/api/follow-ups/${id}`)
 }
 
+// Superadmin testing only — see POST /api/follow-ups/test/due-now.
+export function makeFollowUpsDueNow(): Promise<{ count: number }> {
+  return request('/api/follow-ups/test/due-now', { method: 'POST' })
+}
+
 export function updateFollowUp(id: string, action: 'snooze' | 'dismiss'): Promise<CoachFollowUp> {
   return request(`/api/follow-ups/${id}`, { method: 'PATCH', body: JSON.stringify({ action }) })
 }

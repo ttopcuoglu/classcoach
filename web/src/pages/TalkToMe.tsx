@@ -7,6 +7,7 @@ import {
   getDebriefs,
   getFollowUp,
   getProfile,
+  makeFollowUpsDueNow,
   saveDebriefReflection,
   sendDebriefChat,
   setDebriefSaved,
@@ -173,6 +174,8 @@ export default function TalkToMe() {
   const [nextStepDraft, setNextStepDraft] = useState('')
   const [talkVoice, setTalkVoice] = useState<TalkVoice | null>(null)
   const [examplePrompts, setExamplePrompts] = useState<string[] | null>(null)
+  const [isSuperadmin, setIsSuperadmin] = useState(false)
+  const [testCheckInError, setTestCheckInError] = useState<string | null>(null)
   const talkVoiceRef = useRef<TalkVoice | null>(null)
   talkVoiceRef.current = talkVoice
 
@@ -273,6 +276,7 @@ export default function TalkToMe() {
     getProfile()
       .then((profile) => {
         setTalkVoice(profile.talkVoice)
+        setIsSuperadmin(profile.role === 'superadmin')
         setExamplePrompts(isExperienced(profile.experienceLevel) ? EXPERIENCED_PROMPTS : EXAMPLE_PROMPTS)
       })
       .catch(() => setExamplePrompts(EXAMPLE_PROMPTS))
@@ -468,6 +472,24 @@ export default function TalkToMe() {
   // The teacher's last line is put back on screen next to Coach's (which
   // shows on its own, from the conversation), so it is obvious where they
   // left off before they start speaking.
+  // Superadmin test switch: skip the three-day wait and go see the card.
+  async function handleTestCheckInNow() {
+    setTestCheckInError(null)
+    try {
+      const { count } = await makeFollowUpsDueNow()
+      if (count === 0) {
+        setTestCheckInError('No check-in was scheduled for this session.')
+        return
+      }
+      sessionActiveRef.current = false
+      close()
+      audioRef.current?.pause()
+      navigate('/')
+    } catch (err) {
+      setTestCheckInError((err as Error).message)
+    }
+  }
+
   function handleContinuePast(past: Debrief) {
     const lastUser = [...(past.conversation ?? [])].reverse().find((m) => m.role === 'user')
     setDebrief(past)
@@ -620,6 +642,18 @@ export default function TalkToMe() {
                     <p className="text-center text-xs text-ink-soft">
                       Coach will check in with you about this in a few days.
                     </p>
+                  )}
+                  {!isDebrief && isSuperadmin && (
+                    <div className="flex flex-col items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={handleTestCheckInNow}
+                        className="rounded-full border border-dashed border-terracotta/50 px-3 py-1 text-xs font-medium text-terracotta-600 hover:bg-peach-tint/40"
+                      >
+                        Admin test: make this check-in due now
+                      </button>
+                      {testCheckInError && <p className="text-xs text-terracotta-600">{testCheckInError}</p>}
+                    </div>
                   )}
                 </div>
               </>
