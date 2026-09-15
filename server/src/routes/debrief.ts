@@ -660,22 +660,40 @@ debriefRouter.post('/:id/takeaway', async (req, res) => {
   }
 
   try {
-    const transcript = existing.map((m) => `${m.role === 'assistant' ? 'Coach' : 'Teacher'}: ${m.text}`).join('\n')
-    const response = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 380,
-      system: TALK_TAKEAWAY_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: transcript }],
+    // A conversation opened from a check-in starts with the teacher's answer
+    // ("It didn't work."), which means nothing without the plan it answers —
+    // a takeaway grounded only in that transcript often came back incomplete.
+    const answeredCheckIn = await prisma.coachFollowUp.findFirst({
+      where: { respondedDebriefId: debrief.id, userId: req.user!.userId },
     })
-    const text = response.content
-      .filter((block) => block.type === 'text')
-      .map((block) => block.text)
-      .join('\n')
-    flagIfUnsafe(text, 'debrief.talk.takeaway')
+    const checkInContext = answeredCheckIn
+      ? `Context: this conversation was a check-in. The teacher had planned to try: "${answeredCheckIn.plan}". Coach opened by asking: "${answeredCheckIn.checkInQuestion}"\n\n`
+      : ''
+    const transcript =
+      checkInContext + existing.map((m) => `${m.role === 'assistant' ? 'Coach' : 'Teacher'}: ${m.text}`).join('\n')
 
-    const explored = extractTag(text, 'explored')
-    const tryNext = extractTag(text, 'try_next')
-    const notice = extractTag(text, 'notice')
+    // One quiet retry: a very short conversation occasionally comes back
+    // missing a section, and a second attempt nearly always fills it.
+    let text = ''
+    let explored: string | null = null
+    let tryNext: string | null = null
+    let notice: string | null = null
+    for (let attempt = 0; attempt < 2 && !(explored && tryNext && notice); attempt++) {
+      const response = await anthropic.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 380,
+        system: TALK_TAKEAWAY_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: transcript }],
+      })
+      text = response.content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
+        .join('\n')
+      flagIfUnsafe(text, 'debrief.talk.takeaway')
+      explored = extractTag(text, 'explored')
+      tryNext = extractTag(text, 'try_next')
+      notice = extractTag(text, 'notice')
+    }
     if (!explored || !tryNext || !notice) {
       res.status(502).json({ error: 'Could not summarize this conversation. Please try again.' })
       return

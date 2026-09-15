@@ -106,7 +106,12 @@ const COACHING_PATH = [
 
 // "From Tuesday" reads better than a date for something a few days old.
 function checkInAge(createdAt: string): string {
-  const days = Math.round((Date.now() - new Date(createdAt).getTime()) / DAY_MS)
+  const created = new Date(createdAt)
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+  if (created >= startOfToday) return 'from earlier today'
+  // Calendar days, not 24-hour periods — last night is "yesterday".
+  const days = Math.ceil((startOfToday.getTime() - created.getTime()) / DAY_MS)
   if (days <= 1) return 'from yesterday'
   if (days < 7) return `from ${new Date(createdAt).toLocaleDateString(undefined, { weekday: 'long' })}`
   return `from ${new Date(createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`

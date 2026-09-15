@@ -42,8 +42,10 @@ struct CoachFollowUp: Codable, Identifiable {
         let parser = ISO8601DateFormatter()
         parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         guard let date = parser.date(from: createdAt) ?? ISO8601DateFormatter().date(from: createdAt) else { return "" }
-        let days = Int((Date().timeIntervalSince(date) / 86_400).rounded())
-        if days <= 1 { return "from yesterday" }
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return "from earlier today" }
+        if calendar.isDateInYesterday(date) { return "from yesterday" }
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: Date())).day ?? 0
         if days < 7 { return "from \(date.formatted(.dateTime.weekday(.wide)))" }
         return "from \(date.formatted(.dateTime.month(.abbreviated).day()))"
     }
