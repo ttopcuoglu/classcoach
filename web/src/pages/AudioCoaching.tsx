@@ -2292,7 +2292,6 @@ function ReportPanel({
           segments={session.segments}
           externalFocus={externalFocus}
           onExternalFocusHandled={() => setExternalFocus(null)}
-          onReturnToReport={() => setTab('summary')}
         />
       )}
 
@@ -2939,7 +2938,6 @@ function ReflectTab({
   segments,
   externalFocus,
   onExternalFocusHandled,
-  onReturnToReport,
 }: {
   highlights: AudioHighlight[] | null
   cfuMetric: { state: string }
@@ -2975,7 +2973,6 @@ function ReflectTab({
   segments: TranscriptSegment[]
   externalFocus: { label: string; focus: string; timestampSec: number | null } | null
   onExternalFocusHandled: () => void
-  onReturnToReport: () => void
 }) {
   const started = conversation != null && conversation.length > 0
   const userTurnCount = conversation?.filter((m) => m.role === 'user').length ?? 0
@@ -2992,7 +2989,7 @@ function ReflectTab({
   const [userTranscript, setUserTranscript] = useState<string | null>(
     () => [...(conversation ?? [])].reverse().find((m) => m.role === 'user')?.text ?? null,
   )
-  // "Change topic" opens this picker inside the conversation instead of
+  // "Let's discuss another moment" opens this picker inside the conversation instead of
   // sending the teacher back to the starting screen.
   const [pickingTopic, setPickingTopic] = useState(false)
 
@@ -3038,7 +3035,7 @@ function ReflectTab({
   // Replies already in the conversation when this tab opens are never read
   // aloud again — only new ones are.
   const spokenCountRef = useRef(conversation?.length ?? 0)
-  // The reply currently being read aloud, so Finish, Change topic and
+  // The reply currently being read aloud, so Finish, switching topic and
   // leaving the tab can cut Coach off mid-sentence rather than letting the
   // rest of the queue play out.
   const playbackRef = useRef<PlaybackQueue | null>(null)
@@ -3091,7 +3088,7 @@ function ReflectTab({
     for (const sentence of sentences) queue.push(sentence)
     queue.end()
     queue.finished.then(() => {
-      // A cancelled queue was stopped on purpose (Finish, Change topic,
+      // A cancelled queue was stopped on purpose (Finish, switching topic,
       // leaving) — don't reopen the mic behind the teacher's back.
       if (playbackRef.current !== queue) return
       playbackRef.current = null
@@ -3529,28 +3526,6 @@ function ReflectTab({
                   </button>
                 </div>
               )}
-            </div>
-
-            <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1.5">
-              {!locked && (
-                <button
-                  type="button"
-                  onClick={handleChangeTopic}
-                  className="text-xs font-semibold text-ink-soft hover:text-ink"
-                >
-                  Change topic
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  stopCoach()
-                  onReturnToReport()
-                }}
-                className="text-xs font-semibold text-ink-soft hover:text-ink"
-              >
-                Return to the report
-              </button>
             </div>
 
             <div className="flex flex-col gap-3">
