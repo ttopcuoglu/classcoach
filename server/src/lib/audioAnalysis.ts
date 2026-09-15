@@ -346,10 +346,9 @@ export function detectLessonContent(segments: Segment[], phases: Phase[]): Lesso
   }
 }
 
-// Common capitalized discourse markers, days, and subjects that a naive
-// "any capitalized word" scan would otherwise miscount as a student's
-// name — see countNameMentions below for why this list matters more once
-// sentence-initial words are back in play.
+// Capitalized words that are never a student being addressed: discourse
+// markers, praise words, days, months, subjects, and ways of addressing the
+// whole room.
 const NAME_MENTION_STOPWORDS = new Set([
   'okay', 'ok', 'so', 'now', 'well', 'great', 'good', 'alright', 'first',
   'next', 'then', 'today', 'yes', 'no', 'yeah', 'yep', 'nope', 'actually',
@@ -358,45 +357,74 @@ const NAME_MENTION_STOPWORDS = new Set([
   'saturday', 'sunday', 'january', 'february', 'march', 'april', 'may',
   'june', 'july', 'august', 'september', 'october', 'november', 'december',
   'math', 'science', 'english', 'history', 'reading', 'writing', 'spelling',
+  'thank', 'thanks', 'please', 'sorry', 'right', 'sure', 'cool', 'awesome',
+  'perfect', 'excellent', 'exactly', 'correct', 'nice', 'wow', 'oh', 'um',
+  'uh', 'hmm', 'hi', 'hey', 'hello', 'everyone', 'everybody', 'guys', 'class',
+  'folks', 'friends', 'students', 'kids', 'boys', 'girls', 'sir', 'miss',
+  'mister', 'teacher', 'let', 'lets', 'who', 'what', 'why', 'how', 'when',
+  'where', 'which', 'if', 'but', 'and', 'or', 'because', 'however', 'anyway',
+  'listen', 'look', 'wait', 'stop', 'go', 'come', 'raise', 'hands',
 ])
 
-// A plain "any capitalized word" regex badly over-counts on its own: every
-// sentence's first word is capitalized regardless of content, and common
-// capitalized interjections ("Okay", "Great", "Now") show up constantly in
-// classroom talk — on a real transcript this alone can produce a count
-// like "20" for a 90-second clip with zero actual names said. Genuine
-// names are capitalized wherever they land in a sentence, while ordinary
-// words are (almost) only capitalized by sentence position, so mid-
-// sentence capitalization plus a known non-name stopword list rules out
-// most of that noise. But a sentence's first word can't just be skipped
-// outright either — "Sarah, can you..." (direct address) is one of the
-// most common ways a teacher actually says a student's name, and it's
-// always the sentence's first word. The distinguishing signal kept here:
-// a sentence-initial capitalized word only counts if it's immediately
-// followed by a comma (the vocative-address pattern) — an ordinary
-// sentence-starter like "Now, let's..." or "Okay, everyone..." has that
-// same comma shape, which is exactly why the stopword list still applies
-// to it too. Still a heuristic, not verified against a roster — like
-// every other count in this file, it's a suggestion for the coach to
-// confirm, not a fact.
-// Returns each detected name-like mention as its own entry (not just a
-// count) so a caller can tell "the same name said 20 times" apart from
-// "20 different names said once each" — a very different classroom signal
-// a bare count can't distinguish.
-function extractNameMentions(text: string): string[] {
-  const mentions: string[] = []
+// Words that, right before a capitalized word, mark it as someone being
+// spoken to: "Thank you, Sarah", "Go ahead Marcus", "Nice job, Aaliyah".
+// Words that follow "Name," when the teacher is talking to that student
+// ("Sarah, can you…", "Marcus, please sit") — and not when a lesson topic
+// opens a sentence ("Egypt, however, …", "Hamlet, like Marcus, …").
+const ADDRESS_FOLLOWERS = new Set([
+  'can', 'could', 'would', 'will', 'do', 'did', 'are', 'what', 'why', 'how', 'where', 'who', 'when',
+  'you', 'your', 'youre', 'please', 'go', 'come', 'let', 'tell', 'read', 'share', 'try', 'give',
+  'eyes', 'stop', 'sit', 'put', 'thank', 'thanks', 'nice', 'great', 'good', 'excellent', 'i', 'thats',
+  'yes', 'okay', 'ok', 'hands', 'look', 'listen', 'wait',
+])
+
+const ADDRESS_LEADS = new Set(['thanks', 'you', 'yes', 'ahead', 'nice', 'job', 'okay', 'ok', 'please', 'hi', 'hey', 'morning', 'right', 'sure', 'great', 'good'])
+
+// Counting every capitalized word as a student's name badly over-counts:
+// transcription capitalizes lesson content too — a character, a city, a
+// historical figure — so a lecture with no students in the room could report
+// dozens of "names". Teachers use a student's name to *address* them, so a
+// word only counts when it is set off like direct address:
+//   - it opens the sentence followed by a comma ("Sarah, can you…"),
+//   - it closes the sentence after a comma ("What do you think, Sarah?"),
+//   - or it follows an address phrase ("Thank you, Marcus", "Go ahead Jordan").
+// Every other capitalized occurrence is tallied as content, and a word used
+// more often as content than as address is dropped entirely (the novel's
+// protagonist is not a student). Still a heuristic, not a roster — like every
+// count in this file, a suggestion for the coach to confirm.
+function extractCapitalizedWords(text: string): { addressed: string[]; content: string[] } {
+  const addressed: string[] = []
+  const content: string[] = []
   for (const { sentence } of splitSentences(text)) {
-    const words = sentence.split(/\s+/)
+    const words = sentence.split(/\s+/).filter(Boolean)
     for (let i = 0; i < words.length; i++) {
       const raw = words[i]
       const cleaned = raw.replace(/[^A-Za-z]/g, '')
       if (!/^[A-Z][a-z]+$/.test(cleaned)) continue
       if (NAME_MENTION_STOPWORDS.has(cleaned.toLowerCase())) continue
-      if (i === 0 && !raw.endsWith(',')) continue
-      mentions.push(cleaned)
+      const previous = i > 0 ? words[i - 1] : ''
+      const previousWord = previous.replace(/[^A-Za-z]/g, '').toLowerCase()
+      const last = i === words.length - 1
+      const nextWord = (words[i + 1] ?? '').replace(/[^A-Za-z]/g, '').toLowerCase()
+      const opensWithComma = i === 0 && raw.endsWith(',') && ADDRESS_FOLLOWERS.has(nextWord)
+      const closesAfterComma = last && previous.endsWith(',')
+      const afterAddressLead = i > 0 && ADDRESS_LEADS.has(previousWord) && (last || raw.endsWith(','))
+      if (opensWithComma || closesAfterComma || afterAddressLead) addressed.push(cleaned)
+      else if (i > 0) content.push(cleaned)
     }
   }
-  return mentions
+  return { addressed, content }
+}
+
+// Session-level filter over every teacher segment's capitalized words.
+function resolveNameMentions(addressed: string[], content: string[], hasStudentTalk: boolean): string[] {
+  // No student voice anywhere means nobody was there to be called on.
+  if (!hasStudentTalk) return []
+  const contentCounts = new Map<string, number>()
+  for (const word of content) contentCounts.set(word.toLowerCase(), (contentCounts.get(word.toLowerCase()) ?? 0) + 1)
+  const addressedCounts = new Map<string, number>()
+  for (const word of addressed) addressedCounts.set(word.toLowerCase(), (addressedCounts.get(word.toLowerCase()) ?? 0) + 1)
+  return addressed.filter((word) => (contentCounts.get(word.toLowerCase()) ?? 0) <= (addressedCounts.get(word.toLowerCase()) ?? 0))
 }
 
 function countPhraseMatches(text: string, phrases: string[]): number {
@@ -488,7 +516,8 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
   const toneLog: ToneLogEntry[] = []
   let genericFeedbackCount = 0
   let specificFeedbackCount = 0
-  const nameMentions: string[] = []
+  const addressedWords: string[] = []
+  const contentWords: string[] = []
 
   const waitTimes: number[] = []
   const highlights: Highlight[] = []
@@ -665,12 +694,20 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
         awaitingStudentAnswer = true
       }
 
-      nameMentions.push(...extractNameMentions(segment.text))
+      const capitalized = extractCapitalizedWords(segment.text)
+      addressedWords.push(...capitalized.addressed)
+      contentWords.push(...capitalized.content)
     } else {
       readyForFollowUp = awaitingStudentAnswer
       awaitingStudentAnswer = false
     }
   })
+
+  const nameMentions = resolveNameMentions(
+    addressedWords,
+    contentWords,
+    ordered.some((segment) => segment.speakerLabel === 'Student'),
+  )
 
   if (currentMonologueSec > 0) {
     monologueCandidates.push({ durationSec: currentMonologueSec, startSec: currentMonologueStartSec, text: currentMonologueText })
