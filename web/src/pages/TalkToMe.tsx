@@ -5,6 +5,7 @@ import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import {
   generateTalkTakeaway,
   getDebriefs,
+  getFollowUp,
   getProfile,
   saveDebriefReflection,
   sendDebriefChat,
@@ -12,6 +13,7 @@ import {
   startTalkToMe,
   streamCoachReply,
   type ApiError,
+  type CoachFollowUp,
   type ChatMessage,
   type Debrief,
   type TalkTakeaway,
@@ -53,6 +55,15 @@ const EXPERIENCED_PROMPTS = [
 // you're still inside. The openers are first-person on purpose: they're
 // sent verbatim as the teacher's first turn, so they have to be things a
 // teacher would actually say.
+// Answers to Coach's check-in question — tapping one starts the conversation
+// exactly like any other prompt, with the check-in's plan as context.
+const CHECK_IN_PROMPTS = [
+  'It went well.',
+  'It went okay, but not quite how I planned.',
+  "It didn't work.",
+  "I haven't had a chance to try it yet.",
+]
+
 const DEBRIEF_PROMPTS = [
   'I tried the plan and here\u2019s what happened.',
   'It went better than I expected.',
@@ -129,6 +140,12 @@ export default function TalkToMe() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const isDebrief = searchParams.get('mode') === 'debrief'
+  const followUpId = searchParams.get('followUp')
+  // The check-in this conversation answers, when opened from Home. Only
+  // passed with the first turn; later turns continue that same conversation.
+  const [followUp, setFollowUp] = useState<CoachFollowUp | null>(null)
+  const followUpRef = useRef<CoachFollowUp | null>(null)
+  followUpRef.current = followUp
   const [phase, setPhase] = useState<Phase>('idle')
   const [debrief, setDebrief] = useState<Debrief | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -234,6 +251,16 @@ export default function TalkToMe() {
     }
   }, [fatalError])
 
+  useEffect(() => {
+    if (!followUpId) {
+      setFollowUp(null)
+      return
+    }
+    getFollowUp(followUpId)
+      .then((f) => setFollowUp(f.status === 'dismissed' ? null : f))
+      .catch(() => setFollowUp(null))
+  }, [followUpId])
+
   // Loaded once up front so a saved takeaway from a past session shows up
   // on the starting screen without waiting on anything else.
   useEffect(() => {
@@ -281,7 +308,9 @@ export default function TalkToMe() {
     if (mutedRef.current) {
       try {
         const current = debriefRef.current
-        const result = current ? await sendDebriefChat(current.id, text) : await startTalkToMe(text)
+        const result = current
+          ? await sendDebriefChat(current.id, text)
+          : await startTalkToMe(text, followUpRef.current?.id)
         setDebrief(result)
         resumeListeningIfActive()
       } catch (err) {
@@ -307,10 +336,15 @@ export default function TalkToMe() {
     queueRef.current = queue
     try {
       const current = debriefRef.current
-      const result = await streamCoachReply(current ? current.id : null, text, (sentence) => {
-        if (!sessionActiveRef.current) return
-        queue.push(sentence)
-      })
+      const result = await streamCoachReply(
+        current ? current.id : null,
+        text,
+        (sentence) => {
+          if (!sessionActiveRef.current) return
+          queue.push(sentence)
+        },
+        followUpRef.current?.id,
+      )
       setDebrief(result)
       queue.end()
       await queue.finished
@@ -457,6 +491,7 @@ export default function TalkToMe() {
     setError(null)
     setNextStepOpen(false)
     setNextStepDraft('')
+    setFollowUp(null)
     setPhase('idle')
     // The saved list was loaded when the page opened. A conversation resumed
     // since then has more turns and possibly a newer takeaway, and a stale
@@ -581,6 +616,11 @@ export default function TalkToMe() {
                     <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">What I'll notice</p>
                     <p className="mt-1.5 text-sm text-ink">{takeaway.notice}</p>
                   </div>
+                  {!isDebrief && (
+                    <p className="text-center text-xs text-ink-soft">
+                      Coach will check in with you about this in a few days.
+                    </p>
+                  )}
                 </div>
               </>
             ) : null}
@@ -766,15 +806,17 @@ export default function TalkToMe() {
               {!debrief && phase === 'idle' && !showTypeInput && (
                 <div className="mt-2">
                   <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">
-                    {isDebrief ? 'Debrief' : 'A moment for your teaching'}
+                    {followUp ? 'Coach is checking in' : isDebrief ? 'Debrief' : 'A moment for your teaching'}
                   </p>
                   <h1 className="mt-2 font-heading text-2xl font-bold text-cream sm:text-3xl">
-                    {isDebrief ? 'How did it go?' : "What's on your mind today?"}
+                    {followUp ? followUp.checkInQuestion : isDebrief ? 'How did it go?' : "What's on your mind today?"}
                   </h1>
                   <p className="mt-1.5 text-sm text-cream/70">
-                    {isDebrief
-                      ? "Start wherever you like — Coach will walk through the rest with you."
-                      : 'Talk through a challenge, find the right words, or reflect on your day.'}
+                    {followUp
+                      ? 'Say how it went — good, bad, or not yet. Coach will take it from there.'
+                      : isDebrief
+                        ? "Start wherever you like — Coach will walk through the rest with you."
+                        : 'Talk through a challenge, find the right words, or reflect on your day.'}
                   </p>
                 </div>
               )}
@@ -782,6 +824,12 @@ export default function TalkToMe() {
 
             {!debrief && phase === 'idle' && !showTypeInput ? (
               <div className="flex w-full max-w-md flex-col gap-4">
+                {followUp && (
+                  <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5 text-left">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">What you planned to try</p>
+                    <p className="mt-1.5 text-sm text-ink">{followUp.plan}</p>
+                  </div>
+                )}
                 {isDebrief && (
                   <ul className="flex flex-col gap-1.5 rounded-2xl bg-mint-tint/50 p-5 text-left">
                     {DEBRIEF_QUESTIONS.map((question) => (
@@ -792,7 +840,7 @@ export default function TalkToMe() {
                   </ul>
                 )}
                 <div className="flex flex-col gap-2">
-                  {(isDebrief ? DEBRIEF_PROMPTS : (examplePrompts ?? [])).map((prompt, i) => (
+                  {(followUp ? CHECK_IN_PROMPTS : isDebrief ? DEBRIEF_PROMPTS : (examplePrompts ?? [])).map((prompt, i) => (
                     <button
                       key={prompt}
                       type="button"
@@ -807,7 +855,7 @@ export default function TalkToMe() {
                   ))}
                 </div>
 
-                {!isDebrief && (
+                {!isDebrief && !followUp && (
                   <Link
                     to="/guide/talk-it-through"
                     className="text-xs font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta-600"

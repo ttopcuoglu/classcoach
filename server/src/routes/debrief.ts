@@ -9,6 +9,7 @@ import {
   MEMORY_UPDATE_TOKEN_BUFFER,
 } from '../lib/coachMemory.ts'
 import { buildExperienceContextBlock } from '../lib/experience.ts'
+import { buildFollowUpContextBlock, checkInQuestionFor, nextCheckInDate } from '../lib/followUps.ts'
 import {
   appendTurn,
   CHAT_TURN_CAP,
@@ -136,6 +137,9 @@ One concrete, small next step that came out of the conversation, or that clearly
 <notice>
 One specific thing worth paying attention to next time, tied to what was discussed.
 </notice>
+<check_in>
+The short, warm question you'll ask the teacher a few days from now to see how the next step went. Second person, name the specific step and its setting if one was mentioned, and end with a question — e.g. "You were going to greet students at the door before 3rd period. How did that go?" Under 25 words. Never include a student's, parent's, or colleague's name.
+</check_in>
 ${CORE_COACHING_RULES}`
 
 function isValidCategory(value: unknown): value is string {
@@ -346,8 +350,22 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
   }
 }
 
+// A conversation opened from a check-in on Home: the teacher's pending
+// follow-up, or null when there isn't one (or it isn't theirs).
+async function findPendingFollowUp(userId: string, followUpId: unknown) {
+  if (typeof followUpId !== 'string' || !followUpId) return null
+  return prisma.coachFollowUp.findFirst({ where: { id: followUpId, userId, status: { not: 'dismissed' } } })
+}
+
+async function markFollowUpAnswered(followUpId: string, debriefId: string) {
+  await prisma.coachFollowUp.update({
+    where: { id: followUpId },
+    data: { status: 'talked', respondedDebriefId: debriefId },
+  })
+}
+
 debriefRouter.post('/talk/stream', async (req, res) => {
-  const { message } = req.body ?? {}
+  const { message, followUpId } = req.body ?? {}
   if (typeof message !== 'string' || !message.trim()) {
     res.status(400).json({ error: 'message is required' })
     return
@@ -373,24 +391,29 @@ debriefRouter.post('/talk/stream', async (req, res) => {
   void logUsage(userId, 'talk_to_me')
 
   const memoryOn = (user?.coachMemoryEnabled ?? false) && hasActivePlanFor(user)
+  const followUp = await findPendingFollowUp(userId, followUpId)
+  const talkPrompt = `${TALK_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}`
 
   await streamCoachReply(res, 'talk_start', {
     gateMs: Date.now() - gateStart,
     systemPrompt: memoryOn
-      ? `${TALK_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
-      : `${TALK_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}`,
+      ? `${talkPrompt}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+      : talkPrompt,
     maxTokens: memoryOn ? 110 + MEMORY_UPDATE_TOKEN_BUFFER : 110,
     messages: [{ role: 'user', content: trimmed }],
     safetyLabel: 'debrief.talk',
-    persist: (reply) =>
-      prisma.debrief.create({
+    persist: async (reply) => {
+      const created = await prisma.debrief.create({
         data: {
           userId,
           incidentText: trimmed,
           source: 'talk_to_me',
           conversation: appendTurn([], trimmed, reply),
         },
-      }),
+      })
+      if (followUp) await markFollowUpAnswered(followUp.id, created.id)
+      return created
+    },
     afterPersist: memoryOn
       ? async (rawText) => {
           const updated = applyMemoryUpdate(extractTag(rawText, 'memory_update'), user!.coachMemory)
@@ -469,7 +492,7 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
 })
 
 debriefRouter.post('/talk', async (req, res) => {
-  const { message } = req.body ?? {}
+  const { message, followUpId } = req.body ?? {}
   if (typeof message !== 'string' || !message.trim()) {
     res.status(400).json({ error: 'message is required' })
     return
@@ -488,14 +511,16 @@ debriefRouter.post('/talk', async (req, res) => {
       select: { coachMemory: true, coachMemoryEnabled: true, experienceLevel: true },
     })
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
+    const followUp = await findPendingFollowUp(req.user!.userId, followUpId)
+    const talkPrompt = `${TALK_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}`
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: memoryOn ? 110 + MEMORY_UPDATE_TOKEN_BUFFER : 110,
       thinking: { type: 'disabled' },
       system: memoryOn
-        ? `${TALK_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
-        : `${TALK_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}`,
+        ? `${talkPrompt}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+        : talkPrompt,
       messages: [{ role: 'user', content: trimmed }],
     })
     const text = response.content
@@ -514,6 +539,7 @@ debriefRouter.post('/talk', async (req, res) => {
     const debrief = await prisma.debrief.create({
       data: { userId: req.user!.userId, incidentText: trimmed, source: 'talk_to_me', conversation },
     })
+    if (followUp) await markFollowUpAnswered(followUp.id, debrief.id)
 
     if (memoryOn) {
       const memoryUpdate = applyMemoryUpdate(extractTag(text, 'memory_update'), user!.coachMemory)
@@ -637,7 +663,7 @@ debriefRouter.post('/:id/takeaway', async (req, res) => {
     const transcript = existing.map((m) => `${m.role === 'assistant' ? 'Coach' : 'Teacher'}: ${m.text}`).join('\n')
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 300,
+      max_tokens: 380,
       system: TALK_TAKEAWAY_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: transcript }],
     })
@@ -659,6 +685,29 @@ debriefRouter.post('/:id/takeaway', async (req, res) => {
       where: { id: debrief.id },
       data: { talkTakeaway: { explored, tryNext, notice } },
     })
+
+    // Schedule Coach's check-in on the step. A takeaway regenerated after the
+    // teacher continued the conversation replaces the plan and restarts the
+    // clock, unless they already answered or dismissed the earlier one.
+    const checkInQuestion = checkInQuestionFor(extractTag(text, 'check_in'), tryNext)
+    const existingFollowUp = await prisma.coachFollowUp.findUnique({ where: { sourceDebriefId: debrief.id } })
+    if (!existingFollowUp) {
+      await prisma.coachFollowUp.create({
+        data: {
+          userId: req.user!.userId,
+          sourceDebriefId: debrief.id,
+          plan: tryNext,
+          checkInQuestion,
+          dueAt: nextCheckInDate(),
+        },
+      })
+    } else if (existingFollowUp.status === 'pending') {
+      await prisma.coachFollowUp.update({
+        where: { id: existingFollowUp.id },
+        data: { plan: tryNext, checkInQuestion, dueAt: nextCheckInDate() },
+      })
+    }
+
     res.json(updated)
   } catch (error) {
     console.error('[debrief] takeaway failed:', error)

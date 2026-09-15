@@ -947,13 +947,14 @@ export async function streamCoachReply(
   id: string | null,
   message: string,
   onSentence: (sentence: string) => void,
+  followUpId?: string | null,
 ): Promise<Debrief> {
   const path = id ? `/api/debriefs/${id}/chat/stream` : '/api/debriefs/talk/stream'
   const res = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ message }),
+    body: JSON.stringify(id ? { message } : { message, followUpId: followUpId ?? undefined }),
   })
   // Everything the caller can act on (turn cap, daily limit) is rejected
   // before the stream starts, so it still arrives as a normal status code.
@@ -993,8 +994,34 @@ export async function streamCoachReply(
   return debrief
 }
 
-export function startTalkToMe(message: string): Promise<Debrief> {
-  return request('/api/debriefs/talk', { method: 'POST', body: JSON.stringify({ message }) })
+export function startTalkToMe(message: string, followUpId?: string | null): Promise<Debrief> {
+  return request('/api/debriefs/talk', {
+    method: 'POST',
+    body: JSON.stringify({ message, followUpId: followUpId ?? undefined }),
+  })
+}
+
+// Coach's check-in on a step the teacher planned in Talk It Through.
+export type CoachFollowUp = {
+  id: string
+  plan: string
+  checkInQuestion: string
+  dueAt: string
+  status: 'pending' | 'talked' | 'dismissed'
+  createdAt: string
+  sourceDebriefId: string
+}
+
+export function getDueFollowUps(): Promise<CoachFollowUp[]> {
+  return request('/api/follow-ups/due')
+}
+
+export function getFollowUp(id: string): Promise<CoachFollowUp> {
+  return request(`/api/follow-ups/${id}`)
+}
+
+export function updateFollowUp(id: string, action: 'snooze' | 'dismiss'): Promise<CoachFollowUp> {
+  return request(`/api/follow-ups/${id}`, { method: 'PATCH', body: JSON.stringify({ action }) })
 }
 
 export function generateTalkTakeaway(id: string): Promise<Debrief> {

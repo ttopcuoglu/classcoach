@@ -12,6 +12,7 @@ import { billingWebhookRouter } from './routes/billingWebhook.ts'
 import { conversationPlanRouter } from './routes/conversationPlan.ts'
 import { conversationPrepRouter } from './routes/conversationPrep.ts'
 import { debriefRouter } from './routes/debrief.ts'
+import { followUpsRouter } from './routes/followUps.ts'
 import { lessonPlansRouter } from './routes/lessonPlans.ts'
 import { onboardingRouter } from './routes/onboarding.ts'
 import { parentMessageRouter } from './routes/parentMessage.ts'
@@ -59,6 +60,7 @@ app.use('/api/scenarios', requireAuth, scenariosRouter)
 app.use('/api/attempts', requireAuth, attemptsRouter)
 app.use('/api/profile', requireAuth, profileRouter)
 app.use('/api/debriefs', requireAuth, debriefRouter)
+app.use('/api/follow-ups', requireAuth, followUpsRouter)
 app.use('/api/parent-messages', requireAuth, parentMessageRouter)
 app.use('/api/admin', requireAuth, adminRouter)
 app.use('/api/billing', requireAuth, billingRouter)

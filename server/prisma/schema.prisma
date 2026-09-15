@@ -71,6 +71,7 @@ model User {
   conversationPlans ConversationPlan[]
   assignmentCoachSessions AssignmentCoachSession[]
   pdFocusAreas      PdFocusArea[]
+  coachFollowUps    CoachFollowUp[]
 }
 
 // A school/district that's signed an agreement. joinCode is what its
@@ -212,6 +213,31 @@ model Debrief {
   // Reflection timeline (Practiced -> Tried in class -> Reflected).
   triedAt        DateTime?
   reflectionNote String?
+
+  // The check-in scheduled from this conversation's takeaway, if any.
+  coachFollowUp CoachFollowUp? @relation("FollowUpSource")
+}
+
+// Coach coming back to ask how a planned step went. Created from a Talk It
+// Through takeaway's "try next"; shown on Home once dueAt passes, and opens
+// Talk It Through with the plan as context. status: "pending" (not yet
+// answered) | "talked" (the teacher started a check-in conversation) |
+// "dismissed". Snoozing just moves dueAt.
+model CoachFollowUp {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceDebriefId    String   @unique
+  sourceDebrief      Debrief  @relation("FollowUpSource", fields: [sourceDebriefId], references: [id], onDelete: Cascade)
+  plan               String
+  checkInQuestion    String
+  dueAt              DateTime
+  status             String   @default("pending")
+  respondedDebriefId String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([userId, status, dueAt])
 }
 
 // Backs "Write a Message". tone is one of: warm, professional, firm, urgent

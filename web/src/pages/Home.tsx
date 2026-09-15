@@ -18,9 +18,12 @@ import {
   getAudioSessions,
   getConversationPlans,
   getDebriefs,
+  getDueFollowUps,
   getLessonPlans,
   getProfile,
+  updateFollowUp,
   type AudioSession,
+  type CoachFollowUp,
   type ExperienceLevel,
   type Debrief,
   type ScenarioAttempt,
@@ -101,6 +104,14 @@ const COACHING_PATH = [
   { label: 'Reflect', description: 'See what changed, and what to try next.' },
 ]
 
+// "From Tuesday" reads better than a date for something a few days old.
+function checkInAge(createdAt: string): string {
+  const days = Math.round((Date.now() - new Date(createdAt).getTime()) / DAY_MS)
+  if (days <= 1) return 'from yesterday'
+  if (days < 7) return `from ${new Date(createdAt).toLocaleDateString(undefined, { weekday: 'long' })}`
+  return `from ${new Date(createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+}
+
 function Donut({ pct }: { pct: number }) {
   const size = 96
   const stroke = 10
@@ -148,6 +159,7 @@ export default function Home() {
   // timestamp below to get the true overall last-activity time.
   const [latestOtherActivityAt, setLatestOtherActivityAt] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
+  const [checkIn, setCheckIn] = useState<CoachFollowUp | null>(null)
   const [mood, setMood] = useState<Mood | null>(null)
   const [tip, setTip] = useState(() => pickDailyTip(null))
 
@@ -158,6 +170,10 @@ export default function Home() {
         setExperienceLevel(profile.experienceLevel)
         setNeedsOnboarding(!profile.name && !profile.gradeLevels && !profile.subjects)
       })
+      .catch(() => {})
+
+    getDueFollowUps()
+      .then((due) => setCheckIn(due[0] ?? null))
       .catch(() => {})
 
     getAudioSessions()
@@ -202,6 +218,15 @@ export default function Home() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
+
+  // Either way the card goes: "later" brings it back in a couple of days,
+  // "dismiss" drops it for good. Failures just leave the card up to retry.
+  function handleCheckInAction(action: 'snooze' | 'dismiss') {
+    if (!checkIn) return
+    const current = checkIn
+    setCheckIn(null)
+    updateFollowUp(current.id, action).catch(() => setCheckIn(current))
+  }
 
   function handleMoodSelect(value: Mood) {
     setMood(value)
@@ -365,6 +390,38 @@ export default function Home() {
           </Link>
         </div>
       </div>
+
+      {checkIn && (
+        <div className="flex flex-col gap-4 rounded-3xl border-l-8 border-gold bg-gold-tint/60 p-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-4">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-forest text-gold">
+              <HeadsetIcon className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
+                Coach is checking in · {checkInAge(checkIn.createdAt)}
+              </p>
+              <p className="mt-1.5 font-heading text-lg font-bold text-forest">{checkIn.checkInQuestion}</p>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-3 sm:flex-col sm:items-end">
+            <Link
+              to={`/talk-to-me?followUp=${checkIn.id}`}
+              className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream shadow-sm transition-colors hover:bg-terracotta/90"
+            >
+              Tell Coach how it went →
+            </Link>
+            <div className="flex gap-4 text-xs font-medium text-ink-soft">
+              <button type="button" onClick={() => handleCheckInAction('snooze')} className="hover:text-forest">
+                Remind me later
+              </button>
+              <button type="button" onClick={() => handleCheckInAction('dismiss')} className="hover:text-terracotta-600">
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {needsOnboarding && (
         <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
