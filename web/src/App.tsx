@@ -29,6 +29,7 @@ const LessonPlanExport = lazy(() => import('./pages/LessonPlanExport'))
 const TalkItThroughExport = lazy(() => import('./pages/TalkItThroughExport'))
 const AskPracticeExport = lazy(() => import('./pages/AskPracticeExport'))
 const CommunicationExport = lazy(() => import('./pages/CommunicationExport'))
+const AdminPilotReport = lazy(() => import('./pages/AdminPilotReport'))
 const TalkToMe = lazy(() => import('./pages/TalkToMe'))
 const Onboarding = lazy(() => import('./pages/Onboarding'))
 const Terms = lazy(() => import('./pages/Terms'))
@@ -162,6 +163,14 @@ export default function App() {
               element={
                 <RequireAuth user={user} loading={loading} onSignedIn={refreshUser}>
                   <Export />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="admin/pilot-report"
+              element={
+                <RequireAuth user={user} loading={loading} onSignedIn={refreshUser}>
+                  {user != null && user.role !== 'teacher' ? <AdminPilotReport /> : <Navigate to="/" replace />}
                 </RequireAuth>
               }
             />

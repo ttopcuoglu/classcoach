@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   archivePdFocusArea,
   createOrganization,
@@ -35,6 +36,7 @@ import {
   type SchoolInquiry,
 } from '../lib/api'
 import { categoryLabel } from '../lib/categories'
+import { PRIORITY_LABELS } from '../lib/adminLabels'
 import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import { CHALLENGE_TYPES, MESSAGE_PURPOSES, challengeLabel, purposeLabel } from '../lib/communicationOptions'
 import { ChartBarIcon, ChatBubbleIcon, HomeIcon, LockIcon, ShieldIcon, UserIcon } from '../components/icons'
@@ -418,13 +420,23 @@ function FilterBar({
           ))}
         </select>
 
+        <Link
+          to={`/admin/pilot-report?${new URLSearchParams({
+            ...(selectedOrgId ? { organizationId: selectedOrgId } : {}),
+            startDate,
+            endDate,
+          }).toString()}`}
+          className="ml-auto rounded-lg bg-forest px-3 py-1.5 text-xs font-semibold text-cream hover:bg-forest/90"
+        >
+          Pilot report (PDF)
+        </Link>
         <a
           href={getAdminExportUrl({ organizationId: selectedOrgId || undefined, startDate, endDate, gradeBand: gradeBand || undefined, subject: subject || undefined })}
           target="_blank"
           rel="noreferrer"
-          className="ml-auto rounded-lg border border-hairline px-3 py-1.5 text-xs font-semibold text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600"
+          className="rounded-lg border border-hairline px-3 py-1.5 text-xs font-semibold text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600"
         >
-          Export report
+          Export data (CSV)
         </a>
       </div>
 
@@ -804,14 +816,6 @@ function MemberRow({
       </td>
     </tr>
   )
-}
-
-const PRIORITY_LABELS: Record<string, string> = {
-  'talk-balance': 'Talk time balance',
-  questioning: 'Higher-order questioning',
-  'wait-time': 'Wait time after questions',
-  cfu: 'Checking for understanding',
-  feedback: 'Specific feedback',
 }
 
 // A staff-wide, deterministic coach-voice observation — same discipline as
