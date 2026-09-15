@@ -179,7 +179,15 @@ export type BreakdownHeadlineMetrics = {
 
 export type AdminBreakdownBucket =
   | { bucket: string; suppressed: true }
-  | { bucket: string; suppressed: false; teacherCount: number; metrics: BreakdownHeadlineMetrics }
+  | {
+      bucket: string
+      suppressed: false
+      teacherCount: number
+      // The smaller groups merged into this one because each had too few
+      // teachers to show on its own, e.g. ["Grades 6-8", "Grades 9-12"].
+      combined?: string[]
+      metrics: BreakdownHeadlineMetrics
+    }
 
 export type AdminBreakdown = {
   by: 'gradeBand' | 'subject'
@@ -745,6 +753,23 @@ export function getAdminBreakdown(params: {
   const query = new URLSearchParams({ by: params.by })
   if (params.organizationId) query.set('organizationId', params.organizationId)
   return request(`/api/admin/overview/breakdown?${query.toString()}`)
+}
+
+// How many teachers picked each My Growth focus (see /overview/focus-areas).
+export type AdminFocusAreas =
+  | { suppressed: true; minTeachers: number }
+  | {
+      suppressed: false
+      minTeachers: number
+      totalTeachers: number
+      areas: { metric: FocusMetric; count: number }[]
+      otherCount: number
+    }
+
+export function getAdminFocusAreas(organizationId?: string): Promise<AdminFocusAreas> {
+  return request(
+    `/api/admin/overview/focus-areas${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`,
+  )
 }
 
 export function getOrganizationMembers(organizationId?: string): Promise<OrgMember[]> {

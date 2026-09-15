@@ -4,6 +4,7 @@ import { requireAdmin, requireSuperadmin } from '../lib/auth.ts'
 import { CHALLENGE_TYPES, MESSAGE_PURPOSES } from '../lib/communicationOptions.ts'
 import { MIN_DURATION_FOR_CFU_DETECTION_SEC, PRIORITY_LABELS, topPriorityForSession } from '../lib/coachingPriority.ts'
 import { generateUniqueJoinCode, normalizeJoinCode, parseAdminEmails, syncOrganizationRoles } from '../lib/organization.ts'
+import { mergeBreakdownGroups } from '../lib/breakdownGroups.ts'
 import { prisma } from '../lib/prisma.ts'
 import { SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
 import { stripe } from '../lib/stripe.ts'
@@ -757,25 +758,58 @@ adminRouter.get('/overview/breakdown', async (req, res) => {
     },
   })
 
+  type Row = (typeof sessions)[number]
+  const teachersIn = (rows: Row[]) => new Set(rows.map((r) => r.userId)).size
   const bucketKeys: readonly string[] = by === 'subject' ? SUBJECT_BUCKETS : GRADE_BANDS
-  const bucketOf = (s: (typeof sessions)[number]) =>
-    by === 'subject' ? subjectBucketFor(s.classSubject) : gradeBandFor(s.gradeLevel)
+  const bucketOf = (s: Row) => (by === 'subject' ? subjectBucketFor(s.classSubject) : gradeBandFor(s.gradeLevel))
 
-  const grouped = new Map<string, (typeof sessions)[number][]>(bucketKeys.map((k) => [k, []]))
+  const grouped = new Map<string, Row[]>(bucketKeys.map((k) => [k, []]))
   for (const s of sessions) {
     grouped.get(bucketOf(s))!.push(s)
   }
 
-  const breakdown = bucketKeys.map((bucket) => {
-    const rows = grouped.get(bucket) ?? []
-    const teacherCount = new Set(rows.map((r) => r.userId)).size
-    if (teacherCount < MIN_TEACHERS_FOR_BREAKDOWN) {
-      return { bucket, suppressed: true as const }
-    }
-    return { bucket, suppressed: false as const, teacherCount, metrics: computeHeadlineMetrics(rows) }
-  })
+  const groups = mergeBreakdownGroups(grouped, by, MIN_TEACHERS_FOR_BREAKDOWN)
+
+  const breakdown = groups.map((g) => ({
+    bucket: g.label,
+    suppressed: false as const,
+    teacherCount: teachersIn(g.rows),
+    combined: g.combined && g.combined.length > 1 ? g.combined : undefined,
+    metrics: computeHeadlineMetrics(g.rows),
+  }))
 
   res.json({ by, minTeachers: MIN_TEACHERS_FOR_BREAKDOWN, breakdown })
+})
+
+// "Where teachers are focusing" — how many teachers picked each My Growth
+// focus. Less identifying than instructional metrics (it's what someone
+// chose to work on, not how they teach), so the floor is lower, but a focus
+// only one teacher chose still folds into "other" rather than naming them.
+const MIN_TEACHERS_FOR_FOCUS = 3
+const MIN_TEACHERS_PER_FOCUS = 2
+
+adminRouter.get('/overview/focus-areas', async (req, res) => {
+  const resolved = await resolveScope(req, res)
+  if (!resolved) return
+  const { organizationId } = resolved
+
+  const users = await prisma.user.findMany({
+    where: { focusMetric: { not: null }, suspendedAt: null, ...(organizationId ? { organizationId } : {}) },
+    select: { focusMetric: true },
+  })
+  const counts = new Map<string, number>()
+  for (const u of users) counts.set(u.focusMetric!, (counts.get(u.focusMetric!) ?? 0) + 1)
+
+  if (users.length < MIN_TEACHERS_FOR_FOCUS) {
+    res.json({ suppressed: true, minTeachers: MIN_TEACHERS_FOR_FOCUS })
+    return
+  }
+  const areas = [...counts.entries()]
+    .filter(([, count]) => count >= MIN_TEACHERS_PER_FOCUS)
+    .sort((a, b) => b[1] - a[1])
+    .map(([metric, count]) => ({ metric, count }))
+  const otherCount = users.length - areas.reduce((sum, a) => sum + a.count, 0)
+  res.json({ suppressed: false, minTeachers: MIN_TEACHERS_FOR_FOCUS, totalTeachers: users.length, areas, otherCount })
 })
 
 // Names/emails only — no attempts, ratings, or any practice content. Only

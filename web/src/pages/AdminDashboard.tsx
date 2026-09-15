@@ -6,6 +6,8 @@ import {
   deleteOrganization,
   deleteUser,
   getAdminBreakdown,
+  getAdminFocusAreas,
+  type AdminFocusAreas,
   getAdminExportUrl,
   getAdminOverview,
   getAdminUsers,
@@ -33,6 +35,7 @@ import {
   type SchoolInquiry,
 } from '../lib/api'
 import { categoryLabel } from '../lib/categories'
+import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import { CHALLENGE_TYPES, MESSAGE_PURPOSES, challengeLabel, purposeLabel } from '../lib/communicationOptions'
 import { ChartBarIcon, ChatBubbleIcon, HomeIcon, LockIcon, ShieldIcon, UserIcon } from '../components/icons'
 
@@ -1132,7 +1135,15 @@ function BreakdownCard({ selectedOrgId }: { selectedOrgId: string }) {
 
       {by === 'none' && (
         <p className="mt-2 text-xs text-ink-soft">
-          See the same averages above split by grade band or subject, to spot where PD would help most.
+          See the same averages above split by grade band or subject, to spot where PD would help most. Groups with
+          fewer than 5 teachers are combined with their neighbours so no one can be singled out.
+        </p>
+      )}
+
+      {data && data.breakdown.length === 0 && (
+        <p className="mt-3 rounded-2xl bg-cream p-4 text-sm text-ink-soft">
+          Unlocks once at least {data.minTeachers} teachers have recorded a lesson. Until then, the school-wide averages
+          above are the most detailed view that keeps individual teachers private.
         </p>
       )}
 
@@ -1145,6 +1156,11 @@ function BreakdownCard({ selectedOrgId }: { selectedOrgId: string }) {
           {data.breakdown.map((entry) => (
             <div key={entry.bucket} className="rounded-xl border border-hairline/60 p-3">
               <p className="text-sm font-semibold text-ink">{entry.bucket}</p>
+              {!entry.suppressed && entry.combined && (
+                <p className="mt-0.5 text-xs text-ink-soft">
+                  Combines {entry.combined.join(', ')} — too few teachers in each to show separately
+                </p>
+              )}
               {entry.suppressed ? (
                 <p className="mt-2 text-xs text-ink-soft">
                   Not enough data yet — fewer than {data.minTeachers} teachers have a session here.
@@ -1190,6 +1206,71 @@ function BreakdownCard({ selectedOrgId }: { selectedOrgId: string }) {
               )}
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// What teachers chose to work on in My Growth — works for a small staff where
+// grade/subject averages can't be shown, since it's a choice, not a measure
+// of anyone's teaching. Suppression lives server-side.
+function FocusAreasCard({ selectedOrgId }: { selectedOrgId: string }) {
+  const [data, setData] = useState<AdminFocusAreas | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setData(null)
+    setError(null)
+    getAdminFocusAreas(selectedOrgId || undefined)
+      .then(setData)
+      .catch(() => setError('Could not load focus areas.'))
+  }, [selectedOrgId])
+
+  const maxCount = data && !data.suppressed ? Math.max(1, ...data.areas.map((a) => a.count), data.otherCount) : 1
+
+  return (
+    <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+      <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Where teachers are focusing</h2>
+      <p className="mt-1 text-xs text-ink-soft">
+        The growth focus each teacher chose for themselves in Lesson Debrief. A focus only one teacher picked is counted
+        under "other", so no one is named by their choice.
+      </p>
+
+      {error && <p className="mt-3 text-sm text-terracotta-600">{error}</p>}
+      {!data && !error && <p className="mt-3 text-sm text-ink-soft">Loading...</p>}
+
+      {data?.suppressed && (
+        <p className="mt-3 rounded-2xl bg-cream p-4 text-sm text-ink-soft">
+          Shows once at least {data.minTeachers} teachers have picked a focus.
+        </p>
+      )}
+
+      {data && !data.suppressed && (
+        <div className="mt-4 flex flex-col gap-2.5">
+          {data.areas.map((area) => (
+            <div key={area.metric} className="flex items-center gap-3">
+              <span className="w-44 shrink-0 text-sm text-ink">{FOCUS_METRIC_LABELS[area.metric] ?? area.metric}</span>
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-cream">
+                <div className="h-full rounded-full bg-forest" style={{ width: `${(area.count / maxCount) * 100}%` }} />
+              </div>
+              <span className="w-24 shrink-0 text-right text-sm text-ink-soft">
+                {area.count} teachers
+              </span>
+            </div>
+          ))}
+          {data.otherCount > 0 && (
+            <div className="flex items-center gap-3">
+              <span className="w-44 shrink-0 text-sm text-ink-soft">Other focus areas</span>
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-cream">
+                <div className="h-full rounded-full bg-hairline" style={{ width: `${(data.otherCount / maxCount) * 100}%` }} />
+              </div>
+              <span className="w-24 shrink-0 text-right text-sm text-ink-soft">
+                {data.otherCount} {data.otherCount === 1 ? 'teacher' : 'teachers'}
+              </span>
+            </div>
+          )}
+          <p className="mt-1 text-xs text-ink-soft">{data.totalTeachers} teachers have chosen a focus.</p>
         </div>
       )}
     </div>
@@ -1595,6 +1676,8 @@ function CoachingInsightsPanel({ overview, selectedOrgId }: { overview: AdminOve
               emptyText="No communication activity yet."
             />
           </div>
+
+          <FocusAreasCard selectedOrgId={selectedOrgId} />
 
           <BreakdownCard selectedOrgId={selectedOrgId} />
         </>
