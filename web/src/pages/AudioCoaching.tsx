@@ -9,7 +9,7 @@ import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { HATCH_STYLE } from '../lib/chartPatterns'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
-import { playQueue, primeAudioElement, splitIntoSentences } from '../lib/voicePlayback'
+import { createPlaybackQueue, primeAudioElement, splitIntoSentences, type PlaybackQueue } from '../lib/voicePlayback'
 import {
   createAudioSession,
   deleteAudioSession,
@@ -2983,12 +2983,18 @@ function ReflectTab({
   const lastAssistant = conversation ? [...conversation].reverse().find((m) => m.role === 'assistant') : null
 
   // A session that was already finished before (has saved notes) opens
-  // straight into the review screen; otherwise starts on the starting
-  // screen every time (even if a conversation is already in progress —
-  // that's what the three-dot "Continue previous debrief" menu is for).
+  // straight into the review screen. A conversation already in progress
+  // picks up where it left off — leaving for the report and coming back
+  // must not drop the teacher onto the starting screen again. Only a
+  // session with no conversation yet opens on the starting screen.
   const [reviewingNotes, setReviewingNotes] = useState(() => Boolean(strengths || growthAreas || nextStep))
-  const [showStartScreen, setShowStartScreen] = useState(true)
-  const [userTranscript, setUserTranscript] = useState<string | null>(null)
+  const [showStartScreen, setShowStartScreen] = useState(() => !started)
+  const [userTranscript, setUserTranscript] = useState<string | null>(
+    () => [...(conversation ?? [])].reverse().find((m) => m.role === 'user')?.text ?? null,
+  )
+  // "Change topic" opens this picker inside the conversation instead of
+  // sending the teacher back to the starting screen.
+  const [pickingTopic, setPickingTopic] = useState(false)
 
   // Starting-screen path selection — picking a card only selects it
   // (per spec, never immediately starts anything); "Start Talking"/"Type
@@ -3029,7 +3035,13 @@ function ReflectTab({
   const [muted, setMuted] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
-  const spokenCountRef = useRef(0)
+  // Replies already in the conversation when this tab opens are never read
+  // aloud again — only new ones are.
+  const spokenCountRef = useRef(conversation?.length ?? 0)
+  // The reply currently being read aloud, so Finish, Change topic and
+  // leaving the tab can cut Coach off mid-sentence rather than letting the
+  // rest of the queue play out.
+  const playbackRef = useRef<PlaybackQueue | null>(null)
   const voiceModeRef = useRef(false)
   voiceModeRef.current = voiceMode
   const mutedRef = useRef(false)
@@ -3071,17 +3083,36 @@ function ReflectTab({
       if (!locked && !turnCapHit) start()
       return
     }
+    const sentences = splitIntoSentences(last.text)
+    if (sentences.length === 0) return
     setIsSpeaking(true)
-    playQueue(audioRef.current, splitIntoSentences(last.text), talkVoice).then(() => {
+    const queue = createPlaybackQueue(audioRef.current, talkVoice)
+    playbackRef.current = queue
+    for (const sentence of sentences) queue.push(sentence)
+    queue.end()
+    queue.finished.then(() => {
+      // A cancelled queue was stopped on purpose (Finish, Change topic,
+      // leaving) — don't reopen the mic behind the teacher's back.
+      if (playbackRef.current !== queue) return
+      playbackRef.current = null
       setIsSpeaking(false)
       if (voiceModeRef.current && !locked && !turnCapHit) start()
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversation, voiceMode])
 
-  // Releases the mic on unmount (e.g. leaving this tab or the report).
+  // Stops Coach mid-sentence and releases the mic.
+  function stopCoach() {
+    playbackRef.current?.cancel()
+    playbackRef.current = null
+    audioRef.current?.pause()
+    setIsSpeaking(false)
+    close()
+  }
+
+  // Leaving this tab or the report silences Coach and releases the mic.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => close, [])
+  useEffect(() => stopCoach, [])
 
   // Fire-and-forget, same as TalkToMe.tsx's own priming — never awaited, so
   // it can't block the actual state transition (starting the conversation,
@@ -3158,8 +3189,22 @@ function ReflectTab({
   // exactly the existing "Continue previous debrief" menu item's own
   // resume mechanism, run in reverse.
   function handleChangeTopic() {
-    setShowStartScreen(true)
+    stopCoach()
     setShowTranscriptWindow(false)
+    setPickingTopic(true)
+  }
+
+  // Switching topic is just the next turn of the same conversation.
+  function handlePickTopic(message: string, timestampSec: number | null) {
+    setPickingTopic(false)
+    setCurrentTimestampSec(timestampSec)
+    setUserTranscript(message)
+    onSend(message)
+  }
+
+  function handleCancelTopicPicker() {
+    setPickingTopic(false)
+    if (voiceMode && !sessionPaused && !locked && !turnCapHit) start()
   }
 
   // Consumes a "Discuss this" click from Summary's Moments card. If a
@@ -3194,13 +3239,14 @@ function ReflectTab({
       if (voiceMode && !locked && !turnCapHit) start()
     } else {
       setSessionPaused(true)
-      if (voiceMode) close()
+      if (voiceMode) stopCoach()
     }
   }
 
   function handleFinish() {
-    close()
-    audioRef.current?.pause()
+    stopCoach()
+    setVoiceMode(false)
+    setPickingTopic(false)
     setShowFinishConfirm(false)
     setReviewingNotes(true)
     onSummarize()
@@ -3497,7 +3543,10 @@ function ReflectTab({
               )}
               <button
                 type="button"
-                onClick={onReturnToReport}
+                onClick={() => {
+                  stopCoach()
+                  onReturnToReport()
+                }}
                 className="text-xs font-semibold text-ink-soft hover:text-ink"
               >
                 Return to the report
@@ -3554,6 +3603,49 @@ function ReflectTab({
                   >
                     Let's discuss another moment
                   </button>
+                </div>
+              )}
+
+              {pickingTopic && (
+                <div className="rounded-xl border border-terracotta/30 bg-peach-tint/40 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">
+                      What would you like to talk about next?
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleCancelTopicPicker}
+                      className="text-xs font-medium text-ink-soft hover:text-ink"
+                    >
+                      Keep going
+                    </button>
+                  </div>
+                  <div className="mt-3 flex flex-col gap-2">
+                    {starterPrompts.map((p) => (
+                      <button
+                        key={p.label}
+                        type="button"
+                        onClick={() => handlePickTopic(`Let's switch to another moment: ${p.label}.`, p.timestampSec ?? null)}
+                        className="rounded-xl border border-hairline bg-cream-card px-4 py-2.5 text-left text-sm text-ink transition-colors hover:border-terracotta/40"
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => handlePickTopic('Can we talk about how the lesson felt to me overall?', null)}
+                      className="rounded-xl border border-hairline bg-cream-card px-4 py-2.5 text-left text-sm text-ink transition-colors hover:border-terracotta/40"
+                    >
+                      How the lesson felt overall
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePickTopic("I'd like to talk about something else from this lesson.", null)}
+                      className="rounded-xl border border-hairline bg-cream-card px-4 py-2.5 text-left text-sm text-ink transition-colors hover:border-terracotta/40"
+                    >
+                      Something else on my mind
+                    </button>
+                  </div>
                 </div>
               )}
 
