@@ -20,6 +20,15 @@ private let experiencedPrompts = [
     "I want to try something new this unit.",
 ]
 
+/// Answers to Coach's check-in question — same list as `CHECK_IN_PROMPTS` in
+/// web/src/pages/TalkToMe.tsx.
+private let checkInPrompts = [
+    "It went well.",
+    "It went okay, but not quite how I planned.",
+    "It didn't work.",
+    "I haven't had a chance to try it yet.",
+]
+
 /// Mirrors `web/src/pages/TalkToMe.tsx` — a voice conversation with Coach:
 /// record a turn → transcribe → stream Coach's reply, speaking each sentence
 /// as it arrives → listen again, until the teacher pauses or finishes. A
@@ -56,6 +65,17 @@ struct TalkToMeView: View {
     // one of those steps may already be in flight when Pause is tapped.
     // Without this flag the in-flight step would switch the mic back on.
     @State private var sessionActive = false
+
+    /// The check-in this conversation answers, when opened from Home's card.
+    /// Sent with the first turn only; cleared when starting a new conversation.
+    @State private var activeFollowUp: CoachFollowUp?
+    /// The teacher tapped "Don't check in on this" on the current takeaway.
+    @State private var checkInOff = false
+    @State private var checkInNote: String?
+
+    init(followUp: CoachFollowUp? = nil) {
+        _activeFollowUp = State(initialValue: followUp)
+    }
 
     private var voice: String? { authManager.currentUser?.talkVoice }
 
@@ -214,22 +234,43 @@ struct TalkToMeView: View {
 
     // MARK: - Start screen
 
+    private var startPrompts: [String] {
+        if activeFollowUp != nil { return checkInPrompts }
+        return ExperienceLevel.isExperienced(authManager.currentUser?.experienceLevel) ? experiencedPrompts : examplePrompts
+    }
+
     private var startScreen: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("A MOMENT FOR YOUR TEACHING")
+                Text(activeFollowUp != nil ? "COACH IS CHECKING IN" : "A MOMENT FOR YOUR TEACHING")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(AppTheme.accent)
-                Text("What's on your mind today?")
+                Text(activeFollowUp?.checkInQuestion ?? "What's on your mind today?")
                     .font(.heading(.title2))
                     .foregroundStyle(AppTheme.forest)
-                Text("Talk through a challenge, find the right words, or reflect on your day.")
+                Text(activeFollowUp != nil
+                     ? "Say how it went — good, bad, or not yet. Coach will take it from there."
+                     : "Talk through a challenge, find the right words, or reflect on your day.")
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.textSecondary)
             }
 
+            if let activeFollowUp {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("WHAT YOU PLANNED TO TRY")
+                        .font(.caption2.weight(.bold)).tracking(0.8)
+                        .foregroundStyle(AppTheme.terracotta600)
+                    Text(activeFollowUp.plan)
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.textPrimary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .background(AppTheme.goldTint.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
+            }
+
             VStack(spacing: 8) {
-                ForEach(ExperienceLevel.isExperienced(authManager.currentUser?.experienceLevel) ? experiencedPrompts : examplePrompts, id: \.self) { prompt in
+                ForEach(startPrompts, id: \.self) { prompt in
                     Button {
                         submit(prompt, typed: true)
                     } label: {
@@ -472,6 +513,8 @@ struct TalkToMeView: View {
                 takeawaySection("WHAT I'LL TRY", takeaway.tryNext, AppTheme.terracotta600, fill: AppTheme.goldTint.opacity(0.7))
                 takeawaySection("WHAT I'LL NOTICE", takeaway.notice, AppTheme.terracotta600, fill: AppTheme.peachTint.opacity(0.55))
 
+                checkInFooter(debriefId: debrief.id)
+
                 VStack(spacing: 10) {
                     if !atCap {
                         pillButton("Continue This Conversation", filled: AppTheme.accent) {
@@ -488,6 +531,39 @@ struct TalkToMeView: View {
             }
         }
         .padding(.horizontal)
+    }
+
+    /// "Coach will check in…" with the opt-out, plus the superadmin test switch.
+    private func checkInFooter(debriefId: String) -> some View {
+        VStack(spacing: 8) {
+            if checkInOff {
+                Text("Okay — no check-in for this one.")
+            } else {
+                Text("Coach will check in with you about this in a few days.")
+                Button("Don't check in on this") {
+                    Task { await turnCheckInOff(debriefId: debriefId) }
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(AppTheme.terracotta600)
+
+                if authManager.currentUser?.role == "superadmin" {
+                    Button("Admin test: make this check-in due now") {
+                        Task { await makeCheckInDueNow() }
+                    }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(AppTheme.terracotta600)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .overlay(Capsule().strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4])).foregroundStyle(AppTheme.terracotta.opacity(0.5)))
+                }
+            }
+            if let checkInNote {
+                Text(checkInNote).foregroundStyle(AppTheme.terracotta600)
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(AppTheme.textSecondary)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
     }
 
     private func takeawaySection(_ label: String, _ text: String, _ color: Color, fill: Color? = nil) -> some View {
@@ -564,7 +640,11 @@ struct TalkToMeView: View {
         player.stop()
         let spokenVoice = voice
         do {
-            let result = try await TalkToMeService.streamReply(debriefId: debrief?.id, message: text) { sentence in
+            let result = try await TalkToMeService.streamReply(
+                debriefId: debrief?.id,
+                message: text,
+                followUpId: activeFollowUp?.id
+            ) { sentence in
                 streamingReply = streamingReply.map { "\($0) \(sentence)" } ?? sentence
                 phase = .speaking
                 if !muted { player.enqueue(sentence, voice: spokenVoice) }
@@ -614,7 +694,30 @@ struct TalkToMeView: View {
         }
     }
 
+    private func turnCheckInOff(debriefId: String) async {
+        checkInOff = true
+        do {
+            try await TalkToMeService.dismissFollowUp(forDebrief: debriefId)
+        } catch {
+            checkInOff = false
+        }
+    }
+
+    private func makeCheckInDueNow() async {
+        checkInNote = nil
+        do {
+            let count = try await TalkToMeService.makeFollowUpsDueNow()
+            checkInNote = count == 0
+                ? "No check-in was scheduled for this session."
+                : "Done — the check-in is waiting on Home."
+        } catch {
+            checkInNote = error.localizedDescription
+        }
+    }
+
     private func continuePast(_ talk: Debrief) {
+        checkInOff = false
+        checkInNote = nil
         debrief = talk
         userTranscript = talk.conversation.last { $0.role == "user" }?.text
         streamingReply = nil
@@ -632,6 +735,9 @@ struct TalkToMeView: View {
         errorMessage = nil
         finishing = false
         takeawayError = nil
+        activeFollowUp = nil
+        checkInOff = false
+        checkInNote = nil
         Task { await loadSavedTalks() }
     }
 

@@ -28,7 +28,12 @@ enum TalkToMeService {
         return result.transcript
     }
 
-    private struct MessageBody: Encodable { let message: String }
+    /// `followUpId` rides along only on a conversation's first turn, when it
+    /// was opened from Coach's check-in; nil is left out of the JSON.
+    private struct MessageBody: Encodable {
+        let message: String
+        var followUpId: String?
+    }
 
     private struct StreamFrame: Decodable {
         let type: String
@@ -45,11 +50,13 @@ enum TalkToMeService {
     static func streamReply(
         debriefId: String?,
         message: String,
+        followUpId: String? = nil,
         onSentence: @MainActor @escaping (String) -> Void
     ) async throws -> Debrief {
         let path = debriefId.map { "/api/debriefs/\($0)/chat/stream" } ?? "/api/debriefs/talk/stream"
+        let body = MessageBody(message: message, followUpId: debriefId == nil ? followUpId : nil)
         var result: Debrief?
-        try await APIClient.shared.streamLines(path, body: MessageBody(message: message)) { line in
+        try await APIClient.shared.streamLines(path, body: body) { line in
             guard let data = line.data(using: .utf8),
                   let frame = try? JSONDecoder().decode(StreamFrame.self, from: data) else { return }
             switch frame.type {
@@ -86,6 +93,33 @@ enum TalkToMeService {
     static func savedConversations() async throws -> [Debrief] {
         let all: [Debrief] = try await APIClient.shared.request("/api/debriefs?source=talk_to_me")
         return all.filter(\.saved)
+    }
+
+    // MARK: - Coach's check-ins
+
+    /// Check-ins due now, newest first — Home shows the first one.
+    static func dueFollowUps() async throws -> [CoachFollowUp] {
+        try await APIClient.shared.request("/api/follow-ups/due")
+    }
+
+    private struct FollowUpActionBody: Encodable { let action: String }
+
+    /// "snooze" brings it back in a couple of days; "dismiss" drops it.
+    static func updateFollowUp(id: String, action: String) async throws -> CoachFollowUp {
+        try await APIClient.shared.request("/api/follow-ups/\(id)", method: "PATCH", body: FollowUpActionBody(action: action))
+    }
+
+    private struct CountResponse: Decodable { let count: Int }
+
+    /// "Don't check in on this" on a takeaway.
+    static func dismissFollowUp(forDebrief debriefId: String) async throws {
+        let _: CountResponse = try await APIClient.shared.request("/api/follow-ups/by-debrief/\(debriefId)/dismiss", method: "POST")
+    }
+
+    /// Superadmin testing only: makes the caller's pending check-ins due now.
+    static func makeFollowUpsDueNow() async throws -> Int {
+        let result: CountResponse = try await APIClient.shared.request("/api/follow-ups/test/due-now", method: "POST")
+        return result.count
     }
 
     /// Fetches one sentence's speech as MP3 bytes, in the teacher's chosen

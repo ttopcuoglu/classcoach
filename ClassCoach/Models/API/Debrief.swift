@@ -25,3 +25,26 @@ struct TalkTakeaway: Codable {
     let tryNext: String
     let notice: String
 }
+
+/// Coach's check-in on a step planned in Talk It Through — mirrors the
+/// server's `CoachFollowUp` (see server/src/routes/followUps.ts).
+struct CoachFollowUp: Codable, Identifiable {
+    let id: String
+    let plan: String
+    let checkInQuestion: String
+    let dueAt: String
+    let status: String
+    let createdAt: String
+    let sourceDebriefId: String
+
+    /// "from yesterday", "from Friday", or "from Sep 3" — same wording as web.
+    var ageLabel: String {
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = parser.date(from: createdAt) ?? ISO8601DateFormatter().date(from: createdAt) else { return "" }
+        let days = Int((Date().timeIntervalSince(date) / 86_400).rounded())
+        if days <= 1 { return "from yesterday" }
+        if days < 7 { return "from \(date.formatted(.dateTime.weekday(.wide)))" }
+        return "from \(date.formatted(.dateTime.month(.abbreviated).day()))"
+    }
+}

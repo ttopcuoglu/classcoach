@@ -2,6 +2,8 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject private var authManager: AuthManager
+    /// Coach's due check-in, if any — refreshed whenever Home comes back into view.
+    @State private var checkIn: CoachFollowUp?
 
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
@@ -40,6 +42,11 @@ struct HomeView: View {
                     .background(AppTheme.forest, in: RoundedRectangle(cornerRadius: 24))
                     .padding(.horizontal)
                     .padding(.top, 8)
+
+                    if let checkIn {
+                        checkInCard(checkIn)
+                            .padding(.horizontal)
+                    }
 
                     NavigationLink { AudioCoachingView() } label: {
                         FeatureCard(
@@ -97,6 +104,67 @@ struct HomeView: View {
             }
             .background(AppTheme.background)
             .navigationTitle("Wivoza")
+            .onAppear { Task { await loadCheckIn() } }
+        }
+    }
+
+    private func checkInCard(_ followUp: CoachFollowUp) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "headphones")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.gold)
+                    .frame(width: 40, height: 40)
+                    .background(AppTheme.forest, in: RoundedRectangle(cornerRadius: 12))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("COACH IS CHECKING IN · \(followUp.ageLabel.uppercased())")
+                        .font(.caption2.weight(.bold)).tracking(0.8)
+                        .foregroundStyle(AppTheme.terracotta600)
+                    Text(followUp.checkInQuestion)
+                        .font(.heading(.headline))
+                        .foregroundStyle(AppTheme.forest)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            NavigationLink { TalkToMeView(followUp: followUp) } label: {
+                Text("Tell Coach how it went →")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 18).padding(.vertical, 10)
+                    .background(AppTheme.terracotta, in: Capsule())
+            }
+
+            HStack(spacing: 18) {
+                Button("Remind me later") { Task { await act(on: followUp, "snooze") } }
+                Button("Dismiss") { Task { await act(on: followUp, "dismiss") } }
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(AppTheme.textSecondary)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.goldTint.opacity(0.8), in: RoundedRectangle(cornerRadius: 22))
+        .overlay(alignment: .leading) {
+            UnevenRoundedRectangle(topLeadingRadius: 22, bottomLeadingRadius: 22)
+                .fill(AppTheme.gold)
+                .frame(width: 6)
+        }
+    }
+
+    private func loadCheckIn() async {
+        if let due = try? await TalkToMeService.dueFollowUps() {
+            checkIn = due.first
+        }
+    }
+
+    /// The card goes either way; a failed request just brings it back.
+    private func act(on followUp: CoachFollowUp, _ action: String) async {
+        checkIn = nil
+        do {
+            _ = try await TalkToMeService.updateFollowUp(id: followUp.id, action: action)
+        } catch {
+            checkIn = followUp
         }
     }
 }
