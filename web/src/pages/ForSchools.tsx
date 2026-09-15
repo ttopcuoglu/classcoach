@@ -43,6 +43,15 @@ const PRIVACY_POINTS = [
   'Coach refers to people by role — “a student,” “the class” — not by name.',
 ]
 
+// What the pilot report (and the admin panel behind it) shows a school
+// leader. Kept to what the report actually contains.
+const LEADER_VIEW = [
+  { title: 'Adoption', body: 'How many teachers activated, who is active this month, and who keeps coming back.' },
+  { title: 'How teachers use it', body: 'Which parts of Wivoza your staff lean on — lesson reflection, planning, practice, or family communication.' },
+  { title: 'Where teachers are focusing', body: 'The growth goals teachers set for themselves, so PD can meet them where they already are.' },
+  { title: 'School-wide classroom trends', body: 'Talk time, wait time, questioning and tone across recorded lessons, by grade or subject once groups are large enough.' },
+]
+
 const STEPS = [
   { title: 'Tell us about your school', body: 'Fill in the short form below. It takes about a minute.' },
   { title: 'We get in touch', body: 'We reply by email to talk through your staff size, goals, and pricing.' },
@@ -370,6 +379,67 @@ export default function ForSchools() {
         </div>
       </section>
 
+      {/* What school leaders see */}
+      <section className="mx-auto w-full max-w-6xl px-6 py-8">
+        <div className="grid gap-8 lg:grid-cols-[1.1fr_1fr] lg:items-center">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">What school leaders see</p>
+            <h2 className="mt-2 font-heading text-3xl font-extrabold text-forest">
+              The big picture, without watching anyone<span className="text-gold">.</span>
+            </h2>
+            <p className="mt-3 text-ink-soft">
+              Your admin panel — and a short pilot report you can share with your district — shows how coaching is
+              taking hold across your staff.
+            </p>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              {LEADER_VIEW.map((item, i) => (
+                <div key={item.title} className="rounded-2xl border border-hairline bg-cream-card p-5">
+                  <span
+                    className={`flex h-8 w-8 items-center justify-center rounded-xl font-heading text-sm font-bold ${
+                      ['bg-terracotta text-cream', 'bg-gold text-forest', 'bg-mint-tint text-forest', 'bg-forest text-gold'][i]
+                    }`}
+                  >
+                    {i + 1}
+                  </span>
+                  <h3 className="mt-3 font-heading text-base font-bold text-forest">{item.title}</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-ink-soft">{item.body}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-5 flex items-start gap-2.5 text-sm text-forest">
+              <LockIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
+              You see school-wide patterns — never one teacher’s recordings, conversations, or ratings. Groups with
+              fewer than 5 teachers are combined so no one can be singled out.
+            </p>
+          </div>
+
+          <a
+            href="/samples/pilot-report.pdf"
+            target="_blank"
+            rel="noreferrer"
+            className="group block rounded-3xl bg-forest p-5 text-cream shadow-lg transition-transform hover:-translate-y-0.5"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Sample pilot report</p>
+              <span className="rounded-full bg-cream/15 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cream">
+                Invented school
+              </span>
+            </div>
+            <div className="mt-4 overflow-hidden rounded-2xl bg-white">
+              <img
+                src="/samples/pilot-report.png"
+                alt="The first page of a sample Wivoza pilot report: adoption numbers and how teachers used each feature."
+                className="w-full"
+              />
+            </div>
+            <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-cream">
+              See the full sample (PDF)
+              <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </span>
+          </a>
+        </div>
+      </section>
+
       {/* How it works */}
       <section className="mx-auto w-full max-w-6xl px-6 py-8">
         <div className="mb-8 max-w-2xl">
@@ -395,6 +465,10 @@ export default function ForSchools() {
             </div>
           ))}
         </div>
+        <p className="mt-5 rounded-2xl border-l-8 border-gold bg-gold-tint/50 px-5 py-4 text-sm text-forest">
+          <span className="font-semibold">Built for pilots.</span> At the end of a pilot you get a report you can share
+          with your district — adoption, how teachers used Wivoza, and school-wide trends, all anonymous.
+        </p>
       </section>
 
       {/* Form */}

@@ -56,6 +56,9 @@ export default function AdminPilotReport() {
   const organizationId = params.get('organizationId') ?? undefined
   const startDate = params.get('startDate') ?? undefined
   const endDate = params.get('endDate') ?? undefined
+  // Only used to print the published marketing sample (/samples/pilot-report.pdf)
+  // from invented data, so it can never be mistaken for a real school's report.
+  const isSample = params.get('sample') === '1'
 
   const [overview, setOverview] = useState<AdminOverview | null>(null)
   const [focus, setFocus] = useState<AdminFocusAreas | null>(null)
@@ -99,7 +102,7 @@ export default function AdminPilotReport() {
         eyebrow="Wivoza · Pilot report"
         title={overview.organizationName ?? 'All schools'}
         meta={formatRange(overview.periodStart.slice(0, 10), overview.periodEnd.slice(0, 10))}
-        badge="Anonymous — no individual teacher data"
+        badge={isSample ? 'Sample report · invented school' : 'Anonymous — no individual teacher data'}
       />
 
       <ReportSection n={++n} title="Adoption" blurb="How many of your staff are using Wivoza." accent={A.terracotta}>
