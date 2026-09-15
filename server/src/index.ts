@@ -23,6 +23,7 @@ import { ttsRouter } from './routes/tts.ts'
 import { supportRouter } from './routes/support.ts'
 import { schoolInquiriesRouter } from './routes/schoolInquiries.ts'
 import { requireAuth } from './lib/auth.ts'
+import { startRetentionSweeps } from './lib/retention.ts'
 import { attachLiveSttServer } from './routes/sttLive.ts'
 
 const app = express()
@@ -81,3 +82,6 @@ const server = app.listen(port, () => {
 // attaches to the server rather than the Express app. It authenticates the
 // upgrade itself with the same session token the HTTP middleware checks.
 attachLiveSttServer(server, FRONTEND_ORIGINS)
+
+// Deletes Lesson Debrief sessions past each teacher's retention setting.
+startRetentionSweeps()
