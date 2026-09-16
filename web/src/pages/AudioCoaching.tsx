@@ -315,11 +315,54 @@ function RecordingPanel({
   // instead of leaving a dead "setup" entry behind — never touches a
   // session that already existed (e.g. re-opened from Past sessions).
   const justCreatedSessionIdRef = useRef<string | null>(null)
+  // A laptop/Chromebook's own idle-sleep or screensaver can suspend the tab
+  // (and the mic stream with it) mid-recording — the Wake Lock API is the
+  // one thing a web page can do to prevent that, mirroring the iOS app's
+  // UIBackgroundModes=audio fix for the same underlying problem. Not
+  // supported everywhere, so every call is best-effort and silently a
+  // no-op when unavailable or denied — recording must never depend on it.
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null)
+
+  async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return
+    try {
+      wakeLockRef.current = await navigator.wakeLock.request('screen')
+    } catch {
+      // Denied, unsupported in this context, or the page isn't visible
+      // right now — recording continues regardless, just without this
+      // extra protection against the screen sleeping.
+    }
+  }
+
+  async function releaseWakeLock() {
+    try {
+      await wakeLockRef.current?.release()
+    } catch {
+      // Already released (e.g. the tab was hidden) — nothing to do.
+    }
+    wakeLockRef.current = null
+  }
+
+  useEffect(() => {
+    // A wake lock is released automatically whenever the document goes
+    // hidden (switching tabs, minimizing) — re-acquire it once the teacher
+    // comes back if a recording is still actively running, so a brief
+    // tab-switch doesn't permanently lose the protection for the rest of
+    // a long class period.
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible' && phase === 'recording' && !wakeLockRef.current) {
+        requestWakeLock()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [phase])
 
   useEffect(() => {
     return () => {
       if (intervalRef.current) window.clearInterval(intervalRef.current)
       streamRef.current?.getTracks().forEach((t) => t.stop())
+      releaseWakeLock()
     }
   }, [])
 
@@ -382,6 +425,7 @@ function RecordingPanel({
       runStartRef.current = Date.now()
       intervalRef.current = window.setInterval(tick, 250)
       setPhase('recording')
+      requestWakeLock()
     } catch {
       // A session row was just created above but the mic never actually
       // started — clean it up rather than leaving a dead "setup" entry
@@ -404,6 +448,7 @@ function RecordingPanel({
     }
     if (intervalRef.current) window.clearInterval(intervalRef.current)
     setPhase('paused')
+    releaseWakeLock()
   }
 
   function handleResume() {
@@ -411,6 +456,7 @@ function RecordingPanel({
     runStartRef.current = Date.now()
     intervalRef.current = window.setInterval(tick, 250)
     setPhase('recording')
+    requestWakeLock()
   }
 
   async function handleStop() {
@@ -422,6 +468,7 @@ function RecordingPanel({
       runStartRef.current = null
     }
     const finalElapsed = accumulatedSecRef.current
+    releaseWakeLock()
 
     const stopped = new Promise<void>((resolve) => {
       recorder.onstop = () => resolve()
