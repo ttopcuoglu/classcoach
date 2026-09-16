@@ -20,7 +20,7 @@ import {
   getProfile,
   sendReflectMessage,
   summarizeReflectConversation,
-  tagSpeaker,
+  tagSpeakers,
   transcribeAudioSession,
   updateAudioSession,
   updateProfile,
@@ -52,6 +52,7 @@ import {
   getCoverage,
   getCountMetric,
   getPresenceMetric,
+  hasEnoughWaitTimeSamples,
   isConfidentState,
   isMissingState,
   judgeTalkBalance,
@@ -620,19 +621,29 @@ function TagSpeakersPanel({
   onUpdate: (s: AudioSessionWithSegments) => void
   onExit: () => void
 }) {
-  const [tagging, setTagging] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [tagging, setTagging] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  async function handleTag(rawSpeakerTag: string) {
-    setTagging(rawSpeakerTag)
+  function toggle(rawSpeakerTag: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(rawSpeakerTag)) next.delete(rawSpeakerTag)
+      else next.add(rawSpeakerTag)
+      return next
+    })
+  }
+
+  async function handleAnalyze() {
+    setTagging(true)
     setError(null)
     try {
-      const updated = await tagSpeaker(session.id, rawSpeakerTag)
+      const updated = await tagSpeakers(session.id, Array.from(selected))
       onUpdate(updated)
     } catch {
-      setError('Could not tag that speaker. Please try again.')
-      setTagging(null)
+      setError('Could not tag those speakers. Please try again.')
+      setTagging(false)
     }
   }
 
@@ -655,8 +666,9 @@ function TagSpeakersPanel({
     <div className="rounded-2xl border border-hairline bg-cream-card p-6">
       <h2 className="font-heading text-xl font-bold text-forest">Which voice is the teacher?</h2>
       <p className="mt-1 text-sm text-ink-soft">
-        Automatic diarization can tell voices apart, but it can't reliably tell who's the teacher. Pick it
-        below — everyone else will be grouped as Student.
+        Automatic diarization can tell voices apart, but it can't reliably tell who's the teacher — and it
+        sometimes splits one teacher into two voices. Select every voice that's you; everyone else will be
+        grouped as Student.
       </p>
       <div className="mt-4 flex flex-col gap-3">
         {speakers.length === 0 ? (
@@ -674,27 +686,47 @@ function TagSpeakersPanel({
             </button>
           </div>
         ) : (
-          speakers.map((s) => (
-            <div
-              key={s.rawSpeakerTag}
-              className="flex items-center justify-between gap-4 rounded-xl bg-mint-tint/50 p-4"
-            >
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{s.rawSpeakerTag}</p>
-                <p className="mt-1 text-sm text-ink">"{s.sample}"</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleTag(s.rawSpeakerTag)}
-                disabled={tagging !== null}
-                className="shrink-0 rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+          speakers.map((s) => {
+            const isTeacher = selected.has(s.rawSpeakerTag)
+            return (
+              <div
+                key={s.rawSpeakerTag}
+                className={`flex items-center justify-between gap-4 rounded-xl border-2 p-4 transition-colors ${
+                  isTeacher ? 'border-terracotta bg-peach-tint' : 'border-transparent bg-mint-tint/50'
+                }`}
               >
-                {tagging === s.rawSpeakerTag ? 'Analyzing...' : 'This is the Teacher'}
-              </button>
-            </div>
-          ))
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{s.rawSpeakerTag}</p>
+                  <p className="mt-1 text-sm text-ink">"{s.sample}"</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => toggle(s.rawSpeakerTag)}
+                  disabled={tagging}
+                  aria-pressed={isTeacher}
+                  className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-60 ${
+                    isTeacher
+                      ? 'border-terracotta bg-terracotta text-cream hover:bg-terracotta/90'
+                      : 'border-terracotta text-terracotta-600 hover:bg-peach-tint'
+                  }`}
+                >
+                  {isTeacher ? '✓ Teacher' : 'This is the Teacher'}
+                </button>
+              </div>
+            )
+          })
         )}
       </div>
+      {speakers.length > 0 && (
+        <button
+          type="button"
+          onClick={handleAnalyze}
+          disabled={selected.size === 0 || tagging}
+          className="mt-4 rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-forest/90 disabled:bg-hairline disabled:text-ink-soft"
+        >
+          {tagging ? 'Analyzing...' : 'Analyze session'}
+        </button>
+      )}
       {error && <p className="mt-4 text-sm text-terracotta-600">{error}</p>}
     </div>
   )
@@ -1122,7 +1154,7 @@ function buildQuestioningInsight(
   } else if (followUpMetric.state === 'confirmed_none') {
     sentence += ' None of your questions got a follow-up today — a quick "say more about that" can go a long way.'
   }
-  if (waitTimeMetric.state === 'measured' && session.avgWaitTimeSec != null) {
+  if (waitTimeMetric.state === 'measured' && session.avgWaitTimeSec != null && hasEnoughWaitTimeSamples(session.metricsDetail)) {
     sentence +=
       session.avgWaitTimeSec >= 3
         ? ` Your average wait time was ${session.avgWaitTimeSec.toFixed(1)}s — that's real thinking room.`
@@ -1471,7 +1503,12 @@ function buildStrengthCandidates(
     })
   }
 
-  if (hasEnoughDurationForTalkBalance && session.avgWaitTimeSec != null && session.avgWaitTimeSec >= 3) {
+  if (
+    hasEnoughDurationForTalkBalance &&
+    hasEnoughWaitTimeSamples(session.metricsDetail) &&
+    session.avgWaitTimeSec != null &&
+    session.avgWaitTimeSec >= 3
+  ) {
     candidates.push({
       id: 'wait-time',
       observation: `Your average wait time was ${session.avgWaitTimeSec}s`,
@@ -1587,7 +1624,12 @@ function buildPriorityCandidates(
     })
   }
 
-  if (hasEnoughDurationForTalkBalance && session.avgWaitTimeSec != null && session.avgWaitTimeSec < 3) {
+  if (
+    hasEnoughDurationForTalkBalance &&
+    hasEnoughWaitTimeSamples(session.metricsDetail) &&
+    session.avgWaitTimeSec != null &&
+    session.avgWaitTimeSec < 3
+  ) {
     candidates.push({
       id: 'wait-time',
       observation: `Your average wait time was ${session.avgWaitTimeSec}s`,
@@ -2372,6 +2414,7 @@ function ReportPanel({
                 followUpMetric={followUpMetric}
                 waitTimeMetric={waitTimeMetric}
                 avgWaitTimeSec={session.avgWaitTimeSec}
+                waitTimeSampleCount={session.metricsDetail?.waitTimeSampleCount ?? null}
                 focusMetric={focusMetric}
                 questioningInsight={questioningInsight}
                 highlights={session.highlights}
@@ -4666,6 +4709,7 @@ function QuestionsThinkingTab({
   followUpMetric,
   waitTimeMetric,
   avgWaitTimeSec,
+  waitTimeSampleCount,
   focusMetric,
   questioningInsight,
   highlights,
@@ -4678,12 +4722,14 @@ function QuestionsThinkingTab({
   followUpMetric: ReturnType<typeof getCountMetric>
   waitTimeMetric: ReturnType<typeof getPresenceMetric>
   avgWaitTimeSec: number | null
+  waitTimeSampleCount: number | null
   focusMetric: FocusMetric | null
   questioningInsight: string | null
   highlights: AudioHighlight[] | null
 }) {
   const [expanded, setExpanded] = useState(false)
-  const measurableWaitCount = (questionLog ?? []).filter((q) => q.waitTimeSec != null).length
+  // Older sessions predate waitTimeSampleCount; their root-question count is the best available.
+  const measurableWaitCount = waitTimeSampleCount ?? (questionLog ?? []).filter((q) => q.waitTimeSec != null).length
   const strengthCandidate = highlightCandidates(
     highlights,
     'Follow-up / probing question',

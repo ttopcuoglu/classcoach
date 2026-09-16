@@ -57,6 +57,8 @@ export type AnalysisResult = {
     recallQuestionCount: number
     higherOrderQuestionCount: number
     followUpQuestionCount: number
+    // How many question → student-response intervals avgWaitTimeSec averages.
+    waitTimeSampleCount: number
     redirectionCount: number
     firstRedirectionTimestampSec: number | null
     transitionCount: number
@@ -558,9 +560,14 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       currentMonologueSec = 0
     }
 
+    // Wait time is only ever question → *student* response. A teacher turn
+    // right after the question isn't a measurable wait: the gap may be the
+    // teacher pausing mid-thought, or a student answer too quiet to be
+    // transcribed with the teacher then responding to it — either way,
+    // counting it would report a number the audio doesn't support.
     if (lastTeacherQuestionEndSec !== null) {
       const wait = segment.startSec - lastTeacherQuestionEndSec
-      if (wait >= 0) {
+      if (!isTeacher && wait >= 0) {
         waitTimes.push(wait)
         waitCandidates.push({ wait, segment })
         if (lastQuestionEntryForWait) lastQuestionEntryForWait.waitTimeSec = round(wait, 2)
@@ -652,9 +659,12 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       }
 
       let askedQuestionThisSegment = false
-      splitSentences(segment.text).forEach(({ sentence, endedWithQuestion }) => {
+      let segmentEndsWithQuestion = false
+      const sentences = splitSentences(segment.text)
+      sentences.forEach(({ sentence, endedWithQuestion }, sentenceIndex) => {
         const classification = classifyQuestion(sentence)
         if (!endedWithQuestion && !classification) return
+        if (sentenceIndex === sentences.length - 1) segmentEndsWithQuestion = true
 
         questionCount++
         askedQuestionThisSegment = true
@@ -689,9 +699,15 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       // Whether or not this teacher turn used the follow-up opportunity, it
       // consumes it — the window is exactly one teacher turn wide.
       readyForFollowUp = false
-      if (askedQuestionThisSegment) {
+      if (askedQuestionThisSegment) awaitingStudentAnswer = true
+      // The wait clock starts at the segment's end, so it only means
+      // anything when the question is what the segment ends on — for
+      // "What's 3x? Okay, so..." the end-of-segment gap follows the
+      // teacher's own continuation, not the question.
+      if (segmentEndsWithQuestion) {
         lastTeacherQuestionEndSec = segment.endSec
-        awaitingStudentAnswer = true
+      } else {
+        lastQuestionEntryForWait = null
       }
 
       const capitalized = extractCapitalizedWords(segment.text)
@@ -760,6 +776,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       recallQuestionCount,
       higherOrderQuestionCount,
       followUpQuestionCount,
+      waitTimeSampleCount: waitTimes.length,
       redirectionCount,
       firstRedirectionTimestampSec: firstRedirectionTimestampSec != null ? round(firstRedirectionTimestampSec, 1) : null,
       transitionCount,

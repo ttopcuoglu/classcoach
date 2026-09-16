@@ -332,9 +332,17 @@ audioSessionsRouter.post('/:id/transcribe', upload.single('audio'), async (req, 
 })
 
 audioSessionsRouter.post('/:id/tag-speaker', async (req, res) => {
-  const { rawSpeakerTag } = req.body ?? {}
-  if (typeof rawSpeakerTag !== 'string' || !rawSpeakerTag.trim()) {
-    res.status(400).json({ error: 'rawSpeakerTag is required' })
+  // Diarization often splits one teacher into two voices (walking the room,
+  // projecting vs. conversational), so more than one raw tag can be the
+  // teacher. `rawSpeakerTag` (a single string) is still accepted for iOS
+  // builds that predate multi-select.
+  const { rawSpeakerTags, rawSpeakerTag } = req.body ?? {}
+  const requested: unknown[] = Array.isArray(rawSpeakerTags) ? rawSpeakerTags : [rawSpeakerTag]
+  const teacherTags = Array.from(
+    new Set(requested.filter((t): t is string => typeof t === 'string' && t.trim().length > 0)),
+  )
+  if (teacherTags.length === 0) {
+    res.status(400).json({ error: 'Pick at least one teacher voice.' })
     return
   }
 
@@ -347,12 +355,18 @@ audioSessionsRouter.post('/:id/tag-speaker', async (req, res) => {
     return
   }
 
+  const knownTags = new Set(session.segments.map((s) => s.rawSpeakerTag))
+  if (teacherTags.some((t) => !knownTags.has(t))) {
+    res.status(400).json({ error: 'Unknown speaker for this session.' })
+    return
+  }
+
   await prisma.transcriptSegment.updateMany({
-    where: { sessionId: session.id, rawSpeakerTag },
+    where: { sessionId: session.id, rawSpeakerTag: { in: teacherTags } },
     data: { speakerLabel: 'Teacher' },
   })
   await prisma.transcriptSegment.updateMany({
-    where: { sessionId: session.id, rawSpeakerTag: { not: rawSpeakerTag } },
+    where: { sessionId: session.id, rawSpeakerTag: { notIn: teacherTags } },
     data: { speakerLabel: 'Student' },
   })
 

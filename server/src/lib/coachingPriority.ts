@@ -12,6 +12,9 @@
 // a reasonable follow-up but out of scope for this first pass.
 
 const MIN_N_FOR_PERCENT = 10
+// Mirrors MIN_WAIT_TIME_SAMPLES in web/src/lib/reportConfidence.ts — a
+// missing waitTimeSampleCount (session analyzed before it existed) fails.
+const MIN_WAIT_TIME_SAMPLES = 3
 export const MIN_DURATION_FOR_CFU_DETECTION_SEC = 3 * 60
 
 export const PRIORITY_LABELS = ['talk-balance', 'questioning', 'wait-time', 'cfu', 'feedback'] as const
@@ -67,7 +70,8 @@ export function topPriorityForSession(session: PrioritySessionInput): PriorityLa
     }
   }
 
-  if (session.avgWaitTimeSec != null && session.avgWaitTimeSec < 3) {
+  const waitSamples = num('waitTimeSampleCount')
+  if (waitSamples != null && waitSamples >= MIN_WAIT_TIME_SAMPLES && session.avgWaitTimeSec != null && session.avgWaitTimeSec < 3) {
     candidates.push({ id: 'wait-time', weight: 1 })
   }
 

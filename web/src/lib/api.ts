@@ -1468,10 +1468,10 @@ export async function transcribeAudioSession(
   return res.json()
 }
 
-export function tagSpeaker(id: string, rawSpeakerTag: string): Promise<AudioSessionWithSegments> {
+export function tagSpeakers(id: string, rawSpeakerTags: string[]): Promise<AudioSessionWithSegments> {
   return request(`/api/audio-sessions/${id}/tag-speaker`, {
     method: 'POST',
-    body: JSON.stringify({ rawSpeakerTag }),
+    body: JSON.stringify({ rawSpeakerTags }),
   })
 }
 

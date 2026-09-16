@@ -66,13 +66,13 @@ enum AudioCoachingService {
         return result.speakers
     }
 
-    private struct TagSpeakerBody: Encodable { let rawSpeakerTag: String }
+    private struct TagSpeakersBody: Encodable { let rawSpeakerTags: [String] }
 
-    static func tagSpeaker(sessionId: String, rawSpeakerTag: String) async throws -> AudioSessionWithSegments {
+    static func tagSpeakers(sessionId: String, rawSpeakerTags: [String]) async throws -> AudioSessionWithSegments {
         try await APIClient.shared.request(
             "/api/audio-sessions/\(sessionId)/tag-speaker",
             method: "POST",
-            body: TagSpeakerBody(rawSpeakerTag: rawSpeakerTag)
+            body: TagSpeakersBody(rawSpeakerTags: rawSpeakerTags)
         )
     }
 

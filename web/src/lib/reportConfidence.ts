@@ -26,6 +26,19 @@ export const MIN_DURATION_FOR_TALK_BALANCE_CANDIDATE_SEC = SHORT_SESSION_THRESHO
 // precise than it is ("25%" implies a stable rate; "1 of 4" doesn't).
 export const MIN_N_FOR_PERCENT = 10
 
+// Wait time only counts a question followed by an audible student response
+// (see audioAnalysis.ts), so a session with many questions can still have
+// just one or two usable intervals. Below this many, the average is still
+// shown, but never framed as a Strength, Priority, or judgment. Sessions
+// analyzed before waitTimeSampleCount existed used the older, looser wait
+// rule, so a missing count deliberately fails the floor too.
+export const MIN_WAIT_TIME_SAMPLES = 3
+
+export function hasEnoughWaitTimeSamples(metricsDetail: Record<string, number | null> | null | undefined): boolean {
+  const count = metricsDetail?.waitTimeSampleCount
+  return count != null && count >= MIN_WAIT_TIME_SAMPLES
+}
+
 // Checks-for-understanding phrases are optional, relatively sparse teacher
 // behavior — a short clip that happens not to contain one doesn't mean the
 // teacher never uses them. Below this floor, "0" becomes "unavailable"

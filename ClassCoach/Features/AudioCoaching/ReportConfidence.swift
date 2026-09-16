@@ -255,6 +255,17 @@ enum AudioInsights {
         }
     }
 
+    /// Mirrors `MIN_WAIT_TIME_SAMPLES` in web/src/lib/reportConfidence.ts —
+    /// fewer usable question → student-response intervals than this, or a
+    /// session analyzed before the count existed, never makes wait time a
+    /// Strength or Priority.
+    static let minWaitTimeSamples = 3.0
+
+    static func hasEnoughWaitTimeSamples(_ session: AudioSessionWithSegments) -> Bool {
+        guard let count = session.metricsDetail?["waitTimeSampleCount"] else { return false }
+        return count >= minWaitTimeSamples
+    }
+
     static func buildStrengthCandidates(
         _ session: AudioSessionWithSegments, cfuMetric: Metric, feedbackRatio: Metric, higherOrderRatio: Metric?
     ) -> [NoticeCandidate] {
@@ -277,7 +288,7 @@ enum AudioInsights {
                 timestampSec: nil, excerpt: nil, durationSec: nil, weight: 1, focusMetric: .higherOrderPct
             ))
         }
-        if let wait = session.avgWaitTimeSec, wait >= 3 {
+        if hasEnoughWaitTimeSamples(session), let wait = session.avgWaitTimeSec, wait >= 3 {
             candidates.append(NoticeCandidate(
                 id: "wait-time", observation: "Your average wait time was \(Confidence.formatNumber(wait))s",
                 whyItMatters: "Giving students real time to think before answering leads to deeper, more complete responses.",
@@ -332,7 +343,7 @@ enum AudioInsights {
                 timestampSec: nil, excerpt: nil, durationSec: nil, weight: 1, focusMetric: .higherOrderPct
             ))
         }
-        if let wait = session.avgWaitTimeSec, wait < 3 {
+        if hasEnoughWaitTimeSamples(session), let wait = session.avgWaitTimeSec, wait < 3 {
             candidates.append(NoticeCandidate(
                 id: "wait-time", observation: "Your average wait time was \(Confidence.formatNumber(wait))s",
                 whyItMatters: "A few extra seconds of silence after a question gives more students time to formulate an answer.",
