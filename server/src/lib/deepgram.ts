@@ -3,6 +3,14 @@ import { DEFAULT_TALK_VOICE, isValidTalkVoice } from './talkVoices.ts'
 // One-shot (non-streaming) transcription against Deepgram's prerecorded
 // endpoint. The caller is responsible for never persisting `buffer` — this
 // function only ever holds it in memory long enough to make the request.
+//
+// mip_opt_out=true is required on every request to both endpoints below —
+// this is classroom/student audio, and without it Deepgram's Model
+// Improvement Program is allowed to retain and train on it. There is no
+// account-level toggle for this (confirmed against the live project via
+// the Management API); it's a per-request parameter only, so it must
+// never be dropped from either URL, including if either call is ever
+// rewritten to use an SDK instead of a raw fetch.
 
 export type DeepgramUtterance = {
   speaker: number
@@ -22,7 +30,7 @@ export async function transcribeAudio(buffer: Buffer, contentType: string): Prom
   if (!apiKey) throw new Error('DEEPGRAM_API_KEY is not set')
 
   const response = await fetch(
-    'https://api.deepgram.com/v1/listen?diarize=true&punctuate=true&utterances=true&smart_format=true',
+    'https://api.deepgram.com/v1/listen?diarize=true&punctuate=true&utterances=true&smart_format=true&mip_opt_out=true',
     {
       method: 'POST',
       headers: {
@@ -64,7 +72,7 @@ export async function synthesizeSpeechStream(text: string, voice?: string): Prom
   if (!apiKey) throw new Error('DEEPGRAM_API_KEY is not set')
 
   const safeVoice = isValidTalkVoice(voice) ? voice : DEFAULT_TALK_VOICE
-  const response = await fetch(`https://api.deepgram.com/v1/speak?model=aura-2-${safeVoice}-en`, {
+  const response = await fetch(`https://api.deepgram.com/v1/speak?model=aura-2-${safeVoice}-en&mip_opt_out=true`, {
     method: 'POST',
     headers: {
       Authorization: `Token ${apiKey}`,
