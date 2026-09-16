@@ -1262,7 +1262,7 @@ function buildClimateInsight(
 // together whichever of stated-objective / a real-world connection /
 // defined vocabulary were actually detected into one warm sentence. Null
 // when lessonContent itself is null (session predates this field, or the
-// Opening phase wasn't captured) — never speaks from nothing, same
+// start of the lesson wasn't captured) — never speaks from nothing, same
 // discipline as every other builder in this file.
 function buildContentInsight(lessonContent: AudioLessonContent | null): string | null {
   if (!lessonContent) return null
@@ -1282,7 +1282,7 @@ function buildContentInsight(lessonContent: AudioLessonContent | null): string |
   }
   if (parts.length === 0) {
     if (lessonContent.statedObjective.found === false) {
-      return 'No stated objective, real-world connection, or defined vocabulary term was detected today — even one of these can anchor a lesson for students.'
+      return "None of the common spoken phrases for a stated objective, real-world connection, or vocabulary definition came through today (anything posted on the board wouldn't show up) — even one said aloud can anchor a lesson for students."
     }
     return null
   }
@@ -3989,8 +3989,8 @@ function LessonContentTab({
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Stated objective</p>
           {!lessonContent || lessonContent.statedObjective.found === null ? (
-            <p className="mt-1 text-sm text-ink-soft" title="Opening phase not captured.">
-              — Opening phase not captured
+            <p className="mt-1 text-sm text-ink-soft" title="The recording was too short to check the start of the lesson.">
+              — Start of the lesson not captured
             </p>
           ) : lessonContent.statedObjective.found ? (
             <p className="mt-1 text-sm text-ink">
@@ -4000,7 +4000,10 @@ function LessonContentTab({
               </span>
             </p>
           ) : (
-            <p className="mt-1 text-sm text-ink-soft">Not detected in the Opening phase.</p>
+            <p className="mt-1 text-sm text-ink-soft">
+              Not heard near the start of the recording. An objective posted on the board or slides wouldn't show up
+              here.
+            </p>
           )}
         </div>
 

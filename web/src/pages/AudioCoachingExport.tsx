@@ -230,7 +230,9 @@ export default function AudioCoachingExport() {
               <p className="mt-1.5 text-sm text-ink">
                 {content.statedObjective?.found && content.statedObjective.quote
                   ? `“${content.statedObjective.quote}”`
-                  : 'No clearly stated objective was detected. Even one sentence naming the goal can anchor a lesson.'}
+                  : content.statedObjective?.found === false
+                    ? "Not heard near the start of the recording (an objective posted on the board wouldn't show up). Even one sentence naming the goal aloud can anchor a lesson."
+                    : "The start of the lesson wasn't captured, so a stated objective couldn't be checked."}
               </p>
             </div>
             <QuoteList label="Key vocabulary moments" quotes={content.vocabulary ?? []} accent={A.forest} />

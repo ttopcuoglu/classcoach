@@ -89,12 +89,12 @@ struct LessonContentTab: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("STATED OBJECTIVE").font(.caption.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
             if content.statedObjectiveFound == nil {
-                Text("— Opening phase not captured").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                Text("— Start of the lesson not captured").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
             } else if content.statedObjectiveFound == true, let quote = content.statedObjectiveQuote {
                 Text("Detected: \"\(quote)\"\(content.statedObjectiveTimestampSec.map { " (\(ReportConfidence.formatDuration($0)))" } ?? "")")
                     .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
             } else {
-                Text("Not detected in the Opening phase.").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                Text("Not heard near the start of the recording. An objective posted on the board or slides wouldn't show up here.").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
             }
         }
     }

@@ -155,13 +155,15 @@ export const CORRECTIVE_PHRASES = [
 ]
 
 // Lesson Content — keyword/phrase-matched flags and quotes only, never a
-// score. "Found" vs "not found" is still a confident result once a phase
-// has actually been captured; only a too-short/missing Opening phase makes
-// the stated-objective check itself unavailable (mirrors the same
-// phase-coverage judgment used for Session Phases elsewhere in this
-// report — see reportConfidence.ts on the frontend for why 30s is the
-// floor for "meaningfully captured").
+// score. Only a recording too short to have a meaningful start (see
+// reportConfidence.ts on the frontend for why 30s is the floor for
+// "meaningfully captured") makes the stated-objective check unavailable.
 const MIN_PHASE_DURATION_SEC = 30
+// A detected Opening phase is often just the first 10% of the recording
+// (the proportional fallback when no transition phrase is heard), which
+// can end before a teacher states the objective — so the search always
+// covers at least the first five minutes.
+const OBJECTIVE_SEARCH_MIN_SEC = 5 * 60
 const MAX_CONNECTION_QUOTES = 3
 const MAX_VOCABULARY_QUOTES = 5
 // A cloud reads better fuller than the old flat chip list's cap did.
@@ -233,13 +235,13 @@ function extractTopicTerms(
 }
 
 function detectStatedObjective(segments: Segment[], phases: Phase[]): LessonContentResult['statedObjective'] {
-  const opening = phases.find((p) => p.label === 'Opening')
-  if (!opening || opening.endSec - opening.startSec < MIN_PHASE_DURATION_SEC) {
+  const recordedSec = segments.length ? Math.max(...segments.map((s) => s.endSec)) : 0
+  if (recordedSec < MIN_PHASE_DURATION_SEC) {
     return { found: null, quote: null, timestampSec: null }
   }
-  const openingTeacherSegments = segments.filter(
-    (s) => s.speakerLabel === 'Teacher' && s.startSec >= opening.startSec && s.startSec < opening.endSec,
-  )
+  const openingEndSec = phases.find((p) => p.label === 'Opening')?.endSec ?? 0
+  const windowEndSec = Math.max(openingEndSec, OBJECTIVE_SEARCH_MIN_SEC)
+  const openingTeacherSegments = segments.filter((s) => s.speakerLabel === 'Teacher' && s.startSec < windowEndSec)
   for (const segment of openingTeacherSegments) {
     if (countPhraseMatches(segment.text, OBJECTIVE_PHRASES) > 0) {
       return { found: true, quote: segment.text, timestampSec: segment.startSec }
@@ -394,6 +396,15 @@ const ADDRESS_LEADS = new Set(['thanks', 'you', 'yes', 'ahead', 'nice', 'job', '
 // more often as content than as address is dropped entirely (the novel's
 // protagonist is not a student). Still a heuristic, not a roster — like every
 // count in this file, a suggestion for the coach to confirm.
+// A name as transcription writes it: capitalized, with at least one
+// lowercase letter (so acronyms like DNA don't count), any Unicode letters
+// (José, Zoë), and internal capitals, apostrophes, or hyphens (DeShawn,
+// McKenzie, O'Brien, Mary-Kate). The old ASCII-only /^[A-Z][a-z]+$/ check
+// silently dropped every one of these, and stripped "José" to "Jos".
+const NAME_SHAPE = /^\p{Lu}(?=.*\p{Ll})\p{L}*(?:['’-]\p{L}+)*$/u
+// Contractions of pronouns/verbs ("I'm", "They're") — not names.
+const CONTRACTION_SUFFIX = /['’](?:m|re|ll|ve|d|t)$/i
+
 function extractCapitalizedWords(text: string): { addressed: string[]; content: string[] } {
   const addressed: string[] = []
   const content: string[] = []
@@ -401,9 +412,10 @@ function extractCapitalizedWords(text: string): { addressed: string[]; content: 
     const words = sentence.split(/\s+/).filter(Boolean)
     for (let i = 0; i < words.length; i++) {
       const raw = words[i]
-      const cleaned = raw.replace(/[^A-Za-z]/g, '')
-      if (!/^[A-Z][a-z]+$/.test(cleaned)) continue
-      if (NAME_MENTION_STOPWORDS.has(cleaned.toLowerCase())) continue
+      // Trim surrounding punctuation, then a possessive ("Sarah's" → "Sarah").
+      const cleaned = raw.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '').replace(/['’]s$/i, '')
+      if (!NAME_SHAPE.test(cleaned) || CONTRACTION_SUFFIX.test(cleaned)) continue
+      if (NAME_MENTION_STOPWORDS.has(cleaned.toLowerCase().replace(/['’]/g, ''))) continue
       const previous = i > 0 ? words[i - 1] : ''
       const previousWord = previous.replace(/[^A-Za-z]/g, '').toLowerCase()
       const last = i === words.length - 1
