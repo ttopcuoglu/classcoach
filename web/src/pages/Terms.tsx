@@ -299,14 +299,16 @@ export default function Terms() {
             <p className="mt-2">
               <strong>Anthropic (Claude API):</strong> text you submit for coaching features — including transcripts,
               chat messages, practice responses, and lesson materials — is sent to Anthropic to generate AI coaching
-              feedback, reflections, suggested language, and lesson-planning content. Anthropic does not use content
-              submitted through its commercial API to train its models.
+              feedback, reflections, suggested language, and lesson-planning content. Under Anthropic's commercial API
+              terms, this content is never used to train its models, and is automatically deleted from Anthropic's
+              systems within 30 days.
             </p>
             <p className="mt-2">
               <strong>Deepgram:</strong> audio you record or upload is sent to Deepgram to generate a text transcript,
               and text is sent to Deepgram to generate the spoken audio used in voice features like Talk It Through.
-              Deepgram may use submitted audio to improve its models unless that use is disabled through account
-              settings; we maintain account-level controls to restrict that use.
+              Every request we send to Deepgram is explicitly marked to opt out of Deepgram's Model Improvement
+              Program, so submitted audio is never used to improve Deepgram's models — this opt-out is built into
+              every request our servers make, not a setting you need to enable.
             </p>
             <p className="mt-2">
               These providers receive only the content you submit for the features above — never your account
