@@ -36,6 +36,7 @@ private let checkInPrompts = [
 /// again later from "Past conversations".
 struct TalkToMeView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var authManager: AuthManager
     @StateObject private var recorder = VoiceTurnRecorder()
     @StateObject private var player = SpeechPlayer()
@@ -164,6 +165,14 @@ struct TalkToMeView: View {
                 recorder.close()
                 player.stop()
                 phase = .idle
+            }
+            // If the mic still couldn't reopen while the screen was off (a
+            // call or Siri interrupted it), pick the conversation back up as
+            // soon as the teacher returns, instead of waiting on "Try Again".
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .active, phase == .error, sessionActive, recorder.fatalError != nil {
+                    beginListening()
+                }
             }
             .onChange(of: recorder.fatalError) { _, newValue in
                 if let newValue {
