@@ -16,6 +16,7 @@ import {
   formatRatio,
   getCoverage,
   getCountMetric,
+  getFollowUpMetric,
   getPresenceMetric,
   isConfidentState,
   MIN_DURATION_FOR_CFU_DETECTION_SEC,
@@ -115,7 +116,11 @@ export default function AudioCoachingExport() {
       ? formatRatio(num('higherOrderQuestionCount'), session.questionCount)
       : null
   const waitTime = getPresenceMetric(session.avgWaitTimeSec)
-  const followUps = getCountMetric({ count: rawNum('followUpQuestionCount'), recordedSec })
+  const followUps = getFollowUpMetric({
+    count: rawNum('followUpQuestionCount'),
+    studentVoiceSegments: rawNum('studentVoiceSegments'),
+    recordedSec,
+  })
   const cfu = getCountMetric({
     count: session.cfuCount,
     recordedSec,

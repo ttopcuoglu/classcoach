@@ -30,7 +30,9 @@ export async function transcribeAudio(buffer: Buffer, contentType: string): Prom
   if (!apiKey) throw new Error('DEEPGRAM_API_KEY is not set')
 
   const response = await fetch(
-    'https://api.deepgram.com/v1/listen?diarize=true&punctuate=true&utterances=true&smart_format=true&mip_opt_out=true',
+    // model must stay explicit: with none, Deepgram falls back to its oldest
+    // "base" model (confirmed via response metadata), not Nova.
+    'https://api.deepgram.com/v1/listen?model=nova-3&diarize=true&punctuate=true&utterances=true&smart_format=true&mip_opt_out=true',
     {
       method: 'POST',
       headers: {

@@ -163,6 +163,29 @@ export function getCountMetric(options: {
   return { state: 'measured', display: String(count) }
 }
 
+// Follow-ups are only detectable after a *transcribed* student answer. With
+// no student voice captured at all, a 0 would claim the teacher never
+// followed up when the audio simply couldn't show it.
+export function getFollowUpMetric(options: {
+  count: number | null | undefined
+  studentVoiceSegments: number | null | undefined
+  recordedSec: number
+}): ConfidentMetric {
+  if (options.studentVoiceSegments === 0) {
+    return {
+      state: 'not_measurable',
+      display: '—',
+      reason: "No student answers were picked up in this recording, so follow-ups to them couldn't be detected.",
+    }
+  }
+  return getCountMetric({ count: options.count, recordedSec: options.recordedSec })
+}
+
+// Student voices far from the mic, quiet, or overlapping often don't get
+// transcribed, so every student-talk figure is a floor, not an exact count.
+export const STUDENT_TALK_CAVEAT =
+  "Quiet or distant student voices often aren't picked up, so treat student talk here as a minimum."
+
 // For a plain numeric field that's either present or it isn't (talk %,
 // wait time) — used only to fold these into a category's coverage tally
 // alongside the count/ratio metrics above.

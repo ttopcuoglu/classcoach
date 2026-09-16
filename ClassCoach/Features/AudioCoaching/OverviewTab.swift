@@ -28,7 +28,11 @@ struct OverviewMetrics {
         redirectionMetric = ReportConfidence.getCountMetric(count: detail["redirectionCount"].map { Int($0) }, recordedSec: recordedSec)
         directiveMetric = ReportConfidence.getCountMetric(count: detail["directiveCount"].map { Int($0) }, recordedSec: recordedSec)
         nameMentionMetric = ReportConfidence.getCountMetric(count: detail["nameMentionCount"].map { Int($0) }, recordedSec: recordedSec)
-        followUpMetric = ReportConfidence.getCountMetric(count: detail["followUpQuestionCount"].map { Int($0) }, recordedSec: recordedSec)
+        followUpMetric = ReportConfidence.getFollowUpMetric(
+            count: detail["followUpQuestionCount"].map { Int($0) },
+            studentVoiceSegments: detail["studentVoiceSegments"].map { Int($0) },
+            recordedSec: recordedSec
+        )
 
         if let q = session.questionCount, q > 0 {
             let higherOrder = detail["higherOrderQuestionCount"].map { Int($0) } ?? 0

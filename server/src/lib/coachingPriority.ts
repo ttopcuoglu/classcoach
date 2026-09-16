@@ -16,6 +16,9 @@ const MIN_N_FOR_PERCENT = 10
 // missing waitTimeSampleCount (session analyzed before it existed) fails.
 const MIN_WAIT_TIME_SAMPLES = 3
 export const MIN_DURATION_FOR_CFU_DETECTION_SEC = 3 * 60
+// Mirrors MIN_DURATION_FOR_TALK_BALANCE_CANDIDATE_SEC — a zero CFU count only
+// becomes a priority on a recording at least this long.
+const MIN_DURATION_FOR_CFU_PRIORITY_SEC = 10 * 60
 
 export const PRIORITY_LABELS = ['talk-balance', 'questioning', 'wait-time', 'cfu', 'feedback'] as const
 export type PriorityLabel = (typeof PRIORITY_LABELS)[number]
@@ -76,7 +79,7 @@ export function topPriorityForSession(session: PrioritySessionInput): PriorityLa
   }
 
   const cfuLimitedEvidence = recordedSec < MIN_DURATION_FOR_CFU_DETECTION_SEC
-  if (!cfuLimitedEvidence && session.cfuCount === 0) {
+  if (!cfuLimitedEvidence && recordedSec >= MIN_DURATION_FOR_CFU_PRIORITY_SEC && session.cfuCount === 0) {
     candidates.push({ id: 'cfu', weight: 1 })
   }
 

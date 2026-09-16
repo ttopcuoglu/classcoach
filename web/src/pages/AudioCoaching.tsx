@@ -51,6 +51,7 @@ import {
   formatRatio,
   getCoverage,
   getCountMetric,
+  getFollowUpMetric,
   getPresenceMetric,
   hasEnoughWaitTimeSamples,
   isConfidentState,
@@ -60,6 +61,7 @@ import {
   MIN_DURATION_FOR_TALK_BALANCE_CANDIDATE_SEC,
   MIN_N_FOR_PERCENT,
   SHORT_SESSION_THRESHOLD_SEC,
+  STUDENT_TALK_CAVEAT,
   type ConfidentMetric,
   type MetricState,
   type TalkBalanceJudgment,
@@ -925,17 +927,17 @@ function buildReflectContext(
 
   if (cfuMetric.state === 'confirmed_none') {
     context.push(
-      'No explicit checks for understanding were detected this session (confidently measured, not missing data).',
+      'None of the common spoken check-for-understanding phrases (like "thumbs up" or "turn and talk") were heard this session. Only those spoken phrases are detected, so a silent, written, or differently worded check would not show up — don\'t treat this as proof no check happened.',
     )
   }
   if (redirectionMetric.state === 'confirmed_none') {
     context.push(
-      'No redirection/behavior language was flagged this session (confidently measured, not missing data).',
+      'None of the common spoken redirection phrases (like "eyes on me") were heard this session. Nonverbal or differently worded redirection would not show up.',
     )
   }
   if (directiveMetric.state === 'confirmed_none') {
     context.push(
-      'No clear task-instruction language was detected this session (confidently measured, not missing data).',
+      'None of the common task-instruction phrases (like "open your" or "turn to page") were heard this session. Directions phrased differently would not show up.',
     )
   }
 
@@ -986,14 +988,14 @@ function buildReflectStarterPrompts(
   if (prompts.length < 3 && cfuMetric.state === 'confirmed_none') {
     prompts.push({
       label: 'Talk about checking for understanding',
-      focus: 'why no explicit check for understanding came through this session, and what that might look like next time',
+      focus: 'how they checked for understanding today, since none of the common spoken check phrases came through in the recording',
       timestampSec: null,
     })
   }
   if (prompts.length < 3 && redirectionMetric.state === 'confirmed_none') {
     prompts.push({
       label: 'Talk about how the room felt today',
-      focus: 'how the classroom climate felt today, since no redirection language was detected',
+      focus: 'how the classroom climate felt today, since none of the common redirection phrases came through',
       timestampSec: null,
     })
   }
@@ -1131,7 +1133,7 @@ function buildTalkInsight(
   } else if (studentSegmentsMetric.state === 'confirmed_none' && sentence) {
     sentence += ' No separately identifiable student voice was captured this session.'
   }
-  return sentence
+  return sentence ? `${sentence} ${STUDENT_TALK_CAVEAT}` : sentence
 }
 
 function buildQuestioningInsight(
@@ -1152,7 +1154,7 @@ function buildQuestioningInsight(
   if (followUpMetric.state === 'measured') {
     sentence += ` You followed up on a question ${followUpMetric.display} time${followUpMetric.display === '1' ? '' : 's'} — that's a habit worth keeping.`
   } else if (followUpMetric.state === 'confirmed_none') {
-    sentence += ' None of your questions got a follow-up today — a quick "say more about that" can go a long way.'
+    sentence += ' No follow-up questions were detected after a student answer today — a quick "say more about that" can go a long way.'
   }
   if (waitTimeMetric.state === 'measured' && session.avgWaitTimeSec != null && hasEnoughWaitTimeSamples(session.metricsDetail)) {
     sentence +=
@@ -1188,7 +1190,7 @@ function buildCfuInsight(
       `${count} verbal check${count === '1' ? '' : 's'} for understanding ${count === '1' ? 'was' : 'were'} also detected.`,
     )
   } else if (cfuMetric.state === 'confirmed_none') {
-    parts.push('No verbal checks for understanding were detected this session.')
+    parts.push('None of the common spoken check-for-understanding phrases came through this session.')
   }
   return parts.length > 0 ? parts.join(' ') : null
 }
@@ -1209,7 +1211,7 @@ function buildRoutinesInsight(
   if (counted.length > 0) {
     parts.push(`${counted.join(' and ')} ${counted.length === 1 && counted[0].startsWith('1 ') ? 'was' : 'were'} detected.`)
   } else if (transitionMetric.state === 'confirmed_none' && directiveMetric.state === 'confirmed_none') {
-    parts.push('No transition language or task-instruction language was detected in this session.')
+    parts.push('None of the common transition or task-instruction phrases came through this session — directions phrased differently wouldn\'t show up here.')
   }
   if (directiveMetric.state === 'measured') {
     parts.push(
@@ -1230,7 +1232,7 @@ function buildClimateInsight(
 ): string | null {
   const parts: string[] = []
   if (redirectionMetric.state === 'confirmed_none') {
-    parts.push('No redirection moments were detected this session.')
+    parts.push('None of the common redirection phrases came through this session.')
   } else if (redirectionMetric.state === 'measured') {
     parts.push(
       `${redirectionMetric.display} redirection moment${redirectionMetric.display === '1' ? ' was' : 's were'} detected.`,
@@ -1596,7 +1598,7 @@ function buildPriorityCandidates(
   if (hasEnoughDurationForTalkBalance && balance?.kind === 'teacher-heavy') {
     candidates.push({
       id: 'talk-balance',
-      observation: `You talked ${balance.teacherPct}% of the time today`,
+      observation: `You had ${balance.teacherPct}% of the talk the recording picked up today`,
       whyItMatters: 'Look for a moment to hand the floor to students — even a short turn-and-talk shifts the balance.',
       timestampSec: null,
       excerpt: null,
@@ -1642,10 +1644,12 @@ function buildPriorityCandidates(
     })
   }
 
-  if (cfuMetric.state === 'confirmed_none') {
+  // Only spoken check phrases are detectable, so a zero from a short clip
+  // is too thin to headline as the one thing to work on.
+  if (cfuMetric.state === 'confirmed_none' && hasEnoughDurationForTalkBalance) {
     candidates.push({
       id: 'cfu',
-      observation: 'No explicit check for understanding was detected this session',
+      observation: 'None of the common spoken check-for-understanding phrases came through this session',
       whyItMatters: 'Even a quick thumbs-up check can catch confusion early, before it compounds.',
       timestampSec: null,
       excerpt: null,
@@ -2131,7 +2135,11 @@ function ReportPanel({
   const higherOrderCount = num('higherOrderQuestionCount')
   const higherOrderRatio =
     session.questionCount != null ? formatRatio(higherOrderCount ?? 0, session.questionCount) : null
-  const followUpMetric = getCountMetric({ count: num('followUpQuestionCount'), recordedSec })
+  const followUpMetric = getFollowUpMetric({
+    count: num('followUpQuestionCount'),
+    studentVoiceSegments: num('studentVoiceSegments'),
+    recordedSec,
+  })
   const waitTimeMetric = getPresenceMetric(session.avgWaitTimeSec)
 
   // Checking Understanding

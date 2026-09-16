@@ -69,6 +69,21 @@ enum ReportConfidence {
         return ConfidentMetric(state: .measured, display: String(count))
     }
 
+    /// Mirrors `getFollowUpMetric` in reportConfidence.ts — follow-ups are
+    /// only detectable after a transcribed student answer, so no captured
+    /// student voice means "unknown", not a confident zero.
+    static func getFollowUpMetric(count: Int?, studentVoiceSegments: Int?, recordedSec: Double) -> ConfidentMetric {
+        if studentVoiceSegments == 0 {
+            return ConfidentMetric(
+                state: .notMeasurable, display: "—",
+                reason: "No student answers were picked up in this recording, so follow-ups to them couldn't be detected."
+            )
+        }
+        return getCountMetric(count: count, recordedSec: recordedSec)
+    }
+
+    static let studentTalkCaveat = "Quiet or distant student voices often aren't picked up, so treat student talk here as a minimum."
+
     static func getPresenceMetric(_ value: Double?) -> ConfidentMetric {
         guard let value else {
             return ConfidentMetric(state: .notMeasurable, display: "—", reason: "Not enough data in this session to compute this.")
@@ -154,6 +169,7 @@ enum AudioInsights {
 
     static func buildTalkInsight(_ session: AudioSessionWithSegments) -> String? {
         buildVoiceBalanceCaption(Confidence.judgeTalkBalance(teacherPct: session.teacherTalkPct, studentPct: session.studentTalkPct))
+            .map { "\($0) \(Confidence.studentTalkCaveat)" }
     }
 
     static func buildQuestioningInsight(_ session: AudioSessionWithSegments, higherOrderRatio: Metric?) -> String? {
@@ -173,7 +189,7 @@ enum AudioInsights {
             return "You checked for understanding today — a good habit for catching confusion before it compounds."
         }
         if cfuMetric.state == .confirmedNone {
-            return "No explicit check for understanding was detected this session — even a quick thumbs-up check can catch confusion early."
+            return "None of the common spoken check-for-understanding phrases came through this session — even a quick thumbs-up check can catch confusion early."
         }
         return nil
     }
@@ -193,7 +209,7 @@ enum AudioInsights {
 
     static func buildClimateInsight(_ redirectionMetric: Metric, positiveCount: Int?, correctiveCount: Int?) -> String? {
         if redirectionMetric.state == .confirmedNone {
-            return "No redirection language was detected this session."
+            return "None of the common redirection phrases came through this session."
         }
         if redirectionMetric.state == .measured {
             var sentence = "You used redirection language \(redirectionMetric.display) today."
@@ -331,7 +347,7 @@ enum AudioInsights {
         )
         if case .teacherHeavy(let t, _) = Confidence.judgeTalkBalance(teacherPct: session.teacherTalkPct, studentPct: session.studentTalkPct) {
             candidates.append(NoticeCandidate(
-                id: "talk-balance", observation: "You talked \(Int(t))% of the time today",
+                id: "talk-balance", observation: "You had \(Int(t))% of the talk the recording picked up today",
                 whyItMatters: "Look for a moment to hand the floor to students — even a short turn-and-talk shifts the balance.",
                 timestampSec: nil, excerpt: nil, durationSec: nil, weight: 2, focusMetric: .talkRatio
             ))
@@ -350,9 +366,11 @@ enum AudioInsights {
                 timestampSec: nil, excerpt: nil, durationSec: nil, weight: 1, focusMetric: .avgWaitTime
             ))
         }
-        if cfuMetric.state == .confirmedNone {
+        // Only spoken check phrases are detectable, so a zero from a short
+        // clip is too thin to headline as the one thing to work on.
+        if cfuMetric.state == .confirmedNone, (session.durationSec ?? 0) >= Confidence.shortSessionThresholdSec {
             candidates.append(NoticeCandidate(
-                id: "cfu", observation: "No explicit check for understanding was detected this session",
+                id: "cfu", observation: "None of the common spoken check-for-understanding phrases came through this session",
                 whyItMatters: "Even a quick thumbs-up check can catch confusion early, before it compounds.",
                 timestampSec: nil, excerpt: nil, durationSec: nil, weight: 1, focusMetric: .cfuCount
             ))
@@ -399,13 +417,13 @@ enum AudioInsights {
             context.append("At \(ReportConfidence.formatDuration(h.timestampSec))\(durationPart), \"\(h.label)\": \"\(h.excerpt)\"")
         }
         if cfuMetric.state == .confirmedNone {
-            context.append("No explicit checks for understanding were detected this session (confidently measured, not missing data).")
+            context.append("None of the common spoken check-for-understanding phrases (like \"thumbs up\" or \"turn and talk\") were heard this session. Only those spoken phrases are detected, so a silent, written, or differently worded check would not show up — don't treat this as proof no check happened.")
         }
         if redirectionMetric.state == .confirmedNone {
-            context.append("No redirection/behavior language was flagged this session (confidently measured, not missing data).")
+            context.append("None of the common spoken redirection phrases (like \"eyes on me\") were heard this session. Nonverbal or differently worded redirection would not show up.")
         }
         if directiveMetric.state == .confirmedNone {
-            context.append("No clear task-instruction language was detected this session (confidently measured, not missing data).")
+            context.append("None of the common task-instruction phrases (like \"open your\" or \"turn to page\") were heard this session. Directions phrased differently would not show up.")
         }
         return Array(context.prefix(8))
     }
