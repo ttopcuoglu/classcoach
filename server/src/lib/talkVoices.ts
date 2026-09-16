@@ -8,7 +8,7 @@ export const TALK_VOICES = ['thalia', 'andromeda', 'helena', 'apollo', 'arcas', 
 
 export type TalkVoice = (typeof TALK_VOICES)[number]
 
-export const DEFAULT_TALK_VOICE: TalkVoice = 'thalia'
+export const DEFAULT_TALK_VOICE: TalkVoice = 'arcas'
 
 export function isValidTalkVoice(value: unknown): value is TalkVoice {
   return typeof value === 'string' && (TALK_VOICES as readonly string[]).includes(value)

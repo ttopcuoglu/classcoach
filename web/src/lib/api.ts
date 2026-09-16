@@ -39,11 +39,11 @@ export type ScenarioAttempt = {
 export type TalkVoice = 'thalia' | 'andromeda' | 'helena' | 'apollo' | 'arcas' | 'aries'
 
 export const TALK_VOICES: { value: TalkVoice; label: string; description: string }[] = [
-  { value: 'thalia', label: 'Thalia', description: 'Clear, confident, energetic (default)' },
+  { value: 'thalia', label: 'Thalia', description: 'Clear, confident, energetic' },
   { value: 'andromeda', label: 'Andromeda', description: 'Casual and expressive' },
   { value: 'helena', label: 'Helena', description: 'Warm, caring, friendly' },
   { value: 'apollo', label: 'Apollo', description: 'Calm and confident' },
-  { value: 'arcas', label: 'Arcas', description: 'Smooth and natural' },
+  { value: 'arcas', label: 'Arcas', description: 'Smooth and natural (default)' },
   { value: 'aries', label: 'Aries', description: 'Warm and energetic' },
 ]
 
