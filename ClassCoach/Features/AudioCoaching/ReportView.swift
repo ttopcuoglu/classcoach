@@ -110,7 +110,6 @@ struct ReportView: View {
                     OverviewTab(
                         session: session,
                         onSetFocus: { metric in focusMetric = metric; tab = .myGrowth },
-                        onNavigateReflect: { tab = .reflect },
                         onNavigateInsights: { target in section = target; tab = .insights }
                     )
                 case .insights:

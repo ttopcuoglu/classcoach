@@ -52,12 +52,11 @@ struct OverviewMetrics {
 }
 
 /// The Summary tab — mirrors `AudioCoaching.tsx`'s `SummaryTab`: the lesson
-/// at a glance, four headline numbers, one strength, one focus, who was
-/// heard, and one next step. Everything else lives in Insights.
+/// at a glance, four headline numbers, one strength, one focus, and who was
+/// heard. Everything else lives in Insights; talking it through is Reflect.
 struct OverviewTab: View {
     let session: AudioSessionWithSegments
     let onSetFocus: (FocusMetric) -> Void
-    let onNavigateReflect: () -> Void
     let onNavigateInsights: (InsightsSection) -> Void
 
     private var m: OverviewMetrics { OverviewMetrics(session) }
@@ -101,7 +100,6 @@ struct OverviewTab: View {
             strengthCard
             priorityCard
             whoWasHeardCard
-            nextStepCard
         }
     }
 
@@ -195,22 +193,6 @@ struct OverviewTab: View {
                 .padding(.top, 2)
         }
         .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
-    }
-
-    private var nextStepCard: some View {
-        tintedCard(AppTheme.peachTint.opacity(0.6)) {
-            eyebrow("One next step", AppTheme.terracotta600)
-            Text("Talk this lesson through with your coach, and leave with one thing to try next time.")
-                .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-            Button(action: onNavigateReflect) {
-                Label("Reflect with Wivoza", systemImage: "bubble.left.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16).padding(.vertical, 10)
-                    .background(AppTheme.terracotta, in: Capsule())
-            }
-            .padding(.top, 4)
-        }
     }
 
     private func balanceBar(label: String, pct: Double?, color: Color) -> some View {

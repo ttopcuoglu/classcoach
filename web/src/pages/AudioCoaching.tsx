@@ -1746,16 +1746,17 @@ function StrengthCard({
   )
 }
 
-// One card inside the "Evidence from the lesson" section — the one
-// remaining growth-oriented moment once the strength above has its own
-// section (never the same moment twice, per momentToRevisit's own
-// de-duplication against the "One next step" pick).
+// One card inside the "Evidence from the lesson" section — the Summary's
+// single growth-oriented pick (the focus-aware top priority), with the
+// "Set as my focus" shortcut when it maps to a trended My Growth metric.
 function EvidenceMomentCard({
   moment,
   onDiscuss,
+  onSetFocus,
 }: {
   moment: NoticeCandidate
   onDiscuss: (candidate: NoticeCandidate) => void
+  onSetFocus: (metric: FocusMetric) => void
 }) {
   return (
     <div className="rounded-2xl border border-hairline bg-cream-card p-6 md:col-span-2">
@@ -1763,13 +1764,24 @@ function EvidenceMomentCard({
       <p className="mt-1.5 text-sm font-semibold text-ink">{formatCandidateHeadline(moment)}</p>
       {moment.excerpt && <p className="mt-1 text-sm text-ink-soft">"{moment.excerpt}"</p>}
       <p className="mt-1 text-sm text-ink-soft">{moment.whyItMatters}</p>
-      <button
-        type="button"
-        onClick={() => onDiscuss(moment)}
-        className="mt-2 text-sm font-medium text-forest hover:text-terracotta-600"
-      >
-        Discuss this →
-      </button>
+      <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2">
+        <button
+          type="button"
+          onClick={() => onDiscuss(moment)}
+          className="text-sm font-medium text-forest hover:text-terracotta-600"
+        >
+          Discuss this →
+        </button>
+        {moment.focusMetric && (
+          <button
+            type="button"
+            onClick={() => onSetFocus(moment.focusMetric as FocusMetric)}
+            className="text-sm font-medium text-forest hover:text-terracotta-600"
+          >
+            Set as my focus → My Growth
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -1894,57 +1906,6 @@ function QuestionsOpenedCard({
         className="mt-3 text-sm font-medium text-forest hover:text-terracotta-600"
       >
         Review the questions →
-      </button>
-    </div>
-  )
-}
-
-// One next step: "Set as my focus" when the top priority maps to a
-// trended My Growth metric, plus the single "Reflect with Wivoza" CTA —
-// replaces the old TryThisNext (3 buttons) + AskWivozaCoachButton (a
-// second, separate coaching entry point) with the one action the
-// proposal asks for.
-function NextStepCard({
-  priority,
-  onSetFocus,
-  onGoReflect,
-}: {
-  priority: NoticeCandidate | null
-  onSetFocus: (metric: FocusMetric) => void
-  onGoReflect: () => void
-}) {
-  return (
-    <div className="rounded-2xl bg-peach-tint/50 p-6">
-      <span className="inline-block rounded-full bg-cream-card px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-terracotta-600">
-        One next step
-      </span>
-      {priority && (
-        <>
-          <p className="mt-3 text-base font-semibold text-ink">{formatCandidateHeadline(priority)}</p>
-          <p className="mt-1 text-sm text-ink-soft">{priority.whyItMatters}</p>
-          {priority.excerpt && (
-            <blockquote className="mt-3 border-l-2 border-terracotta pl-3 text-sm italic text-ink-soft">
-              "{priority.excerpt}"
-            </blockquote>
-          )}
-          {priority.focusMetric && (
-            <button
-              type="button"
-              onClick={() => onSetFocus(priority.focusMetric as FocusMetric)}
-              className="mt-3 rounded-lg border border-hairline px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
-            >
-              Set as my focus → My Growth
-            </button>
-          )}
-        </>
-      )}
-      <button
-        type="button"
-        onClick={onGoReflect}
-        className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-terracotta px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
-      >
-        <ChatBubbleIcon className="h-4 w-4" />
-        Reflect with Wivoza
       </button>
     </div>
   )
@@ -2329,7 +2290,6 @@ function ReportPanel({
           cfuInsight={cfuInsight}
           classSummary={session.classSummary}
           classSummarySending={classSummarySending}
-          onGoReflect={() => setTab('reflect')}
           onNavigateInsights={(section) => handleViewSource('insights', '', section)}
           onDiscussWithCoach={handleDiscussWithCoach}
           focusMetric={focusMetric}
@@ -2517,7 +2477,6 @@ function SummaryTab({
   cfuInsight,
   classSummary,
   classSummarySending,
-  onGoReflect,
   onNavigateInsights,
   onDiscussWithCoach,
   focusMetric,
@@ -2537,7 +2496,6 @@ function SummaryTab({
   cfuInsight: string | null
   classSummary: string | null
   classSummarySending: boolean
-  onGoReflect: () => void
   onNavigateInsights: (section: InsightsSection) => void
   onDiscussWithCoach: (candidate: NoticeCandidate) => void
   focusMetric: FocusMetric | null
@@ -2547,17 +2505,15 @@ function SummaryTab({
   const strengthCandidates = buildStrengthCandidates(session, cfuMetric, feedbackRatio, higherOrderRatio)
   const priorityCandidates = buildPriorityCandidates(session, cfuMetric, feedbackRatio, higherOrderRatio)
   const strength = pickTop(strengthCandidates)
-  const priority = pickTop(priorityCandidates, focusMetric)
-  // "A moment to revisit" must never repeat whatever's already showing as
-  // the focus-aware "One Next Step" pick — best REMAINING priority
-  // candidate instead of the same one twice.
-  const momentToRevisit = pickTop(priorityCandidates.filter((c) => c.id !== priority?.id))
+  // No separate "One next step" card any more — Reflect is its own tab — so
+  // the focus-aware top priority is the moment to revisit.
+  const momentToRevisit = pickTop(priorityCandidates, focusMetric)
   const spotlight = buildSpotlight(talkInsight, questioningInsight, cfuInsight)
 
-  // Five sections, in the order a teacher actually wants to read them:
-  // what happened, what went well, what to focus on, the evidence behind
-  // it, and what to do next — rather than a stack of similarly-weighted
-  // cards with no throughline.
+  // Four sections, in the order a teacher actually wants to read them:
+  // what happened, what went well, what to focus on, and the evidence
+  // behind it — rather than a stack of similarly-weighted cards with no
+  // throughline. Talking it through lives in the Reflect tab.
   return (
     <div className="flex flex-col gap-8">
       {/* 1. Lesson at a glance */}
@@ -2667,12 +2623,11 @@ function SummaryTab({
             followUpMetric={followUpMetric}
             onExplore={() => onNavigateInsights('questions')}
           />
-          {momentToRevisit && <EvidenceMomentCard moment={momentToRevisit} onDiscuss={onDiscussWithCoach} />}
+          {momentToRevisit && (
+            <EvidenceMomentCard moment={momentToRevisit} onDiscuss={onDiscussWithCoach} onSetFocus={onFocusMetricChange} />
+          )}
         </div>
       </div>
-
-      {/* 5. One next step */}
-      <NextStepCard priority={priority} onSetFocus={onFocusMetricChange} onGoReflect={onGoReflect} />
     </div>
   )
 }
