@@ -67,6 +67,8 @@ struct ReviewCommunicationView: View {
             Text("Review option").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
             ChipRow(items: reviewModeChips, selection: reviewMode) { reviewMode = $0 ?? "both" }
 
+            ProgressRing(active: submitting, estimatedSeconds: 12, label: "Reading both messages", hint: "Usually about fifteen seconds.")
+
             Button {
                 Task { await submit() }
             } label: {

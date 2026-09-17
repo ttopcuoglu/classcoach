@@ -87,6 +87,8 @@ struct PracticeConversationView: View {
                         .disabled(submitting)
                 }
 
+                ProgressRing(active: submitting, estimatedSeconds: 12, label: "Reading your response", hint: "Usually about fifteen seconds.")
+
                 HStack {
                     Button("Try a different scenario") {
                         situationText = nil
@@ -115,6 +117,7 @@ struct PracticeConversationView: View {
             } else {
                 VStack(spacing: 10) {
                     Text("No scenario loaded yet.").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                    ProgressRing(active: generating, estimatedSeconds: 8, label: "Building a scenario", hint: "Usually under ten seconds.")
                     HStack {
                         Button {
                             Task { await generate() }

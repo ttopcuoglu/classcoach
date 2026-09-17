@@ -147,6 +147,7 @@ struct TryItOutContent: View {
                 .buttonStyle(.plain)
                 .disabled(generating)
             }
+            ProgressRing(active: generating, estimatedSeconds: 8, label: "Building a scenario", hint: "Usually under ten seconds.")
             Button {
                 Task { await generateScenario() }
             } label: {
@@ -204,6 +205,8 @@ struct TryItOutContent: View {
                 .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
                 .disabled(submitting)
+
+            ProgressRing(active: submitting, estimatedSeconds: 8, label: "Reading your response", hint: "Usually under ten seconds.")
 
             HStack {
                 Button("Try a different scenario") {

@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { MicIcon } from '../components/icons'
 import SafetyAdvisoryBanner, { PrivacyReminder } from '../components/SafetyAdvisoryBanner'
 import { UpgradeMessage } from '../components/UpgradeMessage'
-import { ProgressRing } from '../components/ProgressRing'
+import { ProgressRing, WorkingRing } from '../components/ProgressRing'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import {
@@ -227,6 +227,7 @@ export default function PracticeConversation() {
             {!activeSituation ? (
               <div className="p-2 text-center">
                 <p className="text-sm text-ink-soft">No scenario loaded yet.</p>
+                <WorkingRing active={generating} estimatedMs={8000} label="Building a scenario" hint="Usually under ten seconds." className="mt-4 text-forest" />
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
                   <button
                     type="button"

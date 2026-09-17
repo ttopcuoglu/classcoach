@@ -105,6 +105,8 @@ struct AskExpertContent: View {
                 .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
                 .disabled(submitting)
 
+            ProgressRing(active: submitting, estimatedSeconds: 9, label: "Reading what you wrote", hint: "Usually about ten seconds.")
+
             Button {
                 Task { await submit() }
             } label: {

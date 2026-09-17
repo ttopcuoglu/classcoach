@@ -24,6 +24,17 @@ struct FollowUpChatView: View {
                     .frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
             }
 
+            if sending {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Wivoza is thinking…")
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                .padding(.vertical, 4)
+                .accessibilityElement(children: .combine)
+            }
+
             if let error {
                 Text(error).font(.caption).foregroundStyle(AppTheme.terracotta600)
             }

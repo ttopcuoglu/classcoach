@@ -1,3 +1,5 @@
+import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
+
 type Props = {
   /** 0-100. Values outside that range are clamped. */
   progress: number
@@ -56,6 +58,32 @@ export function ProgressRing({ progress, size = 72, label, hint, className = '' 
       </div>
       {label && <p className="text-sm font-medium">{label}</p>}
       {hint && <p className="text-xs opacity-70">{hint}</p>}
+    </div>
+  )
+}
+
+// ProgressRing plus its own simulated progress, for a wait that just needs
+// "Wivoza is working" shown next to the button that started it — saves each
+// caller a separate useSimulatedProgress hook per loading flag. Renders
+// nothing while inactive.
+export function WorkingRing({
+  active,
+  estimatedMs,
+  label,
+  hint,
+  className = '',
+}: {
+  active: boolean
+  estimatedMs: number
+  label: string
+  hint?: string
+  className?: string
+}) {
+  const progress = useSimulatedProgress(active, estimatedMs)
+  if (!active) return null
+  return (
+    <div className={`flex justify-center py-1 ${className}`}>
+      <ProgressRing progress={progress} label={label} hint={hint} />
     </div>
   )
 }

@@ -4,7 +4,7 @@ import CoachingChat from '../components/CoachingChat'
 import ReflectionTimeline from '../components/ReflectionTimeline'
 import ShareButton from '../components/ShareButton'
 import { ArrowUpIcon, MicIcon, StarIcon } from '../components/icons'
-import { ProgressRing } from '../components/ProgressRing'
+import { ProgressRing, WorkingRing } from '../components/ProgressRing'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { CATEGORIES, categoryLabel } from '../lib/categories'
@@ -451,6 +451,14 @@ export default function TryItOut() {
                     {listening ? 'Listening... tap to stop' : 'Speak your response'}
                   </button>
                 )}
+                {/* The hero's ring isn't on screen once a scenario is showing. */}
+                <WorkingRing
+                  active={generating || submitting}
+                  estimatedMs={8000}
+                  label={generating ? 'Building a scenario' : 'Reading your response'}
+                  hint="Usually under ten seconds."
+                  className="text-forest"
+                />
                 <div className="flex items-center justify-between">
                   {!sessionState && (
                     <button
@@ -506,6 +514,8 @@ export default function TryItOut() {
                   onSend={handleSendChat}
                   placeholder="Ask a follow-up about this feedback..."
                 />
+
+                <WorkingRing active={generating} estimatedMs={8000} label="Building a scenario" hint="Usually under ten seconds." className="text-forest" />
 
                 <div className="flex items-center justify-between">
                   <button

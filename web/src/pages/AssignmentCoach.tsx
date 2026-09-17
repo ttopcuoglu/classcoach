@@ -22,7 +22,7 @@ import {
   UploadIcon,
   WarningIcon,
 } from '../components/icons'
-import { ProgressRing } from '../components/ProgressRing'
+import { ProgressRing, WorkingRing } from '../components/ProgressRing'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import { ASSIGNMENT_GRADE_LEVELS } from '../lib/assignmentGradeLevels'
@@ -999,6 +999,7 @@ function ReviewSnapshotPanel({
           </div>
         </div>
       )}
+      <WorkingRing active={refining} estimatedMs={12000} label="Updating the review with your answer" className="mt-4 text-cream" />
       {refineError && <p className="mt-2 text-sm text-terracotta">{refineError}</p>}
 
       {hasOpportunity && (
@@ -1103,6 +1104,13 @@ function ReviewSnapshotPanel({
         </div>
       )}
 
+      <WorkingRing
+        active={revising}
+        estimatedMs={16000}
+        label="Revising the whole assignment"
+        hint="Working in everything you've discussed."
+        className="mt-4 text-cream"
+      />
       <button
         type="button"
         onClick={onRevise}
@@ -1557,6 +1565,7 @@ function Workspace({
                   answering={refining}
                 />
               )}
+              <WorkingRing active={refining} estimatedMs={12000} label="Updating with your answer" className="text-forest" />
               {refineError && <p className="text-sm text-terracotta-600">{refineError}</p>}
 
               {session.aiResistant && (
@@ -1672,6 +1681,7 @@ function Workspace({
                       </div>
                     </div>
                   )}
+                  <WorkingRing active={aiResisting} estimatedMs={16000} label="Redesigning the assignment" className="text-forest" />
                   {aiResistError && <p className="text-sm text-terracotta-600">{aiResistError}</p>}
                 </div>
               )}
@@ -1721,6 +1731,7 @@ function Workspace({
                   answering={refining}
                 />
               )}
+              <WorkingRing active={refining} estimatedMs={12000} label="Updating with your answer" className="text-forest" />
               {refineError && <p className="text-sm text-terracotta-600">{refineError}</p>}
 
               <div className="flex flex-col gap-3">
@@ -1766,6 +1777,7 @@ function Workspace({
                     </button>
                   </div>
                 )}
+                <WorkingRing active={reviewing} estimatedMs={12000} label="Putting together a coaching review" className="text-forest" />
                 {reviewError && <p className="text-sm text-terracotta-600">{reviewError}</p>}
 
                 <div className="flex flex-wrap gap-2">

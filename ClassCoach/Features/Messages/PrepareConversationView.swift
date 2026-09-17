@@ -74,6 +74,8 @@ struct PrepareConversationView: View {
             Text("Meeting format").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
             ChipRow(items: meetingFormatChips, selection: meetingFormat) { meetingFormat = $0 }
 
+            ProgressRing(active: submitting, estimatedSeconds: 16, label: "Building your meeting plan", hint: "Twelve sections — usually about twenty seconds.")
+
             Button {
                 Task { await submit() }
             } label: {

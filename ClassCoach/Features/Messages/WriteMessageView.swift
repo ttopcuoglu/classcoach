@@ -86,6 +86,8 @@ struct WriteMessageView: View {
                 labeledField("Briefly describe what happened and what you need to communicate", text: $incidentSummary)
             }
 
+            ProgressRing(active: drafting, estimatedSeconds: 11, label: "Drafting your message", hint: "Usually about ten seconds.")
+
             Button {
                 Task { await draft() }
             } label: {
