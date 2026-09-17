@@ -85,6 +85,8 @@ struct TagSpeakersView: View {
                         .background(selected.isEmpty || tagging ? AppTheme.textSecondary.opacity(0.4) : AppTheme.primary, in: Capsule())
                 }
                 .disabled(selected.isEmpty || tagging)
+
+                ProgressRing(active: tagging, estimatedSeconds: 4, label: "Analyzing your session")
             }
 
             if let error {

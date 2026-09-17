@@ -1802,6 +1802,13 @@ function Workspace({
                 >
                   {revising ? 'Revising...' : 'Revise the whole assignment'}
                 </button>
+                <WorkingRing
+                  active={revising}
+                  estimatedMs={16000}
+                  label="Revising the whole assignment"
+                  hint="Working in everything you've discussed."
+                  className="text-forest"
+                />
                 {reviseError && <p className="text-sm text-terracotta-600">{reviseError}</p>}
               </div>
             </>

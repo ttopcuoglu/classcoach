@@ -756,6 +756,7 @@ function TagSpeakersPanel({
           {tagging ? 'Analyzing...' : 'Analyze session'}
         </button>
       )}
+      <WorkingRing active={tagging} estimatedMs={4000} label="Analyzing your session" className="mt-4 text-forest" />
       {error && <p className="mt-4 text-sm text-terracotta-600">{error}</p>}
     </div>
   )

@@ -84,6 +84,8 @@ private struct GeneratePanel: View {
             field("Unit name", $unitName)
             field("Essential question", $essentialQuestion)
 
+            ProgressRing(active: generating, estimatedSeconds: 12, label: "Drafting a sample day", hint: "Usually about fifteen seconds.")
+
             Button {
                 Task { await generate() }
             } label: {
@@ -240,6 +242,8 @@ private struct FeedbackPanel: View {
                 .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
                 .disabled(submitting)
 
+            ProgressRing(active: submitting, estimatedSeconds: 12, label: "Reading your plan", hint: "Usually about fifteen seconds.")
+
             Button {
                 Task { await submit() }
             } label: {
@@ -280,6 +284,8 @@ private struct FeedbackPanel: View {
                         Button("Dismiss") { revisionDismissed = true }
                             .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
                     }
+
+                    ProgressRing(active: applyingRevision, estimatedSeconds: 12, label: "Applying the revision")
                 }
                 .padding(10)
                 .background(AppTheme.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))

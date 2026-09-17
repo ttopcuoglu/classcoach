@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { ShareIcon, StarIcon } from '../components/icons'
 import CoachingChat from '../components/CoachingChat'
 import { PanelHeader } from '../components/PanelHeader'
-import { ProgressRing } from '../components/ProgressRing'
+import { ProgressRing, WorkingRing } from '../components/ProgressRing'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { Spinner } from '../components/Spinner'
 import { UpgradeMessage } from '../components/UpgradeMessage'
@@ -547,6 +547,13 @@ function GeneratePanel() {
             <p className="text-xs text-ink-soft">This is a sample for ideas — adjust it to fit your class.</p>
 
             {plan.deliveryCoaching && <DeliveryCoachingCard coaching={plan.deliveryCoaching} />}
+            <WorkingRing
+              active={deliveryLoading}
+              estimatedMs={14000}
+              label="Coaching how to teach it"
+              hint="Opening, pacing, engagement, and closing."
+              className="text-forest"
+            />
             {deliveryError && <p className="text-sm text-terracotta-600">{deliveryError}</p>}
 
             <div className="flex items-center justify-between">
@@ -809,9 +816,17 @@ function FeedbackPanel() {
                     Dismiss
                   </button>
                 </div>
+                <WorkingRing active={applyingRevision} estimatedMs={12000} label="Applying the revision" className="mt-3 text-forest" />
               </div>
             )}
             {plan.deliveryCoaching && <DeliveryCoachingCard coaching={plan.deliveryCoaching} />}
+            <WorkingRing
+              active={deliveryLoading}
+              estimatedMs={14000}
+              label="Coaching how to teach it"
+              hint="Opening, pacing, engagement, and closing."
+              className="text-forest"
+            />
             {deliveryError && <p className="text-sm text-terracotta-600">{deliveryError}</p>}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
@@ -1175,6 +1190,7 @@ function PresentationPanel() {
                     Dismiss
                   </button>
                 </div>
+                <WorkingRing active={applyingRevision} estimatedMs={12000} label="Applying the revision" className="mt-3 text-forest" />
               </div>
             )}
 
