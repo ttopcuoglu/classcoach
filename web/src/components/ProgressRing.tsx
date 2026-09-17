@@ -62,6 +62,21 @@ export function ProgressRing({ progress, size = 72, label, hint, className = '' 
   )
 }
 
+// The compact, inline form for chat threads: a small ring beside
+// "Wivoza is thinking…", sized to sit where the next reply will appear.
+export function ThinkingIndicator({ active, estimatedMs = 8000 }: { active: boolean; estimatedMs?: number }) {
+  const progress = useSimulatedProgress(active, estimatedMs)
+  if (!active) return null
+  return (
+    <div className="flex max-w-[85%] items-center gap-3 rounded-2xl rounded-bl-sm border border-hairline bg-cream px-3 py-2 text-sm text-ink-soft">
+      <span className="text-forest">
+        <ProgressRing progress={progress} size={40} />
+      </span>
+      Wivoza is thinking…
+    </div>
+  )
+}
+
 // ProgressRing plus its own simulated progress, for a wait that just needs
 // "Wivoza is working" shown next to the button that started it — saves each
 // caller a separate useSimulatedProgress hook per loading flag. Renders

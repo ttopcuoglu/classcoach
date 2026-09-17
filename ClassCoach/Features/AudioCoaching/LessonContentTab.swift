@@ -133,6 +133,8 @@ struct LessonContentTab: View {
                 .padding(.horizontal, 16).padding(.vertical, 9)
                 .background(AppTheme.primary, in: Capsule())
                 .disabled(generating)
+
+                ProgressRing(active: generating, estimatedSeconds: 14, label: "Writing content specialist notes")
             } else if let notes = session.contentNotes {
                 Text("These notes are generated from a short audio excerpt and may miss context. They're meant as a starting point for your own reflection, not a factual review — please use your own subject expertise as the final word.")
                     .font(.caption2).foregroundStyle(AppTheme.textSecondary)

@@ -113,6 +113,8 @@ struct ReflectTab: View {
                             }
                         }
                         .disabled(sending)
+
+                        ProgressRing(active: sending, estimatedSeconds: 8, label: "Starting your debrief")
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -127,9 +129,7 @@ struct ReflectTab: View {
                             .background(message.role == "user" ? AppTheme.forest : AppTheme.mintTint.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
                             .frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
                     }
-                    if sending {
-                        Text("One moment…").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-                    }
+                    ProgressRing(active: sending, estimatedSeconds: 8, label: "Wivoza is thinking…", size: 44)
                 }
 
                 if let error {
@@ -285,6 +285,13 @@ struct ReflectTab: View {
                     .disabled(summarizing)
                 }
             }
+
+            ProgressRing(
+                active: summarizing,
+                estimatedSeconds: 12,
+                label: "Wrapping up your reflection",
+                hint: "Pulling your notes from the conversation."
+            )
 
             labeledField("What went well", text: $strengths)
             labeledField("What you want to work on", text: $growthAreas)

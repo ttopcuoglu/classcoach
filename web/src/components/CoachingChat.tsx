@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { ChatMessage } from '../lib/api'
-import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
-import { ProgressRing } from './ProgressRing'
+import { ThinkingIndicator } from './ProgressRing'
 
 // Shared follow-up chat thread for the one-shot feedback surfaces (Practice,
 // Debrief, Difficult Conversations, Parent Messages). Visually mirrors
@@ -33,7 +32,6 @@ export default function CoachingChat({
   placeholder?: string
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const thinkingProgress = useSimulatedProgress(sending, 8000)
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
@@ -58,14 +56,7 @@ export default function CoachingChat({
               {m.text}
             </div>
           ))}
-          {sending && (
-            <div className="flex max-w-[85%] items-center gap-3 rounded-2xl rounded-bl-sm border border-hairline bg-cream px-3 py-2 text-sm text-ink-soft">
-              <span className="text-forest">
-                <ProgressRing progress={thinkingProgress} size={40} />
-              </span>
-              Wivoza is thinking…
-            </div>
-          )}
+          <ThinkingIndicator active={sending} />
         </div>
       )}
 

@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, LockIcon, MicIcon, PlayIcon } from '../components/icons'
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
-import { ProgressRing } from '../components/ProgressRing'
+import { ProgressRing, ThinkingIndicator, WorkingRing } from '../components/ProgressRing'
 import { ACCENTS, StatTile, type Accent } from '../components/report'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
@@ -3375,8 +3375,14 @@ function ReflectTab({
           </button>
 
           {summarizing ? (
-            <div className="rounded-2xl border border-hairline bg-cream-card p-8 text-center">
-              <p className="text-sm text-ink-soft">Wrapping up your reflection…</p>
+            <div className="rounded-2xl border border-hairline bg-cream-card p-8">
+              <WorkingRing
+                active
+                estimatedMs={12000}
+                label="Wrapping up your reflection"
+                hint="Pulling your notes from the conversation."
+                className="text-forest"
+              />
             </div>
           ) : (
             <>
@@ -3569,6 +3575,7 @@ function ReflectTab({
               >
                 Type instead
               </button>
+              <WorkingRing active={sending} estimatedMs={8000} label="Starting your debrief" className="text-forest" />
               <p className="mt-1 text-xs text-ink-soft">Your debrief is private and saved automatically.</p>
             </div>
           )}
@@ -3621,7 +3628,7 @@ function ReflectTab({
                   <p className="mt-1">{lastAssistant.text}</p>
                 </div>
               )}
-              {sending && <p className="text-sm text-ink-soft">Thinking...</p>}
+              <ThinkingIndicator active={sending} />
 
               {lastAssistant && !sending && (
                 <div className="flex flex-wrap items-center gap-2">
@@ -4029,14 +4036,17 @@ function LessonContentTab({
             Not enough subject-specific content detected to generate notes this session.
           </p>
         ) : !contentNotes ? (
-          <button
-            type="button"
-            onClick={onGenerate}
-            disabled={sending}
-            className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
-          >
-            {sending ? 'Generating...' : 'Generate content specialist notes'}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={onGenerate}
+              disabled={sending}
+              className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+            >
+              {sending ? 'Generating...' : 'Generate content specialist notes'}
+            </button>
+            <WorkingRing active={sending} estimatedMs={14000} label="Writing content specialist notes" className="text-forest" />
+          </>
         ) : (
           <div className="flex flex-col gap-3">
             <p className="text-xs text-ink-soft">
