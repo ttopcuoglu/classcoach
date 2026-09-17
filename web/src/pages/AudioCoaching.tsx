@@ -235,16 +235,6 @@ export default function AudioCoaching() {
         onExit={handleExit}
       />
 
-      {/* Shown once there's a session to track, or whenever Home's "Your
-          growth" card sent the teacher here — then even with no sessions yet
-          it explains that trends start after a couple of recordings. */}
-      {!active && !historyLoading && (sessions.length > 0 || growthLinked) && (
-        <div id="my-growth" ref={growthRef} className="scroll-mt-6">
-          <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">My Growth</h2>
-          <MyGrowthTab sessions={sessions} focusMetric={focusMetric} onFocusMetricChange={handleFocusMetricChange} />
-        </div>
-      )}
-
       {!active && (
         <div>
           <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Past sessions</h2>
@@ -266,6 +256,16 @@ export default function AudioCoaching() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Shown once there's a session to track, or whenever Home's "Your
+          growth" card sent the teacher here — then even with no sessions yet
+          it explains that trends start after a couple of recordings. */}
+      {!active && !historyLoading && (sessions.length > 0 || growthLinked) && (
+        <div id="my-growth" ref={growthRef} className="scroll-mt-6">
+          <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">My Growth</h2>
+          <MyGrowthTab sessions={sessions} focusMetric={focusMetric} onFocusMetricChange={handleFocusMetricChange} />
         </div>
       )}
     </div>
@@ -5276,11 +5276,18 @@ function frequencyMax(values: (number | null)[]): number {
 function buildTrendInsight(sessions: AudioSession[]): string | null {
   if (sessions.length < 3) return null
 
-  const withTalk = sessions.filter((s) => s.teacherTalkPct != null)
+  // A lower teacher share alone doesn't mean more student voice — it also
+  // drops when more of a recording is silence or goes uncaptured (once shown
+  // as "more room for student voice" with students at 0% in every session).
+  // Only credit students when their own share actually rose.
+  const withTalk = sessions.filter((s) => s.teacherTalkPct != null && s.studentTalkPct != null)
   if (withTalk.length >= 3) {
-    const delta = withTalk[withTalk.length - 1].teacherTalkPct! - withTalk[0].teacherTalkPct!
-    if (delta <= -8) {
-      return `Your talk time is down ${Math.abs(Math.round(delta))} points since your first tracked session — more room for student voice.`
+    const first = withTalk[0]
+    const last = withTalk[withTalk.length - 1]
+    const teacherDelta = last.teacherTalkPct! - first.teacherTalkPct!
+    const studentDelta = last.studentTalkPct! - first.studentTalkPct!
+    if (teacherDelta <= -8 && studentDelta >= 5) {
+      return `Your talk time is down ${Math.abs(Math.round(teacherDelta))} points since your first tracked session, and students' is up ${Math.round(studentDelta)} — more room for student voice.`
     }
   }
 

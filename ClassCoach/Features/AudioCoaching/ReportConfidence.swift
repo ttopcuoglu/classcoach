@@ -432,11 +432,15 @@ enum AudioInsights {
 
     static func buildTrendInsight(_ sessions: [AudioSession]) -> String? {
         guard sessions.count >= 3 else { return nil }
-        let withTalk = sessions.filter { $0.teacherTalkPct != nil }
+        // Mirrors web: a lower teacher share alone can just mean more silence
+        // or uncaptured audio, so only credit student voice when students'
+        // own share actually rose.
+        let withTalk = sessions.filter { $0.teacherTalkPct != nil && $0.studentTalkPct != nil }
         if withTalk.count >= 3 {
-            let delta = withTalk.last!.teacherTalkPct! - withTalk.first!.teacherTalkPct!
-            if delta <= -8 {
-                return "Your talk time is down \(Int(abs(delta).rounded())) points since your first tracked session — more room for student voice."
+            let teacherDelta = withTalk.last!.teacherTalkPct! - withTalk.first!.teacherTalkPct!
+            let studentDelta = withTalk.last!.studentTalkPct! - withTalk.first!.studentTalkPct!
+            if teacherDelta <= -8 && studentDelta >= 5 {
+                return "Your talk time is down \(Int(abs(teacherDelta).rounded())) points since your first tracked session, and students' is up \(Int(studentDelta.rounded())) — more room for student voice."
             }
         }
         let withQuestions = sessions.filter { ($0.questionCount ?? 0) >= ReportConfidence.minNForPercent && $0.higherOrderPct != nil }
