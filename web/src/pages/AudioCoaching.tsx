@@ -1426,6 +1426,8 @@ type NoticeCandidate = {
   durationSec: number | null
   weight: number
   focusMetric: FocusMetric | null
+  /** What the report actually measured, for Reflect's coach when the label alone carries no data. */
+  detail?: string
 }
 
 // Fixed tie-break order so ranking is deterministic across renders.
@@ -1980,6 +1982,7 @@ function ReportPanel({
   const [externalFocus, setExternalFocus] = useState<{
     label: string
     focus: string
+    detail: string | null
     timestampSec: number | null
   } | null>(null)
 
@@ -2040,7 +2043,7 @@ function ReportPanel({
   // overrideText lets voice mode submit a transcribed turn directly,
   // bypassing reflectDraft entirely — same convention as Ask.tsx's and
   // TalkToMe.tsx's own optional-override submit functions.
-  async function handleSendReflect(overrideText?: string) {
+  async function handleSendReflect(overrideText?: string, extraContext: string[] = []) {
     const usingOverride = overrideText != null
     const trimmed = (overrideText ?? reflectDraft).trim()
     if (!trimmed || reflectSending) return
@@ -2048,7 +2051,7 @@ function ReportPanel({
     setReflectError(null)
     if (!usingOverride) setReflectDraft('')
     try {
-      const updated = await sendReflectMessage(session.id, { message: trimmed, context: reflectContext })
+      const updated = await sendReflectMessage(session.id, { message: trimmed, context: [...extraContext, ...reflectContext] })
       onUpdate({ ...session, ...updated })
     } catch (err) {
       const kind = (err as { kind?: ReflectChatErrorKind })?.kind ?? 'other'
@@ -2239,6 +2242,7 @@ function ReportPanel({
       ]
         .filter(Boolean)
         .join(' '),
+      detail: candidate.detail ?? null,
       timestampSec: candidate.timestampSec,
     })
   }
@@ -2626,6 +2630,7 @@ function SummaryTab({
                 durationSec: null,
                 weight: 0,
                 focusMetric,
+                detail: [focusSnapshot.capturedLine, focusSnapshot.statusLine].filter(Boolean).join(' '),
               })
             }
             className="mt-3 text-sm font-medium text-forest hover:text-terracotta-600"
@@ -3028,7 +3033,7 @@ function ReflectTab({
   draft: string
   onDraftChange: (v: string) => void
   onStart: (focus?: string) => void
-  onSend: (overrideText?: string) => void
+  onSend: (overrideText?: string, extraContext?: string[]) => void
   locked: boolean
   talkVoice: TalkVoice | null
   strengths: string
@@ -3051,7 +3056,7 @@ function ReflectTab({
   focusMetric: FocusMetric | null
   onFocusMetricChange: (metric: FocusMetric | null) => void
   segments: TranscriptSegment[]
-  externalFocus: { label: string; focus: string; timestampSec: number | null } | null
+  externalFocus: { label: string; focus: string; detail: string | null; timestampSec: number | null } | null
   onExternalFocusHandled: () => void
 }) {
   const started = conversation != null && conversation.length > 0
@@ -3293,8 +3298,18 @@ function ReflectTab({
     setShowStartScreen(false)
     setShowTranscriptWindow(false)
     setCurrentTimestampSec(externalFocus.timestampSec)
-    if (started) onSend(`Let's discuss this: ${externalFocus.label}`)
-    else onStart(externalFocus.focus)
+    // The label alone ("Follow-up questions — your current focus") carries
+    // no data, and mid-conversation the coach once answered with its earlier
+    // talk-balance reply instead — so the switch is spelled out, along with
+    // whatever the report actually measured for the new topic.
+    const measured = externalFocus.detail ? ` What the report shows about it: ${externalFocus.detail}` : ''
+    if (started) {
+      onSend(`Let's discuss this: ${externalFocus.label}`, [
+        `The teacher just switched to a new topic: ${externalFocus.label}.${measured}`,
+      ])
+    } else {
+      onStart(externalFocus.detail ? `${externalFocus.focus} (the report shows: ${externalFocus.detail})` : externalFocus.focus)
+    }
     onExternalFocusHandled()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalFocus])
