@@ -611,6 +611,26 @@ export type AudioContentNote = {
 }
 export type AudioContentNotes = { subject: string; notes: AudioContentNote[] }
 
+// Rubric Lens — the session's evidence organised under a teaching
+// framework's components. Evidence and next steps only, never a level.
+export type AudioRubricEvidence = { kind: string; timestampSec: number; text: string }
+export type AudioRubricComponent = {
+  code: string
+  name: string
+  domain: string
+  audibility: 'strong' | 'partial'
+  summary: string
+  nextStep: string | null
+  evidence: AudioRubricEvidence[]
+}
+export type AudioRubricLens = {
+  framework: string
+  frameworkName: string
+  generatedAt: string
+  components: AudioRubricComponent[]
+  notObservable: { code: string; name: string; domain: string; reason: string }[]
+}
+
 export type AudioSession = {
   id: string
   teacherName: string | null
@@ -639,6 +659,7 @@ export type AudioSession = {
   reflectConversation: AudioReflectMessage[] | null
   lessonContent: AudioLessonContent | null
   contentNotes: AudioContentNotes | null
+  rubricLens: AudioRubricLens | null
   classSummary: string | null
   strengths: string | null
   growthAreas: string | null
@@ -1508,6 +1529,10 @@ export function summarizeReflectConversation(
 
 export function generateContentNotes(id: string): Promise<AudioSession> {
   return request(`/api/audio-sessions/${id}/content-notes`, { method: 'POST' })
+}
+
+export function generateRubricLens(id: string): Promise<AudioSessionWithSegments> {
+  return request(`/api/audio-sessions/${id}/rubric-lens`, { method: 'POST' })
 }
 
 export function generateClassSummary(id: string): Promise<AudioSession> {

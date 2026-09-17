@@ -15,6 +15,14 @@ import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
 import { transcribeAudio } from '../lib/deepgram.ts'
 import { extractTag, stripTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
+import {
+  buildRubricEvidence,
+  buildRubricLensSystemPrompt,
+  DEFAULT_RUBRIC_FRAMEWORK,
+  parseRubricLens,
+  RUBRIC_FRAMEWORKS,
+  type RubricLensResult,
+} from '../lib/rubricLens.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const audioSessionsRouter = Router()
@@ -643,6 +651,100 @@ audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
   } catch (error) {
     console.error('[audio-sessions] content notes failed:', error)
     res.status(502).json({ error: 'Could not generate content notes. Please try again.' })
+  }
+})
+
+// Rubric Lens stays silent below this many citable moments — a lens built
+// on two quotes would read like a verdict about everything it couldn't hear.
+const MIN_RUBRIC_EVIDENCE_ITEMS = 4
+const NOT_ENOUGH_RUBRIC_EVIDENCE_ERROR =
+  "This recording didn't capture enough teaching moments to see it through a rubric. A longer recording usually does."
+
+audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
+  const session = await prisma.audioSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+    include: { segments: true },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  if (session.status === 'locked') {
+    res.status(403).json({ error: 'This report is locked and can no longer be edited.' })
+    return
+  }
+  // Generated once and kept, like Content Notes — a second tap returns the
+  // same lens rather than a second, differently-worded one.
+  if (session.rubricLens) {
+    res.json(await prisma.audioSession.findFirst({
+      where: { id: session.id },
+      include: { segments: { orderBy: { startSec: 'asc' } } },
+    }))
+    return
+  }
+
+  const framework = RUBRIC_FRAMEWORKS[DEFAULT_RUBRIC_FRAMEWORK]
+  const evidence = buildRubricEvidence({
+    ...session,
+    segments: session.segments.map((s) => ({
+      speakerLabel: s.speakerLabel,
+      startSec: s.startSec,
+      endSec: s.endSec,
+      text: s.text,
+    })),
+  })
+  if (evidence.items.length < MIN_RUBRIC_EVIDENCE_ITEMS) {
+    res.status(400).json({ error: NOT_ENOUGH_RUBRIC_EVIDENCE_ERROR })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'rubric_lens')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 4000,
+      system: buildRubricLensSystemPrompt(
+        framework,
+        evidence,
+        `${CORE_COACHING_RULES}\n${TRANSCRIPT_RELIABILITY_NOTICE}`,
+      ),
+      messages: [{ role: 'user', content: 'Write the rubric lens now.' }],
+    })
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+    flagIfUnsafe(text, 'audioSessions.rubricLens')
+
+    const components = parseRubricLens(text, framework, evidence.items)
+    // Most of the framework has to come back — a lens missing half its
+    // components would look like those parts of teaching were absent.
+    if (components.length < Math.ceil(framework.components.length * 0.75)) {
+      res.status(502).json({ error: 'Could not build the rubric lens. Please try again.' })
+      return
+    }
+
+    const rubricLens: RubricLensResult = {
+      framework: framework.id,
+      frameworkName: framework.name,
+      generatedAt: new Date().toISOString(),
+      components,
+      notObservable: framework.notObservable,
+    }
+    const updated = await prisma.audioSession.update({
+      where: { id: session.id },
+      data: { rubricLens },
+      include: { segments: { orderBy: { startSec: 'asc' } } },
+    })
+    res.json(updated)
+  } catch (error) {
+    console.error('[audio-sessions] rubric lens failed:', error)
+    res.status(502).json({ error: 'Could not build the rubric lens. Please try again.' })
   }
 })
 

@@ -15,6 +15,7 @@ import {
   deleteAudioSession,
   generateClassSummary,
   generateContentNotes,
+  generateRubricLens,
   getAudioSession,
   getAudioSessions,
   getProfile,
@@ -33,6 +34,7 @@ import {
   type AudioQuestionLogEntry,
   type AudioReflectMessage,
   type AudioRedirectionLogEntry,
+  type AudioRubricLens,
   type AudioSession,
   type AudioSessionWithSegments,
   type AudioToneLogEntry,
@@ -763,7 +765,7 @@ function TagSpeakersPanel({
 }
 
 type ReportTab = 'summary' | 'insights' | 'reflect' | 'growth'
-type InsightsSection = 'talk' | 'questions' | 'understanding' | 'content' | 'routines'
+type InsightsSection = 'talk' | 'questions' | 'understanding' | 'content' | 'routines' | 'rubric'
 type ReflectPath = 'full_report' | 'specific_moment' | 'how_it_felt' | 'ask_question'
 
 const REFLECT_PATH_CARDS: {
@@ -818,6 +820,7 @@ const INSIGHTS_SECTIONS: { key: InsightsSection; label: string }[] = [
   { key: 'understanding', label: 'Checks & Feedback' },
   { key: 'content', label: 'Clarity & Content' },
   { key: 'routines', label: 'Climate & Routines' },
+  { key: 'rubric', label: 'Rubric Lens' },
 ]
 
 // The printed report's numbers, one-line descriptions and colours for these
@@ -837,6 +840,8 @@ const INSIGHTS_SECTION_META: Record<InsightsSection, { n: number; blurb: string;
   },
   content: { n: 4, blurb: 'What the lesson said it was about, in its own words.', accent: ACCENTS.forest },
   routines: { n: 5, blurb: 'Counts, not scores. There is no such thing as a correct number here.', accent: ACCENTS.terracotta },
+  // Screen only — the printed report stops at section 5.
+  rubric: { n: 6, blurb: 'This lesson seen through your evaluation framework. Evidence, not a rating.', accent: ACCENTS.gold },
 }
 
 // Lets the stat groups inside a section tint themselves with that section's
@@ -1978,6 +1983,8 @@ function ReportPanel({
   const [summarizeError, setSummarizeError] = useState<string | null>(null)
   const [contentNotesSending, setContentNotesSending] = useState(false)
   const [contentNotesError, setContentNotesError] = useState<string | null>(null)
+  const [rubricLensSending, setRubricLensSending] = useState(false)
+  const [rubricLensError, setRubricLensError] = useState<string | null>(null)
   const [classSummarySending, setClassSummarySending] = useState(false)
   const hasAttemptedClassSummaryRef = useRef(false)
   const [externalFocus, setExternalFocus] = useState<{
@@ -2089,6 +2096,19 @@ function ReportPanel({
       setContentNotesError((err as Error).message || 'Could not generate content notes. Please try again.')
     } finally {
       setContentNotesSending(false)
+    }
+  }
+
+  async function handleGenerateRubricLens() {
+    setRubricLensSending(true)
+    setRubricLensError(null)
+    try {
+      const updated = await generateRubricLens(session.id)
+      onUpdate({ ...session, ...updated })
+    } catch (err) {
+      setRubricLensError((err as Error).message || 'Could not build the rubric lens. Please try again.')
+    } finally {
+      setRubricLensSending(false)
     }
   }
 
@@ -2467,6 +2487,17 @@ function ReportPanel({
                 redirectionLog={session.redirectionLog}
                 segments={session.segments}
                 onDiscussWithCoach={handleDiscussWithCoach}
+              />
+            )}
+
+            {insightsSection === 'rubric' && (
+              <RubricLensTab
+                rubricLens={session.rubricLens}
+                locked={locked}
+                isShort={coverage.isShort}
+                sending={rubricLensSending}
+                error={rubricLensError}
+                onGenerate={handleGenerateRubricLens}
               />
             )}
             </SectionAccentContext.Provider>
@@ -4107,6 +4138,130 @@ function LessonContentTab({
         )}
         {error && <p className="text-sm text-terracotta-600">{error}</p>}
       </div>
+    </div>
+  )
+}
+
+// On demand only — nothing here is built until the teacher asks, and once
+// built it's kept (see the /:id/rubric-lens route). Never shows a level.
+function RubricLensTab({
+  rubricLens,
+  locked,
+  isShort,
+  sending,
+  error,
+  onGenerate,
+}: {
+  rubricLens: AudioRubricLens | null
+  locked: boolean
+  isShort: boolean
+  sending: boolean
+  error: string | null
+  onGenerate: () => void
+}) {
+  if (!rubricLens) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+          <p className="font-heading text-lg font-bold text-forest">See this lesson through the Danielson Framework</p>
+          <p className="mt-2 text-sm text-ink">
+            Rubric Lens sorts what your recording captured under Danielson's Domain 2 (Learning Environments) and
+            Domain 3 (Learning Experiences). For each component you get the moments that show it and one next step to
+            try.
+          </p>
+          <ul className="mt-3 flex flex-col gap-1 text-sm text-ink-soft">
+            <li>· Evidence and next steps only. It never gives a level or a score.</li>
+            <li>· Only what audio can show. Anything visual, like room setup, is left out.</li>
+            <li>· Only you see it.</li>
+          </ul>
+          {locked ? (
+            <p className="mt-5 text-sm text-ink-soft">This report is locked, so a rubric lens can't be added to it.</p>
+          ) : (
+            <div className="mt-5 flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={onGenerate}
+                disabled={sending}
+                className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+              >
+                {sending ? 'Building your rubric lens...' : 'View through Danielson rubric'}
+              </button>
+              <WorkingRing active={sending} estimatedMs={30000} label="Matching your lesson to the framework" className="text-forest" />
+            </div>
+          )}
+        </div>
+        {error && <p className="text-sm text-terracotta-600">{error}</p>}
+      </div>
+    )
+  }
+
+  const domains = [...new Set(rubricLens.components.map((c) => c.domain))]
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="rounded-xl border border-dashed border-hairline p-4 text-xs text-ink-soft">
+        {rubricLens.frameworkName}, Domains 2 and 3. This organizes what your recording captured under each component.
+        It isn't a rating, and a thin section only means audio couldn't show much there, not that it didn't happen.
+        {isShort && (
+          <span className="mt-1 block font-semibold text-terracotta-600">
+            This session is under {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes, so there is less evidence to
+            work with.
+          </span>
+        )}
+      </div>
+
+      {domains.map((domain) => (
+        <section key={domain} className="flex flex-col gap-3">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">{domain}</h3>
+          {rubricLens.components
+            .filter((c) => c.domain === domain)
+            .map((component) => (
+              <div key={component.code} className="rounded-2xl border border-hairline bg-cream-card p-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-md bg-gold px-2 py-0.5 text-xs font-bold text-forest">{component.code}</span>
+                  <p className="font-heading text-base font-bold text-forest">{component.name}</p>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                      component.audibility === 'strong' ? 'bg-mint-tint/60 text-forest' : 'bg-cream text-ink-soft'
+                    }`}
+                  >
+                    {component.audibility === 'strong' ? 'Audio shows this well' : 'Audio shows part of this'}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm text-ink">{component.summary}</p>
+                {component.evidence.length > 0 && (
+                  <div className="mt-3 flex flex-col gap-2">
+                    {component.evidence.map((item, i) => (
+                      <div key={i} className="border-l-2 border-gold/60 pl-3">
+                        <p className="text-sm text-ink">"{item.text}"</p>
+                        <p className="mt-0.5 text-xs text-ink-soft">
+                          {formatTime(item.timestampSec)} · {item.kind}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {component.nextStep && (
+                  <div className="mt-4 rounded-xl bg-gold-tint/50 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Next step to try</p>
+                    <p className="mt-1 text-sm text-ink">{component.nextStep}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          {rubricLens.notObservable
+            .filter((c) => c.domain === domain)
+            .map((c) => (
+              <div key={c.code} className="rounded-2xl border border-dashed border-hairline p-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-md bg-hairline px-2 py-0.5 text-xs font-bold text-ink-soft">{c.code}</span>
+                  <p className="font-heading text-base font-bold text-ink-soft">{c.name}</p>
+                </div>
+                <p className="mt-2 text-sm text-ink-soft">Not in a recording. {c.reason}</p>
+              </div>
+            ))}
+        </section>
+      ))}
     </div>
   )
 }

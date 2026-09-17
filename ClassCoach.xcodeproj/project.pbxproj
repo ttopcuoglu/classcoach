@@ -56,6 +56,7 @@
 		75BA6626EB6627EA471DBEBF /* MyGrowthTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3E65D601C04B09766233D44 /* MyGrowthTab.swift */; };
 		D0383AB7AA54501B1C6C90D4 /* ReflectTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63DECA9CA7D3A0E56A4B0333 /* ReflectTab.swift */; };
 		427B01393DC452716CA98872 /* LessonContentTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20CF71C485DFFD882E16B3D0 /* LessonContentTab.swift */; };
+		9C3E7A21B4D5F60718293A4B /* RubricLensTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B1D2E3F4A5B6C7D8E9F0A1B /* RubricLensTab.swift */; };
 		2FCC0211134E449E76C6FDD6 /* ClimateDiscourseTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCEF352A681A5ED25BA6A15F /* ClimateDiscourseTabs.swift */; };
 		7AE5BA2F822605B019572E89 /* TalkToMeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F399238B1022C4F8369E6B27 /* TalkToMeService.swift */; };
 		E756E79251A3E9065230DA3F /* VoiceTurnRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B52077CE49175646B02AC4F8 /* VoiceTurnRecorder.swift */; };
@@ -117,6 +118,7 @@
 		A3E65D601C04B09766233D44 /* MyGrowthTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyGrowthTab.swift; sourceTree = "<group>"; };
 		63DECA9CA7D3A0E56A4B0333 /* ReflectTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReflectTab.swift; sourceTree = "<group>"; };
 		20CF71C485DFFD882E16B3D0 /* LessonContentTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonContentTab.swift; sourceTree = "<group>"; };
+		5B1D2E3F4A5B6C7D8E9F0A1B /* RubricLensTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RubricLensTab.swift; sourceTree = "<group>"; };
 		FCEF352A681A5ED25BA6A15F /* ClimateDiscourseTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClimateDiscourseTabs.swift; sourceTree = "<group>"; };
 		F399238B1022C4F8369E6B27 /* TalkToMeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkToMeService.swift; sourceTree = "<group>"; };
 		B52077CE49175646B02AC4F8 /* VoiceTurnRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceTurnRecorder.swift; sourceTree = "<group>"; };
@@ -232,6 +234,7 @@
 				A3E65D601C04B09766233D44 /* MyGrowthTab.swift */,
 				63DECA9CA7D3A0E56A4B0333 /* ReflectTab.swift */,
 				20CF71C485DFFD882E16B3D0 /* LessonContentTab.swift */,
+				5B1D2E3F4A5B6C7D8E9F0A1B /* RubricLensTab.swift */,
 				FCEF352A681A5ED25BA6A15F /* ClimateDiscourseTabs.swift */,
 				434C59F88122CBFEEFC6763E /* ReportConfidence.swift */,
 				09F68B8E7CA6E94BDED9D840 /* FocusMetrics.swift */,
@@ -479,6 +482,7 @@
 				75BA6626EB6627EA471DBEBF /* MyGrowthTab.swift in Sources */,
 				D0383AB7AA54501B1C6C90D4 /* ReflectTab.swift in Sources */,
 				427B01393DC452716CA98872 /* LessonContentTab.swift in Sources */,
+				9C3E7A21B4D5F60718293A4B /* RubricLensTab.swift in Sources */,
 				2FCC0211134E449E76C6FDD6 /* ClimateDiscourseTabs.swift in Sources */,
 				7AE5BA2F822605B019572E89 /* TalkToMeService.swift in Sources */,
 				E756E79251A3E9065230DA3F /* VoiceTurnRecorder.swift in Sources */,

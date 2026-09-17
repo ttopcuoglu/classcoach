@@ -531,6 +531,11 @@ model AudioSession {
   // until the teacher explicitly generates it (Lesson Content tab).
   contentNotes     Json?
 
+  // Rubric Lens: the session's evidence organised under a teaching
+  // framework's components (see lib/rubricLens.ts's RubricLensResult). Null
+  // until the teacher asks for it — never generated automatically.
+  rubricLens       Json?
+
   // Claude-generated summary of what the class covered + a genuine
   // strength, auto-generated once on the teacher's first Summary view and
   // cached forever after. Null = not yet attempted, or the one retryable

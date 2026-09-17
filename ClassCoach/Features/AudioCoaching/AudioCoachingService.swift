@@ -107,4 +107,8 @@ enum AudioCoachingService {
     static func generateContentNotes(sessionId: String) async throws -> AudioSession {
         try await APIClient.shared.request("/api/audio-sessions/\(sessionId)/content-notes", method: "POST")
     }
+
+    static func generateRubricLens(sessionId: String) async throws -> AudioSessionWithSegments {
+        try await APIClient.shared.request("/api/audio-sessions/\(sessionId)/rubric-lens", method: "POST")
+    }
 }

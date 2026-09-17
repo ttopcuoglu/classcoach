@@ -31,6 +31,7 @@ export type UsageAction =
   | 'conversation_prep_generate'
   | 'reflect_chat'
   | 'content_notes'
+  | 'rubric_lens'
   | 'attempt_chat'
   | 'debrief_chat'
   | 'conversation_prep_chat'

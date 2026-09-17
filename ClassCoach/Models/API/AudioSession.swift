@@ -107,6 +107,41 @@ struct AudioContentNotes: Decodable {
     let notes: [AudioContentNote]
 }
 
+/// Mirrors `web/src/lib/api.ts`'s `AudioRubricLens` — a session's evidence
+/// organised under a teaching framework's components. Never a level.
+struct AudioRubricEvidence: Decodable {
+    let kind: String
+    let timestampSec: Double
+    let text: String
+}
+
+struct AudioRubricComponent: Decodable, Identifiable {
+    var id: String { code }
+    let code: String
+    let name: String
+    let domain: String
+    let audibility: String
+    let summary: String
+    let nextStep: String?
+    let evidence: [AudioRubricEvidence]
+}
+
+struct AudioRubricNotObservable: Decodable, Identifiable {
+    var id: String { code }
+    let code: String
+    let name: String
+    let domain: String
+    let reason: String
+}
+
+struct AudioRubricLens: Decodable {
+    let framework: String
+    let frameworkName: String
+    let generatedAt: String
+    let components: [AudioRubricComponent]
+    let notObservable: [AudioRubricNotObservable]
+}
+
 struct AudioSession: Decodable, Identifiable {
     let id: String
     let teacherName: String?
@@ -130,6 +165,7 @@ struct AudioSession: Decodable, Identifiable {
     let reflectConversation: [AudioReflectMessage]?
     let lessonContent: AudioLessonContent?
     let contentNotes: AudioContentNotes?
+    let rubricLens: AudioRubricLens?
     /// A plain-language "Lesson at a glance" paragraph, generated after analysis.
     let classSummary: String?
     let strengths: String?
@@ -143,7 +179,7 @@ struct AudioSession: Decodable, Identifiable {
         case id, teacherName, classSubject, period, gradeLevel, sessionDate, consentConfirmed, status,
              durationSec, teacherTalkPct, studentTalkPct, questionCount, higherOrderPct, avgWaitTimeSec,
              cfuCount, metricsDetail, highlights, phases, questionLog, reflectConversation, lessonContent,
-             contentNotes, classSummary, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
+             contentNotes, rubricLens, classSummary, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -180,6 +216,8 @@ struct AudioSession: Decodable, Identifiable {
         reflectConversation = try container.decodeIfPresent([AudioReflectMessage].self, forKey: .reflectConversation)
         lessonContent = try container.decodeIfPresent(AudioLessonContent.self, forKey: .lessonContent)
         contentNotes = try container.decodeIfPresent(AudioContentNotes.self, forKey: .contentNotes)
+        // try? so an unexpected shape hides the lens instead of dropping the whole session.
+        rubricLens = try? container.decodeIfPresent(AudioRubricLens.self, forKey: .rubricLens)
         classSummary = try? container.decodeIfPresent(String.self, forKey: .classSummary)
         strengths = try container.decodeIfPresent(String.self, forKey: .strengths)
         growthAreas = try container.decodeIfPresent(String.self, forKey: .growthAreas)
@@ -226,6 +264,7 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
     var reflectConversation: [AudioReflectMessage]? { session.reflectConversation }
     var lessonContent: AudioLessonContent? { session.lessonContent }
     var contentNotes: AudioContentNotes? { session.contentNotes }
+    var rubricLens: AudioRubricLens? { session.rubricLens }
     var classSummary: String? { session.classSummary }
     var strengths: String? { session.strengths }
     var growthAreas: String? { session.growthAreas }

@@ -17,7 +17,7 @@ enum ReportTab: String, CaseIterable {
 /// as the web report and the printable PDF, so "section 3" means the same
 /// thing on the phone, the website and paper.
 enum InsightsSection: String, CaseIterable, Identifiable {
-    case talk, questions, understanding, content, routines
+    case talk, questions, understanding, content, routines, rubric
 
     var id: String { rawValue }
     var number: Int { (InsightsSection.allCases.firstIndex(of: self) ?? 0) + 1 }
@@ -29,6 +29,7 @@ enum InsightsSection: String, CaseIterable, Identifiable {
         case .understanding: return "Checks & Feedback"
         case .content: return "Clarity & Content"
         case .routines: return "Climate & Routines"
+        case .rubric: return "Rubric Lens"
         }
     }
 
@@ -39,6 +40,7 @@ enum InsightsSection: String, CaseIterable, Identifiable {
         case .understanding: return "How you checked they were with you, and how specific your feedback was."
         case .content: return "What the lesson said it was about, in its own words."
         case .routines: return "Counts, not scores. There is no such thing as a correct number here."
+        case .rubric: return "This lesson seen through your evaluation framework. Evidence, not a rating."
         }
     }
 
@@ -49,6 +51,7 @@ enum InsightsSection: String, CaseIterable, Identifiable {
         case .understanding: return .teal
         case .content: return .forest
         case .routines: return .terracotta
+        case .rubric: return .gold
         }
     }
 }
@@ -222,6 +225,7 @@ struct ReportView: View {
                 case .understanding: DiscourseDetailsTab(session: session, part: .understanding)
                 case .content: LessonContentTab(session: session, onUpdate: onUpdate)
                 case .routines: ClimateRoutinesTab(session: session)
+                case .rubric: RubricLensTab(session: session, locked: locked, onUpdate: onUpdate)
                 }
             }
             .environment(\.reportAccent, section.accent)
