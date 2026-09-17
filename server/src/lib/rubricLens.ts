@@ -310,14 +310,30 @@ For every component listed above, in the same order, write exactly one block:
 <component>
 <code>the component code, e.g. 3b</code>
 <evidence>up to 3 moment numbers that best show this component, comma-separated, or none</evidence>
-<summary>1-2 sentences describing what the recording shows for this component, grounded in the cited moments and counts. If there is little or no evidence, say what audio couldn't capture here.</summary>
-<next_step>One concrete, small practice to try in a future lesson that builds on what was heard. Write none if the evidence is too thin to suggest anything specific.</next_step>
+<summary>1-2 sentences (45 words at most) describing what the recording shows for this component, grounded in the cited moments and counts. If there is little or no evidence, say what audio couldn't capture here.</summary>
+<next_step>One sentence (35 words at most): a concrete, small practice to try in a future lesson that builds on what was heard. Write none if the evidence is too thin to suggest anything specific.</next_step>
 </component>
 
-Refer to moments only by number inside <evidence>. Don't quote or restate them in the summary, and don't invent a moment, number, or detail. The same moment may support more than one component.
+The numbering above is ours, and the teacher never sees it. Use a moment number only inside <evidence>; in <summary> and <next_step>, never write "moment 4", "[4]" or any other reference to a number — describe the moment in words, or say "the moment above". Don't invent a moment, number, or detail. The same moment may support more than one component.
 
 Write in plain text only, no markdown.
 ${sharedRules}`
+}
+
+// The prompt forbids it, but a next step that says "like in moment 21" did
+// reach a teacher once — the numbering is ours and means nothing to them.
+// Cutting the reference (with any "like in" / "see" that introduces it)
+// leaves a sentence that still reads correctly.
+const MOMENT_REFERENCE =
+  /[,;]?\s*\(?\[?(?:as |like |such as |e\.g\.,? |for example,? )?(?:seen |shown |described |mentioned )?(?:in|at|from|see)?\s*moments?\s*#?\d+(?:\s*(?:,|and|&|-|–|to)\s*#?\d+)*\)?\]?/gi
+
+export function stripMomentReferences(text: string): string {
+  return text
+    .replace(MOMENT_REFERENCE, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .replace(/\(\s*\)/g, '')
+    .trim()
 }
 
 export function parseRubricLens(
@@ -342,8 +358,8 @@ export function parseRubricLens(
     }
     const nextStep = extractTag(block, 'next_step')
     byCode.set(code, {
-      summary,
-      nextStep: nextStep && nextStep.toLowerCase() !== 'none' ? nextStep : null,
+      summary: stripMomentReferences(summary),
+      nextStep: nextStep && nextStep.toLowerCase() !== 'none' ? stripMomentReferences(nextStep) : null,
       evidence,
     })
   }
