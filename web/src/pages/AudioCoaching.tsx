@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, LockIcon, MicIcon, PlayIcon } from '../components/icons'
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
@@ -94,6 +94,13 @@ export default function AudioCoaching() {
   // this client can't verify without a new API call, so the line is only
   // ever shown when we're certain: plain "free" plan, no organization.
   const [showFreeCapLine, setShowFreeCapLine] = useState(false)
+  // Home's "Your growth" card links here with #my-growth. Growth trends used
+  // to live only inside an opened report's My Growth tab, so that card
+  // landed on the recording page with no growth in sight.
+  const location = useLocation()
+  const growthLinked = location.hash === '#my-growth'
+  const growthRef = useRef<HTMLDivElement>(null)
+  const scrolledToGrowth = useRef(false)
 
   function refreshHistory() {
     getAudioSessions()
@@ -113,6 +120,16 @@ export default function AudioCoaching() {
       })
       .catch(() => {})
   }, [])
+
+  // Wait for the session list so the section is at its final height before
+  // scrolling — otherwise it would jump once the trends render.
+  useEffect(() => {
+    // Once only — closing a report later shouldn't yank the page back here.
+    if (growthLinked && !historyLoading && !active && !scrolledToGrowth.current) {
+      scrolledToGrowth.current = true
+      growthRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [growthLinked, historyLoading, active])
 
   const freeRecordingsUsedThisMonth = useMemo(() => {
     const startOfMonth = new Date()
@@ -217,6 +234,16 @@ export default function AudioCoaching() {
         onSpeakers={setSpeakers}
         onExit={handleExit}
       />
+
+      {/* Shown once there's a session to track, or whenever Home's "Your
+          growth" card sent the teacher here — then even with no sessions yet
+          it explains that trends start after a couple of recordings. */}
+      {!active && !historyLoading && (sessions.length > 0 || growthLinked) && (
+        <div id="my-growth" ref={growthRef} className="scroll-mt-6">
+          <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">My Growth</h2>
+          <MyGrowthTab sessions={sessions} focusMetric={focusMetric} onFocusMetricChange={handleFocusMetricChange} />
+        </div>
+      )}
 
       {!active && (
         <div>

@@ -582,7 +582,7 @@ export default function Home() {
         </Link>
         {experienced ? (
           <Link
-            to="/audio-coaching"
+            to="/audio-coaching#my-growth"
             className="group flex items-center gap-4 rounded-2xl bg-mint-tint/50 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
           >
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-forest text-gold">
