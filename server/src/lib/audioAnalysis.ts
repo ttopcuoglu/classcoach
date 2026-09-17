@@ -107,6 +107,14 @@ export const CFU_PHRASES = [
   'thumbs up', 'thumbs down', 'turn and talk', 'on a scale of',
   'raise your hand if', 'show me with your fingers', 'talk to your partner',
   'fist to five',
+  // Exit tickets. Only when said aloud — one on a slide, form, or handout
+  // never shows up. "Before you leave" alone is too common ("…push in your
+  // chairs"), so it only counts followed by answer/write, with or without
+  // the comma transcription may add; "3-2-1" is left out because it's far
+  // more often a countdown than the 3-2-1 exit routine.
+  'exit ticket', 'exit slip', 'ticket out the door', 'ticket to leave',
+  'before you leave, answer', 'before you leave answer',
+  'before you leave, write', 'before you leave write',
 ]
 
 // A short, generic description per matched phrase — never derived from
@@ -122,6 +130,14 @@ const CFU_PHRASE_DESCRIPTIONS: Record<string, string> = {
   'raise your hand if': 'A show-of-hands check.',
   'show me with your fingers': 'A quick individual signal check.',
   'fist to five': 'A self-rated confidence check.',
+  'exit ticket': 'An end-of-lesson written check.',
+  'exit slip': 'An end-of-lesson written check.',
+  'ticket out the door': 'An end-of-lesson written check.',
+  'ticket to leave': 'An end-of-lesson written check.',
+  'before you leave, answer': 'An end-of-lesson written check.',
+  'before you leave answer': 'An end-of-lesson written check.',
+  'before you leave, write': 'An end-of-lesson written check.',
+  'before you leave write': 'An end-of-lesson written check.',
 }
 
 export const REDIRECTION_PHRASES = [
