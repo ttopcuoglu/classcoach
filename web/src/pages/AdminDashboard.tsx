@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   archivePdFocusArea,
@@ -291,11 +291,12 @@ export default function AdminDashboard() {
             onOrgChange={handleOrgChange}
             orgs={orgs}
             isSuperadmin={isSuperadmin}
+            currentUserId={me?.id ?? null}
             overview={overview}
           />
         )}
         {tab === 'organizations' && <OrganizationsPanel />}
-        {tab === 'platformUsers' && <UsersPanel />}
+        {tab === 'platformUsers' && <UsersPanel currentUserId={me?.id ?? null} />}
         {tab === 'schoolInquiries' && <SchoolInquiriesPanel />}
       </div>
     </div>
@@ -731,12 +732,187 @@ function editsFrom(values: EditValues): MemberEdits {
   return { name: values.name.trim() || null, jobTitle: values.jobTitle || null, role: values.role }
 }
 
-function MembersList({ organizationId, isSuperadmin }: { organizationId?: string; isSuperadmin: boolean }) {
+// ---- Bulk selection, shared by both rosters ----
+//
+// Selection only ever counts rows the current filters show: a filter change
+// can't leave hidden accounts selected and then sweep them into a delete.
+// Your own account and superadmins are never selectable.
+
+type BulkOutcome = { done: number; failures: string[] }
+
+// One request per person, a few at a time — the per-user routes already
+// carry every permission and self-protection check, so bulk adds no new
+// server surface, and one refusal doesn't abort the rest.
+async function runBulk<T extends { id: string; name: string | null; email: string }>(
+  people: T[],
+  action: (person: T) => Promise<unknown>,
+): Promise<BulkOutcome> {
+  const failures: string[] = []
+  let done = 0
+  for (let i = 0; i < people.length; i += 5) {
+    const batch = people.slice(i, i + 5)
+    const results = await Promise.allSettled(batch.map((p) => action(p)))
+    results.forEach((r, j) => {
+      if (r.status === 'fulfilled') done += 1
+      else failures.push(`${batch[j].name ?? batch[j].email}: ${(r.reason as Error).message}`)
+    })
+  }
+  return { done, failures }
+}
+
+function SelectAllCheckbox({
+  checked,
+  indeterminate,
+  disabled,
+  onChange,
+}: {
+  checked: boolean
+  indeterminate: boolean
+  disabled: boolean
+  onChange: () => void
+}) {
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate
+  }, [indeterminate])
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={checked}
+      disabled={disabled}
+      onChange={onChange}
+      aria-label="Select all shown"
+      title="Select everyone the current filters show"
+      className="h-4 w-4 cursor-pointer accent-forest disabled:cursor-default"
+    />
+  )
+}
+
+function RowCheckbox({
+  checked,
+  disabled,
+  label,
+  onChange,
+}: {
+  checked: boolean
+  disabled: boolean
+  label: string
+  onChange: () => void
+}) {
+  return (
+    <input
+      type="checkbox"
+      checked={checked}
+      disabled={disabled}
+      onChange={onChange}
+      aria-label={`Select ${label}`}
+      className="h-4 w-4 cursor-pointer accent-forest disabled:cursor-not-allowed disabled:opacity-30"
+    />
+  )
+}
+
+type BulkAction = { key: string; label: string; danger?: boolean; count: number; run: () => void }
+
+function BulkBar({
+  selectedCount,
+  actions,
+  busy,
+  outcome,
+  onClear,
+}: {
+  selectedCount: number
+  actions: BulkAction[]
+  busy: string | null
+  outcome: string | null
+  onClear: () => void
+}) {
+  if (selectedCount === 0 && !outcome) return null
+  return (
+    <div className="mt-3 flex flex-col gap-2 rounded-xl border border-hairline bg-mint-tint/40 px-3.5 py-2.5">
+      {selectedCount > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-semibold text-forest">{selectedCount} selected</span>
+          {actions.map((a) => (
+            <button
+              key={a.key}
+              type="button"
+              onClick={a.run}
+              disabled={busy !== null || a.count === 0}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors disabled:opacity-40 ${
+                a.danger
+                  ? 'border-terracotta/40 bg-cream-card text-terracotta-600 hover:bg-peach-tint'
+                  : 'border-hairline bg-cream-card text-ink hover:bg-cream'
+              }`}
+            >
+              {busy === a.key ? 'Working...' : `${a.label}${a.count !== selectedCount ? ` (${a.count})` : ''}`}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={busy !== null}
+            className="text-xs font-medium text-ink-soft hover:text-ink disabled:opacity-40"
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
+      {outcome && <p className="whitespace-pre-line text-xs text-ink">{outcome}</p>}
+    </div>
+  )
+}
+
+function describeOutcome(verb: string, outcome: BulkOutcome): string {
+  const lines = [`${verb} ${outcome.done} ${outcome.done === 1 ? 'account' : 'accounts'}.`]
+  if (outcome.failures.length > 0) {
+    lines.push(`Couldn't do ${outcome.failures.length}:`, ...outcome.failures.map((f) => `· ${f}`))
+  }
+  return lines.join('\n')
+}
+
+// Deleting in bulk is irreversible and cascades to everyone's recordings and
+// notes, so it asks for the word, not just an OK.
+function confirmBulkDelete(people: { name: string | null; email: string }[]): boolean {
+  const preview = people
+    .slice(0, 5)
+    .map((p) => `  · ${p.name ? `${p.name} (${p.email})` : p.email}`)
+    .join('\n')
+  const more = people.length > 5 ? `\n  …and ${people.length - 5} more` : ''
+  const typed = window.prompt(
+    `Permanently delete ${people.length} ${people.length === 1 ? 'account' : 'accounts'} and all their data?\n\n${preview}${more}\n\nThis cannot be undone. Type DELETE to confirm.`,
+  )
+  return typed?.trim() === 'DELETE'
+}
+
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`
+}
+
+const filterSelectClass =
+  'rounded-xl border border-hairline bg-cream px-2.5 py-1.5 text-xs text-ink focus:border-terracotta focus:outline-none'
+
+type MemberStatusFilter = 'all' | 'Active' | 'Inactive' | 'Never active' | 'Suspended'
+
+function MembersList({
+  organizationId,
+  isSuperadmin,
+  currentUserId,
+}: {
+  organizationId?: string
+  isSuperadmin: boolean
+  currentUserId: string | null
+}) {
   const [members, setMembers] = useState<OrgMember[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [roleFilter, setRoleFilter] = useState<'all' | 'teacher' | 'org_admin'>('all')
+  const [statusFilter, setStatusFilter] = useState<MemberStatusFilter>('all')
   const [sortKey, setSortKey] = useState<MemberSortKey>('name')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkBusy, setBulkBusy] = useState<string | null>(null)
+  const [bulkOutcome, setBulkOutcome] = useState<string | null>(null)
 
   function refresh() {
     setError(null)
@@ -747,6 +923,8 @@ function MembersList({ organizationId, isSuperadmin }: { organizationId?: string
 
   useEffect(() => {
     setMembers(null)
+    setSelected(new Set())
+    setBulkOutcome(null)
     refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId])
@@ -763,10 +941,12 @@ function MembersList({ organizationId, isSuperadmin }: { organizationId?: string
   const query = search.trim().toLowerCase()
   const filtered = (members ?? []).filter(
     (m) =>
-      !query ||
-      (m.name ?? '').toLowerCase().includes(query) ||
-      m.email.toLowerCase().includes(query) ||
-      (m.jobTitle ?? '').toLowerCase().includes(query),
+      (!query ||
+        (m.name ?? '').toLowerCase().includes(query) ||
+        m.email.toLowerCase().includes(query) ||
+        (m.jobTitle ?? '').toLowerCase().includes(query)) &&
+      (roleFilter === 'all' || m.role === roleFilter) &&
+      (statusFilter === 'all' || memberStatusLabel(m) === statusFilter),
   )
 
   const sorted = [...filtered].sort((a, b) => {
@@ -779,32 +959,156 @@ function MembersList({ organizationId, isSuperadmin }: { organizationId?: string
     return sortDir === 'asc' ? cmp : -cmp
   })
 
+  const isSelectable = (m: OrgMember) => m.role !== 'superadmin' && m.id !== currentUserId
+  const selectable = sorted.filter(isSelectable)
+  const picked = selectable.filter((m) => selected.has(m.id))
+  const allPicked = selectable.length > 0 && picked.length === selectable.length
+
+  function toggle(id: string) {
+    setBulkOutcome(null)
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    setBulkOutcome(null)
+    setSelected(allPicked ? new Set() : new Set(selectable.map((m) => m.id)))
+  }
+
+  async function bulk(key: string, verb: string, people: OrgMember[], action: (m: OrgMember) => Promise<unknown>) {
+    setBulkBusy(key)
+    const outcome = await runBulk(people, action)
+    setBulkBusy(null)
+    setSelected(new Set())
+    setBulkOutcome(describeOutcome(verb, outcome))
+    refresh()
+  }
+
+  const toSuspend = picked.filter((m) => !m.suspendedAt)
+  const toUnsuspend = picked.filter((m) => m.suspendedAt)
+  const actions: BulkAction[] = [
+    {
+      key: 'suspend',
+      label: 'Suspend',
+      count: toSuspend.length,
+      run: () => {
+        if (
+          !window.confirm(
+            `Suspend ${plural(toSuspend.length, 'person', 'people')}? They won't be able to sign in until unsuspended. Their data is kept.`,
+          )
+        ) {
+          return
+        }
+        void bulk('suspend', 'Suspended', toSuspend, (m) => suspendMember(m.id, true, organizationId))
+      },
+    },
+    {
+      key: 'unsuspend',
+      label: 'Unsuspend',
+      count: toUnsuspend.length,
+      run: () => void bulk('unsuspend', 'Unsuspended', toUnsuspend, (m) => suspendMember(m.id, false, organizationId)),
+    },
+    {
+      key: 'remove',
+      label: 'Remove from school',
+      count: picked.length,
+      run: () => {
+        if (
+          !window.confirm(
+            `Remove ${plural(picked.length, 'person', 'people')} from this school? They become independent — no data is lost.`,
+          )
+        ) {
+          return
+        }
+        void bulk('remove', 'Removed', picked, (m) => removeMember(m.id, organizationId))
+      },
+    },
+  ]
+  if (isSuperadmin) {
+    actions.push({
+      key: 'delete',
+      label: 'Delete',
+      danger: true,
+      count: picked.length,
+      run: () => {
+        if (!confirmBulkDelete(picked)) return
+        void bulk('delete', 'Deleted', picked, (m) => deleteUser(m.id))
+      },
+    })
+  }
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
           Members{members ? ` (${members.length})` : ''}
         </h2>
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, email, or title"
-          className={`${inputClass} w-full max-w-xs`}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value as typeof roleFilter)}
+            aria-label="Filter by role"
+            className={filterSelectClass}
+          >
+            <option value="all">All roles</option>
+            <option value="teacher">Teachers</option>
+            <option value="org_admin">Admins</option>
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as MemberStatusFilter)}
+            aria-label="Filter by status"
+            className={filterSelectClass}
+          >
+            <option value="all">All statuses</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+            <option value="Never active">Never active</option>
+            <option value="Suspended">Suspended</option>
+          </select>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, email, or title"
+            className={`${inputClass} w-full max-w-xs`}
+          />
+        </div>
       </div>
       {error && <p className="mt-2 text-sm text-terracotta-600">{error}</p>}
+      <BulkBar
+        selectedCount={picked.length}
+        actions={actions}
+        busy={bulkBusy}
+        outcome={bulkOutcome}
+        onClear={() => {
+          setSelected(new Set())
+          setBulkOutcome(null)
+        }}
+      />
       {!members ? (
         <p className="mt-3 text-sm text-ink-soft">Loading...</p>
       ) : members.length === 0 ? (
         <p className="mt-3 text-sm text-ink-soft">No members yet.</p>
       ) : sorted.length === 0 ? (
-        <p className="mt-3 text-sm text-ink-soft">No members match &ldquo;{search}&rdquo;.</p>
+        <p className="mt-3 text-sm text-ink-soft">No members match these filters.</p>
       ) : (
         <div className="mt-3 overflow-x-auto rounded-xl border border-hairline">
-          <table className="w-full min-w-[720px] border-collapse bg-cream-card text-sm">
+          <table className="w-full min-w-[760px] border-collapse bg-cream-card text-sm">
             <thead>
               <tr className="border-b border-hairline bg-cream">
+                <th className="w-10 px-3.5 py-2.5 text-left">
+                  <SelectAllCheckbox
+                    checked={allPicked}
+                    indeterminate={picked.length > 0 && !allPicked}
+                    disabled={selectable.length === 0 || bulkBusy !== null}
+                    onChange={toggleAll}
+                  />
+                </th>
                 <SortableTh label="Name" sortKey="name" active={sortKey} dir={sortDir} onSort={handleSort} />
                 <SortableTh label="Role" sortKey="role" active={sortKey} dir={sortDir} onSort={handleSort} />
                 <SortableTh label="Status" sortKey="status" active={sortKey} dir={sortDir} onSort={handleSort} />
@@ -820,6 +1124,9 @@ function MembersList({ organizationId, isSuperadmin }: { organizationId?: string
                   member={m}
                   organizationId={organizationId}
                   isSuperadmin={isSuperadmin}
+                  selected={selected.has(m.id)}
+                  selectable={isSelectable(m) && bulkBusy === null}
+                  onToggle={() => toggle(m.id)}
                   onChanged={refresh}
                 />
               ))}
@@ -835,11 +1142,17 @@ function MemberRow({
   member,
   organizationId,
   isSuperadmin,
+  selected,
+  selectable,
+  onToggle,
   onChanged,
 }: {
   member: OrgMember
   organizationId?: string
   isSuperadmin: boolean
+  selected: boolean
+  selectable: boolean
+  onToggle: () => void
   onChanged: () => void
 }) {
   const [busy, setBusy] = useState(false)
@@ -893,7 +1206,10 @@ function MemberRow({
 
   return (
     <>
-      <tr className="border-b border-hairline/60 align-top last:border-0">
+      <tr className={`border-b border-hairline/60 align-top last:border-0 ${selected ? 'bg-mint-tint/30' : ''}`}>
+        <td className="px-3.5 py-3">
+          <RowCheckbox checked={selected} disabled={!selectable} label={member.name ?? member.email} onChange={onToggle} />
+        </td>
         <td className="px-3.5 py-3">
           <p className="text-sm font-semibold text-ink">{member.name ?? member.email}</p>
           <p className="text-xs text-ink-soft">
@@ -929,7 +1245,7 @@ function MemberRow({
         </td>
         <td className={ACTIONS_TD_CLASS}>
           {actionable ? (
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-3 whitespace-nowrap">
               <button
                 type="button"
                 onClick={() => setEditing((e) => !e)}
@@ -973,7 +1289,7 @@ function MemberRow({
       </tr>
       {editing && (
         <EditUserRow
-          colSpan={6}
+          colSpan={7}
           initial={{
             name: member.name ?? '',
             jobTitle: member.jobTitle ?? '',
@@ -1940,12 +2256,14 @@ function PeoplePanel({
   onOrgChange,
   orgs,
   isSuperadmin,
+  currentUserId,
   overview,
 }: {
   selectedOrgId: string
   onOrgChange: (id: string) => void
   orgs: Organization[]
   isSuperadmin: boolean
+  currentUserId: string | null
   overview: AdminOverview | null
 }) {
   return (
@@ -1974,7 +2292,11 @@ function PeoplePanel({
         <p className="text-sm text-ink-soft">Loading...</p>
       ) : overview.scope === 'organization' ? (
         <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-          <MembersList organizationId={selectedOrgId || undefined} isSuperadmin={isSuperadmin} />
+          <MembersList
+            organizationId={selectedOrgId || undefined}
+            isSuperadmin={isSuperadmin}
+            currentUserId={currentUserId}
+          />
         </div>
       ) : (
         <p className="text-sm text-ink-soft">Select an organization above to view its staff roster.</p>
@@ -2432,14 +2754,20 @@ type UserSortKey = 'name' | 'role' | 'organization' | 'status' | 'joined'
 
 // Same searchable/sortable table pattern as Members above — this list spans
 // every organization on the platform, so it needs search even more.
-function UsersPanel() {
+function UsersPanel({ currentUserId }: { currentUserId: string | null }) {
   const [users, setUsers] = useState<AdminUser[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [roleFilter, setRoleFilter] = useState<'all' | AdminUser['role']>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'suspended'>('all')
+  // 'all', 'independent', or an organization id.
+  const [schoolFilter, setSchoolFilter] = useState('all')
   const [sortKey, setSortKey] = useState<UserSortKey>('name')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
-
   const [orgs, setOrgs] = useState<Organization[]>([])
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkBusy, setBulkBusy] = useState<string | null>(null)
+  const [bulkOutcome, setBulkOutcome] = useState<string | null>(null)
 
   function refresh() {
     setError(null)
@@ -2467,10 +2795,14 @@ function UsersPanel() {
   const query = search.trim().toLowerCase()
   const filtered = (users ?? []).filter(
     (u) =>
-      !query ||
-      (u.name ?? '').toLowerCase().includes(query) ||
-      u.email.toLowerCase().includes(query) ||
-      (u.organizationName ?? '').toLowerCase().includes(query),
+      (!query ||
+        (u.name ?? '').toLowerCase().includes(query) ||
+        u.email.toLowerCase().includes(query) ||
+        (u.organizationName ?? '').toLowerCase().includes(query)) &&
+      (roleFilter === 'all' || u.role === roleFilter) &&
+      (statusFilter === 'all' || (statusFilter === 'suspended') === !!u.suspendedAt) &&
+      (schoolFilter === 'all' ||
+        (schoolFilter === 'independent' ? !u.organizationId : u.organizationId === schoolFilter)),
   )
 
   const sorted = [...filtered].sort((a, b) => {
@@ -2483,12 +2815,85 @@ function UsersPanel() {
     return sortDir === 'asc' ? cmp : -cmp
   })
 
+  const isSelectable = (u: AdminUser) => u.role !== 'superadmin' && u.id !== currentUserId
+  const selectable = sorted.filter(isSelectable)
+  const picked = selectable.filter((u) => selected.has(u.id))
+  const allPicked = selectable.length > 0 && picked.length === selectable.length
+  const filtersActive = query !== '' || roleFilter !== 'all' || statusFilter !== 'all' || schoolFilter !== 'all'
+
+  function toggle(id: string) {
+    setBulkOutcome(null)
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    setBulkOutcome(null)
+    setSelected(allPicked ? new Set() : new Set(selectable.map((u) => u.id)))
+  }
+
+  function clearFilters() {
+    setSearch('')
+    setRoleFilter('all')
+    setStatusFilter('all')
+    setSchoolFilter('all')
+  }
+
+  async function bulk(key: string, verb: string, people: AdminUser[], action: (u: AdminUser) => Promise<unknown>) {
+    setBulkBusy(key)
+    const outcome = await runBulk(people, action)
+    setBulkBusy(null)
+    setSelected(new Set())
+    setBulkOutcome(describeOutcome(verb, outcome))
+    refresh()
+  }
+
+  const toSuspend = picked.filter((u) => !u.suspendedAt)
+  const toUnsuspend = picked.filter((u) => u.suspendedAt)
+  const actions: BulkAction[] = [
+    {
+      key: 'suspend',
+      label: 'Suspend',
+      count: toSuspend.length,
+      run: () => {
+        if (
+          !window.confirm(
+            `Suspend ${plural(toSuspend.length, 'account', 'accounts')}? They won't be able to sign in until unsuspended. Their data is kept.`,
+          )
+        ) {
+          return
+        }
+        void bulk('suspend', 'Suspended', toSuspend, (u) => suspendUser(u.id, true))
+      },
+    },
+    {
+      key: 'unsuspend',
+      label: 'Unsuspend',
+      count: toUnsuspend.length,
+      run: () => void bulk('unsuspend', 'Unsuspended', toUnsuspend, (u) => suspendUser(u.id, false)),
+    },
+    {
+      key: 'delete',
+      label: 'Delete',
+      danger: true,
+      count: picked.length,
+      run: () => {
+        if (!confirmBulkDelete(picked)) return
+        void bulk('delete', 'Deleted', picked, (u) => deleteUser(u.id))
+      },
+    },
+  ]
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
-            Platform users{users ? ` (${users.length})` : ''}
+            Platform users{users ? ` (${filtersActive ? `${sorted.length} of ${users.length}` : users.length})` : ''}
           </h2>
           <p className="mt-0.5 text-xs text-ink-soft">
             Every user across every organization, including independent teachers not part of any school —
@@ -2503,18 +2908,78 @@ function UsersPanel() {
           className={`${inputClass} w-full max-w-xs`}
         />
       </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value as typeof roleFilter)}
+          aria-label="Filter by role"
+          className={filterSelectClass}
+        >
+          <option value="all">All roles</option>
+          <option value="teacher">Teachers</option>
+          <option value="org_admin">Org admins</option>
+          <option value="superadmin">Superadmins</option>
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+          aria-label="Filter by status"
+          className={filterSelectClass}
+        >
+          <option value="all">All statuses</option>
+          <option value="active">Active</option>
+          <option value="suspended">Suspended</option>
+        </select>
+        <select
+          value={schoolFilter}
+          onChange={(e) => setSchoolFilter(e.target.value)}
+          aria-label="Filter by school"
+          className={filterSelectClass}
+        >
+          <option value="all">All schools</option>
+          <option value="independent">Independent</option>
+          {orgs.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
+            </option>
+          ))}
+        </select>
+        {filtersActive && (
+          <button type="button" onClick={clearFilters} className="text-xs font-medium text-ink-soft hover:text-ink">
+            Clear filters
+          </button>
+        )}
+      </div>
       {error && <p className="mt-2 text-sm text-terracotta-600">{error}</p>}
+      <BulkBar
+        selectedCount={picked.length}
+        actions={actions}
+        busy={bulkBusy}
+        outcome={bulkOutcome}
+        onClear={() => {
+          setSelected(new Set())
+          setBulkOutcome(null)
+        }}
+      />
       {!users ? (
         <p className="mt-3 text-sm text-ink-soft">Loading...</p>
       ) : users.length === 0 ? (
         <p className="mt-3 text-sm text-ink-soft">No users yet.</p>
       ) : sorted.length === 0 ? (
-        <p className="mt-3 text-sm text-ink-soft">No users match &ldquo;{search}&rdquo;.</p>
+        <p className="mt-3 text-sm text-ink-soft">No users match these filters.</p>
       ) : (
         <div className="mt-3 overflow-x-auto rounded-xl border border-hairline">
-          <table className="w-full min-w-[720px] border-collapse bg-cream-card text-sm">
+          <table className="w-full min-w-[760px] border-collapse bg-cream-card text-sm">
             <thead>
               <tr className="border-b border-hairline bg-cream">
+                <th className="w-10 px-3.5 py-2.5 text-left">
+                  <SelectAllCheckbox
+                    checked={allPicked}
+                    indeterminate={picked.length > 0 && !allPicked}
+                    disabled={selectable.length === 0 || bulkBusy !== null}
+                    onChange={toggleAll}
+                  />
+                </th>
                 <SortableTh label="Name" sortKey="name" active={sortKey} dir={sortDir} onSort={handleSort} />
                 <SortableTh label="Role" sortKey="role" active={sortKey} dir={sortDir} onSort={handleSort} />
                 <SortableTh
@@ -2531,7 +2996,15 @@ function UsersPanel() {
             </thead>
             <tbody>
               {sorted.map((u) => (
-                <UserRow key={u.id} user={u} orgs={orgs} onChanged={refresh} />
+                <UserRow
+                  key={u.id}
+                  user={u}
+                  orgs={orgs}
+                  selected={selected.has(u.id)}
+                  selectable={isSelectable(u) && bulkBusy === null}
+                  onToggle={() => toggle(u.id)}
+                  onChanged={refresh}
+                />
               ))}
             </tbody>
           </table>
@@ -2541,7 +3014,21 @@ function UsersPanel() {
   )
 }
 
-function UserRow({ user, orgs, onChanged }: { user: AdminUser; orgs: Organization[]; onChanged: () => void }) {
+function UserRow({
+  user,
+  orgs,
+  selected,
+  selectable,
+  onToggle,
+  onChanged,
+}: {
+  user: AdminUser
+  orgs: Organization[]
+  selected: boolean
+  selectable: boolean
+  onToggle: () => void
+  onChanged: () => void
+}) {
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -2579,7 +3066,10 @@ function UserRow({ user, orgs, onChanged }: { user: AdminUser; orgs: Organizatio
 
   return (
     <>
-      <tr className="border-b border-hairline/60 align-top last:border-0">
+      <tr className={`border-b border-hairline/60 align-top last:border-0 ${selected ? 'bg-mint-tint/30' : ''}`}>
+        <td className="px-3.5 py-3">
+          <RowCheckbox checked={selected} disabled={!selectable} label={user.name ?? user.email} onChange={onToggle} />
+        </td>
         <td className="px-3.5 py-3">
           <p className="text-sm font-semibold text-ink">{user.name ?? user.email}</p>
           <p className="text-xs text-ink-soft">{user.email}</p>
@@ -2603,7 +3093,7 @@ function UserRow({ user, orgs, onChanged }: { user: AdminUser; orgs: Organizatio
           {new Date(user.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
         </td>
         <td className={ACTIONS_TD_CLASS}>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-3 whitespace-nowrap">
             <button
               type="button"
               onClick={() => setEditing((e) => !e)}
@@ -2634,7 +3124,7 @@ function UserRow({ user, orgs, onChanged }: { user: AdminUser; orgs: Organizatio
       </tr>
       {editing && (
         <EditUserRow
-          colSpan={6}
+          colSpan={7}
           initial={{
             name: user.name ?? '',
             jobTitle: user.jobTitle ?? '',
