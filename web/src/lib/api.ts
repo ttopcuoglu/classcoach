@@ -269,6 +269,8 @@ export type AdminUser = {
   name: string | null
   email: string
   role: 'teacher' | 'org_admin' | 'superadmin'
+  jobTitle: JobTitle | null
+  organizationId: string | null
   organizationName: string | null
   suspendedAt: string | null
   createdAt: string
@@ -797,10 +799,28 @@ export function getOrganizationMembers(organizationId?: string): Promise<OrgMemb
   return request(`/api/admin/members${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`)
 }
 
+// A superadmin acts on a member only within the organization they've
+// selected, so it rides along as a query param; a school admin's own
+// school is resolved server-side and needs none.
+function memberPath(id: string, organizationId?: string, suffix = ''): string {
+  const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''
+  return `/api/admin/members/${id}${suffix}${query}`
+}
+
+export type MemberEdits = { name?: string | null; jobTitle?: JobTitle | null; role?: 'teacher' | 'org_admin' }
+
 // Removes a teacher from their org (org_admin's own scoped power, or a
 // superadmin acting within a selected org) — un-enrolls them, no data lost.
-export function removeMember(id: string): Promise<{ status: string }> {
-  return request(`/api/admin/members/${id}`, { method: 'DELETE' })
+export function removeMember(id: string, organizationId?: string): Promise<{ status: string }> {
+  return request(memberPath(id, organizationId), { method: 'DELETE' })
+}
+
+export function updateMember(id: string, edits: MemberEdits, organizationId?: string): Promise<{ status: string }> {
+  return request(memberPath(id, organizationId), { method: 'PATCH', body: JSON.stringify(edits) })
+}
+
+export function suspendMember(id: string, suspended: boolean, organizationId?: string): Promise<{ status: string }> {
+  return request(memberPath(id, organizationId, '/suspend'), { method: 'POST', body: JSON.stringify({ suspended }) })
 }
 
 // The remaining three are superadmin-only.
@@ -810,6 +830,10 @@ export function getAdminUsers(): Promise<AdminUser[]> {
 
 export function suspendUser(id: string, suspended: boolean): Promise<AdminUser> {
   return request(`/api/admin/users/${id}/suspend`, { method: 'POST', body: JSON.stringify({ suspended }) })
+}
+
+export function updateUser(id: string, edits: MemberEdits & { organizationId?: string | null }): Promise<AdminUser> {
+  return request(`/api/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(edits) })
 }
 
 export function deleteUser(id: string): Promise<{ status: string }> {

@@ -3,7 +3,13 @@ import type { Request, Response } from 'express'
 import { requireAdmin, requireSuperadmin } from '../lib/auth.ts'
 import { CHALLENGE_TYPES, MESSAGE_PURPOSES } from '../lib/communicationOptions.ts'
 import { MIN_DURATION_FOR_CFU_DETECTION_SEC, PRIORITY_LABELS, topPriorityForSession } from '../lib/coachingPriority.ts'
-import { generateUniqueJoinCode, normalizeJoinCode, parseAdminEmails, syncOrganizationRoles } from '../lib/organization.ts'
+import {
+  generateUniqueJoinCode,
+  normalizeJoinCode,
+  parseAdminEmails,
+  setListedAsAdmin,
+  syncOrganizationRoles,
+} from '../lib/organization.ts'
 import { mergeBreakdownGroups } from '../lib/breakdownGroups.ts'
 import { prisma } from '../lib/prisma.ts'
 import { SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
@@ -866,7 +872,99 @@ adminRouter.delete('/members/:id', async (req, res) => {
     return
   }
 
+  // Off the school's admin list too — otherwise sign-in re-adopts a removed
+  // school admin straight back into the school.
+  await setListedAsAdmin(organizationId, target.email, false)
   await prisma.user.update({ where: { id: targetId }, data: { organizationId: null, role: 'teacher' } })
+  res.json({ status: 'ok' })
+})
+
+// The same fixed list onboarding offers — an admin picks from it rather than
+// typing, so rosters stay filterable.
+const JOB_TITLES = ['Teacher', 'Instructional Coach', 'Assistant Principal', 'Principal', 'District Leader', 'Other']
+const EDITABLE_ROLES = ['teacher', 'org_admin']
+
+type UserEdits = { name?: string | null; jobTitle?: string | null; role?: string }
+
+// Only the fields present in the body are changed. Email is deliberately
+// not editable — it's how the person signs in, including through Google or
+// Apple, and a typo would lock them out.
+function parseUserEdits(body: unknown): { edits: UserEdits } | { error: string } {
+  const { name, jobTitle, role } = (body ?? {}) as Record<string, unknown>
+  const edits: UserEdits = {}
+  if (name !== undefined) {
+    if (name !== null && typeof name !== 'string') return { error: 'name must be a string or null' }
+    const trimmed = typeof name === 'string' ? name.trim() : ''
+    if (trimmed.length > 100) return { error: 'Name must be 100 characters or fewer.' }
+    edits.name = trimmed || null
+  }
+  if (jobTitle !== undefined) {
+    if (jobTitle !== null && (typeof jobTitle !== 'string' || !JOB_TITLES.includes(jobTitle))) {
+      return { error: 'jobTitle must be one of the listed titles, or null' }
+    }
+    edits.jobTitle = jobTitle as string | null
+  }
+  if (role !== undefined) {
+    if (typeof role !== 'string' || !EDITABLE_ROLES.includes(role)) {
+      return { error: 'role must be teacher or org_admin' }
+    }
+    edits.role = role
+  }
+  return { edits }
+}
+
+// A school admin's edit and suspend reach only their own school's members,
+// and never a superadmin — same organizationId check as removal above, so
+// the :id in the URL is never trusted on its own. Permanent delete stays
+// superadmin-only: it erases a teacher's private recordings and notes.
+async function findScopedMember(req: Request, res: Response) {
+  const resolved = await resolveScope(req, res)
+  if (!resolved) return null
+  const { organizationId } = resolved
+  if (!organizationId) {
+    res.status(400).json({ error: 'Select an organization first.' })
+    return null
+  }
+  const target = await prisma.user.findUnique({ where: { id: req.params.id as string } })
+  if (!target || target.organizationId !== organizationId || target.role === 'superadmin') {
+    res.status(404).json({ error: 'Member not found in this organization.' })
+    return null
+  }
+  return target
+}
+
+adminRouter.patch('/members/:id', async (req, res) => {
+  const target = await findScopedMember(req, res)
+  if (!target) return
+  const parsed = parseUserEdits(req.body)
+  if ('error' in parsed) {
+    res.status(400).json({ error: parsed.error })
+    return
+  }
+  if (parsed.edits.role !== undefined && parsed.edits.role !== target.role && target.id === req.user!.userId) {
+    res.status(400).json({ error: "You can't change your own role." })
+    return
+  }
+  if (parsed.edits.role !== undefined && parsed.edits.role !== target.role && target.organizationId) {
+    await setListedAsAdmin(target.organizationId, target.email, parsed.edits.role === 'org_admin')
+  }
+  await prisma.user.update({ where: { id: target.id }, data: parsed.edits })
+  res.json({ status: 'ok' })
+})
+
+adminRouter.post('/members/:id/suspend', async (req, res) => {
+  const { suspended } = req.body ?? {}
+  if (typeof suspended !== 'boolean') {
+    res.status(400).json({ error: 'suspended must be a boolean' })
+    return
+  }
+  const target = await findScopedMember(req, res)
+  if (!target) return
+  if (target.id === req.user!.userId) {
+    res.status(400).json({ error: "You can't suspend your own account." })
+    return
+  }
+  await prisma.user.update({ where: { id: target.id }, data: { suspendedAt: suspended ? new Date() : null } })
   res.json({ status: 'ok' })
 })
 
@@ -1239,6 +1337,8 @@ adminRouter.get('/users', requireSuperadmin, async (_req, res) => {
       name: true,
       email: true,
       role: true,
+      jobTitle: true,
+      organizationId: true,
       suspendedAt: true,
       createdAt: true,
       organization: { select: { name: true } },
@@ -1251,6 +1351,8 @@ adminRouter.get('/users', requireSuperadmin, async (_req, res) => {
       name: u.name,
       email: u.email,
       role: u.role,
+      jobTitle: u.jobTitle,
+      organizationId: u.organizationId,
       organizationName: u.organization?.name ?? null,
       suspendedAt: u.suspendedAt,
       createdAt: u.createdAt,
@@ -1294,6 +1396,84 @@ adminRouter.post('/users/:id/suspend', requireSuperadmin, async (req, res) => {
     name: updated.name,
     email: updated.email,
     role: updated.role,
+    organizationName: updated.organization?.name ?? null,
+    suspendedAt: updated.suspendedAt,
+    createdAt: updated.createdAt,
+  })
+})
+
+// The platform-wide edit: everything a school admin can change, plus which
+// school the user belongs to. A school admin can't exist without a school,
+// so moving one out of every school also makes them a teacher.
+adminRouter.patch('/users/:id', requireSuperadmin, async (req, res) => {
+  const id = req.params.id as string
+  const parsed = parseUserEdits(req.body)
+  if ('error' in parsed) {
+    res.status(400).json({ error: parsed.error })
+    return
+  }
+  const target = await prisma.user.findUnique({ where: { id } })
+  if (!target) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+
+  const data: UserEdits & { organizationId?: string | null } = { ...parsed.edits }
+  const { organizationId } = (req.body ?? {}) as { organizationId?: unknown }
+  if (organizationId !== undefined) {
+    if (organizationId !== null && typeof organizationId !== 'string') {
+      res.status(400).json({ error: 'organizationId must be a string or null' })
+      return
+    }
+    if (organizationId && !(await prisma.organization.findUnique({ where: { id: organizationId } }))) {
+      res.status(400).json({ error: 'That organization no longer exists.' })
+      return
+    }
+    data.organizationId = organizationId || null
+  }
+
+  if (target.role === 'superadmin' && (data.role !== undefined || data.organizationId !== undefined)) {
+    res.status(400).json({ error: "A superadmin's role and school can't be changed here." })
+    return
+  }
+  const finalOrg = data.organizationId !== undefined ? data.organizationId : target.organizationId
+  let finalRole = data.role ?? target.role
+  if (finalRole === 'org_admin' && !finalOrg) {
+    data.role = 'teacher'
+    finalRole = 'teacher'
+  }
+
+  // Keep every school's admin list in step, or sign-in would undo this: an
+  // old school still listing them would pull them back in as its admin.
+  if (target.role !== 'superadmin') {
+    if (target.organizationId && target.organizationId !== finalOrg) {
+      await setListedAsAdmin(target.organizationId, target.email, false)
+    }
+    if (finalOrg) await setListedAsAdmin(finalOrg, target.email, finalRole === 'org_admin')
+  }
+
+  const updated = await prisma.user.update({
+    where: { id },
+    data,
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      jobTitle: true,
+      organizationId: true,
+      suspendedAt: true,
+      createdAt: true,
+      organization: { select: { name: true } },
+    },
+  })
+  res.json({
+    id: updated.id,
+    name: updated.name,
+    email: updated.email,
+    role: updated.role,
+    jobTitle: updated.jobTitle,
+    organizationId: updated.organizationId,
     organizationName: updated.organization?.name ?? null,
     suspendedAt: updated.suspendedAt,
     createdAt: updated.createdAt,

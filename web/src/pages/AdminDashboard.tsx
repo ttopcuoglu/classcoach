@@ -17,11 +17,16 @@ import {
   getOrganizations,
   getPdFocusAreas,
   removeMember,
+  suspendMember,
   suspendUser,
+  updateMember,
+  updateUser,
   updateOrganization,
   type AdminBreakdown,
   type AdminOverview,
   type AdminUser,
+  type JobTitle,
+  type MemberEdits,
   type ClimateAverages,
   type DataConfidence,
   type InstructionalAverages,
@@ -590,6 +595,142 @@ function SortableTh<K extends string>({
 // A real searchable, sortable table — replaces the earlier card list, which
 // had no way to find or reorder anyone once a roster grew past a handful of
 // names.
+const JOB_TITLES: JobTitle[] = ['Teacher', 'Instructional Coach', 'Assistant Principal', 'Principal', 'District Leader', 'Other']
+
+// Pinned to the table's right edge: both rosters are wider than a laptop
+// window, and macOS hides the horizontal scrollbar, so an ordinary last
+// column left every Suspend/Delete button invisible off-screen.
+const ACTIONS_TH_CLASS =
+  'sticky right-0 bg-cream px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-ink-soft shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.15)]'
+const ACTIONS_TD_CLASS = 'sticky right-0 bg-cream-card px-3.5 py-3 shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.15)]'
+
+type EditValues = { name: string; jobTitle: JobTitle | ''; role: 'teacher' | 'org_admin'; organizationId: string }
+
+// Opens under the row being edited. School is offered only on the
+// platform-wide list (a school admin can't move people between schools),
+// and email is never editable — it's how the person signs in.
+function EditUserRow({
+  colSpan,
+  initial,
+  roleLocked,
+  orgs,
+  onSave,
+  onCancel,
+}: {
+  colSpan: number
+  initial: EditValues
+  roleLocked: boolean
+  orgs?: Organization[]
+  onSave: (values: EditValues) => Promise<void>
+  onCancel: () => void
+}) {
+  const [values, setValues] = useState(initial)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const independent = orgs !== undefined && !values.organizationId
+
+  async function handleSave() {
+    setSaving(true)
+    setError(null)
+    try {
+      await onSave(independent ? { ...values, role: 'teacher' } : values)
+    } catch (err) {
+      setError((err as Error).message)
+      setSaving(false)
+    }
+  }
+
+  return (
+    <tr className="border-b border-hairline/60 bg-cream/60">
+      <td colSpan={colSpan} className="px-3.5 py-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1 text-xs font-semibold text-ink-soft">
+            Name
+            <input
+              value={values.name}
+              onChange={(e) => setValues({ ...values, name: e.target.value })}
+              maxLength={100}
+              className={`${inputClass} w-52`}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-semibold text-ink-soft">
+            Job title
+            <select
+              value={values.jobTitle}
+              onChange={(e) => setValues({ ...values, jobTitle: e.target.value as JobTitle | '' })}
+              className={`${inputClass} w-48`}
+            >
+              <option value="">Not set</option>
+              {JOB_TITLES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
+          {orgs !== undefined && (
+            <label className="flex flex-col gap-1 text-xs font-semibold text-ink-soft">
+              School
+              <select
+                value={values.organizationId}
+                onChange={(e) => setValues({ ...values, organizationId: e.target.value })}
+                disabled={roleLocked}
+                className={`${inputClass} w-52`}
+              >
+                <option value="">Independent</option>
+                {orgs.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className="flex flex-col gap-1 text-xs font-semibold text-ink-soft">
+            Role
+            <select
+              value={independent ? 'teacher' : values.role}
+              onChange={(e) => setValues({ ...values, role: e.target.value as EditValues['role'] })}
+              disabled={roleLocked || independent}
+              className={`${inputClass} w-40`}
+            >
+              <option value="teacher">Teacher</option>
+              <option value="org_admin">School admin</option>
+            </select>
+          </label>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="rounded-full bg-forest px-4 py-2 text-xs font-semibold text-cream disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={saving}
+              className="px-2 py-2 text-xs font-medium text-ink-soft hover:text-ink"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+        {roleLocked && <p className="mt-2 text-xs text-ink-soft">A superadmin's role and school can't be changed here.</p>}
+        {independent && !roleLocked && (
+          <p className="mt-2 text-xs text-ink-soft">Independent teachers can't be school admins.</p>
+        )}
+        {error && <p className="mt-2 text-xs text-terracotta-600">{error}</p>}
+      </td>
+    </tr>
+  )
+}
+
+function editsFrom(values: EditValues): MemberEdits {
+  return { name: values.name.trim() || null, jobTitle: values.jobTitle || null, role: values.role }
+}
+
 function MembersList({ organizationId, isSuperadmin }: { organizationId?: string; isSuperadmin: boolean }) {
   const [members, setMembers] = useState<OrgMember[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -661,7 +802,7 @@ function MembersList({ organizationId, isSuperadmin }: { organizationId?: string
         <p className="mt-3 text-sm text-ink-soft">No members match &ldquo;{search}&rdquo;.</p>
       ) : (
         <div className="mt-3 overflow-x-auto rounded-xl border border-hairline">
-          <table className="w-full min-w-[720px] border-collapse text-sm">
+          <table className="w-full min-w-[720px] border-collapse bg-cream-card text-sm">
             <thead>
               <tr className="border-b border-hairline bg-cream">
                 <SortableTh label="Name" sortKey="name" active={sortKey} dir={sortDir} onSort={handleSort} />
@@ -669,14 +810,18 @@ function MembersList({ organizationId, isSuperadmin }: { organizationId?: string
                 <SortableTh label="Status" sortKey="status" active={sortKey} dir={sortDir} onSort={handleSort} />
                 <SortableTh label="Last active" sortKey="lastActive" active={sortKey} dir={sortDir} onSort={handleSort} />
                 <SortableTh label="Joined" sortKey="joined" active={sortKey} dir={sortDir} onSort={handleSort} />
-                <th className="px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                  Actions
-                </th>
+                <th className={ACTIONS_TH_CLASS}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {sorted.map((m) => (
-                <MemberRow key={m.id} member={m} isSuperadmin={isSuperadmin} onChanged={refresh} />
+                <MemberRow
+                  key={m.id}
+                  member={m}
+                  organizationId={organizationId}
+                  isSuperadmin={isSuperadmin}
+                  onChanged={refresh}
+                />
               ))}
             </tbody>
           </table>
@@ -688,44 +833,54 @@ function MembersList({ organizationId, isSuperadmin }: { organizationId?: string
 
 function MemberRow({
   member,
+  organizationId,
   isSuperadmin,
   onChanged,
 }: {
   member: OrgMember
+  organizationId?: string
   isSuperadmin: boolean
   onChanged: () => void
 }) {
   const [busy, setBusy] = useState(false)
+  const [editing, setEditing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // A superadmin who happens to belong to a school is shown on its roster,
+  // but only the platform-wide list can act on them.
+  const actionable = member.role !== 'superadmin'
 
-  async function handleRemove() {
+  async function run(action: () => Promise<unknown>) {
+    setBusy(true)
+    setError(null)
+    try {
+      await action()
+      onChanged()
+    } catch (err) {
+      setError((err as Error).message)
+      setBusy(false)
+    }
+  }
+
+  function handleRemove() {
     if (!window.confirm(`Remove ${member.name ?? member.email} from this organization? They become independent — no data is lost.`)) {
       return
     }
-    setBusy(true)
-    setError(null)
-    try {
-      await removeMember(member.id)
-      onChanged()
-    } catch (err) {
-      setError((err as Error).message)
-      setBusy(false)
-    }
+    void run(() => removeMember(member.id, organizationId))
   }
 
-  async function handleSuspendToggle() {
-    setBusy(true)
-    setError(null)
-    try {
-      await suspendUser(member.id, !member.suspendedAt)
-      onChanged()
-    } catch (err) {
-      setError((err as Error).message)
-      setBusy(false)
+  function handleSuspendToggle() {
+    if (
+      !member.suspendedAt &&
+      !window.confirm(
+        `Suspend ${member.name ?? member.email}? They won't be able to sign in until you unsuspend them. Their data is kept.`,
+      )
+    ) {
+      return
     }
+    void run(() => suspendMember(member.id, !member.suspendedAt, organizationId))
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (
       !window.confirm(
         `Permanently delete ${member.name ?? member.email}'s account and all their data? This cannot be undone.`,
@@ -733,66 +888,56 @@ function MemberRow({
     ) {
       return
     }
-    setBusy(true)
-    setError(null)
-    try {
-      await deleteUser(member.id)
-      onChanged()
-    } catch (err) {
-      setError((err as Error).message)
-      setBusy(false)
-    }
+    void run(() => deleteUser(member.id))
   }
 
-  const status = memberStatusLabel(member)
-
   return (
-    <tr className="border-b border-hairline/60 align-top last:border-0">
-      <td className="px-3.5 py-3">
-        <p className="text-sm font-semibold text-ink">{member.name ?? member.email}</p>
-        <p className="text-xs text-ink-soft">
-          {member.email}
-          {member.jobTitle ? ` · ${member.jobTitle}` : ''}
-        </p>
-      </td>
-      <td className="whitespace-nowrap px-3.5 py-3">
-        {member.role === 'org_admin' ? (
-          <span className="rounded-full bg-mint-tint/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-forest">
-            Admin
-          </span>
-        ) : (
-          <span className="text-sm text-ink-soft">{memberRoleLabel(member.role)}</span>
-        )}
-      </td>
-      <td className="whitespace-nowrap px-3.5 py-3">
-        {status === 'Active' ? (
-          <span className="text-sm text-ink-soft">Active</span>
-        ) : (
-          <span className="rounded-full bg-peach-tint px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-terracotta-600">
-            {status}
-          </span>
-        )}
-      </td>
-      <td className="whitespace-nowrap px-3.5 py-3 text-sm text-ink-soft">
-        {member.lastActiveAt
-          ? new Date(member.lastActiveAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-          : '—'}
-      </td>
-      <td className="whitespace-nowrap px-3.5 py-3 text-sm text-ink-soft">
-        {new Date(member.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-      </td>
-      <td className="px-3.5 py-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={handleRemove}
-            disabled={busy}
-            className="text-xs font-medium text-ink-soft hover:text-ink disabled:opacity-50"
-          >
-            Remove
-          </button>
-          {isSuperadmin && (
-            <>
+    <>
+      <tr className="border-b border-hairline/60 align-top last:border-0">
+        <td className="px-3.5 py-3">
+          <p className="text-sm font-semibold text-ink">{member.name ?? member.email}</p>
+          <p className="text-xs text-ink-soft">
+            {member.email}
+            {member.jobTitle ? ` · ${member.jobTitle}` : ''}
+          </p>
+        </td>
+        <td className="whitespace-nowrap px-3.5 py-3">
+          {member.role === 'org_admin' ? (
+            <span className="rounded-full bg-mint-tint/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-forest">
+              Admin
+            </span>
+          ) : (
+            <span className="text-sm text-ink-soft">{memberRoleLabel(member.role)}</span>
+          )}
+        </td>
+        <td className="whitespace-nowrap px-3.5 py-3">
+          {status === 'Active' ? (
+            <span className="text-sm text-ink-soft">Active</span>
+          ) : (
+            <span className="rounded-full bg-peach-tint px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-terracotta-600">
+              {status}
+            </span>
+          )}
+        </td>
+        <td className="whitespace-nowrap px-3.5 py-3 text-sm text-ink-soft">
+          {member.lastActiveAt
+            ? new Date(member.lastActiveAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+            : '—'}
+        </td>
+        <td className="whitespace-nowrap px-3.5 py-3 text-sm text-ink-soft">
+          {new Date(member.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+        </td>
+        <td className={ACTIONS_TD_CLASS}>
+          {actionable ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setEditing((e) => !e)}
+                disabled={busy}
+                className="text-xs font-medium text-forest hover:text-ink disabled:opacity-50"
+              >
+                Edit
+              </button>
               <button
                 type="button"
                 onClick={handleSuspendToggle}
@@ -803,18 +948,48 @@ function MemberRow({
               </button>
               <button
                 type="button"
-                onClick={handleDelete}
+                onClick={handleRemove}
                 disabled={busy}
-                className="text-xs font-medium text-terracotta-600 hover:text-terracotta-600 disabled:opacity-50"
+                className="text-xs font-medium text-ink-soft hover:text-ink disabled:opacity-50"
               >
-                Delete
+                Remove
               </button>
-            </>
+              {isSuperadmin && (
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={busy}
+                  className="text-xs font-medium text-terracotta-600 hover:text-terracotta-600 disabled:opacity-50"
+                >
+                  Delete
+                </button>
+              )}
+            </div>
+          ) : (
+            <span className="text-xs text-ink-soft">—</span>
           )}
-        </div>
-        {error && <p className="mt-1 text-xs text-terracotta-600">{error}</p>}
-      </td>
-    </tr>
+          {error && <p className="mt-1 text-xs text-terracotta-600">{error}</p>}
+        </td>
+      </tr>
+      {editing && (
+        <EditUserRow
+          colSpan={6}
+          initial={{
+            name: member.name ?? '',
+            jobTitle: member.jobTitle ?? '',
+            role: member.role === 'org_admin' ? 'org_admin' : 'teacher',
+            organizationId: '',
+          }}
+          roleLocked={false}
+          onSave={async (values) => {
+            await updateMember(member.id, editsFrom(values), organizationId)
+            setEditing(false)
+            onChanged()
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      )}
+    </>
   )
 }
 
@@ -2264,6 +2439,8 @@ function UsersPanel() {
   const [sortKey, setSortKey] = useState<UserSortKey>('name')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
+  const [orgs, setOrgs] = useState<Organization[]>([])
+
   function refresh() {
     setError(null)
     getAdminUsers()
@@ -2273,6 +2450,9 @@ function UsersPanel() {
 
   useEffect(() => {
     refresh()
+    getOrganizations()
+      .then(setOrgs)
+      .catch(() => setOrgs([]))
   }, [])
 
   function handleSort(key: UserSortKey) {
@@ -2332,7 +2512,7 @@ function UsersPanel() {
         <p className="mt-3 text-sm text-ink-soft">No users match &ldquo;{search}&rdquo;.</p>
       ) : (
         <div className="mt-3 overflow-x-auto rounded-xl border border-hairline">
-          <table className="w-full min-w-[720px] border-collapse text-sm">
+          <table className="w-full min-w-[720px] border-collapse bg-cream-card text-sm">
             <thead>
               <tr className="border-b border-hairline bg-cream">
                 <SortableTh label="Name" sortKey="name" active={sortKey} dir={sortDir} onSort={handleSort} />
@@ -2346,14 +2526,12 @@ function UsersPanel() {
                 />
                 <SortableTh label="Status" sortKey="status" active={sortKey} dir={sortDir} onSort={handleSort} />
                 <SortableTh label="Joined" sortKey="joined" active={sortKey} dir={sortDir} onSort={handleSort} />
-                <th className="px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                  Actions
-                </th>
+                <th className={ACTIONS_TH_CLASS}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {sorted.map((u) => (
-                <UserRow key={u.id} user={u} onChanged={refresh} />
+                <UserRow key={u.id} user={u} orgs={orgs} onChanged={refresh} />
               ))}
             </tbody>
           </table>
@@ -2363,15 +2541,16 @@ function UsersPanel() {
   )
 }
 
-function UserRow({ user, onChanged }: { user: AdminUser; onChanged: () => void }) {
+function UserRow({ user, orgs, onChanged }: { user: AdminUser; orgs: Organization[]; onChanged: () => void }) {
   const [busy, setBusy] = useState(false)
+  const [editing, setEditing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleSuspendToggle() {
+  async function run(action: () => Promise<unknown>) {
     setBusy(true)
     setError(null)
     try {
-      await suspendUser(user.id, !user.suspendedAt)
+      await action()
       onChanged()
     } catch (err) {
       setError((err as Error).message)
@@ -2379,69 +2558,106 @@ function UserRow({ user, onChanged }: { user: AdminUser; onChanged: () => void }
     }
   }
 
-  async function handleDelete() {
+  function handleSuspendToggle() {
+    if (
+      !user.suspendedAt &&
+      !window.confirm(`Suspend ${user.name ?? user.email}? They won't be able to sign in until you unsuspend them. Their data is kept.`)
+    ) {
+      return
+    }
+    void run(() => suspendUser(user.id, !user.suspendedAt))
+  }
+
+  function handleDelete() {
     if (
       !window.confirm(`Permanently delete ${user.name ?? user.email}'s account and all their data? This cannot be undone.`)
     ) {
       return
     }
-    setBusy(true)
-    setError(null)
-    try {
-      await deleteUser(user.id)
-      onChanged()
-    } catch (err) {
-      setError((err as Error).message)
-      setBusy(false)
-    }
+    void run(() => deleteUser(user.id))
   }
 
   return (
-    <tr className="border-b border-hairline/60 align-top last:border-0">
-      <td className="px-3.5 py-3">
-        <p className="text-sm font-semibold text-ink">{user.name ?? user.email}</p>
-        <p className="text-xs text-ink-soft">{user.email}</p>
-      </td>
-      <td className="whitespace-nowrap px-3.5 py-3">
-        <span className="rounded-full border border-hairline px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-soft">
-          {platformUserRoleLabel(user.role)}
-        </span>
-      </td>
-      <td className="whitespace-nowrap px-3.5 py-3 text-sm text-ink-soft">{user.organizationName ?? 'Independent'}</td>
-      <td className="whitespace-nowrap px-3.5 py-3">
-        {user.suspendedAt ? (
-          <span className="rounded-full bg-peach-tint px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-terracotta-600">
-            Suspended
+    <>
+      <tr className="border-b border-hairline/60 align-top last:border-0">
+        <td className="px-3.5 py-3">
+          <p className="text-sm font-semibold text-ink">{user.name ?? user.email}</p>
+          <p className="text-xs text-ink-soft">{user.email}</p>
+        </td>
+        <td className="whitespace-nowrap px-3.5 py-3">
+          <span className="rounded-full border border-hairline px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-soft">
+            {platformUserRoleLabel(user.role)}
           </span>
-        ) : (
-          <span className="text-sm text-ink-soft">Active</span>
-        )}
-      </td>
-      <td className="whitespace-nowrap px-3.5 py-3 text-sm text-ink-soft">
-        {new Date(user.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-      </td>
-      <td className="px-3.5 py-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={handleSuspendToggle}
-            disabled={busy}
-            className="text-xs font-medium text-ink-soft hover:text-ink disabled:opacity-50"
-          >
-            {user.suspendedAt ? 'Unsuspend' : 'Suspend'}
-          </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={busy}
-            className="text-xs font-medium text-terracotta-600 hover:text-terracotta-600 disabled:opacity-50"
-          >
-            Delete
-          </button>
-        </div>
-        {error && <p className="mt-1 text-xs text-terracotta-600">{error}</p>}
-      </td>
-    </tr>
+        </td>
+        <td className="whitespace-nowrap px-3.5 py-3 text-sm text-ink-soft">{user.organizationName ?? 'Independent'}</td>
+        <td className="whitespace-nowrap px-3.5 py-3">
+          {user.suspendedAt ? (
+            <span className="rounded-full bg-peach-tint px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-terracotta-600">
+              Suspended
+            </span>
+          ) : (
+            <span className="text-sm text-ink-soft">Active</span>
+          )}
+        </td>
+        <td className="whitespace-nowrap px-3.5 py-3 text-sm text-ink-soft">
+          {new Date(user.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+        </td>
+        <td className={ACTIONS_TD_CLASS}>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setEditing((e) => !e)}
+              disabled={busy}
+              className="text-xs font-medium text-forest hover:text-ink disabled:opacity-50"
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={handleSuspendToggle}
+              disabled={busy}
+              className="text-xs font-medium text-ink-soft hover:text-ink disabled:opacity-50"
+            >
+              {user.suspendedAt ? 'Unsuspend' : 'Suspend'}
+            </button>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={busy}
+              className="text-xs font-medium text-terracotta-600 hover:text-terracotta-600 disabled:opacity-50"
+            >
+              Delete
+            </button>
+          </div>
+          {error && <p className="mt-1 text-xs text-terracotta-600">{error}</p>}
+        </td>
+      </tr>
+      {editing && (
+        <EditUserRow
+          colSpan={6}
+          initial={{
+            name: user.name ?? '',
+            jobTitle: user.jobTitle ?? '',
+            role: user.role === 'org_admin' ? 'org_admin' : 'teacher',
+            organizationId: user.organizationId ?? '',
+          }}
+          roleLocked={user.role === 'superadmin'}
+          orgs={orgs}
+          onSave={async (values) => {
+            const edits = editsFrom(values)
+            await updateUser(
+              user.id,
+              user.role === 'superadmin'
+                ? { name: edits.name, jobTitle: edits.jobTitle }
+                : { ...edits, organizationId: values.organizationId || null },
+            )
+            setEditing(false)
+            onChanged()
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      )}
+    </>
   )
 }
 

@@ -58,6 +58,28 @@ export async function syncOrganizationRoles(organizationId: string, adminEmails:
   }
 }
 
+// Adds or removes one email on an org's adminEmails list. The list, not the
+// user row, is what makes someone a school admin — resolveSignInRole
+// re-derives role from it on every sign-in — so an admin edit that only
+// touched User.role would quietly revert the next time that person signed in.
+export async function setListedAsAdmin(organizationId: string, email: string, listed: boolean) {
+  const org = await prisma.organization.findUnique({ where: { id: organizationId } })
+  if (!org) return
+  const normalized = email.toLowerCase()
+  const current = (org.adminEmails ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+  const next = listed
+    ? current.includes(normalized) ? current : [...current, normalized]
+    : current.filter((e) => e !== normalized)
+  if (next.length === current.length && next.every((e, i) => e === current[i])) return
+  await prisma.organization.update({
+    where: { id: organizationId },
+    data: { adminEmails: next.length > 0 ? next.join(', ') : null },
+  })
+}
+
 function listsAdmin(adminEmails: string | null, email: string): boolean {
   return (adminEmails ?? '')
     .split(',')

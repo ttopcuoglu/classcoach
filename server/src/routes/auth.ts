@@ -133,7 +133,9 @@ authRouter.post('/google', async (req, res) => {
       const { role, organizationId } = await resolveSignInRole(payload.email, isSuperadmin, user)
       user = await prisma.user.update({
         where: { id: user.id },
-        data: { email: payload.email, name: payload.name ?? null, role, organizationId },
+        // Google fills in a missing name but never replaces one — the
+        // teacher may have changed it in Profile, or an admin on the roster.
+        data: { email: payload.email, name: user.name ?? payload.name ?? null, role, organizationId },
         omit: SAFE_USER_OMIT,
         include: USER_INCLUDE_ORG,
       })
