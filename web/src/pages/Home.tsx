@@ -71,6 +71,17 @@ const MOODS: { label: string; value: Mood }[] = [
   { label: 'Overwhelmed', value: 'overwhelmed' },
 ]
 
+// What the card says back. Asking how someone is and then changing only a
+// tip further down felt like being asked for no reason; on the hard days
+// the answer points to Talk It Through, whose coach is there for exactly
+// that, not just classroom management.
+const MOOD_RESPONSES: Record<Mood, { text: string; talk: boolean }> = {
+  good: { text: "Love that. The tip below is one to keep the good day going.", talk: false },
+  okay: { text: 'Fair enough. The tip below is something small for today.', talk: false },
+  stressed: { text: "That's a lot to carry. Want to talk it through? Coach is there for the hard days too.", talk: true },
+  overwhelmed: { text: "You don't have to sort it all out alone. A few minutes with Coach can help you find the one next thing.", talk: true },
+}
+
 const MOOD_SUGGESTED_CATEGORY: Partial<Record<Mood, string>> = {
   stressed: 'disruption',
   overwhelmed: 'transitions',
@@ -572,6 +583,20 @@ export default function Home() {
             </button>
           ))}
         </div>
+        {mood && (
+          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-hairline pt-4">
+            <p className="text-sm text-ink">{MOOD_RESPONSES[mood].text}</p>
+            {MOOD_RESPONSES[mood].talk && (
+              <Link
+                to="/talk-to-me"
+                className="flex items-center gap-1.5 rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
+              >
+                <MicIcon className="h-3.5 w-3.5" />
+                Talk it through
+              </Link>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-6">
