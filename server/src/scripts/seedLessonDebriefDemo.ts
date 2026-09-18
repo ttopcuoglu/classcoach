@@ -137,7 +137,7 @@ const LESSONS: Lesson[] = [
 - States the objective with "By the end of class".
 - Generic praise ("Good", "Nice work"). No redirections — the room is quiet, not loud.
 - Uses "the definition of" once, and "You might have seen" once.
-- Only 3 distinct students speak. About 80 lines, ~1,800 words; the teacher says roughly 88% of the words.`,
+- Only 3 distinct students speak. About 110 lines, ~2,400 words — a full class period, at least 12 minutes of speech; the teacher says roughly 88% of the words.`,
     notes: {
       strengths: `My explanations were clear and organized, and the three kids who answered were thoughtful.`,
       growthAreas: `Only three students spoke all period. When nobody answered I answered my own questions — I didn't notice how often until I read the transcript.`,
