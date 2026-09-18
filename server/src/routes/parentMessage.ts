@@ -15,7 +15,7 @@ import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const parentMessageRouter = Router()
 
-const TONE_INSTRUCTIONS: Record<string, string> = {
+export const TONE_INSTRUCTIONS: Record<string, string> = {
   warm: 'Warm and supportive — assume good faith, emphasize partnership, keep it gentle.',
   professional: 'Professional and neutral — clear, factual, no strong emotional coloring either way.',
   firm: 'Firm and direct — clear about the issue and the expectation going forward, but still respectful and professional, not harsh.',
@@ -47,7 +47,7 @@ const FORMAT_INSTRUCTIONS: Record<string, string> = {
   phone_call_followup: 'A written follow-up to a phone call that already happened — reference that the call took place.',
 }
 
-const MESSAGE_SYSTEM_PROMPT = `You help K-12 teachers draft clear, professional messages and responses.
+export const MESSAGE_SYSTEM_PROMPT = `You help K-12 teachers draft clear, professional messages and responses.
 
 Rules:
 - Write a ready-to-send message, appropriately sized for the format (a few sentences for a text, a short email otherwise).
@@ -68,7 +68,7 @@ Rules:
 - Apply the teacher's requested change to the most recent version of the message, keeping everything else about it intact unless asked to change it too.
 ${CORE_COACHING_RULES}`
 
-function buildContext(body: Record<string, unknown>): { context: string; error: string | null } {
+export function buildContext(body: Record<string, unknown>): { context: string; error: string | null } {
   const startingAction = isValidStartingAction(body.startingAction) ? body.startingAction : 'new'
   const recipientType = isValidRecipientType(body.recipientType) ? body.recipientType : null
   const purpose = isValidMessagePurpose(body.purpose) ? body.purpose : null

@@ -15,7 +15,7 @@ import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const assignmentCoachRouter = Router()
 
-const START_MESSAGE = 'Start our conversation about this assignment.'
+export const START_MESSAGE = 'Start our conversation about this assignment.'
 
 // 'create'/'improve' are retired but may still exist on old rows — the
 // workspace falls back to Review-style display for any unrecognized mode.
@@ -173,7 +173,7 @@ A short, specific title, e.g. "Make student reasoning visible."
 1-2 sentences on what to add or change.
 </main_opportunity_description>`
 
-function buildReviewStartPrompt(originalText: string, extraNote?: string): string {
+export function buildReviewStartPrompt(originalText: string, extraNote?: string): string {
   return `You are Coach, giving a teacher a coaching review of an assignment they've shared, and opening a conversation about it. Do not rewrite the assignment — review it.
 
 ${RIGOR_AND_AI_RISK_GROUNDING}
@@ -305,7 +305,7 @@ type ReviewSnapshot = {
   mainOpportunity: { title: string | null; description: string | null }
 }
 
-function parseReviewSnapshot(text: string): ReviewSnapshot {
+export function parseReviewSnapshot(text: string): ReviewSnapshot {
   return {
     purpose: extractTag(text, 'purpose'),
     gradeFit: { rating: extractTag(text, 'grade_fit_rating'), explanation: extractTag(text, 'grade_fit_explanation') },
@@ -362,7 +362,7 @@ function parseRedesignOutput(text: string, knownAiUseLevel: string | null): Rede
   }
 }
 
-function isReviewSnapshotEmpty(snapshot: ReviewSnapshot): boolean {
+export function isReviewSnapshotEmpty(snapshot: ReviewSnapshot): boolean {
   return (
     !snapshot.purpose &&
     !snapshot.gradeFit.rating &&
@@ -394,7 +394,7 @@ function normalizeDetected(value: string | null): string | null {
   return trimmed
 }
 
-function parseDetection(text: string): { detected: DetectedContext; clarifyingQuestion: ClarifyingQuestion } {
+export function parseDetection(text: string): { detected: DetectedContext; clarifyingQuestion: ClarifyingQuestion } {
   const rawType = (extractTag(text, 'detected_assignment_type') ?? '').trim().toLowerCase()
   const assignmentType = VALID_ASSIGNMENT_TYPES.includes(rawType) ? rawType : 'other'
 

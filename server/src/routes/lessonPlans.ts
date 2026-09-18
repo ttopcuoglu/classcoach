@@ -13,7 +13,7 @@ import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const lessonPlansRouter = Router()
 
-const FEEDBACK_SYSTEM_PROMPT = `You are a warm, practical instructional coach for K-12 teachers, reviewing a lesson plan the teacher wrote themselves. Coach, don't grade.
+export const FEEDBACK_SYSTEM_PROMPT = `You are a warm, practical instructional coach for K-12 teachers, reviewing a lesson plan the teacher wrote themselves. Coach, don't grade.
 
 First, work out whether this is a single day's lesson or a multi-day/weekly plan covering several class periods, and adjust your lens accordingly:
 - For a single-day lesson: focus on that lesson's internal structure — whether the activities build toward the objective, a clear gradual release of responsibility (I Do / We Do / You Do or equivalent), a higher-order-thinking element (not just recall), realistic pacing, and a real closure.
@@ -348,7 +348,7 @@ lessonPlansRouter.get('/:id', async (req, res) => {
   res.json(lessonPlan)
 })
 
-function readContext(body: Record<string, unknown>) {
+export function readContext(body: Record<string, unknown>) {
   const { objective, unitName, essentialQuestion, standard, subject, gradeLevel } = body
   return {
     objective: typeof objective === 'string' ? objective.trim() : '',
@@ -422,7 +422,7 @@ async function runFeedback(
   res.status(201).json(lessonPlan)
 }
 
-function buildPromptHeader(context: FeedbackContext): string {
+export function buildPromptHeader(context: FeedbackContext): string {
   return [
     context.objective ? `Objective: ${context.objective}` : null,
     context.unitName ? `Unit: ${context.unitName}` : null,

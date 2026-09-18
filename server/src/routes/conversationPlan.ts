@@ -34,7 +34,7 @@ const MEETING_TYPE_GUIDANCE: Record<string, string> = {
   difficult_colleague: 'This is a difficult conversation with a colleague.',
 }
 
-const PLAN_SYSTEM_PROMPT = `You are a warm, practical communication coach helping a K-12 teacher prepare for a real, upcoming conversation. Build a concrete plan grounded only in what the teacher told you — never invent facts, names, or details they didn't give you.
+export const PLAN_SYSTEM_PROMPT = `You are a warm, practical communication coach helping a K-12 teacher prepare for a real, upcoming conversation. Build a concrete plan grounded only in what the teacher told you — never invent facts, names, or details they didn't give you.
 
 Write in plain text only — no markdown (no **bold**, no # headings). Use a leading "-" for list items, one per line.
 
@@ -100,7 +100,7 @@ type PlanContent = {
   adminInvolvement: string
 }
 
-function parsePlan(text: string): PlanContent | null {
+export function parsePlan(text: string): PlanContent | null {
   const plan: PlanContent = {
     agenda: extractTag(text, 'agenda') ?? '',
     opening: extractTag(text, 'opening') ?? '',
@@ -120,7 +120,7 @@ function parsePlan(text: string): PlanContent | null {
   return hasContent ? plan : null
 }
 
-function buildContext(body: Record<string, unknown>): { context: string; error: string | null } {
+export function buildContext(body: Record<string, unknown>): { context: string; error: string | null } {
   const situationText = typeof body.situationText === 'string' ? body.situationText.trim() : ''
   if (!situationText) return { context: '', error: 'situationText is required' }
 
