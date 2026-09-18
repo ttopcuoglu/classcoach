@@ -52,6 +52,17 @@ type Activity =
   | { type: 'scenario'; id: string; createdAt: string; attempt: ScenarioAttempt }
   | { type: 'ask'; id: string; createdAt: string; debrief: Debrief }
 
+// Ask and Talk It Through conversations are both Debrief rows; only the
+// source says which feature a teacher would expect to land back in.
+function isTalkItThrough(item: Activity): boolean {
+  return item.type === 'ask' && item.debrief.source === 'talk_to_me'
+}
+
+function activityLink(item: Activity): string {
+  if (item.type === 'scenario') return '/coach-chat'
+  return isTalkItThrough(item) ? '/talk-to-me' : '/coach-chat?tab=ask'
+}
+
 const MOODS: { label: string; value: Mood }[] = [
   { label: 'Good', value: 'good' },
   { label: 'Okay', value: 'okay' },
@@ -623,7 +634,7 @@ export default function Home() {
             {activity.map((item) => (
               <Link
                 key={item.id}
-                to={item.type === 'scenario' ? '/coach-chat' : '/coach-chat?tab=ask'}
+                to={activityLink(item)}
                 className="flex items-start gap-3 rounded-2xl border border-hairline bg-cream-card p-4 transition-colors hover:border-terracotta/40"
               >
                 <span
@@ -631,7 +642,13 @@ export default function Home() {
                     item.type === 'scenario' ? 'bg-gold text-forest' : 'bg-forest text-gold'
                   }`}
                 >
-                  {item.type === 'scenario' ? <BrainIcon className="h-3.5 w-3.5" /> : <ChatBubbleIcon className="h-3.5 w-3.5" />}
+                  {item.type === 'scenario' ? (
+                    <BrainIcon className="h-3.5 w-3.5" />
+                  ) : isTalkItThrough(item) ? (
+                    <MicIcon className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChatBubbleIcon className="h-3.5 w-3.5" />
+                  )}
                 </span>
                 <p className="line-clamp-2 text-sm text-ink">
                   {item.type === 'scenario' ? item.attempt.scenario.text : item.debrief.incidentText}
