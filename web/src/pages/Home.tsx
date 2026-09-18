@@ -58,9 +58,10 @@ function isTalkItThrough(item: Activity): boolean {
   return item.type === 'ask' && item.debrief.source === 'talk_to_me'
 }
 
+// Straight to the conversation itself, not just the feature's start screen.
 function activityLink(item: Activity): string {
-  if (item.type === 'scenario') return '/coach-chat'
-  return isTalkItThrough(item) ? '/talk-to-me' : '/coach-chat?tab=ask'
+  if (item.type === 'scenario') return '/coach-chat?tab=practice'
+  return isTalkItThrough(item) ? `/talk-to-me?open=${item.id}` : `/coach-chat?tab=ask&open=${item.id}`
 }
 
 const MOODS: { label: string; value: Mood }[] = [

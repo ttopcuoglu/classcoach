@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ProgressRing } from '../components/ProgressRing'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import CoachingChat from '../components/CoachingChat'
@@ -93,11 +93,26 @@ export default function Ask() {
       .catch(() => setStarters(NEW_TEACHER_STARTERS))
   }, [])
 
+  // Opened from Home's Recent work: show that conversation — its coaching
+  // and follow-up chat — rather than an empty form.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const openId = searchParams.get('open')
+
   useEffect(() => {
     getDebriefs({ source: 'ask_tab' })
-      .then(setAllDebriefs)
+      .then((all) => {
+        setAllDebriefs(all)
+        const opened = openId ? all.find((d) => d.id === openId) : undefined
+        if (opened) setDebrief(opened)
+        if (openId) {
+          const next = new URLSearchParams(searchParams)
+          next.delete('open')
+          setSearchParams(next, { replace: true })
+        }
+      })
       .catch(() => {})
       .finally(() => setHistoryLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {

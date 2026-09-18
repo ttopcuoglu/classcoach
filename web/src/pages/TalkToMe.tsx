@@ -143,6 +143,8 @@ export default function TalkToMe() {
   const [searchParams] = useSearchParams()
   const isDebrief = searchParams.get('mode') === 'debrief'
   const followUpId = searchParams.get('followUp')
+  // A past conversation opened from Home's Recent work.
+  const openId = searchParams.get('open')
   // The check-in this conversation answers, when opened from Home. Only
   // passed with the first turn; later turns continue that same conversation.
   const [followUp, setFollowUp] = useState<CoachFollowUp | null>(null)
@@ -269,10 +271,27 @@ export default function TalkToMe() {
 
   // Loaded once up front so a saved takeaway from a past session shows up
   // on the starting screen without waiting on anything else.
+  //
+  // Opened from Recent work, the page goes straight to that conversation
+  // instead of the start screen: its takeaway if it was finished, otherwise
+  // paused on the last exchange. Never with the mic on — nobody asked to
+  // talk yet, and browsers won't start one without a tap anyway.
   useEffect(() => {
     getDebriefs({ source: 'talk_to_me' })
-      .then((all) => setSavedTalks(all.filter((d) => d.saved)))
+      .then((all) => {
+        setSavedTalks(all.filter((d) => d.saved))
+        const opened = openId ? all.find((d) => d.id === openId) : undefined
+        if (!opened) return
+        const lastUser = [...(opened.conversation ?? [])].reverse().find((m) => m.role === 'user')
+        setDebrief(opened)
+        setUserTranscript(lastUser?.text ?? null)
+        setTakeaway(opened.talkTakeaway ?? null)
+        // Once open, the link has done its job — Start over shouldn't land
+        // back in the same conversation on the next render or a refresh.
+        navigate('/talk-to-me', { replace: true })
+      })
       .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
