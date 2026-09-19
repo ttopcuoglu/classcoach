@@ -201,7 +201,10 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
         )}
 
         <main className="flex-1 px-4 py-6 pb-24 md:px-10 md:py-10 md:pb-10">
-          <div className="mx-auto w-full max-w-4xl">
+          {/* Reading width everywhere except the admin reports, which carry their
+              own section menu beside the content — at the reading width that
+              left the dashboards about 670px, too narrow for a row of stats. */}
+          <div className={`mx-auto w-full ${location.pathname.startsWith('/admin') ? 'max-w-6xl' : 'max-w-4xl'}`}>
             <Outlet />
           </div>
         </main>

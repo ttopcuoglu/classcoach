@@ -849,25 +849,40 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             </div>
           </div>
 
+          {/* Teachers read this page too, so the leader pitch stays small and
+              leads with what leaders can't see: a big dashboard here would read
+              as "my principal will be watching my lessons". */}
           <div
             id="for-schools"
-            className="mx-auto mt-8 flex max-w-3xl scroll-mt-24 flex-col items-center justify-between gap-6 rounded-2xl bg-forest p-8 text-center sm:flex-row sm:text-left"
+            className="mx-auto mt-8 grid max-w-4xl scroll-mt-24 gap-6 rounded-2xl bg-forest p-8 text-center sm:grid-cols-[1fr_auto] sm:items-center sm:text-left"
           >
             <div>
               <h3 className="font-heading text-lg font-bold text-cream">
                 Bringing Wivoza to your school or district?
               </h3>
-              <p className="mt-1.5 text-sm text-cream/70">
+              <p className="mt-1.5 text-sm text-cream/80">
+                School leaders see school-wide trends and whether their PD is working, never a
+                teacher&rsquo;s recordings or coaching.
+              </p>
+              <p className="mt-1.5 text-sm text-cream/60">
                 District licensing gives every teacher Plus-level access, with support built for
                 your rollout.
               </p>
+              <Link
+                to="/for-schools"
+                className="mt-5 inline-flex items-center gap-2 whitespace-nowrap rounded-full bg-gold px-5 py-3 text-sm font-semibold text-forest transition-opacity hover:opacity-90"
+              >
+                See how it works for schools
+                <ArrowRightIcon className="h-4 w-4" />
+              </Link>
             </div>
-            <Link
-              to="/for-schools"
-              className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-gold px-5 py-3 text-sm font-semibold text-forest transition-opacity hover:opacity-90"
-            >
-              See how it works for schools
-              <ArrowRightIcon className="h-4 w-4" />
+            <Link to="/for-schools" className="hidden w-72 overflow-hidden rounded-xl bg-cream p-1.5 sm:block">
+              <img
+                src="/samples/admin-pd-progress.png"
+                alt="A school-wide focus area for an invented school, shown in fewer lessons since tracking began."
+                className="w-full rounded-lg"
+                loading="lazy"
+              />
             </Link>
           </div>
         </div>

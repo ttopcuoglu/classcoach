@@ -2247,7 +2247,7 @@ function AttentionTile({
       <p className="text-sm font-semibold text-forest">{label}</p>
       <p className="mt-1 flex-1 text-sm leading-relaxed text-ink">{body}</p>
       {actionLabel && onAction && (
-        <button type="button" onClick={onAction} className="mt-3 self-start text-sm font-semibold text-terracotta-600 hover:text-terracotta">
+        <button type="button" onClick={onAction} className="mt-3 self-start text-left text-sm font-semibold text-terracotta-600 hover:text-terracotta">
           {actionLabel} →
         </button>
       )}
@@ -2985,7 +2985,7 @@ function FocusAreaCard({
       {item.suggestedAction && (
         <p className="mt-2 text-sm text-ink">
           <span className="font-semibold">Suggested PD: </span>
-          {item.suggestedAction}
+          {item.suggestedAction.charAt(0).toUpperCase() + item.suggestedAction.slice(1)}
         </p>
       )}
     </div>

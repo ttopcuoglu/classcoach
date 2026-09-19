@@ -46,10 +46,10 @@ const PRIVACY_POINTS = [
 // What the pilot report (and the admin panel behind it) shows a school
 // leader. Kept to what the report actually contains.
 const LEADER_VIEW = [
-  { title: 'Adoption', body: 'How many teachers activated, who is active this month, and who keeps coming back.' },
-  { title: 'How teachers use it', body: 'Which parts of Wivoza your staff lean on — lesson reflection, planning, practice, or family communication.' },
-  { title: 'Where teachers are focusing', body: 'The growth goals teachers set for themselves, so PD can meet them where they already are.' },
-  { title: 'School-wide classroom trends', body: 'Talk time, wait time, questioning and tone across recorded lessons, by grade or subject once groups are large enough.' },
+  { title: 'Is it being used?', body: 'Who activated, who is active, who keeps coming back, and who could use a nudge, with what tends to help.' },
+  { title: 'Where should PD go?', body: 'Shared strengths and growth areas from recorded lessons, each explained in plain words, by grade or subject once groups are large enough.' },
+  { title: 'Did the PD work?', body: 'Track a focus area and see whether it shows up in fewer lessons since you started, for example 43% of lessons down to 22%.' },
+  { title: 'What should we do next?', body: 'The most common need you are not working on yet, with a suggested PD session, ready for your next staff meeting.' },
 ]
 
 const STEPS = [
@@ -428,7 +428,7 @@ export default function ForSchools() {
             <div className="mt-4 overflow-hidden rounded-2xl bg-white">
               <img
                 src="/samples/pilot-report.png"
-                alt="The first page of a sample Wivoza pilot report: adoption numbers and how teachers used each feature."
+                alt="The first page of a sample Wivoza pilot report for an invented school: an At a glance summary and adoption numbers."
                 className="w-full"
               />
             </div>
@@ -437,6 +437,53 @@ export default function ForSchools() {
               <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </span>
           </a>
+        </div>
+      </section>
+
+      {/* Inside the admin panel */}
+      <section className="mx-auto w-full max-w-6xl px-6 py-8">
+        <div className="mb-6 max-w-2xl">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Inside the admin panel</p>
+          <h2 className="mt-2 font-heading text-3xl font-extrabold text-forest">
+            Every number explains itself<span className="text-gold">.</span>
+          </h2>
+          <p className="mt-3 text-ink-soft">
+            Your dashboard opens with the answer, points to what needs your attention, and shows whether the work you
+            chose as a school is paying off. Shown here with an invented school.
+          </p>
+        </div>
+        <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr] lg:items-start">
+          <figure className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-3 shadow-sm">
+            <img
+              src="/samples/admin-dashboard.png"
+              alt="The admin dashboard for an invented school: an At a glance summary, this period's adoption numbers, and three things that need attention."
+              className="w-full rounded-2xl"
+              loading="lazy"
+            />
+            <figcaption className="px-2 pb-1 pt-3 text-sm text-ink-soft">
+              <span className="font-semibold text-forest">Dashboard.</span> The four things a principal needs to know,
+              then what to look at this week.
+            </figcaption>
+          </figure>
+          <div className="flex flex-col gap-6">
+            <figure className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-3 shadow-sm">
+              <img
+                src="/samples/admin-pd-progress.png"
+                alt="A tracked focus area for an invented school: talk time balance went from 43% of lessons to 22% since tracking began."
+                className="w-full rounded-2xl"
+                loading="lazy"
+              />
+              <figcaption className="px-2 pb-1 pt-3 text-sm text-ink-soft">
+                <span className="font-semibold text-forest">Professional Learning.</span> Pick a focus as a school and see
+                whether it shows up in fewer lessons.
+              </figcaption>
+            </figure>
+            <p className="flex items-start gap-2.5 rounded-2xl bg-mint-tint/50 p-5 text-sm text-forest">
+              <LockIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
+              Teachers keep using Wivoza because you can&rsquo;t see their recordings or coaching. That trust is what
+              fills these reports.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -467,7 +514,8 @@ export default function ForSchools() {
         </div>
         <p className="mt-5 rounded-2xl border-l-8 border-gold bg-gold-tint/50 px-5 py-4 text-sm text-forest">
           <span className="font-semibold">Built for pilots.</span> At the end of a pilot you get a report you can share
-          with your district — adoption, how teachers used Wivoza, and school-wide trends, all anonymous.
+          with your district: adoption, what your PD changed, school-wide trends, and a recommended next step, all
+          anonymous.
         </p>
       </section>
 
