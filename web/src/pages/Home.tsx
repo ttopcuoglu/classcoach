@@ -60,7 +60,7 @@ function isTalkItThrough(item: Activity): boolean {
 
 // Straight to the conversation itself, not just the feature's start screen.
 function activityLink(item: Activity): string {
-  if (item.type === 'scenario') return '/coach-chat?tab=practice'
+  if (item.type === 'scenario') return `/coach-chat?tab=practice&open=${item.id}`
   return isTalkItThrough(item) ? `/talk-to-me?open=${item.id}` : `/coach-chat?tab=ask&open=${item.id}`
 }
 

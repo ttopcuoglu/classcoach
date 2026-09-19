@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import CoachingChat from '../components/CoachingChat'
+import PastList from '../components/PastList'
 import ReflectionTimeline from '../components/ReflectionTimeline'
 import ShareButton from '../components/ShareButton'
 import { ArrowUpIcon, MicIcon, StarIcon } from '../components/icons'
@@ -79,9 +80,22 @@ export default function TryItOut() {
   const [chatSending, setChatSending] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
 
+  // Opened from Home's Recent work: go straight to that attempt.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const openId = searchParams.get('open')
+
   useEffect(() => {
     getAttempts()
-      .then(setAllAttempts)
+      .then((all) => {
+        setAllAttempts(all)
+        const opened = openId ? all.find((a) => a.id === openId) : undefined
+        if (opened) setAttempt(opened)
+        if (openId) {
+          const next = new URLSearchParams(searchParams)
+          next.delete('open')
+          setSearchParams(next, { replace: true })
+        }
+      })
       .catch(() => {})
       .finally(() => setHistoryLoading(false))
 
@@ -98,9 +112,8 @@ export default function TryItOut() {
 
     const suggested = sessionStorage.getItem('classcoach.suggestedCategory')
     if (suggested) setCategory(suggested)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  const savedAttempts = allAttempts.filter((a) => a.saved)
 
   const categoryTally = useMemo(() => {
     const counts = new Map<string, number>()
@@ -119,7 +132,7 @@ export default function TryItOut() {
       byCategory.set(a.scenario.category, list)
     }
 
-    let best: { category: string; delta: number } | null = null
+    let best: { category: string; delta: number; attempts: number } | null = null
     for (const [cat, attempts] of byCategory) {
       if (attempts.length < 2) continue
       const sorted = [...attempts].sort(
@@ -131,7 +144,7 @@ export default function TryItOut() {
       if (secondHalf.length === 0) continue
       const avg = (arr: ScenarioAttempt[]) => arr.reduce((sum, a) => sum + (a.rating ?? 0), 0) / arr.length
       const delta = avg(secondHalf) - avg(firstHalf)
-      if (delta > 0 && (!best || delta > best.delta)) best = { category: cat, delta }
+      if (delta > 0 && (!best || delta > best.delta)) best = { category: cat, delta, attempts: attempts.length }
     }
     return best
   }, [allAttempts])
@@ -240,6 +253,7 @@ export default function TryItOut() {
     try {
       const updated = await markAttemptTried(id)
       setAllAttempts((prev) => prev.map((a) => (a.id === id ? updated : a)))
+      setAttempt((prev) => (prev?.id === id ? updated : prev))
     } catch {
       // reflection timeline is a nice-to-have; a failed update just leaves the button as-is
     }
@@ -249,6 +263,7 @@ export default function TryItOut() {
     try {
       const updated = await saveAttemptReflection(id, note)
       setAllAttempts((prev) => prev.map((a) => (a.id === id ? updated : a)))
+      setAttempt((prev) => (prev?.id === id ? updated : prev))
     } catch {
       // same as above — non-critical, silently ignored
     }
@@ -263,12 +278,27 @@ export default function TryItOut() {
     try {
       const updated = await sendAttemptChat(attempt.id, trimmed)
       setAttempt(updated)
+      setAllAttempts((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
     } catch (err) {
       setChatError((err as Error).message || 'Could not reach your coach. Please try again.')
       setChatDraft(trimmed)
     } finally {
       setChatSending(false)
     }
+  }
+
+  // A past attempt opens like a fresh one: the scenario, your response, the
+  // coaching and any follow-ups, with the chat to keep going.
+  function handleOpenPast(id: string) {
+    const past = allAttempts.find((a) => a.id === id)
+    if (!past) return
+    setSessionState(null)
+    setAttempt(past)
+    setResponseText('')
+    setError(null)
+    setChatDraft('')
+    setChatError(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const hasFeedback = attempt && (attempt.feedback || attempt.modelResponse)
@@ -285,6 +315,7 @@ export default function TryItOut() {
               key={label}
               type="button"
               onClick={() => setCategory(value)}
+              title={count ? `You've practiced this ${count === 1 ? 'once' : `${count} times`}` : undefined}
               className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                 isActive
                   ? 'border-forest bg-forest text-cream'
@@ -292,7 +323,7 @@ export default function TryItOut() {
               }`}
             >
               {label}
-              {count ? ` · ${count}` : ''}
+              {count ? ` · ${count} practiced` : ''}
             </button>
           )
         })}
@@ -515,6 +546,14 @@ export default function TryItOut() {
                   placeholder="Ask a follow-up about this feedback..."
                 />
 
+                <ReflectionTimeline
+                  triedAt={attempt.triedAt}
+                  reflectionNote={attempt.reflectionNote}
+                  onMarkTried={() => handleMarkTried(attempt.id)}
+                  onSaveReflection={(note) => handleSaveReflection(attempt.id, note)}
+                />
+                <ShareButton type="attempt" onShare={() => shareAttempt(attempt.id)} />
+
                 <WorkingRing active={generating} estimatedMs={8000} label="Building a scenario" hint="Usually under ten seconds." className="text-forest" />
 
                 <div className="flex items-center justify-between">
@@ -573,87 +612,47 @@ export default function TryItOut() {
       </div>
 
       {growthInsight && (
-        <div className="flex items-center gap-3 rounded-2xl bg-mint-tint/50 p-5">
-          <ArrowUpIcon className="h-5 w-5 shrink-0 text-forest" />
-          <p className="text-sm text-ink">
-            <span className="font-semibold text-forest">You're showing growth</span> in{' '}
-            {categoryLabel(growthInsight.category)} scenarios.
-          </p>
+        <div className="flex items-start gap-3 rounded-2xl bg-mint-tint/50 p-5">
+          <ArrowUpIcon className="mt-0.5 h-5 w-5 shrink-0 text-forest" />
+          <div className="text-sm text-ink">
+            <p>
+              <span className="font-semibold text-forest">You're growing in {categoryLabel(growthInsight.category).toLowerCase()} scenarios.</span>{' '}
+              Across your {growthInsight.attempts} tries, your more recent responses were stronger than your first ones.
+            </p>
+            <p className="mt-1 text-xs text-ink-soft">
+              After each response, Wivoza privately notes how well it handled the moment. It&rsquo;s never shown as a
+              grade, and no one else sees it; it&rsquo;s only used to compare your earlier and later tries at the same
+              kind of situation.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setCategory(growthInsight.category)
+                handleNewScenario(growthInsight.category)
+              }}
+              disabled={generating}
+              className="mt-2 text-sm font-semibold text-forest hover:text-terracotta-600 disabled:opacity-60"
+            >
+              Practice another one →
+            </button>
+          </div>
         </div>
       )}
 
-      <div>
-        <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Saved scenarios</h2>
-        {historyLoading ? (
-          <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
-        ) : savedAttempts.length === 0 ? (
-          <p className="mt-2 text-sm text-ink-soft">Nothing saved yet. Tap "Save for later" after feedback to keep a scenario here.</p>
-        ) : (
-          <div className="mt-3 flex flex-col gap-3">
-            {savedAttempts.map((a) => (
-              <SavedAttemptCard key={a.id} attempt={a} onMarkTried={handleMarkTried} onSaveReflection={handleSaveReflection} />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function SavedAttemptCard({
-  attempt,
-  onMarkTried,
-  onSaveReflection,
-}: {
-  attempt: ScenarioAttempt
-  onMarkTried: (id: string) => void
-  onSaveReflection: (id: string, note: string) => void
-}) {
-  const [expanded, setExpanded] = useState(false)
-  return (
-    <div className="rounded-xl border border-hairline bg-cream-card p-4">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-start justify-between gap-4 text-left"
-      >
-        <div>
-          <span className="rounded-full bg-mint-tint/60 px-2 py-0.5 text-xs font-semibold text-forest">
-            {categoryLabel(attempt.scenario.category)}
-          </span>
-          <p className="mt-1.5 text-sm text-ink">{attempt.scenario.text}</p>
-        </div>
-        <span className="shrink-0 text-xs font-medium text-ink-soft">{expanded ? 'Hide' : 'Show'}</span>
-      </button>
-      {expanded && (
-        <div className="mt-3 flex flex-col gap-3 border-t border-hairline pt-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Your response</p>
-            <p className="mt-1 text-sm text-ink">{attempt.responseText}</p>
-          </div>
-          {attempt.feedback && (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coaching</p>
-              <p className="mt-1 text-sm whitespace-pre-wrap text-ink">{attempt.feedback}</p>
-            </div>
-          )}
-          {attempt.modelResponse && (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-forest">
-                Model response
-              </p>
-              <p className="mt-1 text-sm whitespace-pre-wrap text-ink">{attempt.modelResponse}</p>
-            </div>
-          )}
-          <ShareButton type="attempt" onShare={() => shareAttempt(attempt.id)} />
-          <ReflectionTimeline
-            triedAt={attempt.triedAt}
-            reflectionNote={attempt.reflectionNote}
-            onMarkTried={() => onMarkTried(attempt.id)}
-            onSaveReflection={(note) => onSaveReflection(attempt.id, note)}
-          />
-        </div>
-      )}
+      <PastList
+        title="Your practice"
+        items={allAttempts.map((a) => ({
+          id: a.id,
+          createdAt: a.createdAt,
+          label: categoryLabel(a.scenario.category),
+          text: a.scenario.text,
+          saved: a.saved,
+        }))}
+        activeId={attempt && !attempt.id.startsWith('draft-') ? attempt.id : null}
+        loading={historyLoading}
+        emptyText="Nothing yet. Every scenario you respond to will be kept here, with its feedback."
+        onOpen={handleOpenPast}
+      />
     </div>
   )
 }

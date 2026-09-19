@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ProgressRing } from '../components/ProgressRing'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import CoachingChat from '../components/CoachingChat'
+import PastList from '../components/PastList'
 import ReflectionTimeline from '../components/ReflectionTimeline'
 import ShareButton from '../components/ShareButton'
 import { MicIcon, StarIcon } from '../components/icons'
@@ -120,8 +121,6 @@ export default function Ask() {
     if (prefill?.incidentText) setIncidentText(prefill.incidentText)
   }, [])
 
-  const savedDebriefs = allDebriefs.filter((d) => d.saved)
-
   async function handleSubmit(override?: string) {
     const text = (override ?? incidentText).trim()
     if (!text || submitting) return
@@ -155,6 +154,7 @@ export default function Ask() {
     try {
       const updated = await sendDebriefChat(debrief.id, trimmed)
       setDebrief(updated)
+      setAllDebriefs((prev) => prev.map((d) => (d.id === updated.id ? updated : d)))
     } catch (err) {
       setChatError((err as Error).message || 'Could not reach your coach. Please try again.')
       setChatDraft(trimmed)
@@ -179,6 +179,7 @@ export default function Ask() {
     try {
       const updated = await markDebriefTried(id)
       setAllDebriefs((prev) => prev.map((d) => (d.id === id ? updated : d)))
+      setDebrief((prev) => (prev?.id === id ? updated : prev))
     } catch {
       // reflection timeline is a nice-to-have; a failed update just leaves the button as-is
     }
@@ -188,9 +189,22 @@ export default function Ask() {
     try {
       const updated = await saveDebriefReflection(id, note)
       setAllDebriefs((prev) => prev.map((d) => (d.id === id ? updated : d)))
+      setDebrief((prev) => (prev?.id === id ? updated : prev))
     } catch {
       // same as above — non-critical, silently ignored
     }
+  }
+
+  // A past question opens exactly like a fresh answer: the coaching, any
+  // follow-ups, and the chat to keep going.
+  function handleOpenPast(id: string) {
+    const past = allDebriefs.find((d) => d.id === id)
+    if (!past) return
+    setDebrief(past)
+    setError(null)
+    setChatDraft('')
+    setChatError(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function handlePracticeThis() {
@@ -332,6 +346,14 @@ export default function Ask() {
               placeholder="Ask a follow-up about this feedback..."
             />
 
+            <ReflectionTimeline
+              triedAt={debrief.triedAt}
+              reflectionNote={debrief.reflectionNote}
+              onMarkTried={() => handleMarkTried(debrief.id)}
+              onSaveReflection={(note) => handleSaveReflection(debrief.id, note)}
+            />
+            <ShareButton type="debrief" onShare={() => shareDebrief(debrief.id)} />
+
             <div className="flex flex-wrap items-center justify-between gap-3">
               <button
                 type="button"
@@ -393,76 +415,20 @@ export default function Ask() {
         </div>
       )}
 
-      <div>
-        <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Saved</h2>
-        {historyLoading ? (
-          <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
-        ) : savedDebriefs.length === 0 ? (
-          <p className="mt-2 text-sm text-ink-soft">Nothing saved yet. Tap "Save for later" on an answer to keep it here.</p>
-        ) : (
-          <div className="mt-3 flex flex-col gap-3">
-            {savedDebriefs.map((d) => (
-              <SavedDebriefCard key={d.id} debrief={d} onMarkTried={handleMarkTried} onSaveReflection={handleSaveReflection} />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function SavedDebriefCard({
-  debrief,
-  onMarkTried,
-  onSaveReflection,
-}: {
-  debrief: Debrief
-  onMarkTried: (id: string) => void
-  onSaveReflection: (id: string, note: string) => void
-}) {
-  const [expanded, setExpanded] = useState(false)
-  return (
-    <div className="rounded-xl border border-hairline bg-cream-card p-4">
-      <button type="button" onClick={() => setExpanded((e) => !e)} className="flex w-full items-start justify-between gap-3 text-left">
-        <div>
-          {debrief.category && (
-            <span className="rounded-full bg-mint-tint/60 px-2 py-0.5 text-xs font-semibold text-forest">
-              {categoryLabel(debrief.category)}
-            </span>
-          )}
-          <p className="mt-1.5 text-sm text-ink">{debrief.incidentText}</p>
-        </div>
-        <span className="shrink-0 text-xs font-medium text-ink-soft">{expanded ? 'Hide' : 'Show'}</span>
-      </button>
-      {expanded && (
-        <div className="mt-3 flex flex-col gap-3 border-t border-hairline pt-3">
-          {debrief.feedback && (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Coaching</p>
-              <p className="mt-1 text-sm whitespace-pre-wrap text-ink">{debrief.feedback}</p>
-            </div>
-          )}
-          {debrief.wordsToTry && (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Words to try</p>
-              <p className="mt-1 text-sm whitespace-pre-wrap text-ink">{debrief.wordsToTry}</p>
-            </div>
-          )}
-          {debrief.followUp && (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-forest">One next step</p>
-              <p className="mt-1 text-sm whitespace-pre-wrap text-ink">{debrief.followUp}</p>
-            </div>
-          )}
-          <ShareButton type="debrief" onShare={() => shareDebrief(debrief.id)} />
-          <ReflectionTimeline
-            triedAt={debrief.triedAt}
-            reflectionNote={debrief.reflectionNote}
-            onMarkTried={() => onMarkTried(debrief.id)}
-            onSaveReflection={(note) => onSaveReflection(debrief.id, note)}
-          />
-        </div>
-      )}
+      <PastList
+        title="Your questions"
+        items={allDebriefs.map((d) => ({
+          id: d.id,
+          createdAt: d.createdAt,
+          label: d.category ? categoryLabel(d.category) : null,
+          text: d.incidentText,
+          saved: d.saved,
+        }))}
+        activeId={debrief?.id ?? null}
+        loading={historyLoading}
+        emptyText="Nothing yet. Your questions and their answers will be kept here."
+        onOpen={handleOpenPast}
+      />
     </div>
   )
 }
