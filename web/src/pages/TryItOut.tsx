@@ -76,9 +76,10 @@ export default function TryItOut() {
     done: boolean
     attemptIds: string[]
   } | null>(null)
-  // The situation/grade/difficulty choices stay folded into one line until
-  // asked for — most teachers start from a suggested scenario.
-  const [customizing, setCustomizing] = useState(false)
+  // The situation/grade/difficulty choices start open inside the start card,
+  // so nobody misses that scenarios can be tailored; Hide folds them into
+  // the one-line summary for anyone who prefers a tidier card.
+  const [customizing, setCustomizing] = useState(true)
 
   const [allAttempts, setAllAttempts] = useState<ScenarioAttempt[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
@@ -431,7 +432,7 @@ export default function TryItOut() {
                   aria-expanded={customizing}
                   className="text-sm font-semibold text-gold hover:text-cream"
                 >
-                  {customizing ? 'Done' : 'Change'}
+                  {customizing ? 'Hide' : 'Change'}
                 </button>
               </div>
               {customizing && (
