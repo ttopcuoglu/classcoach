@@ -15,3 +15,6 @@ xcuserdata/
 node_modules/
 .env
 .env.local
+
+# Wivoza assets (large videos, provisioning profile, reports) - kept local, not in git
+Wivoza-Assets/
