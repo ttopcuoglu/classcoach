@@ -11,7 +11,7 @@ import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, t
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { buildDocx } from '../lib/docxBuilder.ts'
-import { parseDocOutput, parseSlidesOutput, sanitizeDocModel, sanitizeSlides } from '../lib/exportModels.ts'
+import { parseDocOutput, parseSlidesOutput, sanitizeDeck, sanitizeDocModel } from '../lib/exportModels.ts'
 import { buildPdf } from '../lib/pdfBuilder.ts'
 import { buildPptx } from '../lib/slidesPptx.ts'
 import { prisma } from '../lib/prisma.ts'
@@ -889,6 +889,16 @@ const SLIDES_SYSTEM_PROMPT = `You lay out a teacher's assignment or presentation
 
 This is formatting only — PRESERVE the original's structure and content. If the text is already a presentation, produce exactly one slide per original slide, in the same order (use blank lines and topic changes to find the slide boundaries) — never merge, reorder, drop, or add slides. If it is a worksheet or other document, follow its own sections in order, splitting a section across slides only when it genuinely cannot fit on one. Keep the teacher's own wording and every question, instruction, and blank ("I am ______"); do not rewrite or invent content. Titles under 8 words (use the original heading where there is one). Skip any [[diagram:...]] directives. Add a brief teacher speaker note only where it genuinely helps; otherwise leave notes empty. At most 25 slides.
 
+Choose ONE <theme> for the whole deck that fits its subject and audience — decide from the content, not from habit, and don't default to wivoza when a subject theme fits:
+- history — history, social studies, civics, geography, government, culture (warm parchment, serif type).
+- science — science, biology, chemistry, physics, earth science, technology, engineering (deep blue and teal, techy).
+- math — math, numbers, algebra, geometry, data, statistics (indigo and orange, crisp).
+- ela — reading, writing, literature, grammar, poetry, world languages (plum and gold, serif type).
+- arts — art, music, drama, design, creative projects (bold magenta, amber, violet).
+- early — grades K-3 or any playful, young-learner deck (bright, friendly colors).
+- wellness — health, PE, SEL, mindfulness, classroom community and culture (fresh greens).
+- wivoza — only when nothing above fits (school-wide, general, mixed).
+
 Make it visual and varied. Give EVERY slide one <icon>: a single emoji that fits the topic (for young students, friendly and concrete). Give EVERY slide a <layout>, chosen like this:
 - title — only for the first slide.
 - keyterm — introducing a vocabulary word or key idea: the title is the word itself, bullets are its meaning and examples.
@@ -897,7 +907,8 @@ Make it visual and varied. Give EVERY slide one <icon>: a single emoji that fits
 - cards — lists, steps, rules, and activities with 3-5 items.
 Vary the layouts: never use the same layout on more than 2 slides in a row.
 
-Plain text only, no markdown. Respond with exactly this structure and nothing else — the first slide is the title slide, with an empty <bullets> (or one short subtitle line):
+Plain text only, no markdown. Respond with exactly this structure and nothing else — first the theme, then the slides; the first slide is the title slide, with an empty <bullets> (or one short subtitle line):
+<theme>history</theme>
 <slide>
 <layout>cards</layout>
 <icon>🌟</icon>
@@ -1069,12 +1080,12 @@ assignmentCoachRouter.post('/export-file', async (req, res) => {
   try {
     let buffer: Buffer
     if (format === 'pptx') {
-      const slides = sanitizeSlides(req.body?.model)
-      if (!slides) {
+      const deck = sanitizeDeck(req.body?.model)
+      if (!deck) {
         res.status(400).json({ error: 'That slide deck is not valid.' })
         return
       }
-      buffer = await buildPptx(slides[0].title, slides)
+      buffer = await buildPptx(deck.slides[0].title, deck)
     } else {
       const doc = sanitizeDocModel(req.body?.model)
       if (!doc) {

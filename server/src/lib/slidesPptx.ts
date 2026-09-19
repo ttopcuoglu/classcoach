@@ -11,65 +11,124 @@ export type Slide = {
   icon: string | null
 }
 
-const CREAM = 'F7F3EA'
-const FOREST = '1B2E28'
-const TERRACOTTA = 'C96A45'
-const GOLD = 'E4B84A'
-const TEAL = '2F7F76'
-const PLUM = '7A4E8C'
-const WHITE = 'FFFFFF'
-const FONT = 'Arial'
-
-// Rotated per slide so consecutive slides don't look identical.
-const ACCENTS = [TERRACOTTA, TEAL, PLUM, GOLD]
-const accentFor = (i: number) => ACCENTS[i % ACCENTS.length]
-// Gold needs dark text on it; the others take white.
-const onAccent = (accent: string) => (accent === GOLD ? FOREST : WHITE)
-
-const SHADOW = { type: 'outer' as const, color: '000000', opacity: 0.14, blur: 8, offset: 3, angle: 90 }
-
-function footer(slide: PptxGenJS.Slide, dark: boolean) {
-  slide.addText('Wivoza', {
-    x: 0.6, y: 7.0, w: 2, h: 0.3, fontFace: FONT, fontSize: 10, bold: true,
-    color: dark ? 'FFFFFF' : TERRACOTTA, transparency: dark ? 40 : 0,
-  })
-  slide.slideNumber = { x: 12.3, y: 7.0, w: 0.5, h: 0.3, fontFace: FONT, fontSize: 10, color: dark ? 'FFFFFF' : '8A8A80' }
+type Decor = 'circles' | 'stripes' | 'squares'
+export type Theme = {
+  dark: string // title / prompt background
+  light: string // content-slide background
+  ink: string // text on light
+  accents: [string, string, string, string]
+  highlight: string // underline / subtitle on dark
+  head: string
+  body: string
+  decor: Decor
 }
 
-function addTitleSlide(pptx: PptxGenJS, s: Slide) {
+// One look per kind of content, so a history deck and a math deck don't
+// share a template. Mirrored in web/src/components/ExportModal.tsx — keep the
+// two in sync.
+export const THEMES = {
+  wivoza: { dark: '1B2E28', light: 'F7F3EA', ink: '1B2E28', accents: ['C96A45', '2F7F76', '7A4E8C', 'E4B84A'], highlight: 'E4B84A', head: 'Arial', body: 'Arial', decor: 'circles' },
+  history: { dark: '2E1F1A', light: 'F4EBDD', ink: '2E1F1A', accents: ['8C2F39', '3B6478', 'B08D57', '5B6B4E'], highlight: 'D4AF6A', head: 'Georgia', body: 'Georgia', decor: 'stripes' },
+  science: { dark: '0E2A3F', light: 'EEF6F8', ink: '0E2A3F', accents: ['0097A7', 'F2A900', '3D7EAA', '6BAA2B'], highlight: '5CE1E6', head: 'Trebuchet MS', body: 'Arial', decor: 'squares' },
+  math: { dark: '1E2A5E', light: 'F2F4FF', ink: '1E2A5E', accents: ['3B5BDB', 'F76707', '12A87C', 'AE3EC9'], highlight: 'FFD43B', head: 'Trebuchet MS', body: 'Arial', decor: 'squares' },
+  ela: { dark: '38213F', light: 'FBF5EC', ink: '38213F', accents: ['9C4A8C', 'C98A1B', 'C25B56', '4F7CAC'], highlight: 'F0C36A', head: 'Georgia', body: 'Georgia', decor: 'circles' },
+  arts: { dark: '1B1830', light: 'FFF7EE', ink: '1B1830', accents: ['E63E8C', 'F5A300', '0BB3C9', '7B3FE4'], highlight: 'FFD166', head: 'Trebuchet MS', body: 'Arial', decor: 'circles' },
+  early: { dark: '22579E', light: 'FFFBEA', ink: '22406B', accents: ['F25C54', 'F7B32B', '3F88C5', '4CB963'], highlight: 'FFE066', head: 'Trebuchet MS', body: 'Trebuchet MS', decor: 'circles' },
+  wellness: { dark: '1D4A3A', light: 'F1F8F3', ink: '1D3A30', accents: ['2A9D6F', 'F29E4C', '3C7AA8', 'D9534F'], highlight: 'C7F464', head: 'Trebuchet MS', body: 'Arial', decor: 'squares' },
+} as const satisfies Record<string, Theme>
+
+export const THEME_NAMES = Object.keys(THEMES) as (keyof typeof THEMES)[]
+export type ThemeName = keyof typeof THEMES
+
+export type SlideDeck = { theme: ThemeName; slides: Slide[] }
+
+const WHITE = 'FFFFFF'
+const SHADOW = { type: 'outer' as const, color: '000000', opacity: 0.14, blur: 8, offset: 3, angle: 90 }
+
+// White text on a dark or mid accent, dark ink on a light one (gold, yellow).
+function onColor(hex: string, ink: string): string {
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+  return lum > 0.6 ? ink : WHITE
+}
+
+const accentAt = (t: Theme, i: number) => t.accents[i % 4]
+
+function footer(slide: PptxGenJS.Slide, t: Theme, onDark: boolean) {
+  slide.addText('Wivoza', {
+    x: 0.6, y: 7.0, w: 2, h: 0.3, fontFace: t.body, fontSize: 10, bold: true,
+    color: onDark ? WHITE : t.accents[0], transparency: onDark ? 40 : 0,
+  })
+  slide.slideNumber = { x: 12.3, y: 7.0, w: 0.5, h: 0.3, fontFace: t.body, fontSize: 10, color: onDark ? WHITE : '8A8A80' }
+}
+
+// Big decorative shapes on the title slide, in the theme's own style.
+function decorTitle(slide: PptxGenJS.Slide, t: Theme) {
+  const [a, b, c] = t.accents
+  if (t.decor === 'stripes') {
+    slide.addShape('rect', { x: 9.4, y: -2, w: 1.0, h: 12, rotate: 18, fill: { color: a } })
+    slide.addShape('rect', { x: 10.7, y: -2, w: 0.45, h: 12, rotate: 18, fill: { color: t.highlight } })
+    slide.addShape('rect', { x: 11.5, y: -2, w: 1.5, h: 12, rotate: 18, fill: { color: b } })
+    slide.addShape('rect', { x: 12.9, y: -2, w: 0.5, h: 12, rotate: 18, fill: { color: c } })
+  } else if (t.decor === 'squares') {
+    slide.addShape('roundRect', { x: 9.6, y: -0.9, w: 3.8, h: 3.8, rectRadius: 0.35, rotate: 18, fill: { color: a } })
+    slide.addShape('roundRect', { x: 11.3, y: 4.5, w: 2.4, h: 2.4, rectRadius: 0.3, rotate: -14, fill: { color: b } })
+    slide.addShape('roundRect', { x: 8.1, y: 3.8, w: 0.95, h: 0.95, rectRadius: 0.15, rotate: 30, fill: { color: t.highlight } })
+    slide.addShape('roundRect', { x: -0.9, y: 6.3, w: 2.3, h: 2.3, rectRadius: 0.3, rotate: 20, fill: { color: c } })
+  } else {
+    slide.addShape('ellipse', { x: 9.4, y: -1.6, w: 5.4, h: 5.4, fill: { color: a } })
+    slide.addShape('ellipse', { x: 11.3, y: 4.6, w: 3.2, h: 3.2, fill: { color: b } })
+    slide.addShape('ellipse', { x: -1.5, y: 6.0, w: 3.3, h: 3.3, fill: { color: t.highlight } })
+    slide.addShape('ellipse', { x: 8.2, y: 3.9, w: 1.1, h: 1.1, fill: { color: t.highlight, transparency: 25 } })
+  }
+}
+
+// Subtler version for full-color slides, drawn as translucent white.
+function decorSoft(slide: PptxGenJS.Slide, t: Theme) {
+  const soft = { color: WHITE, transparency: 86 }
+  if (t.decor === 'stripes') {
+    slide.addShape('rect', { x: 10.2, y: -2, w: 1.3, h: 12, rotate: 18, fill: soft })
+    slide.addShape('rect', { x: 11.9, y: -2, w: 0.6, h: 12, rotate: 18, fill: soft })
+  } else if (t.decor === 'squares') {
+    slide.addShape('roundRect', { x: 10.6, y: -1.2, w: 3.6, h: 3.6, rectRadius: 0.3, rotate: 18, fill: soft })
+    slide.addShape('roundRect', { x: -1.2, y: 5.3, w: 3.2, h: 3.2, rectRadius: 0.3, rotate: -16, fill: soft })
+  } else {
+    slide.addShape('ellipse', { x: 10.6, y: -1.4, w: 4.4, h: 4.4, fill: soft })
+    slide.addShape('ellipse', { x: -1.6, y: 4.9, w: 4.2, h: 4.2, fill: soft })
+  }
+}
+
+function addTitleSlide(pptx: PptxGenJS, s: Slide, t: Theme) {
   const slide = pptx.addSlide()
-  slide.background = { color: FOREST }
-  slide.addShape('ellipse', { x: 9.4, y: -1.6, w: 5.4, h: 5.4, fill: { color: TERRACOTTA } })
-  slide.addShape('ellipse', { x: 11.3, y: 4.6, w: 3.2, h: 3.2, fill: { color: TEAL } })
-  slide.addShape('ellipse', { x: -1.5, y: 6.0, w: 3.3, h: 3.3, fill: { color: GOLD } })
-  slide.addShape('ellipse', { x: 8.2, y: 3.9, w: 1.1, h: 1.1, fill: { color: GOLD, transparency: 25 } })
+  slide.background = { color: t.dark }
+  decorTitle(slide, t)
   if (s.icon) {
     slide.addText(s.icon, { x: 10.0, y: 0.75, w: 2.6, h: 2.4, fontSize: 96, align: 'center', valign: 'middle' })
   }
   slide.addText(s.title, {
-    x: 0.9, y: 2.0, w: 8.4, h: 2.6, fontFace: FONT, fontSize: 50, bold: true, color: WHITE, valign: 'middle', fit: 'shrink',
+    x: 0.9, y: 2.0, w: 8.4, h: 2.6, fontFace: t.head, fontSize: 50, bold: true, color: WHITE, valign: 'middle', fit: 'shrink',
   })
-  slide.addShape('roundRect', { x: 0.95, y: 4.85, w: 1.6, h: 0.14, rectRadius: 0.07, fill: { color: GOLD } })
+  slide.addShape('roundRect', { x: 0.95, y: 4.85, w: 1.6, h: 0.14, rectRadius: 0.07, fill: { color: t.highlight } })
   const sub = s.bullets.join('  ·  ')
   if (sub) {
-    slide.addText(sub, { x: 0.9, y: 5.15, w: 8.2, h: 0.8, fontFace: FONT, fontSize: 20, color: CREAM, valign: 'top' })
+    slide.addText(sub, { x: 0.9, y: 5.15, w: 8.2, h: 0.8, fontFace: t.body, fontSize: 20, color: t.light, valign: 'top' })
   }
-  slide.addText('Made with Wivoza', { x: 2.7, y: 6.85, w: 4, h: 0.35, fontFace: FONT, fontSize: 12, bold: true, color: GOLD })
+  slide.addText('Made with Wivoza', { x: 2.7, y: 6.85, w: 4, h: 0.35, fontFace: t.body, fontSize: 12, bold: true, color: t.highlight })
   return slide
 }
 
-function addCardsSlide(pptx: PptxGenJS, s: Slide, index: number) {
-  const accent = accentFor(index)
+function addCardsSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme) {
+  const accent = accentAt(t, index)
   const slide = pptx.addSlide()
-  slide.background = { color: CREAM }
+  slide.background = { color: t.light }
   slide.addShape('rect', { x: 0, y: 0, w: 13.33, h: 0.22, fill: { color: accent } })
   if (s.icon) {
     slide.addShape('ellipse', { x: 0.6, y: 0.55, w: 1.05, h: 1.05, fill: { color: accent } })
     slide.addText(s.icon, { x: 0.6, y: 0.55, w: 1.05, h: 1.05, fontSize: 34, align: 'center', valign: 'middle' })
   }
   slide.addText(s.title, {
-    x: s.icon ? 1.9 : 0.6, y: 0.5, w: s.icon ? 10.8 : 12.1, h: 1.15, fontFace: FONT, fontSize: 34, bold: true,
-    color: FOREST, valign: 'middle', fit: 'shrink',
+    x: s.icon ? 1.9 : 0.6, y: 0.5, w: s.icon ? 10.8 : 12.1, h: 1.15, fontFace: t.head, fontSize: 34, bold: true,
+    color: t.ink, valign: 'middle', fit: 'shrink',
   })
 
   const n = s.bullets.length
@@ -80,99 +139,96 @@ function addCardsSlide(pptx: PptxGenJS, s: Slide, index: number) {
     const fontSize = n >= 5 ? 20 : n === 4 ? 22 : 24
     s.bullets.forEach((b, i) => {
       const y = top + i * (cardH + gap)
-      const c = accentFor(index + i)
+      const c = accentAt(t, index + i)
       slide.addShape('roundRect', { x: 0.6, y, w: 12.1, h: cardH, rectRadius: 0.16, fill: { color: WHITE }, shadow: SHADOW })
       slide.addShape('ellipse', { x: 0.85, y: y + (cardH - 0.62) / 2, w: 0.62, h: 0.62, fill: { color: c } })
       slide.addText(String(i + 1), {
-        x: 0.85, y: y + (cardH - 0.62) / 2, w: 0.62, h: 0.62, fontFace: FONT, fontSize: 18, bold: true, color: onAccent(c), align: 'center', valign: 'middle',
+        x: 0.85, y: y + (cardH - 0.62) / 2, w: 0.62, h: 0.62, fontFace: t.body, fontSize: 18, bold: true, color: onColor(c, t.ink), align: 'center', valign: 'middle',
       })
-      slide.addText(b, {
-        x: 1.75, y, w: 10.7, h: cardH, fontFace: FONT, fontSize, color: FOREST, valign: 'middle', fit: 'shrink',
-      })
+      slide.addText(b, { x: 1.75, y, w: 10.7, h: cardH, fontFace: t.body, fontSize, color: t.ink, valign: 'middle', fit: 'shrink' })
     })
   }
-  footer(slide, false)
+  footer(slide, t, false)
   return slide
 }
 
-function addSplitSlide(pptx: PptxGenJS, s: Slide, index: number) {
-  const accent = accentFor(index)
+function addSplitSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme) {
+  const accent = accentAt(t, index)
   const slide = pptx.addSlide()
-  slide.background = { color: CREAM }
+  slide.background = { color: t.light }
   slide.addShape('rect', { x: 0, y: 0, w: 4.7, h: 7.5, fill: { color: accent } })
   slide.addShape('ellipse', { x: -1.2, y: -1.2, w: 3.2, h: 3.2, fill: { color: WHITE, transparency: 85 } })
   slide.addShape('ellipse', { x: 2.6, y: 5.2, w: 3.4, h: 3.4, fill: { color: WHITE, transparency: 88 } })
-  slide.addText(s.icon ?? '★', { x: 0.3, y: 1.9, w: 4.1, h: 3.4, fontSize: 130, align: 'center', valign: 'middle', color: onAccent(accent) })
+  slide.addText(s.icon ?? '★', { x: 0.3, y: 1.9, w: 4.1, h: 3.4, fontSize: 130, align: 'center', valign: 'middle', color: onColor(accent, t.ink) })
   slide.addText(s.title, {
-    x: 5.2, y: 0.7, w: 7.6, h: 1.7, fontFace: FONT, fontSize: 36, bold: true, color: FOREST, valign: 'middle', fit: 'shrink',
+    x: 5.2, y: 0.7, w: 7.6, h: 1.7, fontFace: t.head, fontSize: 36, bold: true, color: t.ink, valign: 'middle', fit: 'shrink',
   })
   slide.addShape('roundRect', { x: 5.25, y: 2.45, w: 1.3, h: 0.12, rectRadius: 0.06, fill: { color: accent } })
   if (s.bullets.length > 0) {
     slide.addText(
       s.bullets.map((b) => ({ text: b, options: { bullet: { indent: 24 }, breakLine: true } })),
-      { x: 5.2, y: 2.85, w: 7.6, h: 3.9, fontFace: FONT, fontSize: 26, color: FOREST, valign: 'top', paraSpaceAfter: 14, fit: 'shrink' },
+      { x: 5.2, y: 2.85, w: 7.6, h: 3.9, fontFace: t.body, fontSize: 26, color: t.ink, valign: 'top', paraSpaceAfter: 14, fit: 'shrink' },
     )
   }
-  footer(slide, false)
+  footer(slide, t, false)
   return slide
 }
 
-function addKeytermSlide(pptx: PptxGenJS, s: Slide, index: number) {
-  const accent = accentFor(index)
-  const fg = onAccent(accent)
+function addKeytermSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme) {
+  const accent = accentAt(t, index)
+  const fg = onColor(accent, t.ink)
   const slide = pptx.addSlide()
   slide.background = { color: accent }
-  slide.addShape('ellipse', { x: 10.6, y: -1.4, w: 4.4, h: 4.4, fill: { color: WHITE, transparency: 85 } })
-  slide.addShape('ellipse', { x: -1.6, y: 4.9, w: 4.2, h: 4.2, fill: { color: WHITE, transparency: 88 } })
+  decorSoft(slide, t)
   if (s.icon) slide.addText(s.icon, { x: 5.4, y: 0.5, w: 2.5, h: 1.5, fontSize: 64, align: 'center', valign: 'middle' })
   slide.addText(s.title, {
-    x: 0.8, y: 1.9, w: 11.7, h: 1.6, fontFace: FONT, fontSize: 64, bold: true, color: fg, align: 'center', valign: 'middle', fit: 'shrink',
+    x: 0.8, y: 1.9, w: 11.7, h: 1.6, fontFace: t.head, fontSize: 64, bold: true, color: fg, align: 'center', valign: 'middle', fit: 'shrink',
   })
   const n = Math.min(s.bullets.length, 4)
-  const pillH = 0.8
-  const startY = 3.85
+  const pillH = 0.72
   s.bullets.slice(0, n).forEach((b, i) => {
-    const y = startY + i * (pillH + 0.18)
-    slide.addShape('roundRect', { x: 2.2, y, w: 8.9, h: pillH, rectRadius: 0.4, fill: { color: WHITE }, shadow: SHADOW })
-    slide.addText(b, { x: 2.5, y, w: 8.3, h: pillH, fontFace: FONT, fontSize: 22, color: FOREST, align: 'center', valign: 'middle', fit: 'shrink' })
+    const y = 3.7 + i * (pillH + 0.14)
+    slide.addShape('roundRect', { x: 2.2, y, w: 8.9, h: pillH, rectRadius: 0.36, fill: { color: WHITE }, shadow: SHADOW })
+    slide.addText(b, { x: 2.5, y, w: 8.3, h: pillH, fontFace: t.body, fontSize: 22, color: t.ink, align: 'center', valign: 'middle', fit: 'shrink' })
   })
-  footer(slide, true)
+  footer(slide, t, true)
   return slide
 }
 
-function addPromptSlide(pptx: PptxGenJS, s: Slide, index: number) {
-  const accent = accentFor(index + 1)
-  const fg = onAccent(accent)
+function addPromptSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme) {
+  const accent = accentAt(t, index + 1)
+  const fg = onColor(accent, t.ink)
   const slide = pptx.addSlide()
-  slide.background = { color: FOREST }
+  slide.background = { color: t.dark }
   slide.addShape('roundRect', { x: 0.6, y: 0.6, w: 12.1, h: 6.1, rectRadius: 0.35, fill: { color: accent } })
   slide.addShape('ellipse', { x: 10.4, y: 0.95, w: 2.0, h: 2.0, fill: { color: WHITE, transparency: 82 } })
   slide.addText(s.icon ?? '💬', { x: 1.0, y: 1.0, w: 1.6, h: 1.4, fontSize: 60, align: 'center', valign: 'middle' })
   slide.addText(s.title, {
-    x: 2.8, y: 0.9, w: 9.4, h: 2.4, fontFace: FONT, fontSize: 38, bold: true, color: fg, valign: 'middle', fit: 'shrink',
+    x: 2.8, y: 0.9, w: 9.4, h: 2.4, fontFace: t.head, fontSize: 38, bold: true, color: fg, valign: 'middle', fit: 'shrink',
   })
   const n = Math.min(s.bullets.length, 3)
   s.bullets.slice(0, n).forEach((b, i) => {
     const y = 3.75 + i * 0.95
     slide.addShape('roundRect', { x: 1.2, y, w: 10.9, h: 0.78, rectRadius: 0.39, fill: { color: WHITE, transparency: 12 } })
-    slide.addText(b, { x: 1.5, y, w: 10.3, h: 0.78, fontFace: FONT, fontSize: 20, color: FOREST, valign: 'middle', fit: 'shrink' })
+    slide.addText(b, { x: 1.5, y, w: 10.3, h: 0.78, fontFace: t.body, fontSize: 20, color: t.ink, valign: 'middle', fit: 'shrink' })
   })
-  footer(slide, true)
+  footer(slide, t, true)
   return slide
 }
 
-export async function buildPptx(deckTitle: string, slides: Slide[]): Promise<Buffer> {
+export async function buildPptx(deckTitle: string, deck: SlideDeck): Promise<Buffer> {
+  const t: Theme = THEMES[deck.theme] ?? THEMES.wivoza
   const pptx = new PptxGenJS()
   pptx.layout = 'LAYOUT_WIDE'
   pptx.title = deckTitle
 
-  slides.forEach((s, i) => {
+  deck.slides.forEach((s, i) => {
     let slide: PptxGenJS.Slide
-    if (s.layout === 'title') slide = addTitleSlide(pptx, s)
-    else if (s.layout === 'split') slide = addSplitSlide(pptx, s, i)
-    else if (s.layout === 'keyterm') slide = addKeytermSlide(pptx, s, i)
-    else if (s.layout === 'prompt') slide = addPromptSlide(pptx, s, i)
-    else slide = addCardsSlide(pptx, s, i)
+    if (s.layout === 'title') slide = addTitleSlide(pptx, s, t)
+    else if (s.layout === 'split') slide = addSplitSlide(pptx, s, i, t)
+    else if (s.layout === 'keyterm') slide = addKeytermSlide(pptx, s, i, t)
+    else if (s.layout === 'prompt') slide = addPromptSlide(pptx, s, i, t)
+    else slide = addCardsSlide(pptx, s, i, t)
     if (s.notes) slide.addNotes(s.notes)
   })
 

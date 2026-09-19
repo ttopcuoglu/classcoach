@@ -1,5 +1,5 @@
 import { extractTag } from './extractTag.ts'
-import { SLIDE_LAYOUTS, type Slide, type SlideLayout } from './slidesPptx.ts'
+import { SLIDE_LAYOUTS, THEME_NAMES, type Slide, type SlideDeck, type SlideLayout, type ThemeName } from './slidesPptx.ts'
 
 export type DocBlock =
   | { type: 'heading'; text: string }
@@ -46,10 +46,14 @@ export function sanitizeDocModel(raw: unknown): DocModel | null {
   return { title, subtitle: clean(r.subtitle, 200) || null, blocks }
 }
 
-export function sanitizeSlides(raw: unknown): Slide[] | null {
-  if (!Array.isArray(raw)) return null
+export function sanitizeDeck(raw: unknown): SlideDeck | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  if (!Array.isArray(r.slides)) return null
+  const theme = (THEME_NAMES as readonly string[]).includes(r.theme as string) ? (r.theme as ThemeName) : 'wivoza'
+
   const slides: Slide[] = []
-  for (const item of raw.slice(0, MAX_SLIDES)) {
+  for (const item of r.slides.slice(0, MAX_SLIDES)) {
     if (!item || typeof item !== 'object') continue
     const s = item as Record<string, unknown>
     const title = clean(s.title, 200)
@@ -68,7 +72,7 @@ export function sanitizeSlides(raw: unknown): Slide[] | null {
   }
   if (slides.length === 0) return null
   slides[0].layout = 'title'
-  return slides
+  return { theme, slides }
 }
 
 const listItems = (body: string): string[] =>
@@ -89,8 +93,8 @@ export function parseDocOutput(text: string): DocModel | null {
   return sanitizeDocModel({ title: extractTag(text, 'title'), subtitle: extractTag(text, 'subtitle'), blocks })
 }
 
-// Parses Claude's repeated <slide> tag output into validated slides.
-export function parseSlidesOutput(text: string): Slide[] | null {
+// Parses Claude's <theme> + repeated <slide> tag output into a validated deck.
+export function parseSlidesOutput(text: string): SlideDeck | null {
   const raw: unknown[] = []
   for (const m of text.matchAll(/<slide>([\s\S]*?)<\/slide>/g)) {
     const block = m[1]
@@ -102,5 +106,5 @@ export function parseSlidesOutput(text: string): Slide[] | null {
       icon: extractTag(block, 'icon'),
     })
   }
-  return sanitizeSlides(raw)
+  return sanitizeDeck({ theme: (extractTag(text.split('<slide>')[0], 'theme') ?? '').trim().toLowerCase(), slides: raw })
 }

@@ -1361,19 +1361,22 @@ export type ExportSlide = {
   icon: string | null
 }
 
+export type ExportTheme = 'wivoza' | 'history' | 'science' | 'math' | 'ela' | 'arts' | 'early' | 'wellness'
+export type ExportDeck = { theme: ExportTheme; slides: ExportSlide[] }
+
 export type ExportKind = 'document' | 'slides'
 export type ExportFormat = 'docx' | 'pdf' | 'pptx'
 
 // Step 1: Claude lays `text` out as a document or slide deck to preview.
 export function getExportPreview(id: string, kind: 'document', text: string): Promise<{ kind: 'document'; model: ExportDoc }>
-export function getExportPreview(id: string, kind: 'slides', text: string): Promise<{ kind: 'slides'; model: ExportSlide[] }>
+export function getExportPreview(id: string, kind: 'slides', text: string): Promise<{ kind: 'slides'; model: ExportDeck }>
 export function getExportPreview(id: string, kind: ExportKind, text: string) {
   return request(`/api/assignment-coach/${id}/export-preview`, { method: 'POST', body: JSON.stringify({ kind, text }) })
 }
 
 // Step 2: render the previewed model to a real file and save it. No Claude
 // call, so downloading several formats from one preview is free.
-export async function downloadExportFile(format: ExportFormat, model: ExportDoc | ExportSlide[]): Promise<void> {
+export async function downloadExportFile(format: ExportFormat, model: ExportDoc | ExportDeck): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/api/assignment-coach/export-file`, {
     method: 'POST',
     credentials: 'include',

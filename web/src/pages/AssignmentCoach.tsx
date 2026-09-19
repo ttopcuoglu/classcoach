@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { AssignmentContent } from '../components/AssignmentDiagram'
-import ExportModal from '../components/ExportModal'
+import ExportModal, { ExportButtons, guessFormat } from '../components/ExportModal'
 import AnswerSection, { NumberedCard } from '../components/AnswerSection'
 import CoachingChat from '../components/CoachingChat'
 import {
@@ -41,6 +40,7 @@ import {
   type AssignmentCoachMode,
   type AssignmentCoachSession,
   type AssignmentType,
+  type ExportFormat,
 } from '../lib/api'
 
 const AI_USE_LEVEL_OPTIONS: { value: AssignmentAiUseLevel; label: string; description: string }[] = [
@@ -1335,16 +1335,13 @@ function Workspace({
   const [aiResistError, setAiResistError] = useState<string | null>(null)
 
   const [revising, setRevising] = useState(false)
-  const [exportText, setExportText] = useState<string | null>(null)
-  const [editingRevision, setEditingRevision] = useState(false)
+  const [exportRequest, setExportRequest] = useState<{ text: string; format: ExportFormat } | null>(null)
   const [reviseError, setReviseError] = useState<string | null>(null)
 
   const [refining, setRefining] = useState(false)
   const [refineError, setRefineError] = useState<string | null>(null)
   const [clarifyingDismissed, setClarifyingDismissed] = useState(false)
 
-  const [revisedView, setRevisedView] = useState<'original' | 'revised'>('revised')
-  const [editingRedesign, setEditingRedesign] = useState(false)
 
   const [text, setText] = useState(session.liveAssignmentText ?? '')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -1453,7 +1450,6 @@ function Workspace({
     try {
       const updated = await reviseAssignmentCoach(session.id)
       onUpdate(updated)
-      setRevisedView('revised')
       // The Review screen has no side-by-side document, so bring the new
       // Revised assignment card into view — otherwise nothing seems to happen.
       window.setTimeout(() => document.getElementById('revised-assignment')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
@@ -1550,7 +1546,7 @@ function Workspace({
           </button>
           <button
             type="button"
-            onClick={() => setExportText(text)}
+            onClick={() => setExportRequest({ text, format: guessFormat(text) })}
             disabled={!text.trim()}
             className="text-sm font-medium text-ink-soft hover:text-forest disabled:opacity-50"
           >
@@ -1658,45 +1654,16 @@ function Workspace({
                     <NumberedCard
                       n={redesignN('revised')}
                       title="Revised assignment"
-                      subtitle="The assignment with those changes made"
-                      aside={
-                        <div className="flex shrink-0 rounded-full border border-hairline bg-cream-card p-0.5 text-xs font-semibold">
-                          <button
-                            type="button"
-                            onClick={() => setRevisedView('original')}
-                            className={`rounded-full px-2.5 py-1 ${revisedView === 'original' ? 'bg-forest text-cream' : 'text-ink-soft'}`}
-                          >
-                            Original
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setRevisedView('revised')}
-                            className={`rounded-full px-2.5 py-1 ${revisedView === 'revised' ? 'bg-forest text-cream' : 'text-ink-soft'}`}
-                          >
-                            Revised
-                          </button>
-                        </div>
-                      }
+                      subtitle="Preview it, then save it in the format you need"
                     >
-                      {editingRedesign ? (
-                        <textarea
-                          value={text}
-                          onChange={(e) => setText(e.target.value)}
-                          rows={12}
-                          className="w-full rounded-lg border border-hairline bg-cream px-3 py-2 text-sm text-ink focus:border-terracotta/50 focus:outline-none"
-                        />
-                      ) : (
-                        <div className="rounded-xl bg-cream-card p-4">
-                          <AssignmentContent
-                            text={revisedView === 'original' ? session.originalText || 'No original text on file.' : session.aiResistant.revisedAssignment}
-                          />
-                        </div>
-                      )}
+                      <ExportButtons
+                        onOpen={(format) => setExportRequest({ text: session.aiResistant?.revisedAssignment ?? '', format })}
+                      />
                       <div className="mt-4 flex flex-wrap items-center gap-3">
                         <button
                           type="button"
                           onClick={handleApplyAiResistant}
-                          className="rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-cream transition-opacity hover:opacity-90"
+                          className="text-xs font-semibold text-ink-soft hover:text-forest"
                         >
                           Apply to assignment
                         </button>
@@ -1705,21 +1672,7 @@ function Workspace({
                           onClick={() => handleCopyValue(session.aiResistant?.revisedAssignment ?? '')}
                           className="text-xs font-semibold text-ink-soft hover:text-forest"
                         >
-                          Copy revised assignment
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setExportText(session.aiResistant?.revisedAssignment ?? '')}
-                          className="rounded-lg border border-forest/40 bg-mint-tint px-4 py-2 text-xs font-semibold text-forest transition-colors hover:bg-mint-tint/70"
-                        >
-                          Preview &amp; export (.docx, .pdf, .pptx)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingRedesign((v) => !v)}
-                          className="text-xs font-semibold text-ink-soft hover:text-forest"
-                        >
-                          {editingRedesign ? 'Done editing' : 'Edit'}
+                          Copy revised text
                         </button>
                         <button
                           type="button"
@@ -1867,55 +1820,12 @@ function Workspace({
             <NumberedCard
               n={session.reviewSnapshot ? 7 : 1}
               title="Revised assignment"
-              subtitle="Your assignment with the changes you discussed"
-              aside={
-                <div className="flex shrink-0 rounded-full border border-hairline bg-cream-card p-0.5 text-xs font-semibold">
-                  <button
-                    type="button"
-                    onClick={() => setRevisedView('original')}
-                    className={`rounded-full px-2.5 py-1 ${revisedView === 'original' ? 'bg-forest text-cream' : 'text-ink-soft'}`}
-                  >
-                    Original
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRevisedView('revised')}
-                    className={`rounded-full px-2.5 py-1 ${revisedView === 'revised' ? 'bg-forest text-cream' : 'text-ink-soft'}`}
-                  >
-                    Revised
-                  </button>
-                </div>
-              }
+              subtitle="Preview it, then save it in the format you need"
             >
-              {editingRevision && revisedView === 'revised' ? (
-                <textarea
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  rows={14}
-                  className="w-full rounded-lg border border-hairline bg-cream px-3 py-2 text-sm text-ink focus:border-terracotta/50 focus:outline-none"
-                />
-              ) : (
-                <div className="rounded-xl bg-cream-card p-4">
-                  <AssignmentContent text={revisedView === 'original' ? session.originalText || 'No original text on file.' : text} />
-                </div>
-              )}
+              <ExportButtons onOpen={(format) => setExportRequest({ text, format })} />
               <div className="mt-4 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setExportText(text)}
-                  className="rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-cream transition-opacity hover:opacity-90"
-                >
-                  Preview &amp; export (.docx, .pdf, .pptx)
-                </button>
                 <button type="button" onClick={handleCopy} className="text-xs font-semibold text-ink-soft hover:text-forest">
-                  Copy revised assignment
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditingRevision((v) => !v)}
-                  className="text-xs font-semibold text-ink-soft hover:text-forest"
-                >
-                  {editingRevision ? 'Done editing' : 'Edit'}
+                  Copy revised text
                 </button>
               </div>
             </NumberedCard>
@@ -1934,7 +1844,14 @@ function Workspace({
           />
         </div>
       </div>
-      {exportText && <ExportModal sessionId={session.id} text={exportText} onClose={() => setExportText(null)} />}
+      {exportRequest && (
+        <ExportModal
+          sessionId={session.id}
+          text={exportRequest.text}
+          initialFormat={exportRequest.format}
+          onClose={() => setExportRequest(null)}
+        />
+      )}
     </div>
   )
 }

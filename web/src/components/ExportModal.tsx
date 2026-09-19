@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { downloadExportFile, getExportPreview } from '../lib/api'
-import type { ExportDoc, ExportFormat, ExportKind, ExportSlide } from '../lib/api'
+import type { ExportDeck, ExportDoc, ExportFormat, ExportKind, ExportSlide, ExportTheme } from '../lib/api'
 
 const FOREST = '#1B2E28'
-const CREAM = '#F7F3EA'
 const GOLD = '#E4B84A'
 const INK = '#26312D'
 const WHITE = '#FFFFFF'
-// Mirrors the colors the .docx/.pdf/.pptx builders use on the server, so the
-// preview looks like the file that gets downloaded.
+// Document accents mirror server/src/lib/docxBuilder.ts and pdfBuilder.ts.
 const ACCENTS = [
   { color: '#C96A45', tint: '#FBEAE2' },
   { color: '#2F7F76', tint: '#E2F1EE' },
@@ -17,16 +15,73 @@ const ACCENTS = [
   { color: '#C99A1E', tint: '#FFF3D1' },
 ]
 const accentAt = (i: number) => ACCENTS[i % ACCENTS.length]
-const slideAccent = (i: number) => (['#C96A45', '#2F7F76', '#7A4E8C', GOLD] as const)[i % 4]
-const onAccent = (accent: string) => (accent === GOLD ? FOREST : WHITE)
+
+type Decor = 'circles' | 'stripes' | 'squares'
+type Theme = {
+  dark: string
+  light: string
+  ink: string
+  accents: [string, string, string, string]
+  highlight: string
+  head: string
+  body: string
+  decor: Decor
+}
+// Mirrors THEMES in server/src/lib/slidesPptx.ts — keep the two in sync.
+const THEMES: Record<ExportTheme, Theme> = {
+  wivoza: { dark: '#1B2E28', light: '#F7F3EA', ink: '#1B2E28', accents: ['#C96A45', '#2F7F76', '#7A4E8C', '#E4B84A'], highlight: '#E4B84A', head: 'Arial', body: 'Arial', decor: 'circles' },
+  history: { dark: '#2E1F1A', light: '#F4EBDD', ink: '#2E1F1A', accents: ['#8C2F39', '#3B6478', '#B08D57', '#5B6B4E'], highlight: '#D4AF6A', head: 'Georgia', body: 'Georgia', decor: 'stripes' },
+  science: { dark: '#0E2A3F', light: '#EEF6F8', ink: '#0E2A3F', accents: ['#0097A7', '#F2A900', '#3D7EAA', '#6BAA2B'], highlight: '#5CE1E6', head: 'Trebuchet MS', body: 'Arial', decor: 'squares' },
+  math: { dark: '#1E2A5E', light: '#F2F4FF', ink: '#1E2A5E', accents: ['#3B5BDB', '#F76707', '#12A87C', '#AE3EC9'], highlight: '#FFD43B', head: 'Trebuchet MS', body: 'Arial', decor: 'squares' },
+  ela: { dark: '#38213F', light: '#FBF5EC', ink: '#38213F', accents: ['#9C4A8C', '#C98A1B', '#C25B56', '#4F7CAC'], highlight: '#F0C36A', head: 'Georgia', body: 'Georgia', decor: 'circles' },
+  arts: { dark: '#1B1830', light: '#FFF7EE', ink: '#1B1830', accents: ['#E63E8C', '#F5A300', '#0BB3C9', '#7B3FE4'], highlight: '#FFD166', head: 'Trebuchet MS', body: 'Arial', decor: 'circles' },
+  early: { dark: '#22579E', light: '#FFFBEA', ink: '#22406B', accents: ['#F25C54', '#F7B32B', '#3F88C5', '#4CB963'], highlight: '#FFE066', head: 'Trebuchet MS', body: 'Trebuchet MS', decor: 'circles' },
+  wellness: { dark: '#1D4A3A', light: '#F1F8F3', ink: '#1D3A30', accents: ['#2A9D6F', '#F29E4C', '#3C7AA8', '#D9534F'], highlight: '#C7F464', head: 'Trebuchet MS', body: 'Arial', decor: 'squares' },
+}
+
+function onColor(hex: string, ink: string): string {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6 ? ink : WHITE
+}
 
 // A deck's text is short lines; a worksheet has full sentences. Only picks
-// which tab opens first — the teacher can always switch.
-function guessKind(text: string): ExportKind {
+// which format the general header button opens with — the teacher can switch.
+export function guessFormat(text: string): ExportFormat {
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
-  if (lines.length < 15) return 'document'
+  if (lines.length < 15) return 'docx'
   const sorted = lines.map((l) => l.length).sort((a, b) => a - b)
-  return sorted[Math.floor(sorted.length / 2)] < 50 ? 'slides' : 'document'
+  return sorted[Math.floor(sorted.length / 2)] < 50 ? 'pptx' : 'docx'
+}
+
+const kindOf = (format: ExportFormat): ExportKind => (format === 'pptx' ? 'slides' : 'document')
+
+// The three "export as" buttons shown on the revised-assignment cards.
+export function ExportButtons({ onOpen }: { onOpen: (format: ExportFormat) => void }) {
+  const options: { format: ExportFormat; label: string; badge: string; color: string }[] = [
+    { format: 'docx', label: 'Word Document', badge: 'W', color: '#2B579A' },
+    { format: 'pdf', label: 'PDF Document', badge: 'PDF', color: '#D93025' },
+    { format: 'pptx', label: 'PowerPoint Presentation', badge: 'P', color: '#D24726' },
+  ]
+  return (
+    <div className="flex flex-wrap gap-2.5">
+      {options.map((o) => (
+        <button
+          key={o.format}
+          type="button"
+          onClick={() => onOpen(o.format)}
+          className="flex items-center gap-2.5 rounded-xl border border-hairline bg-white px-4 py-2.5 text-sm font-semibold text-forest shadow-sm transition-colors hover:border-forest/50 hover:bg-cream"
+        >
+          <span
+            className="flex h-7 min-w-7 items-center justify-center rounded-md px-1 text-[11px] font-extrabold text-white"
+            style={{ background: o.color }}
+          >
+            {o.badge}
+          </span>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
 }
 
 function DocPreview({ model }: { model: ExportDoc }) {
@@ -103,123 +158,221 @@ function DocPreview({ model }: { model: ExportDoc }) {
   )
 }
 
-// Sized in container-query units so the whole slide scales with its width.
-const cq = (n: number) => `${n}cqw`
-const abs = (style: CSSProperties): CSSProperties => ({ position: 'absolute', ...style })
-const circle = (x: number, y: number, size: number, background: string): CSSProperties =>
-  abs({ left: cq(x), top: cq(y), width: cq(size), height: cq(size), borderRadius: '50%', background })
+// Slides are laid out in the same inch coordinates the .pptx builder uses
+// (a 13.33 x 7.5 in slide = 100cqw wide), so the preview matches the file.
+const inch = (n: number) => `${n * 7.5}cqw`
+const pt = (n: number) => `${(n / 72) * 7.5}cqw`
+const rgba = (hex: string, alpha: number) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
+  return `rgba(${r},${g},${b},${alpha})`
+}
+type Box = { x: number; y: number; w: number; h: number; fill?: string; radius?: number | '50%'; rotate?: number; shadow?: boolean }
+const shape = ({ x, y, w, h, fill, radius, rotate, shadow }: Box): CSSProperties => ({
+  position: 'absolute',
+  left: inch(x),
+  top: inch(y),
+  width: inch(w),
+  height: inch(h),
+  background: fill,
+  borderRadius: radius === '50%' ? '50%' : radius ? inch(radius) : undefined,
+  transform: rotate ? `rotate(${rotate}deg)` : undefined,
+  boxShadow: shadow ? '0 0.3cqw 0.8cqw rgba(0,0,0,0.14)' : undefined,
+})
+type Txt = { size: number; color: string; font: string; bold?: boolean; align?: 'left' | 'center'; valign?: 'top' | 'middle' }
+const text = (x: number, y: number, w: number, h: number, t: Txt): CSSProperties => ({
+  ...shape({ x, y, w, h }),
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: t.valign === 'top' ? 'flex-start' : 'center',
+  textAlign: t.align ?? 'left',
+  fontFamily: `${t.font}, sans-serif`,
+  fontSize: pt(t.size),
+  fontWeight: t.bold ? 700 : 400,
+  color: t.color,
+  lineHeight: 1.15,
+  overflow: 'hidden',
+})
 
-function SlideThumb({ slide, index }: { slide: ExportSlide; index: number }) {
-  const accent = slideAccent(index)
-  const fg = onAccent(accent)
-  const frame: CSSProperties = { containerType: 'inline-size', position: 'relative', width: '100%', aspectRatio: '16 / 9', overflow: 'hidden' }
-  const text = (style: CSSProperties): CSSProperties => abs({ fontFamily: 'Arial, Helvetica, sans-serif', lineHeight: 1.15, ...style })
+function TitleDecor({ t }: { t: Theme }) {
+  const [a, b, c] = t.accents
+  if (t.decor === 'stripes') {
+    return (
+      <>
+        <div style={shape({ x: 9.4, y: -2, w: 1.0, h: 12, rotate: 18, fill: a })} />
+        <div style={shape({ x: 10.7, y: -2, w: 0.45, h: 12, rotate: 18, fill: t.highlight })} />
+        <div style={shape({ x: 11.5, y: -2, w: 1.5, h: 12, rotate: 18, fill: b })} />
+        <div style={shape({ x: 12.9, y: -2, w: 0.5, h: 12, rotate: 18, fill: c })} />
+      </>
+    )
+  }
+  if (t.decor === 'squares') {
+    return (
+      <>
+        <div style={shape({ x: 9.6, y: -0.9, w: 3.8, h: 3.8, radius: 0.35, rotate: 18, fill: a })} />
+        <div style={shape({ x: 11.3, y: 4.5, w: 2.4, h: 2.4, radius: 0.3, rotate: -14, fill: b })} />
+        <div style={shape({ x: 8.1, y: 3.8, w: 0.95, h: 0.95, radius: 0.15, rotate: 30, fill: t.highlight })} />
+        <div style={shape({ x: -0.9, y: 6.3, w: 2.3, h: 2.3, radius: 0.3, rotate: 20, fill: c })} />
+      </>
+    )
+  }
+  return (
+    <>
+      <div style={shape({ x: 9.4, y: -1.6, w: 5.4, h: 5.4, radius: '50%', fill: a })} />
+      <div style={shape({ x: 11.3, y: 4.6, w: 3.2, h: 3.2, radius: '50%', fill: b })} />
+      <div style={shape({ x: -1.5, y: 6.0, w: 3.3, h: 3.3, radius: '50%', fill: t.highlight })} />
+      <div style={shape({ x: 8.2, y: 3.9, w: 1.1, h: 1.1, radius: '50%', fill: rgba(t.highlight, 0.75) })} />
+    </>
+  )
+}
+
+function SoftDecor({ t }: { t: Theme }) {
+  const soft = 'rgba(255,255,255,0.14)'
+  if (t.decor === 'stripes') {
+    return (
+      <>
+        <div style={shape({ x: 10.2, y: -2, w: 1.3, h: 12, rotate: 18, fill: soft })} />
+        <div style={shape({ x: 11.9, y: -2, w: 0.6, h: 12, rotate: 18, fill: soft })} />
+      </>
+    )
+  }
+  if (t.decor === 'squares') {
+    return (
+      <>
+        <div style={shape({ x: 10.6, y: -1.2, w: 3.6, h: 3.6, radius: 0.3, rotate: 18, fill: soft })} />
+        <div style={shape({ x: -1.2, y: 5.3, w: 3.2, h: 3.2, radius: 0.3, rotate: -16, fill: soft })} />
+      </>
+    )
+  }
+  return (
+    <>
+      <div style={shape({ x: 10.6, y: -1.4, w: 4.4, h: 4.4, radius: '50%', fill: soft })} />
+      <div style={shape({ x: -1.6, y: 4.9, w: 4.2, h: 4.2, radius: '50%', fill: soft })} />
+    </>
+  )
+}
+
+function SlideThumb({ slide, index, theme }: { slide: ExportSlide; index: number; theme: ExportTheme }) {
+  const t = THEMES[theme] ?? THEMES.wivoza
+  const accent = t.accents[index % 4]
+  const frame: CSSProperties = { containerType: 'inline-size', position: 'relative', width: '100%', aspectRatio: '13.33 / 7.5', overflow: 'hidden' }
+  const wordmark = (onDark: boolean) => (
+    <div style={text(0.6, 7.0, 2, 0.3, { size: 10, color: onDark ? 'rgba(255,255,255,0.6)' : t.accents[0], font: t.body, bold: true })}>Wivoza</div>
+  )
 
   if (slide.layout === 'title') {
     return (
-      <div style={{ ...frame, background: FOREST }}>
-        <div style={circle(70, -12, 40, '#C96A45')} />
-        <div style={circle(85, 34, 24, '#2F7F76')} />
-        <div style={circle(-11, 45, 25, GOLD)} />
-        {slide.icon && <div style={text({ left: cq(76), top: cq(5), width: cq(20), textAlign: 'center', fontSize: cq(11) })}>{slide.icon}</div>}
-        <div style={text({ left: cq(7), top: cq(14), width: cq(60), fontSize: cq(5.2), fontWeight: 700, color: WHITE })}>{slide.title}</div>
-        <div style={abs({ left: cq(7), top: cq(37), width: cq(12), height: cq(1), borderRadius: cq(1), background: GOLD })} />
-        {slide.bullets.length > 0 && <div style={text({ left: cq(7), top: cq(39), width: cq(60), fontSize: cq(1.7), color: CREAM })}>{slide.bullets.join('  ·  ')}</div>}
-        <div style={text({ left: cq(21), top: cq(51), fontSize: cq(1), fontWeight: 700, color: GOLD })}>Made with Wivoza</div>
+      <div style={{ ...frame, background: t.dark }}>
+        <TitleDecor t={t} />
+        {slide.icon && <div style={text(10.0, 0.75, 2.6, 2.4, { size: 96, color: WHITE, font: t.head, align: 'center' })}>{slide.icon}</div>}
+        <div style={text(0.9, 2.0, 8.4, 2.6, { size: 50, color: WHITE, font: t.head, bold: true })}>{slide.title}</div>
+        <div style={shape({ x: 0.95, y: 4.85, w: 1.6, h: 0.14, radius: 0.07, fill: t.highlight })} />
+        {slide.bullets.length > 0 && (
+          <div style={text(0.9, 5.15, 8.2, 0.8, { size: 20, color: t.light, font: t.body, valign: 'top' })}>{slide.bullets.join('  ·  ')}</div>
+        )}
+        <div style={text(2.7, 6.85, 4, 0.35, { size: 12, color: t.highlight, font: t.body, bold: true })}>Made with Wivoza</div>
       </div>
     )
   }
 
   if (slide.layout === 'split') {
     return (
-      <div style={{ ...frame, background: CREAM }}>
-        <div style={abs({ left: 0, top: 0, width: cq(35), height: '100%', background: accent })} />
-        <div style={text({ left: 0, top: cq(15), width: cq(35), textAlign: 'center', fontSize: cq(13), color: fg })}>{slide.icon ?? '★'}</div>
-        <div style={text({ left: cq(39), top: cq(5), width: cq(56), fontSize: cq(3.1), fontWeight: 700, color: FOREST })}>{slide.title}</div>
-        <div style={abs({ left: cq(39), top: cq(19), width: cq(10), height: cq(0.8), borderRadius: cq(1), background: accent })} />
-        <ul style={text({ left: cq(39), top: cq(22), width: cq(55), fontSize: cq(2.1), color: FOREST, margin: 0, padding: 0, listStyle: 'none' })}>
+      <div style={{ ...frame, background: t.light }}>
+        <div style={shape({ x: 0, y: 0, w: 4.7, h: 7.5, fill: accent })} />
+        <div style={shape({ x: -1.2, y: -1.2, w: 3.2, h: 3.2, radius: '50%', fill: 'rgba(255,255,255,0.15)' })} />
+        <div style={shape({ x: 2.6, y: 5.2, w: 3.4, h: 3.4, radius: '50%', fill: 'rgba(255,255,255,0.12)' })} />
+        <div style={text(0.3, 1.9, 4.1, 3.4, { size: 130, color: onColor(accent, t.ink), font: t.head, align: 'center' })}>{slide.icon ?? '★'}</div>
+        <div style={text(5.2, 0.7, 7.6, 1.7, { size: 36, color: t.ink, font: t.head, bold: true })}>{slide.title}</div>
+        <div style={shape({ x: 5.25, y: 2.45, w: 1.3, h: 0.12, radius: 0.06, fill: accent })} />
+        <ul style={{ ...text(5.2, 2.85, 7.6, 3.9, { size: 26, color: t.ink, font: t.body, valign: 'top' }), margin: 0, padding: 0, listStyle: 'none', gap: inch(0.2) }}>
           {slide.bullets.map((b, i) => (
-            <li key={i} style={{ marginBottom: cq(1.2) }}>
-              • {b}
-            </li>
+            <li key={i}>• {b}</li>
           ))}
         </ul>
+        {wordmark(false)}
       </div>
     )
   }
 
   if (slide.layout === 'keyterm') {
+    const fg = onColor(accent, t.ink)
     return (
       <div style={{ ...frame, background: accent }}>
-        <div style={circle(80, -10, 33, 'rgba(255,255,255,0.15)')} />
-        <div style={circle(-12, 37, 32, 'rgba(255,255,255,0.12)')} />
-        {slide.icon && <div style={text({ left: 0, top: cq(3.5), width: '100%', textAlign: 'center', fontSize: cq(6) })}>{slide.icon}</div>}
-        <div style={text({ left: cq(5), top: cq(13), width: cq(90), textAlign: 'center', fontSize: cq(6), fontWeight: 700, color: fg })}>{slide.title}</div>
-        {slide.bullets.slice(0, 4).map((b, i) => (
-          <div
-            key={i}
-            style={text({ left: cq(17), top: cq(29 + i * 6.4), width: cq(66), height: cq(5.6), borderRadius: cq(3), background: WHITE, color: FOREST, fontSize: cq(1.9), textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0.3cqw 0.8cqw rgba(0,0,0,0.15)' })}
-          >
-            {b}
-          </div>
-        ))}
+        <SoftDecor t={t} />
+        {slide.icon && <div style={text(5.4, 0.5, 2.5, 1.5, { size: 64, color: fg, font: t.head, align: 'center' })}>{slide.icon}</div>}
+        <div style={text(0.8, 1.9, 11.7, 1.6, { size: 64, color: fg, font: t.head, bold: true, align: 'center' })}>{slide.title}</div>
+        {slide.bullets.slice(0, 4).map((b, i) => {
+          const y = 3.7 + i * 0.86
+          return (
+            <div key={i}>
+              <div style={shape({ x: 2.2, y, w: 8.9, h: 0.72, radius: 0.36, fill: WHITE, shadow: true })} />
+              <div style={text(2.5, y, 8.3, 0.72, { size: 22, color: t.ink, font: t.body, align: 'center' })}>{b}</div>
+            </div>
+          )
+        })}
+        {wordmark(true)}
       </div>
     )
   }
 
   if (slide.layout === 'prompt') {
-    const cardAccent = slideAccent(index + 1)
+    const card = t.accents[(index + 1) % 4]
+    const fg = onColor(card, t.ink)
     return (
-      <div style={{ ...frame, background: FOREST }}>
-        <div style={abs({ left: cq(4.5), top: cq(4.5), width: cq(91), height: cq(47), borderRadius: cq(2.6), background: cardAccent })} />
-        <div style={text({ left: cq(7.5), top: cq(7.5), width: cq(12), textAlign: 'center', fontSize: cq(4.5) })}>{slide.icon ?? '💬'}</div>
-        <div style={text({ left: cq(21), top: cq(7), width: cq(70), fontSize: cq(3.2), fontWeight: 700, color: onAccent(cardAccent) })}>{slide.title}</div>
-        {slide.bullets.slice(0, 3).map((b, i) => (
-          <div
-            key={i}
-            style={text({ left: cq(9), top: cq(28 + i * 7.1), width: cq(82), height: cq(5.8), borderRadius: cq(3), background: 'rgba(255,255,255,0.88)', color: FOREST, fontSize: cq(1.7), display: 'flex', alignItems: 'center', paddingLeft: cq(2.4) })}
-          >
-            {b}
-          </div>
-        ))}
+      <div style={{ ...frame, background: t.dark }}>
+        <div style={shape({ x: 0.6, y: 0.6, w: 12.1, h: 6.1, radius: 0.35, fill: card })} />
+        <div style={shape({ x: 10.4, y: 0.95, w: 2.0, h: 2.0, radius: '50%', fill: 'rgba(255,255,255,0.18)' })} />
+        <div style={text(1.0, 1.0, 1.6, 1.4, { size: 60, color: fg, font: t.head, align: 'center' })}>{slide.icon ?? '💬'}</div>
+        <div style={text(2.8, 0.9, 9.4, 2.4, { size: 38, color: fg, font: t.head, bold: true })}>{slide.title}</div>
+        {slide.bullets.slice(0, 3).map((b, i) => {
+          const y = 3.75 + i * 0.95
+          return (
+            <div key={i}>
+              <div style={shape({ x: 1.2, y, w: 10.9, h: 0.78, radius: 0.39, fill: 'rgba(255,255,255,0.88)' })} />
+              <div style={text(1.5, y, 10.3, 0.78, { size: 20, color: t.ink, font: t.body })}>{b}</div>
+            </div>
+          )
+        })}
+        {wordmark(true)}
       </div>
     )
   }
 
   // cards
   const n = slide.bullets.length
-  const rowH = n > 0 ? Math.min(8.6, (36 - 1.2 * (n - 1)) / n) : 8
+  const cardH = n > 0 ? Math.min(1.2, (4.85 - 0.16 * (n - 1)) / n) : 1
   return (
-    <div style={{ ...frame, background: CREAM }}>
-      <div style={abs({ left: 0, top: 0, width: '100%', height: cq(1.6), background: accent })} />
+    <div style={{ ...frame, background: t.light }}>
+      <div style={shape({ x: 0, y: 0, w: 13.33, h: 0.22, fill: accent })} />
       {slide.icon && (
         <>
-          <div style={circle(4.5, 4, 8, accent)} />
-          <div style={text({ left: cq(4.5), top: cq(5.6), width: cq(8), textAlign: 'center', fontSize: cq(3.4) })}>{slide.icon}</div>
+          <div style={shape({ x: 0.6, y: 0.55, w: 1.05, h: 1.05, radius: '50%', fill: accent })} />
+          <div style={text(0.6, 0.55, 1.05, 1.05, { size: 34, color: WHITE, font: t.head, align: 'center' })}>{slide.icon}</div>
         </>
       )}
-      <div style={text({ left: cq(slide.icon ? 14.5 : 4.5), top: cq(5), width: cq(80), fontSize: cq(3.2), fontWeight: 700, color: FOREST })}>{slide.title}</div>
+      <div style={text(slide.icon ? 1.9 : 0.6, 0.5, slide.icon ? 10.8 : 12.1, 1.15, { size: 34, color: t.ink, font: t.head, bold: true })}>{slide.title}</div>
       {slide.bullets.map((b, i) => {
-        const c = slideAccent(index + i)
-        const y = 15 + i * (rowH + 1.2)
+        const c = t.accents[(index + i) % 4]
+        const y = 1.95 + i * (cardH + 0.16)
         return (
           <div key={i}>
-            <div style={abs({ left: cq(4.5), top: cq(y), width: cq(91), height: cq(rowH), borderRadius: cq(1.3), background: WHITE, boxShadow: '0 0.3cqw 0.8cqw rgba(0,0,0,0.1)' })} />
-            <div style={{ ...circle(6.4, y + (rowH - 4.6) / 2, 4.6, c), display: 'flex', alignItems: 'center', justifyContent: 'center', color: onAccent(c), fontSize: cq(1.8), fontWeight: 700, fontFamily: 'Arial, sans-serif' }}>{i + 1}</div>
-            <div style={text({ left: cq(13.5), top: cq(y), width: cq(80), height: cq(rowH), display: 'flex', alignItems: 'center', fontSize: cq(n >= 5 ? 1.7 : 2), color: FOREST })}>{b}</div>
+            <div style={shape({ x: 0.6, y, w: 12.1, h: cardH, radius: 0.16, fill: WHITE, shadow: true })} />
+            <div style={shape({ x: 0.85, y: y + (cardH - 0.62) / 2, w: 0.62, h: 0.62, radius: '50%', fill: c })} />
+            <div style={text(0.85, y + (cardH - 0.62) / 2, 0.62, 0.62, { size: 18, color: onColor(c, t.ink), font: t.body, bold: true, align: 'center' })}>{i + 1}</div>
+            <div style={text(1.75, y, 10.7, cardH, { size: n >= 5 ? 20 : n === 4 ? 22 : 24, color: t.ink, font: t.body })}>{b}</div>
           </div>
         )
       })}
+      {wordmark(false)}
     </div>
   )
 }
 
-function SlidesPreview({ slides }: { slides: ExportSlide[] }) {
+function SlidesPreview({ deck }: { deck: ExportDeck }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      {slides.map((slide, i) => (
+      {deck.slides.map((slide, i) => (
         <div key={i}>
-          <SlideThumb slide={slide} index={i} />
+          <SlideThumb slide={slide} index={i} theme={deck.theme} />
           <p className="mt-1 text-[11px] font-semibold text-ink-soft">Slide {i + 1}</p>
         </div>
       ))}
@@ -227,10 +380,31 @@ function SlidesPreview({ slides }: { slides: ExportSlide[] }) {
   )
 }
 
-export default function ExportModal({ sessionId, text, onClose }: { sessionId: string; text: string; onClose: () => void }) {
-  const [kind, setKind] = useState<ExportKind>(() => guessKind(text))
+const THEME_LABELS: Record<ExportTheme, string> = {
+  wivoza: 'Wivoza',
+  history: 'History',
+  science: 'Science',
+  math: 'Math',
+  ela: 'ELA',
+  arts: 'Arts',
+  early: 'Early learners',
+  wellness: 'Wellness',
+}
+
+export default function ExportModal({
+  sessionId,
+  text: sourceText,
+  initialFormat,
+  onClose,
+}: {
+  sessionId: string
+  text: string
+  initialFormat: ExportFormat
+  onClose: () => void
+}) {
+  const [kind, setKind] = useState<ExportKind>(kindOf(initialFormat))
   const [doc, setDoc] = useState<ExportDoc | null>(null)
-  const [slides, setSlides] = useState<ExportSlide[] | null>(null)
+  const [deck, setDeck] = useState<ExportDeck | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<ExportFormat | null>(null)
@@ -240,11 +414,11 @@ export default function ExportModal({ sessionId, text, onClose }: { sessionId: s
     const request = ++requestRef.current
     try {
       if (which === 'document') {
-        const result = await getExportPreview(sessionId, 'document', text)
+        const result = await getExportPreview(sessionId, 'document', sourceText)
         if (request === requestRef.current) setDoc(result.model)
       } else {
-        const result = await getExportPreview(sessionId, 'slides', text)
-        if (request === requestRef.current) setSlides(result.model)
+        const result = await getExportPreview(sessionId, 'slides', sourceText)
+        if (request === requestRef.current) setDeck(result.model)
       }
       if (request === requestRef.current) setError(null)
     } catch (err) {
@@ -273,8 +447,7 @@ export default function ExportModal({ sessionId, text, onClose }: { sessionId: s
     if (next === kind) return
     setKind(next)
     setError(null)
-    const ready = next === 'document' ? doc : slides
-    if (!ready) {
+    if (!(next === 'document' ? doc : deck)) {
       setLoading(true)
       void load(next)
     }
@@ -287,7 +460,7 @@ export default function ExportModal({ sessionId, text, onClose }: { sessionId: s
   }
 
   async function handleDownload(format: ExportFormat) {
-    const model = format === 'pptx' ? slides : doc
+    const model = format === 'pptx' ? deck : doc
     if (!model || busy) return
     setBusy(format)
     setError(null)
@@ -300,11 +473,14 @@ export default function ExportModal({ sessionId, text, onClose }: { sessionId: s
     }
   }
 
-  const ready = kind === 'document' ? doc : slides
+  const ready = kind === 'document' ? doc : deck
   const tabClass = (active: boolean) =>
     `rounded-full px-3 py-1.5 text-xs font-semibold transition-colors sm:px-4 ${active ? 'bg-forest text-cream' : 'text-ink-soft hover:text-forest'}`
-  const downloadClass =
-    'rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50'
+  // The format the teacher clicked stays the solid button; the other is outlined.
+  const downloadClass = (format: ExportFormat) =>
+    `rounded-lg px-4 py-2 text-xs font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 ${
+      format === initialFormat ? 'bg-forest text-cream' : 'border border-forest/40 bg-mint-tint text-forest'
+    }`
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-forest/50 p-3 sm:p-6" onClick={onClose}>
@@ -326,6 +502,11 @@ export default function ExportModal({ sessionId, text, onClose }: { sessionId: s
                 Slides
               </button>
             </div>
+            {kind === 'slides' && deck && (
+              <span className="hidden rounded-full bg-cream-card px-2.5 py-1 text-[11px] font-semibold text-ink-soft sm:inline">
+                Theme: {THEME_LABELS[deck.theme]}
+              </span>
+            )}
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="text-lg font-semibold leading-none text-ink-soft hover:text-forest">
             ✕
@@ -347,8 +528,8 @@ export default function ExportModal({ sessionId, text, onClose }: { sessionId: s
             </div>
           ) : kind === 'document' && doc ? (
             <DocPreview model={doc} />
-          ) : kind === 'slides' && slides ? (
-            <SlidesPreview slides={slides} />
+          ) : kind === 'slides' && deck ? (
+            <SlidesPreview deck={deck} />
           ) : null}
         </div>
 
@@ -365,16 +546,16 @@ export default function ExportModal({ sessionId, text, onClose }: { sessionId: s
             </button>
             {kind === 'document' ? (
               <>
-                <button type="button" onClick={() => handleDownload('docx')} disabled={!doc || loading || busy !== null} className={downloadClass}>
-                  {busy === 'docx' ? 'Building…' : 'Download .docx'}
+                <button type="button" onClick={() => handleDownload('docx')} disabled={!doc || loading || busy !== null} className={downloadClass('docx')}>
+                  {busy === 'docx' ? 'Building…' : 'Download Word (.docx)'}
                 </button>
-                <button type="button" onClick={() => handleDownload('pdf')} disabled={!doc || loading || busy !== null} className={downloadClass}>
-                  {busy === 'pdf' ? 'Building…' : 'Download .pdf'}
+                <button type="button" onClick={() => handleDownload('pdf')} disabled={!doc || loading || busy !== null} className={downloadClass('pdf')}>
+                  {busy === 'pdf' ? 'Building…' : 'Download PDF'}
                 </button>
               </>
             ) : (
-              <button type="button" onClick={() => handleDownload('pptx')} disabled={!slides || loading || busy !== null} className={downloadClass}>
-                {busy === 'pptx' ? 'Building…' : 'Download .pptx'}
+              <button type="button" onClick={() => handleDownload('pptx')} disabled={!deck || loading || busy !== null} className={downloadClass('pptx')}>
+                {busy === 'pptx' ? 'Building…' : 'Download PowerPoint (.pptx)'}
               </button>
             )}
           </div>
