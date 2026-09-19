@@ -4,7 +4,8 @@ import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, LockI
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import { ProgressRing, ThinkingIndicator, WorkingRing } from '../components/ProgressRing'
-import { ACCENTS, StatTile, type Accent } from '../components/report'
+import { NumberedCard } from '../components/AnswerSection'
+import { ACCENT_CYCLE, ACCENTS, StatTile, type Accent } from '../components/report'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { HATCH_STYLE } from '../lib/chartPatterns'
@@ -1736,21 +1737,22 @@ function formatCandidateHeadline(candidate: NoticeCandidate): string {
 // paraphrase, so it can stand as the page's one dedicated "here's what to
 // keep doing" moment.
 function StrengthCard({
+  n,
   strength,
   coverage,
   onViewDiscourse,
   onDiscuss,
 }: {
+  n: number
   strength: NoticeCandidate | null
   coverage: ReturnType<typeof getCoverage>
   onViewDiscourse: () => void
   onDiscuss: (candidate: NoticeCandidate) => void
 }) {
   return (
-    <div className="rounded-2xl bg-mint-tint/50 p-6">
-      <h2 className="text-[11px] font-bold uppercase tracking-wide text-forest">A strength to keep</h2>
+    <NumberedCard n={n} title="A strength to keep" subtitle="Something that worked in this lesson — keep doing it">
       {strength ? (
-        <div className="mt-3 flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5">
           <p className="text-sm font-semibold text-ink">{formatCandidateHeadline(strength)}</p>
           {strength.excerpt && <p className="text-sm text-ink-soft">"{strength.excerpt}"</p>}
           <p className="text-sm text-ink-soft">{strength.whyItMatters}</p>
@@ -1763,7 +1765,7 @@ function StrengthCard({
           </button>
         </div>
       ) : (
-        <div className="mt-2 flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           <p className="text-sm text-ink-soft">
             This recording was {formatTime(coverage.recordedSec)} — not enough measured evidence yet for a
             stand-out strength this session.
@@ -1777,7 +1779,7 @@ function StrengthCard({
           </button>
         </div>
       )}
-    </div>
+    </NumberedCard>
   )
 }
 
@@ -2578,44 +2580,40 @@ function SummaryTab({
   // behind it — rather than a stack of similarly-weighted cards with no
   // throughline. Talking it through lives in the Reflect tab.
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-5">
       {/* 1. Lesson at a glance */}
-      <div className="flex flex-col gap-6">
+      <NumberedCard n={1} title="Lesson at a glance" subtitle="What happened in this lesson, and the four numbers behind it">
         {classSummary ? (
-          <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-6">
-            <h2 className="text-[11px] font-bold uppercase tracking-wide text-terracotta-600">Lesson at a glance</h2>
-            <p className="mt-2 text-base leading-relaxed text-ink">{classSummary}</p>
-          </div>
+          <p className="text-base leading-relaxed text-ink">{classSummary}</p>
         ) : classSummarySending ? (
-          <div className="rounded-2xl border border-hairline bg-cream-card p-6">
-            <div className="flex justify-center text-forest">
-              <ProgressRing
-                progress={classSummaryProgress}
-                label="Putting together a summary of this lesson"
-                hint="Reading the whole transcript, not just the start."
-              />
-            </div>
+          <div className="flex justify-center rounded-xl bg-cream-card/60 p-6 text-forest">
+            <ProgressRing
+              progress={classSummaryProgress}
+              label="Putting together a summary of this lesson"
+              hint="Reading the whole transcript, not just the start."
+            />
           </div>
         ) : (
           spotlight && (
-            <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-6">
-              <h2 className="text-[11px] font-bold uppercase tracking-wide text-terracotta-600">{spotlight.headline}</h2>
-              <p className="mt-2 text-base leading-relaxed text-ink">{spotlight.body}</p>
-            </div>
+            <>
+              <p className="text-sm font-semibold text-ink">{spotlight.headline}</p>
+              <p className="mt-1 text-base leading-relaxed text-ink">{spotlight.body}</p>
+            </>
           )
         )}
 
         {/* The same four numbers, colours and order as page one of the printout. */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <SummaryStat label="You spoke" metric={getPresenceMetric(session.teacherTalkPct)} unit="%" accent={ACCENTS.terracotta} />
           <SummaryStat label="Students spoke" metric={getPresenceMetric(session.studentTalkPct)} unit="%" accent={ACCENTS.gold} />
           <SummaryStat label="Questions" metric={questionsMetric} accent={ACCENTS.mint} />
           <SummaryStat label="Avg. wait" metric={getPresenceMetric(session.avgWaitTimeSec)} unit="s" accent={ACCENTS.forest} />
         </div>
-      </div>
+      </NumberedCard>
 
       {/* 2. A strength to keep */}
       <StrengthCard
+        n={2}
         strength={strength}
         coverage={coverage}
         onViewDiscourse={() => onNavigateInsights('talk')}
@@ -2624,17 +2622,18 @@ function SummaryTab({
 
       {/* 3. Your focus */}
       {focusSnapshot && (
-        <div className="rounded-2xl bg-gold-tint/50 p-6">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-[11px] font-bold uppercase tracking-wide text-terracotta-600">
-              My focus · {focusSnapshot.label}
-            </h2>
-            <span className="rounded-full bg-cream-card px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-terracotta-600">
+        <NumberedCard
+          n={3}
+          title={`My focus · ${focusSnapshot.label}`}
+          subtitle="The one area you chose to work on, in this lesson"
+          aside={
+            <span className="shrink-0 rounded-full bg-cream-card px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-terracotta-600">
               {EVIDENCE_TIER_LABELS[focusSnapshot.tier]}
             </span>
-          </div>
+          }
+        >
           {focusMetric === 'talkRatio' && session.teacherTalkPct != null ? (
-            <div className="mt-4 rounded-xl bg-cream-card/60 p-4">
+            <div className="rounded-xl bg-cream-card/60 p-4">
               <TalkParticipationBar
                 teacherPct={session.teacherTalkPct}
                 studentPct={session.studentTalkPct}
@@ -2644,7 +2643,7 @@ function SummaryTab({
             </div>
           ) : (
             focusSnapshot.valueText && (
-              <p className="mt-3 text-3xl font-semibold text-ink">{focusSnapshot.valueText}</p>
+              <p className="text-3xl font-semibold text-ink">{focusSnapshot.valueText}</p>
             )
           )}
           {focusSnapshot.statusLine && <p className="mt-3 text-sm text-ink">{focusSnapshot.statusLine}</p>}
@@ -2669,13 +2668,16 @@ function SummaryTab({
           >
             Discuss this focus →
           </button>
-        </div>
+        </NumberedCard>
       )}
 
       {/* 4. Evidence from the lesson */}
-      <div className="flex flex-col gap-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Evidence from the lesson</h2>
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+      <NumberedCard
+        n={focusSnapshot ? 4 : 3}
+        title="Evidence from the lesson"
+        subtitle="The moments and numbers behind these notes — open any one to see more"
+      >
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <WhoWasHeardCard
             teacherPct={session.teacherTalkPct}
             studentPct={session.studentTalkPct}
@@ -2691,7 +2693,7 @@ function SummaryTab({
             <EvidenceMomentCard moment={momentToRevisit} onDiscuss={onDiscussWithCoach} onSetFocus={onFocusMetricChange} />
           )}
         </div>
-      </div>
+      </NumberedCard>
     </div>
   )
 }
@@ -3435,82 +3437,79 @@ function ReflectTab({
             <>
               {summarizeError && <p className="text-sm text-terracotta-600">{summarizeError}</p>}
 
-              <div className="rounded-2xl bg-peach-tint/50 p-6">
-                <h2 className="font-heading text-lg font-bold text-forest">My next step</h2>
-                <p className="mt-1 text-sm text-ink-soft">Choose one focus for your next recording.</p>
-                <div className="mt-3">
-                  <FocusSelector focusMetric={focusMetric} onChange={onFocusMetricChange} />
-                </div>
-              </div>
+              {/* The teacher's own notes, in the same numbered sections as every
+                  other takeaway. They stay editable until the report is locked. */}
+              <NumberedCard n={1} title="What I noticed" subtitle="What stood out to you in this lesson">
+                <textarea
+                  aria-label="What I noticed"
+                  value={strengths}
+                  onChange={(e) => onStrengthsChange(e.target.value)}
+                  disabled={locked}
+                  rows={3}
+                  className="w-full rounded-lg border border-hairline bg-cream-card px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
+                />
+              </NumberedCard>
 
-              <div className="rounded-2xl border border-hairline bg-cream-card p-6">
-                <h2 className="font-heading text-lg font-bold text-forest">Your reflection</h2>
-                <div className="mt-4 flex flex-col gap-4">
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-ink">What I noticed</span>
-                    <textarea
-                      value={strengths}
-                      onChange={(e) => onStrengthsChange(e.target.value)}
-                      disabled={locked}
-                      rows={3}
-                      className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-ink">What I want to explore</span>
-                    <textarea
-                      value={growthAreas}
-                      onChange={(e) => onGrowthAreasChange(e.target.value)}
-                      disabled={locked}
-                      rows={3}
-                      className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-ink">My next step</span>
-                    <textarea
-                      value={nextStep}
-                      onChange={(e) => onNextStepChange(e.target.value)}
-                      disabled={locked}
-                      rows={2}
-                      className="rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1.5">
+              <NumberedCard n={2} title="What I want to explore" subtitle="A question or pattern you'd like to understand better">
+                <textarea
+                  aria-label="What I want to explore"
+                  value={growthAreas}
+                  onChange={(e) => onGrowthAreasChange(e.target.value)}
+                  disabled={locked}
+                  rows={3}
+                  className="w-full rounded-lg border border-hairline bg-cream-card px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
+                />
+              </NumberedCard>
+
+              <NumberedCard n={3} title="My next step" subtitle="One thing to try, and when to look back at how it went">
+                <div className="flex flex-col gap-3">
+                  <textarea
+                    aria-label="My next step"
+                    value={nextStep}
+                    onChange={(e) => onNextStepChange(e.target.value)}
+                    disabled={locked}
+                    rows={2}
+                    className="w-full rounded-lg border border-hairline bg-cream-card px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
+                  />
+                  <label className="flex flex-wrap items-center gap-2.5">
                     <span className="text-sm font-medium text-ink">Follow-up date</span>
                     <input
                       type="date"
                       value={followUpDate}
                       onChange={(e) => onFollowUpDateChange(e.target.value)}
                       disabled={locked}
-                      className="w-fit rounded-lg border border-hairline bg-cream px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
+                      className="w-fit rounded-lg border border-hairline bg-cream-card px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
                     />
                   </label>
                 </div>
+              </NumberedCard>
 
-                {!locked && (
-                  <div className="mt-4 flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={onSave}
-                      disabled={saving}
-                      className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
-                    >
-                      {saving ? 'Saving...' : 'Save notes'}
-                    </button>
-                    {saved && <span className="text-sm text-forest">Saved.</span>}
-                    <button
-                      type="button"
-                      onClick={onLock}
-                      disabled={locking}
-                      className="ml-auto rounded-lg border border-hairline px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-60"
-                    >
-                      {locking ? 'Locking...' : 'Lock report'}
-                    </button>
-                  </div>
-                )}
-                {error && <p className="mt-3 text-sm text-terracotta-600">{error}</p>}
-              </div>
+              <NumberedCard n={4} title="Focus for my next recording" subtitle="Choose one area — My Growth will track it across lessons">
+                <FocusSelector focusMetric={focusMetric} onChange={onFocusMetricChange} />
+              </NumberedCard>
+
+              {!locked && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={onSave}
+                    disabled={saving}
+                    className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+                  >
+                    {saving ? 'Saving...' : 'Save notes'}
+                  </button>
+                  {saved && <span className="text-sm text-forest">Saved.</span>}
+                  <button
+                    type="button"
+                    onClick={onLock}
+                    disabled={locking}
+                    className="ml-auto rounded-lg border border-hairline px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-60"
+                  >
+                    {locking ? 'Locking...' : 'Lock report'}
+                  </button>
+                </div>
+              )}
+              {error && <p className="text-sm text-terracotta-600">{error}</p>}
             </>
           )}
         </div>
@@ -4210,9 +4209,15 @@ function RubricLensTab({
         )}
       </div>
 
-      {domains.map((domain) => (
+      {/* A colour band per domain, but no numbers of our own: the framework
+          already numbers its components (2a, 3b...), and a second count
+          beside those could read as a score. */}
+      {domains.map((domain, i) => (
         <section key={domain} className="flex flex-col gap-3">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">{domain}</h3>
+          <div className="flex items-center gap-3">
+            <span aria-hidden="true" className={`h-7 w-1.5 shrink-0 rounded-full ${ACCENT_CYCLE[i % ACCENT_CYCLE.length].band}`} />
+            <h3 className="font-heading text-lg font-bold leading-tight text-forest">{domain}</h3>
+          </div>
           {rubricLens.components
             .filter((c) => c.domain === domain)
             .map((component) => (
