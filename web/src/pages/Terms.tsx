@@ -413,6 +413,7 @@ export default function Terms() {
           <section>
             <h2 className="text-sm font-semibold uppercase tracking-wide text-ink">10. Contact us</h2>
             <p className="mt-1">Business operator: Edinexa Technologies LLC</p>
+            <p className="mt-1">Mailing address: 233 Broad Street, Ste 13A #135, Bridgewater, MA 02324</p>
             <p className="mt-1">Privacy requests: hello@wivoza.com</p>
             <p className="mt-1">Account and billing support: support@wivoza.com</p>
           </section>
