@@ -1360,6 +1360,9 @@ export type ExportSlide = {
   layout: ExportSlideLayout
   icon: string | null
   visual: string | null
+  imageQuery: string | null
+  // A real, openly licensed picture found for a 'visual' slide.
+  image: { url: string; width: number; height: number; credit: string } | null
 }
 
 export type ExportTheme = 'wivoza' | 'history' | 'science' | 'math' | 'ela' | 'arts' | 'early' | 'wellness'

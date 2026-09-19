@@ -1,4 +1,6 @@
+import JSZip from 'jszip'
 import PptxGenJS from 'pptxgenjs'
+import { fetchImageData, type SlideImage } from './imageSearch.ts'
 
 export const SLIDE_LAYOUTS = ['title', 'cards', 'split', 'keyterm', 'prompt', 'steps', 'compare', 'visual'] as const
 export type SlideLayout = (typeof SLIDE_LAYOUTS)[number]
@@ -11,6 +13,9 @@ export type Slide = {
   icon: string | null
   // For the 'visual' layout: what image, diagram or map belongs on the slide.
   visual: string | null
+  // Search words for finding that picture, and the picture once one is found.
+  imageQuery: string | null
+  image: SlideImage | null
 }
 
 type Decor = 'circles' | 'stripes' | 'squares'
@@ -59,7 +64,11 @@ export const THEME_GUIDE = `Choose ONE <theme> for the whole deck that fits its 
 - wivoza — only when nothing above fits (school-wide, general, mixed).`
 
 const WHITE = 'FFFFFF'
-const SHADOW = { type: 'outer' as const, color: '000000', opacity: 0.14, blur: 8, offset: 3, angle: 90 }
+// pptxgenjs rewrites an options object's numbers in place while it writes the
+// slide, so a shadow shared between shapes gets multiplied on every reuse until
+// it overflows to Infinity — which PowerPoint reports as a corrupt file. Always
+// hand it a fresh object.
+const shadow = () => ({ type: 'outer' as const, color: '000000', opacity: 0.14, blur: 8, offset: 3, angle: 90 })
 
 // White text on a dark or mid accent, dark ink on a light one (gold, yellow).
 function onColor(hex: string, ink: string): string {
@@ -101,16 +110,16 @@ function decorTitle(slide: PptxGenJS.Slide, t: Theme) {
 
 // Subtler version for full-color slides, drawn as translucent white.
 function decorSoft(slide: PptxGenJS.Slide, t: Theme) {
-  const soft = { color: WHITE, transparency: 86 }
+  const soft = () => ({ color: WHITE, transparency: 86 })
   if (t.decor === 'stripes') {
-    slide.addShape('rect', { x: 10.2, y: -2, w: 1.3, h: 12, rotate: 18, fill: soft })
-    slide.addShape('rect', { x: 11.9, y: -2, w: 0.6, h: 12, rotate: 18, fill: soft })
+    slide.addShape('rect', { x: 10.2, y: -2, w: 1.3, h: 12, rotate: 18, fill: soft() })
+    slide.addShape('rect', { x: 11.9, y: -2, w: 0.6, h: 12, rotate: 18, fill: soft() })
   } else if (t.decor === 'squares') {
-    slide.addShape('roundRect', { x: 10.6, y: -1.2, w: 3.6, h: 3.6, rectRadius: 0.3, rotate: 18, fill: soft })
-    slide.addShape('roundRect', { x: -1.2, y: 5.3, w: 3.2, h: 3.2, rectRadius: 0.3, rotate: -16, fill: soft })
+    slide.addShape('roundRect', { x: 10.6, y: -1.2, w: 3.6, h: 3.6, rectRadius: 0.3, rotate: 18, fill: soft() })
+    slide.addShape('roundRect', { x: -1.2, y: 5.3, w: 3.2, h: 3.2, rectRadius: 0.3, rotate: -16, fill: soft() })
   } else {
-    slide.addShape('ellipse', { x: 10.6, y: -1.4, w: 4.4, h: 4.4, fill: soft })
-    slide.addShape('ellipse', { x: -1.6, y: 4.9, w: 4.2, h: 4.2, fill: soft })
+    slide.addShape('ellipse', { x: 10.6, y: -1.4, w: 4.4, h: 4.4, fill: soft() })
+    slide.addShape('ellipse', { x: -1.6, y: 4.9, w: 4.2, h: 4.2, fill: soft() })
   }
 }
 
@@ -156,7 +165,7 @@ function addCardsSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme) {
     s.bullets.forEach((b, i) => {
       const y = top + i * (cardH + gap)
       const c = accentAt(t, index + i)
-      slide.addShape('roundRect', { x: 0.6, y, w: 12.1, h: cardH, rectRadius: 0.16, fill: { color: WHITE }, shadow: SHADOW })
+      slide.addShape('roundRect', { x: 0.6, y, w: 12.1, h: cardH, rectRadius: 0.16, fill: { color: WHITE }, shadow: shadow() })
       slide.addShape('ellipse', { x: 0.85, y: y + (cardH - 0.62) / 2, w: 0.62, h: 0.62, fill: { color: c } })
       slide.addText(String(i + 1), {
         x: 0.85, y: y + (cardH - 0.62) / 2, w: 0.62, h: 0.62, fontFace: t.body, fontSize: 18, bold: true, color: onColor(c, t.ink), align: 'center', valign: 'middle',
@@ -204,7 +213,7 @@ function addKeytermSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme) {
   const pillH = 0.72
   s.bullets.slice(0, n).forEach((b, i) => {
     const y = 3.7 + i * (pillH + 0.14)
-    slide.addShape('roundRect', { x: 2.2, y, w: 8.9, h: pillH, rectRadius: 0.36, fill: { color: WHITE }, shadow: SHADOW })
+    slide.addShape('roundRect', { x: 2.2, y, w: 8.9, h: pillH, rectRadius: 0.36, fill: { color: WHITE }, shadow: shadow() })
     slide.addText(b, { x: 2.5, y, w: 8.3, h: pillH, fontFace: t.body, fontSize: 22, color: t.ink, align: 'center', valign: 'middle', fit: 'shrink' })
   })
   footer(slide, t, true)
@@ -255,7 +264,7 @@ function addStepsSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme) {
     steps.forEach((b, i) => {
       const x = 0.6 + i * (w + gap)
       const c = accentAt(t, index + i)
-      slide.addShape('roundRect', { x, y: 2.3, w, h: 3.4, rectRadius: 0.2, fill: { color: WHITE }, shadow: SHADOW })
+      slide.addShape('roundRect', { x, y: 2.3, w, h: 3.4, rectRadius: 0.2, fill: { color: WHITE }, shadow: shadow() })
       slide.addShape('ellipse', { x: x + w / 2 - 0.42, y: 2.55, w: 0.84, h: 0.84, fill: { color: c } })
       slide.addText(String(i + 1), { x: x + w / 2 - 0.42, y: 2.55, w: 0.84, h: 0.84, fontFace: t.body, fontSize: 26, bold: true, color: onColor(c, t.ink), align: 'center', valign: 'middle' })
       slide.addText(b, { x: x + 0.15, y: 3.6, w: w - 0.3, h: 1.95, fontFace: t.body, fontSize: n >= 5 ? 18 : n === 4 ? 20 : 24, color: t.ink, align: 'center', valign: 'top', fit: 'shrink' })
@@ -286,7 +295,7 @@ function addCompareSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme) {
   for (const col of cols) {
     slide.addShape('roundRect', { x: col.x, y: 1.9, w: 5.9, h: 0.85, rectRadius: 0.2, fill: { color: col.color } })
     slide.addText(col.head, { x: col.x, y: 1.9, w: 5.9, h: 0.85, fontFace: t.head, fontSize: 24, bold: true, color: onColor(col.color, t.ink), align: 'center', valign: 'middle', fit: 'shrink' })
-    slide.addShape('roundRect', { x: col.x, y: 2.9, w: 5.9, h: 3.6, rectRadius: 0.2, fill: { color: WHITE }, shadow: SHADOW })
+    slide.addShape('roundRect', { x: col.x, y: 2.9, w: 5.9, h: 3.6, rectRadius: 0.2, fill: { color: WHITE }, shadow: shadow() })
     if (col.items.length > 0) {
       slide.addText(
         col.items.map((item) => ({ text: item, options: { bullet: { indent: 20 }, breakLine: true } })),
@@ -300,9 +309,9 @@ function addCompareSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme) {
   return slide
 }
 
-// A slide that needs an image, diagram, map or chart we can't draw for the
-// teacher: a clearly marked, framed spot that says exactly what to put there.
-function addVisualSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme) {
+// A slide built around a picture. With a found photo it's framed with its
+// credit; without one it's a clearly marked spot that says exactly what to add.
+function addVisualSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme, photo: string | null) {
   const accent = accentAt(t, index)
   const slide = pptx.addSlide()
   slide.background = { color: t.light }
@@ -314,13 +323,26 @@ function addVisualSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme) {
       { x: 0.6, y: 2.4, w: 5.9, h: 4.3, fontFace: t.body, fontSize: 22, color: t.ink, valign: 'top', paraSpaceAfter: 12, fit: 'shrink' },
     )
   }
-  slide.addShape('roundRect', { x: 6.9, y: 0.75, w: 5.85, h: 5.95, rectRadius: 0.25, fill: { color: accent, transparency: 88 }, line: { color: accent, width: 2, dashType: 'dash' } })
-  slide.addShape('roundRect', { x: 7.15, y: 1.0, w: 1.6, h: 0.42, rectRadius: 0.21, fill: { color: accent } })
-  slide.addText('VISUAL', { x: 7.15, y: 1.0, w: 1.6, h: 0.42, fontFace: t.body, fontSize: 12, bold: true, color: onColor(accent, t.ink), align: 'center', valign: 'middle' })
-  slide.addText(s.icon ?? '🖼️', { x: 6.9, y: 1.6, w: 5.85, h: 2.6, fontSize: 88, align: 'center', valign: 'middle' })
-  slide.addText(s.visual || 'Add a picture, diagram or map that shows this idea.', {
-    x: 7.2, y: 4.35, w: 5.25, h: 2.1, fontFace: t.body, fontSize: 17, italic: true, color: t.ink, align: 'center', valign: 'top', fit: 'shrink',
-  })
+
+  if (photo && s.image) {
+    slide.addShape('roundRect', { x: 6.9, y: 0.75, w: 5.85, h: 5.95, rectRadius: 0.25, fill: { color: WHITE }, shadow: shadow() })
+    const box = { x: 7.1, y: 0.95, w: 5.45, h: 4.6 }
+    const scale = Math.min(box.w / s.image.width, box.h / s.image.height)
+    const w = s.image.width * scale
+    const h = s.image.height * scale
+    slide.addImage({ data: photo, x: box.x + (box.w - w) / 2, y: box.y + (box.h - h) / 2, w, h, altText: s.visual ?? s.title })
+    slide.addText(`Picture: ${s.image.credit}`, {
+      x: 7.1, y: 5.7, w: 5.45, h: 0.85, fontFace: t.body, fontSize: 11, italic: true, color: '6B6B6B', align: 'center', valign: 'top', fit: 'shrink',
+    })
+  } else {
+    slide.addShape('roundRect', { x: 6.9, y: 0.75, w: 5.85, h: 5.95, rectRadius: 0.25, fill: { color: accent, transparency: 88 }, line: { color: accent, width: 2, dashType: 'dash' } })
+    slide.addShape('roundRect', { x: 7.15, y: 1.0, w: 1.6, h: 0.42, rectRadius: 0.21, fill: { color: accent } })
+    slide.addText('VISUAL', { x: 7.15, y: 1.0, w: 1.6, h: 0.42, fontFace: t.body, fontSize: 12, bold: true, color: onColor(accent, t.ink), align: 'center', valign: 'middle' })
+    slide.addText(s.icon ?? '🖼️', { x: 6.9, y: 1.6, w: 5.85, h: 2.6, fontSize: 88, align: 'center', valign: 'middle' })
+    slide.addText(s.visual || 'Add a picture, diagram or map that shows this idea.', {
+      x: 7.2, y: 4.35, w: 5.25, h: 2.1, fontFace: t.body, fontSize: 17, italic: true, color: t.ink, align: 'center', valign: 'top', fit: 'shrink',
+    })
+  }
   footer(slide, t, false)
   return slide
 }
@@ -333,6 +355,10 @@ export async function buildPptx(deckTitle: string, deck: SlideDeck): Promise<Buf
   pptx.layout = 'LAYOUT_WIDE'
   pptx.title = deckTitle
 
+  // Download each slide's picture up front, all at once. One that can't be
+  // fetched just leaves that slide with its "add a picture" spot.
+  const photos = await Promise.all(deck.slides.map((s) => (s.layout === 'visual' && s.image ? fetchImageData(s.image.url) : null)))
+
   deck.slides.forEach((s, i) => {
     let slide: PptxGenJS.Slide
     if (s.layout === 'title') slide = addTitleSlide(pptx, s, t)
@@ -341,11 +367,25 @@ export async function buildPptx(deckTitle: string, deck: SlideDeck): Promise<Buf
     else if (s.layout === 'prompt') slide = addPromptSlide(pptx, s, i, t)
     else if (s.layout === 'steps') slide = addStepsSlide(pptx, s, i, t)
     else if (s.layout === 'compare' && s.bullets.length > 1 && s.bullets[0].includes('|')) slide = addCompareSlide(pptx, s, i, t)
-    else if (s.layout === 'visual') slide = addVisualSlide(pptx, s, i, t)
+    else if (s.layout === 'visual') slide = addVisualSlide(pptx, s, i, t, photos[i]?.data ?? null)
     else slide = addCardsSlide(pptx, s, i, t)
     if (s.notes) slide.addNotes(s.notes)
   })
 
-  const out = await pptx.write({ outputType: 'nodebuffer' })
-  return out as Buffer
+  const out = (await pptx.write({ outputType: 'nodebuffer' })) as Buffer
+  await assertValidNumbers(out)
+  return out
+}
+
+// A last line of defense: a NaN or Infinity anywhere in the slide XML makes
+// PowerPoint say the file is corrupt, so fail loudly here instead of handing
+// the teacher a file that needs "repairing".
+async function assertValidNumbers(buffer: Buffer): Promise<void> {
+  const zip = await JSZip.loadAsync(buffer)
+  for (const name of Object.keys(zip.files)) {
+    if (!/^ppt\/(slides|notesSlides)\/[^/]+\.xml$/.test(name)) continue
+    const xml = await zip.files[name].async('string')
+    const bad = xml.match(/="(?:NaN|-?Infinity|undefined|null)"/)
+    if (bad) throw new Error(`Invalid value ${bad[0]} in ${name}`)
+  }
 }

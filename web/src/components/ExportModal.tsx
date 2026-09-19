@@ -421,13 +421,31 @@ function SlideThumb({ slide, index, t }: { slide: ExportSlide; index: number; t:
             <li key={i}>• {b}</li>
           ))}
         </ul>
-        <div style={{ ...shape({ x: 6.9, y: 0.75, w: 5.85, h: 5.95, radius: 0.25, fill: rgba(accent, 0.12) }), border: `0.25cqw dashed ${accent}`, boxSizing: 'border-box' }} />
-        <div style={shape({ x: 7.15, y: 1.0, w: 1.6, h: 0.42, radius: 0.21, fill: accent })} />
-        <div style={text(7.15, 1.0, 1.6, 0.42, { size: 12, color: onColor(accent, t.ink), font: t.body, bold: true, align: 'center' })}>VISUAL</div>
-        <div style={text(6.9, 1.6, 5.85, 2.6, { size: 88, color: t.ink, font: t.head, align: 'center' })}>{slide.icon ?? '🖼️'}</div>
-        <div style={{ ...text(7.2, 4.35, 5.25, 2.1, { size: 17, color: t.ink, font: t.body, align: 'center', valign: 'top' }), fontStyle: 'italic' }}>
-          {slide.visual || 'Add a picture, diagram or map that shows this idea.'}
-        </div>
+        {slide.image ? (
+          <>
+            <div style={shape({ x: 6.9, y: 0.75, w: 5.85, h: 5.95, radius: 0.25, fill: WHITE, shadow: true })} />
+            <img
+              src={slide.image.url}
+              alt={slide.visual ?? slide.title}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              style={{ ...shape({ x: 7.1, y: 0.95, w: 5.45, h: 4.6 }), objectFit: 'contain' }}
+            />
+            <div style={{ ...text(7.1, 5.7, 5.45, 0.85, { size: 11, color: '#6B6B6B', font: t.body, align: 'center', valign: 'top' }), fontStyle: 'italic' }}>
+              Picture: {slide.image.credit}
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ ...shape({ x: 6.9, y: 0.75, w: 5.85, h: 5.95, radius: 0.25, fill: rgba(accent, 0.12) }), border: `0.25cqw dashed ${accent}`, boxSizing: 'border-box' }} />
+            <div style={shape({ x: 7.15, y: 1.0, w: 1.6, h: 0.42, radius: 0.21, fill: accent })} />
+            <div style={text(7.15, 1.0, 1.6, 0.42, { size: 12, color: onColor(accent, t.ink), font: t.body, bold: true, align: 'center' })}>VISUAL</div>
+            <div style={text(6.9, 1.6, 5.85, 2.6, { size: 88, color: t.ink, font: t.head, align: 'center' })}>{slide.icon ?? '🖼️'}</div>
+            <div style={{ ...text(7.2, 4.35, 5.25, 2.1, { size: 17, color: t.ink, font: t.body, align: 'center', valign: 'top' }), fontStyle: 'italic' }}>
+              {slide.visual || 'Add a picture, diagram or map that shows this idea.'}
+            </div>
+          </>
+        )}
         {wordmark(false)}
       </div>
     )
@@ -683,7 +701,7 @@ export default function ExportModal({
           <div className="flex flex-col gap-1">
             <p className="text-xs text-ink-soft">
               {kind === 'document' ? 'Opens in Word, Google Docs, and Pages.' : 'Opens in PowerPoint, Google Slides, and Keynote.'}{' '}
-              {slidesOnly ? 'Add your own photos where a dashed VISUAL spot is marked.' : 'Your original structure is kept.'}
+              {slidesOnly ? 'Pictures are openly licensed and credited on the slide; add your own where a dashed VISUAL spot is marked.' : 'Your original structure is kept.'}
             </p>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               {kind === 'document' ? (

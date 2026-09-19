@@ -1,4 +1,5 @@
 import { extractTag } from './extractTag.ts'
+import { isAllowedImageUrl, type SlideImage } from './imageSearch.ts'
 import { SLIDE_LAYOUTS, THEME_NAMES, type Slide, type SlideDeck, type SlideLayout, type ThemeName } from './slidesPptx.ts'
 
 export type DocBlock =
@@ -52,6 +53,17 @@ export function sanitizeDocModel(raw: unknown): DocModel | null {
   return { title, subtitle: clean(r.subtitle, 200) || null, blocks }
 }
 
+// A picture link only ever points at Wikimedia's image host, whatever a client
+// sends back — the file download fetches it server-side.
+function sanitizeImage(raw: unknown): SlideImage | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const width = Number(r.width)
+  const height = Number(r.height)
+  if (!isAllowedImageUrl(r.url) || !(width >= 1 && width <= 10000) || !(height >= 1 && height <= 10000)) return null
+  return { url: r.url, width, height, credit: clean(r.credit, 200) || 'Wikimedia Commons' }
+}
+
 export function sanitizeDeck(raw: unknown): SlideDeck | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
@@ -75,6 +87,8 @@ export function sanitizeDeck(raw: unknown): SlideDeck | null {
       // An emoji is a few code units at most; anything longer is a word.
       icon: icon && [...icon].length <= 6 ? icon : null,
       visual: clean(s.visual, 300) || null,
+      imageQuery: clean(s.imageQuery, 100) || null,
+      image: sanitizeImage(s.image),
     })
   }
   if (slides.length === 0) return null
@@ -114,6 +128,7 @@ export function parseSlidesOutput(text: string): SlideDeck | null {
       layout: (extractTag(block, 'layout') ?? '').trim().toLowerCase(),
       icon: extractTag(block, 'icon'),
       visual: extractTag(block, 'visual'),
+      imageQuery: extractTag(block, 'image_query'),
     })
   }
   const head = text.split('<slide>')[0]
