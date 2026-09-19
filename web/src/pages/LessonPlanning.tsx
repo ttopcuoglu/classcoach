@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import AnswerSection, { NumberedCard } from '../components/AnswerSection'
+import PastList, { type PastItem } from '../components/PastList'
 import { ShareIcon, StarIcon } from '../components/icons'
 import CoachingChat from '../components/CoachingChat'
 import { PanelHeader } from '../components/PanelHeader'
@@ -204,21 +206,42 @@ function PlanHeader({ plan }: { plan: LessonPlan }) {
   )
 }
 
-function PlanSection({ label, value, accent }: { label: string; value: string | null; accent?: boolean }) {
-  if (!value) return null
+// The sample plan's parts, in teaching order, each with what it's for.
+const PLAN_PARTS: { key: 'doNow' | 'agenda' | 'closure' | 'hots' | 'homework'; title: string; subtitle: string }[] = [
+  { key: 'doNow', title: 'Do Now', subtitle: 'How students start — the first few minutes' },
+  { key: 'agenda', title: 'Agenda', subtitle: 'The main activities, in order' },
+  { key: 'closure', title: 'Closure', subtitle: 'How the lesson wraps up and checks what students learned' },
+  { key: 'hots', title: 'Higher-order thinking', subtitle: 'Where students analyze, evaluate or create' },
+  { key: 'homework', title: 'Homework', subtitle: 'Practice after class' },
+]
+
+const REVIEW_PARTS: { key: keyof LessonPlanPresentationReview; title: string; subtitle: string }[] = [
+  { key: 'gradeLevelFit', title: 'Grade-level fit', subtitle: 'Whether the content and language suit your students' },
+  { key: 'visuals', title: 'Visuals', subtitle: 'How the slides look and read from the back of the room' },
+  { key: 'ideas', title: 'Ideas', subtitle: 'The content, and how it builds from slide to slide' },
+  { key: 'length', title: 'Length', subtitle: 'Whether it fits the time you have' },
+  { key: 'implementation', title: 'Implementation', subtitle: 'How to run it in class' },
+]
+
+type Part = { title: string; subtitle: string; body: string }
+
+function presentParts(parts: { title: string; subtitle: string; body: string | null }[]): Part[] {
+  return parts.filter((part): part is Part => !!part.body)
+}
+
+function PartSections({ parts, start = 1 }: { parts: Part[]; start?: number }) {
   return (
-    <div className={accent ? 'rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5' : 'rounded-2xl bg-mint-tint/40 p-5'}>
-      <p
-        className={`text-[11px] font-bold uppercase tracking-[0.14em] ${accent ? 'text-terracotta-600' : 'text-forest'}`}
-      >
-        {label}
-      </p>
-      <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{value}</p>
-    </div>
+    <>
+      {parts.map((part, i) => (
+        <AnswerSection key={part.title} n={start + i} title={part.title} subtitle={part.subtitle}>
+          {part.body}
+        </AnswerSection>
+      ))}
+    </>
   )
 }
 
-function DeliveryCoachingCard({ coaching }: { coaching: LessonPlanDeliveryCoaching }) {
+function DeliveryCoachingCard({ n, coaching }: { n: number; coaching: LessonPlanDeliveryCoaching }) {
   const rows: [string, string | null][] = [
     ['Opening hook', coaching.openingHook],
     ['Pacing & timing', coaching.pacing],
@@ -227,9 +250,8 @@ function DeliveryCoachingCard({ coaching }: { coaching: LessonPlanDeliveryCoachi
     ['Closing', coaching.closing],
   ]
   return (
-    <div className="rounded-2xl bg-peach-tint/50 p-5">
-      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Presentation & Delivery</p>
-      <div className="mt-2 flex flex-col gap-3">
+    <NumberedCard n={n} title="Presentation & delivery" subtitle="How to teach it — opening, pacing, engagement and closing">
+      <div className="flex flex-col gap-3">
         {rows.map(([label, value]) =>
           value ? (
             <div key={label}>
@@ -239,29 +261,52 @@ function DeliveryCoachingCard({ coaching }: { coaching: LessonPlanDeliveryCoachi
           ) : null,
         )}
       </div>
-    </div>
+    </NumberedCard>
   )
 }
 
-function PresentationReviewCard({ review }: { review: LessonPlanPresentationReview }) {
-  const rows: [string, string | null][] = [
-    ['Grade-level fit', review.gradeLevelFit],
-    ['Visuals', review.visuals],
-    ['Ideas', review.ideas],
-    ['Length', review.length],
-    ['Implementation', review.implementation],
-  ]
+function SuggestedRevisionCard({
+  n,
+  text,
+  applying,
+  onApply,
+  onDismiss,
+}: {
+  n: number
+  text: string
+  applying: boolean
+  onApply: () => void
+  onDismiss: () => void
+}) {
   return (
-    <div className="flex flex-col gap-3">
-      {rows.map(([label, value], i) =>
-        value ? (
-          <div key={label} className={`rounded-2xl p-5 ${['bg-peach-tint/50', 'bg-gold-tint/50', 'bg-mint-tint/50'][i % 3]}`}>
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">{label}</p>
-            <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{value}</p>
-          </div>
-        ) : null,
-      )}
-    </div>
+    <NumberedCard n={n} title="Suggested revision" subtitle="A rewritten version from your conversation — use it or dismiss it">
+      <p className="whitespace-pre-wrap text-sm text-ink">{text}</p>
+      <div className="mt-3 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onApply}
+          disabled={applying}
+          className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+        >
+          {applying ? (
+            <span className="flex items-center gap-2">
+              <Spinner /> Applying...
+            </span>
+          ) : (
+            'Use this version'
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={onDismiss}
+          disabled={applying}
+          className="text-sm font-medium text-ink-soft hover:text-ink"
+        >
+          Dismiss
+        </button>
+      </div>
+      <WorkingRing active={applying} estimatedMs={12000} label="Applying the revision" className="mt-3 text-forest" />
+    </NumberedCard>
   )
 }
 
@@ -316,122 +361,14 @@ function ShareButton({ onShare }: { onShare: () => Promise<{ shareToken: string 
   )
 }
 
-function HistoryList({
-  title,
-  loading,
-  plans,
-}: {
-  title: string
-  loading: boolean
-  plans: LessonPlan[]
-}) {
-  return (
-    <div>
-      <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">{title}</h2>
-      {loading ? (
-        <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
-      ) : plans.length === 0 ? (
-        <div className="mt-2 text-sm text-ink-soft">
-          Plans you save will show up here.
-        </div>
-      ) : (
-        <div className="mt-3 flex flex-col gap-3">
-          {plans.map((p) => (
-            <SavedPlanCard key={p.id} plan={p} />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function SavedPlanCard({ plan }: { plan: LessonPlan }) {
-  const [expanded, setExpanded] = useState(false)
-  return (
-    <div className="rounded-xl border border-hairline bg-cream-card p-4">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-start justify-between gap-4 text-left"
-      >
-        <div>
-          <span className="rounded-full bg-mint-tint/60 px-2 py-0.5 text-xs font-semibold text-forest">
-            {plan.mode === 'generated' ? 'Sample plan' : plan.mode === 'presentation' ? 'Presentation review' : 'Feedback'}
-          </span>
-          <p className="mt-1.5 text-sm text-ink">
-            {plan.objective || plan.fileName || plan.planText?.slice(0, 80) || 'Lesson plan'}
-          </p>
-        </div>
-        <span className="shrink-0 text-xs font-medium text-ink-soft">{expanded ? 'Hide' : 'Show'}</span>
-      </button>
-      {expanded && (
-        <div className="mt-3 flex flex-col gap-3 border-t border-hairline pt-3">
-          {plan.mode === 'feedback' ? (
-            <>
-              {plan.planText && (
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Plan</p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.planText}</p>
-                </div>
-              )}
-              {plan.feedback && (
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Coaching</p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.feedback}</p>
-                </div>
-              )}
-            </>
-          ) : plan.mode === 'presentation' ? (
-            plan.presentationReview && <PresentationReviewCard review={plan.presentationReview} />
-          ) : (
-            <>
-              {plan.doNow && (
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Do Now</p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.doNow}</p>
-                </div>
-              )}
-              {plan.agenda && (
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Agenda</p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.agenda}</p>
-                </div>
-              )}
-              {plan.closure && (
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Closure</p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.closure}</p>
-                </div>
-              )}
-              {plan.hots && (
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">
-                    Higher-order thinking
-                  </p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.hots}</p>
-                </div>
-              )}
-              {plan.homework && (
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Homework</p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{plan.homework}</p>
-                </div>
-              )}
-            </>
-          )}
-          <div className="flex items-center gap-4">
-            <ShareButton onShare={() => shareLessonPlan(plan.id)} />
-            <Link
-              to={`/lesson-planning/${plan.id}/export`}
-              className="text-sm font-medium text-ink-soft hover:text-terracotta-600"
-            >
-              Download
-            </Link>
-          </div>
-        </div>
-      )}
-    </div>
-  )
+function toPastItem(plan: LessonPlan): PastItem {
+  return {
+    id: plan.id,
+    createdAt: plan.createdAt,
+    label: [plan.subject, plan.gradeLevel].filter(Boolean).join(' · ') || null,
+    text: plan.objective || plan.fileName || plan.planText?.slice(0, 200) || 'Lesson plan',
+    saved: plan.saved,
+  }
 }
 
 function GeneratePanel() {
@@ -453,8 +390,6 @@ function GeneratePanel() {
       .catch(() => {})
       .finally(() => setHistoryLoading(false))
   }, [])
-
-  const savedPlans = allPlans.filter((p) => p.saved)
 
   async function handlePresentationFeedback() {
     if (!plan || deliveryLoading) return
@@ -492,6 +427,16 @@ function GeneratePanel() {
     setDeliveryError(null)
   }
 
+  // Reopens an earlier plan in full, with everything that came after it.
+  function handleOpenPast(id: string) {
+    const past = allPlans.find((p) => p.id === id)
+    if (!past) return
+    setPlan(past)
+    setError(null)
+    setDeliveryError(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   async function handleToggleSaved(target: LessonPlan) {
     const nextSaved = !target.saved
     const apply = (p: LessonPlan) => (p.id === target.id ? { ...p, saved: nextSaved } : p)
@@ -504,6 +449,8 @@ function GeneratePanel() {
       if (plan?.id === target.id) setPlan((prev) => (prev ? { ...prev, saved: !nextSaved } : prev))
     }
   }
+
+  const planParts = plan ? presentParts(PLAN_PARTS.map((part) => ({ ...part, body: plan[part.key] }))) : []
 
   return (
     <div className="flex flex-col gap-6">
@@ -538,15 +485,11 @@ function GeneratePanel() {
         ) : (
           <div className="flex flex-col gap-4">
             <PlanHeader plan={plan} />
-            <PlanSection label="Do Now" value={plan.doNow} />
-            <PlanSection label="Agenda" value={plan.agenda} />
-            <PlanSection label="Closure" value={plan.closure} />
-            <PlanSection label="Higher-order thinking" value={plan.hots} accent />
-            <PlanSection label="Homework" value={plan.homework} />
+            <PartSections parts={planParts} />
 
             <p className="text-xs text-ink-soft">This is a sample for ideas — adjust it to fit your class.</p>
 
-            {plan.deliveryCoaching && <DeliveryCoachingCard coaching={plan.deliveryCoaching} />}
+            {plan.deliveryCoaching && <DeliveryCoachingCard n={planParts.length + 1} coaching={plan.deliveryCoaching} />}
             <WorkingRing
               active={deliveryLoading}
               estimatedMs={14000}
@@ -600,7 +543,14 @@ function GeneratePanel() {
         )}
       </div>
 
-      <HistoryList title="Saved sample plans" loading={historyLoading} plans={savedPlans} />
+      <PastList
+        title="Your sample plans"
+        items={allPlans.map(toPastItem)}
+        activeId={plan?.id ?? null}
+        loading={historyLoading}
+        emptyText="Sample plans you generate will show up here."
+        onOpen={handleOpenPast}
+      />
     </div>
   )
 }
@@ -631,8 +581,6 @@ function FeedbackPanel() {
       .catch(() => {})
       .finally(() => setHistoryLoading(false))
   }, [])
-
-  const savedPlans = allPlans.filter((p) => p.saved)
 
   const canSubmit = planText.trim().length > 0
 
@@ -711,6 +659,19 @@ function FeedbackPanel() {
     setDeliveryError(null)
   }
 
+  // Reopens an earlier plan in full, follow-up conversation included.
+  function handleOpenPast(id: string) {
+    const past = allPlans.find((p) => p.id === id)
+    if (!past) return
+    setPlan(past)
+    setError(null)
+    setChatDraft('')
+    setChatError(null)
+    setRevisionDismissed(false)
+    setDeliveryError(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   async function handleToggleSaved(target: LessonPlan) {
     const nextSaved = !target.saved
     const apply = (p: LessonPlan) => (p.id === target.id ? { ...p, saved: nextSaved } : p)
@@ -723,6 +684,14 @@ function FeedbackPanel() {
       if (plan?.id === target.id) setPlan((prev) => (prev ? { ...prev, saved: !nextSaved } : prev))
     }
   }
+
+  const feedbackParts = plan
+    ? presentParts([
+        { title: 'Your plan', subtitle: 'What you shared', body: plan.planText },
+        { title: 'Coaching', subtitle: "What's working, and what to try", body: plan.feedback },
+      ])
+    : []
+  const showRevision = !!plan?.suggestedRevision && !revisionDismissed
 
   return (
     <div className="flex flex-col gap-6">
@@ -769,16 +738,7 @@ function FeedbackPanel() {
         ) : (
           <div className="flex flex-col gap-4">
             <PlanHeader plan={plan} />
-            <div className="rounded-2xl bg-cream p-5">
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Your plan</p>
-              <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{plan.planText}</p>
-            </div>
-            {plan.feedback && (
-              <div className="rounded-2xl bg-peach-tint/50 p-5">
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Coaching</p>
-                <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{plan.feedback}</p>
-              </div>
-            )}
+            <PartSections parts={feedbackParts} />
             <CoachingChat
               messages={plan.conversation.slice(2)}
               sending={chatSending}
@@ -788,38 +748,18 @@ function FeedbackPanel() {
               onSend={handleSendChat}
               placeholder="Ask a follow-up, or ask the coach to revise your plan..."
             />
-            {plan.suggestedRevision && !revisionDismissed && (
-              <div className="rounded-2xl bg-mint-tint/50 p-5">
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">Suggested Revision</p>
-                <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{plan.suggestedRevision}</p>
-                <div className="mt-3 flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleApplyRevision}
-                    disabled={applyingRevision}
-                    className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
-                  >
-                    {applyingRevision ? (
-                      <span className="flex items-center gap-2">
-                        <Spinner /> Applying...
-                      </span>
-                    ) : (
-                      'Use this version'
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRevisionDismissed(true)}
-                    disabled={applyingRevision}
-                    className="text-sm font-medium text-ink-soft hover:text-ink"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-                <WorkingRing active={applyingRevision} estimatedMs={12000} label="Applying the revision" className="mt-3 text-forest" />
-              </div>
+            {showRevision && plan.suggestedRevision && (
+              <SuggestedRevisionCard
+                n={feedbackParts.length + 1}
+                text={plan.suggestedRevision}
+                applying={applyingRevision}
+                onApply={handleApplyRevision}
+                onDismiss={() => setRevisionDismissed(true)}
+              />
             )}
-            {plan.deliveryCoaching && <DeliveryCoachingCard coaching={plan.deliveryCoaching} />}
+            {plan.deliveryCoaching && (
+              <DeliveryCoachingCard n={feedbackParts.length + (showRevision ? 2 : 1)} coaching={plan.deliveryCoaching} />
+            )}
             <WorkingRing
               active={deliveryLoading}
               estimatedMs={14000}
@@ -872,7 +812,14 @@ function FeedbackPanel() {
         )}
       </div>
 
-      <HistoryList title="Saved feedback" loading={historyLoading} plans={savedPlans} />
+      <PastList
+        title="Your plan feedback"
+        items={allPlans.map(toPastItem)}
+        activeId={plan?.id ?? null}
+        loading={historyLoading}
+        emptyText="Plans you get feedback on will show up here."
+        onOpen={handleOpenPast}
+      />
     </div>
   )
 }
@@ -909,8 +856,6 @@ function PresentationPanel() {
       .catch(() => {})
       .finally(() => setHistoryLoading(false))
   }, [])
-
-  const savedPlans = allPlans.filter((p) => p.saved)
 
   async function handleFile(selected: File) {
     setFile(selected)
@@ -1008,6 +953,18 @@ function PresentationPanel() {
     setRevisionDismissed(false)
   }
 
+  // Reopens an earlier plan in full, follow-up conversation included.
+  function handleOpenPast(id: string) {
+    const past = allPlans.find((p) => p.id === id)
+    if (!past) return
+    setPlan(past)
+    setError(null)
+    setChatDraft('')
+    setChatError(null)
+    setRevisionDismissed(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   async function handleToggleSaved(target: LessonPlan) {
     const nextSaved = !target.saved
     const apply = (p: LessonPlan) => (p.id === target.id ? { ...p, saved: nextSaved } : p)
@@ -1020,6 +977,10 @@ function PresentationPanel() {
       if (plan?.id === target.id) setPlan((prev) => (prev ? { ...prev, saved: !nextSaved } : prev))
     }
   }
+
+  const review = plan?.presentationReview
+  const reviewParts = review ? presentParts(REVIEW_PARTS.map((part) => ({ ...part, body: review[part.key] }))) : []
+  const showRevision = !!plan?.suggestedRevision && !revisionDismissed
 
   return (
     <div className="flex flex-col gap-6">
@@ -1151,7 +1112,7 @@ function PresentationPanel() {
               )}
             </div>
 
-            {plan.presentationReview && <PresentationReviewCard review={plan.presentationReview} />}
+            <PartSections parts={reviewParts} />
 
             <CoachingChat
               messages={plan.conversation.slice(2)}
@@ -1162,36 +1123,14 @@ function PresentationPanel() {
               onSend={handleSendChat}
               placeholder="Ask a follow-up, or ask the coach to revise a slide..."
             />
-            {plan.suggestedRevision && !revisionDismissed && (
-              <div className="rounded-2xl bg-mint-tint/50 p-5">
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">Suggested Revision</p>
-                <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{plan.suggestedRevision}</p>
-                <div className="mt-3 flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleApplyRevision}
-                    disabled={applyingRevision}
-                    className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
-                  >
-                    {applyingRevision ? (
-                      <span className="flex items-center gap-2">
-                        <Spinner /> Applying...
-                      </span>
-                    ) : (
-                      'Use this version'
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRevisionDismissed(true)}
-                    disabled={applyingRevision}
-                    className="text-sm font-medium text-ink-soft hover:text-ink"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-                <WorkingRing active={applyingRevision} estimatedMs={12000} label="Applying the revision" className="mt-3 text-forest" />
-              </div>
+            {showRevision && plan.suggestedRevision && (
+              <SuggestedRevisionCard
+                n={reviewParts.length + 1}
+                text={plan.suggestedRevision}
+                applying={applyingRevision}
+                onApply={handleApplyRevision}
+                onDismiss={() => setRevisionDismissed(true)}
+              />
             )}
 
             <div className="flex items-center justify-between">
@@ -1222,7 +1161,14 @@ function PresentationPanel() {
         )}
       </div>
 
-      <HistoryList title="Saved presentation reviews" loading={historyLoading} plans={savedPlans} />
+      <PastList
+        title="Your presentation reviews"
+        items={allPlans.map(toPastItem)}
+        activeId={plan?.id ?? null}
+        loading={historyLoading}
+        emptyText="Presentations you review will show up here."
+        onOpen={handleOpenPast}
+      />
     </div>
   )
 }
