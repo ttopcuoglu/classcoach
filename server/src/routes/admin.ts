@@ -285,6 +285,61 @@ async function computePriorityTally(
   return tally.toJSON()
 }
 
+// One theme's share of the lessons recorded in a window, for tracked focus
+// areas. The all-time tally above can only grow, so comparing it before and
+// after a focus area started made every one look like it was getting worse
+// — even while teachers improved. A share of the lessons in each window
+// answers the question the admin is actually asking: is this showing up in
+// fewer lessons since we started working on it? Confidence is the number of
+// lessons behind the share.
+type ThemeWindowSnapshot = {
+  count: number
+  teachers: number
+  sessions: number
+  sharePct: number | null
+  confidence: DataConfidence
+}
+
+async function computeThemeWindow(
+  organizationId: string,
+  themeKey: string,
+  from: Date | null,
+  to: Date | null,
+): Promise<ThemeWindowSnapshot> {
+  const sessions = await prisma.audioSession.findMany({
+    where: {
+      status: { in: ['analyzed', 'locked'] },
+      user: { organizationId },
+      sessionDate: { ...(from ? { gte: from } : {}), ...(to ? { lt: to } : {}) },
+    },
+    select: {
+      userId: true,
+      teacherTalkPct: true,
+      studentTalkPct: true,
+      questionCount: true,
+      higherOrderPct: true,
+      avgWaitTimeSec: true,
+      cfuCount: true,
+      durationSec: true,
+      metricsDetail: true,
+    },
+  })
+  const teacherIds = new Set<string>()
+  let count = 0
+  for (const s of sessions) {
+    if (topPriorityForSession(s) !== themeKey) continue
+    count += 1
+    teacherIds.add(s.userId)
+  }
+  return {
+    count,
+    teachers: teacherIds.size,
+    sessions: sessions.length,
+    sharePct: sessions.length > 0 ? Math.round((count / sessions.length) * 100) : null,
+    confidence: dataConfidence(sessions.length),
+  }
+}
+
 // Aggregate, staff-wide numbers only — deliberately no route exists that
 // returns one teacher's individual attempts, responses, or ratings. That's
 // the whole point of the "aggregate trends only" admin visibility choice,
@@ -1218,16 +1273,14 @@ adminRouter.get('/pd-focus-areas', async (req, res) => {
   // independent of whatever ad hoc date range is selected on the Dashboard.
   const themeCounts = await computePriorityTally(organizationId, null, null)
 
-  const items = rows.map((row) => {
-    if (row.status !== 'active') {
-      return { ...row, currentSnapshot: null }
-    }
-    const live = themeCounts[row.themeKey] ?? { count: 0, teachers: 0 }
-    return {
-      ...row,
-      currentSnapshot: { count: live.count, teachers: live.teachers, confidence: dataConfidence(live.count) },
-    }
-  })
+  const items = await Promise.all(
+    rows.map(async (row) => {
+      if (row.status !== 'active') {
+        return { ...row, currentSnapshot: null }
+      }
+      return { ...row, currentSnapshot: await computeThemeWindow(organizationId, row.themeKey, row.createdAt, null) }
+    }),
+  )
 
   res.json({ items, themeCounts })
 })
@@ -1261,8 +1314,8 @@ adminRouter.post('/pd-focus-areas', async (req, res) => {
     return
   }
 
-  const tally = await computePriorityTally(organizationId, null, null)
-  const live = tally[themeKey] ?? { count: 0, teachers: 0 }
+  const startedAt = new Date()
+  const baseline = await computeThemeWindow(organizationId, themeKey, null, startedAt)
 
   const created = await prisma.pdFocusArea.create({
     data: {
@@ -1271,18 +1324,14 @@ adminRouter.post('/pd-focus-areas', async (req, res) => {
       themeKey,
       title: title.trim(),
       suggestedAction: typeof suggestedAction === 'string' && suggestedAction.trim() ? suggestedAction.trim() : null,
-      baselineSnapshot: {
-        count: live.count,
-        teachers: live.teachers,
-        confidence: dataConfidence(live.count),
-        capturedAt: new Date().toISOString(),
-      },
+      baselineSnapshot: { ...baseline, capturedAt: startedAt.toISOString() },
+      createdAt: startedAt,
     },
   })
 
   res.json({
     ...created,
-    currentSnapshot: { count: live.count, teachers: live.teachers, confidence: dataConfidence(live.count) },
+    currentSnapshot: await computeThemeWindow(organizationId, themeKey, startedAt, null),
   })
 })
 
@@ -1310,18 +1359,13 @@ adminRouter.patch('/pd-focus-areas/:id', async (req, res) => {
     return
   }
 
-  const tally = await computePriorityTally(organizationId, null, null)
-  const live = tally[existing.themeKey] ?? { count: 0, teachers: 0 }
-  const finalSnapshot = {
-    count: live.count,
-    teachers: live.teachers,
-    confidence: dataConfidence(live.count),
-    capturedAt: new Date().toISOString(),
-  }
+  const archivedAt = new Date()
+  const final = await computeThemeWindow(organizationId, existing.themeKey, existing.createdAt, archivedAt)
+  const finalSnapshot = { ...final, capturedAt: archivedAt.toISOString() }
 
   const updated = await prisma.pdFocusArea.update({
     where: { id: existing.id },
-    data: { status: 'archived', archivedAt: new Date(), finalSnapshot },
+    data: { status: 'archived', archivedAt, finalSnapshot },
   })
   res.json({ ...updated, currentSnapshot: null })
 })

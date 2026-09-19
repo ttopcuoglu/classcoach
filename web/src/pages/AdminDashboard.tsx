@@ -33,6 +33,7 @@ import {
   type Organization,
   type OrgMember,
   type PdFocusArea,
+  type PdFocusAreaSnapshot,
   type Strength,
   type TallyEntry,
   type UserProfile,
@@ -2493,9 +2494,8 @@ function PdFocusAreaContent({ organizationId }: { organizationId?: string }) {
                   Started {formatShortDate(item.createdAt)}
                   {item.archivedAt ? ` · Archived ${formatShortDate(item.archivedAt)}` : ''}
                   {' · '}
-                  {item.baselineSnapshot.count}× · {item.baselineSnapshot.teachers} teacher
-                  {item.baselineSnapshot.teachers === 1 ? '' : 's'} → {item.finalSnapshot?.count ?? 0}× ·{' '}
-                  {item.finalSnapshot?.teachers ?? 0} teacher{(item.finalSnapshot?.teachers ?? 0) === 1 ? '' : 's'}
+                  {describeSnapshot(item.baselineSnapshot)} →{' '}
+                  {item.finalSnapshot ? describeSnapshot(item.finalSnapshot) : 'no final numbers'}
                 </p>
               </div>
             ))}
@@ -2504,6 +2504,28 @@ function PdFocusAreaContent({ organizationId }: { organizationId?: string }) {
       )}
     </div>
   )
+}
+
+// "In 52% of lessons (13 of 25)" when the snapshot has shares; the old raw
+// count for focus areas started before shares were tracked.
+function describeSnapshot(snapshot: Omit<PdFocusAreaSnapshot, 'capturedAt'>): string {
+  if (snapshot.sessions != null && snapshot.sharePct != null) {
+    return `In ${snapshot.sharePct}% of lessons (${snapshot.count} of ${snapshot.sessions})`
+  }
+  return `${snapshot.count}× · ${snapshot.teachers} teacher${snapshot.teachers === 1 ? '' : 's'}`
+}
+
+// A theme is a need, so a smaller share is the good direction. Silent until
+// both sides have shares and "since" has enough lessons behind it.
+function describeTrend(
+  baseline: Omit<PdFocusAreaSnapshot, 'capturedAt'>,
+  since: Omit<PdFocusAreaSnapshot, 'capturedAt'> | null,
+): { text: string; improving: boolean } | null {
+  if (!since || since.confidence === 'none' || baseline.sharePct == null || since.sharePct == null) return null
+  const change = since.sharePct - baseline.sharePct
+  if (change <= -5) return { text: `Down ${-change} points since you started — it's showing up in fewer lessons.`, improving: true }
+  if (change >= 5) return { text: `Up ${change} points since you started — worth another look at the plan.`, improving: false }
+  return { text: 'About the same so far — give it a few more weeks of lessons.', improving: false }
 }
 
 function FocusAreaCard({
@@ -2516,6 +2538,7 @@ function FocusAreaCard({
   archiving: boolean
 }) {
   const current = item.currentSnapshot
+  const trend = describeTrend(item.baselineSnapshot, current)
   return (
     <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2537,27 +2560,26 @@ function FocusAreaCard({
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">When you started</p>
           <p className="mt-1 flex items-center gap-1.5 text-sm text-ink">
-            <span className="font-semibold">
-              {item.baselineSnapshot.count}× · {item.baselineSnapshot.teachers} teacher
-              {item.baselineSnapshot.teachers === 1 ? '' : 's'}
-            </span>
+            <span className="font-semibold">{describeSnapshot(item.baselineSnapshot)}</span>
             <ConfidenceBadge level={item.baselineSnapshot.confidence} />
           </p>
         </div>
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Now</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Since you started</p>
           {current == null || current.confidence === 'none' ? (
             <p className="mt-1 text-sm text-ink-soft">Not enough evidence yet</p>
           ) : (
             <p className="mt-1 flex items-center gap-1.5 text-sm text-ink">
-              <span className="font-semibold">
-                {current.count}× · {current.teachers} teacher{current.teachers === 1 ? '' : 's'}
-              </span>
+              <span className="font-semibold">{describeSnapshot(current)}</span>
               <ConfidenceBadge level={current.confidence} />
             </p>
           )}
         </div>
       </div>
+
+      {trend && (
+        <p className={`mt-3 text-sm font-semibold ${trend.improving ? 'text-forest' : 'text-ink'}`}>{trend.text}</p>
+      )}
 
       {item.suggestedAction && <p className="mt-3 text-sm text-ink-soft">{item.suggestedAction}</p>}
     </div>

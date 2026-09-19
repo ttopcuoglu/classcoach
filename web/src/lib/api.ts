@@ -246,7 +246,17 @@ export type OrgMember = {
   lastActiveAt: string | null
 }
 
-export type PdFocusAreaSnapshot = { count: number; teachers: number; confidence: DataConfidence; capturedAt?: string }
+// sessions/sharePct: the lessons in the snapshot's window and the share of
+// them flagged with this theme. Missing on focus areas started before shares
+// were tracked — those still show raw counts.
+export type PdFocusAreaSnapshot = {
+  count: number
+  teachers: number
+  confidence: DataConfidence
+  capturedAt?: string
+  sessions?: number
+  sharePct?: number | null
+}
 
 export type PdFocusArea = {
   id: string
