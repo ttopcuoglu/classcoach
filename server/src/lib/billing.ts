@@ -65,7 +65,7 @@ export const LESSON_PLANNING_ACTIONS = [
   'assignment_coach_finalize',
   'assignment_coach_review',
   'assignment_coach_ai_resistant',
-  'assignment_coach_slides',
+  'assignment_coach_export',
   'lesson_plan_delivery_feedback',
   'lesson_plan_presentation_review',
 ]

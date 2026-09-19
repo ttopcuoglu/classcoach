@@ -41,7 +41,7 @@ function addTitleSlide(pptx: PptxGenJS, s: Slide) {
   slide.background = { color: FOREST }
   slide.addShape('ellipse', { x: 9.4, y: -1.6, w: 5.4, h: 5.4, fill: { color: TERRACOTTA } })
   slide.addShape('ellipse', { x: 11.3, y: 4.6, w: 3.2, h: 3.2, fill: { color: TEAL } })
-  slide.addShape('ellipse', { x: -1.3, y: 5.3, w: 3.4, h: 3.4, fill: { color: GOLD } })
+  slide.addShape('ellipse', { x: -1.5, y: 6.0, w: 3.3, h: 3.3, fill: { color: GOLD } })
   slide.addShape('ellipse', { x: 8.2, y: 3.9, w: 1.1, h: 1.1, fill: { color: GOLD, transparency: 25 } })
   if (s.icon) {
     slide.addText(s.icon, { x: 10.0, y: 0.75, w: 2.6, h: 2.4, fontSize: 96, align: 'center', valign: 'middle' })

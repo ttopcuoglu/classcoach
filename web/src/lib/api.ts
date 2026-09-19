@@ -1344,14 +1344,41 @@ export function reviseAssignmentCoach(id: string): Promise<AssignmentCoachSessio
   return request(`/api/assignment-coach/${id}/revise`, { method: 'POST' })
 }
 
-// Returns a .pptx (opens in PowerPoint and Google Slides) built from `text`
-// when given — what's on screen — otherwise from the session's stored text.
-export async function downloadAssignmentSlides(id: string, text?: string): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/api/assignment-coach/${id}/slides`, {
+export type ExportDocBlock =
+  | { type: 'heading'; text: string }
+  | { type: 'paragraph'; text: string }
+  | { type: 'bullets'; items: string[] }
+  | { type: 'numbered'; items: string[] }
+  | { type: 'callout'; label: string; text: string }
+export type ExportDoc = { title: string; subtitle: string | null; blocks: ExportDocBlock[] }
+
+export type ExportSlideLayout = 'title' | 'cards' | 'split' | 'keyterm' | 'prompt'
+export type ExportSlide = {
+  title: string
+  bullets: string[]
+  notes: string | null
+  layout: ExportSlideLayout
+  icon: string | null
+}
+
+export type ExportKind = 'document' | 'slides'
+export type ExportFormat = 'docx' | 'pdf' | 'pptx'
+
+// Step 1: Claude lays `text` out as a document or slide deck to preview.
+export function getExportPreview(id: string, kind: 'document', text: string): Promise<{ kind: 'document'; model: ExportDoc }>
+export function getExportPreview(id: string, kind: 'slides', text: string): Promise<{ kind: 'slides'; model: ExportSlide[] }>
+export function getExportPreview(id: string, kind: ExportKind, text: string) {
+  return request(`/api/assignment-coach/${id}/export-preview`, { method: 'POST', body: JSON.stringify({ kind, text }) })
+}
+
+// Step 2: render the previewed model to a real file and save it. No Claude
+// call, so downloading several formats from one preview is free.
+export async function downloadExportFile(format: ExportFormat, model: ExportDoc | ExportSlide[]): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/assignment-coach/export-file`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ format, model }),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => null)
@@ -1360,7 +1387,7 @@ export async function downloadAssignmentSlides(id: string, text?: string): Promi
   const url = URL.createObjectURL(await res.blob())
   const link = document.createElement('a')
   link.href = url
-  link.download = 'wivoza-slides.pptx'
+  link.download = format === 'pptx' ? 'wivoza-slides.pptx' : `wivoza-assignment.${format}`
   document.body.appendChild(link)
   link.click()
   link.remove()

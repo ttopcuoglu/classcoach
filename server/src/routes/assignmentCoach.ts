@@ -10,7 +10,10 @@ import { checkFeatureAccess, countUsageLogActionsThisMonth, LESSON_PLANNING_ACTI
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { extractTag } from '../lib/extractTag.ts'
-import { buildPptx, SLIDE_LAYOUTS, type Slide, type SlideLayout } from '../lib/slidesPptx.ts'
+import { buildDocx } from '../lib/docxBuilder.ts'
+import { parseDocOutput, parseSlidesOutput, sanitizeDocModel, sanitizeSlides } from '../lib/exportModels.ts'
+import { buildPdf } from '../lib/pdfBuilder.ts'
+import { buildPptx } from '../lib/slidesPptx.ts'
 import { prisma } from '../lib/prisma.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
@@ -97,7 +100,7 @@ const DIAGRAM_SYNTAX_INSTRUCTIONS = `When a visual model would genuinely help (a
 [[diagram:number_line|start=S|end=E|points=v1,v2,...|labels=l1,l2,...]] — a number line from S to E, points as decimals (e.g. 0.25 for 1/4), each labeled with the matching entry in labels (e.g. "1/4").
 Use these only where a visual genuinely clarifies the task, not on every line.`
 
-const ASSIGNMENT_FINALIZE_SYSTEM_PROMPT = `You are Coach, wrapping up a conversation about an assignment with a teacher. Produce the final assignment text based on everything actually discussed — never introduce a new idea that wasn't part of the conversation. Start from the current assignment given below and return the COMPLETE revised assignment (every section, slide, or question, with the discussed changes applied) — never a summary or an excerpt of it.
+const ASSIGNMENT_FINALIZE_SYSTEM_PROMPT = `You are Coach, wrapping up a conversation about an assignment with a teacher. Produce the final assignment text based on everything actually discussed — never introduce a new idea that wasn't part of the conversation. Start from the current assignment given below and return the COMPLETE revised assignment (every section, slide, or question, with the discussed changes applied) — never a summary or an excerpt of it. Keep the original's structure exactly: the same sections, slides, questions, headings, order, and formatting, and its own wording wherever it isn't being changed. Make the smallest set of edits that accomplishes what was discussed — never rewrite, reorder, merge, drop, or reformat parts that didn't need to change, and only add new content where the change genuinely requires it.
 
 ${DIAGRAM_SYNTAX_INSTRUCTIONS}
 
@@ -243,7 +246,7 @@ The specific parts of the ORIGINAL assignment a student could complete by pastin
 A short, plain-language, copy-ready statement for students covering: what AI use is allowed, what's limited, what's prohibited, what they must disclose, and what evidence of their own thinking they must provide.
 </guidelines>
 <revised_assignment>
-The full redesigned assignment text, ready for a student to read.
+The COMPLETE original assignment with only the edits needed to add the safeguards, ready for a student to read. Keep the original's structure exactly: the same sections, slides, questions, headings, order, and formatting, and its own wording wherever it isn't being changed. Make the smallest set of edits that accomplishes what was discussed — never rewrite, reorder, merge, drop, or reformat parts that didn't need to change, and only add new content where the change genuinely requires it.
 </revised_assignment>`
 }
 
@@ -882,9 +885,9 @@ assignmentCoachRouter.post('/:id/ai-resistant', async (req, res) => {
 // from "Improve specific areas," which stays a chat message). Reuses the
 // same finalize mechanism the workspace already relies on: summarize the
 // full conversation so far into one rewritten assignment.
-const SLIDES_SYSTEM_PROMPT = `You turn a teacher's assignment or presentation text into a vivid, modern, student-facing slide deck that will be projected in a classroom.
+const SLIDES_SYSTEM_PROMPT = `You lay out a teacher's assignment or presentation as a vivid, modern, student-facing slide deck that will be projected in a classroom.
 
-Keep the teacher's own content and wording — never invent facts, questions, or activities that aren't in the text. One idea per slide, 2-5 short bullets each, titles under 8 words. Split long sections across slides rather than crowding one. Fill-in-the-blank lines can stay as blanks ("I am ______"). Skip any [[diagram:...]] directives. Add a brief teacher speaker note only where it genuinely helps (e.g. "pause here for turn-and-talk"); otherwise leave notes empty. At most 25 slides.
+This is formatting only — PRESERVE the original's structure and content. If the text is already a presentation, produce exactly one slide per original slide, in the same order (use blank lines and topic changes to find the slide boundaries) — never merge, reorder, drop, or add slides. If it is a worksheet or other document, follow its own sections in order, splitting a section across slides only when it genuinely cannot fit on one. Keep the teacher's own wording and every question, instruction, and blank ("I am ______"); do not rewrite or invent content. Titles under 8 words (use the original heading where there is one). Skip any [[diagram:...]] directives. Add a brief teacher speaker note only where it genuinely helps; otherwise leave notes empty. At most 25 slides.
 
 Make it visual and varied. Give EVERY slide one <icon>: a single emoji that fits the topic (for young students, friendly and concrete). Give EVERY slide a <layout>, chosen like this:
 - title — only for the first slide.
@@ -905,6 +908,31 @@ Plain text only, no markdown. Respond with exactly this structure and nothing el
 </bullets>
 <notes>Optional speaker note</notes>
 </slide>
+${CORE_COACHING_RULES}`
+
+const DOC_SYSTEM_PROMPT = `You lay out a teacher's assignment as a polished, student-ready document that will be exported to Word and PDF.
+
+This is formatting only — PRESERVE the original: keep every section, question, instruction, and blank ("____") in the same order and in the teacher's own wording. Never add, drop, merge, reorder, or rewrite content, and do not invent a cover page, extra instructions, or an answer key. Skip any [[diagram:...]] directives.
+
+Structure it with these block types:
+- heading: a section title that already exists in the original (or its clearest existing label).
+- paragraph: ordinary text and instructions; keep line breaks that matter (like sentence frames with blanks) inside one paragraph.
+- bullets or numbered: lists that are already lists in the original, one item per line.
+- callout: for objectives, learning targets, vocabulary or word banks, turn-and-talk or discussion prompts, tips, and reminders — give it a short label such as "Objective" or "Word bank". Use callouts for roughly a fifth of the blocks, not everything.
+The title is the assignment's own title (or a short 2-6 word name if it has none). The subtitle is optional (for example grade and subject).
+
+Plain text only, no markdown. Respond with exactly this structure and nothing else:
+<title>Title</title>
+<subtitle>Optional subtitle</subtitle>
+<block type="heading">Section title</block>
+<block type="paragraph">Text</block>
+<block type="bullets">
+- Item
+</block>
+<block type="numbered">
+- Item
+</block>
+<block type="callout" label="Objective">Text</block>
 ${CORE_COACHING_RULES}`
 
 assignmentCoachRouter.post('/:id/revise', async (req, res) => {
@@ -965,15 +993,20 @@ assignmentCoachRouter.post('/:id/revise', async (req, res) => {
   }
 })
 
-// Turns whatever is currently in the live assignment (original, revised, or
-// AI-redesigned) into a downloadable .pptx — Google Slides opens .pptx
-// directly, so one file format covers both PowerPoint and Slides.
-assignmentCoachRouter.post('/:id/slides', async (req, res) => {
+// Step 1 of exporting: Claude lays the assignment out as a structured
+// document or slide deck, which the client previews before any file is made.
+assignmentCoachRouter.post('/:id/export-preview', async (req, res) => {
   const session = await prisma.assignmentCoachSession.findFirst({
     where: { id: req.params.id, userId: req.user!.userId },
   })
   if (!session) {
     res.status(404).json({ error: 'Assignment Coach session not found' })
+    return
+  }
+
+  const kind = req.body?.kind
+  if (kind !== 'document' && kind !== 'slides') {
+    res.status(400).json({ error: 'kind must be "document" or "slides".' })
     return
   }
 
@@ -983,11 +1016,11 @@ assignmentCoachRouter.post('/:id/slides', async (req, res) => {
   const override = typeof req.body?.text === 'string' ? req.body.text.trim().slice(0, 60000) : ''
   const content = override || (session.liveAssignmentText ?? session.originalText ?? '').trim()
   if (!content) {
-    res.status(400).json({ error: 'There is no assignment text to turn into slides yet.' })
+    res.status(400).json({ error: 'There is no assignment text to export yet.' })
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'assignment_coach_slides')
+  const allowed = await checkAndLogUsage(req.user!.userId, 'assignment_coach_export')
   if (!allowed) {
     res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
     return
@@ -998,7 +1031,7 @@ assignmentCoachRouter.post('/:id/slides', async (req, res) => {
       model: CLAUDE_MODEL,
       max_tokens: 8192,
       thinking: { type: 'disabled' },
-      system: SLIDES_SYSTEM_PROMPT,
+      system: kind === 'slides' ? SLIDES_SYSTEM_PROMPT : DOC_SYSTEM_PROMPT,
       messages: [{ role: 'user', content }],
     })
     const text = response.content
@@ -1006,41 +1039,56 @@ assignmentCoachRouter.post('/:id/slides', async (req, res) => {
       .map((block) => block.text)
       .join('\n')
 
-    const slides: Slide[] = []
-    for (const match of text.matchAll(/<slide>([\s\S]*?)<\/slide>/g)) {
-      const block = match[1]
-      const title = extractTag(block, 'title')
-      if (!title) continue
-      const bullets = (extractTag(block, 'bullets') ?? '')
-        .split('\n')
-        .map((line) => line.replace(/^\s*[-•*]\s*/, '').trim())
-        .filter(Boolean)
-      const rawLayout = (extractTag(block, 'layout') ?? '').trim().toLowerCase()
-      const layout = (SLIDE_LAYOUTS as readonly string[]).includes(rawLayout) ? (rawLayout as SlideLayout) : 'cards'
-      const icon = (extractTag(block, 'icon') ?? '').trim()
-      slides.push({
-        title,
-        bullets,
-        notes: extractTag(block, 'notes') || null,
-        layout,
-        // An emoji is a few code units at most; anything longer is Claude
-        // writing a word instead of an icon, so drop it.
-        icon: icon && [...icon].length <= 6 ? icon : null,
-      })
-    }
-    if (slides.length === 0) {
-      res.status(502).json({ error: 'Could not build slides. Please try again.' })
+    const model = kind === 'slides' ? parseSlidesOutput(text) : parseDocOutput(text)
+    if (!model) {
+      res.status(502).json({ error: 'Could not lay this out. Please try again.' })
       return
     }
+    res.json({ kind, model })
+  } catch (error) {
+    console.error('[assignment-coach] export preview failed:', error)
+    res.status(502).json({ error: 'Could not lay this out. Please try again.' })
+  }
+})
 
-    slides[0].layout = 'title'
-    const buffer = await buildPptx(session.title ?? slides[0].title, slides)
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation')
-    res.setHeader('Content-Disposition', 'attachment; filename="wivoza-slides.pptx"')
+// Step 2: render the previewed model to a real file. No Claude call — the
+// model comes back from the client (and is re-validated), so downloading
+// several formats from one preview costs nothing extra.
+const EXPORT_FILES = {
+  docx: { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', name: 'wivoza-assignment.docx' },
+  pdf: { type: 'application/pdf', name: 'wivoza-assignment.pdf' },
+  pptx: { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', name: 'wivoza-slides.pptx' },
+} as const
+
+assignmentCoachRouter.post('/export-file', async (req, res) => {
+  const format = req.body?.format as keyof typeof EXPORT_FILES
+  if (!(format in EXPORT_FILES)) {
+    res.status(400).json({ error: 'format must be "docx", "pdf", or "pptx".' })
+    return
+  }
+  try {
+    let buffer: Buffer
+    if (format === 'pptx') {
+      const slides = sanitizeSlides(req.body?.model)
+      if (!slides) {
+        res.status(400).json({ error: 'That slide deck is not valid.' })
+        return
+      }
+      buffer = await buildPptx(slides[0].title, slides)
+    } else {
+      const doc = sanitizeDocModel(req.body?.model)
+      if (!doc) {
+        res.status(400).json({ error: 'That document is not valid.' })
+        return
+      }
+      buffer = format === 'docx' ? await buildDocx(doc) : await buildPdf(doc)
+    }
+    res.setHeader('Content-Type', EXPORT_FILES[format].type)
+    res.setHeader('Content-Disposition', `attachment; filename="${EXPORT_FILES[format].name}"`)
     res.send(buffer)
   } catch (error) {
-    console.error('[assignment-coach] slides failed:', error)
-    res.status(502).json({ error: 'Could not build slides. Please try again.' })
+    console.error('[assignment-coach] export file failed:', error)
+    res.status(500).json({ error: 'Could not build that file. Please try again.' })
   }
 })
 

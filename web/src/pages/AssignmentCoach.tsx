@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AssignmentContent } from '../components/AssignmentDiagram'
+import ExportModal from '../components/ExportModal'
 import AnswerSection, { NumberedCard } from '../components/AnswerSection'
 import CoachingChat from '../components/CoachingChat'
 import {
@@ -31,7 +32,6 @@ import {
   refineAssignmentCoach,
   reviewAssignmentCoach,
   reviseAssignmentCoach,
-  downloadAssignmentSlides,
   runAiResistant,
   sendAssignmentCoachChat,
   startAssignmentCoach,
@@ -1335,9 +1335,8 @@ function Workspace({
   const [aiResistError, setAiResistError] = useState<string | null>(null)
 
   const [revising, setRevising] = useState(false)
-  const [buildingSlides, setBuildingSlides] = useState(false)
+  const [exportText, setExportText] = useState<string | null>(null)
   const [editingRevision, setEditingRevision] = useState(false)
-  const [slidesError, setSlidesError] = useState<string | null>(null)
   const [reviseError, setReviseError] = useState<string | null>(null)
 
   const [refining, setRefining] = useState(false)
@@ -1503,19 +1502,6 @@ function Workspace({
     await navigator.clipboard.writeText(text).catch(() => {})
   }
 
-  async function handleDownloadSlides(source: string) {
-    if (buildingSlides || !source.trim()) return
-    setBuildingSlides(true)
-    setSlidesError(null)
-    try {
-      await downloadAssignmentSlides(session.id, source)
-    } catch (err) {
-      setSlidesError((err as Error).message || 'Could not build slides. Please try again.')
-    } finally {
-      setBuildingSlides(false)
-    }
-  }
-
   async function handleCopyValue(value: string) {
     await navigator.clipboard.writeText(value).catch(() => {})
   }
@@ -1564,11 +1550,11 @@ function Workspace({
           </button>
           <button
             type="button"
-            onClick={() => handleDownloadSlides(text)}
-            disabled={!text.trim() || buildingSlides}
+            onClick={() => setExportText(text)}
+            disabled={!text.trim()}
             className="text-sm font-medium text-ink-soft hover:text-forest disabled:opacity-50"
           >
-            {buildingSlides ? 'Building slides…' : 'Download slides'}
+            Preview &amp; export
           </button>
           <button
             type="button"
@@ -1582,8 +1568,6 @@ function Workspace({
           </button>
         </div>
       </div>
-
-      {slidesError && <p className="text-sm text-terracotta-600">{slidesError}</p>}
 
       {!(!isRedesign && session.reviewSnapshot) && (
         <div className="flex flex-wrap gap-2">
@@ -1725,11 +1709,10 @@ function Workspace({
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDownloadSlides(session.aiResistant?.revisedAssignment ?? '')}
-                          disabled={buildingSlides}
-                          className="text-xs font-semibold text-ink-soft hover:text-forest disabled:opacity-50"
+                          onClick={() => setExportText(session.aiResistant?.revisedAssignment ?? '')}
+                          className="rounded-lg border border-forest/40 bg-mint-tint px-4 py-2 text-xs font-semibold text-forest transition-colors hover:bg-mint-tint/70"
                         >
-                          {buildingSlides ? 'Building slides…' : 'Download as slides (.pptx)'}
+                          Preview &amp; export (.docx, .pdf, .pptx)
                         </button>
                         <button
                           type="button"
@@ -1919,11 +1902,10 @@ function Workspace({
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => handleDownloadSlides(text)}
-                  disabled={buildingSlides}
-                  className="rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+                  onClick={() => setExportText(text)}
+                  className="rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-cream transition-opacity hover:opacity-90"
                 >
-                  {buildingSlides ? 'Building slides…' : 'Download as slides (.pptx)'}
+                  Preview &amp; export (.docx, .pdf, .pptx)
                 </button>
                 <button type="button" onClick={handleCopy} className="text-xs font-semibold text-ink-soft hover:text-forest">
                   Copy revised assignment
@@ -1952,6 +1934,7 @@ function Workspace({
           />
         </div>
       </div>
+      {exportText && <ExportModal sessionId={session.id} text={exportText} onClose={() => setExportText(null)} />}
     </div>
   )
 }
