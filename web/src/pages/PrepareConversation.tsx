@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { PanelHeader } from '../components/PanelHeader'
 import { Link, useNavigate } from 'react-router-dom'
+import AnswerSection from '../components/AnswerSection'
 import CoachingChat from '../components/CoachingChat'
+import PastList from '../components/PastList'
+import { usePastItems } from '../hooks/usePastItems'
 import { StarIcon } from '../components/icons'
 import { Spinner } from '../components/Spinner'
 import { UpgradeMessage } from '../components/UpgradeMessage'
@@ -20,38 +23,30 @@ import {
 import { setPracticePrefill, setWritePrefill, takePreparePrefill } from '../lib/communicationsPrefill'
 import {
   extractAssignmentText,
+  getConversationPlans,
   sendConversationPlanChat,
   setConversationPlanSaved,
   submitConversationPlan,
   type ConversationPlan,
+  type ConversationPlanContent,
 } from '../lib/api'
 
-const PLAN_SECTIONS_BEFORE_MODEL: { key: keyof NonNullable<ConversationPlan['planContent']>; label: string }[] = [
-  { key: 'agenda', label: 'Suggested meeting agenda' },
-  { key: 'opening', label: 'Suggested opening' },
-  { key: 'mainConcern', label: 'Key talking points' },
-  { key: 'facts', label: 'Important facts to present' },
-  { key: 'questions', label: 'Questions to ask' },
-  { key: 'reactions', label: 'Possible reactions' },
-  { key: 'recommendedResponses', label: 'How to respond' },
-  { key: 'phrasesToAvoid', label: 'Language to avoid' },
-  { key: 'boundaries', label: 'Boundaries to maintain' },
-  { key: 'closing', label: 'Suggested closing' },
+// The plan's sections in the order a meeting runs, each with what it's for.
+const PLAN_SECTIONS: { key: keyof ConversationPlanContent; title: string; subtitle: string }[] = [
+  { key: 'agenda', title: 'Suggested meeting agenda', subtitle: 'The order to take things in' },
+  { key: 'opening', title: 'Suggested opening', subtitle: 'How to start on common ground' },
+  { key: 'mainConcern', title: 'Key talking points', subtitle: 'What you need to get across' },
+  { key: 'facts', title: 'Important facts to present', subtitle: 'What to have in front of you, stated plainly' },
+  { key: 'questions', title: 'Questions to ask', subtitle: 'To understand their side before deciding anything' },
+  { key: 'reactions', title: 'Possible reactions', subtitle: 'What they might say or feel' },
+  { key: 'recommendedResponses', title: 'How to respond', subtitle: 'Calm answers to those reactions' },
+  { key: 'phrasesToAvoid', title: 'Language to avoid', subtitle: 'Words that tend to raise the temperature' },
+  { key: 'boundaries', title: 'Boundaries to maintain', subtitle: 'What stays off the table, kindly and firmly' },
+  { key: 'closing', title: 'Suggested closing', subtitle: 'How to end on a clear, shared next step' },
+  { key: 'modelResponse', title: 'A model response', subtitle: 'One way the hardest moment could sound' },
+  { key: 'nextSteps', title: 'Next steps', subtitle: 'What happens after the meeting' },
+  { key: 'adminInvolvement', title: 'When to involve an administrator', subtitle: "Signs it's time to bring someone in" },
 ]
-
-const PLAN_SECTIONS_AFTER_MODEL: { key: keyof NonNullable<ConversationPlan['planContent']>; label: string }[] = [
-  { key: 'nextSteps', label: 'Next steps' },
-  { key: 'adminInvolvement', label: 'When to involve an administrator' },
-]
-
-function PlanSectionCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl bg-mint-tint/40 p-5 print:border print:border-ink/20">
-      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">{label}</p>
-      <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{value}</p>
-    </div>
-  )
-}
 
 export default function PrepareConversation() {
   const navigate = useNavigate()
@@ -169,6 +164,19 @@ export default function PrepareConversation() {
       situationText: plan.situationText,
     })
     navigate('/communications?tool=practice')
+  }
+
+  const past = usePastItems(getConversationPlans, plan)
+
+  // Reopens an earlier meeting plan in full, follow-up conversation included.
+  function handleOpenPast(id: string) {
+    const earlier = past.items.find((p) => p.id === id)
+    if (!earlier) return
+    setPlan(earlier)
+    setError(null)
+    setChatDraft('')
+    setChatError(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function handleNewPlan() {
@@ -389,26 +397,13 @@ export default function PrepareConversation() {
             </div>
 
             <div className="grid gap-3">
-              {plan.planContent &&
-                PLAN_SECTIONS_BEFORE_MODEL.map(({ key, label }) => {
-                  const value = plan.planContent?.[key]
-                  if (!value) return null
-                  return <PlanSectionCard key={key} label={label} value={value} />
-                })}
-
-              {plan.planContent?.modelResponse && (
-                <div className="rounded-2xl bg-mint-tint/50 p-5 print:border-ink/20">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">A model response</p>
-                  <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{plan.planContent.modelResponse}</p>
-                </div>
-              )}
-
-              {plan.planContent &&
-                PLAN_SECTIONS_AFTER_MODEL.map(({ key, label }) => {
-                  const value = plan.planContent?.[key]
-                  if (!value) return null
-                  return <PlanSectionCard key={key} label={label} value={value} />
-                })}
+              {PLAN_SECTIONS.map((section) => ({ ...section, body: plan.planContent?.[section.key] }))
+                .filter((section): section is typeof section & { body: string } => !!section.body)
+                .map((section, i) => (
+                  <AnswerSection key={section.key} n={i + 1} title={section.title} subtitle={section.subtitle}>
+                    {section.body}
+                  </AnswerSection>
+                ))}
             </div>
 
             <div className="print:hidden">
@@ -461,6 +456,23 @@ export default function PrepareConversation() {
             <UpgradeMessage text={error} />
           </p>
         )}
+      </div>
+
+      <div className="print:hidden">
+        <PastList
+          title="Your meeting plans"
+          items={past.items.map((p) => ({
+            id: p.id,
+            createdAt: p.createdAt,
+            label: meetingTypeLabel(p.meetingType) || null,
+            text: p.title || p.situationText,
+            saved: p.saved,
+          }))}
+          activeId={plan?.id ?? null}
+          loading={past.loading}
+          emptyText="Meetings you prepare for will show up here."
+          onOpen={handleOpenPast}
+        />
       </div>
     </div>
   )

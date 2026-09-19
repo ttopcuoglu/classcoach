@@ -1215,9 +1215,12 @@ export function getSharedConversationPrep(token: string): Promise<SharedConversa
   return request(`/api/share/conversation-prep/${token}`)
 }
 
-export function getConversationPreps(params?: { saved?: boolean }): Promise<ConversationPrep[]> {
-  const query = params?.saved ? '?saved=true' : ''
-  return request(`/api/conversation-prep${query}`)
+export function getConversationPreps(params?: { saved?: boolean; source?: ConversationPrepSource }): Promise<ConversationPrep[]> {
+  const query = new URLSearchParams()
+  if (params?.saved) query.set('saved', 'true')
+  if (params?.source) query.set('source', params.source)
+  const qs = query.toString()
+  return request(`/api/conversation-prep${qs ? `?${qs}` : ''}`)
 }
 
 export type SubmitConversationPrepInput = {

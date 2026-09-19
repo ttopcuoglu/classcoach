@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { PanelHeader } from '../components/PanelHeader'
 import { Link } from 'react-router-dom'
+import AnswerSection, { NumberedCard } from '../components/AnswerSection'
 import CoachingChat from '../components/CoachingChat'
+import PastList from '../components/PastList'
+import { usePastItems } from '../hooks/usePastItems'
 import ShareButton from '../components/ShareButton'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import { StarIcon } from '../components/icons'
@@ -11,6 +14,7 @@ import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { REVIEW_MODES, type ReviewMode } from '../lib/communicationOptions'
 import { takeReviewPrefill } from '../lib/communicationsPrefill'
 import {
+  getConversationPreps,
   sendConversationPrepChat,
   setConversationPrepSaved,
   shareConversationPrep,
@@ -39,6 +43,19 @@ export default function ReviewCommunication() {
   const [chatError, setChatError] = useState<string | null>(null)
 
   const canSubmit = situationText.trim().length > 0 && responseText.trim().length > 0 && !submitting
+
+  const past = usePastItems(() => getConversationPreps({ source: 'review' }), prep)
+
+  // Reopens an earlier review in full, follow-up conversation included.
+  function handleOpenPast(id: string) {
+    const review = past.items.find((p) => p.id === id)
+    if (!review) return
+    setPrep(review)
+    setError(null)
+    setChatDraft('')
+    setChatError(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   async function handleSubmit() {
     if (!canSubmit) return
@@ -177,26 +194,31 @@ export default function ReviewCommunication() {
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            <div>
+            <NumberedCard n={1} title="What you shared" subtitle="The message you received, and what you plan to send back">
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Message received</p>
-              <p className="mt-1 text-sm text-ink">{prep.situationText}</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{prep.situationText}</p>
               <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Your planned response</p>
-              <p className="mt-1 text-sm text-ink">{prep.responseText}</p>
-            </div>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{prep.responseText}</p>
+            </NumberedCard>
 
-            {prep.feedback && (
-              <div className="rounded-2xl bg-peach-tint/50 p-5">
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Coaching</p>
-                <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{prep.feedback}</p>
-              </div>
-            )}
-
-            {prep.modelResponse && (
-              <div className="rounded-2xl bg-mint-tint/50 p-5">
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">Revised response</p>
-                <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{prep.modelResponse}</p>
-              </div>
-            )}
+            {[
+              prep.feedback && {
+                title: 'Coaching',
+                subtitle: "How your response is likely to land, and what to change",
+                body: prep.feedback,
+              },
+              prep.modelResponse && {
+                title: 'Revised response',
+                subtitle: 'Your response with those changes made — ready to adapt and send',
+                body: prep.modelResponse,
+              },
+            ]
+              .filter((part): part is { title: string; subtitle: string; body: string } => !!part)
+              .map((part, i) => (
+                <AnswerSection key={part.title} n={i + 2} title={part.title} subtitle={part.subtitle}>
+                  {part.body}
+                </AnswerSection>
+              ))}
 
             <div className="flex flex-wrap gap-2">
               {QUICK_ACTIONS.map((action) => (
@@ -258,6 +280,21 @@ export default function ReviewCommunication() {
           </p>
         )}
       </div>
+
+      <PastList
+        title="Your reviews"
+        items={past.items.map((p) => ({
+          id: p.id,
+          createdAt: p.createdAt,
+          label: null,
+          text: p.title || p.situationText,
+          saved: p.saved,
+        }))}
+        activeId={prep?.id ?? null}
+        loading={past.loading}
+        emptyText="Communications you review will show up here."
+        onOpen={handleOpenPast}
+      />
     </div>
   )
 }

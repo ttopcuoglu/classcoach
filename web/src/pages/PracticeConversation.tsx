@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { PanelHeader } from '../components/PanelHeader'
 import { Link } from 'react-router-dom'
-import { MicIcon } from '../components/icons'
+import AnswerSection, { NumberedCard } from '../components/AnswerSection'
+import { MicIcon, StarIcon } from '../components/icons'
+import PastList from '../components/PastList'
+import { usePastItems } from '../hooks/usePastItems'
 import SafetyAdvisoryBanner, { PrivacyReminder } from '../components/SafetyAdvisoryBanner'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import { ProgressRing, WorkingRing } from '../components/ProgressRing'
@@ -9,6 +12,7 @@ import { useSpeechToText } from '../hooks/useSpeechToText'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import {
   CHALLENGE_TYPES,
+  challengeLabel,
   CONVERSATION_DIFFICULTY_LEVELS,
   RECIPIENT_TYPES,
   type ChallengeType,
@@ -17,7 +21,13 @@ import {
 } from '../lib/communicationOptions'
 import { GRADE_BANDS, type GradeBand } from '../lib/gradeBands'
 import { takePracticePrefill } from '../lib/communicationsPrefill'
-import { generateConversationScenario, submitConversationPrep, type ConversationPrep } from '../lib/api'
+import {
+  generateConversationScenario,
+  getConversationPreps,
+  setConversationPrepSaved,
+  submitConversationPrep,
+  type ConversationPrep,
+} from '../lib/api'
 
 const RATING_STYLES: Record<string, string> = {
   strong: 'bg-mint-tint/60 text-forest',
@@ -32,7 +42,7 @@ function RatingPill({ rating }: { rating: string }) {
 
 function ReportDimension({ label, rating, feedback }: { label: string; rating: string; feedback: string }) {
   return (
-    <div className="rounded-2xl bg-gold-tint/40 p-5">
+    <div className="rounded-xl bg-cream-card p-4">
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">{label}</p>
         <RatingPill rating={rating} />
@@ -113,6 +123,28 @@ export default function PracticeConversation() {
       setError(e instanceof Error ? e.message : 'Could not get coaching feedback. Please try again.')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const past = usePastItems(() => getConversationPreps({ source: 'practice' }), prep)
+
+  // Reopens an earlier practice with its full coaching report.
+  function handleOpenPast(id: string) {
+    const attempt = past.items.find((p) => p.id === id)
+    if (!attempt) return
+    setPrep(attempt)
+    setError(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  async function handleToggleSaved() {
+    if (!prep) return
+    const nextSaved = !prep.saved
+    setPrep((p) => (p ? { ...p, saved: nextSaved } : p))
+    try {
+      await setConversationPrepSaved(prep.id, nextSaved)
+    } catch {
+      setPrep((p) => (p ? { ...p, saved: !nextSaved } : p))
     }
   }
 
@@ -325,13 +357,14 @@ export default function PracticeConversation() {
           </div>
         ) : report ? (
           <div className="flex flex-col gap-4">
-            <div>
+            <NumberedCard n={1} title="What you practiced" subtitle="The situation, and what you said">
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Situation</p>
-              <p className="mt-1 text-sm text-ink">{prep.situationText}</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{prep.situationText}</p>
               <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Your response</p>
-              <p className="mt-1 text-sm text-ink">{prep.responseText}</p>
-            </div>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{prep.responseText}</p>
+            </NumberedCard>
 
+            <NumberedCard n={2} title="How it went" subtitle="Six parts of a hard conversation, with a note on each">
             <div className="grid gap-3 sm:grid-cols-2">
               <ReportDimension label="Clarity" rating={report.clarity.rating} feedback={report.clarity.feedback} />
               <ReportDimension label="Empathy" rating={report.empathy.rating} feedback={report.empathy.feedback} />
@@ -352,43 +385,49 @@ export default function PracticeConversation() {
                 feedback={report.resolution.feedback}
               />
             </div>
+            </NumberedCard>
 
-            <div className="rounded-2xl bg-peach-tint/50 p-5">
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">What you did well</p>
-              <p className="mt-1.5 text-sm text-ink">{report.didWell}</p>
-            </div>
-            <div className="rounded-2xl bg-mint-tint/50 p-5">
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">Priority for improvement</p>
-              <p className="mt-1.5 text-sm text-ink">{report.priority}</p>
-            </div>
-            <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">A stronger phrase</p>
-              <p className="mt-1.5 text-sm text-ink">{report.strongerPhrase}</p>
-            </div>
-            {report.modelResponse && (
-              <div className="rounded-2xl bg-mint-tint/50 p-5">
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">A model response</p>
-                <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{report.modelResponse}</p>
+            {[
+              { title: 'What you did well', subtitle: 'Keep doing this in the real conversation', body: report.didWell },
+              { title: 'Priority for improvement', subtitle: 'The one change that would help most', body: report.priority },
+              { title: 'A stronger phrase', subtitle: 'Words to borrow for the moment that matters', body: report.strongerPhrase },
+              { title: 'A model response', subtitle: 'One way the whole response could sound', body: report.modelResponse },
+              { title: 'Suggested next step', subtitle: 'What to practice or do next', body: report.nextStep },
+            ]
+              .filter((part): part is { title: string; subtitle: string; body: string } => !!part.body)
+              .map((part, i) => (
+                <AnswerSection key={part.title} n={i + 3} title={part.title} subtitle={part.subtitle}>
+                  {part.body}
+                </AnswerSection>
+              ))}
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={handleToggleSaved}
+                  className={`flex items-center gap-1.5 text-sm font-medium ${
+                    prep.saved ? 'text-terracotta-600' : 'text-ink-soft hover:text-terracotta-600'
+                  }`}
+                >
+                  <StarIcon className="h-4 w-4" filled={prep.saved} />
+                  {prep.saved ? 'Saved' : 'Save for later'}
+                </button>
+                <Link
+                  to={`/communications/practice/${prep.id}/export`}
+                  className="text-sm font-medium text-ink-soft transition-colors hover:text-terracotta-600"
+                >
+                  Export / Print
+                </Link>
               </div>
-            )}
-            <div className="rounded-2xl bg-peach-tint/30 p-5">
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Suggested next step</p>
-              <p className="mt-1.5 text-sm text-ink">{report.nextStep}</p>
+              <button
+                type="button"
+                onClick={handlePracticeAgain}
+                className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90"
+              >
+                Practice Again
+              </button>
             </div>
-
-            <button
-              type="button"
-              onClick={handlePracticeAgain}
-              className="self-end rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90"
-            >
-              Practice Again
-            </button>
-            <Link
-              to={`/communications/practice/${prep.id}/export`}
-              className="text-sm font-medium text-ink-soft transition-colors hover:text-terracotta-600"
-            >
-              Export / Print
-            </Link>
           </div>
         ) : null}
         {error && (
@@ -397,6 +436,21 @@ export default function PracticeConversation() {
           </p>
         )}
       </div>
+
+      <PastList
+        title="Your practice conversations"
+        items={past.items.map((p) => ({
+          id: p.id,
+          createdAt: p.createdAt,
+          label: challengeLabel(p.category) || null,
+          text: p.title || p.situationText,
+          saved: p.saved,
+        }))}
+        activeId={prep?.id ?? null}
+        loading={past.loading}
+        emptyText="Conversations you practice will show up here."
+        onOpen={handleOpenPast}
+      />
     </div>
   )
 }

@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { PanelHeader } from '../components/PanelHeader'
 import { Link } from 'react-router-dom'
+import AnswerSection, { NumberedCard } from '../components/AnswerSection'
 import CoachingChat from '../components/CoachingChat'
+import PastList from '../components/PastList'
+import { usePastItems } from '../hooks/usePastItems'
 import { MicIcon, StarIcon } from '../components/icons'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import SafetyAdvisoryBanner, { PrivacyReminder } from '../components/SafetyAdvisoryBanner'
@@ -25,7 +28,13 @@ import {
   type StartingAction,
 } from '../lib/communicationOptions'
 import { takeWritePrefill } from '../lib/communicationsPrefill'
-import { draftParentMessage, sendParentMessageChat, setParentMessageSaved, type ParentMessage } from '../lib/api'
+import {
+  draftParentMessage,
+  getParentMessages,
+  sendParentMessageChat,
+  setParentMessageSaved,
+  type ParentMessage,
+} from '../lib/api'
 
 const QUICK_ACTIONS: { label: string; instruction: string }[] = [
   { label: 'Make warmer', instruction: 'Make this warmer and more supportive in tone.' },
@@ -84,6 +93,8 @@ export default function WriteMessage() {
 
   const [translateOpen, setTranslateOpen] = useState(false)
   const [customLanguage, setCustomLanguage] = useState('')
+
+  const past = usePastItems(getParentMessages, current)
 
   const activeFieldSetter =
     startingAction === 'respond' ? setReceivedMessage : startingAction === 'improve' ? setExistingDraft : setIncidentSummary
@@ -171,6 +182,19 @@ export default function WriteMessage() {
     }
   }
 
+  // Reopens an earlier message in full, revisions included, so it can be
+  // copied again or revised further.
+  function handleOpenPast(id: string) {
+    const message = past.items.find((m) => m.id === id)
+    if (!message) return
+    setCurrent(message)
+    setError(null)
+    setChatDraft('')
+    setChatError(null)
+    setTranslateOpen(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   function handleStartOver() {
     setCurrent(null)
     setIncidentSummary('')
@@ -181,6 +205,17 @@ export default function WriteMessage() {
     setChatDraft('')
     setChatError(null)
   }
+
+  // What the message was built from, as the teacher gave it.
+  const startedFrom = current
+    ? current.startingAction === 'respond' && current.receivedMessage
+      ? { title: 'The message you received', body: current.receivedMessage }
+      : current.startingAction === 'improve' && current.existingDraft
+        ? { title: 'Your original draft', body: current.existingDraft }
+        : current.incidentSummary
+          ? { title: 'What happened', body: current.incidentSummary }
+          : null
+    : null
 
   return (
     <div className="flex flex-col gap-6">
@@ -379,9 +414,17 @@ export default function WriteMessage() {
               <span>· {toneLabel(current.tone)}</span>
               {formatLabel(current.format) && <span>· {formatLabel(current.format)}</span>}
             </div>
-            <div className="rounded-2xl border border-hairline bg-cream p-5 shadow-sm">
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Your draft</p>
-              <p className="mt-2 text-sm whitespace-pre-wrap text-ink">{current.draftText}</p>
+            {startedFrom && (
+              <AnswerSection n={1} title={startedFrom.title} subtitle="What you gave the coach to work from">
+                {startedFrom.body}
+              </AnswerSection>
+            )}
+            <NumberedCard
+              n={startedFrom ? 2 : 1}
+              title="Your message"
+              subtitle="Ready to copy — change it below with a quick edit or a follow-up"
+            >
+              <p className="whitespace-pre-wrap rounded-xl bg-cream-card p-4 text-sm text-ink shadow-sm">{current.draftText}</p>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                 <button
                   type="button"
@@ -407,7 +450,7 @@ export default function WriteMessage() {
                   {copied ? 'Copied' : 'Copy'}
                 </button>
               </div>
-            </div>
+            </NumberedCard>
 
             <div className="flex flex-wrap gap-2">
               {QUICK_ACTIONS.map((action) => (
@@ -496,6 +539,21 @@ export default function WriteMessage() {
           </p>
         )}
       </div>
+
+      <PastList
+        title="Your messages"
+        items={past.items.map((m) => ({
+          id: m.id,
+          createdAt: m.createdAt,
+          label: purposeLabel(m.purpose) || recipientLabel(m.recipientType) || null,
+          text: m.title || m.draftText,
+          saved: m.saved,
+        }))}
+        activeId={current?.id ?? null}
+        loading={past.loading}
+        emptyText="Messages you write will show up here."
+        onOpen={handleOpenPast}
+      />
     </div>
   )
 }
