@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import AnswerSection from '../components/AnswerSection'
 import { BrainIcon, MicIcon, StarIcon, WarningIcon } from '../components/icons'
+import PastList from '../components/PastList'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import {
   generateTalkTakeaway,
@@ -165,7 +167,8 @@ export default function TalkToMe() {
   const [takeaway, setTakeaway] = useState<TalkTakeaway | null>(null)
   const [takeawayLoading, setTakeawayLoading] = useState(false)
   const [takeawayError, setTakeawayError] = useState<string | null>(null)
-  const [savedTalks, setSavedTalks] = useState<Debrief[]>([])
+  const [pastTalks, setPastTalks] = useState<Debrief[]>([])
+  const [pastLoading, setPastLoading] = useState(true)
   // Set when the server refuses a turn because this conversation is at its
   // length limit (see TALK_TURN_CAP) — distinct from an error, see
   // handleTurnFailed.
@@ -279,18 +282,16 @@ export default function TalkToMe() {
   useEffect(() => {
     getDebriefs({ source: 'talk_to_me' })
       .then((all) => {
-        setSavedTalks(all.filter((d) => d.saved))
+        setPastTalks(all)
         const opened = openId ? all.find((d) => d.id === openId) : undefined
         if (!opened) return
-        const lastUser = [...(opened.conversation ?? [])].reverse().find((m) => m.role === 'user')
-        setDebrief(opened)
-        setUserTranscript(lastUser?.text ?? null)
-        setTakeaway(opened.talkTakeaway ?? null)
+        handleOpenPast(opened)
         // Once open, the link has done its job — Start over shouldn't land
         // back in the same conversation on the next render or a refresh.
         navigate('/talk-to-me', { replace: true })
       })
       .catch(() => {})
+      .finally(() => setPastLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -486,14 +487,6 @@ export default function TalkToMe() {
     beginListening()
   }
 
-  // Picks a saved conversation back up. It becomes the live conversation, so
-  // every turn from here goes to the same record and Coach receives the whole
-  // history — the same path "Continue This Conversation" above already takes
-  // from the takeaway screen, entered from the start screen instead.
-  //
-  // The teacher's last line is put back on screen next to Coach's (which
-  // shows on its own, from the conversation), so it is obvious where they
-  // left off before they start speaking.
   async function handleCheckInOff() {
     if (!debrief) return
     setCheckInOff(true)
@@ -522,16 +515,20 @@ export default function TalkToMe() {
     }
   }
 
-  function handleContinuePast(past: Debrief) {
+  // Reopens a past conversation in full: its takeaway if it was wrapped up,
+  // otherwise paused on the last exchange with Resume. Never with the mic
+  // on — reading an old takeaway shouldn't start a conversation.
+  function handleOpenPast(past: Debrief) {
     const lastUser = [...(past.conversation ?? [])].reverse().find((m) => m.role === 'user')
     setDebrief(past)
     setUserTranscript(lastUser?.text ?? null)
-    setTakeaway(null)
+    setTakeaway(past.talkTakeaway ?? null)
     setCheckInOff(false)
     setTakeawayError(null)
+    setError(null)
     setNextStepOpen(false)
     setConversationFull(false)
-    beginListening()
+    window.scrollTo({ top: 0 })
   }
 
   function handleStartOver() {
@@ -553,7 +550,7 @@ export default function TalkToMe() {
     // since then has more turns and possibly a newer takeaway, and a stale
     // copy would offer Continue on one that is actually full.
     getDebriefs({ source: 'talk_to_me' })
-      .then((all) => setSavedTalks(all.filter((d) => d.saved)))
+      .then(setPastTalks)
       .catch(() => {})
     // Also clears ?mode=debrief: starting over from a debrief means an
     // ordinary new conversation, not another debrief of the same plan.
@@ -660,18 +657,15 @@ export default function TalkToMe() {
                   </button>
                 </div>
                 <div className="flex flex-col gap-3">
-                  <div className="rounded-2xl bg-mint-tint/50 p-5">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">What we explored</p>
-                    <p className="mt-1.5 text-sm text-ink">{takeaway.explored}</p>
-                  </div>
-                  <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">What I'll try</p>
-                    <p className="mt-1.5 text-sm text-ink">{takeaway.tryNext}</p>
-                  </div>
-                  <div className="rounded-2xl bg-peach-tint/50 p-5">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">What I'll notice</p>
-                    <p className="mt-1.5 text-sm text-ink">{takeaway.notice}</p>
-                  </div>
+                  <AnswerSection n={1} title="What we explored" subtitle="What the conversation was about">
+                    {takeaway.explored}
+                  </AnswerSection>
+                  <AnswerSection n={2} title="What I'll try" subtitle="One step to take into your next lesson">
+                    {takeaway.tryNext}
+                  </AnswerSection>
+                  <AnswerSection n={3} title="What I'll notice" subtitle="How you'll know whether it's working">
+                    {takeaway.notice}
+                  </AnswerSection>
                   {!isDebrief && (
                     <p className="text-center text-xs text-ink-soft">
                       {checkInOff ? (
@@ -800,6 +794,32 @@ export default function TalkToMe() {
                   type="button"
                   onClick={() => navigate('/')}
                   className="self-center text-sm font-medium text-ink-soft hover:text-ink"
+                >
+                  Done
+                </button>
+              </div>
+            ) : takeaway ? (
+              <div className="flex flex-wrap items-center justify-center gap-2.5">
+                <button
+                  type="button"
+                  hidden={atCap}
+                  onClick={handleContinueTalking}
+                  className="flex items-center gap-2 rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
+                >
+                  <MicIcon className="h-4 w-4" />
+                  Continue This Conversation
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartOver}
+                  className="rounded-full border-2 border-hairline bg-cream-card px-5 py-2.5 text-sm font-semibold text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
+                >
+                  Start a New One
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/')}
+                  className="px-3 text-sm font-medium text-ink-soft hover:text-ink"
                 >
                   Done
                 </button>
@@ -945,18 +965,6 @@ export default function TalkToMe() {
                   </Link>
                 )}
 
-                {savedTalks.length > 0 && (
-                  <div className="flex flex-col gap-2 text-left">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
-                      Past conversations
-                    </p>
-                    <div className="flex flex-col gap-2">
-                      {savedTalks.map((d) => (
-                        <SavedTalkCard key={d.id} debrief={d} onContinue={() => handleContinuePast(d)} />
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             ) : (
               <div className="flex w-full max-w-md flex-col gap-3">
@@ -1057,6 +1065,28 @@ export default function TalkToMe() {
                 )}
               </div>
             )}
+
+            {!debrief && phase === 'idle' && !showTypeInput && !isDebrief && !followUp && (pastLoading || pastTalks.length > 0) && (
+              <div className="w-full max-w-md text-left">
+                <PastList
+                  title="Your conversations"
+                  items={pastTalks.map((d) => ({
+                    id: d.id,
+                    createdAt: d.createdAt,
+                    label: d.talkTakeaway ? 'Takeaway' : 'Not wrapped up',
+                    text: d.incidentText,
+                    saved: d.saved,
+                  }))}
+                  activeId={null}
+                  loading={pastLoading}
+                  emptyText="Your conversations will show up here."
+                  onOpen={(id) => {
+                    const past = pastTalks.find((d) => d.id === id)
+                    if (past) handleOpenPast(past)
+                  }}
+                />
+              </div>
+            )}
           </>
         )}
       </main>
@@ -1064,73 +1094,6 @@ export default function TalkToMe() {
       <p className="px-6 pb-6 text-center text-xs text-ink-soft">
         Your voice is never saved — only the conversation text.
       </p>
-    </div>
-  )
-}
-
-// A saved conversation only ever gets bookmarked from its takeaway screen
-// (see handleToggleSaved), so talkTakeaway is expected to be set here —
-// still guarded defensively in case that ever changes.
-function SavedTalkCard({ debrief, onContinue }: { debrief: Debrief; onContinue: () => void }) {
-  const [expanded, setExpanded] = useState(false)
-  const takeaway = debrief.talkTakeaway
-  const turnsUsed = (debrief.conversation ?? []).filter((m) => m.role === 'user').length
-  const full = turnsUsed >= TALK_TURN_CAP
-  return (
-    <div className="rounded-2xl border border-hairline bg-cream-card p-4 transition-colors hover:border-terracotta/40">
-      <div className="flex w-full items-start justify-between gap-3 text-left">
-        <button type="button" onClick={() => setExpanded((e) => !e)} className="flex-1 text-left">
-          <p className="text-sm text-ink">{debrief.incidentText}</p>
-        </button>
-        <div className="flex shrink-0 items-center gap-3">
-          {/* Two separate actions rather than one card-wide tap target:
-              reading a takeaway should never accidentally switch the
-              microphone on. */}
-          <button
-            type="button"
-            onClick={() => setExpanded((e) => !e)}
-            className="text-xs font-medium text-ink-soft hover:text-ink"
-          >
-            {expanded ? 'Hide' : 'Show'}
-          </button>
-          {full ? (
-            <span className="text-xs font-medium text-ink-soft" title="This conversation has reached its length limit.">
-              Full
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={onContinue}
-              className="flex items-center gap-1 rounded-full bg-terracotta px-3 py-1 text-xs font-semibold text-cream transition-opacity hover:opacity-90"
-            >
-              <MicIcon className="h-3 w-3" />
-              Continue
-            </button>
-          )}
-        </div>
-      </div>
-      {expanded && (
-        <div className="mt-3 flex flex-col gap-3 border-t border-hairline pt-3 text-left">
-          {takeaway ? (
-            <>
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">What we explored</p>
-                <p className="mt-1 text-sm text-ink">{takeaway.explored}</p>
-              </div>
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">What I'll try</p>
-                <p className="mt-1 text-sm text-ink">{takeaway.tryNext}</p>
-              </div>
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">What I'll notice</p>
-                <p className="mt-1 text-sm text-ink">{takeaway.notice}</p>
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-ink-soft">No takeaway was saved for this conversation.</p>
-          )}
-        </div>
-      )}
     </div>
   )
 }
