@@ -10,6 +10,7 @@ import { checkFeatureAccess, countUsageLogActionsThisMonth, LESSON_PLANNING_ACTI
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { extractTag } from '../lib/extractTag.ts'
+import { buildPptx, type Slide } from '../lib/slidesPptx.ts'
 import { prisma } from '../lib/prisma.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
@@ -96,7 +97,7 @@ const DIAGRAM_SYNTAX_INSTRUCTIONS = `When a visual model would genuinely help (a
 [[diagram:number_line|start=S|end=E|points=v1,v2,...|labels=l1,l2,...]] — a number line from S to E, points as decimals (e.g. 0.25 for 1/4), each labeled with the matching entry in labels (e.g. "1/4").
 Use these only where a visual genuinely clarifies the task, not on every line.`
 
-const ASSIGNMENT_FINALIZE_SYSTEM_PROMPT = `You are Coach, wrapping up a conversation about an assignment with a teacher. Produce the final assignment text based on everything actually discussed — never introduce a new idea that wasn't part of the conversation.
+const ASSIGNMENT_FINALIZE_SYSTEM_PROMPT = `You are Coach, wrapping up a conversation about an assignment with a teacher. Produce the final assignment text based on everything actually discussed — never introduce a new idea that wasn't part of the conversation. Start from the current assignment given below and return the COMPLETE revised assignment (every section, slide, or question, with the discussed changes applied) — never a summary or an excerpt of it.
 
 ${DIAGRAM_SYNTAX_INSTRUCTIONS}
 
@@ -881,6 +882,21 @@ assignmentCoachRouter.post('/:id/ai-resistant', async (req, res) => {
 // from "Improve specific areas," which stays a chat message). Reuses the
 // same finalize mechanism the workspace already relies on: summarize the
 // full conversation so far into one rewritten assignment.
+const SLIDES_SYSTEM_PROMPT = `You convert a teacher's assignment or presentation text into a clean student-facing slide deck.
+
+Keep the teacher's own content and wording — never invent facts, questions, or activities that aren't in the text. One idea per slide, 3-5 short bullets each, titles under 8 words. Split long sections across slides rather than crowding one. Fill-in-the-blank lines can stay as blanks ("I am ______"). Skip any [[diagram:...]] directives. Add a brief teacher speaker note only where it genuinely helps (e.g. "pause here for turn-and-talk"); otherwise leave notes empty. At most 25 slides.
+
+Plain text only, no markdown. Respond with exactly this structure and nothing else — the first slide is the title slide, with an empty <bullets>:
+<slide>
+<title>Slide title</title>
+<bullets>
+- First bullet
+- Second bullet
+</bullets>
+<notes>Optional speaker note</notes>
+</slide>
+${CORE_COACHING_RULES}`
+
 assignmentCoachRouter.post('/:id/revise', async (req, res) => {
   const session = await prisma.assignmentCoachSession.findFirst({
     where: { id: req.params.id, userId: req.user!.userId },
@@ -904,6 +920,10 @@ assignmentCoachRouter.post('/:id/revise', async (req, res) => {
 
   try {
     const transcript = existing.map((m) => `${m.role === 'assistant' ? 'Coach' : 'Teacher'}: ${m.text}`).join('\n')
+    // The assignment itself has to be in the input — the chat transcript
+    // alone only mentions it in passing, so a revise built from it alone
+    // comes back as a couple of sentences instead of the full document.
+    const input = `${contextFromSession(session).join('\n')}\n\nThe coaching conversation so far:\n${transcript}`
     // Same reproduce-the-full-assignment concern as the start route — a low
     // cap here truncates <assignment> mid-write on a real assignment.
     const response = await anthropic.messages.create({
@@ -911,7 +931,7 @@ assignmentCoachRouter.post('/:id/revise', async (req, res) => {
       max_tokens: 8192,
       thinking: { type: 'disabled' },
       system: ASSIGNMENT_FINALIZE_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: transcript }],
+      messages: [{ role: 'user', content: input }],
     })
     const text = response.content
       .filter((block) => block.type === 'text')
@@ -932,6 +952,73 @@ assignmentCoachRouter.post('/:id/revise', async (req, res) => {
   } catch (error) {
     console.error('[assignment-coach] revise failed:', error)
     res.status(502).json({ error: 'Could not revise the assignment. Please try again.' })
+  }
+})
+
+// Turns whatever is currently in the live assignment (original, revised, or
+// AI-redesigned) into a downloadable .pptx — Google Slides opens .pptx
+// directly, so one file format covers both PowerPoint and Slides.
+assignmentCoachRouter.post('/:id/slides', async (req, res) => {
+  const session = await prisma.assignmentCoachSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Assignment Coach session not found' })
+    return
+  }
+
+  // The client sends exactly what's on screen (e.g. an AI redesign the
+  // teacher hasn't applied yet, or edits not yet autosaved) — fall back to
+  // the stored text otherwise.
+  const override = typeof req.body?.text === 'string' ? req.body.text.trim().slice(0, 60000) : ''
+  const content = override || (session.liveAssignmentText ?? session.originalText ?? '').trim()
+  if (!content) {
+    res.status(400).json({ error: 'There is no assignment text to turn into slides yet.' })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'assignment_coach_slides')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 8192,
+      thinking: { type: 'disabled' },
+      system: SLIDES_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content }],
+    })
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+
+    const slides: Slide[] = []
+    for (const match of text.matchAll(/<slide>([\s\S]*?)<\/slide>/g)) {
+      const block = match[1]
+      const title = extractTag(block, 'title')
+      if (!title) continue
+      const bullets = (extractTag(block, 'bullets') ?? '')
+        .split('\n')
+        .map((line) => line.replace(/^\s*[-•*]\s*/, '').trim())
+        .filter(Boolean)
+      slides.push({ title, bullets, notes: extractTag(block, 'notes') || null })
+    }
+    if (slides.length === 0) {
+      res.status(502).json({ error: 'Could not build slides. Please try again.' })
+      return
+    }
+
+    const buffer = await buildPptx(session.title ?? slides[0].title, slides)
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation')
+    res.setHeader('Content-Disposition', 'attachment; filename="wivoza-slides.pptx"')
+    res.send(buffer)
+  } catch (error) {
+    console.error('[assignment-coach] slides failed:', error)
+    res.status(502).json({ error: 'Could not build slides. Please try again.' })
   }
 })
 

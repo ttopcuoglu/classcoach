@@ -31,6 +31,7 @@ import {
   refineAssignmentCoach,
   reviewAssignmentCoach,
   reviseAssignmentCoach,
+  downloadAssignmentSlides,
   runAiResistant,
   sendAssignmentCoachChat,
   startAssignmentCoach,
@@ -1334,6 +1335,8 @@ function Workspace({
   const [aiResistError, setAiResistError] = useState<string | null>(null)
 
   const [revising, setRevising] = useState(false)
+  const [buildingSlides, setBuildingSlides] = useState(false)
+  const [slidesError, setSlidesError] = useState<string | null>(null)
   const [reviseError, setReviseError] = useState<string | null>(null)
 
   const [refining, setRefining] = useState(false)
@@ -1495,6 +1498,19 @@ function Workspace({
     await navigator.clipboard.writeText(text).catch(() => {})
   }
 
+  async function handleDownloadSlides(source: string) {
+    if (buildingSlides || !source.trim()) return
+    setBuildingSlides(true)
+    setSlidesError(null)
+    try {
+      await downloadAssignmentSlides(session.id, source)
+    } catch (err) {
+      setSlidesError((err as Error).message || 'Could not build slides. Please try again.')
+    } finally {
+      setBuildingSlides(false)
+    }
+  }
+
   async function handleCopyValue(value: string) {
     await navigator.clipboard.writeText(value).catch(() => {})
   }
@@ -1540,6 +1556,14 @@ function Workspace({
           </button>
           <button
             type="button"
+            onClick={() => handleDownloadSlides(text)}
+            disabled={!text.trim() || buildingSlides}
+            className="text-sm font-medium text-ink-soft hover:text-forest disabled:opacity-50"
+          >
+            {buildingSlides ? 'Building slides…' : 'Download slides'}
+          </button>
+          <button
+            type="button"
             onClick={handleToggleSaved}
             className={`flex items-center gap-1.5 text-sm font-medium ${
               session.saved ? 'text-terracotta-600' : 'text-ink-soft hover:text-terracotta-600'
@@ -1550,6 +1574,8 @@ function Workspace({
           </button>
         </div>
       </div>
+
+      {slidesError && <p className="text-sm text-terracotta-600">{slidesError}</p>}
 
       {!(!isRedesign && session.reviewSnapshot) && (
         <div className="flex flex-wrap gap-2">
@@ -1688,6 +1714,14 @@ function Workspace({
                           className="text-xs font-semibold text-ink-soft hover:text-forest"
                         >
                           Copy revised assignment
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadSlides(session.aiResistant?.revisedAssignment ?? '')}
+                          disabled={buildingSlides}
+                          className="text-xs font-semibold text-ink-soft hover:text-forest disabled:opacity-50"
+                        >
+                          {buildingSlides ? 'Building slides…' : 'Download as slides (.pptx)'}
                         </button>
                         <button
                           type="button"

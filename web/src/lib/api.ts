@@ -1344,6 +1344,29 @@ export function reviseAssignmentCoach(id: string): Promise<AssignmentCoachSessio
   return request(`/api/assignment-coach/${id}/revise`, { method: 'POST' })
 }
 
+// Returns a .pptx (opens in PowerPoint and Google Slides) built from `text`
+// when given — what's on screen — otherwise from the session's stored text.
+export async function downloadAssignmentSlides(id: string, text?: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/assignment-coach/${id}/slides`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw apiError(body?.error ?? `Request failed with status ${res.status}`, res.status)
+  }
+  const url = URL.createObjectURL(await res.blob())
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'wivoza-slides.pptx'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 export function runAiResistant(id: string): Promise<AssignmentCoachSession> {
   return request(`/api/assignment-coach/${id}/ai-resistant`, { method: 'POST' })
 }
