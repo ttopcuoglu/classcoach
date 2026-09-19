@@ -33,7 +33,6 @@ import {
   type Organization,
   type OrgMember,
   type PdFocusArea,
-  type PdFocusAreaSnapshot,
   type Strength,
   type TallyEntry,
   type UserProfile,
@@ -43,7 +42,7 @@ import {
 } from '../lib/api'
 import { ACCENT_CYCLE, type Accent } from '../components/report'
 import { categoryLabel } from '../lib/categories'
-import { PRIORITY_LABELS } from '../lib/adminLabels'
+import { describeSnapshot, describeTrend, PD_SUGGESTIONS, PRIORITY_LABELS, PRIORITY_MEANING, STRENGTH_MEANING } from '../lib/adminLabels'
 import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import { CHALLENGE_TYPES, MESSAGE_PURPOSES, challengeLabel, purposeLabel } from '../lib/communicationOptions'
 import { ChartBarIcon, ChatBubbleIcon, HomeIcon, LockIcon, ShieldIcon, UserIcon } from '../components/icons'
@@ -1984,13 +1983,6 @@ function confidenceFor(n: number): DataConfidence {
   return 'full'
 }
 
-const PD_SUGGESTIONS: Record<string, string> = {
-  'talk-balance': 'a short PD session on structuring more student talk time — think-pair-share, cold-call routines',
-  questioning: 'a 15-minute micro-PD on higher-order question stems (why / explain / compare / justify)',
-  'wait-time': 'a quick, low-lift practice: silently count to 3-5 after every question before calling on someone',
-  cfu: 'a shared routine for quick checks for understanding — thumbs up/down, exit tickets, cold-call',
-  feedback: 'a short workshop on giving specific rather than generic feedback during practice',
-}
 
 // ---- Shared report layout ----
 //
@@ -2043,24 +2035,6 @@ function AdminCard({
   )
 }
 
-// What each growth area actually means in a lesson — the rule that put a
-// lesson in it, in the words a principal would use.
-const PRIORITY_MEANING: Record<string, string> = {
-  'talk-balance': 'The teacher did 65% or more of the talking.',
-  questioning: 'Fewer than 4 in 10 questions asked students to explain, compare or reason.',
-  'wait-time': 'Students got under 3 seconds to think before someone answered.',
-  cfu: 'A 10+ minute lesson with no check for understanding.',
-  feedback: 'Most feedback was general ("good job") rather than specific.',
-}
-
-// Strengths come from the server with the percentage the name refers to.
-const STRENGTH_MEANING: Record<string, string> = {
-  'Checks for understanding': 'of lessons included at least one check for understanding.',
-  'Higher-order questioning': 'of questions asked students to explain, compare or reason.',
-  'Real-life examples and connections': 'of lessons connected the content to real life or earlier learning.',
-  'Calm classroom management': 'of lessons needed no redirections at all.',
-  'Clear directions': 'of lessons included at least one clear, specific direction.',
-}
 
 // "At a glance": three sentences a principal can read in ten seconds, built
 // only from numbers already on the page and silent where there isn't enough.
@@ -2872,27 +2846,6 @@ function PdFocusAreaContent({ organizationId }: { organizationId?: string }) {
   )
 }
 
-// "In 52% of lessons (13 of 25)" when the snapshot has shares; the old raw
-// count for focus areas started before shares were tracked.
-function describeSnapshot(snapshot: Omit<PdFocusAreaSnapshot, 'capturedAt'>): string {
-  if (snapshot.sessions != null && snapshot.sharePct != null) {
-    return `In ${snapshot.sharePct}% of lessons (${snapshot.count} of ${snapshot.sessions})`
-  }
-  return `${snapshot.count}× · ${snapshot.teachers} teacher${snapshot.teachers === 1 ? '' : 's'}`
-}
-
-// A theme is a need, so a smaller share is the good direction. Silent until
-// both sides have shares and "since" has enough lessons behind it.
-function describeTrend(
-  baseline: Omit<PdFocusAreaSnapshot, 'capturedAt'>,
-  since: Omit<PdFocusAreaSnapshot, 'capturedAt'> | null,
-): { text: string; improving: boolean } | null {
-  if (!since || since.confidence === 'none' || baseline.sharePct == null || since.sharePct == null) return null
-  const change = since.sharePct - baseline.sharePct
-  if (change <= -5) return { text: `Down ${-change} points since you started — it's showing up in fewer lessons.`, improving: true }
-  if (change >= 5) return { text: `Up ${change} points since you started — worth another look at the plan.`, improving: false }
-  return { text: 'About the same so far — give it a few more weeks of lessons.', improving: false }
-}
 
 function FocusAreaCard({
   item,
