@@ -1336,6 +1336,7 @@ function Workspace({
 
   const [revising, setRevising] = useState(false)
   const [buildingSlides, setBuildingSlides] = useState(false)
+  const [editingRevision, setEditingRevision] = useState(false)
   const [slidesError, setSlidesError] = useState<string | null>(null)
   const [reviseError, setReviseError] = useState<string | null>(null)
 
@@ -1453,6 +1454,10 @@ function Workspace({
     try {
       const updated = await reviseAssignmentCoach(session.id)
       onUpdate(updated)
+      setRevisedView('revised')
+      // The Review screen has no side-by-side document, so bring the new
+      // Revised assignment card into view — otherwise nothing seems to happen.
+      window.setTimeout(() => document.getElementById('revised-assignment')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
     } catch (err) {
       setReviseError((err as Error).message || 'Could not revise the assignment. Please try again.')
     } finally {
@@ -1517,6 +1522,9 @@ function Workspace({
 
   // The redesign's parts, numbered in reading order over the ones present.
   const redesign = session.aiResistant
+  // Review mode starts with the live text equal to the original — once Revise
+  // (or an edit) makes it differ, there's a revised assignment to show.
+  const hasRevision = !isRedesign && text.trim() !== '' && text.trim() !== (session.originalText ?? '').trim()
   const redesignParts = redesign
     ? [
         redesign.aiRole && 'aiRole',
@@ -1870,6 +1878,67 @@ function Workspace({
               </div>
             </>
           )}
+
+        {hasRevision && (
+          <div id="revised-assignment">
+            <NumberedCard
+              n={session.reviewSnapshot ? 7 : 1}
+              title="Revised assignment"
+              subtitle="Your assignment with the changes you discussed"
+              aside={
+                <div className="flex shrink-0 rounded-full border border-hairline bg-cream-card p-0.5 text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setRevisedView('original')}
+                    className={`rounded-full px-2.5 py-1 ${revisedView === 'original' ? 'bg-forest text-cream' : 'text-ink-soft'}`}
+                  >
+                    Original
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRevisedView('revised')}
+                    className={`rounded-full px-2.5 py-1 ${revisedView === 'revised' ? 'bg-forest text-cream' : 'text-ink-soft'}`}
+                  >
+                    Revised
+                  </button>
+                </div>
+              }
+            >
+              {editingRevision && revisedView === 'revised' ? (
+                <textarea
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  rows={14}
+                  className="w-full rounded-lg border border-hairline bg-cream px-3 py-2 text-sm text-ink focus:border-terracotta/50 focus:outline-none"
+                />
+              ) : (
+                <div className="rounded-xl bg-cream-card p-4">
+                  <AssignmentContent text={revisedView === 'original' ? session.originalText || 'No original text on file.' : text} />
+                </div>
+              )}
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadSlides(text)}
+                  disabled={buildingSlides}
+                  className="rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  {buildingSlides ? 'Building slides…' : 'Download as slides (.pptx)'}
+                </button>
+                <button type="button" onClick={handleCopy} className="text-xs font-semibold text-ink-soft hover:text-forest">
+                  Copy revised assignment
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingRevision((v) => !v)}
+                  className="text-xs font-semibold text-ink-soft hover:text-forest"
+                >
+                  {editingRevision ? 'Done editing' : 'Edit'}
+                </button>
+              </div>
+            </NumberedCard>
+          </div>
+        )}
 
         <div id="assignment-coach-chat">
           <CoachingChat

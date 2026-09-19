@@ -10,7 +10,7 @@ import { checkFeatureAccess, countUsageLogActionsThisMonth, LESSON_PLANNING_ACTI
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { extractTag } from '../lib/extractTag.ts'
-import { buildPptx, type Slide } from '../lib/slidesPptx.ts'
+import { buildPptx, SLIDE_LAYOUTS, type Slide, type SlideLayout } from '../lib/slidesPptx.ts'
 import { prisma } from '../lib/prisma.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
@@ -882,12 +882,22 @@ assignmentCoachRouter.post('/:id/ai-resistant', async (req, res) => {
 // from "Improve specific areas," which stays a chat message). Reuses the
 // same finalize mechanism the workspace already relies on: summarize the
 // full conversation so far into one rewritten assignment.
-const SLIDES_SYSTEM_PROMPT = `You convert a teacher's assignment or presentation text into a clean student-facing slide deck.
+const SLIDES_SYSTEM_PROMPT = `You turn a teacher's assignment or presentation text into a vivid, modern, student-facing slide deck that will be projected in a classroom.
 
-Keep the teacher's own content and wording — never invent facts, questions, or activities that aren't in the text. One idea per slide, 3-5 short bullets each, titles under 8 words. Split long sections across slides rather than crowding one. Fill-in-the-blank lines can stay as blanks ("I am ______"). Skip any [[diagram:...]] directives. Add a brief teacher speaker note only where it genuinely helps (e.g. "pause here for turn-and-talk"); otherwise leave notes empty. At most 25 slides.
+Keep the teacher's own content and wording — never invent facts, questions, or activities that aren't in the text. One idea per slide, 2-5 short bullets each, titles under 8 words. Split long sections across slides rather than crowding one. Fill-in-the-blank lines can stay as blanks ("I am ______"). Skip any [[diagram:...]] directives. Add a brief teacher speaker note only where it genuinely helps (e.g. "pause here for turn-and-talk"); otherwise leave notes empty. At most 25 slides.
 
-Plain text only, no markdown. Respond with exactly this structure and nothing else — the first slide is the title slide, with an empty <bullets>:
+Make it visual and varied. Give EVERY slide one <icon>: a single emoji that fits the topic (for young students, friendly and concrete). Give EVERY slide a <layout>, chosen like this:
+- title — only for the first slide.
+- keyterm — introducing a vocabulary word or key idea: the title is the word itself, bullets are its meaning and examples.
+- prompt — a turn-and-talk, discussion question, reflection, or exit-ticket question: the title is the question, bullets are optional sentence starters.
+- split — a concept or explanation slide with 2-4 bullets, shown beside a large icon.
+- cards — lists, steps, rules, and activities with 3-5 items.
+Vary the layouts: never use the same layout on more than 2 slides in a row.
+
+Plain text only, no markdown. Respond with exactly this structure and nothing else — the first slide is the title slide, with an empty <bullets> (or one short subtitle line):
 <slide>
+<layout>cards</layout>
+<icon>🌟</icon>
 <title>Slide title</title>
 <bullets>
 - First bullet
@@ -1005,13 +1015,25 @@ assignmentCoachRouter.post('/:id/slides', async (req, res) => {
         .split('\n')
         .map((line) => line.replace(/^\s*[-•*]\s*/, '').trim())
         .filter(Boolean)
-      slides.push({ title, bullets, notes: extractTag(block, 'notes') || null })
+      const rawLayout = (extractTag(block, 'layout') ?? '').trim().toLowerCase()
+      const layout = (SLIDE_LAYOUTS as readonly string[]).includes(rawLayout) ? (rawLayout as SlideLayout) : 'cards'
+      const icon = (extractTag(block, 'icon') ?? '').trim()
+      slides.push({
+        title,
+        bullets,
+        notes: extractTag(block, 'notes') || null,
+        layout,
+        // An emoji is a few code units at most; anything longer is Claude
+        // writing a word instead of an icon, so drop it.
+        icon: icon && [...icon].length <= 6 ? icon : null,
+      })
     }
     if (slides.length === 0) {
       res.status(502).json({ error: 'Could not build slides. Please try again.' })
       return
     }
 
+    slides[0].layout = 'title'
     const buffer = await buildPptx(session.title ?? slides[0].title, slides)
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation')
     res.setHeader('Content-Disposition', 'attachment; filename="wivoza-slides.pptx"')
