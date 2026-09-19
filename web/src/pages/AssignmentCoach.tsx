@@ -424,6 +424,7 @@ function AddAssignmentScreen({
   const [fileName, setFileName] = useState<string | null>(null)
   const [fileReady, setFileReady] = useState(false)
   const [extracting, setExtracting] = useState(false)
+  const [extractMs, setExtractMs] = useState(6000)
   const [dragOver, setDragOver] = useState(false)
   const [aiUseLevel, setAiUseLevel] = useState<AssignmentAiUseLevel | ''>('')
   const [letWivozaRecommend, setLetWivozaRecommend] = useState(false)
@@ -470,6 +471,9 @@ function AddAssignmentScreen({
   }, [starting])
 
   async function handleFile(file: File) {
+    // Photos go through OCR, which takes noticeably longer than parsing a
+    // document — scale the estimate so the ring's pace looks honest.
+    setExtractMs(/\.(jpe?g|png)$/i.test(file.name) ? 18000 : 6000)
     setExtracting(true)
     setError(null)
     setFileReady(false)
@@ -593,7 +597,7 @@ function AddAssignmentScreen({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".docx,.pdf,.txt,.jpg,.jpeg,.png"
+                  accept=".docx,.pdf,.pptx,.txt,.jpg,.jpeg,.png"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0]
@@ -622,7 +626,7 @@ function AddAssignmentScreen({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".docx,.pdf,.txt,.jpg,.jpeg,.png"
+                  accept=".docx,.pdf,.pptx,.txt,.jpg,.jpeg,.png"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0]
@@ -630,7 +634,14 @@ function AddAssignmentScreen({
                     e.target.value = ''
                   }}
                 />
-                <div className="relative">
+                <WorkingRing
+                  active={extracting}
+                  estimatedMs={extractMs}
+                  label="Reading your file"
+                  hint="Pulling the text out — this only takes a moment."
+                  className="text-cream"
+                />
+                <div className={`relative ${extracting ? 'hidden' : ''}`}>
                   <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-terracotta/20 text-terracotta">
                     <ClipboardIcon className="h-6 w-6" />
                   </span>
@@ -638,9 +649,9 @@ function AddAssignmentScreen({
                     <SparkleIcon className="h-3.5 w-3.5" />
                   </span>
                 </div>
-                <p className="font-heading text-lg font-semibold text-cream">Add your assignment</p>
-                <p className="text-sm text-cream/60">Drag a file here, or paste the text below.</p>
-                <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
+                <p className={`font-heading text-lg font-semibold text-cream ${extracting ? 'hidden' : ''}`}>Add your assignment</p>
+                <p className={`text-sm text-cream/60 ${extracting ? 'hidden' : ''}`}>Drag a file here, or paste the text below.</p>
+                <div className={`mt-1 flex flex-wrap items-center justify-center gap-2 ${extracting ? 'hidden' : ''}`}>
                   <button
                     type="button"
                     onClick={() => setInputMode('paste')}
@@ -656,10 +667,10 @@ function AddAssignmentScreen({
                     className="flex items-center gap-1.5 rounded-xl border border-cream/15 bg-cream/5 px-4 py-2.5 text-sm font-semibold text-cream/90 hover:bg-cream/10 disabled:opacity-50"
                   >
                     <UploadIcon className="h-4 w-4" />
-                    {extracting ? 'Reading file...' : 'Choose file'}
+                    Choose file
                   </button>
                 </div>
-                <p className="text-xs text-cream/50">PDF, Word, image, or plain text</p>
+                <p className={`text-xs text-cream/50 ${extracting ? 'hidden' : ''}`}>PDF, Word, PowerPoint, image, or plain text</p>
               </div>
             )
           ) : (
@@ -776,7 +787,7 @@ const TONE_DOT: Record<Tone, string> = {
 }
 
 // One area of the review: where it landed in plain words (never a score),
-// why, and a way to work on it with the coach.
+// and why.
 function ReviewFinding({
   n,
   title,
@@ -786,9 +797,6 @@ function ReviewFinding({
   explanation,
   detail,
   note,
-  actionLabel,
-  onAction,
-  disabled,
   children,
 }: {
   n: number
@@ -799,9 +807,6 @@ function ReviewFinding({
   explanation: string | null
   detail?: string | null
   note?: string | null
-  actionLabel: string
-  onAction: () => void
-  disabled?: boolean
   children?: React.ReactNode
 }) {
   return (
@@ -814,14 +819,6 @@ function ReviewFinding({
       {detail && <p className="mt-2 whitespace-pre-wrap text-xs text-ink-soft">{detail}</p>}
       {note && <p className="mt-2 text-xs italic text-terracotta-600">{note}</p>}
       {children}
-      <button
-        type="button"
-        onClick={onAction}
-        disabled={disabled}
-        className="mt-3 text-xs font-semibold text-forest hover:text-terracotta-600 disabled:opacity-50"
-      >
-        {actionLabel} →
-      </button>
     </NumberedCard>
   )
 }
@@ -1088,9 +1085,6 @@ function ReviewSnapshotPanel({
         tone={gradeFitTone(snapshot.gradeFit.rating)}
         statusLabel={GRADE_FIT_LABELS[snapshot.gradeFit.rating ?? ''] ?? 'Not enough evidence yet'}
         explanation={snapshot.gradeFit.explanation}
-        actionLabel="See evidence"
-        onAction={() => onAction("Let's talk about whether this fits the intended grade level.")}
-        disabled={chatSending}
       />
       <ReviewFinding
         n={next()}
@@ -1099,9 +1093,6 @@ function ReviewSnapshotPanel({
         tone="warn"
         statusLabel={snapshot.rigor.label ?? 'Not enough evidence yet'}
         explanation={snapshot.rigor.explanation}
-        actionLabel="Strengthen thinking"
-        onAction={() => onAction("Let's strengthen the rigor of this assignment.")}
-        disabled={chatSending}
       />
       <ReviewFinding
         n={next()}
@@ -1111,9 +1102,6 @@ function ReviewSnapshotPanel({
         statusLabel={MEANINGFUL_WORK_LABELS[snapshot.meaningfulWork.rating ?? ''] ?? 'Not enough evidence yet'}
         explanation={snapshot.meaningfulWork.explanation}
         note={snapshot.meaningfulWork.suggestion}
-        actionLabel="Remove low-value work"
-        onAction={() => onAction("Let's remove any low-value or busywork steps.")}
-        disabled={chatSending}
       />
       <ReviewFinding
         n={next()}
@@ -1123,9 +1111,6 @@ function ReviewSnapshotPanel({
         statusLabel={AI_RISK_LABELS[snapshot.aiRisk.rating ?? ''] ?? 'Not enough evidence yet'}
         explanation={snapshot.aiRisk.explanation}
         detail={snapshot.aiRisk.reasons}
-        actionLabel="Make it AI-resilient"
-        onAction={() => onAction("Let's make student thinking more visible so this is harder to fully outsource to AI.")}
-        disabled={chatSending}
       >
         {(snapshot.aiRisk.rating === 'high' || snapshot.aiRisk.rating === 'moderate') && (
           <button

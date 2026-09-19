@@ -13,6 +13,7 @@ import { extractTag } from '../lib/extractTag.ts'
 import { buildDocx } from '../lib/docxBuilder.ts'
 import { parseDocOutput, parseSlidesOutput, sanitizeDeck, sanitizeDocModel } from '../lib/exportModels.ts'
 import { buildPdf } from '../lib/pdfBuilder.ts'
+import { extractPptxText } from '../lib/pptxText.ts'
 import { buildPptx } from '../lib/slidesPptx.ts'
 import { prisma } from '../lib/prisma.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
@@ -458,7 +459,7 @@ function contextFromSession(session: {
 
 // Stateless document-text extraction for the "Upload a file" intake path —
 // pure local parsing, no Claude call, so this isn't usage-capped.
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } })
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } })
 
 // Lazily created once per server process and reused across requests — the
 // English trained-data download only happens on the very first OCR call,
@@ -548,12 +549,14 @@ assignmentCoachRouter.post('/extract-text', upload.single('file'), async (req, r
       text = (await mammoth.extractRawText({ buffer: req.file.buffer })).value
     } else if (name.endsWith('.pdf')) {
       text = await extractPdfText(req.file.buffer)
+    } else if (name.endsWith('.pptx')) {
+      text = await extractPptxText(req.file.buffer)
     } else if (name.endsWith('.txt')) {
       text = req.file.buffer.toString('utf-8')
     } else if (IMAGE_EXTENSIONS.some((ext) => name.endsWith(ext))) {
       text = await ocrImageBuffer(req.file.buffer)
     } else {
-      res.status(400).json({ error: 'Please upload a .docx, .pdf, .txt, .jpg, or .png file.' })
+      res.status(400).json({ error: 'Please upload a .docx, .pdf, .pptx, .txt, .jpg, or .png file.' })
       return
     }
     if (!text.trim()) {
