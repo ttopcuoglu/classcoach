@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import AnswerSection from '../components/AnswerSection'
 import CoachingChat from '../components/CoachingChat'
 import PastList from '../components/PastList'
 import ReflectionTimeline from '../components/ReflectionTimeline'
@@ -594,28 +595,25 @@ export default function TryItOut() {
               </div>
             ) : (
               <div className="flex flex-col gap-4">
-                <div className="rounded-2xl bg-cream p-5">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">
-                    Your response
-                  </p>
-                  <p className="mt-1.5 text-sm text-ink">{attempt.responseText}</p>
-                </div>
-
-                {attempt.feedback && (
-                  <div className="rounded-2xl bg-peach-tint/50 p-5">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Coaching</p>
-                    <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink">{attempt.feedback}</p>
-                  </div>
-                )}
-
-                {attempt.modelResponse && (
-                  <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
-                      A model response to compare against
-                    </p>
-                    <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink">{attempt.modelResponse}</p>
-                  </div>
-                )}
+                {[
+                  { title: 'Your response', subtitle: 'What you said you would do.', body: attempt.responseText },
+                  attempt.feedback && {
+                    title: 'Coaching',
+                    subtitle: 'What worked, and what to strengthen.',
+                    body: attempt.feedback,
+                  },
+                  attempt.modelResponse && {
+                    title: 'A model response',
+                    subtitle: 'One way to handle it, to compare with yours.',
+                    body: attempt.modelResponse,
+                  },
+                ]
+                  .filter((part): part is { title: string; subtitle: string; body: string } => !!part)
+                  .map((part, i) => (
+                    <AnswerSection key={part.title} n={i + 1} title={part.title} subtitle={part.subtitle}>
+                      {part.body}
+                    </AnswerSection>
+                  ))}
 
                 <CoachingChat
                   messages={attempt.conversation.slice(2)}

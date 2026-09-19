@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ProgressRing } from '../components/ProgressRing'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
+import AnswerSection from '../components/AnswerSection'
 import CoachingChat from '../components/CoachingChat'
 import PastList from '../components/PastList'
 import ReflectionTimeline from '../components/ReflectionTimeline'
@@ -309,32 +310,29 @@ export default function Ask() {
               <p className="mt-1 text-sm text-ink">{debrief.incidentText}</p>
             </div>
 
-            {debrief.feedback && (
-              <div className="rounded-2xl bg-peach-tint/50 p-5">
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
-                  What may be happening
-                </p>
-                <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink">{debrief.feedback}</p>
-              </div>
-            )}
-
-            {debrief.wordsToTry && (
-              <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
-                  Words to try
-                </p>
-                <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink">{debrief.wordsToTry}</p>
-              </div>
-            )}
-
-            {debrief.followUp && (
-              <div className="rounded-2xl bg-mint-tint/50 p-5">
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">
-                  One next step
-                </p>
-                <p className="mt-1.5 text-sm whitespace-pre-wrap text-ink">{debrief.followUp}</p>
-              </div>
-            )}
+            {[
+              debrief.feedback && {
+                title: 'What may be happening',
+                subtitle: 'A read on the moment you described.',
+                body: debrief.feedback,
+              },
+              debrief.wordsToTry && {
+                title: 'Words to try',
+                subtitle: 'Language you can use as it is, or adapt.',
+                body: debrief.wordsToTry,
+              },
+              debrief.followUp && {
+                title: 'One next step',
+                subtitle: 'Something small to try in your next class.',
+                body: debrief.followUp,
+              },
+            ]
+              .filter((part): part is { title: string; subtitle: string; body: string } => !!part)
+              .map((part, i) => (
+                <AnswerSection key={part.title} n={i + 1} title={part.title} subtitle={part.subtitle}>
+                  {part.body}
+                </AnswerSection>
+              ))}
 
             <CoachingChat
               messages={debrief.conversation.slice(2)}
