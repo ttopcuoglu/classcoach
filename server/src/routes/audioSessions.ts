@@ -753,7 +753,7 @@ audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
 // "A strength to keep"), grounded in a real quote/timestamp rather than
 // this prompt's paraphrase. Asking for both here produced two competing,
 // sometimes-inconsistent strength claims on the same page.
-function buildClassSummarySystemPrompt(exhibits: { text: string; timestampSec: number }[], recordedSec: number): string {
+export function buildClassSummarySystemPrompt(exhibits: { text: string; timestampSec: number }[], recordedSec: number): string {
   const durationGuidance =
     recordedSec < 120
       ? 'This is a very short clip — at this length, write exactly one plain, honest sentence about what little was captured.'

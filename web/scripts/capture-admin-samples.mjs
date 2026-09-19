@@ -12,15 +12,7 @@
 // with the invented Maple Ridge Academy numbers below — the same story the
 // demo principal account tells — before the app's own code loads.
 
-import { spawn } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-
-const APP = process.env.APP_URL ?? 'http://localhost:5173'
-const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-const OUT = new URL('../public/samples/', import.meta.url).pathname
-const PORT = 9333
+import { withChrome } from './capture.mjs'
 
 // ---- invented school ----
 
@@ -97,132 +89,32 @@ const FIXTURES = {
   ] },
 }
 
-// Runs in the page before any app code: answers /api from FIXTURES.
-const MOCK = `(() => {
-  const FIXTURES = ${JSON.stringify(FIXTURES)};
-  const realFetch = window.fetch.bind(window);
-  window.fetch = async (input, init) => {
-    const url = new URL(typeof input === 'string' ? input : input.url, location.origin);
-    if (!url.pathname.startsWith('/api/')) return realFetch(input, init);
-    const key = url.pathname === '/api/admin/overview/breakdown' ? 'breakdown:' + url.searchParams.get('by') : url.pathname;
-    const body = key in FIXTURES ? FIXTURES[key] : [];
-    return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
-  };
-})();`
+// The breakdown endpoint is one path with two answers.
+const route = (pathname, params) =>
+  pathname === '/api/admin/overview/breakdown' ? 'breakdown:' + params.get('by') : pathname
 
-// ---- a minimal DevTools Protocol client ----
+await withChrome({ fixtures: FIXTURES, route }, async ({ open, pdf, shoot, viewport, evaluate, sleep }) => {
+  // Pilot report: the PDF, then its first page as the preview image.
+  await open('/admin/pilot-report?sample=1')
+  await pdf('pilot-report.pdf')
+  await shoot('pilot-report.png', `() => [
+    document.querySelector('header'),
+    [...document.querySelectorAll('section')].find(s => s.querySelector('h2')?.textContent === 'Adoption'),
+  ]`)
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  // The admin pages sit beside two navigation columns; a wider window gives
+  // their content the room a principal's laptop would.
+  await viewport(1760)
 
-async function connect() {
-  for (let i = 0; i < 50; i++) {
-    try {
-      const targets = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json()
-      const page = targets.find((t) => t.type === 'page')
-      if (page) return page.webSocketDebuggerUrl
-    } catch {
-      // Chrome still starting
-    }
-    await sleep(200)
-  }
-  throw new Error('Chrome did not start')
-}
+  // Dashboard: At a glance + What needs your attention.
+  await open('/admin')
+  await shoot('admin-dashboard.png', `() => [
+    [...document.querySelectorAll('p')].find(p => p.textContent === 'At a glance').parentElement,
+    [...document.querySelectorAll('section')].find(s => s.querySelector('h2')?.textContent === 'What needs your attention'),
+  ]`)
 
-function client(wsUrl) {
-  const ws = new WebSocket(wsUrl)
-  let id = 0
-  const pending = new Map()
-  const events = []
-  ws.onmessage = (msg) => {
-    const data = JSON.parse(msg.data)
-    if (data.id && pending.has(data.id)) {
-      const { resolve, reject } = pending.get(data.id)
-      pending.delete(data.id)
-      data.error ? reject(new Error(data.error.message)) : resolve(data.result)
-    } else if (data.method) {
-      events.push(data.method)
-    }
-  }
-  const ready = new Promise((r) => (ws.onopen = r))
-  const send = async (method, params = {}) => {
-    await ready
-    return new Promise((resolve, reject) => {
-      pending.set(++id, { resolve, reject })
-      ws.send(JSON.stringify({ id, method, params }))
-    })
-  }
-  return { send, close: () => ws.close() }
-}
-
-async function main() {
-  const profile = mkdtempSync(join(tmpdir(), 'wivoza-capture-'))
-  const chrome = spawn(CHROME, [
-    '--headless=new', `--remote-debugging-port=${PORT}`, `--user-data-dir=${profile}`,
-    '--no-first-run', '--hide-scrollbars', 'about:blank',
-  ], { stdio: 'ignore' })
-
-  try {
-    const cdp = client(await connect())
-    await cdp.send('Page.enable')
-    await cdp.send('Runtime.enable')
-    await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: MOCK })
-    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 1800, deviceScaleFactor: 2, mobile: false })
-
-    const evaluate = async (expression) =>
-      (await cdp.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })).result.value
-    const open = async (path) => {
-      await cdp.send('Page.navigate', { url: APP + path })
-      await sleep(2500)
-    }
-    // Screenshot of the union of the elements a selector-script returns.
-    const shoot = async (file, rectScript) => {
-      const r = await evaluate(`(() => { const els = (${rectScript})(); const rs = els.map(e => e.getBoundingClientRect());
-        const x = Math.min(...rs.map(r => r.left)), y = Math.min(...rs.map(r => r.top)) + scrollY;
-        const right = Math.max(...rs.map(r => r.right)), bottom = Math.max(...rs.map(r => r.bottom)) + scrollY;
-        return { x: x - 16, y: y - 16, width: right - x + 32, height: bottom - y + 32 }; })()`)
-      const { data } = await cdp.send('Page.captureScreenshot', {
-        format: 'png', captureBeyondViewport: true, clip: { ...r, scale: 1 },
-      })
-      writeFileSync(join(OUT, file), Buffer.from(data, 'base64'))
-      console.log(`✓ ${file} (${Math.round(r.width)}×${Math.round(r.height)})`)
-    }
-
-    // Pilot report: the PDF, then its first page as the preview image.
-    await open('/admin/pilot-report?sample=1')
-    const { data: pdf } = await cdp.send('Page.printToPDF', { printBackground: true, preferCSSPageSize: true })
-    writeFileSync(join(OUT, 'pilot-report.pdf'), Buffer.from(pdf, 'base64'))
-    console.log('✓ pilot-report.pdf')
-    await shoot('pilot-report.png', `() => {
-      const cover = document.querySelector('header');
-      const adoption = [...document.querySelectorAll('section')].find(s => s.querySelector('h2')?.textContent === 'Adoption');
-      return [cover, adoption];
-    }`)
-
-    // The admin pages sit beside two navigation columns; a wider window gives
-    // their content the room a principal's laptop would.
-    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1760, height: 1800, deviceScaleFactor: 2, mobile: false })
-
-    // Dashboard: At a glance + What needs your attention.
-    await open('/admin')
-    await shoot('admin-dashboard.png', `() => {
-      const glance = [...document.querySelectorAll('p')].find(p => p.textContent === 'At a glance').parentElement;
-      const attention = [...document.querySelectorAll('section')].find(s => s.querySelector('h2')?.textContent === 'What needs your attention');
-      return [glance, attention];
-    }`)
-
-    // Professional Learning: the tracked focus area.
-    await evaluate(`[...document.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Professional Learning').click()`)
-    await sleep(1500)
-    await shoot('admin-pd-progress.png', `() => [[...document.querySelectorAll('h3')].find(h => h.textContent === 'Talk time balance').closest('.rounded-3xl')]`)
-
-    cdp.close()
-  } finally {
-    // Chrome keeps writing to its profile until it has fully exited.
-    const exited = new Promise((resolve) => chrome.once('exit', resolve))
-    chrome.kill()
-    await exited
-    rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
-  }
-}
-
-await main()
+  // Professional Learning: the tracked focus area.
+  await evaluate(`[...document.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Professional Learning').click()`)
+  await sleep(1500)
+  await shoot('admin-pd-progress.png', `() => [[...document.querySelectorAll('h3')].find(h => h.textContent === 'Talk time balance').closest('.rounded-3xl')]`)
+})

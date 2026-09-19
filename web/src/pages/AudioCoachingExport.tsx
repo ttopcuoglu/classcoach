@@ -274,6 +274,52 @@ export default function AudioCoachingExport() {
           )}
         </ReportSection>
 
+        {/* Rubric Lens — only once the teacher has asked for it in the app.
+            The page they'd bring to an evaluation conversation, so it prints
+            the same evidence-and-next-step view, never a level. */}
+        {session.rubricLens && (
+          <ReportSection
+            n={++n}
+            title="Rubric Lens"
+            blurb={`${session.rubricLens.frameworkName}: evidence from this lesson for each component. Not a rating.`}
+            accent={A.forest}
+          >
+            <div className="flex flex-col gap-3">
+              {session.rubricLens.components.map((c) => (
+                <div key={c.code} className="break-inside-avoid rounded-2xl border border-hairline bg-white p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-md bg-gold px-2 py-0.5 text-xs font-bold text-forest">{c.code}</span>
+                    <span className="font-heading text-base font-bold text-forest">{c.name}</span>
+                    <span className="text-[11px] text-ink-soft">
+                      {c.audibility === 'strong' ? 'Audio shows this well' : 'Audio shows part of this'}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-ink">{c.summary}</p>
+                  {c.evidence.map((e, i) => (
+                    <p key={i} className="mt-1.5 border-l-2 border-gold/60 pl-3 text-sm text-ink">
+                      “{e.text}” <span className="text-xs text-ink-soft">({formatTime(e.timestampSec)} · {e.kind})</span>
+                    </p>
+                  ))}
+                  {c.nextStep && (
+                    <p className="mt-2 rounded-xl bg-gold-tint/50 px-3 py-2 text-sm text-ink">
+                      <span className="font-semibold">Next step to try: </span>
+                      {c.nextStep}
+                    </p>
+                  )}
+                </div>
+              ))}
+              {session.rubricLens.notObservable.map((c) => (
+                <p key={c.code} className="break-inside-avoid rounded-2xl border border-dashed border-hairline p-4 text-sm text-ink-soft">
+                  <span className="font-semibold">
+                    {c.code} {c.name}:
+                  </span>{' '}
+                  not in a recording. {c.reason}
+                </p>
+              ))}
+            </div>
+          </ReportSection>
+        )}
+
         {/* Moments */}
         {session.highlights && session.highlights.length > 0 && (
           <ReportSection n={++n} title="Moments Worth Revisiting" blurb="Specific points in the recording, with timestamps." accent={A.gold}>

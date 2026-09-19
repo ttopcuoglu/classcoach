@@ -1,0 +1,1366 @@
+{
+  "lesson": {
+    "id": "sample-lesson",
+    "teacherName": null,
+    "classSubject": "World History 10",
+    "period": "8th period",
+    "gradeLevel": "10th",
+    "sessionDate": "2026-09-17T18:20:00.000Z",
+    "consentConfirmed": true,
+    "status": "analyzed",
+    "durationSec": 688,
+    "teacherTalkPct": 36.5,
+    "studentTalkPct": 22.1,
+    "questionCount": 14,
+    "higherOrderPct": 57.1,
+    "avgWaitTimeSec": 3.56,
+    "cfuCount": 1,
+    "metricsDetail": {
+      "totalDurationSec": 688.3,
+      "teacherTalkSec": 251.5,
+      "studentTalkSec": 152.4,
+      "studentVoiceSegments": 20,
+      "longestTeacherMonologueSec": 41.8,
+      "recallQuestionCount": 6,
+      "higherOrderQuestionCount": 8,
+      "followUpQuestionCount": 3,
+      "waitTimeSampleCount": 14,
+      "redirectionCount": 1,
+      "firstRedirectionTimestampSec": 2,
+      "transitionCount": 0,
+      "directiveCount": 3,
+      "positivePhraseCount": 5,
+      "correctivePhraseCount": 0,
+      "positiveToCorrectiveRatio": null,
+      "genericFeedbackCount": 2,
+      "specificFeedbackCount": 12,
+      "nameMentionCount": 1,
+      "uniqueNameCount": 1
+    },
+    "highlights": [
+      {
+        "label": "Follow-up / probing question",
+        "timestampSec": 338.89,
+        "excerpt": "What evidence in the testimony backs that up?"
+      },
+      {
+        "label": "Longest wait time",
+        "timestampSec": 346.6,
+        "excerpt": "It said a girl named Ellen lost part of her finger in the loom because there was nothing covering the gears.",
+        "durationSec": 4.2
+      },
+      {
+        "label": "Longest uninterrupted teacher monologue",
+        "timestampSec": 100.82,
+        "excerpt": "Okay, let's hear what some of you came up with. Let's start over here — what did your pair put down?",
+        "durationSec": 41.8
+      }
+    ],
+    "phases": [
+      {
+        "label": "Opening",
+        "startSec": 0,
+        "endSec": 68.8
+      },
+      {
+        "label": "Instruction",
+        "startSec": 68.8,
+        "endSec": 413
+      },
+      {
+        "label": "Work Time",
+        "startSec": 413,
+        "endSec": 619.5
+      },
+      {
+        "label": "Closing",
+        "startSec": 619.5,
+        "endSec": 688.3
+      }
+    ],
+    "questionLog": [
+      {
+        "timestampSec": 27.16,
+        "type": "recall",
+        "waitTimeSec": 2.83,
+        "text": "Does that make sense",
+        "followUps": []
+      },
+      {
+        "timestampSec": 56.53,
+        "type": "recall",
+        "waitTimeSec": 3.86,
+        "text": "Before we dig into the testimony, what does the word testimony mean",
+        "followUps": []
+      },
+      {
+        "timestampSec": 90.72,
+        "type": "recall",
+        "waitTimeSec": 3.73,
+        "text": "How many hours does the testimony say the workday lasted",
+        "followUps": []
+      },
+      {
+        "timestampSec": 316.96,
+        "type": "recall",
+        "waitTimeSec": 3.89,
+        "text": "Let's start over here — what did your pair put down",
+        "followUps": [
+          {
+            "timestampSec": 338.89,
+            "type": "higher_order",
+            "waitTimeSec": 4.18,
+            "text": "What evidence in the testimony backs that up",
+            "followUps": []
+          }
+        ]
+      },
+      {
+        "timestampSec": 391.07,
+        "type": "higher_order",
+        "waitTimeSec": 3.89,
+        "text": "How would a factory owner have answered that",
+        "followUps": []
+      },
+      {
+        "timestampSec": 431.12,
+        "type": "higher_order",
+        "waitTimeSec": 3.16,
+        "text": "Why do you think children were hired",
+        "followUps": []
+      },
+      {
+        "timestampSec": 453.68,
+        "type": "recall",
+        "waitTimeSec": 3.78,
+        "text": "What did your pair put down",
+        "followUps": []
+      },
+      {
+        "timestampSec": 506.58,
+        "type": "higher_order",
+        "waitTimeSec": 2.83,
+        "text": "How would you feel if you worked a fourteen-hour day with no way to complain",
+        "followUps": []
+      },
+      {
+        "timestampSec": 536.95,
+        "type": "higher_order",
+        "waitTimeSec": 3.94,
+        "text": "What evidence in the testimony backs that up",
+        "followUps": [
+          {
+            "timestampSec": 553.1,
+            "type": "higher_order",
+            "waitTimeSec": 4.13,
+            "text": "How would a factory owner have answered that",
+            "followUps": []
+          }
+        ]
+      },
+      {
+        "timestampSec": 599.81,
+        "type": "recall",
+        "waitTimeSec": 3.37,
+        "text": "Last one, what did your pair put down",
+        "followUps": [
+          {
+            "timestampSec": 618.19,
+            "type": "higher_order",
+            "waitTimeSec": 3.35,
+            "text": "Why do you think she felt there was nothing else",
+            "followUps": []
+          }
+        ]
+      },
+      {
+        "timestampSec": 651.62,
+        "type": "higher_order",
+        "waitTimeSec": 2.93,
+        "text": "What could have changed if children weren't allowed to work in factories",
+        "followUps": []
+      }
+    ],
+    "cfuLog": [
+      {
+        "timestampSec": 674.05,
+        "text": "Before you leave, write down one thing you heard from another pair that changed your mind or added something you hadn't thought about.",
+        "whatItChecked": "An end-of-lesson written check."
+      }
+    ],
+    "feedbackLog": [
+      {
+        "timestampSec": 54.29,
+        "kind": "generic",
+        "text": "Exactly, nice thinking, Marcus."
+      },
+      {
+        "timestampSec": 72.63,
+        "kind": "specific",
+        "text": "Right, in other words it's a firsthand account — somebody describing what they lived through, not a textbook summarizing it."
+      },
+      {
+        "timestampSec": 100.82,
+        "kind": "specific",
+        "text": "Fourteen hours, and no lunch break mentioned either. Keep that in mind."
+      },
+      {
+        "timestampSec": 356.37,
+        "kind": "specific",
+        "text": "Good, I like how you pointed to that specific detail instead of just saying it was dangerous in general."
+      },
+      {
+        "timestampSec": 383.4,
+        "kind": "specific",
+        "text": "I like how you pointed to the fourteen-hour day as evidence, not just said it was bad."
+      },
+      {
+        "timestampSec": 406.32,
+        "kind": "specific",
+        "text": "Great point, that's exactly the kind of pushback we might expect from someone running the factory."
+      },
+      {
+        "timestampSec": 445.48,
+        "kind": "specific",
+        "text": "That connects to something we'll keep seeing this unit, companies looking for the cheapest labor they can find."
+      },
+      {
+        "timestampSec": 462.67,
+        "kind": "specific",
+        "text": "That's fine, read what you have."
+      },
+      {
+        "timestampSec": 479.25,
+        "kind": "specific",
+        "text": "That's actually a really strong point — noticing the tone of a source and using it as evidence is something historians do all the time."
+      },
+      {
+        "timestampSec": 522,
+        "kind": "specific",
+        "text": "One more pair, go ahead."
+      },
+      {
+        "timestampSec": 567.11,
+        "kind": "specific",
+        "text": "Interesting, so from his view it might look like a favor, even though it's really forcing a little kid to work."
+      },
+      {
+        "timestampSec": 593.21,
+        "kind": "specific",
+        "text": "Good, that's a strong claim with a clear piece of evidence right behind it."
+      },
+      {
+        "timestampSec": 635.38,
+        "kind": "specific",
+        "text": "That's a really thoughtful read of that line."
+      },
+      {
+        "timestampSec": 668.5,
+        "kind": "generic",
+        "text": "Great point, nice thinking."
+      }
+    ],
+    "directiveLog": [
+      {
+        "timestampSec": 123.54,
+        "text": "Thirty seconds on your own first — write down one thing that stands out to you."
+      },
+      {
+        "timestampSec": 160.71,
+        "text": "Alright, now work with your partner and agree on one claim and one piece of evidence."
+      },
+      {
+        "timestampSec": 674.05,
+        "text": "Before you leave, write down one thing you heard from another pair that changed your mind or added something you hadn't thought about."
+      }
+    ],
+    "toneLog": [
+      {
+        "timestampSec": 54.29,
+        "kind": "positive",
+        "text": "Exactly, nice thinking, Marcus."
+      },
+      {
+        "timestampSec": 356.37,
+        "kind": "positive",
+        "text": "Good, I like how you pointed to that specific detail instead of just saying it was dangerous in general."
+      },
+      {
+        "timestampSec": 383.4,
+        "kind": "positive",
+        "text": "I like how you pointed to the fourteen-hour day as evidence, not just said it was bad."
+      },
+      {
+        "timestampSec": 406.32,
+        "kind": "positive",
+        "text": "Great point, that's exactly the kind of pushback we might expect from someone running the factory."
+      },
+      {
+        "timestampSec": 668.5,
+        "kind": "positive",
+        "text": "Great point, nice thinking."
+      }
+    ],
+    "redirectionLog": [
+      {
+        "timestampSec": 1.98,
+        "text": "Okay, eyes up here, let's get started."
+      }
+    ],
+    "reflectConversation": null,
+    "lessonContent": {
+      "topicTerms": {
+        "teacher": [
+          {
+            "term": "pair",
+            "count": 10
+          },
+          {
+            "term": "evidence",
+            "count": 8
+          },
+          {
+            "term": "factory",
+            "count": 7
+          },
+          {
+            "term": "testimony",
+            "count": 7
+          },
+          {
+            "term": "down",
+            "count": 6
+          },
+          {
+            "term": "work",
+            "count": 5
+          },
+          {
+            "term": "claim",
+            "count": 4
+          },
+          {
+            "term": "something",
+            "count": 4
+          },
+          {
+            "term": "look",
+            "count": 3
+          },
+          {
+            "term": "working",
+            "count": 3
+          },
+          {
+            "term": "conditions",
+            "count": 3
+          },
+          {
+            "term": "nice",
+            "count": 3
+          },
+          {
+            "term": "write",
+            "count": 3
+          },
+          {
+            "term": "piece",
+            "count": 3
+          },
+          {
+            "term": "backs",
+            "count": 3
+          },
+          {
+            "term": "hear",
+            "count": 3
+          },
+          {
+            "term": "Great",
+            "count": 3
+          },
+          {
+            "term": "point",
+            "count": 3
+          },
+          {
+            "term": "really",
+            "count": 3
+          },
+          {
+            "term": "actually",
+            "count": 2
+          }
+        ],
+        "student": [
+          {
+            "term": "said",
+            "count": 11
+          },
+          {
+            "term": "evidence",
+            "count": 5
+          },
+          {
+            "term": "machines",
+            "count": 4
+          },
+          {
+            "term": "nothing",
+            "count": 4
+          },
+          {
+            "term": "needed",
+            "count": 4
+          },
+          {
+            "term": "Maybe",
+            "count": 4
+          },
+          {
+            "term": "hours",
+            "count": 3
+          },
+          {
+            "term": "money",
+            "count": 3
+          },
+          {
+            "term": "testimony",
+            "count": 3
+          },
+          {
+            "term": "workers",
+            "count": 3
+          },
+          {
+            "term": "little",
+            "count": 2
+          },
+          {
+            "term": "actually",
+            "count": 2
+          },
+          {
+            "term": "fourteen",
+            "count": 2
+          },
+          {
+            "term": "kids",
+            "count": 2
+          },
+          {
+            "term": "part",
+            "count": 2
+          },
+          {
+            "term": "wrote",
+            "count": 2
+          },
+          {
+            "term": "more",
+            "count": 2
+          },
+          {
+            "term": "says",
+            "count": 2
+          },
+          {
+            "term": "even",
+            "count": 2
+          },
+          {
+            "term": "around",
+            "count": 2
+          }
+        ]
+      },
+      "statedObjective": {
+        "found": true,
+        "quote": "Today we're going to look closely at what factory work was actually like for the people who lived through it.",
+        "timestampSec": 5.61
+      },
+      "connections": [
+        {
+          "quote": "That connects to something we'll keep seeing this unit, companies looking for the cheapest labor they can find.",
+          "timestampSec": 445.48
+        },
+        {
+          "quote": "In real life, we still argue about working conditions today, this isn't just something from the past.",
+          "timestampSec": 639.34
+        }
+      ],
+      "vocabulary": [
+        {
+          "quote": "Quick review first — the factory system is defined as a way of producing goods where workers, including a lot of kids, ran machines together in one building instead of making things by hand at home. Does that make sense?",
+          "timestampSec": 27.16
+        },
+        {
+          "quote": "Right, in other words it's a firsthand account — somebody describing what they lived through, not a textbook summarizing it.",
+          "timestampSec": 72.63
+        }
+      ],
+      "subject": null
+    },
+    "contentNotes": null,
+    "rubricLens": {
+      "framework": "danielson_2022",
+      "frameworkName": "Danielson Framework for Teaching (2022)",
+      "generatedAt": "2026-09-17T18:20:00.000Z",
+      "components": [
+        {
+          "code": "2a",
+          "name": "Cultivating Respectful and Affirming Environments",
+          "domain": "Domain 2: Learning Environments",
+          "audibility": "partial",
+          "summary": "Teacher language toward students was warm and encouraging, using a student's name positively and affirming responses (\"Exactly, nice thinking,\" \"Great point\"). Audio can't capture facial expression, tone of voice nuance, or classroom climate beyond word choice.",
+          "nextStep": "Try naming a specific student contribution during transitions too, not just after answers, to extend the affirming tone throughout the lesson.",
+          "evidence": [
+            {
+              "kind": "General praise · Encouraging language",
+              "timestampSec": 54.29,
+              "text": "Exactly, nice thinking, Marcus."
+            },
+            {
+              "kind": "Encouraging language",
+              "timestampSec": 356.37,
+              "text": "Good, I like how you pointed to that specific detail instead of just saying it was dangerous in general."
+            },
+            {
+              "kind": "Encouraging language",
+              "timestampSec": 406.32,
+              "text": "Great point, that's exactly the kind of pushback we might expect from someone running the factory."
+            }
+          ]
+        },
+        {
+          "code": "2b",
+          "name": "Fostering a Culture for Learning",
+          "domain": "Domain 2: Learning Environments",
+          "audibility": "partial",
+          "summary": "Praise often named exactly what a student did well, such as pointing to specific evidence rather than a vague claim, and the lesson opened with a clear purpose tied to quality thinking. This suggests spoken expectations for precision in evidence use.",
+          "nextStep": "Consider adding a spoken expectation about persistence or revising work, since the current praise focuses on accuracy more than effort or improvement.",
+          "evidence": [
+            {
+              "kind": "Encouraging language",
+              "timestampSec": 356.37,
+              "text": "Good, I like how you pointed to that specific detail instead of just saying it was dangerous in general."
+            },
+            {
+              "kind": "Specific feedback",
+              "timestampSec": 383.4,
+              "text": "I like how you pointed to the fourteen-hour day as evidence, not just said it was bad."
+            },
+            {
+              "kind": "Stated learning goal",
+              "timestampSec": 5.61,
+              "text": "Today we're going to look closely at what factory work was actually like for the people who lived through it."
+            }
+          ]
+        },
+        {
+          "code": "2c",
+          "name": "Maintaining Purposeful Environments",
+          "domain": "Domain 2: Learning Environments",
+          "audibility": "partial",
+          "summary": "Directions for tasks were clear and specific (thirty seconds alone, then partner work to agree on a claim and evidence), though the automatic count shows zero detected spoken transitions between activities, meaning shifts may have been handled nonverbally or briefly.",
+          "nextStep": "Try adding a brief spoken transition line signaling when one activity ends and the next begins, to make shifts explicit for all students.",
+          "evidence": [
+            {
+              "kind": "Redirection",
+              "timestampSec": 1.98,
+              "text": "Okay, eyes up here, let's get started."
+            },
+            {
+              "kind": "Task instruction",
+              "timestampSec": 123.54,
+              "text": "Thirty seconds on your own first — write down one thing that stands out to you."
+            },
+            {
+              "kind": "Task instruction",
+              "timestampSec": 160.71,
+              "text": "Alright, now work with your partner and agree on one claim and one piece of evidence."
+            }
+          ]
+        },
+        {
+          "code": "2d",
+          "name": "Supporting Positive Student Behavior",
+          "domain": "Domain 2: Learning Environments",
+          "audibility": "partial",
+          "summary": "Only one redirection was detected, phrased briefly and neutrally, and the lesson moved forward right after it. Audio can't show whether other nonverbal redirections happened or how students behaved throughout.",
+          "nextStep": null,
+          "evidence": [
+            {
+              "kind": "Redirection",
+              "timestampSec": 1.98,
+              "text": "Okay, eyes up here, let's get started."
+            }
+          ]
+        },
+        {
+          "code": "3a",
+          "name": "Communicating About Purpose and Content",
+          "domain": "Domain 3: Learning Experiences",
+          "audibility": "strong",
+          "summary": "The lesson opened with a stated learning goal, defined key vocabulary clearly (factory system, testimony), and connected content to a broader unit theme about labor costs. Explanations were concise and paired with checks for understanding.",
+          "nextStep": null,
+          "evidence": [
+            {
+              "kind": "Stated learning goal",
+              "timestampSec": 5.61,
+              "text": "Today we're going to look closely at what factory work was actually like for the people who lived through it."
+            },
+            {
+              "kind": "Vocabulary defined",
+              "timestampSec": 27.16,
+              "text": "Quick review first — the factory system is defined as a way of producing goods where workers, including a lot of kids, ran machines together in one building instead of making things by hand at home. Does that make sense?"
+            },
+            {
+              "kind": "Connection to prior knowledge or the real world",
+              "timestampSec": 445.48,
+              "text": "That connects to something we'll keep seeing this unit, companies looking for the cheapest labor they can find."
+            }
+          ]
+        },
+        {
+          "code": "3b",
+          "name": "Using Questioning and Discussion Techniques",
+          "domain": "Domain 3: Learning Experiences",
+          "audibility": "strong",
+          "summary": "Questions included both recall (6) and higher-order (5) types, with average wait time around 3.5 seconds and 3 follow-up questions extending student thinking, such as asking how a factory owner might respond or what could have changed historically.",
+          "nextStep": "Try adding one or two more follow-up questions after recall answers to push initial responses toward deeper reasoning.",
+          "evidence": [
+            {
+              "kind": "Higher-order question, about 3.9s before a student answered",
+              "timestampSec": 391.07,
+              "text": "How would a factory owner have answered that"
+            },
+            {
+              "kind": "Higher-order question, about 2.8s before a student answered",
+              "timestampSec": 506.58,
+              "text": "How would you feel if you worked a fourteen-hour day with no way to complain"
+            },
+            {
+              "kind": "Higher-order question, about 2.9s before a student answered",
+              "timestampSec": 651.62,
+              "text": "What could have changed if children weren't allowed to work in factories"
+            }
+          ]
+        },
+        {
+          "code": "3c",
+          "name": "Engaging Students in Learning",
+          "domain": "Domain 3: Learning Experiences",
+          "audibility": "partial",
+          "summary": "Students spoke in response to structured tasks (independent writing, then partner discussion producing a claim and evidence), with estimated student talk time around 22%. Audio can't confirm how many students participated beyond those who spoke into the microphone.",
+          "nextStep": null,
+          "evidence": [
+            {
+              "kind": "Task instruction",
+              "timestampSec": 123.54,
+              "text": "Thirty seconds on your own first — write down one thing that stands out to you."
+            },
+            {
+              "kind": "Task instruction",
+              "timestampSec": 160.71,
+              "text": "Alright, now work with your partner and agree on one claim and one piece of evidence."
+            },
+            {
+              "kind": "Student response",
+              "timestampSec": 468.94,
+              "text": "We wrote that the testimony sounds angry, like frustrated, and our evidence is the part where she says \"we are not machines.\""
+            }
+          ]
+        },
+        {
+          "code": "3d",
+          "name": "Using Assessment for Learning",
+          "domain": "Domain 3: Learning Experiences",
+          "audibility": "strong",
+          "summary": "The teacher checked understanding through direct questions and a closing written reflection task, and gave specific feedback in most instances (12 of 14 feedback moments), such as clarifying vocabulary and naming strong evidence use.",
+          "nextStep": null,
+          "evidence": [
+            {
+              "kind": "Specific feedback · Vocabulary defined",
+              "timestampSec": 72.63,
+              "text": "Right, in other words it's a firsthand account — somebody describing what they lived through, not a textbook summarizing it."
+            },
+            {
+              "kind": "Specific feedback",
+              "timestampSec": 383.4,
+              "text": "I like how you pointed to the fourteen-hour day as evidence, not just said it was bad."
+            },
+            {
+              "kind": "Check for understanding (An end-of-lesson written check.) · Task instruction",
+              "timestampSec": 674.05,
+              "text": "Before you leave, write down one thing you heard from another pair that changed your mind or added something you hadn't thought about."
+            }
+          ]
+        },
+        {
+          "code": "3e",
+          "name": "Responding Flexibly to Student Needs",
+          "domain": "Domain 3: Learning Experiences",
+          "audibility": "partial",
+          "summary": "The teacher followed up on student responses with additional questions that pushed for reasoning from another perspective or deeper justification, showing responsiveness to what students had just said rather than moving on immediately.",
+          "nextStep": "Try building in a brief re-explanation or alternate example when a follow-up reveals a gap, to extend this responsiveness further.",
+          "evidence": [
+            {
+              "kind": "Follow-up question after a student response",
+              "timestampSec": 338.89,
+              "text": "What evidence in the testimony backs that up"
+            },
+            {
+              "kind": "Follow-up question after a student response",
+              "timestampSec": 553.1,
+              "text": "How would a factory owner have answered that"
+            },
+            {
+              "kind": "Follow-up question after a student response",
+              "timestampSec": 618.19,
+              "text": "Why do you think she felt there was nothing else"
+            }
+          ]
+        }
+      ],
+      "notObservable": [
+        {
+          "code": "2e",
+          "name": "Organizing Spaces for Learning",
+          "domain": "Domain 2: Learning Environments",
+          "reason": "Room arrangement and materials are visual, so a recording can't show them."
+        }
+      ]
+    },
+    "classSummary": "The class examined firsthand testimony from a factory worker to explore what working conditions were like during the era of the factory system, with students working in pairs to identify a claim about those conditions and support it with specific evidence from the text, including discussion of the long workday and why children were often employed.",
+    "strengths": "The half-sheet worked. Eleven students spoke, and every pair had something written before anyone talked.",
+    "growthAreas": "I still jumped in to explain once or twice before pairs had finished. The exit ticket answers were short.",
+    "nextStep": "Keep the half-sheet for Friday's source, and give pairs a full two minutes before I call on anyone.",
+    "followUpDate": null,
+    "createdAt": "2026-09-17T18:20:00.000Z",
+    "updatedAt": "2026-09-17T18:20:00.000Z",
+    "segments": [
+      {
+        "id": "seg-0",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 1.98,
+        "endSec": 4.96,
+        "text": "Okay, eyes up here, let's get started."
+      },
+      {
+        "id": "seg-1",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 5.61,
+        "endSec": 13.36,
+        "text": "Today we're going to look closely at what factory work was actually like for the people who lived through it."
+      },
+      {
+        "id": "seg-2",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 13.95,
+        "endSec": 26.72,
+        "text": "Our objective today is that by the end of class you'll be able to use evidence from a primary source to support a claim about factory working conditions."
+      },
+      {
+        "id": "seg-3",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 27.16,
+        "endSec": 43.13,
+        "text": "Quick review first — the factory system is defined as a way of producing goods where workers, including a lot of kids, ran machines together in one building instead of making things by hand at home. Does that make sense?"
+      },
+      {
+        "id": "seg-4",
+        "rawSpeakerTag": "Speaker 1",
+        "speakerLabel": "Student",
+        "startSec": 45.96,
+        "endSec": 53.63,
+        "text": "Yeah, like it's all happening in one place instead of everybody doing their own little piece at home?"
+      },
+      {
+        "id": "seg-5",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 54.29,
+        "endSec": 55.99,
+        "text": "Exactly, nice thinking, Marcus."
+      },
+      {
+        "id": "seg-6",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 56.53,
+        "endSec": 61.91,
+        "text": "Before we dig into the testimony, what does the word testimony mean?"
+      },
+      {
+        "id": "seg-7",
+        "rawSpeakerTag": "Speaker 2",
+        "speakerLabel": "Student",
+        "startSec": 65.77,
+        "endSec": 72.1,
+        "text": "Isn't it like when somebody tells what actually happened to them, like their own story?"
+      },
+      {
+        "id": "seg-8",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 72.63,
+        "endSec": 81.75,
+        "text": "Right, in other words it's a firsthand account — somebody describing what they lived through, not a textbook summarizing it."
+      },
+      {
+        "id": "seg-9",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 82.78,
+        "endSec": 89.68,
+        "text": "Take a look at the excerpt again, the one from the factory worker's testimony on your handout."
+      },
+      {
+        "id": "seg-10",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 90.72,
+        "endSec": 95.01,
+        "text": "How many hours does the testimony say the workday lasted?"
+      },
+      {
+        "id": "seg-11",
+        "rawSpeakerTag": "Speaker 3",
+        "speakerLabel": "Student",
+        "startSec": 98.74,
+        "endSec": 100.39,
+        "text": "It said fourteen hours."
+      },
+      {
+        "id": "seg-12",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 100.82,
+        "endSec": 105.79,
+        "text": "Fourteen hours, and no lunch break mentioned either. Keep that in mind."
+      },
+      {
+        "id": "seg-13",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 106.74,
+        "endSec": 111.83,
+        "text": "Okay, here's what we're doing today. Each pair is getting a half sheet."
+      },
+      {
+        "id": "seg-14",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 112.57,
+        "endSec": 122.84,
+        "text": "On it, you're going to write one claim about the working conditions and one piece of evidence straight from the testimony that backs it up."
+      },
+      {
+        "id": "seg-15",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 123.54,
+        "endSec": 130.71,
+        "text": "Thirty seconds on your own first — write down one thing that stands out to you."
+      },
+      {
+        "id": "seg-16",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 160.71,
+        "endSec": 166.96,
+        "text": "Alright, now work with your partner and agree on one claim and one piece of evidence."
+      },
+      {
+        "id": "seg-17",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 316.96,
+        "endSec": 325.02,
+        "text": "Okay, let's hear what some of you came up with. Let's start over here — what did your pair put down?"
+      },
+      {
+        "id": "seg-18",
+        "rawSpeakerTag": "Speaker 4",
+        "speakerLabel": "Student",
+        "startSec": 328.91,
+        "endSec": 337.82,
+        "text": "We said the conditions were unsafe because kids worked right next to machines that didn't have any guards on them."
+      },
+      {
+        "id": "seg-19",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 338.89,
+        "endSec": 342.42,
+        "text": "What evidence in the testimony backs that up?"
+      },
+      {
+        "id": "seg-20",
+        "rawSpeakerTag": "Speaker 4",
+        "speakerLabel": "Student",
+        "startSec": 346.6,
+        "endSec": 355.54,
+        "text": "It said a girl named Ellen lost part of her finger in the loom because there was nothing covering the gears."
+      },
+      {
+        "id": "seg-21",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 356.37,
+        "endSec": 364.09,
+        "text": "Good, I like how you pointed to that specific detail instead of just saying it was dangerous in general."
+      },
+      {
+        "id": "seg-22",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 364.78,
+        "endSec": 370.72,
+        "text": "Nice job. Let's hear from another pair — tell us what you wrote down."
+      },
+      {
+        "id": "seg-23",
+        "rawSpeakerTag": "Speaker 5",
+        "speakerLabel": "Student",
+        "startSec": 374.47,
+        "endSec": 382.81,
+        "text": "We said the hours were too long, and our evidence is it said fourteen hours a day, six days a week."
+      },
+      {
+        "id": "seg-24",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 383.4,
+        "endSec": 390.34,
+        "text": "I like how you pointed to the fourteen-hour day as evidence, not just said it was bad."
+      },
+      {
+        "id": "seg-25",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 391.07,
+        "endSec": 394.49,
+        "text": "How would a factory owner have answered that?"
+      },
+      {
+        "id": "seg-26",
+        "rawSpeakerTag": "Speaker 5",
+        "speakerLabel": "Student",
+        "startSec": 398.38,
+        "endSec": 405.69,
+        "text": "Probably that it's needed to keep the machines running so they don't lose money, or something like that?"
+      },
+      {
+        "id": "seg-27",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 406.32,
+        "endSec": 413.51,
+        "text": "Great point, that's exactly the kind of pushback we might expect from someone running the factory."
+      },
+      {
+        "id": "seg-28",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 414.48,
+        "endSec": 418.2,
+        "text": "Go ahead, share what your pair came up with."
+      },
+      {
+        "id": "seg-29",
+        "rawSpeakerTag": "Speaker 6",
+        "speakerLabel": "Student",
+        "startSec": 422.18,
+        "endSec": 430.57,
+        "text": "We wrote that kids were hired because they got paid less and could fit into small spaces under the machines."
+      },
+      {
+        "id": "seg-30",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 431.12,
+        "endSec": 434.19,
+        "text": "Why do you think children were hired?"
+      },
+      {
+        "id": "seg-31",
+        "rawSpeakerTag": "Speaker 6",
+        "speakerLabel": "Student",
+        "startSec": 437.35,
+        "endSec": 444.65,
+        "text": "Maybe because owners could pay them almost nothing and they were too young to argue or ask for more."
+      },
+      {
+        "id": "seg-32",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 445.48,
+        "endSec": 452.62,
+        "text": "That connects to something we'll keep seeing this unit, companies looking for the cheapest labor they can find."
+      },
+      {
+        "id": "seg-33",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 453.68,
+        "endSec": 456.27,
+        "text": "What did your pair put down?"
+      },
+      {
+        "id": "seg-34",
+        "rawSpeakerTag": "Speaker 7",
+        "speakerLabel": "Student",
+        "startSec": 460.05,
+        "endSec": 462.06,
+        "text": "We weren't sure about ours."
+      },
+      {
+        "id": "seg-35",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 462.67,
+        "endSec": 465.04,
+        "text": "That's fine, read what you have."
+      },
+      {
+        "id": "seg-36",
+        "rawSpeakerTag": "Speaker 7",
+        "speakerLabel": "Student",
+        "startSec": 468.94,
+        "endSec": 478.71,
+        "text": "We wrote that the testimony sounds angry, like frustrated, and our evidence is the part where she says \"we are not machines.\""
+      },
+      {
+        "id": "seg-37",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 479.25,
+        "endSec": 488.91,
+        "text": "That's actually a really strong point — noticing the tone of a source and using it as evidence is something historians do all the time."
+      },
+      {
+        "id": "seg-38",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 489.36,
+        "endSec": 491.59,
+        "text": "Let's hear from this pair."
+      },
+      {
+        "id": "seg-39",
+        "rawSpeakerTag": "Speaker 8",
+        "speakerLabel": "Student",
+        "startSec": 495.1,
+        "endSec": 505.72,
+        "text": "We said the workers had no way to speak up, and our evidence is that nobody in the testimony mentions any kind of complaint system."
+      },
+      {
+        "id": "seg-40",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 506.58,
+        "endSec": 513.08,
+        "text": "How would you feel if you worked a fourteen-hour day with no way to complain?"
+      },
+      {
+        "id": "seg-41",
+        "rawSpeakerTag": "Speaker 8",
+        "speakerLabel": "Student",
+        "startSec": 515.91,
+        "endSec": 521.35,
+        "text": "Honestly pretty hopeless, like there's nothing you could even do about it."
+      },
+      {
+        "id": "seg-42",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 522,
+        "endSec": 524.26,
+        "text": "One more pair, go ahead."
+      },
+      {
+        "id": "seg-43",
+        "rawSpeakerTag": "Speaker 9",
+        "speakerLabel": "Student",
+        "startSec": 527.49,
+        "endSec": 535.96,
+        "text": "We said the youngest workers were around eight or nine, based on what she said about her little brother."
+      },
+      {
+        "id": "seg-44",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 536.95,
+        "endSec": 540.58,
+        "text": "What evidence in the testimony backs that up?"
+      },
+      {
+        "id": "seg-45",
+        "rawSpeakerTag": "Speaker 9",
+        "speakerLabel": "Student",
+        "startSec": 544.52,
+        "endSec": 552.65,
+        "text": "She said her brother started at the mill when he was eight, right after their dad got hurt on the job."
+      },
+      {
+        "id": "seg-46",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 553.1,
+        "endSec": 556.38,
+        "text": "How would a factory owner have answered that?"
+      },
+      {
+        "id": "seg-47",
+        "rawSpeakerTag": "Speaker 9",
+        "speakerLabel": "Student",
+        "startSec": 560.51,
+        "endSec": 566.43,
+        "text": "Maybe he'd say the family needed the money so it was actually helping them out?"
+      },
+      {
+        "id": "seg-48",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 567.11,
+        "endSec": 575.74,
+        "text": "Interesting, so from his view it might look like a favor, even though it's really forcing a little kid to work."
+      },
+      {
+        "id": "seg-49",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 576.29,
+        "endSec": 578.92,
+        "text": "Tell us what your pair wrote."
+      },
+      {
+        "id": "seg-50",
+        "rawSpeakerTag": "Speaker 10",
+        "speakerLabel": "Student",
+        "startSec": 582.96,
+        "endSec": 592.34,
+        "text": "We said safety wasn't a priority at all, and our evidence is that there were no breaks mentioned, not even after the injury."
+      },
+      {
+        "id": "seg-51",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 593.21,
+        "endSec": 599.03,
+        "text": "Good, that's a strong claim with a clear piece of evidence right behind it."
+      },
+      {
+        "id": "seg-52",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 599.81,
+        "endSec": 603.07,
+        "text": "Last one, what did your pair put down?"
+      },
+      {
+        "id": "seg-53",
+        "rawSpeakerTag": "Speaker 11",
+        "speakerLabel": "Student",
+        "startSec": 606.44,
+        "endSec": 617.13,
+        "text": "We said the testimony shows workers felt like they had no other choice, and the evidence is where she says \"there was nothing else for us.\""
+      },
+      {
+        "id": "seg-54",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 618.19,
+        "endSec": 622.66,
+        "text": "Why do you think she felt there was nothing else?"
+      },
+      {
+        "id": "seg-55",
+        "rawSpeakerTag": "Speaker 11",
+        "speakerLabel": "Student",
+        "startSec": 626.01,
+        "endSec": 634.33,
+        "text": "Maybe because there weren't other jobs where they lived, or her family needed money right away and couldn't wait around."
+      },
+      {
+        "id": "seg-56",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 635.38,
+        "endSec": 638.89,
+        "text": "That's a really thoughtful read of that line."
+      },
+      {
+        "id": "seg-57",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 639.34,
+        "endSec": 646.56,
+        "text": "In real life, we still argue about working conditions today, this isn't just something from the past."
+      },
+      {
+        "id": "seg-58",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 647.26,
+        "endSec": 651.18,
+        "text": "Okay, let's bring it back together for a second."
+      },
+      {
+        "id": "seg-59",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 651.62,
+        "endSec": 656.33,
+        "text": "What could have changed if children weren't allowed to work in factories?"
+      },
+      {
+        "id": "seg-60",
+        "rawSpeakerTag": "Speaker 1",
+        "speakerLabel": "Student",
+        "startSec": 659.26,
+        "endSec": 668.05,
+        "text": "Maybe families would've needed different jobs, or the factories would've had to pay adults more to do the same work?"
+      },
+      {
+        "id": "seg-61",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 668.5,
+        "endSec": 670.09,
+        "text": "Great point, nice thinking."
+      },
+      {
+        "id": "seg-62",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 671.05,
+        "endSec": 673.32,
+        "text": "Alright, great work today, everyone."
+      },
+      {
+        "id": "seg-63",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 674.05,
+        "endSec": 683.87,
+        "text": "Before you leave, write down one thing you heard from another pair that changed your mind or added something you hadn't thought about."
+      },
+      {
+        "id": "seg-64",
+        "rawSpeakerTag": "Speaker 0",
+        "speakerLabel": "Teacher",
+        "startSec": 684.54,
+        "endSec": 688.34,
+        "text": "Turn those in on your way out, thank you."
+      }
+    ]
+  },
+  "talk": {
+    "id": "sample-talk",
+    "incidentText": "So my fourth period seventh graders — I've got about five kids who just call out constantly, even when someone else is answering. I remind them, it works for two minutes, and honestly the quiet kids have just stopped trying.",
+    "category": null,
+    "feedback": null,
+    "wordsToTry": null,
+    "followUp": null,
+    "rating": null,
+    "source": "talk_to_me",
+    "saved": true,
+    "shareToken": null,
+    "createdAt": "2026-08-23T23:40:00.000Z",
+    "conversation": [
+      {
+        "role": "user",
+        "text": "So my fourth period seventh graders — I've got about five kids who just call out constantly, even when someone else is answering. I remind them, it works for two minutes, and honestly the quiet kids have just stopped trying.",
+        "createdAt": "2026-08-23T23:40:45.000Z"
+      },
+      {
+        "role": "assistant",
+        "text": "Yeah, that's the real cost — the quiet kids checking out is worse than the calling out itself. What have you tried besides the verbal reminders — anything structural, like cold-calling or requiring hands for a stretch?",
+        "createdAt": "2026-08-23T23:41:30.000Z"
+      },
+      {
+        "role": "user",
+        "text": "I did try a points chart for hand-raising last year and honestly it felt babyish for seventh graders, so I dropped it. Cold-calling I've done a little, but I worry it'll put the quiet kids on the spot in a bad way if I just start picking on them randomly.",
+        "createdAt": "2026-08-23T23:42:15.000Z"
+      },
+      {
+        "role": "assistant",
+        "text": "Fair worry, but there's a version that softens that — pair cold-calling with think time. Give a question, say \"thirty seconds, everyone jots something down,\" then call on someone by name, calling on a quiet kid to read their own written answer feels a lot less exposed than being cold-called with nothing prepped. Want to try that as your structural fix for the callers, alongside naming the pattern to the class directly?",
+        "createdAt": "2026-08-23T23:43:00.000Z"
+      },
+      {
+        "role": "user",
+        "text": "That could actually work — giving them something written down first takes the pressure off. I could even do it like \"turn and check with your neighbor\" for ten seconds before I call on anyone, so nobody's totally blank when I pick them.",
+        "createdAt": "2026-08-23T23:43:45.000Z"
+      },
+      {
+        "role": "assistant",
+        "text": "That neighbor-check is a nice extra layer, gives quiet kids a dry run before it's ever public. One thing to nail down before Monday, though — what are you actually going to say to the five callers about why this new structure exists, so it doesn't feel like it came out of nowhere?",
+        "createdAt": "2026-08-23T23:44:30.000Z"
+      },
+      {
+        "role": "user",
+        "text": "I think I'll just be straight with them, something like \"I love that you all know this stuff, but I want to hear from more voices, so we're doing written answer first, then I call on people\" — probably say that Monday at the start of class, not spring it on them mid-lesson. Okay, I'll try that with 4th period tomorrow.",
+        "createdAt": "2026-08-23T23:45:15.000Z"
+      },
+      {
+        "role": "assistant",
+        "text": "That's a good frame — puts it on getting more voices in, not on calling them out for calling out. Let me know how it lands.",
+        "createdAt": "2026-08-23T23:46:00.000Z"
+      }
+    ],
+    "talkTakeaway": {
+      "explored": "The teacher described five students who call out constantly in fourth period, causing quieter students to disengage, and we discussed replacing verbal reminders with a structured approach: written think time or a neighbor-check before cold-calling.",
+      "tryNext": "Start fourth period with the written-answer-then-cold-call structure (including the ten-second neighbor check), and open class with the planned framing about wanting to hear from more voices.",
+      "notice": "Watch how the quiet students respond once they have something written down before being called on — whether that dry run actually lowers the pressure you were worried about."
+    },
+    "triedAt": "2026-08-27T18:55:00.000Z",
+    "reflectionNote": "The written-answer-then-cold-call opener is a keeper — call-outs dropped and three quiet kids raised their hands, which made my day. Open discussion is still loose though, so that's the piece to solve next."
+  },
+  "plan": {
+    "id": "sample-plan",
+    "mode": "feedback",
+    "objective": "Students will analyze a primary source to make a claim about working conditions in early factories and support it with evidence.",
+    "unitName": "The Industrial Revolution",
+    "essentialQuestion": null,
+    "standard": null,
+    "subject": "World History",
+    "gradeLevel": "10th",
+    "planText": "8th period (last period of the day), 50 minutes.\n\nDo Now (5 min): Photo of a textile mill interior on the board. Write one thing you notice and one question you have.\n\nMini-lesson (10 min): Quick review of the factory system and why it replaced cottage industry. Key vocabulary: factory system, textile mill, child labor.\n\nPrimary source (8 min): Excerpt of a factory worker's testimony to Parliament (Sadler Committee, 1832). I read the first paragraph aloud, then they read the rest silently.\n\nHalf-sheet (12 min): Thirty seconds on your own first — write down one thing that stands out to you. Then with your partner, agree on ONE claim about working conditions and ONE piece of evidence from the testimony. Both names on the half-sheet.\n\nShare out (10 min): I call on pairs, not individuals — \"What did your pair put down?\" I push for evidence: which line in the testimony backs that up?\n\nExit ticket (5 min): Write down one thing you heard from another pair that changed your mind.\n\nNote to self: this class is silent. The same three students answer everything and everyone else waits them out. Last time I tried think-pair-share the pairs just chatted about their weekend. The half-sheet is supposed to give pairs something they have to produce before anyone talks.",
+    "feedback": "This is a single-day, 50-minute lesson, and the bones of it are genuinely solid — you can see the objective (analyze a primary source, make a claim, support it with evidence) running through nearly every step rather than sitting off to the side as decoration.\n\nThe structure builds logically: the Do Now activates noticing/questioning, the mini-lesson gives just enough vocabulary and context to make the source legible, and then the half-sheet asks students to do the actual thinking the objective demands — claim plus evidence, in writing, before anyone has to speak. That sequencing is smart, and it's clearly a direct response to what you know about this class period. Naming that the silent thirty-seconds-alone step exists specifically to give reluctant talkers something concrete to lean on before the pair work — that's exactly the kind of diagnosis-and-fix thinking that makes a lesson plan trustworthy. You're not just running a script; you're solving a real problem with this specific group.\n\nA few things to look at:\n\nThe gradual release here is more \"I do a little, then straight to you do\" than a true I do / we do / you do. The mini-lesson gives content but not a model of the actual skill — making a claim and backing it with a specific line of text. Given how silent and evidence-shy this class is, it might help to do one moment of \"we do\" between the mini-lesson and the half-sheet: read one sentence of the testimony together and think aloud, \"this line makes me think X, because it says Y\" — modeling the exact move you want on the half-sheet. Thirty seconds is enough; you don't need to eat much time, but showing the move once before asking pairs to produce it cold could raise the quality of what comes back.\n\nThe higher-order thinking is there in the task (claim + evidence) but the primary source itself is thin — one excerpt, 8 minutes, partly read aloud by you. With Sadler Committee testimony, there's often room for a slightly meatier or slightly more haunting excerpt that gives pairs more to disagree about, which would also help the share-out generate real friction instead of everyone converging on the same obvious claim.\n\nClosure is real, but the exit ticket is asking students to report on someone else's thinking (\"what changed your mind\") rather than to state their own claim one more time in their own words. That's a nice listening-accountability move, but it means you don't get a final individual check on whether each student, alone, can now do the actual objective — claim plus evidence. You might alternate: some days \"what changed your mind,\" other days \"state your own claim and evidence now, in your own words,\" so you're getting individual formative data on the skill itself, not just on engagement.\n\nPacing looks realistic for 50 minutes, and structuring the share-out around pairs rather than individuals is a good workaround for the participation pattern you're seeing — it lowers the risk of being wrong alone. Worth naming to yourself as a strategy that's working, not just a workaround.",
+    "rating": 4,
+    "doNow": null,
+    "agenda": null,
+    "closure": null,
+    "hots": null,
+    "homework": null,
+    "saved": true,
+    "shareToken": null,
+    "createdAt": "2026-09-16T23:40:00.000Z",
+    "conversation": [
+      {
+        "role": "user",
+        "text": "Objective: Students will analyze a primary source to make a claim about working conditions in early factories and support it with evidence.\nUnit: The Industrial Revolution\nSubject: World History\nGrade level: 10th\n\nLesson plan:\n8th period (last period of the day), 50 minutes.\n\nDo Now (5 min): Photo of a textile mill interior on the board. Write one thing you notice and one question you have.\n\nMini-lesson (10 min): Quick review of the factory system and why it replaced cottage industry. Key vocabulary: factory system, textile mill, child labor.\n\nPrimary source (8 min): Excerpt of a factory worker's testimony to Parliament (Sadler Committee, 1832). I read the first paragraph aloud, then they read the rest silently.\n\nHalf-sheet (12 min): Thirty seconds on your own first — write down one thing that stands out to you. Then with your partner, agree on ONE claim about working conditions and ONE piece of evidence from the testimony. Both names on the half-sheet.\n\nShare out (10 min): I call on pairs, not individuals — \"What did your pair put down?\" I push for evidence: which line in the testimony backs that up?\n\nExit ticket (5 min): Write down one thing you heard from another pair that changed your mind.\n\nNote to self: this class is silent. The same three students answer everything and everyone else waits them out. Last time I tried think-pair-share the pairs just chatted about their weekend. The half-sheet is supposed to give pairs something they have to produce before anyone talks.",
+        "createdAt": "2026-09-16T23:40:00.000Z"
+      },
+      {
+        "role": "assistant",
+        "text": "This is a single-day, 50-minute lesson, and the bones of it are genuinely solid — you can see the objective (analyze a primary source, make a claim, support it with evidence) running through nearly every step rather than sitting off to the side as decoration.\n\nThe structure builds logically: the Do Now activates noticing/questioning, the mini-lesson gives just enough vocabulary and context to make the source legible, and then the half-sheet asks students to do the actual thinking the objective demands — claim plus evidence, in writing, before anyone has to speak. That sequencing is smart, and it's clearly a direct response to what you know about this class period. Naming that the silent thirty-seconds-alone step exists specifically to give reluctant talkers something concrete to lean on before the pair work — that's exactly the kind of diagnosis-and-fix thinking that makes a lesson plan trustworthy. You're not just running a script; you're solving a real problem with this specific group.\n\nA few things to look at:\n\nThe gradual release here is more \"I do a little, then straight to you do\" than a true I do / we do / you do. The mini-lesson gives content but not a model of the actual skill — making a claim and backing it with a specific line of text. Given how silent and evidence-shy this class is, it might help to do one moment of \"we do\" between the mini-lesson and the half-sheet: read one sentence of the testimony together and think aloud, \"this line makes me think X, because it says Y\" — modeling the exact move you want on the half-sheet. Thirty seconds is enough; you don't need to eat much time, but showing the move once before asking pairs to produce it cold could raise the quality of what comes back.\n\nThe higher-order thinking is there in the task (claim + evidence) but the primary source itself is thin — one excerpt, 8 minutes, partly read aloud by you. With Sadler Committee testimony, there's often room for a slightly meatier or slightly more haunting excerpt that gives pairs more to disagree about, which would also help the share-out generate real friction instead of everyone converging on the same obvious claim.\n\nClosure is real, but the exit ticket is asking students to report on someone else's thinking (\"what changed your mind\") rather than to state their own claim one more time in their own words. That's a nice listening-accountability move, but it means you don't get a final individual check on whether each student, alone, can now do the actual objective — claim plus evidence. You might alternate: some days \"what changed your mind,\" other days \"state your own claim and evidence now, in your own words,\" so you're getting individual formative data on the skill itself, not just on engagement.\n\nPacing looks realistic for 50 minutes, and structuring the share-out around pairs rather than individuals is a good workaround for the participation pattern you're seeing — it lowers the risk of being wrong alone. Worth naming to yourself as a strategy that's working, not just a workaround.",
+        "createdAt": "2026-09-16T23:40:00.000Z"
+      }
+    ],
+    "suggestedRevision": null,
+    "deliveryCoaching": null,
+    "fileName": null,
+    "slideCount": null,
+    "presentationReview": null
+  }
+}

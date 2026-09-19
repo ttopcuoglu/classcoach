@@ -15,6 +15,7 @@
 // is what Lesson Debrief measures as wait time.
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import {
   analyzeTranscript,
@@ -38,7 +39,7 @@ const WORDS_PER_SEC = 2.4
 // shares, whichever class it is.
 const FOCUS_METRIC = 'avgWaitTime'
 
-type Lesson = {
+export type Lesson = {
   key: string
   // Eastern time the recording started.
   recordedAt: string
@@ -53,7 +54,7 @@ type Lesson = {
   notes?: { strengths: string; growthAreas: string; nextStep: string }
 }
 
-const LESSONS: Lesson[] = [
+export const LESSONS: Lesson[] = [
   {
     key: 'g7_baseline',
     recordedAt: '2026-08-21T12:35:00-04:00',
@@ -190,7 +191,7 @@ T: Okay everyone, eyes up here.
 S1: Is this on the test?
 T: Take thirty seconds and write down your answer. [work 30]`
 
-type Line = { s: string; t: string; work?: number }
+export type Line = { s: string; t: string; work?: number }
 
 async function writeTranscript(lesson: Lesson): Promise<Line[]> {
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -242,7 +243,7 @@ function seeded(seed: string) {
 // a question a student answers, the marked work time, or a normal beat
 // between turns. A work line followed by a student (which the prompt rules
 // out) gets a normal wait rather than inflating wait time by minutes.
-function buildSegments(lesson: Lesson, lines: Line[]): Segment[] {
+export function buildSegments(lesson: Lesson, lines: Line[]): Segment[] {
   const rand = seeded(lesson.key)
   const between = (lo: number, hi: number) => lo + (hi - lo) * rand()
   const segments: Segment[] = []
@@ -269,7 +270,7 @@ function round(n: number) {
 }
 
 // Speaker tags as diarization would produce them: one per voice.
-function rawTags(lines: Line[]): string[] {
+export function rawTags(lines: Line[]): string[] {
   const ids = new Map<string, number>([['T', 0]])
   return lines.map((l) => {
     if (!ids.has(l.s)) ids.set(l.s, ids.size)
@@ -379,12 +380,15 @@ async function insert(inPath: string, email: string) {
   await prisma.$disconnect()
 }
 
-const [command, ...args] = process.argv.slice(2)
-if (command === 'generate' && args[0]) {
-  await generate(args[0])
-} else if (command === 'insert' && args.length >= 2) {
-  await insert(args[0], args[1])
-} else {
-  console.error('Usage: generate <out.json> | insert <in.json> <email>')
-  process.exit(1)
+// Only when run directly — buildTeacherSamples imports the lesson timing above.
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const [command, ...args] = process.argv.slice(2)
+  if (command === 'generate' && args[0]) {
+    await generate(args[0])
+  } else if (command === 'insert' && args.length >= 2) {
+    await insert(args[0], args[1])
+  } else {
+    console.error('Usage: generate <out.json> | insert <in.json> <email>')
+    process.exit(1)
+  }
 }

@@ -129,8 +129,23 @@ const VALUE_PROPS = ['Private by design', 'Judgment-free', 'Built for busy educa
 // but not one readable sentence, so it proves nothing at card size. Each card
 // instead shows the single moment that makes the point — the problem, then what
 // Wivoza did about it — as real text, with the full printed report a click away.
-// Excerpts are quoted from the reports themselves; every scenario is invented.
+// Excerpts are quoted, or closely paraphrased, from the reports themselves;
+// every scenario is invented.
 const SAMPLES = [
+  {
+    feature: 'Talk It Through',
+    eyebrow: 'Talk it through',
+    title: 'A tough class, talked through out loud',
+    before: {
+      label: 'You said',
+      text: '“I’ve got about five kids who just call out constantly … and honestly the quiet kids have just stopped trying.”',
+    },
+    after: {
+      label: 'What you’ll try',
+      text: 'Written answers first, a ten-second neighbor check, then call on students by name — opening class by saying you want to hear more voices.',
+    },
+    pdf: '/samples/talk-it-through.pdf',
+  },
   {
     feature: 'Communication Coach',
     eyebrow: 'Review my communication',
@@ -162,14 +177,14 @@ const SAMPLES = [
   {
     feature: 'Lesson Planning',
     eyebrow: 'Get feedback',
-    title: 'Feedback that catches what you missed',
+    title: 'Feedback that makes a good plan better',
     before: {
       label: 'Your plan',
-      text: '“Every food chain begins with a consumer. Consumers use sunlight to make their own food.”',
+      text: '“Thirty seconds on your own first. Then with your partner, agree on one claim and one piece of evidence from the testimony.”',
     },
     after: {
-      label: 'Coach caught it',
-      text: 'The definitions are swapped. Producers make their own food from sunlight; consumers eat other organisms.',
+      label: 'Coach’s suggestion',
+      text: 'Model the move once before pairs try it: read one sentence together and think aloud, “this line makes me think X, because it says Y.”',
     },
     pdf: '/samples/lesson-plan-feedback.pdf',
   },
@@ -219,14 +234,14 @@ function SampleCard({ feature, eyebrow, title, before, after, pdf }: (typeof SAM
 
 // The hero shows Lesson Debrief, the feature that sets Wivoza apart: a
 // miniature of the real report's cover and numbers. The figures are the ones
-// in the published sample report (/samples/lesson-debrief.pdf) — a staged
-// recording, not a real class — and the frame says "Sample" so nobody reads
-// them as someone's results.
+// in the published sample report (/samples/lesson-debrief.pdf) — an invented
+// class, not a real one — and the frame says "Sample" so nobody reads them as
+// someone's results.
 const HERO_TILES = [
-  { label: 'You spoke', value: '42.6', unit: '%', card: 'bg-peach-tint', ink: 'text-terracotta-600' },
-  { label: 'Students spoke', value: '15.9', unit: '%', card: 'bg-gold-tint', ink: 'text-terracotta-600' },
-  { label: 'Questions', value: '15', unit: '', card: 'bg-mint-tint', ink: 'text-forest' },
-  { label: 'Avg. wait', value: '3.07', unit: 's', card: 'bg-mint-tint', ink: 'text-forest' },
+  { label: 'You spoke', value: '36.5', unit: '%', card: 'bg-peach-tint', ink: 'text-terracotta-600' },
+  { label: 'Students spoke', value: '22.1', unit: '%', card: 'bg-gold-tint', ink: 'text-terracotta-600' },
+  { label: 'Questions', value: '14', unit: '', card: 'bg-mint-tint', ink: 'text-forest' },
+  { label: 'Avg. wait', value: '3.56', unit: 's', card: 'bg-mint-tint', ink: 'text-forest' },
 ]
 
 function ReportMockup() {
@@ -253,9 +268,9 @@ function ReportMockup() {
               </span>
             </div>
             <p className="mt-1.5 font-heading text-xl font-bold">
-              ELA 7 <span className="text-gold">·</span> 4th period
+              World History 10 <span className="text-gold">·</span> 8th period
             </p>
-            <p className="text-xs text-cream/60">7th grade · 12:02 recorded</p>
+            <p className="text-xs text-cream/60">10th grade · 11:28 recorded</p>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -271,10 +286,8 @@ function ReportMockup() {
           </div>
 
           <div className="rounded-xl border-l-4 border-gold bg-gold-tint/60 px-3 py-2.5">
-            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-terracotta-600">A strength to keep · 1:42</p>
-            <p className="mt-0.5 text-sm leading-snug text-ink">
-              “What are the two traits Marcus shows at the beginning of the story?”
-            </p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-terracotta-600">A strength to keep · 5:38</p>
+            <p className="mt-0.5 text-sm leading-snug text-ink">“What evidence in the testimony backs that up?”</p>
           </div>
         </div>
       </div>
@@ -654,12 +667,13 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
           <div>
             <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Lesson Debrief · Sample report</span>
             <h3 className="mt-2 font-heading text-2xl font-bold leading-snug sm:text-3xl">
-              Twelve minutes of class, seen clearly<span className="text-gold">.</span>
+              Eleven minutes of class, seen clearly<span className="text-gold">.</span>
             </h3>
             <p className="mt-3 text-sm leading-relaxed text-cream/75">
               Who was heard and for how long, what was asked and how long students had to think, how
-              checks for understanding went — with the exact moments, timestamps, and one next step. A
-              staged recording; no real class or student.
+              checks for understanding went — with the exact moments, timestamps, and one next step. Then
+              the same lesson through the Danielson rubric: evidence for each component, never a score.
+              An invented class; no real teacher or student.
             </p>
             <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-gold">
               View the full sample report
@@ -684,7 +698,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             </div>
           </div>
         </a>
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2">
           {SAMPLES.map((sample) => (
             <SampleCard key={sample.title} {...sample} />
           ))}
