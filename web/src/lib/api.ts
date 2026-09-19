@@ -1352,17 +1352,18 @@ export type ExportDocBlock =
   | { type: 'callout'; label: string; text: string }
 export type ExportDoc = { title: string; subtitle: string | null; blocks: ExportDocBlock[] }
 
-export type ExportSlideLayout = 'title' | 'cards' | 'split' | 'keyterm' | 'prompt'
+export type ExportSlideLayout = 'title' | 'cards' | 'split' | 'keyterm' | 'prompt' | 'steps' | 'compare' | 'visual'
 export type ExportSlide = {
   title: string
   bullets: string[]
   notes: string | null
   layout: ExportSlideLayout
   icon: string | null
+  visual: string | null
 }
 
 export type ExportTheme = 'wivoza' | 'history' | 'science' | 'math' | 'ela' | 'arts' | 'early' | 'wellness'
-export type ExportDeck = { theme: ExportTheme; variant: number; slides: ExportSlide[] }
+export type ExportDeck = { theme: ExportTheme; variant: number; slides: ExportSlide[]; changes: string[] }
 
 export type ExportKind = 'document' | 'slides'
 export type ExportFormat = 'docx' | 'pdf' | 'pptx'
@@ -1395,6 +1396,12 @@ export async function downloadExportFile(format: ExportFormat, model: ExportDoc 
   link.click()
   link.remove()
   URL.revokeObjectURL(url)
+}
+
+// Builds an improved, themed deck from a saved presentation review (applying
+// every recommendation). Preview it, then download through downloadExportFile.
+export function generatePresentation(planId: string): Promise<{ kind: 'slides'; model: ExportDeck }> {
+  return request(`/api/lesson-plans/${planId}/presentation-generate`, { method: 'POST' })
 }
 
 export function runAiResistant(id: string): Promise<AssignmentCoachSession> {

@@ -74,12 +74,14 @@ export function sanitizeDeck(raw: unknown): SlideDeck | null {
       layout,
       // An emoji is a few code units at most; anything longer is a word.
       icon: icon && [...icon].length <= 6 ? icon : null,
+      visual: clean(s.visual, 300) || null,
     })
   }
   if (slides.length === 0) return null
   slides[0].layout = 'title'
   const variant = Number.isInteger(r.variant) ? (((r.variant as number) % 4) + 4) % 4 : hashString(slides[0].title) % 4
-  return { theme, variant, slides }
+  const changes = Array.isArray(r.changes) ? r.changes.map((c) => clean(c, 300)).filter(Boolean).slice(0, 10) : []
+  return { theme, variant, slides, changes }
 }
 
 const listItems = (body: string): string[] =>
@@ -111,9 +113,15 @@ export function parseSlidesOutput(text: string): SlideDeck | null {
       notes: extractTag(block, 'notes'),
       layout: (extractTag(block, 'layout') ?? '').trim().toLowerCase(),
       icon: extractTag(block, 'icon'),
+      visual: extractTag(block, 'visual'),
     })
   }
-  return sanitizeDeck({ theme: (extractTag(text.split('<slide>')[0], 'theme') ?? '').trim().toLowerCase(), slides: raw })
+  const head = text.split('<slide>')[0]
+  return sanitizeDeck({
+    theme: (extractTag(head, 'theme') ?? '').trim().toLowerCase(),
+    changes: listItems(extractTag(text, 'changes') ?? ''),
+    slides: raw,
+  })
 }
 
 // A fallback for when Claude leaves the theme blank or picks the generic

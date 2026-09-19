@@ -345,6 +345,94 @@ function SlideThumb({ slide, index, t }: { slide: ExportSlide; index: number; t:
     )
   }
 
+  if (slide.layout === 'steps') {
+    const accentA = t.accents[index % 4]
+    const steps = slide.bullets.slice(0, 5)
+    const n = steps.length
+    const gap = 0.5
+    const w = n > 0 ? (12.1 - gap * (n - 1)) / n : 0
+    return (
+      <div style={{ ...frame, background: t.light }}>
+        <div style={shape({ x: 0, y: 0, w: 13.33, h: 0.22, fill: accentA })} />
+        {slide.icon && (
+          <>
+            <div style={shape({ x: 0.6, y: 0.55, w: 1.05, h: 1.05, radius: '50%', fill: accentA })} />
+            <div style={text(0.6, 0.55, 1.05, 1.05, { size: 34, color: WHITE, font: t.head, align: 'center' })}>{slide.icon}</div>
+          </>
+        )}
+        <div style={text(slide.icon ? 1.9 : 0.6, 0.5, slide.icon ? 10.8 : 12.1, 1.15, { size: 34, color: t.ink, font: t.head, bold: true })}>{slide.title}</div>
+        {steps.map((b, i) => {
+          const x = 0.6 + i * (w + gap)
+          const c = t.accents[(index + i) % 4]
+          return (
+            <div key={i}>
+              <div style={shape({ x, y: 2.3, w, h: 3.4, radius: 0.2, fill: WHITE, shadow: true })} />
+              <div style={shape({ x: x + w / 2 - 0.42, y: 2.55, w: 0.84, h: 0.84, radius: '50%', fill: c })} />
+              <div style={text(x + w / 2 - 0.42, 2.55, 0.84, 0.84, { size: 26, color: onColor(c, t.ink), font: t.body, bold: true, align: 'center' })}>{i + 1}</div>
+              <div style={text(x + 0.15, 3.6, w - 0.3, 1.95, { size: n >= 5 ? 18 : n === 4 ? 20 : 24, color: t.ink, font: t.body, align: 'center', valign: 'top' })}>{b}</div>
+              {i < n - 1 && <div style={text(x + w, 2.55, gap, 0.84, { size: 28, color: accentA, font: t.body, bold: true, align: 'center' })}>→</div>}
+            </div>
+          )
+        })}
+        {wordmark(false)}
+      </div>
+    )
+  }
+
+  if (slide.layout === 'compare') {
+    const rows = slide.bullets.map((b) => b.split('|').map((part) => part.trim()))
+    const [headL, headR] = rows[0] ?? ['', '']
+    const body = rows.slice(1)
+    const [a, b] = [t.accents[index % 4], t.accents[(index + 1) % 4]]
+    const cols = [
+      { x: 0.6, head: headL, color: a, items: body.map((r) => r[0]).filter(Boolean) },
+      { x: 6.83, head: headR ?? '', color: b, items: body.map((r) => r[1] ?? '').filter(Boolean) },
+    ]
+    return (
+      <div style={{ ...frame, background: t.light }}>
+        <div style={shape({ x: 0, y: 0, w: 13.33, h: 0.22, fill: a })} />
+        <div style={text(0.6, 0.5, 12.1, 1.15, { size: 34, color: t.ink, font: t.head, bold: true })}>{slide.title}</div>
+        {cols.map((col, ci) => (
+          <div key={ci}>
+            <div style={shape({ x: col.x, y: 1.9, w: 5.9, h: 0.85, radius: 0.2, fill: col.color })} />
+            <div style={text(col.x, 1.9, 5.9, 0.85, { size: 24, color: onColor(col.color, t.ink), font: t.head, bold: true, align: 'center' })}>{col.head}</div>
+            <div style={shape({ x: col.x, y: 2.9, w: 5.9, h: 3.6, radius: 0.2, fill: WHITE, shadow: true })} />
+            <ul style={{ ...text(col.x + 0.25, 3.05, 5.4, 3.3, { size: 24, color: t.ink, font: t.body, valign: 'top' }), margin: 0, padding: 0, listStyle: 'none', gap: inch(0.25) }}>
+              {col.items.map((item, k) => (
+                <li key={k}>• {item}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+        <div style={shape({ x: 6.2, y: 1.98, w: 0.93, h: 0.7, radius: '50%', fill: t.dark })} />
+        <div style={text(6.2, 1.98, 0.93, 0.7, { size: 18, color: WHITE, font: t.head, bold: true, align: 'center' })}>vs</div>
+        {wordmark(false)}
+      </div>
+    )
+  }
+
+  if (slide.layout === 'visual') {
+    return (
+      <div style={{ ...frame, background: t.light }}>
+        <div style={shape({ x: 0, y: 0, w: 13.33, h: 0.22, fill: accent })} />
+        <div style={text(0.6, 0.5, 5.9, 1.7, { size: 32, color: t.ink, font: t.head, bold: true })}>{slide.title}</div>
+        <ul style={{ ...text(0.6, 2.4, 5.9, 4.3, { size: 22, color: t.ink, font: t.body, valign: 'top' }), margin: 0, padding: 0, listStyle: 'none', gap: inch(0.2) }}>
+          {slide.bullets.map((b, i) => (
+            <li key={i}>• {b}</li>
+          ))}
+        </ul>
+        <div style={{ ...shape({ x: 6.9, y: 0.75, w: 5.85, h: 5.95, radius: 0.25, fill: rgba(accent, 0.12) }), border: `0.25cqw dashed ${accent}`, boxSizing: 'border-box' }} />
+        <div style={shape({ x: 7.15, y: 1.0, w: 1.6, h: 0.42, radius: 0.21, fill: accent })} />
+        <div style={text(7.15, 1.0, 1.6, 0.42, { size: 12, color: onColor(accent, t.ink), font: t.body, bold: true, align: 'center' })}>VISUAL</div>
+        <div style={text(6.9, 1.6, 5.85, 2.6, { size: 88, color: t.ink, font: t.head, align: 'center' })}>{slide.icon ?? '🖼️'}</div>
+        <div style={{ ...text(7.2, 4.35, 5.25, 2.1, { size: 17, color: t.ink, font: t.body, align: 'center', valign: 'top' }), fontStyle: 'italic' }}>
+          {slide.visual || 'Add a picture, diagram or map that shows this idea.'}
+        </div>
+        {wordmark(false)}
+      </div>
+    )
+  }
+
   // cards
   const n = slide.bullets.length
   const cardH = n > 0 ? Math.min(1.2, (4.85 - 0.16 * (n - 1)) / n) : 1
@@ -430,11 +518,17 @@ export default function ExportModal({
   text: sourceText,
   initialFormat,
   onClose,
+  loader,
+  slidesOnly = false,
 }: {
   sessionId: string
   text: string
   initialFormat: ExportFormat
   onClose: () => void
+  /** Builds the layout some other way than laying out an Assignment Coach assignment. */
+  loader?: (kind: ExportKind) => Promise<ExportDoc | ExportDeck>
+  /** A deck that's built from a review: no document option, and no "structure kept" note. */
+  slidesOnly?: boolean
 }) {
   const [format, setFormat] = useState<ExportFormat>(initialFormat)
   const kind = kindOf(format)
@@ -448,14 +542,14 @@ export default function ExportModal({
   async function load(which: ExportKind) {
     const request = ++requestRef.current
     try {
-      if (which === 'document') {
-        const result = await getExportPreview(sessionId, 'document', sourceText)
-        remember(cacheKey(sessionId, 'document', sourceText), result.model)
-        if (request === requestRef.current) setDoc(result.model)
-      } else {
-        const result = await getExportPreview(sessionId, 'slides', sourceText)
-        remember(cacheKey(sessionId, 'slides', sourceText), result.model)
-        if (request === requestRef.current) setDeck(result.model)
+      let model: ExportDoc | ExportDeck
+      if (loader) model = await loader(which)
+      else if (which === 'document') model = (await getExportPreview(sessionId, 'document', sourceText)).model
+      else model = (await getExportPreview(sessionId, 'slides', sourceText)).model
+      remember(cacheKey(sessionId, which, sourceText), model)
+      if (request === requestRef.current) {
+        if (which === 'document') setDoc(model as ExportDoc)
+        else setDeck(model as ExportDeck)
       }
       if (request === requestRef.current) setError(null)
     } catch (err) {
@@ -539,7 +633,7 @@ export default function ExportModal({
         <div className="flex items-center justify-between gap-2 border-b border-hairline px-4 py-3 sm:px-5">
           <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
             <h2 className="shrink-0 font-heading text-base font-bold text-forest">Preview</h2>
-            <span className="rounded-full bg-forest px-3 py-1 text-xs font-semibold text-cream">{FORMAT_LABELS[format]}</span>
+            <span className="rounded-full bg-forest px-3 py-1 text-xs font-semibold text-cream">{slidesOnly ? 'Improved presentation' : FORMAT_LABELS[format]}</span>
             {kind === 'slides' && deck && (
               <span className="rounded-full bg-cream-card px-2.5 py-1 text-[11px] font-semibold text-ink-soft">
                 Theme: {THEME_LABELS[deck.theme]}
@@ -566,14 +660,30 @@ export default function ExportModal({
           ) : kind === 'document' && doc ? (
             <DocPreview model={doc} />
           ) : kind === 'slides' && deck ? (
-            <SlidesPreview deck={deck} />
+            <div className="flex flex-col gap-4">
+              {deck.changes.length > 0 && (
+                <div className="rounded-xl border border-hairline bg-white px-4 py-3">
+                  <p className="text-xs font-bold uppercase tracking-wide text-terracotta-600">What we improved</p>
+                  <ul className="mt-1.5 flex flex-col gap-1 text-sm text-ink">
+                    {deck.changes.map((change, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-terracotta" />
+                        <span>{change}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <SlidesPreview deck={deck} />
+            </div>
           ) : null}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline px-5 py-3">
           <div className="flex flex-col gap-1">
             <p className="text-xs text-ink-soft">
-              {kind === 'document' ? 'Opens in Word, Google Docs, and Pages.' : 'Opens in PowerPoint, Google Slides, and Keynote.'} Your original structure is kept.
+              {kind === 'document' ? 'Opens in Word, Google Docs, and Pages.' : 'Opens in PowerPoint, Google Slides, and Keynote.'}{' '}
+              {slidesOnly ? 'Add your own photos where a dashed VISUAL spot is marked.' : 'Your original structure is kept.'}
             </p>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               {kind === 'document' ? (
@@ -585,7 +695,7 @@ export default function ExportModal({
                     Switch to a presentation
                   </button>
                 </>
-              ) : (
+              ) : slidesOnly ? null : (
                 <button type="button" onClick={() => switchKind('document')} className={linkClass}>
                   Switch to a document
                 </button>

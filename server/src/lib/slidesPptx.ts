@@ -1,6 +1,6 @@
 import PptxGenJS from 'pptxgenjs'
 
-export const SLIDE_LAYOUTS = ['title', 'cards', 'split', 'keyterm', 'prompt'] as const
+export const SLIDE_LAYOUTS = ['title', 'cards', 'split', 'keyterm', 'prompt', 'steps', 'compare', 'visual'] as const
 export type SlideLayout = (typeof SLIDE_LAYOUTS)[number]
 
 export type Slide = {
@@ -9,6 +9,8 @@ export type Slide = {
   notes: string | null
   layout: SlideLayout
   icon: string | null
+  // For the 'visual' layout: what image, diagram or map belongs on the slide.
+  visual: string | null
 }
 
 type Decor = 'circles' | 'stripes' | 'squares'
@@ -42,7 +44,19 @@ export type ThemeName = keyof typeof THEMES
 
 // `variant` (0-3) rotates the accent colors, so two decks on the same
 // subject don't come out looking identical.
-export type SlideDeck = { theme: ThemeName; variant: number; slides: Slide[] }
+export type SlideDeck = { theme: ThemeName; variant: number; slides: Slide[]; changes: string[] }
+
+// Shown to Claude wherever it picks a deck's theme, so every feature that
+// builds a deck chooses the same way.
+export const THEME_GUIDE = `Choose ONE <theme> for the whole deck that fits its subject and audience — decide from the content, not from habit, and don't default to wivoza when a subject theme fits:
+- history — history, social studies, civics, geography, government, culture (warm parchment, serif type).
+- science — science, biology, chemistry, physics, earth science, technology, engineering (deep blue and teal, techy).
+- math — math, numbers, algebra, geometry, data, statistics (indigo and orange, crisp).
+- ela — reading, writing, literature, grammar, poetry, world languages (plum and gold, serif type).
+- arts — art, music, drama, design, creative projects (bold magenta, amber, violet).
+- early — grades K-3 or any playful, young-learner deck (bright, friendly colors).
+- wellness — health, PE, SEL, mindfulness, classroom community and culture (fresh greens).
+- wivoza — only when nothing above fits (school-wide, general, mixed).`
 
 const WHITE = 'FFFFFF'
 const SHADOW = { type: 'outer' as const, color: '000000', opacity: 0.14, blur: 8, offset: 3, angle: 90 }
@@ -218,6 +232,99 @@ function addPromptSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme) {
   return slide
 }
 
+
+// Process, sequence, timeline or cycle: one card per step, joined by arrows.
+function addStepsSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme) {
+  const accent = accentAt(t, index)
+  const slide = pptx.addSlide()
+  slide.background = { color: t.light }
+  slide.addShape('rect', { x: 0, y: 0, w: 13.33, h: 0.22, fill: { color: accent } })
+  if (s.icon) {
+    slide.addShape('ellipse', { x: 0.6, y: 0.55, w: 1.05, h: 1.05, fill: { color: accent } })
+    slide.addText(s.icon, { x: 0.6, y: 0.55, w: 1.05, h: 1.05, fontSize: 34, align: 'center', valign: 'middle' })
+  }
+  slide.addText(s.title, {
+    x: s.icon ? 1.9 : 0.6, y: 0.5, w: s.icon ? 10.8 : 12.1, h: 1.15, fontFace: t.head, fontSize: 34, bold: true,
+    color: t.ink, valign: 'middle', fit: 'shrink',
+  })
+  const steps = s.bullets.slice(0, 5)
+  const n = steps.length
+  if (n > 0) {
+    const gap = 0.5
+    const w = (12.1 - gap * (n - 1)) / n
+    steps.forEach((b, i) => {
+      const x = 0.6 + i * (w + gap)
+      const c = accentAt(t, index + i)
+      slide.addShape('roundRect', { x, y: 2.3, w, h: 3.4, rectRadius: 0.2, fill: { color: WHITE }, shadow: SHADOW })
+      slide.addShape('ellipse', { x: x + w / 2 - 0.42, y: 2.55, w: 0.84, h: 0.84, fill: { color: c } })
+      slide.addText(String(i + 1), { x: x + w / 2 - 0.42, y: 2.55, w: 0.84, h: 0.84, fontFace: t.body, fontSize: 26, bold: true, color: onColor(c, t.ink), align: 'center', valign: 'middle' })
+      slide.addText(b, { x: x + 0.15, y: 3.6, w: w - 0.3, h: 1.95, fontFace: t.body, fontSize: n >= 5 ? 18 : n === 4 ? 20 : 24, color: t.ink, align: 'center', valign: 'top', fit: 'shrink' })
+      if (i < n - 1) {
+        slide.addText('→', { x: x + w, y: 2.55, w: gap, h: 0.84, fontFace: t.body, fontSize: 28, bold: true, color: accent, align: 'center', valign: 'middle' })
+      }
+    })
+  }
+  footer(slide, t, false)
+  return slide
+}
+
+// Two things side by side. The first bullet is "Left heading | Right heading";
+// each bullet after it is "left item | right item".
+function addCompareSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme) {
+  const rows = s.bullets.map((b) => b.split('|').map((part) => part.trim()))
+  const [headL, headR] = rows[0] ?? ['', '']
+  const body = rows.slice(1)
+  const [a, b] = [accentAt(t, index), accentAt(t, index + 1)]
+  const slide = pptx.addSlide()
+  slide.background = { color: t.light }
+  slide.addShape('rect', { x: 0, y: 0, w: 13.33, h: 0.22, fill: { color: a } })
+  slide.addText(s.title, { x: 0.6, y: 0.5, w: 12.1, h: 1.15, fontFace: t.head, fontSize: 34, bold: true, color: t.ink, valign: 'middle', fit: 'shrink' })
+  const cols: { x: number; head: string; color: string; items: string[] }[] = [
+    { x: 0.6, head: headL, color: a, items: body.map((r) => r[0]).filter(Boolean) },
+    { x: 6.83, head: headR ?? '', color: b, items: body.map((r) => r[1] ?? '').filter(Boolean) },
+  ]
+  for (const col of cols) {
+    slide.addShape('roundRect', { x: col.x, y: 1.9, w: 5.9, h: 0.85, rectRadius: 0.2, fill: { color: col.color } })
+    slide.addText(col.head, { x: col.x, y: 1.9, w: 5.9, h: 0.85, fontFace: t.head, fontSize: 24, bold: true, color: onColor(col.color, t.ink), align: 'center', valign: 'middle', fit: 'shrink' })
+    slide.addShape('roundRect', { x: col.x, y: 2.9, w: 5.9, h: 3.6, rectRadius: 0.2, fill: { color: WHITE }, shadow: SHADOW })
+    if (col.items.length > 0) {
+      slide.addText(
+        col.items.map((item) => ({ text: item, options: { bullet: { indent: 20 }, breakLine: true } })),
+        { x: col.x + 0.25, y: 3.05, w: 5.4, h: 3.3, fontFace: t.body, fontSize: 24, color: t.ink, valign: 'top', paraSpaceAfter: 12, fit: 'shrink' },
+      )
+    }
+  }
+  slide.addShape('ellipse', { x: 6.2, y: 1.98, w: 0.93, h: 0.7, fill: { color: t.dark } })
+  slide.addText('vs', { x: 6.2, y: 1.98, w: 0.93, h: 0.7, fontFace: t.head, fontSize: 18, bold: true, color: WHITE, align: 'center', valign: 'middle' })
+  footer(slide, t, false)
+  return slide
+}
+
+// A slide that needs an image, diagram, map or chart we can't draw for the
+// teacher: a clearly marked, framed spot that says exactly what to put there.
+function addVisualSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme) {
+  const accent = accentAt(t, index)
+  const slide = pptx.addSlide()
+  slide.background = { color: t.light }
+  slide.addShape('rect', { x: 0, y: 0, w: 13.33, h: 0.22, fill: { color: accent } })
+  slide.addText(s.title, { x: 0.6, y: 0.5, w: 5.9, h: 1.7, fontFace: t.head, fontSize: 32, bold: true, color: t.ink, valign: 'middle', fit: 'shrink' })
+  if (s.bullets.length > 0) {
+    slide.addText(
+      s.bullets.map((b) => ({ text: b, options: { bullet: { indent: 22 }, breakLine: true } })),
+      { x: 0.6, y: 2.4, w: 5.9, h: 4.3, fontFace: t.body, fontSize: 22, color: t.ink, valign: 'top', paraSpaceAfter: 12, fit: 'shrink' },
+    )
+  }
+  slide.addShape('roundRect', { x: 6.9, y: 0.75, w: 5.85, h: 5.95, rectRadius: 0.25, fill: { color: accent, transparency: 88 }, line: { color: accent, width: 2, dashType: 'dash' } })
+  slide.addShape('roundRect', { x: 7.15, y: 1.0, w: 1.6, h: 0.42, rectRadius: 0.21, fill: { color: accent } })
+  slide.addText('VISUAL', { x: 7.15, y: 1.0, w: 1.6, h: 0.42, fontFace: t.body, fontSize: 12, bold: true, color: onColor(accent, t.ink), align: 'center', valign: 'middle' })
+  slide.addText(s.icon ?? '🖼️', { x: 6.9, y: 1.6, w: 5.85, h: 2.6, fontSize: 88, align: 'center', valign: 'middle' })
+  slide.addText(s.visual || 'Add a picture, diagram or map that shows this idea.', {
+    x: 7.2, y: 4.35, w: 5.25, h: 2.1, fontFace: t.body, fontSize: 17, italic: true, color: t.ink, align: 'center', valign: 'top', fit: 'shrink',
+  })
+  footer(slide, t, false)
+  return slide
+}
+
 export async function buildPptx(deckTitle: string, deck: SlideDeck): Promise<Buffer> {
   const base: Theme = THEMES[deck.theme] ?? THEMES.wivoza
   const shift = ((deck.variant % 4) + 4) % 4
@@ -232,6 +339,9 @@ export async function buildPptx(deckTitle: string, deck: SlideDeck): Promise<Buf
     else if (s.layout === 'split') slide = addSplitSlide(pptx, s, i, t)
     else if (s.layout === 'keyterm') slide = addKeytermSlide(pptx, s, i, t)
     else if (s.layout === 'prompt') slide = addPromptSlide(pptx, s, i, t)
+    else if (s.layout === 'steps') slide = addStepsSlide(pptx, s, i, t)
+    else if (s.layout === 'compare' && s.bullets.length > 1 && s.bullets[0].includes('|')) slide = addCompareSlide(pptx, s, i, t)
+    else if (s.layout === 'visual') slide = addVisualSlide(pptx, s, i, t)
     else slide = addCardsSlide(pptx, s, i, t)
     if (s.notes) slide.addNotes(s.notes)
   })

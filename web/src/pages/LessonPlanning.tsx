@@ -4,6 +4,7 @@ import AnswerSection, { NumberedCard } from '../components/AnswerSection'
 import PastList, { type PastItem } from '../components/PastList'
 import { ShareIcon, StarIcon } from '../components/icons'
 import CoachingChat from '../components/CoachingChat'
+import ExportModal from '../components/ExportModal'
 import { PanelHeader } from '../components/PanelHeader'
 import { ProgressRing, WorkingRing } from '../components/ProgressRing'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
@@ -12,6 +13,7 @@ import { UpgradeMessage } from '../components/UpgradeMessage'
 import {
   applyLessonPlanRevision,
   extractPresentationText,
+  generatePresentation,
   generateLessonPlan,
   getLessonPlans,
   getPresentationFeedback,
@@ -847,6 +849,7 @@ function PresentationPanel() {
   const [chatSending, setChatSending] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
 
+  const [generateOpen, setGenerateOpen] = useState(false)
   const [applyingRevision, setApplyingRevision] = useState(false)
   const [revisionDismissed, setRevisionDismissed] = useState(false)
 
@@ -1114,6 +1117,25 @@ function PresentationPanel() {
 
             <PartSections parts={reviewParts} />
 
+            <NumberedCard
+              n={reviewParts.length + 1}
+              title="Create an improved presentation"
+              subtitle="Apply every recommendation above and build it as a new deck"
+            >
+              <p className="text-sm leading-relaxed text-ink-soft">
+                Wivoza rebuilds your presentation with the clearer wording, visuals, pacing checks, and length changes recommended
+                above, in a design that fits your subject. You'll preview it before you download.
+              </p>
+              <button
+                type="button"
+                onClick={() => setGenerateOpen(true)}
+                className="mt-3 flex items-center gap-2.5 rounded-xl border border-hairline bg-white px-4 py-2.5 text-sm font-semibold text-forest shadow-sm transition-colors hover:border-forest/50 hover:bg-cream"
+              >
+                <span className="flex h-7 min-w-7 items-center justify-center rounded-md bg-[#D24726] px-1 text-[11px] font-extrabold text-white">P</span>
+                Create improved presentation
+              </button>
+            </NumberedCard>
+
             <CoachingChat
               messages={plan.conversation.slice(2)}
               sending={chatSending}
@@ -1125,7 +1147,7 @@ function PresentationPanel() {
             />
             {showRevision && plan.suggestedRevision && (
               <SuggestedRevisionCard
-                n={reviewParts.length + 1}
+                n={reviewParts.length + 2}
                 text={plan.suggestedRevision}
                 applying={applyingRevision}
                 onApply={handleApplyRevision}
@@ -1160,6 +1182,17 @@ function PresentationPanel() {
           </p>
         )}
       </div>
+
+      {generateOpen && plan && (
+        <ExportModal
+          sessionId={plan.id}
+          text="presentation"
+          initialFormat="pptx"
+          slidesOnly
+          loader={() => generatePresentation(plan.id).then((result) => result.model)}
+          onClose={() => setGenerateOpen(false)}
+        />
+      )}
 
       <PastList
         title="Your presentation reviews"

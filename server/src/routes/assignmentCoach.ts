@@ -14,7 +14,7 @@ import { buildDocx } from '../lib/docxBuilder.ts'
 import { parseDocOutput, parseSlidesOutput, sanitizeDeck, sanitizeDocModel, themeFromContext } from '../lib/exportModels.ts'
 import { buildPdf } from '../lib/pdfBuilder.ts'
 import { extractPptxText } from '../lib/pptxText.ts'
-import { buildPptx } from '../lib/slidesPptx.ts'
+import { buildPptx, THEME_GUIDE } from '../lib/slidesPptx.ts'
 import { prisma } from '../lib/prisma.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
@@ -892,15 +892,7 @@ const SLIDES_SYSTEM_PROMPT = `You lay out a teacher's assignment or presentation
 
 This is formatting only — PRESERVE the original's structure and content. If the text is already a presentation, produce exactly one slide per original slide, in the same order (use blank lines and topic changes to find the slide boundaries) — never merge, reorder, drop, or add slides. If it is a worksheet or other document, follow its own sections in order, splitting a section across slides only when it genuinely cannot fit on one. Keep the teacher's own wording and every question, instruction, and blank ("I am ______"); do not rewrite or invent content. Titles under 8 words (use the original heading where there is one). Skip any [[diagram:...]] directives. Add a brief teacher speaker note only where it genuinely helps; otherwise leave notes empty. At most 25 slides.
 
-Choose ONE <theme> for the whole deck that fits its subject and audience — decide from the content, not from habit, and don't default to wivoza when a subject theme fits:
-- history — history, social studies, civics, geography, government, culture (warm parchment, serif type).
-- science — science, biology, chemistry, physics, earth science, technology, engineering (deep blue and teal, techy).
-- math — math, numbers, algebra, geometry, data, statistics (indigo and orange, crisp).
-- ela — reading, writing, literature, grammar, poetry, world languages (plum and gold, serif type).
-- arts — art, music, drama, design, creative projects (bold magenta, amber, violet).
-- early — grades K-3 or any playful, young-learner deck (bright, friendly colors).
-- wellness — health, PE, SEL, mindfulness, classroom community and culture (fresh greens).
-- wivoza — only when nothing above fits (school-wide, general, mixed).
+${THEME_GUIDE}
 
 Make it visual and varied. Give EVERY slide one <icon>: a single emoji that fits the topic (for young students, friendly and concrete). Give EVERY slide a <layout>, chosen like this:
 - title — only for the first slide.

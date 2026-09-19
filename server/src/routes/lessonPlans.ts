@@ -6,9 +6,11 @@ import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { checkFeatureAccess, countUsageLogActionsThisMonth, LESSON_PLANNING_ACTIONS } from '../lib/billing.ts'
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES, INSTRUCTION_PRIORITY_NOTICE } from '../lib/coachPersona.ts'
+import { parseSlidesOutput, themeFromContext } from '../lib/exportModels.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
+import { THEME_GUIDE } from '../lib/slidesPptx.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const lessonPlansRouter = Router()
@@ -221,6 +223,51 @@ function formatSlidesAsText(slides: ExtractedSlide[]): string {
     .join('\n\n')
 }
 
+// Builds the improved deck from a saved presentation review: the teacher's
+// slide-by-slide text plus every recommendation Coach gave (and anything the
+// teacher asked for in the follow-up chat), applied to a themed deck.
+function buildPresentationGeneratePrompt(context: string[]): string {
+  return `You are rebuilding a teacher's presentation as an improved, classroom-ready slide deck. Below are their slides (slide by slide, with a note where a slide already has an image) and the review Coach gave them. Apply EVERY recommendation in the review — grade-level fit (simplify or stretch the wording), visuals, ideas (fill gaps, fix the order, clarify confusing slides), length (trim, combine or expand as advised), and implementation (add the pauses, checks for understanding, and pacing the review calls for). Also apply anything the teacher asked for in the follow-up chat.
+
+Stay true to the teacher's presentation: the same topic, the same main ideas, and their own wording wherever the review didn't ask for a change. Do not invent facts, dates, statistics, quotes, or examples that aren't in the slides or the review. Where the review asks for a new example or a visual you can't know, write a plain placeholder in the slide and tell the teacher in the speaker notes to add their own.
+
+Visuals matter. Use the layouts to make the deck genuinely visual, not walls of text:
+- steps — a process, sequence, timeline, or cycle: each bullet is one short step (under 8 words), in order, at most 5.
+- compare — two things side by side: the first bullet is "Left heading | Right heading", then one row per bullet as "left item | right item".
+- visual — a slide that needs a picture, diagram, map, or chart that you cannot draw (anything the review's visuals section recommended, and any slide the teacher already gave an image — say "Keep your original image here" in that case). Put a specific description of exactly what to show in <visual> (for example "A labeled map of the routes from the South to Canada"), and keep the bullets short.
+- keyterm — introducing a vocabulary word or key idea: the title is the word, bullets are its meaning and examples.
+- prompt — a question, discussion, turn-and-talk, or check for understanding: the title is the question, bullets are optional sentence starters.
+- split — a concept slide with 2-4 bullets beside a large icon.
+- cards — lists, rules, agendas, activities (3-5 items).
+- title — only the first slide.
+Vary the layouts; never use the same layout on more than 2 slides in a row. Every slide gets one <icon>: a single emoji that fits the topic. Bullets are short (under 15 words). Put pacing advice, what to say aloud, and where to pause in <notes> (brief, and only where it helps). At most 30 slides.
+
+${THEME_GUIDE}
+
+After the theme, list what you changed in <changes>: 4 to 8 dash-prefixed lines, each one plain sentence a teacher would understand, naming the slide (for example "- Slide 4: turned the routes into a step-by-step diagram"). Only list changes you actually made.
+
+Plain text only, no markdown. Respond with exactly this structure and nothing else:
+<theme>history</theme>
+<changes>
+- Slide 2: what changed
+</changes>
+<slide>
+<layout>cards</layout>
+<icon>🌟</icon>
+<title>Slide title</title>
+<bullets>
+- First bullet
+- Second bullet
+</bullets>
+<visual>Only for the visual layout: what to show</visual>
+<notes>Optional speaker note</notes>
+</slide>
+
+Here is what you have to work with:
+${context.join('\n\n')}
+${CORE_COACHING_RULES}`
+}
+
 lessonPlansRouter.post('/extract-presentation', presentationUpload.single('file'), async (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: 'No file received' })
@@ -245,6 +292,67 @@ lessonPlansRouter.post('/extract-presentation', presentationUpload.single('file'
   } catch (error) {
     console.error('[lesson-plans] extract-presentation failed:', error)
     res.status(502).json({ error: 'Could not read that file. Please try a different export.' })
+  }
+})
+
+// Turns a saved presentation review into an improved, themed deck the teacher
+// previews and downloads (the file itself is built by the same export-file
+// route Assignment Coach uses, from the model returned here).
+lessonPlansRouter.post('/:id/presentation-generate', async (req, res) => {
+  const plan = await prisma.lessonPlan.findFirst({ where: { id: req.params.id, userId: req.user!.userId } })
+  if (!plan || plan.mode !== 'presentation' || !plan.planText) {
+    res.status(404).json({ error: 'Presentation review not found' })
+    return
+  }
+  const review = plan.presentationReview as Record<string, string | null> | null
+  if (!review) {
+    res.status(400).json({ error: 'Review this presentation first.' })
+    return
+  }
+
+  const allowed = await checkAndLogUsage(req.user!.userId, 'lesson_plan_presentation_generate')
+  if (!allowed) {
+    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+    return
+  }
+
+  const chat = ((plan.conversation as unknown as ChatMessage[] | null) ?? []).slice(2)
+  const teacherAsks = chat.filter((m) => m.role === 'user').map((m) => `- ${m.text}`)
+  const context = [
+    [plan.subject && `Subject: ${plan.subject}`, plan.gradeLevel && `Grade: ${plan.gradeLevel}`, plan.objective && `About: ${plan.objective}`]
+      .filter(Boolean)
+      .join('\n'),
+    `The teacher's slides:\n${plan.planText}`,
+    `Coach's review:\nGrade-level fit: ${review.gradeLevelFit ?? '—'}\n\nVisuals: ${review.visuals ?? '—'}\n\nIdeas: ${review.ideas ?? '—'}\n\nLength: ${review.length ?? '—'}\n\nImplementation: ${review.implementation ?? '—'}`,
+    teacherAsks.length ? `What the teacher asked for in the follow-up chat:\n${teacherAsks.join('\n')}` : '',
+  ].filter(Boolean)
+
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 8192,
+      thinking: { type: 'disabled' },
+      system: buildPresentationGeneratePrompt(context),
+      messages: [{ role: 'user', content: 'Build the improved presentation now.' }],
+    })
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+
+    const deck = parseSlidesOutput(text)
+    if (!deck) {
+      res.status(502).json({ error: 'Could not build the presentation. Please try again.' })
+      return
+    }
+    if (deck.theme === 'wivoza') {
+      const inferred = themeFromContext(plan.subject, plan.gradeLevel)
+      if (inferred) deck.theme = inferred
+    }
+    res.json({ kind: 'slides', model: deck })
+  } catch (error) {
+    console.error('[lesson-plans] presentation-generate failed:', error)
+    res.status(502).json({ error: 'Could not build the presentation. Please try again.' })
   }
 })
 
