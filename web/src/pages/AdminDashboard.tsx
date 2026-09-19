@@ -41,6 +41,7 @@ import {
   updateSchoolInquiryStatus,
   type SchoolInquiry,
 } from '../lib/api'
+import { ACCENT_CYCLE, type Accent } from '../components/report'
 import { categoryLabel } from '../lib/categories'
 import { PRIORITY_LABELS } from '../lib/adminLabels'
 import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
@@ -488,9 +489,7 @@ function WeeklyActivityChart({ data }: { data: { weekStart: string; activeCount:
 
   return (
     <div>
-      <h3 className="font-heading text-base font-bold text-forest">Weekly participation</h3>
-      <p className="text-xs text-ink-soft">Active teachers per week, last {n} weeks — count of teachers, not a percentage</p>
-      <p className="mt-3 text-[10px] text-ink-soft">max {maxCount}</p>
+      <p className="text-[10px] text-ink-soft">Most in one week: {maxCount}</p>
       <div className="relative mt-6">
         <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} preserveAspectRatio="none">
           <path d={path} fill="none" stroke="var(--color-terracotta)" strokeWidth={2} strokeLinecap="round" />
@@ -1211,7 +1210,7 @@ function MemberRow({
         <td className="px-3.5 py-3">
           <RowCheckbox checked={selected} disabled={!selectable} label={member.name ?? member.email} onChange={onToggle} />
         </td>
-        <td className="px-3.5 py-3">
+        <td className="max-w-[15rem] px-3.5 py-3">
           <p className="text-sm font-semibold text-ink">{member.name ?? member.email}</p>
           <p className="text-xs text-ink-soft">
             {member.email}
@@ -1429,19 +1428,26 @@ function StatRow({
   sampleNote,
   confidence,
   tooltip,
+  goal,
 }: {
   label: string
   value: string
   sampleNote: string
   confidence?: DataConfidence
   tooltip?: string
+  // Shown under the label: what the number means, and what a good sign
+  // looks like, in the same thresholds Wivoza itself uses.
+  goal?: string
 }) {
   const hideValue = confidence === 'none'
   return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-hairline/60 py-2 last:border-0">
-      <span className="flex items-center gap-1.5 text-sm text-ink">
-        {label}
-        {tooltip && <InfoTooltip text={tooltip} />}
+    <div className="flex items-baseline justify-between gap-3 border-b border-hairline/60 py-3 last:border-0">
+      <span>
+        <span className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+          {label}
+          {tooltip && <InfoTooltip text={tooltip} />}
+        </span>
+        {goal && <span className="mt-0.5 block text-xs text-ink-soft">{goal}</span>}
       </span>
       <div className="text-right">
         <span className="flex items-center justify-end gap-1.5">
@@ -1454,18 +1460,23 @@ function StatRow({
   )
 }
 
-function InstructionalAveragesCard({ data, insight }: { data: InstructionalAverages; insight?: string | null }) {
+function InstructionalAveragesCard({ n, data, insight }: { n: number; data: InstructionalAverages; insight?: string | null }) {
   const sampleOr = (n: number, unit: string) => (n > 0 ? `based on ${n} ${unit}` : 'not enough data yet')
   const otherPct =
     data.avgTeacherTalkPct != null && data.avgStudentTalkPct != null
       ? Math.max(0, Math.round(100 - data.avgTeacherTalkPct - data.avgStudentTalkPct))
       : null
   return (
-    <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-      <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Instructional practice averages</h2>
-      <div className="mt-2 flex flex-col">
+    <AdminCard
+      n={n}
+      title="How lessons are taught"
+      question="Averages across every recorded lesson, with what a good sign looks like for each."
+      howToRead="Each measure only counts lessons with real evidence for it. A short recording without enough questions, for example, isn't counted toward questioning. Where there are too few lessons behind a number, it says so instead of guessing."
+    >
+      <div className="flex flex-col">
         <StatRow
           label="Average wait time after a question"
+          goal="A good sign: 3 seconds or more, so more students have time to think."
           value={data.avgWaitTimeSec != null ? `${data.avgWaitTimeSec.toFixed(1)}s` : '—'}
           sampleNote={sampleOr(data.waitTimeSampleSize, 'sessions')}
           confidence={data.waitTimeConfidence}
@@ -1473,6 +1484,7 @@ function InstructionalAveragesCard({ data, insight }: { data: InstructionalAvera
         />
         <StatRow
           label="Teacher talk vs. student talk"
+          goal="A lesson where the teacher talks 65% or more of the time is flagged as a growth area."
           value={
             data.avgTeacherTalkPct != null && data.avgStudentTalkPct != null
               ? `${Math.round(data.avgTeacherTalkPct)}% teacher · ${Math.round(data.avgStudentTalkPct)}% student${otherPct != null ? ` · ${otherPct}% other` : ''}`
@@ -1484,6 +1496,7 @@ function InstructionalAveragesCard({ data, insight }: { data: InstructionalAvera
         />
         <StatRow
           label="Higher-order questions"
+          goal="Questions that ask students to explain, compare or reason. 40% or more is a staff strength."
           value={data.higherOrderPct != null ? `${data.higherOrderPct}%` : '—'}
           sampleNote={sampleOr(data.higherOrderSampleSize, 'questions')}
           confidence={data.higherOrderConfidence}
@@ -1491,6 +1504,7 @@ function InstructionalAveragesCard({ data, insight }: { data: InstructionalAvera
         />
         <StatRow
           label="Sessions with a real-life example or connection"
+          goal="Lessons that tie the content to real life or earlier learning. 60% or more is a strength."
           value={data.realLifeConnectionRatePct != null ? `${data.realLifeConnectionRatePct}%` : '—'}
           sampleNote={sampleOr(data.realLifeConnectionSampleSize, 'sessions')}
           confidence={data.realLifeConnectionConfidence}
@@ -1498,6 +1512,7 @@ function InstructionalAveragesCard({ data, insight }: { data: InstructionalAvera
         />
         <StatRow
           label="Follow-up questions"
+          goal="A second question that builds on a student's answer. More means deeper discussion."
           value={data.avgFollowUpPer10Min != null ? `${data.avgFollowUpPer10Min.toFixed(1)} per 10 min` : '—'}
           sampleNote={sampleOr(data.followUpSampleSize, 'sessions')}
           confidence={data.followUpConfidence}
@@ -1505,6 +1520,7 @@ function InstructionalAveragesCard({ data, insight }: { data: InstructionalAvera
         />
         <StatRow
           label="Sessions with a check for understanding"
+          goal="Thumbs up, turn and talk, exit tickets and the like. 70% or more of lessons is a strength."
           value={data.cfuRatePct != null ? `${data.cfuRatePct}%` : '—'}
           sampleNote={sampleOr(data.cfuSampleSize, 'sessions long enough to detect')}
           confidence={data.cfuConfidence}
@@ -1517,20 +1533,23 @@ function InstructionalAveragesCard({ data, insight }: { data: InstructionalAvera
         never padded with sessions where it wasn&rsquo;t measured.
       </p>
       {insight !== undefined && <AdminCoachNote text={insight} />}
-    </div>
+    </AdminCard>
   )
 }
 
-function ClimateAveragesCard({ data, insight }: { data: ClimateAverages; insight?: string | null }) {
+function ClimateAveragesCard({ n, data, insight }: { n: number; data: ClimateAverages; insight?: string | null }) {
   const sampleOr = (n: number, unit: string) => (n > 0 ? `based on ${n} ${unit}` : 'not enough data yet')
   return (
-    <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-      <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
-        Classroom climate &amp; management
-      </h2>
-      <div className="mt-2 flex flex-col">
+    <AdminCard
+      n={n}
+      title="Classroom climate"
+      question="How calm and well-run classrooms sound, across your staff."
+      howToRead="Found by listening for specific phrases: redirections, directions, encouragement and correction. It counts them; it doesn't judge whether a moment was handled well. No redirections in a recording can mean a calm room, or simply that the recording caught less of that part of class."
+    >
+      <div className="flex flex-col">
         <StatRow
           label="Redirection language"
+          goal="How often teachers redirect behavior. Compare grade bands before drawing conclusions."
           value={data.avgRedirectionPer10Min != null ? `${data.avgRedirectionPer10Min.toFixed(1)} per 10 min` : '—'}
           sampleNote={sampleOr(data.redirectionFrequencySampleSize, 'sessions')}
           confidence={data.redirectionConfidence}
@@ -1538,6 +1557,7 @@ function ClimateAveragesCard({ data, insight }: { data: ClimateAverages; insight
         />
         <StatRow
           label="Sessions with no redirection language detected"
+          goal="Lessons that needed no redirecting at all. 70% or more is a strength."
           value={data.zeroRedirectionRatePct != null ? `${data.zeroRedirectionRatePct}%` : '—'}
           sampleNote={sampleOr(data.redirectionMeasuredSampleSize, 'sessions')}
           confidence={data.redirectionMeasuredConfidence}
@@ -1545,6 +1565,7 @@ function ClimateAveragesCard({ data, insight }: { data: ClimateAverages; insight
         />
         <StatRow
           label="Transition language"
+          goal="Spoken cues for moving between activities, a sign of clear routines."
           value={data.avgTransitionPer10Min != null ? `${data.avgTransitionPer10Min.toFixed(1)} per 10 min` : '—'}
           sampleNote={sampleOr(data.transitionSampleSize, 'sessions')}
           confidence={data.transitionConfidence}
@@ -1552,6 +1573,7 @@ function ClimateAveragesCard({ data, insight }: { data: ClimateAverages; insight
         />
         <StatRow
           label="Sessions with clear directive language detected"
+          goal="Lessons with at least one clear, specific direction. 80% or more is a strength."
           value={data.clearDirectivesRatePct != null ? `${data.clearDirectivesRatePct}%` : '—'}
           sampleNote={sampleOr(data.directiveSampleSize, 'sessions')}
           confidence={data.directiveConfidence}
@@ -1559,6 +1581,7 @@ function ClimateAveragesCard({ data, insight }: { data: ClimateAverages; insight
         />
         <StatRow
           label="Positive vs. corrective tone"
+          goal="Above 50% means teachers encourage more than they correct."
           value={data.positiveTonePct != null ? `${data.positiveTonePct}% positive` : '—'}
           sampleNote={sampleOr(data.toneSampleSize, 'tone-language moments')}
           confidence={data.toneConfidence}
@@ -1570,7 +1593,7 @@ function ClimateAveragesCard({ data, insight }: { data: ClimateAverages; insight
         only counts sessions with real evidence for it.
       </p>
       {insight !== undefined && <AdminCoachNote text={insight} />}
-    </div>
+    </AdminCard>
   )
 }
 
@@ -1587,7 +1610,7 @@ const BREAKDOWN_OPTIONS: { id: 'none' | BreakdownBy; label: string }[] = [
 // bucket only shows up once at least a few distinct teachers have
 // contributed to it (see MIN_TEACHERS_FOR_BREAKDOWN server-side); until
 // then it's a deliberate "not enough data yet," not a missing feature.
-function BreakdownCard({ selectedOrgId }: { selectedOrgId: string }) {
+function BreakdownCard({ n, selectedOrgId }: { n: number; selectedOrgId: string }) {
   const [by, setBy] = useState<'none' | BreakdownBy>('none')
   const [data, setData] = useState<AdminBreakdown | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -1608,11 +1631,12 @@ function BreakdownCard({ selectedOrgId }: { selectedOrgId: string }) {
   const sampleOr = (n: number, unit: string) => (n > 0 ? `based on ${n} ${unit}` : 'not enough data yet')
 
   return (
-    <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
-          Instructional averages, by grade or subject
-        </h2>
+    <AdminCard
+      n={n}
+      title="Compare by grade or subject"
+      question="Is a need school-wide, or concentrated in one grade band or department?"
+      howToRead="The same lesson measures, split by grade band or subject so PD can be targeted — a questioning workshop for the science department rather than the whole staff, for example. Groups with fewer than 5 teachers are combined with their neighbours, so no one can be singled out."
+      aside={
         <div className="flex gap-1 rounded-lg bg-cream p-1">
           {BREAKDOWN_OPTIONS.map((opt) => (
             <button
@@ -1627,8 +1651,8 @@ function BreakdownCard({ selectedOrgId }: { selectedOrgId: string }) {
             </button>
           ))}
         </div>
-      </div>
-
+      }
+    >
       {by === 'none' && (
         <p className="mt-2 text-xs text-ink-soft">
           See the same averages above split by grade band or subject, to spot where PD would help most. Groups with
@@ -1704,14 +1728,14 @@ function BreakdownCard({ selectedOrgId }: { selectedOrgId: string }) {
           ))}
         </div>
       )}
-    </div>
+    </AdminCard>
   )
 }
 
 // What teachers chose to work on in My Growth — works for a small staff where
 // grade/subject averages can't be shown, since it's a choice, not a measure
 // of anyone's teaching. Suppression lives server-side.
-function FocusAreasCard({ selectedOrgId }: { selectedOrgId: string }) {
+function FocusAreasCard({ n, selectedOrgId }: { n: number; selectedOrgId: string }) {
   const [data, setData] = useState<AdminFocusAreas | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -1726,12 +1750,12 @@ function FocusAreasCard({ selectedOrgId }: { selectedOrgId: string }) {
   const maxCount = data && !data.suppressed ? Math.max(1, ...data.areas.map((a) => a.count), data.otherCount) : 1
 
   return (
-    <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-      <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Where teachers are focusing</h2>
-      <p className="mt-1 text-xs text-ink-soft">
-        The growth focus each teacher chose for themselves in Lesson Debrief. A focus only one teacher picked is counted
-        under "other", so no one is named by their choice.
-      </p>
+    <AdminCard
+      n={n}
+      title="What teachers chose to work on"
+      question="The goals your teachers set for themselves — where your PD can meet them."
+      howToRead="Each teacher can pick one growth focus in Lesson Debrief. Only totals are shown, and a focus only one teacher picked is counted under \u201cother\u201d, so nobody is identified by their choice. When your PD matches what teachers already chose, it lands as support rather than a directive."
+    >
 
       {error && <p className="mt-3 text-sm text-terracotta-600">{error}</p>}
       {!data && !error && <p className="mt-3 text-sm text-ink-soft">Loading...</p>}
@@ -1769,21 +1793,29 @@ function FocusAreasCard({ selectedOrgId }: { selectedOrgId: string }) {
           <p className="mt-1 text-xs text-ink-soft">{data.totalTeachers} teachers have chosen a focus.</p>
         </div>
       )}
-    </div>
+    </AdminCard>
   )
 }
 
 function TallyBarList({
+  n,
   title,
+  question,
+  noun,
   tally,
   labelFor,
+  meaningFor,
   totalTeachers,
   comment,
   insight,
 }: {
+  n: number
   title: string
+  question: string
+  noun: [string, string]
   tally: Record<string, TallyEntry>
   labelFor: (value: string) => string
+  meaningFor?: (value: string) => string | undefined
   totalTeachers: number
   comment?: string
   insight?: string | null
@@ -1794,23 +1826,24 @@ function TallyBarList({
   const maxCount = Math.max(1, ...active.map(([, v]) => v.count))
 
   const row = ([value, { count, teachers }]: [string, TallyEntry]) => (
-    <div key={value} className="flex items-center gap-3">
-      <span className="w-40 shrink-0 text-sm text-ink">{labelFor(value)}</span>
-      <div className="h-2 flex-1 overflow-hidden rounded-full bg-cream">
+    <div key={value}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+        <span className="text-sm font-semibold text-ink">{labelFor(value)}</span>
+        <span className="text-sm text-ink-soft">
+          {count === 0 ? 'none yet' : `${plural(count, noun[0], noun[1])} · ${teachers} of ${totalTeachers} teachers`}
+        </span>
+      </div>
+      {meaningFor?.(value) && <p className="text-xs text-ink-soft">{meaningFor(value)}</p>}
+      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-cream">
         <div className="h-full rounded-full bg-terracotta" style={{ width: `${(count / maxCount) * 100}%` }} />
       </div>
-      <span className="w-44 shrink-0 text-right text-sm text-ink-soft">
-        {count === 0 ? 'no activity yet' : `${count} · ${teachers} of ${totalTeachers} teachers`}
-      </span>
     </div>
   )
 
   return (
-    <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-      <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">{title}</h2>
-      {comment && <p className="mt-1 text-xs text-ink-soft">{comment}</p>}
+    <AdminCard n={n} title={title} question={question} howToRead={comment}>
       {active.length > 0 ? (
-        <div className="mt-3 flex flex-col gap-2">{active.map(row)}</div>
+        <div className="flex flex-col gap-3.5">{active.map(row)}</div>
       ) : (
         <p className="mt-3 text-sm text-ink-soft">More data is needed before this shows anything useful.</p>
       )}
@@ -1819,11 +1852,11 @@ function TallyBarList({
           <summary className="cursor-pointer list-none text-xs font-medium text-forest marker:content-none [&::-webkit-details-marker]:hidden">
             Show {inactive.length} {inactive.length === 1 ? 'category' : 'categories'} with no activity
           </summary>
-          <div className="mt-2 flex flex-col gap-2">{inactive.map(row)}</div>
+          <div className="mt-3 flex flex-col gap-3.5">{inactive.map(row)}</div>
         </details>
       )}
       {insight !== undefined && <AdminCoachNote text={insight} />}
-    </div>
+    </AdminCard>
   )
 }
 
@@ -1844,6 +1877,115 @@ const PD_SUGGESTIONS: Record<string, string> = {
   'wait-time': 'a quick, low-lift practice: silently count to 3-5 after every question before calling on someone',
   cfu: 'a shared routine for quick checks for understanding — thumbs up/down, exit tickets, cold-call',
   feedback: 'a short workshop on giving specific rather than generic feedback during practice',
+}
+
+// ---- Shared report layout ----
+//
+// Same shape as Lesson Debrief's Insights sections, so a principal reading
+// these pages sees the teacher reports' look: a numbered, coloured badge, a
+// title, and the question the card answers — then the numbers, then (closed
+// by default) how they were measured. Principals open these between other
+// things; each card has to make sense on its own, without the manual.
+
+function AdminCard({
+  n,
+  title,
+  question,
+  howToRead,
+  aside,
+  children,
+}: {
+  n: number
+  title: string
+  question: string
+  howToRead?: string
+  aside?: React.ReactNode
+  children: React.ReactNode
+}) {
+  const accent: Accent = ACCENT_CYCLE[(n - 1) % ACCENT_CYCLE.length]
+  return (
+    <section className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3.5">
+          <span
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${accent.band} font-heading text-base font-bold text-cream`}
+          >
+            {n}
+          </span>
+          <div>
+            <h2 className="font-heading text-lg font-bold leading-tight text-forest">{title}</h2>
+            <p className="mt-0.5 text-sm text-ink-soft">{question}</p>
+          </div>
+        </div>
+        {aside}
+      </div>
+      <div className="mt-4">{children}</div>
+      {howToRead && (
+        <details className="mt-4 border-t border-hairline/70 pt-3">
+          <summary className="cursor-pointer text-xs font-semibold text-forest">How to read this</summary>
+          <p className="mt-1.5 text-xs leading-relaxed text-ink-soft">{howToRead}</p>
+        </details>
+      )}
+    </section>
+  )
+}
+
+// What each growth area actually means in a lesson — the rule that put a
+// lesson in it, in the words a principal would use.
+const PRIORITY_MEANING: Record<string, string> = {
+  'talk-balance': 'The teacher did 65% or more of the talking.',
+  questioning: 'Fewer than 4 in 10 questions asked students to explain, compare or reason.',
+  'wait-time': 'Students got under 3 seconds to think before someone answered.',
+  cfu: 'A 10+ minute lesson with no check for understanding.',
+  feedback: 'Most feedback was general ("good job") rather than specific.',
+}
+
+// Strengths come from the server with the percentage the name refers to.
+const STRENGTH_MEANING: Record<string, string> = {
+  'Checks for understanding': 'of lessons included at least one check for understanding.',
+  'Higher-order questioning': 'of questions asked students to explain, compare or reason.',
+  'Real-life examples and connections': 'of lessons connected the content to real life or earlier learning.',
+  'Calm classroom management': 'of lessons needed no redirections at all.',
+  'Clear directions': 'of lessons included at least one clear, specific direction.',
+}
+
+// "At a glance": three sentences a principal can read in ten seconds, built
+// only from numbers already on the page and silent where there isn't enough.
+function AtAGlance({ overview }: { overview: AdminOverview }) {
+  const top = (tally: Record<string, TallyEntry>) =>
+    Object.entries(tally)
+      .filter(([, v]) => v.count > 0)
+      .sort((a, b) => b[1].count - a[1].count)[0]
+  const strength = overview.strengths[0]
+  const need = top(overview.priorityTally)
+  const practiced = top(overview.categoryTally)
+  const lines: string[] = []
+  if (strength) lines.push(`Your staff's clearest strength is ${strength.label.toLowerCase()}: ${strength.value}% ${STRENGTH_MEANING[strength.label] ?? ''}`.trim())
+  if (need && need[1].count >= 3) {
+    lines.push(
+      `The most common area to grow is ${(PRIORITY_LABELS[need[0]] ?? need[0]).toLowerCase()}, in ${plural(need[1].count, 'lesson', 'lessons')} across ${plural(need[1].teachers, 'teacher', 'teachers')}.`,
+    )
+  }
+  if (practiced && practiced[1].count >= 3) {
+    lines.push(`Teachers practice ${categoryLabel(practiced[0]).toLowerCase()} most, ${plural(practiced[1].count, 'time', 'times')} so far.`)
+  }
+  if (lines.length === 0) return null
+  return (
+    <div className="rounded-3xl bg-forest p-6 text-cream">
+      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">At a glance</p>
+      <ul className="mt-3 flex flex-col gap-2">
+        {lines.map((line) => (
+          <li key={line} className="flex gap-2.5 text-sm leading-relaxed">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-gold" />
+            {line}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-4 text-xs text-cream/70">
+        Built from your staff&rsquo;s recorded lessons and practice. No individual teacher is ever identified.
+      </p>
+    </div>
+  )
 }
 
 function InsightCard({
@@ -1889,15 +2031,19 @@ function DashboardPanel({ overview, onNavigate }: { overview: AdminOverview; onN
   return (
     <div className="flex flex-col gap-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard label="Licensed staff" value={String(overview.totalTeachers)} sub="Accounts with teacher access" />
+        <StatCard label="Licensed staff" value={String(overview.totalTeachers)} sub="Teachers with a Wivoza account at your school" />
         <StatCard
-          label="Activated accounts"
+          label="Activated"
           value={String(overview.activatedAccounts)}
-          sub="Finished onboarding"
+          sub="Finished setting up their account"
         />
-        <StatCard label="Active this period" value={String(overview.activeThisWeek)} sub={`${participationPct}% of licensed staff`} />
-        <StatCard label="Returning users" value={String(overview.returningUsers)} sub="Active this period and the one before" />
-        <StatCard label="Coaching activities" value={String(overview.activitiesThisWeek)} sub="This period" />
+        <StatCard
+          label="Active this period"
+          value={String(overview.activeThisWeek)}
+          sub={`Used Wivoza in the dates above — ${participationPct}% of staff`}
+        />
+        <StatCard label="Returning" value={String(overview.returningUsers)} sub="Active this period and the one before: the habit signal" />
+        <StatCard label="Coaching activities" value={String(overview.activitiesThisWeek)} sub="Lessons, conversations, plans and practice in these dates" />
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -1935,14 +2081,25 @@ function DashboardPanel({ overview, onNavigate }: { overview: AdminOverview; onN
         />
       </div>
 
-      <AdoptionFunnelCard overview={overview} />
+      <AdoptionFunnelCard n={1} overview={overview} />
 
-      <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-        <WeeklyActivityChart data={overview.weeklyActivity} />
-      </div>
+      <WeeklyParticipationCard n={2} data={overview.weeklyActivity} />
 
-      <FeatureAdoptionCard data={overview.featureAdoption} totalTeachers={overview.totalTeachers} />
+      <FeatureAdoptionCard n={3} data={overview.featureAdoption} totalTeachers={overview.totalTeachers} />
     </div>
+  )
+}
+
+function WeeklyParticipationCard({ n, data }: { n: number; data: AdminOverview['weeklyActivity'] }) {
+  return (
+    <AdminCard
+      n={n}
+      title="Weekly participation"
+      question="Is use growing week to week?"
+      howToRead="How many different teachers used any part of Wivoza in each of the last six weeks. It counts people, not activity, so one very busy teacher can't make a quiet week look busy. This chart always shows the last six weeks, whatever dates are chosen above."
+    >
+      <WeeklyActivityChart data={data} />
+    </AdminCard>
   )
 }
 
@@ -1950,19 +2107,22 @@ function DashboardPanel({ overview, onNavigate }: { overview: AdminOverview; onN
 // numbers already shown as separate stat tiles on the Dashboard, here
 // connected into one funnel so it's clear where staff actually drop off,
 // which is the whole point of a page titled "Adoption & engagement."
-function AdoptionFunnelCard({ overview }: { overview: AdminOverview }) {
+function AdoptionFunnelCard({ n, overview }: { n: number; overview: AdminOverview }) {
   const stages: { label: string; count: number }[] = [
-    { label: 'Licensed staff', count: overview.totalTeachers },
-    { label: 'Activated (finished onboarding)', count: overview.activatedAccounts },
-    { label: 'Active this period', count: overview.activeThisWeek },
-    { label: 'Returning (active this period and the last)', count: overview.returningUsers },
+    { label: 'Have an account', count: overview.totalTeachers },
+    { label: 'Set it up', count: overview.activatedAccounts },
+    { label: 'Used it in these dates', count: overview.activeThisWeek },
+    { label: 'Came back again', count: overview.returningUsers },
   ]
   const total = overview.totalTeachers
   return (
-    <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-      <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Adoption funnel</h2>
-      <p className="text-xs text-ink-soft">Where licensed staff actually stick with Wivoza</p>
-      <div className="mt-3 flex flex-col gap-3">
+    <AdminCard
+      n={n}
+      title="From account to habit"
+      question="Where do teachers drop off between getting an account and using it regularly?"
+      howToRead="Each bar is a share of every teacher with an account. The biggest drop between two bars is where a nudge helps most: teachers who never set up their account need a different message than teachers who tried it once and didn't come back. The People page shows who is in each group."
+    >
+      <div className="flex flex-col gap-3">
         {stages.map(({ label, count }) => {
           const pct = total > 0 ? Math.round((count / total) * 100) : 0
           return (
@@ -1980,23 +2140,37 @@ function AdoptionFunnelCard({ overview }: { overview: AdminOverview }) {
           )
         })}
       </div>
-    </div>
+    </AdminCard>
   )
 }
 
-function FeatureAdoptionCard({ data, totalTeachers }: { data: AdminOverview['featureAdoption']; totalTeachers: number }) {
+function FeatureAdoptionCard({
+  n,
+  data,
+  totalTeachers,
+}: {
+  n: number
+  data: AdminOverview['featureAdoption']
+  totalTeachers: number
+}) {
   const entries = (Object.entries(data) as [keyof typeof data, number][]).sort((a, b) => b[1] - a[1])
   return (
-    <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-      <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Feature adoption</h2>
-      <p className="text-xs text-ink-soft">Share of teachers who have tried each feature at least once, ever</p>
-      <div className="mt-3 flex flex-col gap-3">
+    <AdminCard
+      n={n}
+      title="Which tools teachers use"
+      question="How many of your teachers have tried each part of Wivoza."
+      howToRead="Counts teachers who have used each tool at least once since your school started. A tool few teachers have tried is often one they don't know about yet, which makes it a good five-minute demo at a staff meeting."
+    >
+      <div className="flex flex-col gap-3">
         {entries.map(([key, teacherCount]) => {
           const pct = totalTeachers > 0 ? Math.round((teacherCount / totalTeachers) * 100) : 0
           return (
             <div key={key}>
               <div className="flex items-baseline justify-between gap-3">
-                <span className="text-sm font-medium text-ink">{FEATURE_ACTIVITY_META[key].label}</span>
+                <span className="text-sm font-semibold text-ink">
+                  {FEATURE_ACTIVITY_META[key].label}
+                  <span className="ml-1.5 text-xs font-normal text-ink-soft">{FEATURE_ACTIVITY_META[key].sub}</span>
+                </span>
                 <span className="text-sm font-semibold text-ink">
                   {pct}% · {teacherCount} of {totalTeachers}
                 </span>
@@ -2008,31 +2182,57 @@ function FeatureAdoptionCard({ data, totalTeachers }: { data: AdminOverview['fea
           )
         })}
       </div>
-    </div>
+    </AdminCard>
   )
 }
 
 function EngagementPanel({ overview }: { overview: AdminOverview }) {
+  const { recentStrong, recentTotal, priorStrong, priorTotal } = overview.growth
+  const bars = [
+    { label: 'These dates', strong: recentStrong, total: recentTotal },
+    { label: 'The period before', strong: priorStrong, total: priorTotal },
+  ]
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Staff-wide growth signal</p>
-        {overview.growth.recentTotal === 0 ? (
-          <p className="mt-1 text-sm text-ink-soft">No rated practice this week yet.</p>
+      <AdminCard
+        n={1}
+        title="Growing skill in practice"
+        question="Are teachers handling practice scenarios better over time?"
+        howToRead="When a teacher practices a classroom scenario, Wivoza privately rates the response from 1 to 5 to track growth. Teachers never see it as a score, and you never see anyone's individual rating. A response rated 4 or 5 counts as strong here. A rising share means the practice is working."
+      >
+        {recentTotal === 0 ? (
+          <p className="text-sm text-ink-soft">No rated practice in these dates yet.</p>
         ) : (
-          <p className="mt-1 text-sm text-ink">
-            <span className="text-lg font-semibold text-ink">
-              {overview.growth.recentStrong} of {overview.growth.recentTotal}
-            </span>{' '}
-            rated practice this week showed strong technique
-            {overview.growth.priorTotal > 0
-              ? `, vs. ${overview.growth.priorStrong} of ${overview.growth.priorTotal} the week before.`
-              : '.'}
-          </p>
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-ink">
+              <span className="font-heading text-2xl font-extrabold text-forest">{Math.round((recentStrong / recentTotal) * 100)}%</span>{' '}
+              of practice responses were strong in these dates
+              {priorTotal > 0 ? `, compared with ${Math.round((priorStrong / priorTotal) * 100)}% the period before.` : '.'}
+            </p>
+            {bars.map((b) =>
+              b.total === 0 ? null : (
+                <div key={b.label}>
+                  <div className="flex items-baseline justify-between gap-3 text-sm">
+                    <span className="font-semibold text-ink">{b.label}</span>
+                    <span className="text-ink-soft">
+                      {b.strong} of {b.total} strong
+                    </span>
+                  </div>
+                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-cream">
+                    <div className="h-full rounded-full bg-forest" style={{ width: `${(b.strong / b.total) * 100}%` }} />
+                  </div>
+                </div>
+              ),
+            )}
+          </div>
         )}
-      </div>
+      </AdminCard>
 
-      <FeatureAdoptionCard data={overview.featureAdoption} totalTeachers={overview.totalTeachers} />
+      <AdoptionFunnelCard n={2} overview={overview} />
+
+      <WeeklyParticipationCard n={3} data={overview.weeklyActivity} />
+
+      <FeatureAdoptionCard n={4} data={overview.featureAdoption} totalTeachers={overview.totalTeachers} />
     </div>
   )
 }
@@ -2043,53 +2243,71 @@ function EngagementPanel({ overview }: { overview: AdminOverview }) {
 function TopNList({
   tally,
   labelFor,
+  meaningFor,
   n,
+  noun,
   emptyText,
 }: {
   tally: Record<string, TallyEntry>
   labelFor: (value: string) => string
+  meaningFor?: (value: string) => string | undefined
   n: number
+  // What one count is — "lesson", "practice session" — so a row reads
+  // "23 lessons · 14 teachers" instead of an unexplained "23×".
+  noun: [string, string]
   emptyText: string
 }) {
   const top = Object.entries(tally)
     .filter(([, v]) => v.count > 0)
     .sort((a, b) => b[1].count - a[1].count)
     .slice(0, n)
-  if (top.length === 0) return <p className="mt-2 text-sm text-ink-soft">{emptyText}</p>
+  if (top.length === 0) return <p className="text-sm text-ink-soft">{emptyText}</p>
+  const max = Math.max(1, ...top.map(([, v]) => v.count))
   return (
-    <div className="mt-2 flex flex-col gap-1.5">
+    <div className="flex flex-col gap-3.5">
       {top.map(([value, { count, teachers }]) => (
-        <div key={value} className="flex items-center justify-between gap-3 text-sm">
-          <span className="text-ink">{labelFor(value)}</span>
-          <span className="text-ink-soft">
-            {count}× · {teachers} teacher{teachers === 1 ? '' : 's'}
-          </span>
+        <div key={value}>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+            <span className="text-sm font-semibold text-ink">{labelFor(value)}</span>
+            <span className="text-sm text-ink-soft">
+              {plural(count, noun[0], noun[1])} · {plural(teachers, 'teacher', 'teachers')}
+            </span>
+          </div>
+          {meaningFor?.(value) && <p className="text-xs text-ink-soft">{meaningFor(value)}</p>}
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-cream">
+            <div className="h-full rounded-full bg-terracotta" style={{ width: `${(count / max) * 100}%` }} />
+          </div>
         </div>
       ))}
     </div>
   )
 }
 
-function StrengthsCard({ strengths }: { strengths: Strength[] }) {
+function StrengthsCard({ n, strengths }: { n: number; strengths: Strength[] }) {
   return (
-    <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-      <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Top shared strengths</h2>
+    <AdminCard
+      n={n}
+      title="Shared strengths"
+      question="What is your staff already doing well, across classrooms?"
+      howToRead="Measured from recorded Lesson Debrief lessons. Something counts as a staff strength once it clears Wivoza's bar — for example, checks for understanding in 70% or more of lessons. Worth naming out loud at a staff meeting: strengths spread faster when people hear them."
+    >
       {strengths.length === 0 ? (
-        <p className="mt-2 text-sm text-ink-soft">Not enough data yet to confidently name a staff-wide strength.</p>
+        <p className="text-sm text-ink-soft">Not enough recorded lessons yet to name a staff-wide strength with confidence.</p>
       ) : (
-        <div className="mt-2 flex flex-col gap-1.5">
+        <div className="grid gap-3 sm:grid-cols-3">
           {strengths.map((s) => (
-            <div key={s.label} className="flex items-center justify-between gap-3 text-sm">
-              <span className="text-ink">{s.label}</span>
-              <span className="flex items-center gap-1.5 font-semibold text-ink">
+            <div key={s.label} className="rounded-2xl bg-mint-tint/50 p-4">
+              <p className="flex items-center gap-1.5 font-heading text-3xl font-extrabold text-forest">
                 {s.value}%
                 <ConfidenceBadge level={s.confidence} />
-              </span>
+              </p>
+              <p className="mt-1 text-sm font-semibold text-ink">{s.label}</p>
+              <p className="text-xs text-ink-soft">{s.value}% {STRENGTH_MEANING[s.label] ?? ''}</p>
             </div>
           ))}
         </div>
       )}
-    </div>
+    </AdminCard>
   )
 }
 
@@ -2142,54 +2360,78 @@ function CoachingInsightsPanel({ overview, selectedOrgId }: { overview: AdminOve
 
       {tab === 'overview' && (
         <>
-          <StrengthsCard strengths={overview.strengths} />
+          <AtAGlance overview={overview} />
 
-          <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-            <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Top shared growth areas</h2>
+          <StrengthsCard n={1} strengths={overview.strengths} />
+
+          <AdminCard
+            n={2}
+            title="Shared growth areas"
+            question="Where would a staff-wide PD session help the most teachers?"
+            howToRead="Each recorded lesson is counted under the one area its own numbers point to most — for example, a lesson where the teacher did 65% or more of the talking counts under talk time balance. Short recordings, or ones without enough evidence, aren't counted anywhere. The teacher count shows how widespread it is: an area that shows up for many teachers is a better PD topic than one that shows up often for a few."
+          >
             <TopNList
               tally={overview.priorityTally}
               labelFor={(v) => PRIORITY_LABELS[v] ?? v}
+              meaningFor={(v) => PRIORITY_MEANING[v]}
               n={3}
-              emptyText="Not enough Lesson Debrief data yet."
+              noun={['lesson', 'lessons']}
+              emptyText="Not enough recorded lessons yet."
             />
-          </div>
+          </AdminCard>
 
-          <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-            <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
-              Most practiced classroom situations
-            </h2>
-            <TopNList tally={overview.categoryTally} labelFor={categoryLabel} n={3} emptyText="No practice activity yet." />
-          </div>
+          <AdminCard
+            n={3}
+            title="Classroom situations teachers practice"
+            question="Which moments are teachers rehearsing before they happen for real?"
+            howToRead="Counts the classroom-management scenarios teachers practiced and the situations they asked the coach about. What people practice is usually what worries them — a useful read on where staff want support, even before it shows up in lessons."
+          >
+            <TopNList
+              tally={overview.categoryTally}
+              labelFor={categoryLabel}
+              n={3}
+              noun={['time', 'times']}
+              emptyText="No practice yet."
+            />
+          </AdminCard>
 
-          <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-            <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
-              Most common communication needs
-            </h2>
+          <AdminCard
+            n={4}
+            title="Conversations with families and colleagues"
+            question="What are teachers writing and preparing for most?"
+            howToRead="Messages teachers drafted and difficult conversations they practiced, grouped by purpose. A lot of behavior-concern messages, for example, can point to a shared need before it reaches your office."
+          >
             <TopNList
               tally={mergeTallies(overview.challengeTally, overview.messagePurposeTally)}
               labelFor={communicationLabel}
               n={3}
-              emptyText="No communication activity yet."
+              noun={['time', 'times']}
+              emptyText="No messages or conversation practice yet."
             />
-          </div>
+          </AdminCard>
 
-          <FocusAreasCard selectedOrgId={selectedOrgId} />
+          <FocusAreasCard n={5} selectedOrgId={selectedOrgId} />
 
-          <BreakdownCard selectedOrgId={selectedOrgId} />
+          <BreakdownCard n={6} selectedOrgId={selectedOrgId} />
         </>
       )}
 
       {tab === 'practice' && (
         <>
           <InstructionalAveragesCard
+            n={1}
             data={overview.instructionalAverages}
             insight={buildInstructionalGroupInsight(overview.instructionalAverages)}
           />
           <TallyBarList
-            title="Lesson Debrief: coaching priority, in full"
-            comment="Based on each analyzed session's own measured numbers — a short recording or one with too little evidence on a given metric doesn't count toward any priority, so totals here can be lower than the number of sessions recorded."
+            n={2}
+            title="Every growth area, in full"
+            question="All five areas lessons can point to, from most to least common."
+            noun={['lesson', 'lessons']}
+            comment="Each recorded lesson is counted under the one area its own numbers point to most. A short recording, or one with too little evidence, isn't counted anywhere, so the totals can be lower than the number of lessons recorded."
             tally={overview.priorityTally}
             labelFor={(v) => PRIORITY_LABELS[v] ?? v}
+            meaningFor={(v) => PRIORITY_MEANING[v]}
             totalTeachers={overview.totalTeachers}
             insight={buildTallyInsight(
               overview.priorityTally,
@@ -2199,8 +2441,11 @@ function CoachingInsightsPanel({ overview, selectedOrgId }: { overview: AdminOve
             )}
           />
           <TallyBarList
-            title="Content specialist notes, by theme"
-            comment="Which content-note themes (Clarity, Vocabulary, Engagement, Worth double-checking) come up most across your staff's recordings."
+            n={3}
+            title="Content notes, by theme"
+            question="What the subject-matter notes on recorded lessons most often point to."
+            noun={['note', 'notes']}
+            comment="When a teacher asks for content notes on a lesson, Wivoza groups them into four themes: clarity of explanation, vocabulary, engagement with the content, and facts worth double-checking. Only the theme counts are shown here, never the notes themselves."
             tally={overview.contentNoteTally}
             labelFor={(v) => v}
             totalTeachers={overview.totalTeachers}
@@ -2210,14 +2455,17 @@ function CoachingInsightsPanel({ overview, selectedOrgId }: { overview: AdminOve
       )}
 
       {tab === 'climate' && (
-        <ClimateAveragesCard data={overview.climateAverages} insight={buildClimateGroupInsight(overview.climateAverages)} />
+        <ClimateAveragesCard n={1} data={overview.climateAverages} insight={buildClimateGroupInsight(overview.climateAverages)} />
       )}
 
       {tab === 'communication' && (
         <>
           <TallyBarList
-            title="Conversations practiced, by challenge"
-            comment="The kinds of difficult conversations your staff are rehearsing before having them for real."
+            n={1}
+            title="Difficult conversations practiced"
+            question="The conversations teachers rehearse before having them for real."
+            noun={['practice', 'practices']}
+            comment="Teachers can practice a hard conversation, like an upset parent or a grade dispute, with a simulated person before it happens. A lot of practice on one kind of conversation is a sign staff would welcome support or a shared protocol for it."
             tally={overview.challengeTally}
             labelFor={(v) => challengeLabel(v) ?? v}
             totalTeachers={overview.totalTeachers}
@@ -2229,8 +2477,11 @@ function CoachingInsightsPanel({ overview, selectedOrgId }: { overview: AdminOve
             )}
           />
           <TallyBarList
+            n={2}
             title="Messages written, by purpose"
-            comment="What teachers are reaching out to parents, colleagues, or administrators about most."
+            question="What teachers are reaching out to families and colleagues about."
+            noun={['message', 'messages']}
+            comment="Counts the messages teachers drafted with Wivoza, by why they were writing. Positive updates are worth watching too, since they're the messages families remember."
             tally={overview.messagePurposeTally}
             labelFor={(v) => purposeLabel(v) ?? v}
             totalTeachers={overview.totalTeachers}
@@ -2449,10 +2700,11 @@ function PdFocusAreaContent({ organizationId }: { organizationId?: string }) {
       )}
 
       <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-        <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">+ Track a new focus area</h2>
-        <p className="mt-1 text-xs text-ink-soft">
-          Name a shared coaching theme to track over time — Wivoza snapshots the current evidence now, so you can
-          check back against it later.
+        <h2 className="font-heading text-lg font-bold text-forest">Track a new focus area</h2>
+        <p className="mt-1 text-sm text-ink-soft">
+          Pick a growth area to work on as a school. Wivoza notes how often it shows up in lessons today, then shows
+          whether it shows up in fewer lessons as your PD takes hold. The counts below are how often each area has come
+          up in recorded lessons so far.
         </p>
         <div className="mt-3 flex flex-col gap-2">
           {PRIORITY_LABEL_KEYS.map((key) => {
@@ -2473,7 +2725,7 @@ function PdFocusAreaContent({ organizationId }: { organizationId?: string }) {
                     ? 'Already tracked'
                     : tally.count === 0
                       ? 'No evidence yet'
-                      : `${tally.count}× · ${tally.teachers} teacher${tally.teachers === 1 ? '' : 's'}`}
+                      : `In ${plural(tally.count, 'lesson', 'lessons')} · ${plural(tally.teachers, 'teacher', 'teachers')}`}
                 </span>
               </button>
             )
@@ -2581,7 +2833,16 @@ function FocusAreaCard({
         <p className={`mt-3 text-sm font-semibold ${trend.improving ? 'text-forest' : 'text-ink'}`}>{trend.text}</p>
       )}
 
-      {item.suggestedAction && <p className="mt-3 text-sm text-ink-soft">{item.suggestedAction}</p>}
+      <p className="mt-3 text-xs text-ink-soft">
+        The share of recorded lessons where this was the main area to grow. Lower is better: it means fewer lessons
+        need it.
+      </p>
+      {item.suggestedAction && (
+        <p className="mt-2 text-sm text-ink">
+          <span className="font-semibold">Suggested PD: </span>
+          {item.suggestedAction}
+        </p>
+      )}
     </div>
   )
 }
@@ -3092,9 +3353,9 @@ function UserRow({
         <td className="px-3.5 py-3">
           <RowCheckbox checked={selected} disabled={!selectable} label={user.name ?? user.email} onChange={onToggle} />
         </td>
-        <td className="px-3.5 py-3">
+        <td className="max-w-[15rem] px-3.5 py-3">
           <p className="text-sm font-semibold text-ink">{user.name ?? user.email}</p>
-          <p className="text-xs text-ink-soft">{user.email}</p>
+          <p className="break-all text-xs text-ink-soft">{user.email}</p>
         </td>
         <td className="whitespace-nowrap px-3.5 py-3">
           <span className="rounded-full border border-hairline px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-soft">
