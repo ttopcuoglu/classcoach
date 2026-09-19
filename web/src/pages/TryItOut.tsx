@@ -69,9 +69,16 @@ export default function TryItOut() {
     setResponseText((prev) => (prev ? `${prev} ${text}` : text)),
   )
 
-  const [sessionState, setSessionState] = useState<{ index: number; total: number; done: boolean } | null>(
-    null,
-  )
+  // attemptIds: what this Quick Session produced, for the recap at the end.
+  const [sessionState, setSessionState] = useState<{
+    index: number
+    total: number
+    done: boolean
+    attemptIds: string[]
+  } | null>(null)
+  // The situation/grade/difficulty choices stay folded into one line until
+  // asked for — most teachers start from a suggested scenario.
+  const [customizing, setCustomizing] = useState(false)
 
   const [allAttempts, setAllAttempts] = useState<ScenarioAttempt[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
@@ -180,7 +187,7 @@ export default function TryItOut() {
   }
 
   async function handleStartSession() {
-    setSessionState({ index: 1, total: SESSION_LENGTH, done: false })
+    setSessionState({ index: 1, total: SESSION_LENGTH, done: false, attemptIds: [] })
     await handleNewScenario()
   }
 
@@ -208,6 +215,7 @@ export default function TryItOut() {
       const result = await submitAttempt(attempt.scenarioId, responseText.trim())
       setAttempt(result)
       setAllAttempts((prev) => [result, ...prev])
+      setSessionState((s) => (s && !s.done ? { ...s, attemptIds: [...s.attemptIds, result.id] } : s))
     } catch {
       setError('Could not get coaching feedback. Please try again.')
     } finally {
@@ -302,63 +310,15 @@ export default function TryItOut() {
   }
 
   const hasFeedback = attempt && (attempt.feedback || attempt.modelResponse)
-  const filtersLocked = !!sessionState && !sessionState.done
+  const difficultyText = (DIFFICULTIES.find((d) => d.value === difficulty)?.label ?? 'Any difficulty').toLowerCase()
+  const situationText = category ? categoryLabel(category).toLowerCase() : 'any situation'
+  const sessionAttempts = sessionState?.done
+    ? sessionState.attemptIds.map((id) => allAttempts.find((a) => a.id === id)).filter((a): a is ScenarioAttempt => !!a)
+    : []
+  const unsavedInSession = sessionAttempts.filter((a) => !a.saved)
 
   return (
     <div className="flex flex-col gap-6">
-      <div className={`flex flex-wrap gap-2 ${filtersLocked ? 'pointer-events-none opacity-50' : ''}`}>
-        {CATEGORIES.map(({ label, value }) => {
-          const isActive = category === value
-          const count = value ? categoryTally.get(value) : undefined
-          return (
-            <button
-              key={label}
-              type="button"
-              onClick={() => setCategory(value)}
-              title={count ? `You've practiced this ${count === 1 ? 'once' : `${count} times`}` : undefined}
-              className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                isActive
-                  ? 'border-forest bg-forest text-cream'
-                  : 'border-hairline bg-cream-card text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
-              }`}
-            >
-              {label}
-              {count ? ` · ${count} practiced` : ''}
-            </button>
-          )
-        })}
-      </div>
-
-      <div className={`flex flex-wrap gap-2 ${filtersLocked ? 'pointer-events-none opacity-50' : ''}`}>
-        {GRADE_BANDS.map((band) => (
-          <button
-            key={band}
-            type="button"
-            onClick={() => setGradeBand(band)}
-            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-              gradeBand === band ? 'bg-gold text-forest' : 'bg-gold-tint/50 text-ink-soft hover:text-forest'
-            }`}
-          >
-            Grades {band}
-          </button>
-        ))}
-      </div>
-
-      <div className={`flex flex-wrap gap-2 ${filtersLocked ? 'pointer-events-none opacity-50' : ''}`}>
-        {DIFFICULTIES.map(({ label, value }) => (
-          <button
-            key={label}
-            type="button"
-            onClick={() => setDifficulty(value)}
-            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-              difficulty === value ? 'bg-terracotta text-cream' : 'bg-peach-tint/50 text-ink-soft hover:text-forest'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
       <div
         className={
           !attempt && !sessionState?.done
@@ -367,24 +327,68 @@ export default function TryItOut() {
         }
       >
         {sessionState?.done ? (
-          <div className="p-2 text-center">
-            <p className="font-heading text-2xl font-bold text-forest">Session complete<span className="text-gold">!</span></p>
-            <p className="mt-1 text-sm text-ink-soft">
-              You practiced {sessionState.total} scenarios back to back. Nice work.
-            </p>
-            <button
-              type="button"
-              onClick={handleEndSession}
-              className="mt-4 rounded-lg bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
-            >
-              Back to practice
-            </button>
+          <div className="flex flex-col gap-4 p-2">
+            <div>
+              <p className="font-heading text-2xl font-bold text-forest">Session complete<span className="text-gold">!</span></p>
+              <p className="mt-1 text-sm text-ink-soft">
+                You practiced {sessionState.total} scenarios back to back. Here&rsquo;s what you worked through. Open
+                any one to see its coaching again.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              {sessionAttempts.map((a, i) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => handleOpenPast(a.id)}
+                  className="flex items-start gap-3 rounded-xl border border-hairline bg-cream p-3.5 text-left transition-colors hover:border-terracotta/40"
+                >
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-forest font-heading text-sm font-bold text-gold">
+                    {i + 1}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-semibold text-forest">{categoryLabel(a.scenario.category)}</span>
+                    <span className="mt-0.5 block line-clamp-2 text-sm text-ink">{a.scenario.text}</span>
+                    <span className="mt-1 block line-clamp-1 text-xs text-ink-soft">You said: {a.responseText}</span>
+                  </span>
+                  <span className="shrink-0 text-xs font-semibold text-forest">Open →</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {sessionAttempts.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => unsavedInSession.forEach((a) => handleToggleSaved(a))}
+                  disabled={unsavedInSession.length === 0}
+                  className="flex items-center gap-1.5 rounded-full border border-hairline px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-60"
+                >
+                  <StarIcon className="h-4 w-4" filled={unsavedInSession.length === 0} />
+                  {unsavedInSession.length === 0 ? 'All saved' : `Save all ${sessionAttempts.length}`}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleStartSession}
+                disabled={generating}
+                className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:opacity-60"
+              >
+                Practice {SESSION_LENGTH} more
+              </button>
+              <button
+                type="button"
+                onClick={handleEndSession}
+                className="px-2 py-2.5 text-sm font-semibold text-ink-soft hover:text-ink"
+              >
+                Back to practice
+              </button>
+            </div>
           </div>
         ) : !attempt ? (
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Practice a scenario</p>
             <p className="mt-2 font-heading text-2xl font-bold text-cream">Ready when you are.</p>
-            <p className="mt-1 text-sm text-cream/70">Pick a moment to rehearse, or let Wivoza build one from the filters above.</p>
+            <p className="mt-1 text-sm text-cream/70">Pick a moment to rehearse, or let Wivoza build a new one for you.</p>
             <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
               {(starterScenarios ?? []).map((s, i) => (
                 <button
@@ -415,6 +419,82 @@ export default function TryItOut() {
                 />
               </div>
             )}
+            <div className="mt-5 rounded-2xl bg-cream/10 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-cream/80">
+                  <span className="font-semibold text-cream">New scenarios:</span> {situationText} · grades {gradeBand} ·{' '}
+                  {difficultyText}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setCustomizing((v) => !v)}
+                  aria-expanded={customizing}
+                  className="text-sm font-semibold text-gold hover:text-cream"
+                >
+                  {customizing ? 'Done' : 'Change'}
+                </button>
+              </div>
+              {customizing && (
+                <div className="mt-4 flex flex-col gap-3">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Situation</p>
+                    <div className="mt-1.5 flex flex-wrap gap-2">
+                      {CATEGORIES.map(({ label, value }) => {
+                        const count = value ? categoryTally.get(value) : undefined
+                        return (
+                          <button
+                            key={label}
+                            type="button"
+                            onClick={() => setCategory(value)}
+                            title={count ? `You've practiced this ${count === 1 ? 'once' : `${count} times`}` : undefined}
+                            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                              category === value ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
+                            }`}
+                          >
+                            {label === 'All' ? 'Any situation' : label}
+                            {count ? ` · ${count} practiced` : ''}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Grade band</p>
+                    <div className="mt-1.5 flex flex-wrap gap-2">
+                      {GRADE_BANDS.map((band) => (
+                        <button
+                          key={band}
+                          type="button"
+                          onClick={() => setGradeBand(band)}
+                          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                            gradeBand === band ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
+                          }`}
+                        >
+                          Grades {band}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Difficulty</p>
+                    <div className="mt-1.5 flex flex-wrap gap-2">
+                      {DIFFICULTIES.map(({ label, value }) => (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() => setDifficulty(value)}
+                          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                            difficulty === value ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="mt-5 flex flex-wrap items-center gap-2">
               <button
                 type="button"
