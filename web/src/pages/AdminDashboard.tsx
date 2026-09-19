@@ -42,7 +42,16 @@ import {
 } from '../lib/api'
 import { ACCENT_CYCLE, type Accent } from '../components/report'
 import { categoryLabel } from '../lib/categories'
-import { describeSnapshot, describeTrend, PD_SUGGESTIONS, PRIORITY_LABELS, PRIORITY_MEANING, STRENGTH_MEANING } from '../lib/adminLabels'
+import {
+  buildSchoolGlance,
+  describeSnapshot,
+  describeTrend,
+  nextUntrackedNeed,
+  PD_SUGGESTIONS,
+  PRIORITY_LABELS,
+  PRIORITY_MEANING,
+  STRENGTH_MEANING,
+} from '../lib/adminLabels'
 import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import { CHALLENGE_TYPES, MESSAGE_PURPOSES, challengeLabel, purposeLabel } from '../lib/communicationOptions'
 import { ChartBarIcon, ChatBubbleIcon, HomeIcon, LockIcon, ShieldIcon, UserIcon } from '../components/icons'
@@ -272,7 +281,9 @@ export default function AdminDashboard() {
 
         {isAnalyticsTab && !overview && !overviewError && <p className="text-sm text-ink-soft">Loading...</p>}
 
-        {tab === 'dashboard' && overview && <DashboardPanel overview={overview} onNavigate={setTab} />}
+        {tab === 'dashboard' && overview && (
+          <DashboardPanel overview={overview} organizationId={selectedOrgId || undefined} onNavigate={setTab} />
+        )}
         {tab === 'engagement' && overview && <EngagementPanel overview={overview} />}
         {tab === 'insights' && overview && (
           <CoachingInsightsPanel overview={overview} selectedOrgId={selectedOrgId} />
@@ -2075,31 +2086,25 @@ function AtAGlance({ overview }: { overview: AdminOverview }) {
   )
 }
 
-function InsightCard({
-  eyebrow,
-  body,
-  actionLabel,
-  onAction,
+function DashboardPanel({
+  overview,
+  organizationId,
+  onNavigate,
 }: {
-  eyebrow: string
-  body: string
-  actionLabel?: string
-  onAction?: () => void
+  overview: AdminOverview
+  organizationId?: string
+  onNavigate: (tab: Tab) => void
 }) {
-  return (
-    <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
-      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">{eyebrow}</p>
-      <p className="mt-2 text-sm text-ink">{body}</p>
-      {actionLabel && onAction && (
-        <button type="button" onClick={onAction} className="mt-3 text-sm font-semibold text-terracotta-600 hover:text-terracotta">
-          {actionLabel} →
-        </button>
-      )}
-    </div>
-  )
-}
+  // Tracked focus areas feed the summary and "What needs your attention" —
+  // the Dashboard is where a principal should first see whether PD is working.
+  const [tracked, setTracked] = useState<PdFocusArea[]>([])
+  useEffect(() => {
+    if (overview.scope !== 'organization') return
+    getPdFocusAreas(organizationId)
+      .then((data) => setTracked(data.items.filter((i) => i.status === 'active')))
+      .catch(() => setTracked([]))
+  }, [overview.scope, organizationId])
 
-function DashboardPanel({ overview, onNavigate }: { overview: AdminOverview; onNavigate: (tab: Tab) => void }) {
   const participationPct =
     overview.totalTeachers > 0 ? Math.round((overview.activeThisWeek / overview.totalTeachers) * 100) : 0
   const priorActiveCount =
@@ -2113,66 +2118,139 @@ function DashboardPanel({ overview, onNavigate }: { overview: AdminOverview; onN
     .filter(([, v]) => v.count > 0)
     .sort((a, b) => b[1].count - a[1].count)[0]
   const topPriorityConfidence = topPriorityEntry ? confidenceFor(topPriorityEntry[1].count) : 'none'
-  const topPriorityLabel = topPriorityEntry ? (PRIORITY_LABELS[topPriorityEntry[0]] ?? topPriorityEntry[0]) : null
+  const focusArea = tracked[0] ?? null
+  const focusTrend = focusArea ? describeTrend(focusArea.baselineSnapshot, focusArea.currentSnapshot) : null
+  const next = nextUntrackedNeed(overview, tracked)
+  const glance = buildSchoolGlance(overview, tracked)
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard label="Licensed staff" value={String(overview.totalTeachers)} sub="Teachers with a Wivoza account at your school" />
-        <StatCard
-          label="Activated"
-          value={String(overview.activatedAccounts)}
-          sub="Finished setting up their account"
-        />
-        <StatCard
-          label="Active this period"
-          value={String(overview.activeThisWeek)}
-          sub={`Used Wivoza in the dates above — ${participationPct}% of staff`}
-        />
-        <StatCard label="Returning" value={String(overview.returningUsers)} sub="Active this period and the one before: the habit signal" />
-        <StatCard label="Coaching activities" value={String(overview.activitiesThisWeek)} sub="Lessons, conversations, plans and practice in these dates" />
-      </div>
+      {glance.length > 0 && (
+        <div className="rounded-3xl bg-forest p-6 text-cream">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">At a glance</p>
+          <ul className="mt-3 flex flex-col gap-2">
+            {glance.map((line) => (
+              <li key={line} className="flex gap-2.5 text-sm leading-relaxed">
+                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-gold" />
+                {line}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-4 text-xs text-cream/70">
+            Built from your staff&rsquo;s use of Wivoza and their recorded lessons. No individual teacher is ever identified.
+          </p>
+        </div>
+      )}
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <InsightCard
-          eyebrow="Participation"
-          body={
-            priorParticipationPct == null
-              ? `${participationPct}% of teachers used Wivoza this period.`
-              : `${participationPct}% of teachers used Wivoza this period, ${
-                  participationPct >= priorParticipationPct ? 'up' : 'down'
-                } from ${priorParticipationPct}% last period.`
-          }
-          actionLabel="View engagement"
-          onAction={() => onNavigate('engagement')}
-        />
-        <InsightCard
-          eyebrow="Emerging need"
-          body={
-            topPriorityConfidence === 'none' || !topPriorityLabel
-              ? 'Not enough Lesson Debrief data yet to identify a shared growth area.'
-              : `${topPriorityLabel} appeared as the most common instructional growth area${topPriorityConfidence === 'limited' ? ' (limited data so far)' : ''}.`
-          }
-          actionLabel={topPriorityConfidence !== 'none' ? 'Explore evidence' : undefined}
-          onAction={topPriorityConfidence !== 'none' ? () => onNavigate('insights') : undefined}
-        />
-        <InsightCard
-          eyebrow="Recommended action"
-          body={
-            topPriorityConfidence === 'none' || !topPriorityEntry
-              ? "Once more Lesson Debrief sessions come in, we'll surface a specific recommendation here."
-              : `Consider ${PD_SUGGESTIONS[topPriorityEntry[0]] ?? 'a shared PD session on this theme'}.`
-          }
-          actionLabel={topPriorityConfidence !== 'none' ? 'Track this focus area' : undefined}
-          onAction={topPriorityConfidence !== 'none' ? () => onNavigate('professionalLearning') : undefined}
-        />
-      </div>
+      <AdminCard
+        n={1}
+        title="This period"
+        question="Who has an account, who's using it, and how much, in the dates chosen above."
+        howToRead="Change the dates at the top to look at a different stretch, such as the last 30 days or the whole school year. Returning is the number to watch: people who used Wivoza in this period and the one before are the ones building a habit."
+      >
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <StatCard label="Licensed staff" value={String(overview.totalTeachers)} sub="Teachers with a Wivoza account at your school" />
+          <StatCard label="Activated" value={String(overview.activatedAccounts)} sub="Finished setting up their account" />
+          <StatCard
+            label="Active this period"
+            value={String(overview.activeThisWeek)}
+            sub={`Used Wivoza in these dates, ${participationPct}% of staff`}
+          />
+          <StatCard label="Returning" value={String(overview.returningUsers)} sub="Active this period and the one before: the habit signal" />
+          <StatCard label="Coaching activities" value={String(overview.activitiesThisWeek)} sub="Lessons, conversations, plans and practice in these dates" />
+        </div>
+      </AdminCard>
 
-      <AdoptionFunnelCard n={1} overview={overview} />
+      <AdminCard
+        n={2}
+        title="What needs your attention"
+        question="Three things worth a look this week, each one tap from the details."
+        howToRead="Participation compares this period with the one before. Your focus area compares the share of lessons that needed it before you started tracking with the share since. The next step is the most common growth area in recorded lessons that you aren't tracking yet."
+      >
+        <div className="grid gap-3 md:grid-cols-3">
+          <AttentionTile
+            label="Participation"
+            body={
+              priorParticipationPct == null
+                ? `${participationPct}% of teachers used Wivoza this period.`
+                : `${participationPct}% of teachers used Wivoza this period, ${
+                    participationPct >= priorParticipationPct ? 'up' : 'down'
+                  } from ${priorParticipationPct}% the period before.`
+            }
+            actionLabel="See adoption"
+            onAction={() => onNavigate('engagement')}
+            tint="bg-peach-tint/60"
+          />
+          {focusArea ? (
+            <AttentionTile
+              label={`Your focus: ${focusArea.title.toLowerCase()}`}
+              body={
+                focusTrend
+                  ? `${describeSnapshot(focusArea.baselineSnapshot)} when you started; ${describeSnapshot(focusArea.currentSnapshot!).charAt(0).toLowerCase()}${describeSnapshot(focusArea.currentSnapshot!).slice(1)} since. ${focusTrend.text}`
+                  : `Tracking since ${new Date(focusArea.createdAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}. Progress shows once a few more lessons are recorded.`
+              }
+              actionLabel="See Professional Learning"
+              onAction={() => onNavigate('professionalLearning')}
+              tint="bg-mint-tint/60"
+            />
+          ) : (
+            <AttentionTile
+              label="Emerging need"
+              body={
+                topPriorityConfidence === 'none' || !topPriorityEntry
+                  ? 'Not enough recorded lessons yet to name a shared growth area.'
+                  : `${PRIORITY_LABELS[topPriorityEntry[0]] ?? topPriorityEntry[0]} is the most common growth area in recorded lessons. ${PRIORITY_MEANING[topPriorityEntry[0]] ?? ''}`
+              }
+              actionLabel={topPriorityConfidence !== 'none' ? 'See the evidence' : undefined}
+              onAction={topPriorityConfidence !== 'none' ? () => onNavigate('insights') : undefined}
+              tint="bg-mint-tint/60"
+            />
+          )}
+          <AttentionTile
+            label="Recommended next step"
+            body={
+              next
+                ? `${PRIORITY_LABELS[next.key] ?? next.key}, in ${plural(next.count, 'lesson', 'lessons')} across ${plural(next.teachers, 'teacher', 'teachers')}. Consider ${PD_SUGGESTIONS[next.key] ?? 'a shared PD session on it'}.`
+                : "Once more lessons are recorded, a specific next step will show up here."
+            }
+            actionLabel={next ? 'Track this focus area' : undefined}
+            onAction={next ? () => onNavigate('professionalLearning') : undefined}
+            tint="bg-gold-tint/60"
+          />
+        </div>
+      </AdminCard>
 
-      <WeeklyParticipationCard n={2} data={overview.weeklyActivity} />
+      <AdoptionFunnelCard n={3} overview={overview} />
 
-      <FeatureAdoptionCard n={3} data={overview.featureAdoption} totalTeachers={overview.totalTeachers} />
+      <WeeklyParticipationCard n={4} data={overview.weeklyActivity} />
+
+      <FeatureAdoptionCard n={5} data={overview.featureAdoption} totalTeachers={overview.totalTeachers} />
+    </div>
+  )
+}
+
+function AttentionTile({
+  label,
+  body,
+  actionLabel,
+  onAction,
+  tint,
+}: {
+  label: string
+  body: string
+  actionLabel?: string
+  onAction?: () => void
+  tint: string
+}) {
+  return (
+    <div className={`flex flex-col rounded-2xl p-4 ${tint}`}>
+      <p className="text-sm font-semibold text-forest">{label}</p>
+      <p className="mt-1 flex-1 text-sm leading-relaxed text-ink">{body}</p>
+      {actionLabel && onAction && (
+        <button type="button" onClick={onAction} className="mt-3 self-start text-sm font-semibold text-terracotta-600 hover:text-terracotta">
+          {actionLabel} →
+        </button>
+      )}
     </div>
   )
 }

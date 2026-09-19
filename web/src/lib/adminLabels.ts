@@ -1,4 +1,4 @@
-import type { PdFocusAreaSnapshot } from './api'
+import type { AdminOverview, PdFocusArea, PdFocusAreaSnapshot } from './api'
 
 // Labels for the Lesson Debrief growth priorities counted in the admin
 // overview's priorityTally, shared by the admin panel and the pilot report
@@ -59,4 +59,52 @@ export function describeTrend(
   if (change <= -5) return { text: `Down ${-change} points since you started — it's showing up in fewer lessons.`, improving: true }
   if (change >= 5) return { text: `Up ${change} points since you started — worth another look at the plan.`, improving: false }
   return { text: 'About the same so far — give it a few more weeks of lessons.', improving: false }
+}
+
+function countOf(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`
+}
+
+// The most common growth area nobody is tracking yet: the natural next PD
+// focus, once it has come up in enough lessons to be more than noise.
+export function nextUntrackedNeed(
+  overview: AdminOverview,
+  tracked: PdFocusArea[],
+): { key: string; count: number; teachers: number } | null {
+  const trackedKeys = new Set(tracked.filter((t) => t.status === 'active').map((t) => t.themeKey))
+  const next = Object.entries(overview.priorityTally)
+    .filter(([key, v]) => v.count >= 3 && !trackedKeys.has(key))
+    .sort((a, b) => b[1].count - a[1].count)[0]
+  return next ? { key: next[0], ...next[1] } : null
+}
+
+// The four-sentence answer both the Dashboard and the printed pilot report
+// open with: who's using it, what a tracked focus area changed, the clearest
+// strength, and what to work on next. Each line is left out when the data
+// can't support it.
+export function buildSchoolGlance(overview: AdminOverview, tracked: PdFocusArea[]): string[] {
+  const pctOf = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : '—')
+  const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })
+  const lines = [
+    `${overview.activeThisWeek} of ${overview.totalTeachers} teachers (${pctOf(overview.activeThisWeek, overview.totalTeachers)}) used Wivoza in this period, and ${overview.returningUsers} came back from the period before.`,
+  ]
+  for (const t of tracked.filter((f) => f.status === 'active')) {
+    const trend = describeTrend(t.baselineSnapshot, t.currentSnapshot)
+    if (trend && t.baselineSnapshot.sharePct != null && t.currentSnapshot?.sharePct != null) {
+      lines.push(
+        `Since focusing on ${t.title.toLowerCase()} on ${day(t.createdAt)}, it has gone from ${t.baselineSnapshot.sharePct}% of recorded lessons to ${t.currentSnapshot.sharePct}%.`,
+      )
+    }
+  }
+  const strength = overview.strengths[0]
+  if (strength) {
+    lines.push(`Clearest staff strength: ${strength.label.toLowerCase()}, ${strength.value}% ${STRENGTH_MEANING[strength.label] ?? ''}`.trim())
+  }
+  const next = nextUntrackedNeed(overview, tracked)
+  if (next) {
+    lines.push(
+      `Suggested next focus: ${(PRIORITY_LABELS[next.key] ?? next.key).toLowerCase()}, which came up in ${countOf(next.count, 'lesson', 'lessons')} across ${countOf(next.teachers, 'teacher', 'teachers')}.`,
+    )
+  }
+  return lines
 }

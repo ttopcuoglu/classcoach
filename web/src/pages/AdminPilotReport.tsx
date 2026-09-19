@@ -11,8 +11,10 @@ import {
   StatTile,
 } from '../components/report'
 import {
+  buildSchoolGlance,
   describeSnapshot,
   describeTrend,
+  nextUntrackedNeed,
   PD_SUGGESTIONS,
   PRIORITY_LABELS,
   PRIORITY_MEANING,
@@ -122,31 +124,8 @@ export default function AdminPilotReport() {
   const activityChange = overview.activitiesThisWeek - overview.activitiesPriorWeek
   const { recentStrong, recentTotal, priorStrong, priorTotal } = overview.growth
 
-  // The next need: the most common growth area nobody is tracking yet.
-  const trackedKeys = new Set(tracked.map((t) => t.themeKey))
-  const nextNeed = priorities.find(([key, v]) => !trackedKeys.has(key) && v.count >= 3)
-
-  // At a glance — the four sentences for a reader who stops at page one.
-  const glance: string[] = [
-    `${overview.activeThisWeek} of ${overview.totalTeachers} teachers (${pct(overview.activeThisWeek, overview.totalTeachers)}) used Wivoza in this period, and ${overview.returningUsers} came back from the period before.`,
-  ]
-  for (const t of tracked) {
-    const trend = describeTrend(t.baselineSnapshot, t.currentSnapshot)
-    if (trend && t.baselineSnapshot.sharePct != null && t.currentSnapshot?.sharePct != null) {
-      glance.push(
-        `Since focusing on ${t.title.toLowerCase()} on ${formatDay(t.createdAt)}, it has gone from ${t.baselineSnapshot.sharePct}% of recorded lessons to ${t.currentSnapshot.sharePct}%.`,
-      )
-    }
-  }
-  if (overview.strengths[0]) {
-    const s = overview.strengths[0]
-    glance.push(`Clearest staff strength: ${s.label.toLowerCase()}, ${s.value}% ${STRENGTH_MEANING[s.label] ?? ''}`.trim())
-  }
-  if (nextNeed) {
-    glance.push(
-      `Suggested next focus: ${(PRIORITY_LABELS[nextNeed[0]] ?? nextNeed[0]).toLowerCase()}, which came up in ${plural(nextNeed[1].count, 'lesson', 'lessons')} across ${plural(nextNeed[1].teachers, 'teacher', 'teachers')}.`,
-    )
-  }
+  const nextNeed = nextUntrackedNeed(overview, tracked)
+  const glance = buildSchoolGlance(overview, tracked)
 
   let n = 0
 
@@ -421,15 +400,15 @@ export default function AdminPilotReport() {
           accent={A.terracotta}
         >
           <div className="break-inside-avoid rounded-2xl bg-peach-tint/50 p-5">
-            <p className="font-heading text-lg font-bold text-forest">{PRIORITY_LABELS[nextNeed[0]] ?? nextNeed[0]}</p>
+            <p className="font-heading text-lg font-bold text-forest">{PRIORITY_LABELS[nextNeed.key] ?? nextNeed.key}</p>
             <p className="text-sm text-ink">
-              Came up in {plural(nextNeed[1].count, 'lesson', 'lessons')} across {plural(nextNeed[1].teachers, 'teacher', 'teachers')}.{' '}
-              {PRIORITY_MEANING[nextNeed[0]] ?? ''}
+              Came up in {plural(nextNeed.count, 'lesson', 'lessons')} across {plural(nextNeed.teachers, 'teacher', 'teachers')}.{' '}
+              {PRIORITY_MEANING[nextNeed.key] ?? ''}
             </p>
-            {PD_SUGGESTIONS[nextNeed[0]] && (
+            {PD_SUGGESTIONS[nextNeed.key] && (
               <p className="mt-2 text-sm text-ink">
                 <span className="font-semibold">Suggested PD: </span>
-                {capitalize(PD_SUGGESTIONS[nextNeed[0]])}.
+                {capitalize(PD_SUGGESTIONS[nextNeed.key])}.
               </p>
             )}
           </div>
