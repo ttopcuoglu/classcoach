@@ -40,7 +40,9 @@ export const THEMES = {
 export const THEME_NAMES = Object.keys(THEMES) as (keyof typeof THEMES)[]
 export type ThemeName = keyof typeof THEMES
 
-export type SlideDeck = { theme: ThemeName; slides: Slide[] }
+// `variant` (0-3) rotates the accent colors, so two decks on the same
+// subject don't come out looking identical.
+export type SlideDeck = { theme: ThemeName; variant: number; slides: Slide[] }
 
 const WHITE = 'FFFFFF'
 const SHADOW = { type: 'outer' as const, color: '000000', opacity: 0.14, blur: 8, offset: 3, angle: 90 }
@@ -217,7 +219,9 @@ function addPromptSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme) {
 }
 
 export async function buildPptx(deckTitle: string, deck: SlideDeck): Promise<Buffer> {
-  const t: Theme = THEMES[deck.theme] ?? THEMES.wivoza
+  const base: Theme = THEMES[deck.theme] ?? THEMES.wivoza
+  const shift = ((deck.variant % 4) + 4) % 4
+  const t: Theme = { ...base, accents: [0, 1, 2, 3].map((i) => base.accents[(i + shift) % 4]) as Theme['accents'] }
   const pptx = new PptxGenJS()
   pptx.layout = 'LAYOUT_WIDE'
   pptx.title = deckTitle

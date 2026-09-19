@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { downloadExportFile, getExportPreview } from '../lib/api'
+import { ProgressRing } from './ProgressRing'
 import type { ExportDeck, ExportDoc, ExportFormat, ExportKind, ExportSlide, ExportTheme } from '../lib/api'
 
 const FOREST = '#1B2E28'
@@ -37,6 +39,13 @@ const THEMES: Record<ExportTheme, Theme> = {
   arts: { dark: '#1B1830', light: '#FFF7EE', ink: '#1B1830', accents: ['#E63E8C', '#F5A300', '#0BB3C9', '#7B3FE4'], highlight: '#FFD166', head: 'Trebuchet MS', body: 'Arial', decor: 'circles' },
   early: { dark: '#22579E', light: '#FFFBEA', ink: '#22406B', accents: ['#F25C54', '#F7B32B', '#3F88C5', '#4CB963'], highlight: '#FFE066', head: 'Trebuchet MS', body: 'Trebuchet MS', decor: 'circles' },
   wellness: { dark: '#1D4A3A', light: '#F1F8F3', ink: '#1D3A30', accents: ['#2A9D6F', '#F29E4C', '#3C7AA8', '#D9534F'], highlight: '#C7F464', head: 'Trebuchet MS', body: 'Arial', decor: 'squares' },
+}
+
+// The deck's variant rotates the accent colors, matching the .pptx builder.
+function themedFor(deck: ExportDeck): Theme {
+  const base = THEMES[deck.theme] ?? THEMES.wivoza
+  const shift = ((deck.variant % 4) + 4) % 4
+  return { ...base, accents: [0, 1, 2, 3].map((i) => base.accents[(i + shift) % 4]) as Theme['accents'] }
 }
 
 function onColor(hex: string, ink: string): string {
@@ -251,8 +260,7 @@ function SoftDecor({ t }: { t: Theme }) {
   )
 }
 
-function SlideThumb({ slide, index, theme }: { slide: ExportSlide; index: number; theme: ExportTheme }) {
-  const t = THEMES[theme] ?? THEMES.wivoza
+function SlideThumb({ slide, index, t }: { slide: ExportSlide; index: number; t: Theme }) {
   const accent = t.accents[index % 4]
   const frame: CSSProperties = { containerType: 'inline-size', position: 'relative', width: '100%', aspectRatio: '13.33 / 7.5', overflow: 'hidden' }
   const wordmark = (onDark: boolean) => (
@@ -368,11 +376,12 @@ function SlideThumb({ slide, index, theme }: { slide: ExportSlide; index: number
 }
 
 function SlidesPreview({ deck }: { deck: ExportDeck }) {
+  const t = themedFor(deck)
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       {deck.slides.map((slide, i) => (
         <div key={i}>
-          <SlideThumb slide={slide} index={i} theme={deck.theme} />
+          <SlideThumb slide={slide} index={i} t={t} />
           <p className="mt-1 text-[11px] font-semibold text-ink-soft">Slide {i + 1}</p>
         </div>
       ))}
@@ -391,6 +400,31 @@ const THEME_LABELS: Record<ExportTheme, string> = {
   wellness: 'Wellness',
 }
 
+const FORMAT_LABELS: Record<ExportFormat, string> = {
+  docx: 'Word document',
+  pdf: 'PDF document',
+  pptx: 'PowerPoint presentation',
+}
+const DOWNLOAD_LABELS: Record<ExportFormat, string> = {
+  docx: 'Download Word (.docx)',
+  pdf: 'Download PDF',
+  pptx: 'Download PowerPoint (.pptx)',
+}
+
+// Laying a document out is a paid Claude call, so a finished layout is kept
+// for the same assignment text — reopening the window or switching back is
+// instant instead of waiting (and paying) again.
+const previewCache = new Map<string, ExportDoc | ExportDeck>()
+function cacheKey(sessionId: string, kind: ExportKind, text: string): string {
+  let h = 5381
+  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) >>> 0
+  return `${sessionId}|${kind}|${text.length}|${h}`
+}
+function remember(key: string, model: ExportDoc | ExportDeck) {
+  previewCache.set(key, model)
+  if (previewCache.size > 8) previewCache.delete(previewCache.keys().next().value as string)
+}
+
 export default function ExportModal({
   sessionId,
   text: sourceText,
@@ -402,10 +436,11 @@ export default function ExportModal({
   initialFormat: ExportFormat
   onClose: () => void
 }) {
-  const [kind, setKind] = useState<ExportKind>(kindOf(initialFormat))
-  const [doc, setDoc] = useState<ExportDoc | null>(null)
-  const [deck, setDeck] = useState<ExportDeck | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [format, setFormat] = useState<ExportFormat>(initialFormat)
+  const kind = kindOf(format)
+  const [doc, setDoc] = useState<ExportDoc | null>(() => (previewCache.get(cacheKey(sessionId, 'document', sourceText)) as ExportDoc | undefined) ?? null)
+  const [deck, setDeck] = useState<ExportDeck | null>(() => (previewCache.get(cacheKey(sessionId, 'slides', sourceText)) as ExportDeck | undefined) ?? null)
+  const [loading, setLoading] = useState(() => !previewCache.has(cacheKey(sessionId, kindOf(initialFormat), sourceText)))
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<ExportFormat | null>(null)
   const requestRef = useRef(0)
@@ -415,9 +450,11 @@ export default function ExportModal({
     try {
       if (which === 'document') {
         const result = await getExportPreview(sessionId, 'document', sourceText)
+        remember(cacheKey(sessionId, 'document', sourceText), result.model)
         if (request === requestRef.current) setDoc(result.model)
       } else {
         const result = await getExportPreview(sessionId, 'slides', sourceText)
+        remember(cacheKey(sessionId, 'slides', sourceText), result.model)
         if (request === requestRef.current) setDeck(result.model)
       }
       if (request === requestRef.current) setError(null)
@@ -429,9 +466,8 @@ export default function ExportModal({
   }
 
   useEffect(() => {
-    // Only the tab that's showing is generated, so the teacher isn't billed
-    // for a layout they never open.
-    void load(kind)
+    // A layout that's already cached for this text is shown immediately.
+    if (!(kind === 'document' ? doc : deck)) void load(kind)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -443,13 +479,15 @@ export default function ExportModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  function switchTo(next: ExportKind) {
-    if (next === kind) return
-    setKind(next)
+  function switchKind(next: ExportKind) {
+    setFormat(next === 'slides' ? 'pptx' : 'docx')
     setError(null)
+    requestRef.current++ // ignore any layout still loading for the other kind
     if (!(next === 'document' ? doc : deck)) {
       setLoading(true)
       void load(next)
+    } else {
+      setLoading(false)
     }
   }
 
@@ -459,13 +497,13 @@ export default function ExportModal({
     void load(kind)
   }
 
-  async function handleDownload(format: ExportFormat) {
-    const model = format === 'pptx' ? deck : doc
+  async function handleDownload(target: ExportFormat) {
+    const model = target === 'pptx' ? deck : doc
     if (!model || busy) return
-    setBusy(format)
+    setBusy(target)
     setError(null)
     try {
-      await downloadExportFile(format, model)
+      await downloadExportFile(target, model)
     } catch (err) {
       setError((err as Error).message || 'Could not build that file. Please try again.')
     } finally {
@@ -473,14 +511,21 @@ export default function ExportModal({
     }
   }
 
+  // No real "% done" comes back from Claude, so this is the same honest
+  // estimate the other loading states use.
+  const progress = useSimulatedProgress(loading, kind === 'slides' ? 26000 : 20000)
+  const stepLabel =
+    progress < 25
+      ? 'Reading your assignment…'
+      : progress < 70
+        ? kind === 'slides'
+          ? 'Designing your slides…'
+          : 'Laying out your document…'
+        : 'Adding the finishing touches…'
+
   const ready = kind === 'document' ? doc : deck
-  const tabClass = (active: boolean) =>
-    `rounded-full px-3 py-1.5 text-xs font-semibold transition-colors sm:px-4 ${active ? 'bg-forest text-cream' : 'text-ink-soft hover:text-forest'}`
-  // The format the teacher clicked stays the solid button; the other is outlined.
-  const downloadClass = (format: ExportFormat) =>
-    `rounded-lg px-4 py-2 text-xs font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 ${
-      format === initialFormat ? 'bg-forest text-cream' : 'border border-forest/40 bg-mint-tint text-forest'
-    }`
+  const otherDocFormat: ExportFormat = format === 'docx' ? 'pdf' : 'docx'
+  const linkClass = 'text-xs font-semibold text-forest underline decoration-forest/30 underline-offset-2 hover:decoration-forest disabled:opacity-50'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-forest/50 p-3 sm:p-6" onClick={onClose}>
@@ -492,18 +537,11 @@ export default function ExportModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-2 border-b border-hairline px-4 py-3 sm:px-5">
-          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            <h2 className="shrink-0 font-heading text-base font-bold text-forest">Preview &amp; export</h2>
-            <div className="flex rounded-full border border-hairline bg-cream-card p-0.5">
-              <button type="button" onClick={() => switchTo('document')} className={tabClass(kind === 'document')}>
-                Document
-              </button>
-              <button type="button" onClick={() => switchTo('slides')} className={tabClass(kind === 'slides')}>
-                Slides
-              </button>
-            </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
+            <h2 className="shrink-0 font-heading text-base font-bold text-forest">Preview</h2>
+            <span className="rounded-full bg-forest px-3 py-1 text-xs font-semibold text-cream">{FORMAT_LABELS[format]}</span>
             {kind === 'slides' && deck && (
-              <span className="hidden rounded-full bg-cream-card px-2.5 py-1 text-[11px] font-semibold text-ink-soft sm:inline">
+              <span className="rounded-full bg-cream-card px-2.5 py-1 text-[11px] font-semibold text-ink-soft">
                 Theme: {THEME_LABELS[deck.theme]}
               </span>
             )}
@@ -515,9 +553,8 @@ export default function ExportModal({
 
         <div className="min-h-[16rem] flex-1 overflow-y-auto bg-cream-card p-4 sm:p-6">
           {loading ? (
-            <div className="flex h-56 flex-col items-center justify-center gap-3 text-sm text-ink-soft">
-              <span className="h-7 w-7 animate-spin rounded-full border-2 border-hairline border-t-terracotta" />
-              {kind === 'document' ? 'Laying out your document…' : 'Designing your slides…'}
+            <div className="flex h-64 items-center justify-center text-forest">
+              <ProgressRing progress={progress} size={96} label={stepLabel} hint="This usually takes 15–30 seconds." />
             </div>
           ) : error && !ready ? (
             <div className="flex h-56 flex-col items-center justify-center gap-3 text-center">
@@ -534,30 +571,40 @@ export default function ExportModal({
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline px-5 py-3">
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-1">
             <p className="text-xs text-ink-soft">
               {kind === 'document' ? 'Opens in Word, Google Docs, and Pages.' : 'Opens in PowerPoint, Google Slides, and Keynote.'} Your original structure is kept.
             </p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              {kind === 'document' ? (
+                <>
+                  <button type="button" onClick={() => handleDownload(otherDocFormat)} disabled={!doc || loading || busy !== null} className={linkClass}>
+                    {busy === otherDocFormat ? 'Building…' : `Also download as ${otherDocFormat === 'pdf' ? 'PDF' : 'Word'}`}
+                  </button>
+                  <button type="button" onClick={() => switchKind('slides')} className={linkClass}>
+                    Switch to a presentation
+                  </button>
+                </>
+              ) : (
+                <button type="button" onClick={() => switchKind('document')} className={linkClass}>
+                  Switch to a document
+                </button>
+              )}
+            </div>
             {error && ready && <p className="text-xs text-terracotta-600">{error}</p>}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             <button type="button" onClick={regenerate} disabled={loading} className="text-xs font-semibold text-ink-soft hover:text-forest disabled:opacity-50">
               Regenerate ↻
             </button>
-            {kind === 'document' ? (
-              <>
-                <button type="button" onClick={() => handleDownload('docx')} disabled={!doc || loading || busy !== null} className={downloadClass('docx')}>
-                  {busy === 'docx' ? 'Building…' : 'Download Word (.docx)'}
-                </button>
-                <button type="button" onClick={() => handleDownload('pdf')} disabled={!doc || loading || busy !== null} className={downloadClass('pdf')}>
-                  {busy === 'pdf' ? 'Building…' : 'Download PDF'}
-                </button>
-              </>
-            ) : (
-              <button type="button" onClick={() => handleDownload('pptx')} disabled={!deck || loading || busy !== null} className={downloadClass('pptx')}>
-                {busy === 'pptx' ? 'Building…' : 'Download PowerPoint (.pptx)'}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => handleDownload(format)}
+              disabled={!ready || loading || busy !== null}
+              className="rounded-lg bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {busy === format ? 'Building…' : DOWNLOAD_LABELS[format]}
+            </button>
           </div>
         </div>
       </div>

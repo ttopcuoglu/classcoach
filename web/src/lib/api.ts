@@ -1362,7 +1362,7 @@ export type ExportSlide = {
 }
 
 export type ExportTheme = 'wivoza' | 'history' | 'science' | 'math' | 'ela' | 'arts' | 'early' | 'wellness'
-export type ExportDeck = { theme: ExportTheme; slides: ExportSlide[] }
+export type ExportDeck = { theme: ExportTheme; variant: number; slides: ExportSlide[] }
 
 export type ExportKind = 'document' | 'slides'
 export type ExportFormat = 'docx' | 'pdf' | 'pptx'

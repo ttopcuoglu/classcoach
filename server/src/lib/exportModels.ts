@@ -16,6 +16,12 @@ const MAX_TEXT = 4000
 const MAX_SLIDES = 40
 const MAX_BULLETS = 8
 
+function hashString(value: string): number {
+  let h = 5381
+  for (let i = 0; i < value.length; i++) h = ((h << 5) + h + value.charCodeAt(i)) >>> 0
+  return h
+}
+
 const clean = (v: unknown, max = MAX_TEXT): string => (typeof v === 'string' ? v.trim().slice(0, max) : '')
 
 // Validates a document model — used both on Claude's parsed output and on
@@ -72,7 +78,8 @@ export function sanitizeDeck(raw: unknown): SlideDeck | null {
   }
   if (slides.length === 0) return null
   slides[0].layout = 'title'
-  return { theme, slides }
+  const variant = Number.isInteger(r.variant) ? (((r.variant as number) % 4) + 4) % 4 : hashString(slides[0].title) % 4
+  return { theme, variant, slides }
 }
 
 const listItems = (body: string): string[] =>
@@ -107,4 +114,19 @@ export function parseSlidesOutput(text: string): SlideDeck | null {
     })
   }
   return sanitizeDeck({ theme: (extractTag(text.split('<slide>')[0], 'theme') ?? '').trim().toLowerCase(), slides: raw })
+}
+
+// A fallback for when Claude leaves the theme blank or picks the generic
+// default: infer one from what Wivoza already detected about the assignment.
+export function themeFromContext(subject: string | null, gradeLevel: string | null): ThemeName | null {
+  const grade = (gradeLevel ?? '').toLowerCase()
+  if (/\b(pre-?k|kindergarten|k|1st|2nd|3rd|grade [k123])\b/.test(grade)) return 'early'
+  const s = (subject ?? '').toLowerCase()
+  if (/histor|social stud|civic|geograph|government|econom/.test(s)) return 'history'
+  if (/scien|biolog|chem|physic|earth|environment|engineer|technolog|computer|stem/.test(s)) return 'science'
+  if (/math|algebra|geometr|calcul|statist|arithmetic/.test(s)) return 'math'
+  if (/\bela\b|english|language arts|reading|writing|literature|spanish|french|world lang/.test(s)) return 'ela'
+  if (/\bart\b|arts|music|drama|theat|design|band|choir|film/.test(s)) return 'arts'
+  if (/health|\bpe\b|physical ed|wellness|\bsel\b|advisory|counsel/.test(s)) return 'wellness'
+  return null
 }

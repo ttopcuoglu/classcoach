@@ -11,7 +11,7 @@ import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, t
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { buildDocx } from '../lib/docxBuilder.ts'
-import { parseDocOutput, parseSlidesOutput, sanitizeDeck, sanitizeDocModel } from '../lib/exportModels.ts'
+import { parseDocOutput, parseSlidesOutput, sanitizeDeck, sanitizeDocModel, themeFromContext } from '../lib/exportModels.ts'
 import { buildPdf } from '../lib/pdfBuilder.ts'
 import { extractPptxText } from '../lib/pptxText.ts'
 import { buildPptx } from '../lib/slidesPptx.ts'
@@ -1040,12 +1040,15 @@ assignmentCoachRouter.post('/:id/export-preview', async (req, res) => {
     return
   }
 
+  const known = [session.subject && `subject: ${session.subject}`, session.gradeLevel && `grade: ${session.gradeLevel}`].filter(Boolean)
+  const slidesContextNote = known.length ? `\n\nWhat is already known about this assignment — ${known.join('; ')}. Use it when choosing the theme.` : ''
+
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 8192,
       thinking: { type: 'disabled' },
-      system: kind === 'slides' ? SLIDES_SYSTEM_PROMPT : DOC_SYSTEM_PROMPT,
+      system: kind === 'slides' ? SLIDES_SYSTEM_PROMPT + slidesContextNote : DOC_SYSTEM_PROMPT,
       messages: [{ role: 'user', content }],
     })
     const text = response.content
@@ -1054,6 +1057,11 @@ assignmentCoachRouter.post('/:id/export-preview', async (req, res) => {
       .join('\n')
 
     const model = kind === 'slides' ? parseSlidesOutput(text) : parseDocOutput(text)
+    if (model && 'theme' in model && model.theme === 'wivoza') {
+      // Claude left the generic default: use what we know about the subject.
+      const inferred = themeFromContext(session.subject, session.gradeLevel)
+      if (inferred) model.theme = inferred
+    }
     if (!model) {
       res.status(502).json({ error: 'Could not lay this out. Please try again.' })
       return
