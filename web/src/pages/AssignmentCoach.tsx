@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AssignmentContent } from '../components/AssignmentDiagram'
+import AnswerSection, { NumberedCard } from '../components/AnswerSection'
 import CoachingChat from '../components/CoachingChat'
 import {
   ArrowRightIcon,
-  BrainIcon,
   ChatBubbleIcon,
-  CheckCircleIcon,
   CheckIcon,
   ChecklistIcon,
   ClipboardIcon,
@@ -14,13 +13,10 @@ import {
   CloseIcon,
   GraduationCapIcon,
   KebabIcon,
-  RobotIcon,
   ShieldIcon,
   SparkleIcon,
   StarIcon,
-  TargetIcon,
   UploadIcon,
-  WarningIcon,
 } from '../components/icons'
 import { ProgressRing, WorkingRing } from '../components/ProgressRing'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
@@ -133,12 +129,16 @@ function modeLabel(mode: AssignmentCoachMode): string {
   return mode === 'redesign_ai' ? 'Redesign for AI' : 'Review'
 }
 
+const HISTORY_SHOWN_AT_FIRST = 8
+
 export default function AssignmentCoach() {
   const [pendingMode, setPendingMode] = useState<'review' | 'redesign_ai' | null>(null)
   const [session, setSession] = useState<AssignmentCoachSession | null>(null)
 
   const [sessions, setSessions] = useState<AssignmentCoachSession[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
+  const [historyFilter, setHistoryFilter] = useState<'all' | 'saved'>('all')
+  const [showAllHistory, setShowAllHistory] = useState(false)
 
   useEffect(() => {
     getAssignmentCoachSessions()
@@ -186,6 +186,8 @@ export default function AssignmentCoach() {
     setSession(null)
     setPendingMode('redesign_ai')
   }
+
+  const filteredSessions = historyFilter === 'saved' ? sessions.filter((s) => s.saved) : sessions
 
   if (session) {
     return (
@@ -259,17 +261,55 @@ export default function AssignmentCoach() {
         </button>
       </div>
 
+      {/* Same All/Saved filter as the other tools' past lists, but with this
+          page's own rows — they carry Delete, Export and draft status. */}
       <div>
-        <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">My Assignments</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">My Assignments</h2>
+          {sessions.length > 0 && (
+            <div className="flex gap-1 rounded-full bg-cream-card p-1">
+              {(
+                [
+                  ['all', `All · ${sessions.length}`],
+                  ['saved', `Saved · ${sessions.filter((s) => s.saved).length}`],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setHistoryFilter(key)}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                    historyFilter === key ? 'bg-cream text-forest shadow-sm' : 'text-ink-soft hover:text-ink'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         {historyLoading ? (
           <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
-        ) : sessions.length === 0 ? (
-          <p className="mt-2 text-sm text-ink-soft">Assignments you review or redesign will show up here.</p>
+        ) : filteredSessions.length === 0 ? (
+          <p className="mt-2 text-sm text-ink-soft">
+            {historyFilter === 'saved' && sessions.length > 0
+              ? 'Nothing starred yet. Tap "Save for later" on an assignment to star it.'
+              : 'Assignments you review or redesign will show up here.'}
+          </p>
         ) : (
           <div className="mt-3 flex flex-col gap-3">
-            {sessions.map((s) => (
+            {(showAllHistory ? filteredSessions : filteredSessions.slice(0, HISTORY_SHOWN_AT_FIRST)).map((s) => (
               <AssignmentRow key={s.id} session={s} onOpen={() => setSession(s)} onDelete={() => handleDelete(s.id)} />
             ))}
+            {filteredSessions.length > HISTORY_SHOWN_AT_FIRST && (
+              <button
+                type="button"
+                onClick={() => setShowAllHistory((v) => !v)}
+                className="self-start text-xs font-semibold text-forest hover:text-terracotta-600"
+              >
+                {showAllHistory ? 'Show fewer' : `Show all ${filteredSessions.length}`}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -303,6 +343,7 @@ function AssignmentRow({
           <span className="rounded-full bg-gold-tint px-2 py-0.5 text-xs font-semibold text-terracotta-600">
             {session.status === 'completed' ? 'Completed' : 'Draft'}
           </span>
+          {session.saved && <StarIcon className="h-4 w-4 text-terracotta-600" filled />}
         </div>
         <p className="mt-1.5 truncate text-sm text-ink">
           {session.title || session.originalText?.slice(0, 80) || 'Untitled assignment'}
@@ -726,23 +767,20 @@ function AddAssignmentScreen({
 // the site's own existing dark tokens (forest/forest-soft, the same green
 // already used for the sidebar) plus opacity-tinted terracotta/gold/mint,
 // rather than a separate hand-picked dark palette.
-function darkToneStyles(tone: Tone): { badge: string } {
-  switch (tone) {
-    case 'good':
-      return { badge: 'bg-mint-tint/15 text-mint-tint' }
-    case 'warn':
-      return { badge: 'bg-gold/15 text-gold' }
-    case 'concern':
-      return { badge: 'bg-terracotta/20 text-terracotta' }
-    default:
-      return { badge: 'bg-cream/5 text-cream/80' }
-  }
+const TONE_DOT: Record<Tone, string> = {
+  good: 'bg-brand-500',
+  warn: 'bg-gold',
+  concern: 'bg-terracotta',
+  neutral: 'bg-hairline',
 }
 
-function DarkReviewCard({
-  icon,
+// One area of the review: where it landed in plain words (never a score),
+// why, and a way to work on it with the coach.
+function ReviewFinding({
+  n,
+  title,
+  subtitle,
   tone,
-  label,
   statusLabel,
   explanation,
   detail,
@@ -750,42 +788,40 @@ function DarkReviewCard({
   actionLabel,
   onAction,
   disabled,
+  children,
 }: {
-  icon: React.ReactNode
+  n: number
+  title: string
+  subtitle: string
   tone: Tone
-  label: string
   statusLabel: string
   explanation: string | null
   detail?: string | null
   note?: string | null
   actionLabel: string
-  onAction?: () => void
+  onAction: () => void
   disabled?: boolean
+  children?: React.ReactNode
 }) {
-  const t = darkToneStyles(tone)
   return (
-    <div className="rounded-2xl border border-cream/10 bg-forest-soft p-5">
-      <div className="flex items-start gap-3">
-        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${t.badge}`}>{icon}</span>
-        <div className="min-w-0 flex-1 pt-0.5">
-          <p className="text-xs text-cream/60">{label}</p>
-          <p className="text-base font-semibold text-cream">{statusLabel}</p>
-        </div>
-      </div>
-      {explanation && <p className="mt-3 text-sm leading-relaxed text-cream/80">{explanation}</p>}
-      {detail && <p className="mt-2 whitespace-pre-wrap text-xs text-cream/60">{detail}</p>}
-      {note && <p className="mt-2 text-xs italic text-terracotta">{note}</p>}
-      {onAction && (
-        <button
-          type="button"
-          onClick={onAction}
-          disabled={disabled}
-          className="mt-3 text-xs font-semibold text-cream/80 hover:text-cream disabled:opacity-50"
-        >
-          {actionLabel} →
-        </button>
-      )}
-    </div>
+    <NumberedCard n={n} title={title} subtitle={subtitle}>
+      <p className="flex items-center gap-2 text-sm font-semibold text-forest">
+        <span aria-hidden="true" className={`h-2.5 w-2.5 shrink-0 rounded-full ${TONE_DOT[tone]}`} />
+        {statusLabel}
+      </p>
+      {explanation && <p className="mt-1.5 text-sm leading-relaxed text-ink">{explanation}</p>}
+      {detail && <p className="mt-2 whitespace-pre-wrap text-xs text-ink-soft">{detail}</p>}
+      {note && <p className="mt-2 text-xs italic text-terracotta-600">{note}</p>}
+      {children}
+      <button
+        type="button"
+        onClick={onAction}
+        disabled={disabled}
+        className="mt-3 text-xs font-semibold text-forest hover:text-terracotta-600 disabled:opacity-50"
+      >
+        {actionLabel} →
+      </button>
+    </NumberedCard>
   )
 }
 
@@ -854,7 +890,12 @@ function ReviewSnapshotPanel({
     }
   }
 
+  // Numbered in reading order, so a missing part never leaves a gap.
+  let n = 0
+  const next = () => ++n
+
   return (
+    <div className="flex flex-col gap-3">
     <div className="rounded-3xl bg-forest p-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-1.5">
@@ -1002,106 +1043,105 @@ function ReviewSnapshotPanel({
       <WorkingRing active={refining} estimatedMs={12000} label="Updating the review with your answer" className="mt-4 text-cream" />
       {refineError && <p className="mt-2 text-sm text-terracotta">{refineError}</p>}
 
+    </div>
+
       {hasOpportunity && (
-        <div className="mt-6 rounded-2xl bg-mint-tint p-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-forest/70">Most important opportunity</p>
-          {snapshot.mainOpportunity.title && <p className="mt-2 text-xl font-bold text-forest">{snapshot.mainOpportunity.title}</p>}
-          {snapshot.mainOpportunity.description && <p className="mt-1 text-sm text-forest/80">{snapshot.mainOpportunity.description}</p>}
-          <button
-            type="button"
-            onClick={() => onAction(`Let's work on this: ${snapshot.mainOpportunity.title ?? 'the main opportunity'}.`)}
-            disabled={chatSending}
-            className="mt-4 w-full rounded-xl bg-forest py-3 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            Improve with Coach
-          </button>
-          <button type="button" onClick={() => setShowAll((v) => !v)} className="mt-2 text-xs font-semibold text-forest hover:opacity-80">
-            {showAll ? 'Hide recommendations' : 'See all recommendations'}
-          </button>
-        </div>
-      )}
-
-      {showAll && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {REVIEW_QUICK_ACTIONS.map((a) => (
+        <NumberedCard n={next()} title="Most important opportunity" subtitle="The one change that would improve this assignment most">
+          {snapshot.mainOpportunity.title && <p className="text-lg font-bold text-forest">{snapshot.mainOpportunity.title}</p>}
+          {snapshot.mainOpportunity.description && <p className="mt-1 text-sm text-ink">{snapshot.mainOpportunity.description}</p>}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
-              key={a.label}
               type="button"
-              onClick={() => onAction(a.message)}
+              onClick={() => onAction(`Let's work on this: ${snapshot.mainOpportunity.title ?? 'the main opportunity'}.`)}
               disabled={chatSending}
-              className="rounded-full border border-cream/10 bg-cream/5 px-3 py-1.5 text-xs font-medium text-cream/80 transition-colors hover:border-terracotta/40 hover:text-terracotta disabled:opacity-50"
+              className="rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              {a.label}
+              Improve with Coach
             </button>
-          ))}
-        </div>
+            <button type="button" onClick={() => setShowAll((v) => !v)} className="text-xs font-semibold text-forest hover:text-terracotta-600">
+              {showAll ? 'Hide recommendations' : 'See all recommendations'}
+            </button>
+          </div>
+          {showAll && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {REVIEW_QUICK_ACTIONS.map((a) => (
+                <button
+                  key={a.label}
+                  type="button"
+                  onClick={() => onAction(a.message)}
+                  disabled={chatSending}
+                  className="rounded-full border border-hairline bg-cream-card px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-50"
+                >
+                  {a.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </NumberedCard>
       )}
 
-      <div className="mt-4 flex flex-col gap-3">
-        <DarkReviewCard
-          icon={<CheckCircleIcon className="h-5 w-5" />}
-          tone={gradeFitTone(snapshot.gradeFit.rating)}
-          label="Grade-level fit"
-          statusLabel={GRADE_FIT_LABELS[snapshot.gradeFit.rating ?? ''] ?? 'Not enough evidence yet'}
-          explanation={snapshot.gradeFit.explanation}
-          actionLabel="See evidence"
-          onAction={() => onAction("Let's talk about whether this fits the intended grade level.")}
-          disabled={chatSending}
-        />
-        <DarkReviewCard
-          icon={<BrainIcon className="h-5 w-5" />}
-          tone="warn"
-          label="Thinking and rigor"
-          statusLabel={snapshot.rigor.label ?? 'Not enough evidence yet'}
-          explanation={snapshot.rigor.explanation}
-          actionLabel="Strengthen thinking"
-          onAction={() => onAction("Let's strengthen the rigor of this assignment.")}
-          disabled={chatSending}
-        />
-        <DarkReviewCard
-          icon={<TargetIcon className="h-5 w-5" />}
-          tone={meaningfulWorkTone(snapshot.meaningfulWork.rating)}
-          label="Meaningful work"
-          statusLabel={MEANINGFUL_WORK_LABELS[snapshot.meaningfulWork.rating ?? ''] ?? 'Not enough evidence yet'}
-          explanation={snapshot.meaningfulWork.explanation}
-          note={snapshot.meaningfulWork.suggestion}
-          actionLabel="Remove low-value work"
-          onAction={() => onAction("Let's remove any low-value or busywork steps.")}
-          disabled={chatSending}
-        />
-        <DarkReviewCard
-          icon={<RobotIcon className="h-5 w-5" />}
-          tone={aiRiskTone(snapshot.aiRisk.rating)}
-          label="AI completion risk"
-          statusLabel={AI_RISK_LABELS[snapshot.aiRisk.rating ?? ''] ?? 'Not enough evidence yet'}
-          explanation={snapshot.aiRisk.explanation}
-          detail={snapshot.aiRisk.reasons}
-          actionLabel="Make it AI-resilient"
-          onAction={() => onAction("Let's make student thinking more visible so this is harder to fully outsource to AI.")}
-          disabled={chatSending}
-        />
-      </div>
-
-      {snapshot.workloadSummary && (
-        <div className="mt-3 rounded-2xl border border-cream/10 bg-forest-soft p-5">
-          <p className="text-xs text-cream/50">Workload &amp; clarity</p>
-          <p className="mt-1 text-sm text-cream/80">{snapshot.workloadSummary}</p>
-        </div>
-      )}
-
-      {(snapshot.aiRisk.rating === 'high' || snapshot.aiRisk.rating === 'moderate') && (
-        <div className="mt-3 rounded-2xl border border-terracotta/30 bg-terracotta/10 p-5">
-          <p className="text-sm font-bold text-cream">AI completion risk: {AI_RISK_LABELS[snapshot.aiRisk.rating]}</p>
-          {snapshot.aiRisk.explanation && <p className="mt-1 text-sm text-cream/80">{snapshot.aiRisk.explanation}</p>}
+      <ReviewFinding
+        n={next()}
+        title="Grade-level fit"
+        subtitle="Whether the task matches the grade it's meant for"
+        tone={gradeFitTone(snapshot.gradeFit.rating)}
+        statusLabel={GRADE_FIT_LABELS[snapshot.gradeFit.rating ?? ''] ?? 'Not enough evidence yet'}
+        explanation={snapshot.gradeFit.explanation}
+        actionLabel="See evidence"
+        onAction={() => onAction("Let's talk about whether this fits the intended grade level.")}
+        disabled={chatSending}
+      />
+      <ReviewFinding
+        n={next()}
+        title="Thinking and rigor"
+        subtitle="How much real thinking the task asks of students"
+        tone="warn"
+        statusLabel={snapshot.rigor.label ?? 'Not enough evidence yet'}
+        explanation={snapshot.rigor.explanation}
+        actionLabel="Strengthen thinking"
+        onAction={() => onAction("Let's strengthen the rigor of this assignment.")}
+        disabled={chatSending}
+      />
+      <ReviewFinding
+        n={next()}
+        title="Meaningful work"
+        subtitle="Whether every step earns its place"
+        tone={meaningfulWorkTone(snapshot.meaningfulWork.rating)}
+        statusLabel={MEANINGFUL_WORK_LABELS[snapshot.meaningfulWork.rating ?? ''] ?? 'Not enough evidence yet'}
+        explanation={snapshot.meaningfulWork.explanation}
+        note={snapshot.meaningfulWork.suggestion}
+        actionLabel="Remove low-value work"
+        onAction={() => onAction("Let's remove any low-value or busywork steps.")}
+        disabled={chatSending}
+      />
+      <ReviewFinding
+        n={next()}
+        title="AI completion risk"
+        subtitle="How easily a student could hand the whole task to AI"
+        tone={aiRiskTone(snapshot.aiRisk.rating)}
+        statusLabel={AI_RISK_LABELS[snapshot.aiRisk.rating ?? ''] ?? 'Not enough evidence yet'}
+        explanation={snapshot.aiRisk.explanation}
+        detail={snapshot.aiRisk.reasons}
+        actionLabel="Make it AI-resilient"
+        onAction={() => onAction("Let's make student thinking more visible so this is harder to fully outsource to AI.")}
+        disabled={chatSending}
+      >
+        {(snapshot.aiRisk.rating === 'high' || snapshot.aiRisk.rating === 'moderate') && (
           <button
             type="button"
             onClick={onRedesign}
-            className="mt-3 flex items-center gap-1.5 rounded-xl bg-cream px-4 py-2 text-xs font-semibold text-forest transition-opacity hover:opacity-90"
+            className="mt-3 flex items-center gap-1.5 rounded-full bg-forest px-4 py-2 text-xs font-semibold text-cream transition-opacity hover:opacity-90"
           >
             Make this assignment AI-ready
             <ArrowRightIcon className="h-3.5 w-3.5" />
           </button>
-        </div>
+        )}
+      </ReviewFinding>
+
+      {snapshot.workloadSummary && (
+        <AnswerSection n={next()} title="Workload and clarity" subtitle="How long it takes, and how clear the directions are">
+          {snapshot.workloadSummary}
+        </AnswerSection>
       )}
 
       <WorkingRing
@@ -1109,17 +1149,17 @@ function ReviewSnapshotPanel({
         estimatedMs={16000}
         label="Revising the whole assignment"
         hint="Working in everything you've discussed."
-        className="mt-4 text-cream"
+        className="text-forest"
       />
       <button
         type="button"
         onClick={onRevise}
         disabled={revising || conversationEmpty}
-        className="mt-4 self-start rounded-xl border border-cream/15 px-4 py-2 text-xs font-semibold text-cream/90 hover:bg-cream/5 disabled:opacity-50"
+        className="self-start rounded-xl border border-forest/40 bg-mint-tint px-4 py-2 text-xs font-semibold text-forest transition-colors hover:bg-mint-tint/70 disabled:opacity-50"
       >
         {revising ? 'Revising...' : 'Revise the whole assignment'}
       </button>
-      {reviseError && <p className="mt-2 text-sm text-terracotta">{reviseError}</p>}
+      {reviseError && <p className="text-sm text-terracotta-600">{reviseError}</p>}
     </div>
   )
 }
@@ -1269,30 +1309,6 @@ function ClarifyingBanner({
 // Light-themed sibling to DarkReviewCard, for the redesign output's five
 // sections — Workspace is cream-themed, so reusing DarkReviewCard's dark
 // styling verbatim would look like a foreign patch.
-function LightResultCard({
-  icon,
-  label,
-  accentClassName,
-  children,
-}: {
-  icon: React.ReactNode
-  label: string
-  accentClassName?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-      <div className="flex items-center gap-2">
-        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${accentClassName ?? 'bg-mint-tint text-forest'}`}>
-          {icon}
-        </span>
-        <p className="text-xs font-semibold uppercase tracking-wide text-forest">{label}</p>
-      </div>
-      <div className="mt-3">{children}</div>
-    </div>
-  )
-}
-
 function Workspace({
   session,
   onUpdate,
@@ -1483,6 +1499,19 @@ function Workspace({
     await navigator.clipboard.writeText(value).catch(() => {})
   }
 
+  // The redesign's parts, numbered in reading order over the ones present.
+  const redesign = session.aiResistant
+  const redesignParts = redesign
+    ? [
+        redesign.aiRole && 'aiRole',
+        redesign.vulnerableSteps && 'vulnerableSteps',
+        (redesign.thinkingSafeguards ?? redesign.strategies) && 'safeguards',
+        redesign.guidelines && 'guidelines',
+        redesign.revisedAssignment && 'revised',
+      ].filter(Boolean)
+    : []
+  const redesignN = (part: string) => redesignParts.indexOf(part) + 1
+
   const chips = [
     modeLabel(session.mode),
     isRedesign && session.aiUseLevel
@@ -1571,7 +1600,7 @@ function Workspace({
               {session.aiResistant && (
                 <div className="flex flex-col gap-3">
                   {session.aiResistant.aiRole && (
-                    <LightResultCard icon={<TargetIcon className="h-4 w-4" />} label="Recommended AI role">
+                    <NumberedCard n={redesignN('aiRole')} title="Recommended AI role" subtitle="How students should, or shouldn't, use AI on this task">
                       <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-forest">
                         {AI_USE_LEVEL_OPTIONS.find((o) => o.value === session.aiResistant?.aiRole?.level)?.label ?? 'AI as a thinking partner'}
                         {session.aiResistant.aiRole.recommended && (
@@ -1583,26 +1612,20 @@ function Workspace({
                       {session.aiResistant.aiRole.explanation && (
                         <p className="mt-1 text-sm text-ink">{session.aiResistant.aiRole.explanation}</p>
                       )}
-                    </LightResultCard>
+                    </NumberedCard>
                   )}
                   {session.aiResistant.vulnerableSteps && (
-                    <LightResultCard
-                      icon={<WarningIcon className="h-4 w-4" />}
-                      label="Vulnerable steps"
-                      accentClassName="bg-peach-tint text-terracotta-600"
-                    >
-                      <p className="whitespace-pre-wrap text-sm text-ink">{session.aiResistant.vulnerableSteps}</p>
-                    </LightResultCard>
+                    <AnswerSection n={redesignN('vulnerableSteps')} title="Vulnerable steps" subtitle="The parts AI could do for a student">
+                      {session.aiResistant.vulnerableSteps}
+                    </AnswerSection>
                   )}
                   {(session.aiResistant.thinkingSafeguards ?? session.aiResistant.strategies) && (
-                    <LightResultCard icon={<ShieldIcon className="h-4 w-4" />} label="Thinking safeguards">
-                      <p className="whitespace-pre-wrap text-sm text-ink">
-                        {session.aiResistant.thinkingSafeguards ?? session.aiResistant.strategies}
-                      </p>
-                    </LightResultCard>
+                    <AnswerSection n={redesignN('safeguards')} title="Thinking safeguards" subtitle="Changes that keep the thinking with the student">
+                      {session.aiResistant.thinkingSafeguards ?? session.aiResistant.strategies}
+                    </AnswerSection>
                   )}
                   {session.aiResistant.guidelines && (
-                    <LightResultCard icon={<ChecklistIcon className="h-4 w-4" />} label="Student AI guidelines">
+                    <NumberedCard n={redesignN('guidelines')} title="Student AI guidelines" subtitle="Rules to share with students, ready to copy">
                       <p className="whitespace-pre-wrap text-sm text-ink">{session.aiResistant.guidelines}</p>
                       <button
                         type="button"
@@ -1611,13 +1634,15 @@ function Workspace({
                       >
                         Copy student AI guidelines
                       </button>
-                    </LightResultCard>
+                    </NumberedCard>
                   )}
                   {session.aiResistant.revisedAssignment && (
-                    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Revised assignment</p>
-                        <div className="flex rounded-full border border-hairline bg-cream p-0.5 text-xs font-semibold">
+                    <NumberedCard
+                      n={redesignN('revised')}
+                      title="Revised assignment"
+                      subtitle="The assignment with those changes made"
+                      aside={
+                        <div className="flex shrink-0 rounded-full border border-hairline bg-cream-card p-0.5 text-xs font-semibold">
                           <button
                             type="button"
                             onClick={() => setRevisedView('original')}
@@ -1633,16 +1658,17 @@ function Workspace({
                             Revised
                           </button>
                         </div>
-                      </div>
+                      }
+                    >
                       {editingRedesign ? (
                         <textarea
                           value={text}
                           onChange={(e) => setText(e.target.value)}
                           rows={12}
-                          className="mt-2 w-full rounded-lg border border-hairline bg-cream px-3 py-2 text-sm text-ink focus:border-terracotta/50 focus:outline-none"
+                          className="w-full rounded-lg border border-hairline bg-cream px-3 py-2 text-sm text-ink focus:border-terracotta/50 focus:outline-none"
                         />
                       ) : (
-                        <div className="mt-2">
+                        <div className="rounded-xl bg-cream-card p-4">
                           <AssignmentContent
                             text={revisedView === 'original' ? session.originalText || 'No original text on file.' : session.aiResistant.revisedAssignment}
                           />
@@ -1679,7 +1705,7 @@ function Workspace({
                           {aiResisting ? 'Regenerating...' : 'Regenerate ↻'}
                         </button>
                       </div>
-                    </div>
+                    </NumberedCard>
                   )}
                   <WorkingRing active={aiResisting} estimatedMs={16000} label="Redesigning the assignment" className="text-forest" />
                   {aiResistError && <p className="text-sm text-terracotta-600">{aiResistError}</p>}
@@ -1748,34 +1774,31 @@ function Workspace({
                     </button>
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-                    {session.reviewSummary.working && (
-                      <div className="mb-3">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-forest">What's already working</p>
-                        <p className="mt-1 text-sm text-ink">{session.reviewSummary.working}</p>
-                      </div>
-                    )}
-                    {session.reviewSummary.needsAttention && (
-                      <div className="mb-3">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">What may need attention</p>
-                        <p className="mt-1 text-sm text-ink">{session.reviewSummary.needsAttention}</p>
-                      </div>
-                    )}
-                    {session.reviewSummary.suggestions && (
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Suggested improvements</p>
-                        <p className="mt-1 text-sm text-ink">{session.reviewSummary.suggestions}</p>
-                      </div>
-                    )}
+                  <>
+                    {[
+                      { title: "What's already working", subtitle: 'Keep these parts', body: session.reviewSummary.working },
+                      {
+                        title: 'What may need attention',
+                        subtitle: 'Where students may struggle, or coast',
+                        body: session.reviewSummary.needsAttention,
+                      },
+                      { title: 'Suggested improvements', subtitle: 'Changes to consider', body: session.reviewSummary.suggestions },
+                    ]
+                      .filter((part): part is { title: string; subtitle: string; body: string } => !!part.body)
+                      .map((part, i) => (
+                        <AnswerSection key={part.title} n={i + 1} title={part.title} subtitle={part.subtitle}>
+                          {part.body}
+                        </AnswerSection>
+                      ))}
                     <button
                       type="button"
                       onClick={handleReview}
                       disabled={reviewing}
-                      className="mt-4 text-xs font-semibold text-ink-soft hover:text-forest disabled:opacity-50"
+                      className="self-start text-xs font-semibold text-ink-soft hover:text-forest disabled:opacity-50"
                     >
                       {reviewing ? 'Refreshing...' : 'Refresh review ↻'}
                     </button>
-                  </div>
+                  </>
                 )}
                 <WorkingRing active={reviewing} estimatedMs={12000} label="Putting together a coaching review" className="text-forest" />
                 {reviewError && <p className="text-sm text-terracotta-600">{reviewError}</p>}
