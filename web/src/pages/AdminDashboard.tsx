@@ -561,6 +561,24 @@ function memberStatusLabel(member: OrgMember): 'Suspended' | 'Never active' | 'I
   return 'Active'
 }
 
+// How each roster status reads to a principal, and what it means.
+const STATUS_META: Record<ReturnType<typeof memberStatusLabel>, { label: string; meaning: string; chip: string; tile: string }> = {
+  Active: { label: 'Active', meaning: 'Used Wivoza in the last 14 days.', chip: 'bg-mint-tint text-forest', tile: 'bg-mint-tint/60' },
+  Inactive: { label: 'Inactive', meaning: 'Used it before, but not in the last 14 days.', chip: 'bg-gold-tint text-terracotta-600', tile: 'bg-gold-tint/60' },
+  'Never active': { label: 'Not started', meaning: "Has an account but hasn't used it yet.", chip: 'bg-peach-tint text-terracotta-600', tile: 'bg-peach-tint/60' },
+  Suspended: { label: 'Suspended', meaning: "Can't sign in until you unsuspend them.", chip: 'bg-hairline text-ink-soft', tile: 'bg-cream' },
+}
+const STATUS_ORDER = ['Active', 'Inactive', 'Never active', 'Suspended'] as const
+
+function lastActiveText(iso: string | null): string {
+  const d = daysSince(iso)
+  if (d == null) return 'Never'
+  if (d === 0) return 'Today'
+  if (d === 1) return 'Yesterday'
+  if (d < 14) return `${d} days ago`
+  return new Date(iso!).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
 function memberRoleLabel(role: OrgMember['role']): string {
   return role === 'org_admin' ? 'Admin' : role === 'superadmin' ? 'Superadmin' : 'Teacher'
 }
@@ -1041,12 +1059,52 @@ function MembersList({
     })
   }
 
+  const counts = Object.fromEntries(
+    STATUS_ORDER.map((st) => [st, (members ?? []).filter((m) => memberStatusLabel(m) === st).length]),
+  ) as Record<(typeof STATUS_ORDER)[number], number>
+  const needsNudge = counts['Never active'] + counts.Inactive > 0
+  const rosterN = needsNudge ? 3 : 2
+
   return (
-    <div>
+    <div className="flex flex-col gap-6">
+      {members && members.length > 0 && (
+        <AdminCard
+          n={1}
+          title="Staff at a glance"
+          question="Who is using Wivoza right now. Tap a box to see just those people below."
+          howToRead="Everyone with a Wivoza account at your school, grouped by when they last used any part of it. You see names and dates only, never what anyone recorded, wrote or practiced."
+        >
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {STATUS_ORDER.map((st) => {
+              const on = statusFilter === st
+              return (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setStatusFilter(on ? 'all' : st)}
+                  className={`rounded-2xl p-4 text-left transition-shadow ${STATUS_META[st].tile} ${
+                    on ? 'ring-2 ring-forest' : 'hover:shadow-md'
+                  }`}
+                >
+                  <p className="font-heading text-3xl font-extrabold text-forest">{counts[st]}</p>
+                  <p className="mt-1 text-sm font-semibold text-ink">{STATUS_META[st].label}</p>
+                  <p className="text-xs text-ink-soft">{STATUS_META[st].meaning}</p>
+                </button>
+              )
+            })}
+          </div>
+        </AdminCard>
+      )}
+
+      {members && needsNudge && <NudgeCard n={2} members={members} />}
+
+      <AdminCard
+        n={rosterN}
+        title="Your staff"
+        question={`Everyone at your school with a Wivoza account${members ? ` (${members.length})` : ''}.`}
+        howToRead="Last active is the last time someone used any part of Wivoza. Edit changes a name, job title or role; Suspend stops someone signing in until you unsuspend them; Remove takes them off your school without deleting anything of theirs. Select several people to do the same thing to all of them at once."
+      >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
-          Members{members ? ` (${members.length})` : ''}
-        </h2>
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={roleFilter}
@@ -1067,7 +1125,7 @@ function MembersList({
             <option value="all">All statuses</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
-            <option value="Never active">Never active</option>
+            <option value="Never active">Not started</option>
             <option value="Suspended">Suspended</option>
           </select>
           <input
@@ -1134,7 +1192,66 @@ function MembersList({
           </table>
         </div>
       )}
+      </AdminCard>
     </div>
+  )
+}
+
+// The two groups worth a word from the principal, with a way to reach them:
+// Copy emails puts the addresses on the clipboard for the admin's own email
+// — Wivoza never sends anything on their behalf.
+function NudgeCard({ n, members }: { n: number; members: OrgMember[] }) {
+  const [copied, setCopied] = useState<string | null>(null)
+  const groups = [
+    {
+      key: 'Never active' as const,
+      title: 'Haven\u2019t started yet',
+      advice: 'A two-minute demo at a staff meeting usually works better than another invite email. Showing one real feature, like Talk It Through, is enough.',
+    },
+    {
+      key: 'Inactive' as const,
+      title: 'Tried it, then stopped',
+      advice: 'A personal \u201chow\u2019s it going?\u201d tends to bring people back. Ask what got in the way; it\u2019s often time, and the 5-minute tools answer that.',
+    },
+  ]
+    .map((g) => ({ ...g, people: members.filter((m) => memberStatusLabel(m) === g.key) }))
+    .filter((g) => g.people.length > 0)
+
+  async function copy(key: string, people: OrgMember[]) {
+    try {
+      await navigator.clipboard.writeText(people.map((p) => p.email).join(', '))
+      setCopied(key)
+    } catch {
+      setCopied(null)
+    }
+  }
+
+  return (
+    <AdminCard
+      n={n}
+      title="Who to nudge"
+      question="Teachers who haven't started, or who drifted off, and what tends to help."
+      howToRead="Based only on when people last used Wivoza. Copy emails puts their addresses on your clipboard so you can write to them yourself; Wivoza doesn't send anything for you."
+    >
+      <div className="grid gap-3 md:grid-cols-2">
+        {groups.map((g) => (
+          <div key={g.key} className={`flex flex-col rounded-2xl p-4 ${STATUS_META[g.key].tile}`}>
+            <p className="text-sm font-semibold text-ink">
+              {g.title} <span className="font-normal text-ink-soft">· {plural(g.people.length, 'teacher', 'teachers')}</span>
+            </p>
+            <p className="mt-1 text-xs text-ink-soft">{g.people.map((p) => p.name ?? p.email).join(', ')}</p>
+            <p className="mt-2 flex-1 text-sm text-ink">{g.advice}</p>
+            <button
+              type="button"
+              onClick={() => copy(g.key, g.people)}
+              className="mt-3 self-start rounded-full border border-hairline bg-cream-card px-3 py-1 text-xs font-semibold text-ink hover:border-terracotta/40"
+            >
+              {copied === g.key ? 'Copied' : `Copy ${g.people.length === 1 ? 'email' : 'emails'}`}
+            </button>
+          </div>
+        ))}
+      </div>
+    </AdminCard>
   )
 }
 
@@ -1161,6 +1278,7 @@ function MemberRow({
   // A superadmin who happens to belong to a school is shown on its roster,
   // but only the platform-wide list can act on them.
   const actionable = member.role !== 'superadmin'
+  const status = memberStatusLabel(member)
 
   async function run(action: () => Promise<unknown>) {
     setBusy(true)
@@ -1227,19 +1345,14 @@ function MemberRow({
           )}
         </td>
         <td className="whitespace-nowrap px-3.5 py-3">
-          {status === 'Active' ? (
-            <span className="text-sm text-ink-soft">Active</span>
-          ) : (
-            <span className="rounded-full bg-peach-tint px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-terracotta-600">
-              {status}
-            </span>
-          )}
+          <span
+            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_META[status].chip}`}
+            title={STATUS_META[status].meaning}
+          >
+            {STATUS_META[status].label}
+          </span>
         </td>
-        <td className="whitespace-nowrap px-3.5 py-3 text-sm text-ink-soft">
-          {member.lastActiveAt
-            ? new Date(member.lastActiveAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-            : '—'}
-        </td>
+        <td className="whitespace-nowrap px-3.5 py-3 text-sm text-ink-soft">{lastActiveText(member.lastActiveAt)}</td>
         <td className="whitespace-nowrap px-3.5 py-3 text-sm text-ink-soft">
           {new Date(member.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
         </td>
@@ -2523,7 +2636,10 @@ function PeoplePanel({
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-heading text-2xl font-extrabold text-forest md:text-[34px]">People<span className="text-gold">.</span></h1>
-          <p className="mt-1 text-sm text-ink-soft">Your school&rsquo;s staff roster.</p>
+          <p className="mt-1 text-sm text-ink-soft">
+            Who has an account, who&rsquo;s using Wivoza, and who might need a nudge. You see names and dates only,
+            never anyone&rsquo;s recordings or coaching.
+          </p>
         </div>
         {isSuperadmin && orgs.length > 0 && (
           <select
@@ -2543,13 +2659,11 @@ function PeoplePanel({
       {!overview ? (
         <p className="text-sm text-ink-soft">Loading...</p>
       ) : overview.scope === 'organization' ? (
-        <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-          <MembersList
-            organizationId={selectedOrgId || undefined}
-            isSuperadmin={isSuperadmin}
-            currentUserId={currentUserId}
-          />
-        </div>
+        <MembersList
+          organizationId={selectedOrgId || undefined}
+          isSuperadmin={isSuperadmin}
+          currentUserId={currentUserId}
+        />
       ) : (
         <p className="text-sm text-ink-soft">Select an organization above to view its staff roster.</p>
       )}
