@@ -144,3 +144,26 @@ const MAX_DATA_URL_CHARS = 4_300_000
 export function isDataImageUrl(value: unknown): value is string {
   return typeof value === 'string' && value.length <= MAX_DATA_URL_CHARS && /^data:image\/(?:png|jpeg|gif);base64,[A-Za-z0-9+/]+={0,2}$/.test(value)
 }
+
+// The bytes of a picture embedded in a deck or document, for the Word and PDF
+// builders (which take raw bytes rather than a link).
+export function dataUrlBytes(url: string): { bytes: Buffer; type: 'png' | 'jpg' | 'gif' } | null {
+  const match = isDataImageUrl(url) ? url.match(/^data:image\/(png|jpeg|gif);base64,(.+)$/) : null
+  return match ? { bytes: Buffer.from(match[2], 'base64'), type: match[1] === 'jpeg' ? 'jpg' : (match[1] as 'png' | 'gif') } : null
+}
+
+// Bytes for any vetted picture link — the teacher's own embedded pictures and
+// Wikimedia ones alike — for the Word and PDF builders.
+export async function loadImageBytes(url: string): Promise<{ bytes: Buffer; type: 'png' | 'jpg' | 'gif' } | null> {
+  const embedded = dataUrlBytes(url)
+  if (embedded) return embedded
+  const fetched = await fetchImageData(url)
+  const match = fetched?.data.match(/^image\/(png|jpeg);base64,(.+)$/)
+  return match ? { bytes: Buffer.from(match[2], 'base64'), type: match[1] === 'jpeg' ? 'jpg' : 'png' } : null
+}
+
+// Fits a picture inside a box without stretching it.
+export function fitInside(width: number, height: number, maxWidth: number, maxHeight: number): { width: number; height: number } {
+  const scale = Math.min(maxWidth / width, maxHeight / height, 1)
+  return { width: Math.round(width * scale), height: Math.round(height * scale) }
+}

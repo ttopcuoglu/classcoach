@@ -140,6 +140,9 @@ export default function AssignmentCoach() {
   const [historyLoading, setHistoryLoading] = useState(true)
   const [historyFilter, setHistoryFilter] = useState<'all' | 'saved'>('all')
   const [showAllHistory, setShowAllHistory] = useState(false)
+  // The teacher's own uploaded file, kept only in this browser tab (never sent
+  // to be stored) so an export can carry its pictures into the new layout.
+  const [originalFile, setOriginalFile] = useState<{ sessionId: string; file: File } | null>(null)
 
   useEffect(() => {
     getAssignmentCoachSessions()
@@ -151,6 +154,7 @@ export default function AssignmentCoach() {
   function handleExit() {
     setSession(null)
     setPendingMode(null)
+    setOriginalFile(null)
   }
 
   function handleUpdate(updated: AssignmentCoachSession) {
@@ -192,12 +196,28 @@ export default function AssignmentCoach() {
 
   if (session) {
     return (
-      <Workspace session={session} onUpdate={handleUpdate} onExit={handleExit} onRedesignFromReview={handleRedesignFromReview} />
+      <Workspace
+        session={session}
+        onUpdate={handleUpdate}
+        onExit={handleExit}
+        onRedesignFromReview={handleRedesignFromReview}
+        originalFile={originalFile?.sessionId === session.id ? originalFile.file : null}
+        onOriginalFile={(file) => setOriginalFile(file ? { sessionId: session.id, file } : null)}
+      />
     )
   }
 
   if (pendingMode) {
-    return <AddAssignmentScreen mode={pendingMode} onBack={() => setPendingMode(null)} onStarted={setSession} />
+    return (
+      <AddAssignmentScreen
+        mode={pendingMode}
+        onBack={() => setPendingMode(null)}
+        onStarted={(started, file) => {
+          setOriginalFile(file ? { sessionId: started.id, file } : null)
+          setSession(started)
+        }}
+      />
+    )
   }
 
   return (
@@ -417,12 +437,13 @@ function AddAssignmentScreen({
 }: {
   mode: 'review' | 'redesign_ai'
   onBack: () => void
-  onStarted: (session: AssignmentCoachSession) => void
+  onStarted: (session: AssignmentCoachSession, originalFile: File | null) => void
 }) {
   const [inputMode, setInputMode] = useState<'paste' | 'upload'>('upload')
   const [text, setText] = useState('')
   const [fileName, setFileName] = useState<string | null>(null)
   const [fileReady, setFileReady] = useState(false)
+  const [pickedFile, setPickedFile] = useState<File | null>(null)
   const [extracting, setExtracting] = useState(false)
   const [extractMs, setExtractMs] = useState(6000)
   const [dragOver, setDragOver] = useState(false)
@@ -484,6 +505,7 @@ function AddAssignmentScreen({
       // extracted text itself.
       setText(extracted)
       setFileName(file.name)
+      setPickedFile(file)
       setFileReady(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not read that file. Please try pasting the text instead.')
@@ -495,6 +517,7 @@ function AddAssignmentScreen({
   function handleRemoveFile() {
     setText('')
     setFileName(null)
+    setPickedFile(null)
     setFileReady(false)
     setCarriedOver(false)
     setExtraNote(undefined)
@@ -512,7 +535,7 @@ function AddAssignmentScreen({
         originalText: text.trim(),
         extraNote,
       })
-      onStarted(session)
+      onStarted(session, pickedFile)
     } catch (e) {
       // Redesign gets its own calm, reassuring copy regardless of the
       // underlying reason — the teacher's text and AI-use choice are both
@@ -1295,16 +1318,58 @@ function ClarifyingBanner({
 // Light-themed sibling to DarkReviewCard, for the redesign output's five
 // sections — Workspace is cream-themed, so reusing DarkReviewCard's dark
 // styling verbatim would look like a foreign patch.
+// Lets the teacher bring their original file along so its own pictures are
+// copied into the new Word, PDF, or PowerPoint layout instead of being lost.
+function AttachOriginal({ file, onChange }: { file: File | null; onChange: (file: File | null) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-soft">
+      {file ? (
+        <>
+          <span>
+            Keeping the pictures from <span className="font-semibold text-forest">{file.name}</span>
+          </span>
+          <button type="button" onClick={() => onChange(null)} className="font-semibold hover:text-forest">
+            Remove
+          </button>
+        </>
+      ) : (
+        <>
+          <span>Have pictures in your original file?</span>
+          <button type="button" onClick={() => inputRef.current?.click()} className="font-semibold text-terracotta-600 hover:text-forest">
+            Add it to keep them
+          </button>
+        </>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".pptx,.pdf,.docx"
+        className="hidden"
+        onChange={(e) => {
+          const picked = e.target.files?.[0]
+          if (picked) onChange(picked)
+          e.target.value = ''
+        }}
+      />
+    </div>
+  )
+}
+
 function Workspace({
   session,
   onUpdate,
   onExit,
   onRedesignFromReview,
+  originalFile,
+  onOriginalFile,
 }: {
   session: AssignmentCoachSession
   onUpdate: (session: AssignmentCoachSession) => void
   onExit: () => void
   onRedesignFromReview: (session: AssignmentCoachSession) => void
+  originalFile: File | null
+  onOriginalFile: (file: File | null) => void
 }) {
   const navigate = useNavigate()
   const isRedesign = session.mode === 'redesign_ai'
@@ -1648,6 +1713,7 @@ function Workspace({
                       <ExportButtons
                         onOpen={(format) => setExportRequest({ text: session.aiResistant?.revisedAssignment ?? '', format })}
                       />
+                      <AttachOriginal file={originalFile} onChange={onOriginalFile} />
                       <div className="mt-4 flex flex-wrap items-center gap-3">
                         <button
                           type="button"
@@ -1825,6 +1891,7 @@ function Workspace({
                 </div>
               )}
               <ExportButtons onOpen={(format) => setExportRequest({ text, format })} />
+              <AttachOriginal file={originalFile} onChange={onOriginalFile} />
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 <button type="button" onClick={handleCopy} className="text-xs font-semibold text-ink-soft hover:text-forest">
                   Copy revised text
@@ -1851,6 +1918,7 @@ function Workspace({
           sessionId={session.id}
           text={exportRequest.text}
           initialFormat={exportRequest.format}
+          originalFile={originalFile}
           onClose={() => setExportRequest(null)}
         />
       )}

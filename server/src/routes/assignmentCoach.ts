@@ -11,7 +11,8 @@ import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, t
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { buildDocx } from '../lib/docxBuilder.ts'
-import { parseDocOutput, parseSlidesOutput, sanitizeDeck, sanitizeDocModel, themeFromContext } from '../lib/exportModels.ts'
+import { carryOriginalPictures, parseDocOutput, parseSlidesOutput, sanitizeDeck, sanitizeDocModel, themeFromContext } from '../lib/exportModels.ts'
+import { readOriginalPictures, type OriginalImage, type OriginalPicture } from '../lib/originalImages.ts'
 import { buildPdf } from '../lib/pdfBuilder.ts'
 import { extractPptxText } from '../lib/pptxText.ts'
 import { buildPptx, THEME_GUIDE } from '../lib/slidesPptx.ts'
@@ -916,6 +917,7 @@ Plain text only, no markdown. Respond with exactly this structure and nothing el
 - Second bullet
 </bullets>
 <notes>Optional speaker note</notes>
+<source_slide>Only when the teacher's own picture belongs on this slide: the original slide number</source_slide>
 </slide>
 ${CORE_COACHING_RULES}`
 
@@ -942,6 +944,7 @@ Plain text only, no markdown. Respond with exactly this structure and nothing el
 - Item
 </block>
 <block type="callout" label="Objective">Text</block>
+<block type="image" picture="1"/>
 ${CORE_COACHING_RULES}`
 
 assignmentCoachRouter.post('/:id/revise', async (req, res) => {
@@ -1023,9 +1026,19 @@ assignmentCoachRouter.post('/:id/revise', async (req, res) => {
 
 // Step 1 of exporting: Claude lays the assignment out as a structured
 // document or slide deck, which the client previews before any file is made.
-assignmentCoachRouter.post('/:id/export-preview', async (req, res) => {
+// The teacher's own pictures, when they attach the original file: read in
+// memory for this request only, never stored, and sent back inside the model.
+function picturesNote(kind: 'document' | 'slides', pictures: OriginalPicture[]): string {
+  if (pictures.length === 0) return ''
+  const list = pictures.map((p) => `- Picture ${p.id}${p.context ? `, next to: "${p.context}"` : ''}`).join('\n')
+  return kind === 'slides'
+    ? `\n\nThe teacher's original file has their own pictures on these original slides:\n${list}\nWhen a slide you write comes from one of those original slides, add <source_slide>N</source_slide> with that slide's number — Wivoza will place the teacher's own picture on it, so never replace it. Do not add <source_slide> to any other slide.`
+    : `\n\nThe teacher's original document has their own pictures:\n${list}\nPlace each one with <block type="image" picture="N"/> right where it belongs (near the text it sits next to), keeping the order of the original. Use each picture at most once and never add a picture that is not listed.`
+}
+
+assignmentCoachRouter.post('/:id/export-preview', upload.single('file'), async (req, res) => {
   const session = await prisma.assignmentCoachSession.findFirst({
-    where: { id: req.params.id, userId: req.user!.userId },
+    where: { id: String(req.params.id), userId: req.user!.userId },
   })
   if (!session) {
     res.status(404).json({ error: 'Assignment Coach session not found' })
@@ -1054,6 +1067,10 @@ assignmentCoachRouter.post('/:id/export-preview', async (req, res) => {
     return
   }
 
+  let pictures: OriginalPicture[] = []
+  if (req.file) pictures = await readOriginalPictures(req.file.originalname, req.file.buffer)
+  const pictureMap = new Map<number, OriginalImage>(pictures.map((p) => [p.id, p.image]))
+
   const known = [session.subject && `subject: ${session.subject}`, session.gradeLevel && `grade: ${session.gradeLevel}`].filter(Boolean)
   const slidesContextNote = known.length ? `\n\nWhat is already known about this assignment — ${known.join('; ')}. Use it when choosing the theme.` : ''
 
@@ -1062,7 +1079,7 @@ assignmentCoachRouter.post('/:id/export-preview', async (req, res) => {
       model: CLAUDE_MODEL,
       max_tokens: 8192,
       thinking: { type: 'disabled' },
-      system: kind === 'slides' ? SLIDES_SYSTEM_PROMPT + slidesContextNote : DOC_SYSTEM_PROMPT,
+      system: (kind === 'slides' ? SLIDES_SYSTEM_PROMPT + slidesContextNote : DOC_SYSTEM_PROMPT) + picturesNote(kind, pictures),
       messages: [{ role: 'user', content }],
     })
     const text = response.content
@@ -1070,7 +1087,8 @@ assignmentCoachRouter.post('/:id/export-preview', async (req, res) => {
       .map((block) => block.text)
       .join('\n')
 
-    const model = kind === 'slides' ? parseSlidesOutput(text) : parseDocOutput(text)
+    const model = kind === 'slides' ? parseSlidesOutput(text) : parseDocOutput(text, pictureMap)
+    if (model && 'theme' in model) carryOriginalPictures(model, pictureMap)
     if (model && 'theme' in model && model.theme === 'wivoza') {
       // Claude left the generic default: use what we know about the subject.
       const inferred = themeFromContext(session.subject, session.gradeLevel)

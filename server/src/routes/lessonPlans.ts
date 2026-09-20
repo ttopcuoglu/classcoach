@@ -6,7 +6,7 @@ import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { checkFeatureAccess, countUsageLogActionsThisMonth, LESSON_PLANNING_ACTIONS } from '../lib/billing.ts'
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES, INSTRUCTION_PRIORITY_NOTICE } from '../lib/coachPersona.ts'
-import { parseSlidesOutput, themeFromContext } from '../lib/exportModels.ts'
+import { carryOriginalPictures, parseSlidesOutput, themeFromContext } from '../lib/exportModels.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { findImage } from '../lib/imageSearch.ts'
 import { extractPdfImages, extractPptxImages, orderedSlideParts, type OriginalImage } from '../lib/originalImages.ts'
@@ -352,15 +352,7 @@ async function finishDeck(
   gradeLevel: string | null,
   originals: Map<number, OriginalImage> = new Map(),
 ): Promise<void> {
-  // The teacher's own picture wins: a slide that came from one of their slides
-  // gets that slide's picture, in the visual layout.
-  for (const slide of deck.slides) {
-    const original = slide.sourceSlide ? originals.get(slide.sourceSlide) : undefined
-    if (!original) continue
-    slide.layout = 'visual'
-    slide.image = { url: original.url, width: original.width, height: original.height, credit: `Your original picture (slide ${slide.sourceSlide})`, original: true }
-  }
-
+  carryOriginalPictures(deck, originals)
   if (deck.theme === 'wivoza') {
     const inferred = themeFromContext(subject, gradeLevel)
     if (inferred) deck.theme = inferred

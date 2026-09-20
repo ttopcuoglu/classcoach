@@ -1344,12 +1344,14 @@ export function reviseAssignmentCoach(id: string): Promise<AssignmentCoachSessio
   return request(`/api/assignment-coach/${id}/revise`, { method: 'POST' })
 }
 
+export type ExportImage = { url: string; width: number; height: number; credit: string; original?: boolean }
 export type ExportDocBlock =
   | { type: 'heading'; text: string }
   | { type: 'paragraph'; text: string }
   | { type: 'bullets'; items: string[] }
   | { type: 'numbered'; items: string[] }
   | { type: 'callout'; label: string; text: string }
+  | { type: 'image'; image: ExportImage }
 export type ExportDoc = { title: string; subtitle: string | null; blocks: ExportDocBlock[] }
 
 export type ExportSlideLayout = 'title' | 'cards' | 'split' | 'keyterm' | 'prompt' | 'steps' | 'compare' | 'visual'
@@ -1362,7 +1364,7 @@ export type ExportSlide = {
   visual: string | null
   imageQuery: string | null
   // A real, openly licensed picture found for a 'visual' slide.
-  image: { url: string; width: number; height: number; credit: string; original?: boolean } | null
+  image: ExportImage | null
   sourceSlide: number | null
 }
 
@@ -1372,11 +1374,27 @@ export type ExportDeck = { theme: ExportTheme; variant: number; slides: ExportSl
 export type ExportKind = 'document' | 'slides'
 export type ExportFormat = 'docx' | 'pdf' | 'pptx'
 
-// Step 1: Claude lays `text` out as a document or slide deck to preview.
-export function getExportPreview(id: string, kind: 'document', text: string): Promise<{ kind: 'document'; model: ExportDoc }>
-export function getExportPreview(id: string, kind: 'slides', text: string): Promise<{ kind: 'slides'; model: ExportDeck }>
-export function getExportPreview(id: string, kind: ExportKind, text: string) {
-  return request(`/api/assignment-coach/${id}/export-preview`, { method: 'POST', body: JSON.stringify({ kind, text }) })
+// Step 1: Claude lays `text` out as a document or slide deck to preview. With
+// the teacher's original file attached, its own pictures are carried into the
+// layout — read for this one request and never stored.
+export function getExportPreview(id: string, kind: 'document', text: string, originalFile?: File | null): Promise<{ kind: 'document'; model: ExportDoc }>
+export function getExportPreview(id: string, kind: 'slides', text: string, originalFile?: File | null): Promise<{ kind: 'slides'; model: ExportDeck }>
+export async function getExportPreview(id: string, kind: ExportKind, text: string, originalFile?: File | null) {
+  if (!originalFile) return request(`/api/assignment-coach/${id}/export-preview`, { method: 'POST', body: JSON.stringify({ kind, text }) })
+  const formData = new FormData()
+  formData.append('kind', kind)
+  formData.append('text', text)
+  formData.append('file', originalFile)
+  const res = await fetch(`${API_BASE_URL}/api/assignment-coach/${id}/export-preview`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw apiError(body?.error ?? `Request failed with status ${res.status}`, res.status)
+  }
+  return res.json()
 }
 
 // Step 2: render the previewed model to a real file and save it. No Claude

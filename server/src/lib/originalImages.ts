@@ -145,3 +145,108 @@ export async function extractPdfImages(buffer: Buffer): Promise<Map<number, Orig
   }
   return found
 }
+
+const decodeXmlEntities = (value: string): string =>
+  value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&')
+
+// The text of every slide in play order — one entry per slide, an empty string
+// for a slide with no text, so the numbers line up with the pictures above.
+export async function extractPptxSlideTexts(buffer: Buffer): Promise<string[]> {
+  const zip = await JSZip.loadAsync(buffer)
+  const texts: string[] = []
+  for (const path of await orderedSlideParts(zip)) {
+    const xml = (await zip.file(path)?.async('string')) ?? ''
+    const lines = xml
+      // A soft line break (Shift+Enter) inside a paragraph starts a new line.
+      .replace(/<a:br\s*\/?>/g, '</a:p>')
+      .split('</a:p>')
+      .map((paragraph) =>
+        Array.from(paragraph.matchAll(/<a:t(?:\s[^>]*)?>([^<]*)<\/a:t>/g))
+          .map((m) => decodeXmlEntities(m[1]))
+          .join('')
+          .trim(),
+      )
+      .filter(Boolean)
+    texts.push(lines.join('\n'))
+  }
+  return texts
+}
+
+async function extractPdfPageTexts(buffer: Buffer): Promise<string[]> {
+  const parser = new PDFParse({ data: buffer })
+  try {
+    return (await parser.getText()).pages.map((page) => page.text.trim())
+  } catch {
+    return []
+  } finally {
+    await parser.destroy()
+  }
+}
+
+// A Word file's pictures in reading order, each with the text just before it —
+// the only way to tell where in the worksheet it belonged.
+async function extractDocxPictures(buffer: Buffer): Promise<OriginalPicture[]> {
+  const zip = await JSZip.loadAsync(buffer)
+  const xml = await zip.file('word/document.xml')?.async('string')
+  const rels = await zip.file('word/_rels/document.xml.rels')?.async('string')
+  if (!xml || !rels) return []
+
+  const targets = new Map<string, string>()
+  for (const tag of rels.match(/<Relationship\b[^>]*>/g) ?? []) {
+    const id = tag.match(/\bId="([^"]+)"/)?.[1]
+    const target = tag.match(/\bTarget="([^"]+)"/)?.[1]
+    if (id && target) targets.set(id, target.startsWith('/') ? target.slice(1) : `word/${target}`)
+  }
+
+  const pictures: OriginalPicture[] = []
+  let lastText = ''
+  let totalBytes = 0
+  for (const paragraph of xml.match(/<w:p[ >][\s\S]*?<\/w:p>/g) ?? []) {
+    const own = Array.from(paragraph.matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g)).map((m) => decodeXmlEntities(m[1])).join('').trim()
+    for (const drawing of paragraph.match(/<w:drawing>[\s\S]*?<\/w:drawing>/g) ?? []) {
+      const embed = drawing.match(/<a:blip\b[^>]*\br:embed="([^"]+)"/)?.[1]
+      const path = embed ? targets.get(embed) : undefined
+      const cx = Number(drawing.match(/<wp:extent\b[^>]*\bcx="(\d+)"/)?.[1] ?? 0)
+      const cy = Number(drawing.match(/<wp:extent\b[^>]*\bcy="(\d+)"/)?.[1] ?? 0)
+      const mime = MIME_BY_EXTENSION[path?.split('.').pop()?.toLowerCase() ?? '']
+      const file = path ? zip.file(path) : null
+      if (!path || !mime || !file || cx * cy < MIN_PICTURE_AREA_EMU) continue
+      const bytes = Buffer.from(await file.async('uint8array'))
+      const size = imageSize(bytes)
+      if (!size || bytes.length < MIN_IMAGE_BYTES || bytes.length > MAX_IMAGE_BYTES || totalBytes + bytes.length > MAX_TOTAL_IMAGE_BYTES) continue
+      totalBytes += bytes.length
+      pictures.push({
+        id: pictures.length + 1,
+        image: { url: `data:${mime};base64,${bytes.toString('base64')}`, width: size.width, height: size.height },
+        context: (own || lastText).replace(/\s+/g, ' ').slice(0, 140),
+      })
+    }
+    if (own) lastText = own
+  }
+  return pictures
+}
+
+// A picture from the teacher's file, with enough about where it sat (the slide's
+// or page's text, or the line before it in a Word file) for Claude to say which
+// new slide or spot it belongs on. `id` is the slide or page number, or the
+// picture's order in a Word file.
+export type OriginalPicture = { id: number; image: OriginalImage; context: string }
+
+export async function readOriginalPictures(fileName: string, buffer: Buffer): Promise<OriginalPicture[]> {
+  const name = fileName.toLowerCase()
+  const trim = (text: string) => text.replace(/\s+/g, ' ').slice(0, 140)
+  try {
+    if (name.endsWith('.pptx')) {
+      const [images, texts] = await Promise.all([extractPptxImages(buffer), extractPptxSlideTexts(buffer)])
+      return [...images].map(([id, image]) => ({ id, image, context: trim(texts[id - 1] ?? '') }))
+    }
+    if (name.endsWith('.pdf')) {
+      const [images, texts] = await Promise.all([extractPdfImages(buffer), extractPdfPageTexts(buffer)])
+      return [...images].map(([id, image]) => ({ id, image, context: trim(texts[id - 1] ?? '') }))
+    }
+    if (name.endsWith('.docx')) return await extractDocxPictures(buffer)
+  } catch (error) {
+    console.warn('[original-images] could not read pictures from the original file:', error)
+  }
+  return []
+}

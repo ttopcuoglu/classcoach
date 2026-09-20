@@ -1,5 +1,6 @@
 import { extractTag } from './extractTag.ts'
 import { isAllowedImageUrl, isDataImageUrl, type SlideImage } from './imageSearch.ts'
+import type { OriginalImage } from './originalImages.ts'
 import { SLIDE_LAYOUTS, THEME_NAMES, type Slide, type SlideDeck, type SlideLayout, type ThemeName } from './slidesPptx.ts'
 
 export type DocBlock =
@@ -8,6 +9,7 @@ export type DocBlock =
   | { type: 'bullets'; items: string[] }
   | { type: 'numbered'; items: string[] }
   | { type: 'callout'; label: string; text: string }
+  | { type: 'image'; image: SlideImage }
 
 export type DocModel = { title: string; subtitle: string | null; blocks: DocBlock[] }
 
@@ -47,6 +49,9 @@ export function sanitizeDocModel(raw: unknown): DocModel | null {
     } else if (block.type === 'callout') {
       const text = clean(block.text)
       if (text) blocks.push({ type: 'callout', label: clean(block.label, 60), text })
+    } else if (block.type === 'image') {
+      const image = sanitizeImage(block.image)
+      if (image) blocks.push({ type: 'image', image })
     }
   }
   if (blocks.length === 0) return null
@@ -109,15 +114,35 @@ const listItems = (body: string): string[] =>
     .filter(Boolean)
 
 // Parses Claude's <doc> tag output into a validated model.
-export function parseDocOutput(text: string): DocModel | null {
+export function parseDocOutput(text: string, pictures: Map<number, OriginalImage> = new Map()): DocModel | null {
   const blocks: unknown[] = []
-  for (const m of text.matchAll(/<block\s+type="(\w+)"(?:\s+label="([^"]*)")?\s*>([\s\S]*?)<\/block>/g)) {
+  // Ordinary blocks and self-closing picture blocks, in the order they appear.
+  // A picture number with no matching picture is dropped.
+  const pattern = /<block\s+type="(\w+)"(?:\s+label="([^"]*)")?\s*>([\s\S]*?)<\/block>|<block\s+type="image"\s+picture="(\d+)"\s*\/>/g
+  for (const m of text.matchAll(pattern)) {
+    if (m[4]) {
+      const picture = pictures.get(Number(m[4]))
+      if (picture) blocks.push({ type: 'image', image: { ...picture, credit: 'Your original picture', original: true } })
+      continue
+    }
     const [, type, label, body] = m
     if (type === 'bullets' || type === 'numbered') blocks.push({ type, items: listItems(body) })
     else if (type === 'callout') blocks.push({ type, label: label ?? '', text: body.trim() })
     else blocks.push({ type, text: body.trim() })
   }
   return sanitizeDocModel({ title: extractTag(text, 'title'), subtitle: extractTag(text, 'subtitle'), blocks })
+}
+
+// A slide that came from one of the teacher's own slides gets that slide's
+// picture, in the visual layout — their picture, exactly as it was, is never
+// swapped for a search result.
+export function carryOriginalPictures(deck: SlideDeck, pictures: Map<number, OriginalImage>): void {
+  for (const slide of deck.slides) {
+    const original = slide.sourceSlide ? pictures.get(slide.sourceSlide) : undefined
+    if (!original) continue
+    slide.layout = 'visual'
+    slide.image = { ...original, credit: `Your original picture (slide ${slide.sourceSlide})`, original: true }
+  }
 }
 
 // Parses Claude's <theme> + repeated <slide> tag output into a validated deck.

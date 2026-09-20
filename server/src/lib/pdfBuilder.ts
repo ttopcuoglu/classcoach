@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit'
+import { fitInside, loadImageBytes } from './imageSearch.ts'
 import type { DocModel } from './exportModels.ts'
 
 const FOREST = '#1B2E28'
@@ -30,7 +31,11 @@ function pdfText(text: string): string {
     .replace(/./gsu, (ch) => (ch.charCodeAt(0) <= 0xff || CP1252_EXTRAS.has(ch) ? ch : '?'))
 }
 
-export function buildPdf(model: DocModel): Promise<Buffer> {
+export async function buildPdf(model: DocModel): Promise<Buffer> {
+  // Pictures are read first so the drawing itself can stay synchronous.
+  const pictures = new Map<unknown, Awaited<ReturnType<typeof loadImageBytes>>>()
+  for (const block of model.blocks) if (block.type === 'image') pictures.set(block, await loadImageBytes(block.image.url))
+
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'LETTER', margin: M, bufferPages: true, info: { Title: pdfText(model.title), Creator: 'Wivoza' } })
     const chunks: Buffer[] = []
@@ -92,6 +97,17 @@ export function buildPdf(model: DocModel): Promise<Buffer> {
           doc.y = y + h + 6
         })
         doc.y += 4
+      } else if (block.type === 'image') {
+        const loaded = pictures.get(block)
+        if (!loaded) continue
+        // Points at 72 per inch; up to 6.5 x 4.2 inches.
+        const size = fitInside(block.image.width, block.image.height, CONTENT_W, 300)
+        const credit = pdfText(block.image.credit)
+        ensure(size.height + 34)
+        const y = doc.y + 4
+        doc.image(loaded.bytes, M + (CONTENT_W - size.width) / 2, y, { width: size.width, height: size.height })
+        doc.fillColor('#8A8A80').font('Helvetica-Oblique').fontSize(8.5).text(credit, M, y + size.height + 5, { width: CONTENT_W, align: 'center' })
+        doc.y = y + size.height + 26
       } else {
         const accent = ACCENTS[calloutIndex++ % ACCENTS.length]
         const label = block.label ? pdfText(block.label).toUpperCase() : ''

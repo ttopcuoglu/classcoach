@@ -3,6 +3,7 @@ import {
   BorderStyle,
   Document,
   Footer,
+  ImageRun,
   LevelFormat,
   Packer,
   PageNumber,
@@ -16,6 +17,7 @@ import {
   WidthType,
   type FileChild,
 } from 'docx'
+import { fitInside, loadImageBytes } from './imageSearch.ts'
 import type { DocModel } from './exportModels.ts'
 
 const FOREST = '1B2E28'
@@ -149,6 +151,26 @@ export async function buildDocx(model: DocModel): Promise<Buffer> {
         )
       }
       children.push(spacer(80))
+    } else if (block.type === 'image') {
+      const loaded = await loadImageBytes(block.image.url)
+      if (!loaded) continue
+      // Word sizes pictures in pixels at 96 per inch; 6 x 4 inches at most.
+      const size = fitInside(block.image.width, block.image.height, 576, 384)
+      children.push(
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { before: 120, after: 60 },
+          keepNext: true,
+          children: [new ImageRun({ type: loaded.type, data: loaded.bytes, transformation: size, altText: { title: 'Picture', description: block.image.credit, name: 'picture' } })],
+        }),
+      )
+      children.push(
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 160 },
+          children: [new TextRun({ text: block.image.credit, font: FONT, size: 17, italics: true, color: '8A8A80' })],
+        }),
+      )
     } else {
       children.push(callout(block.label, block.text, ACCENTS[calloutIndex++ % ACCENTS.length]), spacer(160))
     }

@@ -150,6 +150,16 @@ function DocPreview({ model }: { model: ExportDoc }) {
               </ol>
             )
           }
+          if (block.type === 'image') {
+            return (
+              <figure key={i} className="flex flex-col items-center gap-1.5">
+                <img src={block.image.url} alt="" className="max-h-72 w-auto max-w-full rounded-lg object-contain" />
+                <figcaption className="text-[11px] italic" style={{ color: '#8A8A80' }}>
+                  {block.image.credit}
+                </figcaption>
+              </figure>
+            )
+          }
           const accent = accentAt(calloutIndex++)
           return (
             <div key={i} className="rounded-lg border-l-4 px-4 py-3" style={{ background: accent.tint, borderColor: accent.color }}>
@@ -540,10 +550,10 @@ const DOWNLOAD_LABELS: Record<ExportFormat, string> = {
 // for the same assignment text — reopening the window or switching back is
 // instant instead of waiting (and paying) again.
 const previewCache = new Map<string, ExportDoc | ExportDeck>()
-function cacheKey(sessionId: string, kind: ExportKind, text: string): string {
+function cacheKey(sessionId: string, kind: ExportKind, text: string, file?: File | null): string {
   let h = 5381
   for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) >>> 0
-  return `${sessionId}|${kind}|${text.length}|${h}`
+  return `${sessionId}|${kind}|${text.length}|${h}|${file ? `${file.name}:${file.size}` : ''}`
 }
 function remember(key: string, model: ExportDoc | ExportDeck) {
   previewCache.set(key, model)
@@ -559,6 +569,7 @@ export default function ExportModal({
   slidesOnly = false,
   chipLabel = 'Improved presentation',
   changesLabel = 'What we improved',
+  originalFile = null,
 }: {
   sessionId: string
   text: string
@@ -571,12 +582,14 @@ export default function ExportModal({
   /** The pill in the header, and the heading over the list of what the deck does. */
   chipLabel?: string
   changesLabel?: string
+  /** The teacher's own file: its pictures are carried into the layout. */
+  originalFile?: File | null
 }) {
   const [format, setFormat] = useState<ExportFormat>(initialFormat)
   const kind = kindOf(format)
-  const [doc, setDoc] = useState<ExportDoc | null>(() => (previewCache.get(cacheKey(sessionId, 'document', sourceText)) as ExportDoc | undefined) ?? null)
-  const [deck, setDeck] = useState<ExportDeck | null>(() => (previewCache.get(cacheKey(sessionId, 'slides', sourceText)) as ExportDeck | undefined) ?? null)
-  const [loading, setLoading] = useState(() => !previewCache.has(cacheKey(sessionId, kindOf(initialFormat), sourceText)))
+  const [doc, setDoc] = useState<ExportDoc | null>(() => (previewCache.get(cacheKey(sessionId, 'document', sourceText, originalFile)) as ExportDoc | undefined) ?? null)
+  const [deck, setDeck] = useState<ExportDeck | null>(() => (previewCache.get(cacheKey(sessionId, 'slides', sourceText, originalFile)) as ExportDeck | undefined) ?? null)
+  const [loading, setLoading] = useState(() => !previewCache.has(cacheKey(sessionId, kindOf(initialFormat), sourceText, originalFile)))
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<ExportFormat | null>(null)
   const requestRef = useRef(0)
@@ -586,9 +599,9 @@ export default function ExportModal({
     try {
       let model: ExportDoc | ExportDeck
       if (loader) model = await loader(which)
-      else if (which === 'document') model = (await getExportPreview(sessionId, 'document', sourceText)).model
-      else model = (await getExportPreview(sessionId, 'slides', sourceText)).model
-      remember(cacheKey(sessionId, which, sourceText), model)
+      else if (which === 'document') model = (await getExportPreview(sessionId, 'document', sourceText, originalFile)).model
+      else model = (await getExportPreview(sessionId, 'slides', sourceText, originalFile)).model
+      remember(cacheKey(sessionId, which, sourceText, originalFile), model)
       if (request === requestRef.current) {
         if (which === 'document') setDoc(model as ExportDoc)
         else setDeck(model as ExportDeck)
