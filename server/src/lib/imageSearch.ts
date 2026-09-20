@@ -7,7 +7,9 @@
 // classroom-safe is skipped. Every failure returns null, so the slide simply
 // keeps its "add a picture here" spot.
 
-export type SlideImage = { url: string; width: number; height: number; credit: string }
+// `original` marks a picture taken from the teacher's own uploaded deck (a data
+// link, never stored) as opposed to one found on Wikimedia Commons.
+export type SlideImage = { url: string; width: number; height: number; credit: string; original?: boolean }
 
 const IMAGE_HOST = 'upload.wikimedia.org'
 const USER_AGENT = 'Wivoza/1.0 (https://www.wivoza.com; classroom presentation builder)'
@@ -105,7 +107,12 @@ export async function findImage(rawQuery: string): Promise<SlideImage | null> {
 
 // Downloads an image already vetted by findImage. The host allowlist is checked
 // again here because the URL can round-trip through the browser.
-export async function fetchImageData(url: string): Promise<{ data: string; type: 'image/jpeg' | 'image/png' } | null> {
+export async function fetchImageData(url: string): Promise<{ data: string; type: 'image/jpeg' | 'image/png' | 'image/gif' } | null> {
+  // A picture from the teacher's own deck already travels with the deck.
+  if (isDataImageUrl(url)) {
+    const match = url.match(/^data:(image\/(?:png|jpeg|gif));base64,(.+)$/)
+    return match ? { data: `${match[1]};base64,${match[2]}`, type: match[1] as 'image/jpeg' | 'image/png' | 'image/gif' } : null
+  }
   try {
     const parsed = new URL(url)
     if (parsed.protocol !== 'https:' || parsed.hostname !== IMAGE_HOST) return null
@@ -129,4 +136,11 @@ export function isAllowedImageUrl(value: unknown): value is string {
   } catch {
     return false
   }
+}
+
+// A picture embedded straight in the deck model: PNG, JPEG, or GIF only, and
+// small enough (~3 MB of image) that a whole deck of them stays reasonable.
+const MAX_DATA_URL_CHARS = 4_300_000
+export function isDataImageUrl(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= MAX_DATA_URL_CHARS && /^data:image\/(?:png|jpeg|gif);base64,[A-Za-z0-9+/]+={0,2}$/.test(value)
 }

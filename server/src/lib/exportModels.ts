@@ -1,5 +1,5 @@
 import { extractTag } from './extractTag.ts'
-import { isAllowedImageUrl, type SlideImage } from './imageSearch.ts'
+import { isAllowedImageUrl, isDataImageUrl, type SlideImage } from './imageSearch.ts'
 import { SLIDE_LAYOUTS, THEME_NAMES, type Slide, type SlideDeck, type SlideLayout, type ThemeName } from './slidesPptx.ts'
 
 export type DocBlock =
@@ -53,15 +53,18 @@ export function sanitizeDocModel(raw: unknown): DocModel | null {
   return { title, subtitle: clean(r.subtitle, 200) || null, blocks }
 }
 
-// A picture link only ever points at Wikimedia's image host, whatever a client
-// sends back — the file download fetches it server-side.
+// A picture is either a link to Wikimedia's image host (fetched server-side at
+// download time, so nothing else is ever allowed) or one of the teacher's own
+// pictures embedded in the deck as a small PNG/JPEG/GIF.
 function sanitizeImage(raw: unknown): SlideImage | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
   const width = Number(r.width)
   const height = Number(r.height)
-  if (!isAllowedImageUrl(r.url) || !(width >= 1 && width <= 10000) || !(height >= 1 && height <= 10000)) return null
-  return { url: r.url, width, height, credit: clean(r.credit, 200) || 'Wikimedia Commons' }
+  if (!(width >= 1 && width <= 10000) || !(height >= 1 && height <= 10000)) return null
+  if (isDataImageUrl(r.url)) return { url: r.url, width, height, credit: clean(r.credit, 120) || 'Your original picture', original: true }
+  if (isAllowedImageUrl(r.url)) return { url: r.url, width, height, credit: clean(r.credit, 200) || 'Wikimedia Commons' }
+  return null
 }
 
 export function sanitizeDeck(raw: unknown): SlideDeck | null {
@@ -89,6 +92,7 @@ export function sanitizeDeck(raw: unknown): SlideDeck | null {
       visual: clean(s.visual, 300) || null,
       imageQuery: clean(s.imageQuery, 100) || null,
       image: sanitizeImage(s.image),
+      sourceSlide: Number.isInteger(s.sourceSlide) && (s.sourceSlide as number) >= 1 && (s.sourceSlide as number) <= 500 ? (s.sourceSlide as number) : null,
     })
   }
   if (slides.length === 0) return null
@@ -129,6 +133,7 @@ export function parseSlidesOutput(text: string): SlideDeck | null {
       icon: extractTag(block, 'icon'),
       visual: extractTag(block, 'visual'),
       imageQuery: extractTag(block, 'image_query'),
+      sourceSlide: Number.parseInt(extractTag(block, 'source_slide') ?? '', 10) || null,
     })
   }
   const head = text.split('<slide>')[0]

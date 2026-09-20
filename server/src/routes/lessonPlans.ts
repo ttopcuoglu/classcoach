@@ -9,6 +9,7 @@ import { CORE_COACHING_RULES, INSTRUCTION_PRIORITY_NOTICE } from '../lib/coachPe
 import { parseSlidesOutput, themeFromContext } from '../lib/exportModels.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { findImage } from '../lib/imageSearch.ts'
+import { extractPdfImages, extractPptxImages, orderedSlideParts, type OriginalImage } from '../lib/originalImages.ts'
 import { prisma } from '../lib/prisma.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
 import { THEME_GUIDE, type SlideDeck } from '../lib/slidesPptx.ts'
@@ -189,13 +190,7 @@ type ExtractedSlide = { text: string; hasImage: boolean }
 
 async function extractPptxSlides(buffer: Buffer): Promise<ExtractedSlide[]> {
   const zip = await JSZip.loadAsync(buffer)
-  const slideFiles = Object.keys(zip.files)
-    .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
-    .sort((a, b) => {
-      const numA = Number(a.match(/slide(\d+)\.xml$/)?.[1] ?? 0)
-      const numB = Number(b.match(/slide(\d+)\.xml$/)?.[1] ?? 0)
-      return numA - numB
-    })
+  const slideFiles = await orderedSlideParts(zip)
 
   const slides: ExtractedSlide[] = []
   for (const name of slideFiles) {
@@ -256,7 +251,7 @@ function formatSlidesAsText(slides: ExtractedSlide[]): string {
 const DECK_LAYOUT_RULES = `Visuals matter. Use the layouts to make the deck genuinely visual, not walls of text:
 - steps — a process, sequence, timeline, or cycle: each bullet is one short step (under 8 words), in order, at most 5.
 - compare — two things side by side: the first bullet is "Left heading | Right heading", then one row per bullet as "left item | right item".
-- visual — a slide that needs a picture, diagram, map, or chart that you cannot draw (anything the review's visuals section recommended, and any slide the teacher already gave an image). Put a specific description of exactly what to show in <visual> (for example "A labeled map of the routes from the South to Canada"), and keep the bullets short. Only ask for pictures of concrete, well-documented subjects: maps, diagrams, historical images, science and nature, landmarks, and places — for a map, name the region or say "political map". Wivoza will find and place a real, openly licensed picture from <image_query>: 2 to 5 search words (for example "Underground Railroad routes map", "water cycle diagram", "monarch butterfly life cycle") — nouns, places, and event names only. Wivoza cannot keep the teacher's original image, so for a slide that had a map, diagram, or similar image, give an <image_query> for a stand-in that serves the same purpose and say in that slide's <notes> that it replaces their original image, which they can swap back in. For picture prompts about people, families, feelings, or classroom scenes — or anything personal or specific to their class (a family photo, a student's own work) — leave <image_query> out and write "Add your own image here" in <visual>, because a random photo would not fit.
+- visual — a slide that needs a picture, diagram, map, or chart that you cannot draw (anything the review's visuals section recommended, and any slide the teacher already gave an image). Put a specific description of exactly what to show in <visual> (for example "A labeled map of the routes from the South to Canada"), and keep the bullets short. Only ask for pictures of concrete, well-documented subjects: maps, diagrams, historical images, science and nature, landmarks, and places — for a map, name the region or say "political map". Wivoza will find and place a real, openly licensed picture from <image_query>: 2 to 5 search words (for example "Underground Railroad routes map", "water cycle diagram", "monarch butterfly life cycle") — nouns, places, and event names only. When a slide already has the teacher's own picture (the slides below mark it), use the visual layout for that slide and add <source_slide>N</source_slide> with that slide's original number: Wivoza will place the teacher's own picture on it, exactly as it was, so never replace it with a search. For a picture that would be personal or specific to their class and that you can't carry over, or a people, family, feelings, or classroom-scene picture prompt, leave <image_query> out and write "Add your own image here" in <visual>, because a random photo would not fit.
 - keyterm — introducing a vocabulary word or key idea: the title is the word, bullets are its meaning and examples.
 - prompt — a question, discussion, turn-and-talk, or check for understanding: the title is the question, bullets are optional sentence starters.
 - split — a concept slide with 2-4 bullets beside a large icon.
@@ -282,7 +277,8 @@ Plain text only, no markdown. Respond with exactly this structure and nothing el
 - Second bullet
 </bullets>
 <visual>Only for the visual layout: what to show</visual>
-<image_query>Only for the visual layout: search words for finding the picture</image_query>
+<image_query>Only for the visual layout, for a NEW picture to find: search words</image_query>
+<source_slide>Only when carrying over the teacher's own picture: the original slide number</source_slide>
 <notes>Optional speaker note</notes>
 </slide>`
 
@@ -338,14 +334,40 @@ lessonPlansRouter.post('/extract-presentation', presentationUpload.single('file'
 // Every generated deck gets the same finishing: fall back to a subject theme if
 // Claude left the generic default, then find a real picture for each visual
 // slide that asked for one (a miss leaves that slide's "add a picture" spot).
-async function finishDeck(deck: SlideDeck, subject: string | null, gradeLevel: string | null): Promise<void> {
+async function originalImagesFrom(file: Express.Multer.File | undefined): Promise<Map<number, OriginalImage>> {
+  if (!file) return new Map()
+  const name = file.originalname.toLowerCase()
+  try {
+    if (name.endsWith('.pptx')) return await extractPptxImages(file.buffer)
+    if (name.endsWith('.pdf')) return await extractPdfImages(file.buffer)
+  } catch (error) {
+    console.warn('[lesson-plans] could not read pictures from the original file:', error)
+  }
+  return new Map()
+}
+
+async function finishDeck(
+  deck: SlideDeck,
+  subject: string | null,
+  gradeLevel: string | null,
+  originals: Map<number, OriginalImage> = new Map(),
+): Promise<void> {
+  // The teacher's own picture wins: a slide that came from one of their slides
+  // gets that slide's picture, in the visual layout.
+  for (const slide of deck.slides) {
+    const original = slide.sourceSlide ? originals.get(slide.sourceSlide) : undefined
+    if (!original) continue
+    slide.layout = 'visual'
+    slide.image = { url: original.url, width: original.width, height: original.height, credit: `Your original picture (slide ${slide.sourceSlide})`, original: true }
+  }
+
   if (deck.theme === 'wivoza') {
     const inferred = themeFromContext(subject, gradeLevel)
     if (inferred) deck.theme = inferred
   }
   await Promise.all(
     deck.slides
-      .filter((slide) => slide.layout === 'visual' && slide.imageQuery)
+      .filter((slide) => slide.layout === 'visual' && slide.imageQuery && !slide.image)
       .slice(0, 8)
       .map(async (slide) => {
         slide.image = await findImage(slide.imageQuery as string)
@@ -356,8 +378,8 @@ async function finishDeck(deck: SlideDeck, subject: string | null, gradeLevel: s
 // Turns a saved presentation review into an improved, themed deck the teacher
 // previews and downloads (the file itself is built by the same export-file
 // route Assignment Coach uses, from the model returned here).
-lessonPlansRouter.post('/:id/presentation-generate', async (req, res) => {
-  const plan = await prisma.lessonPlan.findFirst({ where: { id: req.params.id, userId: req.user!.userId } })
+lessonPlansRouter.post('/:id/presentation-generate', presentationUpload.single('file'), async (req, res) => {
+  const plan = await prisma.lessonPlan.findFirst({ where: { id: String(req.params.id), userId: req.user!.userId } })
   if (!plan || plan.mode !== 'presentation' || !plan.planText) {
     res.status(404).json({ error: 'Presentation review not found' })
     return
@@ -403,7 +425,10 @@ lessonPlansRouter.post('/:id/presentation-generate', async (req, res) => {
       res.status(502).json({ error: 'Could not build the presentation. Please try again.' })
       return
     }
-    await finishDeck(deck, plan.subject, plan.gradeLevel)
+    // The teacher's own pictures come from the file they attach here, read in
+    // memory for this request and never stored.
+    const originals = await originalImagesFrom(req.file)
+    await finishDeck(deck, plan.subject, plan.gradeLevel, originals)
     res.json({ kind: 'slides', model: deck })
   } catch (error) {
     console.error('[lesson-plans] presentation-generate failed:', error)

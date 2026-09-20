@@ -1362,7 +1362,8 @@ export type ExportSlide = {
   visual: string | null
   imageQuery: string | null
   // A real, openly licensed picture found for a 'visual' slide.
-  image: { url: string; width: number; height: number; credit: string } | null
+  image: { url: string; width: number; height: number; credit: string; original?: boolean } | null
+  sourceSlide: number | null
 }
 
 export type ExportTheme = 'wivoza' | 'history' | 'science' | 'math' | 'ela' | 'arts' | 'early' | 'wellness'
@@ -1403,8 +1404,22 @@ export async function downloadExportFile(format: ExportFormat, model: ExportDoc 
 
 // Builds an improved, themed deck from a saved presentation review (applying
 // every recommendation). Preview it, then download through downloadExportFile.
-export function generatePresentation(planId: string): Promise<{ kind: 'slides'; model: ExportDeck }> {
-  return request(`/api/lesson-plans/${planId}/presentation-generate`, { method: 'POST' })
+export async function generatePresentation(planId: string, originalFile?: File): Promise<{ kind: 'slides'; model: ExportDeck }> {
+  if (!originalFile) return request(`/api/lesson-plans/${planId}/presentation-generate`, { method: 'POST' })
+  // With the teacher's original file attached, their own pictures are copied
+  // into the new deck. It's read for this one request and never stored.
+  const formData = new FormData()
+  formData.append('file', originalFile)
+  const res = await fetch(`${API_BASE_URL}/api/lesson-plans/${planId}/presentation-generate`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw apiError(body?.error ?? `Request failed with status ${res.status}`, res.status)
+  }
+  return res.json()
 }
 
 // Builds a classroom-ready lesson deck from a plan and its delivery coaching.

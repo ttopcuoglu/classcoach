@@ -449,7 +449,7 @@ function SlideThumb({ slide, index, t }: { slide: ExportSlide; index: number; t:
               style={{ ...shape({ x: 7.1, y: 0.95, w: 5.45, h: 4.6 }), objectFit: 'contain' }}
             />
             <div style={{ ...text(7.1, 5.7, 5.45, 0.85, { size: 11, color: '#6B6B6B', font: t.body, align: 'center', valign: 'top' }), fontStyle: 'italic' }}>
-              Picture: {slide.image.credit}
+              {slide.image.original ? slide.image.credit : `Picture: ${slide.image.credit}`}
             </div>
           </>
         ) : (
@@ -725,7 +725,7 @@ export default function ExportModal({
           <div className="flex flex-col gap-1">
             <p className="text-xs text-ink-soft">
               {kind === 'document' ? 'Opens in Word, Google Docs, and Pages.' : 'Opens in PowerPoint, Google Slides, and Keynote.'}{' '}
-              {slidesOnly ? 'Pictures are openly licensed and credited on the slide; add your own where a dashed VISUAL spot is marked.' : 'Your original structure is kept.'}
+              {slidesOnly ? 'Your own pictures are kept as they were; any others are openly licensed and credited on the slide. Add your own where a dashed VISUAL spot is marked.' : 'Your original structure is kept.'}
             </p>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               {kind === 'document' ? (

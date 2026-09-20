@@ -1,4 +1,5 @@
 import JSZip from 'jszip'
+import { orderedSlideParts } from './originalImages.ts'
 
 const decodeXmlEntities = (value: string): string =>
   value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&')
@@ -8,9 +9,7 @@ const decodeXmlEntities = (value: string): string =>
 // a PDF export, which loses its page breaks.
 export async function extractPptxText(buffer: Buffer): Promise<string> {
   const zip = await JSZip.loadAsync(buffer)
-  const slideFiles = Object.keys(zip.files)
-    .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
-    .sort((a, b) => Number(a.match(/slide(\d+)\.xml$/)?.[1]) - Number(b.match(/slide(\d+)\.xml$/)?.[1]))
+  const slideFiles = await orderedSlideParts(zip)
 
   const slides: string[] = []
   for (const name of slideFiles) {

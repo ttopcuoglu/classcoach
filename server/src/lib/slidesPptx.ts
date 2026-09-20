@@ -16,6 +16,9 @@ export type Slide = {
   // Search words for finding that picture, and the picture once one is found.
   imageQuery: string | null
   image: SlideImage | null
+  // The number of the teacher's original slide this one came from, so their own
+  // picture from that slide can be carried over.
+  sourceSlide: number | null
 }
 
 type Decor = 'circles' | 'stripes' | 'squares'
@@ -354,7 +357,7 @@ function addVisualSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme, phot
     const w = s.image.width * scale
     const h = s.image.height * scale
     slide.addImage({ data: photo, x: box.x + (box.w - w) / 2, y: box.y + (box.h - h) / 2, w, h, altText: s.visual ?? s.title })
-    slide.addText(`Picture: ${s.image.credit}`, {
+    slide.addText(s.image.original ? s.image.credit : `Picture: ${s.image.credit}`, {
       x: 7.1, y: 5.7, w: 5.45, h: 0.85, fontFace: t.body, fontSize: 11, italic: true, color: '6B6B6B', align: 'center', valign: 'top', fit: 'shrink',
     })
   } else {

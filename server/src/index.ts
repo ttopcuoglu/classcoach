@@ -40,6 +40,11 @@ app.use(cors({ origin: FRONTEND_ORIGINS, credentials: true }))
 // ever gets a chance to parse (and thereby discard) it.
 app.use('/api/billing/webhook', express.raw({ type: 'application/json' }), billingWebhookRouter)
 
+// A deck carrying the teacher's own pictures can be several MB when it comes
+// back for the file download, so that one route gets a larger limit — it must
+// be registered before the global parser below, which would otherwise reject it.
+app.use('/api/assignment-coach/export-file', express.json({ limit: '40mb' }))
+
 app.use(express.json())
 app.use(cookieParser())
 

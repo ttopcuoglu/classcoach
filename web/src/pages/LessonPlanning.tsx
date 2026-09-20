@@ -885,6 +885,9 @@ function PresentationPanel() {
   const [chatError, setChatError] = useState<string | null>(null)
 
   const [generateOpen, setGenerateOpen] = useState(false)
+  // The original upload, kept only in this browser tab so the improved deck can
+  // copy the teacher's own pictures. It's tied to the plan it was reviewed for.
+  const [originalFile, setOriginalFile] = useState<{ planId: string; file: File } | null>(null)
   const [applyingRevision, setApplyingRevision] = useState(false)
   const [revisionDismissed, setRevisionDismissed] = useState(false)
 
@@ -936,6 +939,7 @@ function PresentationPanel() {
         objective: objective.trim() || undefined,
       })
       setPlan(result)
+      if (file) setOriginalFile({ planId: result.id, file })
       setAllPlans((prev) => [result, ...prev])
       setChatDraft('')
       setChatError(null)
@@ -988,6 +992,7 @@ function PresentationPanel() {
     setSubject('')
     setObjective('')
     setPlan(null)
+    setOriginalFile(null)
     setError(null)
     setChatDraft('')
     setChatError(null)
@@ -1019,6 +1024,7 @@ function PresentationPanel() {
     }
   }
 
+  const originalForPlan = plan && originalFile?.planId === plan.id ? originalFile.file : null
   const review = plan?.presentationReview
   const reviewParts = review ? presentParts(REVIEW_PARTS.map((part) => ({ ...part, body: review[part.key] }))) : []
   const showRevision = !!plan?.suggestedRevision && !revisionDismissed
@@ -1168,6 +1174,28 @@ function PresentationPanel() {
                 Wivoza rebuilds your presentation with the clearer wording, visuals, pacing checks, and length changes recommended
                 above, in a design that fits your subject. You'll preview it before you download.
               </p>
+              {plan && originalForPlan ? (
+                <p className="mt-3 text-sm font-medium text-forest">
+                  ✓ Your own pictures from {originalForPlan.name} will be kept in the new deck.
+                </p>
+              ) : (
+                <label className="mt-3 flex cursor-pointer flex-col gap-0.5 rounded-xl border border-dashed border-terracotta/40 bg-peach-tint/30 px-4 py-3 text-sm hover:border-terracotta/60">
+                  <span className="font-semibold text-forest">Keep your own pictures — add your original file again</span>
+                  <span className="text-xs text-ink-soft">
+                    Optional. It's used only to copy your pictures into the new deck, and it isn't stored.
+                  </span>
+                  <input
+                    type="file"
+                    accept=".pptx,.pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const picked = e.target.files?.[0]
+                      if (picked && plan) setOriginalFile({ planId: plan.id, file: picked })
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+              )}
               <button
                 type="button"
                 onClick={() => setGenerateOpen(true)}
@@ -1228,10 +1256,10 @@ function PresentationPanel() {
       {generateOpen && plan && (
         <ExportModal
           sessionId={plan.id}
-          text="presentation"
+          text={originalForPlan ? `presentation:${originalForPlan.name}:${originalForPlan.size}` : 'presentation'}
           initialFormat="pptx"
           slidesOnly
-          loader={() => generatePresentation(plan.id).then((result) => result.model)}
+          loader={() => generatePresentation(plan.id, originalForPlan ?? undefined).then((result) => result.model)}
           onClose={() => setGenerateOpen(false)}
         />
       )}
