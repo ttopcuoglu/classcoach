@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import AnswerSection from '../components/AnswerSection'
 import { BrainIcon, MicIcon, StarIcon, WarningIcon } from '../components/icons'
+import VoiceBars from '../components/VoiceBars'
 import PastList from '../components/PastList'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import {
@@ -852,34 +853,16 @@ export default function TalkToMe() {
                 <div
                   className={`relative flex h-28 w-28 items-center justify-center rounded-full border shadow-sm transition-colors duration-500 ${STATE_STYLES[visualState].orb}`}
                 >
-                  {visualState === 'listening' && <MicIcon className="h-10 w-10 text-gold" />}
-                  {visualState === 'thinking' && (
-                    // Three settling dots, the same shape every messaging app
-                    // uses for "they are typing" — it reads as the other side
-                    // of a conversation composing a reply. The brain icon it
-                    // replaces read as a machine processing a job.
-                    <span className="flex items-center gap-1.5" aria-hidden="true">
-                      {[0, 160, 320].map((delay) => (
-                        <span
-                          key={delay}
-                          className="h-2 w-2 animate-bounce rounded-full bg-gold/70"
-                          style={{ animationDelay: `${delay}ms` }}
-                        />
-                      ))}
-                    </span>
+                  {/* One live voice signal in place of the mic icon: it follows the
+                      teacher's voice while listening, moves like speech while
+                      Coach talks, and settles to a calm line when idle. */}
+                  {visualState === 'error' ? null : (
+                    <VoiceBars
+                      mode={visualState}
+                      level={level}
+                      className={visualState === 'idle' ? 'text-cream/70' : 'text-gold'}
+                    />
                   )}
-                  {visualState === 'speaking' && (
-                    <span className="flex h-9 items-end gap-1" aria-hidden="true">
-                      {[10, 22, 14, 28, 16].map((barHeight, i) => (
-                        <span
-                          key={barHeight}
-                          className="w-1.5 animate-pulse rounded-full bg-gold"
-                          style={{ height: `${barHeight}px`, animationDelay: `${i * 120}ms` }}
-                        />
-                      ))}
-                    </span>
-                  )}
-                  {visualState === 'idle' && <MicIcon className="h-10 w-10 text-cream/80" />}
                   {visualState === 'error' && <WarningIcon className="h-10 w-10 text-peach-tint" />}
                 </div>
               </div>

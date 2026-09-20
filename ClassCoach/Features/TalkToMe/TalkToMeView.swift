@@ -212,12 +212,33 @@ struct TalkToMeView: View {
                 .fill(visualState.color.opacity(0.14))
                 .overlay(Circle().strokeBorder(visualState.color.opacity(0.6), lineWidth: 1.5))
                 .frame(width: 112, height: 112)
-            Image(systemName: visualState.icon)
-                .font(.system(size: 36))
+            if phase == .error {
+                Image(systemName: visualState.icon)
+                    .font(.system(size: 36))
+                    .foregroundStyle(visualState.color)
+            } else {
+                // One live voice signal in place of the mic icon — mirrors
+                // web's VoiceBars: the teacher's real mic level while listening,
+                // Coach's real playback level while speaking.
+                VoiceBars(
+                    mode: voiceBarsMode,
+                    inputLevel: recorder.level,
+                    outputLevel: { player.outputLevel() }
+                )
                 .foregroundStyle(visualState.color)
-                .symbolEffect(.pulse, isActive: phase == .thinking || phase == .speaking)
+            }
         }
         .frame(height: 170)
+    }
+
+    private var voiceBarsMode: VoiceBars.Mode {
+        if recorder.transcribing { return .thinking }
+        switch phase {
+        case .listening: return .listening
+        case .thinking: return .thinking
+        case .speaking: return .speaking
+        case .idle, .error: return .idle
+        }
     }
 
     private var statusLabel: some View {
@@ -761,3 +782,64 @@ struct TalkToMeView: View {
     TalkToMeView()
         .environmentObject(AuthManager.shared)
 }
+
+/// Talk It Through's centre signal — the native twin of web's
+/// `components/VoiceBars.tsx`. Seven bars shaped like a voice waveform:
+/// listening follows the teacher's microphone level, speaking follows Coach's
+/// actual playback level, thinking is a slow travelling wave, idle is a calm
+/// flat line. Redraws only while active (the timeline pauses when idle).
+struct VoiceBars: View {
+    enum Mode { case idle, listening, thinking, speaking }
+
+    let mode: Mode
+    let inputLevel: Double
+    let outputLevel: () -> Double
+
+    private static let shape: [Double] = [0.5, 0.72, 0.9, 1, 0.9, 0.72, 0.5]
+    private static let minHeight = 0.14
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: mode == .idle || reduceMotion)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            let heights = barHeights(at: t)
+            HStack(spacing: 5) {
+                ForEach(0..<heights.count, id: \.self) { i in
+                    Capsule()
+                        .frame(width: 7, height: 56 * heights[i])
+                }
+            }
+            .frame(height: 56)
+            .animation(.easeOut(duration: 0.12), value: heights)
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func barHeights(at t: Double) -> [Double] {
+        let shape = Self.shape
+        let floor = Self.minHeight
+        if reduceMotion {
+            return shape.map { mode == .idle ? floor + $0 * 0.12 : 0.25 + $0 * 0.35 }
+        }
+        switch mode {
+        case .idle:
+            return shape.map { floor + $0 * 0.12 }
+        case .listening:
+            let loud = min(1, max(0, inputLevel) / 70)
+            return shape.enumerated().map { i, s in
+                floor + (1 - floor) * s * loud * (0.75 + 0.25 * sin(t * 9 + Double(i) * 1.7))
+            }
+        case .speaking:
+            let loud = min(1, outputLevel() / 80)
+            return shape.enumerated().map { i, s in
+                let syllable = 0.6 + 0.4 * abs(sin(t * 7.3 + Double(i) * 0.9))
+                return floor + (1 - floor) * s * loud * syllable
+            }
+        case .thinking:
+            return shape.enumerated().map { i, s in
+                floor + 0.22 * s * (0.5 + 0.5 * sin(t * 3.2 - Double(i) * 0.8))
+            }
+        }
+    }
+}
+

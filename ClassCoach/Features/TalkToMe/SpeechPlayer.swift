@@ -36,6 +36,7 @@ final class SpeechPlayer: NSObject, ObservableObject {
             do {
                 let player = try AVAudioPlayer(data: data)
                 player.delegate = self
+                player.isMeteringEnabled = true
                 self.player = player
                 player.play()
             } catch {
@@ -83,6 +84,16 @@ final class SpeechPlayer: NSObject, ObservableObject {
             }
             if let self, gen == self.generation { self.drainTask = nil }
         }
+    }
+
+    /// How loud Coach is right now, 0–100 — drives Talk It Through's voice
+    /// bars while Coach speaks. Reads the playing sentence's own meter, so it
+    /// costs nothing extra; 0 between sentences and when nothing is playing.
+    func outputLevel() -> Double {
+        guard let player, player.isPlaying else { return 0 }
+        player.updateMeters()
+        let db = Double(player.averagePower(forChannel: 0))
+        return max(0, min(100, (db + 50) * 2))
     }
 
     func stop() {
