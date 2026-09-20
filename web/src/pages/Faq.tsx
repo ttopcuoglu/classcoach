@@ -24,6 +24,14 @@ const CATEGORIES: Category[] = [
         a: 'No audio is ever kept. Talk It Through and Lesson Debrief both transcribe a recording and then immediately discard it — only the resulting text and metrics remain. Wivoza doesn\'t use a camera or video anywhere in the app.',
       },
       {
+        q: 'What happens to a presentation or document I upload?',
+        a: 'The file itself is not stored. It is read in memory to pull out its text (and, if you choose to keep them, its pictures) and then discarded. The text is kept with that work like anything else you submit. When you attach your original file so your own pictures are carried into a new deck or document, those pictures are used only for that request and go straight into the file you download.',
+      },
+      {
+        q: 'Where do the pictures Wivoza adds come from?',
+        a: 'When a slide needs a picture you didn\'t supply, Wivoza searches Wikimedia Commons using a few words about the slide\'s topic — never your name, your file, or student details. It uses only public-domain and Creative Commons pictures, shows the credit line on the slide, and skips anything that isn\'t classroom-safe. If nothing fits well, it leaves a marked spot instead of a random photo.',
+      },
+      {
         q: 'Are student names or identifying details stored?',
         a: 'Coach is built to avoid it — it refers to people by role ("a student," "the class") even if you type a real name yourself, and it\'s instructed to avoid quoting anything that could indirectly identify a specific student.',
       },

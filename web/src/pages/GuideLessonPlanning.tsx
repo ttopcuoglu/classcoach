@@ -86,6 +86,10 @@ const STEPS = [
     title: 'Take the parts that fit',
     body: 'A Suggested Revision sits next to your plan with “Use this version” and “Dismiss.” Nothing is ever applied to your work automatically. Then save it, share it as a read-only link, or download it.',
   },
+  {
+    title: 'Turn it into a presentation',
+    body: 'Review a Presentation can build an improved PowerPoint that applies every recommendation, and the delivery coaching on a plan can become a classroom-ready deck. Preview it, then download. Attach your original file and your own pictures stay on their slides.',
+  },
 ]
 
 const DELIVERY = ['Opening hook', 'Pacing & timing', 'Engagement checkpoints', 'Explaining the hard part', 'Closing']

@@ -311,6 +311,13 @@ export default function Terms() {
               every request our servers make, not a setting you need to enable.
             </p>
             <p className="mt-2">
+              <strong>Wikimedia Commons:</strong> when a slide needs a picture you did not supply, our servers search
+              Wikimedia Commons using a few words about the slide&rsquo;s topic and download a public-domain or
+              Creative Commons picture. Only those topic words are sent — never your name, your files, or student
+              details. Wikimedia Commons is a public service governed by its own privacy practices, and the credit
+              line for each picture is shown in the file you download.
+            </p>
+            <p className="mt-2">
               These providers receive only the content you submit for the features above — never your account
               password or payment details — and are contractually required to protect it to a standard consistent
               with this Notice.
@@ -336,7 +343,10 @@ export default function Terms() {
             <h2 className="text-sm font-semibold uppercase tracking-wide text-ink">5. Retention and deletion</h2>
             <p className="mt-1">
               Original audio recordings are never stored — audio is processed in memory only long enough to generate
-              a transcript, then discarded. Transcripts and coaching history are kept indefinitely by default; you
+              a transcript, then discarded. The same is true of files you upload, such as presentations, documents,
+              and photos of worksheets: they are read in memory to extract their text and are not stored. If you
+              attach an original file so your own pictures can be carried into a new deck or document, those
+              pictures are used only for that request and are not kept. Transcripts and coaching history are kept indefinitely by default; you
               can set a personal auto-deletion period in your account settings, after which older recordings are
               removed. Account details are kept while your account is active and deleted upon account deletion
               request. Billing records are retained by our payment processor under its own standard practices.

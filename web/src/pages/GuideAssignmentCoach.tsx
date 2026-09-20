@@ -71,7 +71,7 @@ const AI_LEVELS = [
 const STEPS = [
   {
     title: 'Add the assignment',
-    body: 'Paste the text, or upload it — .docx, .pdf, .txt, and even a photo of a worksheet as .jpg or .png. There’s no form to fill in: grade level, subject, assignment type, and estimated time all get read from the assignment itself.',
+    body: 'Paste the text, or upload it — .docx, .pdf, .pptx, .txt, and even a photo of a worksheet as .jpg or .png. There’s no form to fill in: grade level, subject, assignment type, and estimated time all get read from the assignment itself.',
   },
   {
     title: 'Make the one real choice',
@@ -84,6 +84,10 @@ const STEPS = [
   {
     title: 'Work on it, right there',
     body: 'The assignment sits in the workspace as editable text that saves as you type. Use a quick action to push on one thing, or talk it through in the chat, then edit until it’s the version you’ll actually hand out.',
+  },
+  {
+    title: 'Save it the way you’ll use it',
+    body: 'Revise the whole assignment, then choose Word, PDF, or PowerPoint. You see a preview first — a modern layout that keeps your sections and wording, with a slide theme that fits the subject. If the original had pictures, add that file and they come along.',
   },
 ]
 
