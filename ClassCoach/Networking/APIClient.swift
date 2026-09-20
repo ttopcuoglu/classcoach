@@ -123,6 +123,35 @@ final class APIClient {
         return try JSONDecoder().decode(Response.self, from: data)
     }
 
+    /// POSTs JSON and returns the raw response bytes — for endpoints that
+    /// answer with a file (the assignment export's .docx / .pdf / .pptx)
+    /// rather than JSON.
+    func postForData(_ path: String, body: Encodable) async throws -> Data {
+        var urlRequest = URLRequest(url: url(for: path))
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = await AuthManager.shared.token {
+            urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        urlRequest.httpBody = try encodeJSONBody(body)
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: urlRequest)
+        } catch {
+            throw APIError.transport(error)
+        }
+
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(statusCode) else {
+            let message = (try? JSONDecoder().decode(ServerErrorBody.self, from: data))?.error
+                ?? "Request failed (\(statusCode))."
+            throw APIError.server(status: statusCode, message: message)
+        }
+        return data
+    }
+
     /// Raw authenticated GET, for endpoints that return a non-JSON body
     /// (e.g. `/api/tts`'s streamed `audio/mpeg`) — same auth header as
     /// `request(_:)`, but returns the bytes as-is instead of decoding JSON.

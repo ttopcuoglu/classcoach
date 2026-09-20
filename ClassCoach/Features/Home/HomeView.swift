@@ -99,6 +99,19 @@ struct HomeView: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.horizontal)
+
+                    NavigationLink { AssignmentCoachView() } label: {
+                        FeatureCard(
+                            eyebrow: "Plan",
+                            title: "Assignment Coach",
+                            description: "Design, review, and refine meaningful student work—with a coach beside you.",
+                            actionLabel: "Review an assignment",
+                            systemImage: "checklist",
+                            iconTint: AppTheme.accent
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal)
                 }
                 .padding(.vertical)
             }

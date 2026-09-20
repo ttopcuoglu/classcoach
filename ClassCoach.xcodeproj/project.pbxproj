@@ -41,6 +41,10 @@
 		AB24573DE6338CCB9D54E870 /* ReviewCommunicationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 067DE456EE863A218A6CB26D /* ReviewCommunicationView.swift */; };
 		CD572816958DAC2390843A8C /* PrepareConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0B01C2311C2082FF3541AB6 /* PrepareConversationView.swift */; };
 		51CA7207F7F1A99FCADEEB99 /* LessonPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF861A7A0783469A73D3ACB0 /* LessonPlan.swift */; };
+		A5510002A5510002A5510002 /* AssignmentCoach.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5510001A5510001A5510001 /* AssignmentCoach.swift */; };
+		A5510004A5510004A5510004 /* AssignmentCoachService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5510003A5510003A5510003 /* AssignmentCoachService.swift */; };
+		A5510006A5510006A5510006 /* AssignmentCoachView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5510005A5510005A5510005 /* AssignmentCoachView.swift */; };
+		A5510008A5510008A5510008 /* AssignmentWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5510007A5510007A5510007 /* AssignmentWorkspaceView.swift */; };
 		F33384E63369E0CF83AAB58C /* LessonPlanningService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 511FF45676C58C84D82F00DC /* LessonPlanningService.swift */; };
 		A91E3AB0DF695B5C0D7750CA /* LessonPlanningView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2D7D552A2E51BEFFD552507 /* LessonPlanningView.swift */; };
 		AB9B8367E14E648F73712E10 /* AudioSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC41C84EDAEEF4D28A99A4D7 /* AudioSession.swift */; };
@@ -103,6 +107,10 @@
 		067DE456EE863A218A6CB26D /* ReviewCommunicationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewCommunicationView.swift; sourceTree = "<group>"; };
 		B0B01C2311C2082FF3541AB6 /* PrepareConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrepareConversationView.swift; sourceTree = "<group>"; };
 		FF861A7A0783469A73D3ACB0 /* LessonPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonPlan.swift; sourceTree = "<group>"; };
+		A5510001A5510001A5510001 /* AssignmentCoach.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssignmentCoach.swift; sourceTree = "<group>"; };
+		A5510003A5510003A5510003 /* AssignmentCoachService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssignmentCoachService.swift; sourceTree = "<group>"; };
+		A5510005A5510005A5510005 /* AssignmentCoachView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssignmentCoachView.swift; sourceTree = "<group>"; };
+		A5510007A5510007A5510007 /* AssignmentWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssignmentWorkspaceView.swift; sourceTree = "<group>"; };
 		511FF45676C58C84D82F00DC /* LessonPlanningService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonPlanningService.swift; sourceTree = "<group>"; };
 		A2D7D552A2E51BEFFD552507 /* LessonPlanningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonPlanningView.swift; sourceTree = "<group>"; };
 		EC41C84EDAEEF4D28A99A4D7 /* AudioSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSession.swift; sourceTree = "<group>"; };
@@ -184,6 +192,7 @@
 				E407EF3F3D6642FAA12C8E1A /* AskExpert */,
 				F213915639961212889480F8 /* Messages */,
 				8530C42984A2D36D58FF128F /* LessonPlanning */,
+				A5510009A5510009A5510009 /* AssignmentCoach */,
 				C232F5E32BD59813C815B9BD /* AudioCoaching */,
 				AD6DE9F1E1882D1616E4541F /* TalkToMe */,
 				44A506547E6FFCE130035CE9 /* CheatSheet */,
@@ -240,6 +249,16 @@
 				09F68B8E7CA6E94BDED9D840 /* FocusMetrics.swift */,
 			);
 			path = AudioCoaching;
+			sourceTree = "<group>";
+		};
+		A5510009A5510009A5510009 /* AssignmentCoach */ = {
+			isa = PBXGroup;
+			children = (
+				A5510005A5510005A5510005 /* AssignmentCoachView.swift */,
+				A5510007A5510007A5510007 /* AssignmentWorkspaceView.swift */,
+				A5510003A5510003A5510003 /* AssignmentCoachService.swift */,
+			);
+			path = AssignmentCoach;
 			sourceTree = "<group>";
 		};
 		8530C42984A2D36D58FF128F /* LessonPlanning */ = {
@@ -327,6 +346,7 @@
 				573742D57C4437D7A7D62716 /* Debrief.swift */,
 				0F0D16967E152069F018B84C /* Communications.swift */,
 				FF861A7A0783469A73D3ACB0 /* LessonPlan.swift */,
+				A5510001A5510001A5510001 /* AssignmentCoach.swift */,
 				EC41C84EDAEEF4D28A99A4D7 /* AudioSession.swift */,
 			);
 			path = API;
@@ -468,6 +488,10 @@
 				CD572816958DAC2390843A8C /* PrepareConversationView.swift in Sources */,
 				51CA7207F7F1A99FCADEEB99 /* LessonPlan.swift in Sources */,
 				F33384E63369E0CF83AAB58C /* LessonPlanningService.swift in Sources */,
+				A5510002A5510002A5510002 /* AssignmentCoach.swift in Sources */,
+				A5510004A5510004A5510004 /* AssignmentCoachService.swift in Sources */,
+				A5510006A5510006A5510006 /* AssignmentCoachView.swift in Sources */,
+				A5510008A5510008A5510008 /* AssignmentWorkspaceView.swift in Sources */,
 				A91E3AB0DF695B5C0D7750CA /* LessonPlanningView.swift in Sources */,
 				AB9B8367E14E648F73712E10 /* AudioSession.swift in Sources */,
 				AB14C09003B590801CF3DBFA /* AudioCoachingService.swift in Sources */,
