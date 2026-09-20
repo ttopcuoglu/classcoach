@@ -79,6 +79,32 @@ function onColor(hex: string, ink: string): string {
 
 const accentAt = (t: Theme, i: number) => t.accents[i % 4]
 
+// PowerPoint only shrinks text to fit when someone edits it, so long lines have
+// to be sized here. A rough estimate (average character ~0.55 of the font size,
+// plus a little slack for word wrapping) is close enough to avoid overflow.
+function lineCount(text: string, widthIn: number, size: number): number {
+  const perLine = Math.max(1, Math.floor((widthIn * 72) / (size * 0.55)))
+  return Math.max(1, Math.ceil((text.length * 1.08) / perLine))
+}
+function fitSize(text: string, widthIn: number, base: number, min: number, maxLines: number): number {
+  let size = base
+  while (size > min && lineCount(text, widthIn, size) > maxLines) size -= 1
+  return size
+}
+// Stacked pill rows: shrink each line to fit on one line if it can, and grow
+// the pill for any line that still wraps.
+function pillRows(items: string[], widthIn: number, base: number, min: number, minH: number, gap: number, startY: number) {
+  let y = startY
+  return items.map((text) => {
+    const size = fitSize(text, widthIn, base, min, 1)
+    const h = Math.max(minH, (lineCount(text, widthIn, size) * size * 1.25) / 72 + 0.3)
+    const row = { text, size, y, h }
+    y += h + gap
+    return row
+  })
+}
+const isWordBank = (text: string) => /^word bank\b/i.test(text)
+
 function footer(slide: PptxGenJS.Slide, t: Theme, onDark: boolean) {
   slide.addText('Wivoza', {
     x: 0.6, y: 7.0, w: 2, h: 0.3, fontFace: t.body, fontSize: 10, bold: true,
@@ -161,16 +187,18 @@ function addCardsSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme) {
     const top = 1.95
     const gap = 0.16
     const cardH = Math.min(1.2, (4.85 - gap * (n - 1)) / n)
-    const fontSize = n >= 5 ? 20 : n === 4 ? 22 : 24
+    const baseSize = n >= 5 ? 20 : n === 4 ? 22 : 24
+    let step = 0
     s.bullets.forEach((b, i) => {
       const y = top + i * (cardH + gap)
       const c = accentAt(t, index + i)
-      slide.addShape('roundRect', { x: 0.6, y, w: 12.1, h: cardH, rectRadius: 0.16, fill: { color: WHITE }, shadow: shadow() })
+      const bank = isWordBank(b)
+      slide.addShape('roundRect', { x: 0.6, y, w: 12.1, h: cardH, rectRadius: 0.16, fill: { color: bank ? t.accents[3] : WHITE, transparency: bank ? 82 : 0 }, shadow: shadow() })
       slide.addShape('ellipse', { x: 0.85, y: y + (cardH - 0.62) / 2, w: 0.62, h: 0.62, fill: { color: c } })
-      slide.addText(String(i + 1), {
-        x: 0.85, y: y + (cardH - 0.62) / 2, w: 0.62, h: 0.62, fontFace: t.body, fontSize: 18, bold: true, color: onColor(c, t.ink), align: 'center', valign: 'middle',
+      slide.addText(bank ? '📚' : String(++step), {
+        x: 0.85, y: y + (cardH - 0.62) / 2, w: 0.62, h: 0.62, fontFace: t.body, fontSize: bank ? 16 : 18, bold: true, color: onColor(c, t.ink), align: 'center', valign: 'middle',
       })
-      slide.addText(b, { x: 1.75, y, w: 10.7, h: cardH, fontFace: t.body, fontSize, color: t.ink, valign: 'middle', fit: 'shrink' })
+      slide.addText(b, { x: 1.75, y, w: 10.7, h: cardH, fontFace: t.body, fontSize: fitSize(b, 10.5, baseSize, 14, 2), color: t.ink, valign: 'middle', fit: 'shrink' })
     })
   }
   footer(slide, t, false)
@@ -209,13 +237,10 @@ function addKeytermSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme) {
   slide.addText(s.title, {
     x: 0.8, y: 1.9, w: 11.7, h: 1.6, fontFace: t.head, fontSize: 64, bold: true, color: fg, align: 'center', valign: 'middle', fit: 'shrink',
   })
-  const n = Math.min(s.bullets.length, 4)
-  const pillH = 0.72
-  s.bullets.slice(0, n).forEach((b, i) => {
-    const y = 3.7 + i * (pillH + 0.14)
-    slide.addShape('roundRect', { x: 2.2, y, w: 8.9, h: pillH, rectRadius: 0.36, fill: { color: WHITE }, shadow: shadow() })
-    slide.addText(b, { x: 2.5, y, w: 8.3, h: pillH, fontFace: t.body, fontSize: 22, color: t.ink, align: 'center', valign: 'middle', fit: 'shrink' })
-  })
+  for (const row of pillRows(s.bullets.slice(0, 4), 8.1, 22, 16, 0.72, 0.14, 3.7)) {
+    slide.addShape('roundRect', { x: 2.2, y: row.y, w: 8.9, h: row.h, rectRadius: Math.min(0.36, row.h / 2), fill: { color: WHITE }, shadow: shadow() })
+    slide.addText(row.text, { x: 2.5, y: row.y, w: 8.3, h: row.h, fontFace: t.body, fontSize: row.size, color: t.ink, align: 'center', valign: 'middle', fit: 'shrink' })
+  }
   footer(slide, t, true)
   return slide
 }
@@ -231,12 +256,10 @@ function addPromptSlide(pptx: PptxGenJS, s: Slide, index: number, t: Theme) {
   slide.addText(s.title, {
     x: 2.8, y: 0.9, w: 9.4, h: 2.4, fontFace: t.head, fontSize: 38, bold: true, color: fg, valign: 'middle', fit: 'shrink',
   })
-  const n = Math.min(s.bullets.length, 3)
-  s.bullets.slice(0, n).forEach((b, i) => {
-    const y = 3.75 + i * 0.95
-    slide.addShape('roundRect', { x: 1.2, y, w: 10.9, h: 0.78, rectRadius: 0.39, fill: { color: WHITE, transparency: 12 } })
-    slide.addText(b, { x: 1.5, y, w: 10.3, h: 0.78, fontFace: t.body, fontSize: 20, color: t.ink, valign: 'middle', fit: 'shrink' })
-  })
+  for (const row of pillRows(s.bullets.slice(0, 3), 10.1, 20, 14, 0.78, 0.17, 3.75)) {
+    slide.addShape('roundRect', { x: 1.2, y: row.y, w: 10.9, h: row.h, rectRadius: Math.min(0.39, row.h / 2), fill: { color: WHITE, transparency: 12 } })
+    slide.addText(row.text, { x: 1.5, y: row.y, w: 10.3, h: row.h, fontFace: t.body, fontSize: row.size, color: t.ink, valign: 'middle', fit: 'shrink' })
+  }
   footer(slide, t, true)
   return slide
 }

@@ -19,6 +19,16 @@ const ALLOWED_LICENSE = /^(public domain|pd\b|cc0|cc[ -]by(?:[ -]sa)?\b)/i
 // teacher an awkward moment.
 const NOT_CLASSROOM_SAFE = /nud|naked|erotic|\bsex|porn|genital|topless|bikini|lingerie|fetish|gore|corpse|autopsy|swastika|lynching|beheading|execution/i
 
+const STOP_WORDS = new Set(['the', 'a', 'an', 'of', 'and', 'in', 'on', 'for', 'to', 'with', 'from', 'at', 'by'])
+// Singular-ish search words, so "routes" and "route", "maps" and "map" agree.
+function queryTokens(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 2 && !STOP_WORDS.has(w))
+    .map((w) => (w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w))
+}
+
 function stripHtml(value: unknown): string {
   return typeof value === 'string' ? value.replace(/<[^>]*>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim() : ''
 }
@@ -56,6 +66,12 @@ export async function findImage(rawQuery: string): Promise<SlideImage | null> {
     const data = (await response.json()) as { query?: { pages?: Record<string, CommonsPage> } }
     const pages = Object.values(data.query?.pages ?? {}).sort((a, b) => (a.index ?? 99) - (b.index ?? 99))
 
+    const tokens = queryTokens(query)
+    // A picture must actually mention most of what was asked for — a weak match
+    // (a mug photo for "family celebration") is worse than the marked spot.
+    const needed = Math.max(1, Math.ceil(tokens.length * 0.6))
+    let best: { score: number; image: SlideImage } | null = null
+
     for (const page of pages) {
       const info = page.imageinfo?.[0]
       if (!info?.thumburl || !info.thumbwidth || !info.thumbheight) continue
@@ -68,14 +84,19 @@ export async function findImage(rawQuery: string): Promise<SlideImage | null> {
       const text = [page.title, stripHtml(meta.ImageDescription?.value), meta.Categories?.value].join(' ')
       if (NOT_CLASSROOM_SAFE.test(text)) continue
 
+      const haystack = text.toLowerCase()
+      const score = tokens.filter((token) => haystack.includes(token)).length
+      if (score < needed || (best && score <= best.score)) continue
+
       const artist = stripHtml(meta.Artist?.value)
       const isPublicDomain = /^(public domain|pd\b|cc0)/i.test(license)
       // Author fields are free-form and often messy (file names, wiki markup), so
       // only a short, clean name is shown; otherwise the license alone credits it.
       const cleanArtist = artist.length > 0 && artist.length <= 45 && !/[:*|]|\.(svg|png|jpe?g)/i.test(artist)
       const credit = [!isPublicDomain && cleanArtist ? artist : null, license, 'Wikimedia Commons'].filter(Boolean).join(' · ')
-      return { url: info.thumburl, width: info.thumbwidth, height: info.thumbheight, credit }
+      best = { score, image: { url: info.thumburl, width: info.thumbwidth, height: info.thumbheight, credit } }
     }
+    return best?.image ?? null
   } catch {
     // Network trouble, a timeout, or an unexpected response — no picture.
   }

@@ -235,7 +235,7 @@ Stay true to the teacher's presentation: the same topic, the same main ideas, an
 Visuals matter. Use the layouts to make the deck genuinely visual, not walls of text:
 - steps — a process, sequence, timeline, or cycle: each bullet is one short step (under 8 words), in order, at most 5.
 - compare — two things side by side: the first bullet is "Left heading | Right heading", then one row per bullet as "left item | right item".
-- visual — a slide that needs a picture, diagram, map, or chart that you cannot draw (anything the review's visuals section recommended, and any slide the teacher already gave an image — say "Keep your original image here" in that case). Put a specific description of exactly what to show in <visual> (for example "A labeled map of the routes from the South to Canada"), and keep the bullets short. When the review recommended ADDING a picture, also give <image_query>: 2 to 5 concrete search words likely to match a real photo, map, or diagram on Wikimedia Commons (for example "Underground Railroad routes map", "water cycle diagram", "monarch butterfly life cycle") — nouns, places, and event names only. Wivoza will find and place a real, openly licensed picture from it. Leave <image_query> out for a slide that already has the teacher's own image, and for a picture that would be personal or specific to their class (a family photo, a student's work).
+- visual — a slide that needs a picture, diagram, map, or chart that you cannot draw (anything the review's visuals section recommended, and any slide the teacher already gave an image). Put a specific description of exactly what to show in <visual> (for example "A labeled map of the routes from the South to Canada"), and keep the bullets short. Only ask for pictures of concrete, well-documented subjects: maps, diagrams, historical images, science and nature, landmarks, and places — for a map, name the region or say "political map". Wivoza will find and place a real, openly licensed picture from <image_query>: 2 to 5 search words (for example "Underground Railroad routes map", "water cycle diagram", "monarch butterfly life cycle") — nouns, places, and event names only. Wivoza cannot keep the teacher's original image, so for a slide that had a map, diagram, or similar image, give an <image_query> for a stand-in that serves the same purpose and say in that slide's <notes> that it replaces their original image, which they can swap back in. For picture prompts about people, families, feelings, or classroom scenes — or anything personal or specific to their class (a family photo, a student's own work) — leave <image_query> out and write "Add your own image here" in <visual>, because a random photo would not fit.
 - keyterm — introducing a vocabulary word or key idea: the title is the word, bullets are its meaning and examples.
 - prompt — a question, discussion, turn-and-talk, or check for understanding: the title is the question, bullets are optional sentence starters.
 - split — a concept slide with 2-4 bullets beside a large icon.
@@ -261,7 +261,7 @@ Plain text only, no markdown. Respond with exactly this structure and nothing el
 - Second bullet
 </bullets>
 <visual>Only for the visual layout: what to show</visual>
-<image_query>Only for the visual layout, when a picture should be found: search words</image_query>
+<image_query>Only for the visual layout: search words for finding the picture</image_query>
 <notes>Optional speaker note</notes>
 </slide>
 

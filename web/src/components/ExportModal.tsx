@@ -202,6 +202,29 @@ const text = (x: number, y: number, w: number, h: number, t: Txt): CSSProperties
   overflow: 'hidden',
 })
 
+// Same text-fitting estimate the .pptx builder uses (see slidesPptx.ts), so the
+// preview wraps and sizes lines the way the file will.
+function lineCount(text: string, widthIn: number, size: number): number {
+  const perLine = Math.max(1, Math.floor((widthIn * 72) / (size * 0.55)))
+  return Math.max(1, Math.ceil((text.length * 1.08) / perLine))
+}
+function fitSize(text: string, widthIn: number, base: number, min: number, maxLines: number): number {
+  let size = base
+  while (size > min && lineCount(text, widthIn, size) > maxLines) size -= 1
+  return size
+}
+function pillRows(items: string[], widthIn: number, base: number, min: number, minH: number, gap: number, startY: number) {
+  let y = startY
+  return items.map((text) => {
+    const size = fitSize(text, widthIn, base, min, 1)
+    const h = Math.max(minH, (lineCount(text, widthIn, size) * size * 1.25) / 72 + 0.3)
+    const row = { text, size, y, h }
+    y += h + gap
+    return row
+  })
+}
+const isWordBank = (text: string) => /^word bank\b/i.test(text)
+
 function TitleDecor({ t }: { t: Theme }) {
   const [a, b, c] = t.accents
   if (t.decor === 'stripes') {
@@ -308,15 +331,12 @@ function SlideThumb({ slide, index, t }: { slide: ExportSlide; index: number; t:
         <SoftDecor t={t} />
         {slide.icon && <div style={text(5.4, 0.5, 2.5, 1.5, { size: 64, color: fg, font: t.head, align: 'center' })}>{slide.icon}</div>}
         <div style={text(0.8, 1.9, 11.7, 1.6, { size: 64, color: fg, font: t.head, bold: true, align: 'center' })}>{slide.title}</div>
-        {slide.bullets.slice(0, 4).map((b, i) => {
-          const y = 3.7 + i * 0.86
-          return (
-            <div key={i}>
-              <div style={shape({ x: 2.2, y, w: 8.9, h: 0.72, radius: 0.36, fill: WHITE, shadow: true })} />
-              <div style={text(2.5, y, 8.3, 0.72, { size: 22, color: t.ink, font: t.body, align: 'center' })}>{b}</div>
-            </div>
-          )
-        })}
+        {pillRows(slide.bullets.slice(0, 4), 8.1, 22, 16, 0.72, 0.14, 3.7).map((row, i) => (
+          <div key={i}>
+            <div style={shape({ x: 2.2, y: row.y, w: 8.9, h: row.h, radius: Math.min(0.36, row.h / 2), fill: WHITE, shadow: true })} />
+            <div style={text(2.5, row.y, 8.3, row.h, { size: row.size, color: t.ink, font: t.body, align: 'center' })}>{row.text}</div>
+          </div>
+        ))}
         {wordmark(true)}
       </div>
     )
@@ -331,15 +351,12 @@ function SlideThumb({ slide, index, t }: { slide: ExportSlide; index: number; t:
         <div style={shape({ x: 10.4, y: 0.95, w: 2.0, h: 2.0, radius: '50%', fill: 'rgba(255,255,255,0.18)' })} />
         <div style={text(1.0, 1.0, 1.6, 1.4, { size: 60, color: fg, font: t.head, align: 'center' })}>{slide.icon ?? '💬'}</div>
         <div style={text(2.8, 0.9, 9.4, 2.4, { size: 38, color: fg, font: t.head, bold: true })}>{slide.title}</div>
-        {slide.bullets.slice(0, 3).map((b, i) => {
-          const y = 3.75 + i * 0.95
-          return (
-            <div key={i}>
-              <div style={shape({ x: 1.2, y, w: 10.9, h: 0.78, radius: 0.39, fill: 'rgba(255,255,255,0.88)' })} />
-              <div style={text(1.5, y, 10.3, 0.78, { size: 20, color: t.ink, font: t.body })}>{b}</div>
-            </div>
-          )
-        })}
+        {pillRows(slide.bullets.slice(0, 3), 10.1, 20, 14, 0.78, 0.17, 3.75).map((row, i) => (
+          <div key={i}>
+            <div style={shape({ x: 1.2, y: row.y, w: 10.9, h: row.h, radius: Math.min(0.39, row.h / 2), fill: 'rgba(255,255,255,0.88)' })} />
+            <div style={text(1.5, row.y, 10.3, row.h, { size: row.size, color: t.ink, font: t.body })}>{row.text}</div>
+          </div>
+        ))}
         {wordmark(true)}
       </div>
     )
@@ -467,12 +484,14 @@ function SlideThumb({ slide, index, t }: { slide: ExportSlide; index: number; t:
       {slide.bullets.map((b, i) => {
         const c = t.accents[(index + i) % 4]
         const y = 1.95 + i * (cardH + 0.16)
+        const bank = isWordBank(b)
+        const step = slide.bullets.slice(0, i + 1).filter((x) => !isWordBank(x)).length
         return (
           <div key={i}>
-            <div style={shape({ x: 0.6, y, w: 12.1, h: cardH, radius: 0.16, fill: WHITE, shadow: true })} />
+            <div style={shape({ x: 0.6, y, w: 12.1, h: cardH, radius: 0.16, fill: bank ? rgba(t.accents[3], 0.18) : WHITE, shadow: true })} />
             <div style={shape({ x: 0.85, y: y + (cardH - 0.62) / 2, w: 0.62, h: 0.62, radius: '50%', fill: c })} />
-            <div style={text(0.85, y + (cardH - 0.62) / 2, 0.62, 0.62, { size: 18, color: onColor(c, t.ink), font: t.body, bold: true, align: 'center' })}>{i + 1}</div>
-            <div style={text(1.75, y, 10.7, cardH, { size: n >= 5 ? 20 : n === 4 ? 22 : 24, color: t.ink, font: t.body })}>{b}</div>
+            <div style={text(0.85, y + (cardH - 0.62) / 2, 0.62, 0.62, { size: bank ? 16 : 18, color: onColor(c, t.ink), font: t.body, bold: true, align: 'center' })}>{bank ? '📚' : step}</div>
+            <div style={text(1.75, y, 10.7, cardH, { size: fitSize(b, 10.5, n >= 5 ? 20 : n === 4 ? 22 : 24, 14, 2), color: t.ink, font: t.body })}>{b}</div>
           </div>
         )
       })}
