@@ -101,16 +101,19 @@ const DIAGRAM_SYNTAX_INSTRUCTIONS = `When a visual model would genuinely help (a
 [[diagram:number_line|start=S|end=E|points=v1,v2,...|labels=l1,l2,...]] — a number line from S to E, points as decimals (e.g. 0.25 for 1/4), each labeled with the matching entry in labels (e.g. "1/4").
 Use these only where a visual genuinely clarifies the task, not on every line.`
 
-const ASSIGNMENT_FINALIZE_SYSTEM_PROMPT = `You are Coach, wrapping up a conversation about an assignment with a teacher. Produce the final assignment text based on everything actually discussed — never introduce a new idea that wasn't part of the conversation. Start from the current assignment given below and return the COMPLETE revised assignment (every section, slide, or question, with the discussed changes applied) — never a summary or an excerpt of it. Keep the original's structure exactly: the same sections, slides, questions, headings, order, and formatting, and its own wording wherever it isn't being changed. Make the smallest set of edits that accomplishes what was discussed — never rewrite, reorder, merge, drop, or reformat parts that didn't need to change, and only add new content where the change genuinely requires it.
+const ASSIGNMENT_FINALIZE_SYSTEM_PROMPT = `You are Coach, revising an assignment for a teacher. Apply (1) the review's most important opportunity and its suggested fixes, when they are given below, and (2) anything the teacher and Coach discussed in the conversation. Always make at least the most important improvement — never hand back the assignment unchanged — but never introduce an idea that came from neither the review nor the conversation. Start from the current assignment given below and return the COMPLETE revised assignment (every section, slide, or question, with the discussed changes applied) — never a summary or an excerpt of it. Keep the original's structure exactly: the same sections, slides, questions, headings, order, and formatting, and its own wording wherever it isn't being changed. Make the smallest set of edits that accomplishes what was discussed — never rewrite, reorder, merge, drop, or reformat parts that didn't need to change, and only add new content where the change genuinely requires it.
 
 ${DIAGRAM_SYNTAX_INSTRUCTIONS}
 
 Write in plain text only — no markdown. Use a dash ("-") at the start of a line for any list-like content.
 
-Respond with exactly this block and nothing else:
+Respond with exactly these blocks and nothing else:
 <assignment>
 The final assignment text — instructions, questions, or task description as the student would see it.
 </assignment>
+<changes>
+2 to 4 dash-prefixed lines, each one plain sentence telling the teacher what you changed (for example "- Added a sentence frame after question 2 asking why it matters"). Only list changes you actually made.
+</changes>
 ${CORE_COACHING_RULES}`
 
 // Appended to both start prompts so a single Claude call can both analyze
@@ -967,7 +970,21 @@ assignmentCoachRouter.post('/:id/revise', async (req, res) => {
     // The assignment itself has to be in the input — the chat transcript
     // alone only mentions it in passing, so a revise built from it alone
     // comes back as a couple of sentences instead of the full document.
-    const input = `${contextFromSession(session).join('\n')}\n\nThe coaching conversation so far:\n${transcript}`
+    // The review's own recommendations are what most teachers want applied when
+    // they click Revise straight after the review, before discussing anything —
+    // without them there is nothing to change and the assignment comes back as-is.
+    const snapshot = session.reviewSnapshot as {
+      mainOpportunity?: { title?: string | null; description?: string | null }
+      meaningfulWork?: { suggestion?: string | null }
+    } | null
+    const reviewNotes = [
+      snapshot?.mainOpportunity?.title &&
+        `Most important opportunity: ${snapshot.mainOpportunity.title}${snapshot.mainOpportunity.description ? ` — ${snapshot.mainOpportunity.description}` : ''}`,
+      snapshot?.meaningfulWork?.suggestion && `Suggested fix for low-value work: ${snapshot.meaningfulWork.suggestion}`,
+    ].filter(Boolean)
+    const input = `${contextFromSession(session).join('\n')}${
+      reviewNotes.length ? `\n\nThe review's recommendations:\n${reviewNotes.join('\n')}` : ''
+    }\n\nThe coaching conversation so far:\n${transcript}`
     // Same reproduce-the-full-assignment concern as the start route — a low
     // cap here truncates <assignment> mid-write on a real assignment.
     const response = await anthropic.messages.create({
@@ -992,7 +1009,12 @@ assignmentCoachRouter.post('/:id/revise', async (req, res) => {
       where: { id: session.id },
       data: { liveAssignmentText: assignment },
     })
-    res.json(updated)
+    const revisionSummary = (extractTag(text, 'changes') ?? '')
+      .split('\n')
+      .map((line) => line.replace(/^\s*[-•*]\s*/, '').trim())
+      .filter(Boolean)
+      .slice(0, 5)
+    res.json({ ...updated, revisionSummary })
   } catch (error) {
     console.error('[assignment-coach] revise failed:', error)
     res.status(502).json({ error: 'Could not revise the assignment. Please try again.' })

@@ -1340,7 +1340,7 @@ export function reviewAssignmentCoach(id: string): Promise<AssignmentCoachSessio
   return request(`/api/assignment-coach/${id}/review`, { method: 'POST' })
 }
 
-export function reviseAssignmentCoach(id: string): Promise<AssignmentCoachSession> {
+export function reviseAssignmentCoach(id: string): Promise<AssignmentCoachSession & { revisionSummary?: string[] }> {
   return request(`/api/assignment-coach/${id}/revise`, { method: 'POST' })
 }
 

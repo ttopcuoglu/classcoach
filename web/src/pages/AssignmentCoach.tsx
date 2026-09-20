@@ -1321,6 +1321,8 @@ function Workspace({
 
   const [revising, setRevising] = useState(false)
   const [exportRequest, setExportRequest] = useState<{ text: string; format: ExportFormat } | null>(null)
+  const [revisedOnce, setRevisedOnce] = useState(false)
+  const [revisionSummary, setRevisionSummary] = useState<string[]>([])
   const [reviseError, setReviseError] = useState<string | null>(null)
 
   const [refining, setRefining] = useState(false)
@@ -1435,6 +1437,8 @@ function Workspace({
     try {
       const updated = await reviseAssignmentCoach(session.id)
       onUpdate(updated)
+      setRevisedOnce(true)
+      setRevisionSummary(updated.revisionSummary ?? [])
       // The Review screen has no side-by-side document, so bring the new
       // Revised assignment card into view — otherwise nothing seems to happen.
       window.setTimeout(() => document.getElementById('revised-assignment')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
@@ -1491,7 +1495,7 @@ function Workspace({
   const redesign = session.aiResistant
   // Review mode starts with the live text equal to the original — once Revise
   // (or an edit) makes it differ, there's a revised assignment to show.
-  const hasRevision = !isRedesign && text.trim() !== '' && text.trim() !== (session.originalText ?? '').trim()
+  const hasRevision = !isRedesign && text.trim() !== '' && (revisedOnce || text.trim() !== (session.originalText ?? '').trim())
   const redesignParts = redesign
     ? [
         redesign.aiRole && 'aiRole',
@@ -1807,6 +1811,19 @@ function Workspace({
               title="Revised assignment"
               subtitle="Preview it, then save it in the format you need"
             >
+              {revisionSummary.length > 0 && (
+                <div className="mb-4 rounded-xl border border-hairline bg-white px-4 py-3">
+                  <p className="text-xs font-bold uppercase tracking-wide text-terracotta-600">What changed</p>
+                  <ul className="mt-1.5 flex flex-col gap-1 text-sm text-ink">
+                    {revisionSummary.map((change, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-terracotta" />
+                        <span>{change}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <ExportButtons onOpen={(format) => setExportRequest({ text, format })} />
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 <button type="button" onClick={handleCopy} className="text-xs font-semibold text-ink-soft hover:text-forest">
