@@ -862,6 +862,8 @@ function FeedbackPanel() {
 function PresentationPanel() {
   const [file, setFile] = useState<File | null>(null)
   const [extracting, setExtracting] = useState(false)
+  const [extractMs, setExtractMs] = useState(5000)
+  const extractProgress = useSimulatedProgress(extracting, extractMs)
   const [extractError, setExtractError] = useState<string | null>(null)
   const [extractedText, setExtractedText] = useState<string | null>(null)
   const [slideCount, setSlideCount] = useState<number | null>(null)
@@ -895,6 +897,9 @@ function PresentationPanel() {
 
   async function handleFile(selected: File) {
     setFile(selected)
+    // Reading a deck is an upload plus parsing, so a bigger file takes longer —
+    // scale the estimate so the ring's pace looks honest.
+    setExtractMs(Math.min(20000, 3000 + (selected.size / 1_048_576) * 1500))
     setExtracting(true)
     setExtractError(null)
     setExtractedText(null)
@@ -1030,16 +1035,20 @@ function PresentationPanel() {
 
             {!extractedText ? (
               <label className="flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-terracotta/30 bg-peach-tint/30 px-4 py-8 text-center transition-colors hover:border-terracotta/40">
-                <span className="flex items-center gap-2 text-sm font-medium text-ink">
-                  {extracting ? (
-                    <>
-                      <Spinner /> Reading your presentation...
-                    </>
-                  ) : (
-                    'Click to upload a .pptx or .pdf'
-                  )}
-                </span>
-                <span className="text-xs text-ink-soft">Export Google Slides or Keynote as PDF first if needed.</span>
+                {extracting ? (
+                  <ProgressRing
+                    progress={extractProgress}
+                    size={84}
+                    label="Reading your presentation"
+                    hint="Pulling the text and slide images out — this only takes a moment."
+                    className="text-forest"
+                  />
+                ) : (
+                  <>
+                    <span className="text-sm font-medium text-ink">Click to upload a .pptx or .pdf</span>
+                    <span className="text-xs text-ink-soft">Export Google Slides or Keynote as PDF first if needed.</span>
+                  </>
+                )}
                 <input
                   type="file"
                   accept=".pptx,.pdf"
