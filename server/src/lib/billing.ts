@@ -69,6 +69,7 @@ export const LESSON_PLANNING_ACTIONS = [
   'lesson_plan_delivery_feedback',
   'lesson_plan_presentation_review',
   'lesson_plan_presentation_generate',
+  'lesson_plan_delivery_deck',
 ]
 
 // Accounts that must never hit a wall or a paywall — the App Store review

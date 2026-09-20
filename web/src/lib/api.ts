@@ -1407,6 +1407,11 @@ export function generatePresentation(planId: string): Promise<{ kind: 'slides'; 
   return request(`/api/lesson-plans/${planId}/presentation-generate`, { method: 'POST' })
 }
 
+// Builds a classroom-ready lesson deck from a plan and its delivery coaching.
+export function generateLessonDeck(planId: string): Promise<{ kind: 'slides'; model: ExportDeck }> {
+  return request(`/api/lesson-plans/${planId}/lesson-deck`, { method: 'POST' })
+}
+
 export function runAiResistant(id: string): Promise<AssignmentCoachSession> {
   return request(`/api/assignment-coach/${id}/ai-resistant`, { method: 'POST' })
 }

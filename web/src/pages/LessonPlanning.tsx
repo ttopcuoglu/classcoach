@@ -13,6 +13,7 @@ import { UpgradeMessage } from '../components/UpgradeMessage'
 import {
   applyLessonPlanRevision,
   extractPresentationText,
+  generateLessonDeck,
   generatePresentation,
   generateLessonPlan,
   getLessonPlans,
@@ -243,7 +244,37 @@ function PartSections({ parts, start = 1 }: { parts: Part[]; start?: number }) {
   )
 }
 
-function DeliveryCoachingCard({ n, coaching }: { n: number; coaching: LessonPlanDeliveryCoaching }) {
+// Builds the lesson as a classroom-ready deck that follows the delivery
+// coaching: preview first, then download as PowerPoint.
+function LessonDeckButton({ planId }: { planId: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-1 flex items-center gap-2.5 self-start rounded-xl border border-hairline bg-white px-4 py-2.5 text-sm font-semibold text-forest shadow-sm transition-colors hover:border-forest/50 hover:bg-cream"
+      >
+        <span className="flex h-7 min-w-7 items-center justify-center rounded-md bg-[#D24726] px-1 text-[11px] font-extrabold text-white">P</span>
+        Create as PowerPoint
+      </button>
+      {open && (
+        <ExportModal
+          sessionId={planId}
+          text="lesson-deck"
+          initialFormat="pptx"
+          slidesOnly
+          chipLabel="Lesson presentation"
+          changesLabel="How your delivery plan is built in"
+          loader={() => generateLessonDeck(planId).then((result) => result.model)}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
+  )
+}
+
+function DeliveryCoachingCard({ n, coaching, planId }: { n: number; coaching: LessonPlanDeliveryCoaching; planId: string }) {
   const rows: [string, string | null][] = [
     ['Opening hook', coaching.openingHook],
     ['Pacing & timing', coaching.pacing],
@@ -262,6 +293,8 @@ function DeliveryCoachingCard({ n, coaching }: { n: number; coaching: LessonPlan
             </div>
           ) : null,
         )}
+        <p className="text-xs text-ink-soft">Turn this into a slide deck you can project: your hook first, a timed agenda, checks for understanding, and your delivery notes in the speaker notes.</p>
+        <LessonDeckButton planId={planId} />
       </div>
     </NumberedCard>
   )
@@ -491,7 +524,7 @@ function GeneratePanel() {
 
             <p className="text-xs text-ink-soft">This is a sample for ideas — adjust it to fit your class.</p>
 
-            {plan.deliveryCoaching && <DeliveryCoachingCard n={planParts.length + 1} coaching={plan.deliveryCoaching} />}
+            {plan.deliveryCoaching && <DeliveryCoachingCard n={planParts.length + 1} coaching={plan.deliveryCoaching} planId={plan.id} />}
             <WorkingRing
               active={deliveryLoading}
               estimatedMs={14000}
@@ -760,7 +793,7 @@ function FeedbackPanel() {
               />
             )}
             {plan.deliveryCoaching && (
-              <DeliveryCoachingCard n={feedbackParts.length + (showRevision ? 2 : 1)} coaching={plan.deliveryCoaching} />
+              <DeliveryCoachingCard n={feedbackParts.length + (showRevision ? 2 : 1)} coaching={plan.deliveryCoaching} planId={plan.id} />
             )}
             <WorkingRing
               active={deliveryLoading}

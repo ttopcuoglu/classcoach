@@ -557,6 +557,8 @@ export default function ExportModal({
   onClose,
   loader,
   slidesOnly = false,
+  chipLabel = 'Improved presentation',
+  changesLabel = 'What we improved',
 }: {
   sessionId: string
   text: string
@@ -566,6 +568,9 @@ export default function ExportModal({
   loader?: (kind: ExportKind) => Promise<ExportDoc | ExportDeck>
   /** A deck that's built from a review: no document option, and no "structure kept" note. */
   slidesOnly?: boolean
+  /** The pill in the header, and the heading over the list of what the deck does. */
+  chipLabel?: string
+  changesLabel?: string
 }) {
   const [format, setFormat] = useState<ExportFormat>(initialFormat)
   const kind = kindOf(format)
@@ -670,7 +675,7 @@ export default function ExportModal({
         <div className="flex items-center justify-between gap-2 border-b border-hairline px-4 py-3 sm:px-5">
           <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
             <h2 className="shrink-0 font-heading text-base font-bold text-forest">Preview</h2>
-            <span className="rounded-full bg-forest px-3 py-1 text-xs font-semibold text-cream">{slidesOnly ? 'Improved presentation' : FORMAT_LABELS[format]}</span>
+            <span className="rounded-full bg-forest px-3 py-1 text-xs font-semibold text-cream">{slidesOnly ? chipLabel : FORMAT_LABELS[format]}</span>
             {kind === 'slides' && deck && (
               <span className="rounded-full bg-cream-card px-2.5 py-1 text-[11px] font-semibold text-ink-soft">
                 Theme: {THEME_LABELS[deck.theme]}
@@ -700,7 +705,7 @@ export default function ExportModal({
             <div className="flex flex-col gap-4">
               {deck.changes.length > 0 && (
                 <div className="rounded-xl border border-hairline bg-white px-4 py-3">
-                  <p className="text-xs font-bold uppercase tracking-wide text-terracotta-600">What we improved</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-terracotta-600">{changesLabel}</p>
                   <ul className="mt-1.5 flex flex-col gap-1 text-sm text-ink">
                     {deck.changes.map((change, i) => (
                       <li key={i} className="flex gap-2">

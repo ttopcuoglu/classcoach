@@ -52,6 +52,7 @@ export type UsageAction =
   | 'lesson_plan_delivery_feedback'
   | 'lesson_plan_presentation_review'
   | 'lesson_plan_presentation_generate'
+  | 'lesson_plan_delivery_deck'
 
 // Every turn-based call in the two free-forever features. Kept as one list so
 // a future action in either area doesn't silently fall back into the flat cap.
