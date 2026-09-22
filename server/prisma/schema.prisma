@@ -208,6 +208,9 @@ model Debrief {
   // "telegram" when the conversation happened over the Telegram bot; null =
   // in the app. Independent of source, which stays "talk_to_me" either way.
   channel      String?
+  // When Coach offered, on Telegram, to wrap this conversation up after it
+  // went quiet. Offered at most once per conversation.
+  telegramWrapUpOfferedAt DateTime?
   saved        Boolean  @default(false)
   shareToken   String?  @unique
   createdAt    DateTime @default(now())

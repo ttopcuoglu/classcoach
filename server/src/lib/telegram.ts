@@ -37,10 +37,37 @@ async function call<T>(method: string, body?: unknown, signal?: AbortSignal): Pr
 // only guards against a pathological one failing to send at all.
 const MAX_MESSAGE_CHARS = 4096
 
+export type InlineButton = { text: string; callback_data: string }
+
+// Buttons that go with a message: a keyboard that stays above the typing box
+// (tapping a button just sends its text), inline buttons under the message
+// itself (tapping sends a callback_query), or an instruction to take the
+// keyboard away.
+export type ReplyMarkup =
+  | { keyboard: { text: string }[][]; resize_keyboard: true; is_persistent: true }
+  | { inline_keyboard: InlineButton[][] }
+  | { remove_keyboard: true }
+
 // Plain text on purpose (no parse_mode): Coach's replies are plain text, and
 // Markdown mode rejects a whole message over one unescaped character.
-export function sendMessage(chatId: string, text: string): Promise<unknown> {
-  return call('sendMessage', { chat_id: chatId, text: text.slice(0, MAX_MESSAGE_CHARS), link_preview_options: { is_disabled: true } })
+export function sendMessage(chatId: string, text: string, replyMarkup?: ReplyMarkup): Promise<{ message_id: number }> {
+  return call('sendMessage', {
+    chat_id: chatId,
+    text: text.slice(0, MAX_MESSAGE_CHARS),
+    link_preview_options: { is_disabled: true },
+    ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+  })
+}
+
+// Takes the inline buttons off a message once one has been tapped, so the
+// same choice can't be made twice.
+export function removeInlineButtons(chatId: string, messageId: number): Promise<unknown> {
+  return call('editMessageReplyMarkup', { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: [] } })
+}
+
+// Every button tap must be answered, or Telegram shows a spinner on it.
+export function answerButtonTap(callbackQueryId: string): Promise<unknown> {
+  return call('answerCallbackQuery', { callback_query_id: callbackQueryId })
 }
 
 // "Coach is typing…" in the chat header. Lasts about five seconds or until a
@@ -54,7 +81,7 @@ export function setMyCommands(commands: { command: string; description: string }
 }
 
 export function setWebhook(url: string, secretToken: string): Promise<unknown> {
-  return call('setWebhook', { url, secret_token: secretToken, allowed_updates: ['message'] })
+  return call('setWebhook', { url, secret_token: secretToken, allowed_updates: ['message', 'callback_query'] })
 }
 
 export function deleteWebhook(): Promise<unknown> {
@@ -69,10 +96,16 @@ export type TelegramUpdate = {
     from?: { first_name?: string }
     text?: string
   }
+  // A tap on one of the inline buttons under a message.
+  callback_query?: {
+    id: string
+    data?: string
+    message?: { message_id: number; chat: { id: number; type: string } }
+  }
 }
 
 export function getUpdates(offset: number, timeoutSec: number, signal?: AbortSignal): Promise<TelegramUpdate[]> {
-  return call('getUpdates', { offset, timeout: timeoutSec, allowed_updates: ['message'] }, signal)
+  return call('getUpdates', { offset, timeout: timeoutSec, allowed_updates: ['message', 'callback_query'] }, signal)
 }
 
 let cachedUsername: string | null = null

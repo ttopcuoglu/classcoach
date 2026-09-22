@@ -26,14 +26,17 @@ import { buildFollowUpContextBlock, snoozedCheckInDate } from './followUps.ts'
 import { extractTag, stripTag } from './extractTag.ts'
 import { prisma } from './prisma.ts'
 import {
+  answerButtonTap,
   deleteWebhook,
   getUpdates,
   isChatGone,
+  removeInlineButtons,
   sendMessage,
   sendTyping,
   setMyCommands,
   setWebhook,
   telegramEnabled,
+  type ReplyMarkup,
   type TelegramUpdate,
 } from './telegram.ts'
 import { checkUsage, logUsage } from './usageLimit.ts'
@@ -56,13 +59,31 @@ const COMMANDS = [
   { command: 'disconnect', description: 'Unlink this chat from Wivoza' },
 ]
 
+// Teachers won't remember commands, so the two that matter live on buttons
+// that stay above the typing box. Tapping one just sends its text.
+const WRAP_UP_BUTTON = '✅ Wrap up'
+const NEW_TOPIC_BUTTON = '🆕 New topic'
+const MAIN_KEYBOARD: ReplyMarkup = {
+  keyboard: [[{ text: WRAP_UP_BUTTON }, { text: NEW_TOPIC_BUTTON }]],
+  resize_keyboard: true,
+  is_persistent: true,
+}
+// For a chat that isn't (or is no longer) connected, where the buttons do nothing.
+const NO_KEYBOARD: ReplyMarkup = { remove_keyboard: true }
+
+// Every message to a connected teacher carries the buttons, so a teacher
+// who connected before they existed gets them with their next reply.
+function reply(chatId: string, text: string) {
+  return sendMessage(chatId, text, MAIN_KEYBOARD)
+}
+
 const HELP_TEXT = `Talk to me like you'd talk to a colleague after class. Tell me what happened and what's on your mind, and we'll figure out a next step together.
 
-/done: wrap up and get your takeaway (I'll check in a few days later to see how it went)
-/new: start a fresh conversation
-/disconnect: unlink this chat from your Wivoza account
+When you're finished, tap "Wrap up" below for your takeaway, and I'll check in a few days later to see how it went. Tap "New topic" to start fresh.
 
-One ask: please leave out students' full names. "A student in 3rd period" works great.`
+One ask: please leave out students' full names. "A student in 3rd period" works great.
+
+(To unlink this chat from your Wivoza account, send /disconnect.)`
 
 const NOT_LINKED_TEXT = `Hi! I'm Coach from Wivoza. To talk with me here, connect this chat to your Wivoza account first: sign in at ${APP_URL}, open Profile, and tap "Connect Telegram." If Telegram doesn't show a Start button, just paste the connect link here.`
 
@@ -91,9 +112,11 @@ export async function unlinkTelegram(userId: string): Promise<void> {
     data: { telegramChatId: null, telegramLinkedAt: null, telegramDebriefId: null },
   })
   if (user?.telegramChatId) {
-    await sendMessage(user.telegramChatId, `This chat is no longer connected to Wivoza. You can reconnect any time from Profile at ${APP_URL}.`).catch(
-      () => {},
-    )
+    await sendMessage(
+      user.telegramChatId,
+      `This chat is no longer connected to Wivoza. You can reconnect any time from Profile at ${APP_URL}.`,
+      NO_KEYBOARD,
+    ).catch(() => {})
   }
 }
 
@@ -124,7 +147,7 @@ async function linkChat(chatId: string, code: string, firstName: string | undefi
     }),
   ])
   const name = user.name?.split(' ')[0] || firstName
-  await sendMessage(chatId, `You're connected${name ? `, ${name}` : ''}! Your conversations here are saved to Talk It Through in Wivoza.\n\n${HELP_TEXT}`)
+  await reply(chatId, `You're connected${name ? `, ${name}` : ''}! Your conversations here are saved to Talk It Through in Wivoza.\n\n${HELP_TEXT}`)
 }
 
 // ---------------------------------------------------------------------------
@@ -145,14 +168,17 @@ export function dispatchUpdate(update: TelegramUpdate): void {
   recentUpdateIds.add(update.update_id)
   if (recentUpdateIds.size > 500) recentUpdateIds.delete(recentUpdateIds.values().next().value!)
 
-  const message = update.message
+  const message = update.message ?? update.callback_query?.message
   // Direct messages only — the bot has no business in a group chat.
   if (!message || message.chat.type !== 'private') return
   const chatId = String(message.chat.id)
+  const tap = update.callback_query
 
   const previous = chatQueues.get(chatId) ?? Promise.resolve()
   const next: Promise<void> = previous
-    .then(() => handleMessage(chatId, message.text, message.from?.first_name))
+    .then(() =>
+      tap ? handleButtonTap(chatId, tap) : handleMessage(chatId, update.message!.text, update.message!.from?.first_name),
+    )
     .catch(async (error) => {
       console.error('[telegram] handling a message failed:', error)
       await sendMessage(chatId, ERROR_TEXT).catch(() => {})
@@ -197,42 +223,62 @@ async function handleMessage(chatId: string, rawText: string | undefined, firstN
     // link (or just its code) instead.
     const pastedCode = text.match(/[?&]start=([A-Za-z0-9_-]{16,64})/)?.[1] ?? (/^[A-Za-z0-9_-]{22}$/.test(text) ? text : null)
     if (pastedCode) await linkChat(chatId, pastedCode, firstName)
-    else await sendMessage(chatId, NOT_LINKED_TEXT)
+    else await sendMessage(chatId, NOT_LINKED_TEXT, NO_KEYBOARD)
     return
   }
   if (user.suspendedAt) {
-    await sendMessage(chatId, "This Wivoza account isn't active right now.")
+    await sendMessage(chatId, "This Wivoza account isn't active right now.", NO_KEYBOARD)
     return
   }
 
-  // Plain "done" / "new" work too; typing a slash on a phone is fiddly.
-  const word = command ?? (/^(done|new)[.!]?$/i.test(text) ? text.replace(/[.!]$/, '').toLowerCase() : null)
+  // The buttons send their own label; plain "done" / "new" work too.
+  const word = command ?? plainWordCommand(text)
   switch (word) {
     case 'start':
     case 'help':
-      await sendMessage(chatId, HELP_TEXT)
+      await reply(chatId, HELP_TEXT)
       return
     case 'new':
       await prisma.user.update({ where: { id: user.id }, data: { telegramDebriefId: null } })
-      await sendMessage(chatId, "Fresh start. What's on your mind?")
+      await reply(chatId, "Fresh start. What's on your mind?")
       return
     case 'done':
-      await finishConversation(chatId, user)
+      await finishConversation(chatId, user, user.telegramDebriefId)
       return
     case 'later':
     case 'skip':
-      await answerCheckInCommand(chatId, user.id, word)
+      await answerCheckIn(chatId, user.id, word)
       return
     case 'disconnect':
       await unlinkTelegram(user.id)
       return
   }
   if (command) {
-    await sendMessage(chatId, `I don't know that command. ${HELP_TEXT}`)
+    await reply(chatId, `I don't know that command. ${HELP_TEXT}`)
     return
   }
 
   await coachReply(chatId, user, text)
+}
+
+function plainWordCommand(text: string): 'done' | 'new' | null {
+  const t = text.replace(/[.!]+$/, '').trim().toLowerCase()
+  if (text === WRAP_UP_BUTTON || t === 'done' || t === 'wrap up' || t === 'wrap it up') return 'done'
+  if (text === NEW_TOPIC_BUTTON || t === 'new' || t === 'new topic') return 'new'
+  return null
+}
+
+// Inline buttons carry "action:id" — see the wrap-up offer and check-ins.
+async function handleButtonTap(chatId: string, tap: { id: string; data?: string; message?: { message_id: number } }) {
+  await answerButtonTap(tap.id).catch(() => {})
+  const user = await prisma.user.findUnique({ where: { telegramChatId: chatId }, select: USER_SELECT })
+  if (!user || user.suspendedAt) return
+  if (tap.message) await removeInlineButtons(chatId, tap.message.message_id).catch(() => {})
+
+  const [action, id] = (tap.data ?? '').split(':')
+  if (action === 'wrap') await finishConversation(chatId, user, id)
+  else if (action === 'nowrap') await reply(chatId, 'No problem. Tap "Wrap up" whenever you\'re ready.')
+  else if (action === 'later' || action === 'skip') await answerCheckIn(chatId, user.id, action, id)
 }
 
 type BotUser = NonNullable<Awaited<ReturnType<typeof loadUser>>>
@@ -287,13 +333,13 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
 
   const existing = (debrief?.conversation as ChatMessage[] | null) ?? []
   if (debrief && countUserTurns(existing) >= TALK_TURN_CAP) {
-    await sendMessage(chatId, 'This conversation has reached its length limit. Send /done for your takeaway, or /new to start fresh.')
+    await reply(chatId, 'This conversation has reached its length limit. Tap "Wrap up" for your takeaway, or "New topic" to start fresh.')
     return
   }
 
   const action = debrief ? 'talk_to_me_chat' : 'talk_to_me'
   if (!(await checkUsage(user.id, action, user))) {
-    await sendMessage(chatId, LIMIT_TEXT)
+    await reply(chatId, LIMIT_TEXT)
     return
   }
   void logUsage(user.id, action)
@@ -303,7 +349,7 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
 
   const stopTyping = keepTyping(chatId)
   let raw: string
-  let reply: string
+  let coachText: string
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -317,26 +363,26 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
       .map((block) => block.text)
       .join('\n')
     flagIfUnsafe(raw, debrief ? 'telegram.talk.chat' : 'telegram.talk')
-    reply = trimIfTruncated(stripTag(raw, 'memory_update'), response.stop_reason)
+    coachText = trimIfTruncated(stripTag(raw, 'memory_update'), response.stop_reason)
   } finally {
     stopTyping()
   }
-  if (!reply) {
-    await sendMessage(chatId, ERROR_TEXT)
+  if (!coachText) {
+    await reply(chatId, ERROR_TEXT)
     return
   }
 
   const saved = debrief
-    ? await prisma.debrief.update({ where: { id: debrief.id }, data: { conversation: appendTurn(existing, text, reply) } })
+    ? await prisma.debrief.update({ where: { id: debrief.id }, data: { conversation: appendTurn(existing, text, coachText) } })
     : await prisma.debrief.create({
-        data: { userId: user.id, incidentText: text, source: 'talk_to_me', channel: 'telegram', conversation: appendTurn([], text, reply) },
+        data: { userId: user.id, incidentText: text, source: 'talk_to_me', channel: 'telegram', conversation: appendTurn([], text, coachText) },
       })
   await prisma.user.update({ where: { id: user.id }, data: { telegramDebriefId: saved.id } })
   if (followUp) {
     await prisma.coachFollowUp.update({ where: { id: followUp.id }, data: { status: 'talked', respondedDebriefId: saved.id } })
   }
 
-  await sendMessage(chatId, reply)
+  await reply(chatId, coachText)
 
   // Bookkeeping for the next turn, after the teacher already has this one.
   if (memoryOn) {
@@ -350,19 +396,26 @@ function weekdayName(date: Date): string {
   return date.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/New_York' })
 }
 
-async function finishConversation(chatId: string, user: BotUser) {
-  // /done works on a conversation that has gone quiet too — wrapping up the
-  // next morning is exactly when a teacher would think to do it.
-  const debrief = user.telegramDebriefId
-    ? await prisma.debrief.findFirst({ where: { id: user.telegramDebriefId, userId: user.id, source: 'talk_to_me' } })
+// Wraps up a conversation: the Wrap up button, "done", /done, or "Yes" on
+// the wrap-up offer (which names its conversation, since the teacher may
+// have moved on to a new one since it was sent).
+async function finishConversation(chatId: string, user: BotUser, debriefId: string | null | undefined) {
+  // Works on a conversation that has gone quiet too — wrapping up the next
+  // morning is exactly when a teacher would think to do it.
+  const debrief = debriefId
+    ? await prisma.debrief.findFirst({ where: { id: debriefId, userId: user.id, source: 'talk_to_me' } })
     : null
   const conversation = (debrief?.conversation as ChatMessage[] | null) ?? []
-  if (!debrief || debrief.talkTakeaway || conversation.length === 0) {
-    await sendMessage(chatId, "There's nothing to wrap up yet. Tell me what's going on and we'll talk it through.")
+  if (!debrief || conversation.length === 0) {
+    await reply(chatId, "There's nothing to wrap up yet. Tell me what's going on and we'll talk it through.")
+    return
+  }
+  if (debrief.talkTakeaway) {
+    await reply(chatId, "That conversation is already wrapped up. It's in Wivoza under Talk It Through.")
     return
   }
   if (!(await checkUsage(user.id, 'talk_to_me_takeaway', user))) {
-    await sendMessage(chatId, LIMIT_TEXT)
+    await reply(chatId, LIMIT_TEXT)
     return
   }
   void logUsage(user.id, 'talk_to_me_takeaway')
@@ -375,47 +428,53 @@ async function finishConversation(chatId: string, user: BotUser) {
     stopTyping()
   }
   if (!result) {
-    await sendMessage(chatId, "Sorry, I couldn't put your takeaway together just now. Send /done to try again.")
+    await reply(chatId, 'Sorry, I couldn\'t put your takeaway together just now. Tap "Wrap up" to try again.')
     return
   }
-  await prisma.user.update({ where: { id: user.id }, data: { telegramDebriefId: null } })
+  if (user.telegramDebriefId === debrief.id) {
+    await prisma.user.update({ where: { id: user.id }, data: { telegramDebriefId: null } })
+  }
 
   const takeaway = result.debrief.talkTakeaway as { explored: string; tryNext: string; notice: string }
   const checkInLine = result.followUp
     ? `\n\nI'll check in on ${weekdayName(result.followUp.dueAt)} to see how it went.`
     : ''
-  await sendMessage(
+  await reply(
     chatId,
     `Here's your takeaway.\n\nWhat we talked about\n${takeaway.explored}\n\nTry next\n${takeaway.tryNext}\n\nNotice\n${takeaway.notice}${checkInLine}\n\nIt's saved in Wivoza under Talk It Through.`,
   )
 }
 
-async function answerCheckInCommand(chatId: string, userId: string, word: 'later' | 'skip') {
-  const checkIn = await findSentCheckIn(userId)
+// "Ask me later" / "Skip this one" on a check-in (or /later, /skip). A
+// button names its check-in; a typed command means the latest one sent.
+async function answerCheckIn(chatId: string, userId: string, word: 'later' | 'skip', followUpId?: string) {
+  const checkIn = followUpId
+    ? await prisma.coachFollowUp.findFirst({ where: { id: followUpId, userId, status: 'pending' } })
+    : await findSentCheckIn(userId)
   if (!checkIn) {
-    await sendMessage(chatId, "There's no check-in waiting right now.")
+    await reply(chatId, "There's no check-in waiting right now.")
     return
   }
   if (word === 'later') {
     const dueAt = snoozedCheckInDate()
     await prisma.coachFollowUp.update({ where: { id: checkIn.id }, data: { dueAt, telegramSentAt: null } })
-    await sendMessage(chatId, `No problem. I'll ask again on ${weekdayName(dueAt)}.`)
+    await reply(chatId, `No problem. I'll ask again on ${weekdayName(dueAt)}.`)
   } else {
     await prisma.coachFollowUp.update({ where: { id: checkIn.id }, data: { status: 'dismissed' } })
-    await sendMessage(chatId, "Got it, I won't ask about that one again.")
+    await reply(chatId, "Got it, I won't ask about that one again.")
   }
 }
 
 // ---------------------------------------------------------------------------
-// Check-ins
+// Check-ins and wrap-up offers
 // ---------------------------------------------------------------------------
 //
-// Due check-ins go out to linked chats, on weekdays during US school hours
-// only (13:00-22:00 UTC is 9am-6pm Eastern, 6am-3pm Pacific) — a check-in
-// about 3rd period shouldn't buzz a teacher's phone at 11pm. A check-in
-// stays on Home in the app either way.
+// Both go out on weekdays during US school hours only (13:00-22:00 UTC is
+// 9am-6pm Eastern, 6am-3pm Pacific) — a message about 3rd period shouldn't
+// buzz a teacher's phone at 11pm. Anything that comes due outside the
+// window simply waits for the next one.
 
-const CHECK_IN_SWEEP_MS = 10 * 60 * 1000
+const SWEEP_EVERY_MS = 10 * 60 * 1000
 const SEND_WINDOW_UTC_HOURS = { start: 13, end: 22 }
 
 function inSendWindow(now: Date): boolean {
@@ -424,6 +483,17 @@ function inSendWindow(now: Date): boolean {
   return day >= 1 && day <= 5 && hour >= SEND_WINDOW_UTC_HOURS.start && hour < SEND_WINDOW_UTC_HOURS.end
 }
 
+// Blocked or deleted chats: unlink, so nothing more is tried. Anything the
+// teacher would have been sent is still in the app.
+async function unlinkGoneChat(userId: string) {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { telegramChatId: null, telegramLinkedAt: null, telegramDebriefId: null },
+  })
+}
+
+// A check-in stays on Home in the app either way; this also sends it to a
+// connected chat.
 export async function sendDueCheckIns(now = new Date()): Promise<number> {
   if (!inSendWindow(now)) return 0
   const due = await prisma.coachFollowUp.findMany({
@@ -446,33 +516,90 @@ export async function sendDueCheckIns(now = new Date()): Promise<number> {
     })
     if (count === 0) continue
     try {
-      await sendMessage(
-        checkIn.user.telegramChatId!,
-        `${checkIn.checkInQuestion}\n\nJust reply here to tell me how it went. Send /later to be asked again in a couple of days, or /skip to drop it.`,
-      )
+      await sendMessage(checkIn.user.telegramChatId!, `${checkIn.checkInQuestion}\n\nJust reply here to tell me how it went.`, {
+        inline_keyboard: [
+          [
+            { text: 'Ask me later', callback_data: `later:${checkIn.id}` },
+            { text: 'Skip this one', callback_data: `skip:${checkIn.id}` },
+          ],
+        ],
+      })
       sent++
     } catch (error) {
-      if (isChatGone(error)) {
-        // Blocked or deleted: unlink, and leave the check-in for Home.
-        await prisma.user.update({
-          where: { id: checkIn.userId },
-          data: { telegramChatId: null, telegramLinkedAt: null, telegramDebriefId: null },
-        })
-      } else {
-        console.error('[telegram] sending a check-in failed:', error)
-      }
+      if (isChatGone(error)) await unlinkGoneChat(checkIn.userId)
+      else console.error('[telegram] sending a check-in failed:', error)
       await prisma.coachFollowUp.update({ where: { id: checkIn.id }, data: { telegramSentAt: null } })
     }
   }
   return sent
 }
 
-async function checkInSweep() {
+// Most teachers stop replying when they're finished rather than tapping
+// Wrap up, and the takeaway is what schedules the check-in. So once a real
+// conversation (two or more exchanges) goes quiet, Coach offers to wrap it
+// up — once per conversation, and not for one that's days old.
+const WRAP_UP_OFFER_AFTER_MS = 30 * 60 * 1000
+const WRAP_UP_OFFER_WITHIN_MS = 3 * 24 * 60 * 60 * 1000
+const WRAP_UP_MIN_EXCHANGES = 2
+
+export async function sendWrapUpOffers(now = new Date()): Promise<number> {
+  if (!inSendWindow(now)) return 0
+  const users = await prisma.user.findMany({
+    where: { telegramChatId: { not: null }, telegramDebriefId: { not: null }, suspendedAt: null },
+    select: { id: true, telegramChatId: true, telegramDebriefId: true },
+  })
+  if (users.length === 0) return 0
+  const debriefs = await prisma.debrief.findMany({
+    where: {
+      id: { in: users.map((u) => u.telegramDebriefId!) },
+      telegramWrapUpOfferedAt: null,
+      createdAt: { gte: new Date(now.getTime() - WRAP_UP_OFFER_WITHIN_MS - CONVERSATION_IDLE_MS) },
+    },
+  })
+
+  let sent = 0
+  for (const debrief of debriefs) {
+    const user = users.find((u) => u.telegramDebriefId === debrief.id && u.id === debrief.userId)
+    if (!user || debrief.talkTakeaway) continue
+    const idleMs = now.getTime() - lastActivity(debrief).getTime()
+    const conversation = (debrief.conversation as ChatMessage[] | null) ?? []
+    if (countUserTurns(conversation) < WRAP_UP_MIN_EXCHANGES) continue
+    if (idleMs < WRAP_UP_OFFER_AFTER_MS || idleMs > WRAP_UP_OFFER_WITHIN_MS) continue
+
+    const { count } = await prisma.debrief.updateMany({
+      where: { id: debrief.id, telegramWrapUpOfferedAt: null },
+      data: { telegramWrapUpOfferedAt: now },
+    })
+    if (count === 0) continue
+    try {
+      await sendMessage(
+        user.telegramChatId!,
+        "Want me to wrap up our conversation with a takeaway? I'll check in a few days later to see how it went.",
+        {
+          inline_keyboard: [
+            [
+              { text: 'Yes, wrap it up', callback_data: `wrap:${debrief.id}` },
+              { text: 'Not now', callback_data: `nowrap:${debrief.id}` },
+            ],
+          ],
+        },
+      )
+      sent++
+    } catch (error) {
+      if (isChatGone(error)) await unlinkGoneChat(user.id)
+      else console.error('[telegram] sending a wrap-up offer failed:', error)
+    }
+  }
+  return sent
+}
+
+async function sweep() {
   try {
-    const sent = await sendDueCheckIns()
-    if (sent > 0) console.log(`[telegram] sent ${sent} check-in(s)`)
+    const checkIns = await sendDueCheckIns()
+    const offers = await sendWrapUpOffers()
+    if (checkIns + offers > 0) console.log(`[telegram] sent ${checkIns} check-in(s), ${offers} wrap-up offer(s)`)
   } catch (error) {
-    console.error('[telegram] check-in sweep failed:', error)
+    console.error('[telegram] sweep failed:', error)
   }
 }
 
@@ -527,8 +654,9 @@ export function startTelegramBot() {
     void pollForUpdates()
   }
 
-  const checkIns = process.env.TELEGRAM_CHECKINS
-  if (checkIns === 'on' || (checkIns !== 'off' && onRender)) {
-    setInterval(() => void checkInSweep(), CHECK_IN_SWEEP_MS).unref()
+  // Check-ins and wrap-up offers.
+  const outreach = process.env.TELEGRAM_CHECKINS
+  if (outreach === 'on' || (outreach !== 'off' && onRender)) {
+    setInterval(() => void sweep(), SWEEP_EVERY_MS).unref()
   }
 }
