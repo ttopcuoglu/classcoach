@@ -58,6 +58,16 @@ model User {
   planStatus            String? // "active" | "canceled" | "past_due" — null if never subscribed
   planRenewsAt          DateTime? // current Stripe billing-period end
   stripeCustomerId      String?   @unique
+  // Talk It Through over Telegram (see server/src/routes/telegram.ts). The
+  // chat id is a Telegram integer stored as text — it can exceed 32 bits.
+  telegramChatId             String?   @unique
+  telegramLinkedAt           DateTime?
+  // One-time code behind the "Connect Telegram" link on Profile; cleared on use.
+  telegramLinkToken          String?   @unique
+  telegramLinkTokenExpiresAt DateTime?
+  // The conversation Telegram messages currently continue, until it goes
+  // idle, gets a takeaway, or the teacher sends /new.
+  telegramDebriefId          String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -195,6 +205,9 @@ model Debrief {
   // Null on rows created before this field existed; treated as "ask_tab" at
   // the application layer.
   source       String?
+  // "telegram" when the conversation happened over the Telegram bot; null =
+  // in the app. Independent of source, which stays "talk_to_me" either way.
+  channel      String?
   saved        Boolean  @default(false)
   shareToken   String?  @unique
   createdAt    DateTime @default(now())
@@ -235,6 +248,9 @@ model CoachFollowUp {
   dueAt              DateTime
   status             String   @default("pending")
   respondedDebriefId String?
+  // When this check-in was sent to the teacher on Telegram; null = not sent
+  // (or snoozed since, so it goes out again when next due).
+  telegramSentAt     DateTime?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

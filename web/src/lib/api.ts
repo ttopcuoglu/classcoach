@@ -1114,6 +1114,23 @@ export function updateFollowUp(id: string, action: 'snooze' | 'dismiss'): Promis
   return request(`/api/follow-ups/${id}`, { method: 'PATCH', body: JSON.stringify({ action }) })
 }
 
+// Talk It Through over Telegram — see server/src/routes/telegram.ts.
+// `available` is false when the server has no bot configured.
+export type TelegramStatus = { available: boolean; linked: boolean; linkedAt: string | null }
+
+export function getTelegramStatus(): Promise<TelegramStatus> {
+  return request('/api/telegram')
+}
+
+// A one-time t.me link (valid 15 minutes) that connects the chat it's opened in.
+export function createTelegramLink(): Promise<{ url: string }> {
+  return request('/api/telegram/link', { method: 'POST' })
+}
+
+export function disconnectTelegram(): Promise<{ linked: false }> {
+  return request('/api/telegram/link', { method: 'DELETE' })
+}
+
 export function generateTalkTakeaway(id: string): Promise<Debrief> {
   return request(`/api/debriefs/${id}/takeaway`, { method: 'POST' })
 }

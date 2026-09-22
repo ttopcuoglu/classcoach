@@ -5,13 +5,16 @@ import {
   createCheckoutSession,
   deleteAccount,
   getProfile,
+  getTelegramStatus,
   resetData,
   TALK_VOICES,
   updateProfile,
   type ExperienceLevel,
+  type TelegramStatus,
   type UserProfile,
   type TalkVoice,
 } from '../lib/api'
+import TelegramConnect from '../components/TelegramConnect'
 import { EXPERIENCE_OPTIONS } from '../lib/experience'
 
 const SECTION_BADGES = ['bg-gold text-forest', 'bg-terracotta text-cream', 'bg-forest text-gold']
@@ -45,6 +48,7 @@ export default function Profile() {
   const [coachMemory, setCoachMemory] = useState<string | null>(null)
   const [coachMemoryEnabled, setCoachMemoryEnabled] = useState(true)
   const [talkVoice, setTalkVoice] = useState<TalkVoice | null>(null)
+  const [telegram, setTelegram] = useState<TelegramStatus | null>(null)
   const [plan, setPlan] = useState<'free' | 'plus'>('free')
   const [plusAccess, setPlusAccess] = useState<UserProfile['plusAccess']>(null)
 
@@ -89,6 +93,18 @@ export default function Profile() {
       .catch(() => setSaveError('Could not load your profile.'))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    // Optional card: if this fails or the server has no bot, it just doesn't show.
+    getTelegramStatus()
+      .then(setTelegram)
+      .catch(() => {})
+  }, [])
+
+  // The Telegram card only shows when the server has a bot, so the sections
+  // after it are numbered around it.
+  const showTelegram = telegram?.available === true
+  const afterTelegram = showTelegram ? 1 : 0
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
@@ -417,8 +433,22 @@ export default function Profile() {
         <p className="mt-2 text-xs text-ink-soft">Use "Save changes" above to apply this.</p>
       </div>
 
+      {showTelegram && (
+        <TelegramConnect
+          status={telegram}
+          onStatusChange={setTelegram}
+          heading={
+            <SectionHeading
+              n={4}
+              title="Coach on Telegram"
+              description="Text Coach from Telegram, just like Talk It Through, and get Coach's check-ins there. Conversations are saved here too."
+            />
+          }
+        />
+      )}
+
       <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-        <SectionHeading n={4} title="School" />
+        <SectionHeading n={4 + afterTelegram} title="School" />
         {organizationName ? (
           <p className="mt-3 text-sm text-ink">
             Part of: <span className="font-semibold">{organizationName}</span>
@@ -478,7 +508,7 @@ export default function Profile() {
 
       <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
         <SectionHeading
-          n={5}
+          n={5 + afterTelegram}
           title="Your data"
           description="Export your saved scenarios and starred Q&A, or clear your data from this device."
         />

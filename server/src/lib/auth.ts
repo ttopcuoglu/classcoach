@@ -10,8 +10,9 @@ if (!JWT_SECRET) {
 export const SESSION_COOKIE = 'session'
 
 // Pass to any Prisma User query/mutation that ends in res.json(user) — the
-// hash must never reach the browser.
-export const SAFE_USER_OMIT = { passwordHash: true } as const
+// hash must never reach the browser, and neither should a pending Telegram
+// link code (it is only ever handed out by POST /api/telegram/link).
+export const SAFE_USER_OMIT = { passwordHash: true, telegramLinkToken: true } as const
 
 // Pair with SAFE_USER_OMIT so the client can show which org (if any) a user
 // belongs to, without exposing anything beyond the org's name.

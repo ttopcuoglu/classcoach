@@ -76,7 +76,8 @@ followUpsRouter.patch('/:id', async (req, res) => {
   }
   const updated = await prisma.coachFollowUp.update({
     where: { id: existing.id },
-    data: action === 'snooze' ? { dueAt: snoozedCheckInDate() } : { status: 'dismissed' },
+    // A snoozed check-in goes out on Telegram again when it next comes due.
+    data: action === 'snooze' ? { dueAt: snoozedCheckInDate(), telegramSentAt: null } : { status: 'dismissed' },
     select: FOLLOW_UP_SELECT,
   })
   res.json(updated)

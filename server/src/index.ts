@@ -21,9 +21,11 @@ import { scenariosRouter } from './routes/scenarios.ts'
 import { shareRouter } from './routes/share.ts'
 import { ttsRouter } from './routes/tts.ts'
 import { supportRouter } from './routes/support.ts'
+import { telegramRouter, telegramWebhookRouter } from './routes/telegram.ts'
 import { schoolInquiriesRouter } from './routes/schoolInquiries.ts'
 import { requireAuth } from './lib/auth.ts'
 import { startRetentionSweeps } from './lib/retention.ts'
+import { startTelegramBot } from './lib/telegramCoach.ts'
 import { attachLiveSttServer } from './routes/sttLive.ts'
 
 const app = express()
@@ -60,6 +62,8 @@ app.use('/api/share', shareRouter)
 app.use('/api/support', supportRouter)
 // Public POST (own IP + global limits); GET/PATCH are superadmin-only inside.
 app.use('/api/school-inquiries', schoolInquiriesRouter)
+// Public, but only Telegram knows the secret header it checks; see routes/telegram.ts.
+app.use('/api/telegram/webhook', telegramWebhookRouter)
 
 // Everything else requires a signed-in user.
 app.use('/api/scenarios', requireAuth, scenariosRouter)
@@ -77,6 +81,7 @@ app.use('/api/conversation-plans', requireAuth, conversationPlanRouter)
 app.use('/api/assignment-coach', requireAuth, assignmentCoachRouter)
 app.use('/api/tts', requireAuth, ttsRouter)
 app.use('/api/onboarding', requireAuth, onboardingRouter)
+app.use('/api/telegram', requireAuth, telegramRouter)
 
 const port = Number(process.env.PORT) || 3001
 const server = app.listen(port, () => {
@@ -90,3 +95,6 @@ attachLiveSttServer(server, FRONTEND_ORIGINS)
 
 // Deletes Lesson Debrief sessions past each teacher's retention setting.
 startRetentionSweeps()
+
+// Talk It Through over Telegram; inert unless TELEGRAM_BOT_TOKEN is set.
+startTelegramBot()

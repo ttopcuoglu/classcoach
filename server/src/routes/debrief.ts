@@ -23,6 +23,7 @@ import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
 import { transcribeAudio } from '../lib/deepgram.ts'
 import { extractTag, stripTag } from '../lib/extractTag.ts'
+import type { CoachFollowUp, Debrief } from '../generated/prisma/client.ts'
 import { prisma } from '../lib/prisma.ts'
 import { SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
 import { reconcileTail, takeCompleteSentences, visibleSoFar } from '../lib/sentenceStream.ts'
@@ -641,6 +642,92 @@ debriefRouter.post('/:id/chat', async (req, res) => {
   }
 })
 
+// Summarizes a finished Talk It Through conversation and schedules Coach's
+// check-in on its "try next". Shared by the app's Finish session and the
+// Telegram bot's /done. Returns null when Claude's reply came back missing a
+// section even after a retry; throws when the Claude call itself fails.
+export async function generateTalkTakeaway(
+  userId: string,
+  debrief: { id: string; conversation: unknown },
+): Promise<{ debrief: Debrief; followUp: CoachFollowUp | null } | null> {
+  const existing = (debrief.conversation as ChatMessage[] | null) ?? []
+  // A conversation opened from a check-in starts with the teacher's answer
+  // ("It didn't work."), which means nothing without the plan it answers —
+  // a takeaway grounded only in that transcript often came back incomplete.
+  const answeredCheckIn = await prisma.coachFollowUp.findFirst({
+    where: { respondedDebriefId: debrief.id, userId },
+  })
+  const checkInContext = answeredCheckIn
+    ? `Context: this conversation was a check-in. The teacher had planned to try: "${answeredCheckIn.plan}". Coach opened by asking: "${answeredCheckIn.checkInQuestion}"\n\n`
+    : ''
+  const transcript =
+    checkInContext + existing.map((m) => `${m.role === 'assistant' ? 'Coach' : 'Teacher'}: ${m.text}`).join('\n')
+
+  // One quiet retry: a very short conversation occasionally comes back
+  // missing a section, and a second attempt nearly always fills it.
+  let text = ''
+  let explored: string | null = null
+  let tryNext: string | null = null
+  let notice: string | null = null
+  for (let attempt = 0; attempt < 2 && !(explored && tryNext && notice); attempt++) {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 380,
+      system: TALK_TAKEAWAY_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: transcript }],
+    })
+    text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+    flagIfUnsafe(text, 'debrief.talk.takeaway')
+    explored = extractTag(text, 'explored')
+    tryNext = extractTag(text, 'try_next')
+    notice = extractTag(text, 'notice')
+  }
+  if (!explored || !tryNext || !notice) return null
+
+  const updated = await prisma.debrief.update({
+    where: { id: debrief.id },
+    data: { talkTakeaway: { explored, tryNext, notice } },
+  })
+
+  // Schedule Coach's check-in on the step. A takeaway regenerated after the
+  // teacher continued the conversation replaces the plan and restarts the
+  // clock, unless they already answered or dismissed the earlier one.
+  const checkInQuestion = checkInQuestionFor(extractTag(text, 'check_in'), tryNext)
+  const existingFollowUp = await prisma.coachFollowUp.findUnique({ where: { sourceDebriefId: debrief.id } })
+  if (!existingFollowUp || existingFollowUp.status === 'pending') {
+    // One check-in at a time: the newest plan replaces any older one still
+    // waiting, rather than lining up a queue of "how did it go?"s.
+    await prisma.coachFollowUp.updateMany({
+      where: { userId, status: 'pending', sourceDebriefId: { not: debrief.id } },
+      data: { status: 'replaced' },
+    })
+  }
+  let followUp = existingFollowUp
+  if (!existingFollowUp) {
+    followUp = await prisma.coachFollowUp.create({
+      data: {
+        userId,
+        sourceDebriefId: debrief.id,
+        plan: tryNext,
+        checkInQuestion,
+        dueAt: nextCheckInDate(),
+      },
+    })
+  } else if (existingFollowUp.status === 'pending') {
+    // A rescheduled check-in goes out on Telegram again when next due.
+    followUp = await prisma.coachFollowUp.update({
+      where: { id: existingFollowUp.id },
+      data: { plan: tryNext, checkInQuestion, dueAt: nextCheckInDate(), telegramSentAt: null },
+    })
+  }
+
+  // Only a still-pending check-in will actually be asked.
+  return { debrief: updated, followUp: followUp?.status === 'pending' ? followUp : null }
+}
+
 debriefRouter.post('/:id/takeaway', async (req, res) => {
   const debrief = await prisma.debrief.findFirst({
     where: { id: req.params.id, userId: req.user!.userId },
@@ -667,81 +754,12 @@ debriefRouter.post('/:id/takeaway', async (req, res) => {
   }
 
   try {
-    // A conversation opened from a check-in starts with the teacher's answer
-    // ("It didn't work."), which means nothing without the plan it answers —
-    // a takeaway grounded only in that transcript often came back incomplete.
-    const answeredCheckIn = await prisma.coachFollowUp.findFirst({
-      where: { respondedDebriefId: debrief.id, userId: req.user!.userId },
-    })
-    const checkInContext = answeredCheckIn
-      ? `Context: this conversation was a check-in. The teacher had planned to try: "${answeredCheckIn.plan}". Coach opened by asking: "${answeredCheckIn.checkInQuestion}"\n\n`
-      : ''
-    const transcript =
-      checkInContext + existing.map((m) => `${m.role === 'assistant' ? 'Coach' : 'Teacher'}: ${m.text}`).join('\n')
-
-    // One quiet retry: a very short conversation occasionally comes back
-    // missing a section, and a second attempt nearly always fills it.
-    let text = ''
-    let explored: string | null = null
-    let tryNext: string | null = null
-    let notice: string | null = null
-    for (let attempt = 0; attempt < 2 && !(explored && tryNext && notice); attempt++) {
-      const response = await anthropic.messages.create({
-        model: CLAUDE_MODEL,
-        max_tokens: 380,
-        system: TALK_TAKEAWAY_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: transcript }],
-      })
-      text = response.content
-        .filter((block) => block.type === 'text')
-        .map((block) => block.text)
-        .join('\n')
-      flagIfUnsafe(text, 'debrief.talk.takeaway')
-      explored = extractTag(text, 'explored')
-      tryNext = extractTag(text, 'try_next')
-      notice = extractTag(text, 'notice')
-    }
-    if (!explored || !tryNext || !notice) {
+    const result = await generateTalkTakeaway(req.user!.userId, debrief)
+    if (!result) {
       res.status(502).json({ error: 'Could not summarize this conversation. Please try again.' })
       return
     }
-
-    const updated = await prisma.debrief.update({
-      where: { id: debrief.id },
-      data: { talkTakeaway: { explored, tryNext, notice } },
-    })
-
-    // Schedule Coach's check-in on the step. A takeaway regenerated after the
-    // teacher continued the conversation replaces the plan and restarts the
-    // clock, unless they already answered or dismissed the earlier one.
-    const checkInQuestion = checkInQuestionFor(extractTag(text, 'check_in'), tryNext)
-    const existingFollowUp = await prisma.coachFollowUp.findUnique({ where: { sourceDebriefId: debrief.id } })
-    if (!existingFollowUp || existingFollowUp.status === 'pending') {
-      // One check-in at a time: the newest plan replaces any older one still
-      // waiting, rather than lining up a queue of "how did it go?"s.
-      await prisma.coachFollowUp.updateMany({
-        where: { userId: req.user!.userId, status: 'pending', sourceDebriefId: { not: debrief.id } },
-        data: { status: 'replaced' },
-      })
-    }
-    if (!existingFollowUp) {
-      await prisma.coachFollowUp.create({
-        data: {
-          userId: req.user!.userId,
-          sourceDebriefId: debrief.id,
-          plan: tryNext,
-          checkInQuestion,
-          dueAt: nextCheckInDate(),
-        },
-      })
-    } else if (existingFollowUp.status === 'pending') {
-      await prisma.coachFollowUp.update({
-        where: { id: existingFollowUp.id },
-        data: { plan: tryNext, checkInQuestion, dueAt: nextCheckInDate() },
-      })
-    }
-
-    res.json(updated)
+    res.json(result.debrief)
   } catch (error) {
     console.error('[debrief] takeaway failed:', error)
     res.status(502).json({ error: 'Could not summarize this conversation. Please try again.' })
