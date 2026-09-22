@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto'
 import { Router } from 'express'
+import QRCode from 'qrcode'
 import { prisma } from '../lib/prisma.ts'
 import { getBotUsername, telegramEnabled, type TelegramUpdate } from '../lib/telegram.ts'
 import { createLinkCode, dispatchUpdate, unlinkTelegram } from '../lib/telegramCoach.ts'
@@ -24,7 +25,11 @@ telegramRouter.post('/link', async (req, res) => {
   }
   try {
     const [code, username] = await Promise.all([createLinkCode(req.user!.userId), getBotUsername()])
-    res.json({ url: `https://t.me/${username}?start=${code}` })
+    const url = `https://t.me/${username}?start=${code}`
+    // On a computer, scanning this with a phone camera opens the link
+    // straight in the Telegram app, which is where teachers actually chat.
+    const qr = await QRCode.toDataURL(url, { margin: 1, width: 480 })
+    res.json({ url, qr })
   } catch (error) {
     console.error('[telegram] creating a link failed:', error)
     res.status(502).json({ error: 'Could not reach Telegram. Please try again.' })

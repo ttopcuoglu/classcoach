@@ -1122,8 +1122,9 @@ export function getTelegramStatus(): Promise<TelegramStatus> {
   return request('/api/telegram')
 }
 
-// A one-time t.me link (valid 15 minutes) that connects the chat it's opened in.
-export function createTelegramLink(): Promise<{ url: string }> {
+// A one-time t.me link (valid 15 minutes) that connects the chat it's opened
+// in, plus the same link as a QR code image (data URL) to scan from a computer.
+export function createTelegramLink(): Promise<{ url: string; qr: string }> {
   return request('/api/telegram/link', { method: 'POST' })
 }
 

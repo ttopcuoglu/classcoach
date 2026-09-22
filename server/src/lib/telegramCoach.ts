@@ -64,7 +64,7 @@ const HELP_TEXT = `Talk to me like you'd talk to a colleague after class. Tell m
 
 One ask: please leave out students' full names. "A student in 3rd period" works great.`
 
-const NOT_LINKED_TEXT = `Hi! I'm Coach from Wivoza. To talk with me here, connect this chat to your Wivoza account first: sign in at ${APP_URL}, open Profile, and tap "Connect Telegram."`
+const NOT_LINKED_TEXT = `Hi! I'm Coach from Wivoza. To talk with me here, connect this chat to your Wivoza account first: sign in at ${APP_URL}, open Profile, and tap "Connect Telegram." If Telegram doesn't show a Start button, just paste the connect link here.`
 
 const LIMIT_TEXT = "You've reached today's limit for coaching conversations. Let's pick this up tomorrow."
 const ERROR_TEXT = "Sorry, I couldn't come up with a reply just now. Please try sending that again."
@@ -192,7 +192,12 @@ async function handleMessage(chatId: string, rawText: string | undefined, firstN
 
   const user = await prisma.user.findUnique({ where: { telegramChatId: chatId }, select: USER_SELECT })
   if (!user) {
-    await sendMessage(chatId, NOT_LINKED_TEXT)
+    // Telegram only shows the Start button the first time a chat is opened
+    // from a link, so a teacher who messaged the bot before can paste the
+    // link (or just its code) instead.
+    const pastedCode = text.match(/[?&]start=([A-Za-z0-9_-]{16,64})/)?.[1] ?? (/^[A-Za-z0-9_-]{22}$/.test(text) ? text : null)
+    if (pastedCode) await linkChat(chatId, pastedCode, firstName)
+    else await sendMessage(chatId, NOT_LINKED_TEXT)
     return
   }
   if (user.suspendedAt) {
