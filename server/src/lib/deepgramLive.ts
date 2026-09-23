@@ -35,6 +35,9 @@ export function openLiveTranscription(sampleRate: number): Promise<LiveTranscrib
     punctuate: 'true',
     smart_format: 'true',
     interim_results: 'false',
+    // Opts out of Deepgram's Model Improvement Program, as every other
+    // Deepgram request does (see deepgram.ts) — the Privacy Notice promises it.
+    mip_opt_out: 'true',
   })
 
   return new Promise<LiveTranscriber>((resolve, reject) => {
