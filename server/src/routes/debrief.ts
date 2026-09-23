@@ -800,6 +800,20 @@ debriefRouter.patch('/:id', async (req, res) => {
   res.json(debrief)
 })
 
+// Deletes one conversation and everything hanging off it: its check-in goes
+// with it (onDelete: Cascade), and if the Telegram bot was in the middle of
+// it, that chat starts fresh on the next message.
+debriefRouter.delete('/:id', async (req, res) => {
+  const userId = req.user!.userId
+  const { count } = await prisma.debrief.deleteMany({ where: { id: req.params.id, userId } })
+  if (count === 0) {
+    res.status(404).json({ error: 'Debrief not found' })
+    return
+  }
+  await prisma.user.updateMany({ where: { id: userId, telegramDebriefId: req.params.id }, data: { telegramDebriefId: null } })
+  res.json({ deleted: true })
+})
+
 debriefRouter.post('/:id/share', async (req, res) => {
   const existing = await prisma.debrief.findFirst({
     where: { id: req.params.id, userId: req.user!.userId },

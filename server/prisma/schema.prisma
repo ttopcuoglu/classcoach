@@ -58,6 +58,11 @@ model User {
   planStatus            String? // "active" | "canceled" | "past_due" — null if never subscribed
   planRenewsAt          DateTime? // current Stripe billing-period end
   stripeCustomerId      String?   @unique
+  // "Forgot password" — a SHA-256 hash of the emailed token (never the token
+  // itself, so a copy of this table can't reset anyone's password), good for
+  // one hour and cleared the moment it's used.
+  passwordResetTokenHash String?
+  passwordResetExpiresAt DateTime?
   // Talk It Through over Telegram (see server/src/routes/telegram.ts). The
   // chat id is a Telegram integer stored as text — it can exceed 32 bits.
   telegramChatId             String?   @unique
@@ -82,6 +87,8 @@ model User {
   assignmentCoachSessions AssignmentCoachSession[]
   pdFocusAreas      PdFocusArea[]
   coachFollowUps    CoachFollowUp[]
+
+  @@index([passwordResetTokenHash])
 }
 
 // A school/district that's signed an agreement. joinCode is what its

@@ -29,6 +29,7 @@ export default function PastList({
   loading,
   emptyText,
   onOpen,
+  onDelete,
 }: {
   title: string
   items: PastItem[]
@@ -36,6 +37,9 @@ export default function PastList({
   loading: boolean
   emptyText: string
   onOpen: (id: string) => void
+  // Optional: when given, each row gets a Delete button. The caller confirms
+  // and does the deleting; this only asks.
+  onDelete?: (id: string) => void
 }) {
   const [filter, setFilter] = useState<'all' | 'saved'>('all')
   const [showAll, setShowAll] = useState(false)
@@ -79,17 +83,17 @@ export default function PastList({
       ) : (
         <div className="mt-3 flex flex-col gap-2">
           {shown.map((item) => (
-            <button
+            // A row is its own element rather than one big button, so Delete
+            // can sit inside it without nesting a button in a button.
+            <div
               key={item.id}
-              type="button"
-              onClick={() => onOpen(item.id)}
-              className={`flex items-start gap-3 rounded-xl border p-3.5 text-left transition-colors ${
+              className={`group flex items-start gap-3 rounded-xl border p-3.5 transition-colors ${
                 item.id === activeId
                   ? 'border-forest bg-mint-tint/40'
                   : 'border-hairline bg-cream-card hover:border-terracotta/40'
               }`}
             >
-              <div className="min-w-0 flex-1">
+              <button type="button" onClick={() => onOpen(item.id)} className="min-w-0 flex-1 text-left">
                 <p className="flex flex-wrap items-center gap-2 text-xs text-ink-soft">
                   <span>{dayLabel(item.createdAt)}</span>
                   {item.label && (
@@ -97,12 +101,27 @@ export default function PastList({
                   )}
                 </p>
                 <p className="mt-1 line-clamp-2 text-sm text-ink">{item.text}</p>
-              </div>
+              </button>
               {item.saved && <StarIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" filled />}
-              <span className="mt-0.5 shrink-0 text-xs font-semibold text-forest">
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(item.id)}
+                  aria-label="Delete this conversation"
+                  title="Delete this conversation"
+                  className="mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold text-ink-soft transition-colors hover:bg-peach-tint hover:text-terracotta-600"
+                >
+                  Delete
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => onOpen(item.id)}
+                className="mt-0.5 shrink-0 text-xs font-semibold text-forest"
+              >
                 {item.id === activeId ? 'Open' : 'Open →'}
-              </span>
-            </button>
+              </button>
+            </div>
           ))}
           {filtered.length > SHOWN_AT_FIRST && (
             <button

@@ -721,6 +721,17 @@ function apiError(message: string, status: number): ApiError {
   return Object.assign(new Error(message), { status })
 }
 
+// "Forgot password" — always resolves, whether or not the address has an
+// account, so the page can't be used to discover who is registered.
+export function requestPasswordReset(email: string): Promise<{ ok: true }> {
+  return request('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) })
+}
+
+// Sets the new password and signs the teacher straight in.
+export function resetPassword(token: string, password: string): Promise<UserProfile> {
+  return request('/api/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) })
+}
+
 export function signInWithGoogle(credential: string): Promise<UserProfile> {
   return request('/api/auth/google', { method: 'POST', body: JSON.stringify({ credential }) })
 }
@@ -1130,6 +1141,11 @@ export function createTelegramLink(): Promise<{ url: string; qr: string }> {
 
 export function disconnectTelegram(): Promise<{ linked: false }> {
   return request('/api/telegram/link', { method: 'DELETE' })
+}
+
+// Removes one conversation for good, along with any check-in scheduled from it.
+export function deleteDebrief(id: string): Promise<{ deleted: true }> {
+  return request(`/api/debriefs/${id}`, { method: 'DELETE' })
 }
 
 export function generateTalkTakeaway(id: string): Promise<Debrief> {

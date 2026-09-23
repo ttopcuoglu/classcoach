@@ -43,6 +43,8 @@ const GuideAssignmentCoach = lazy(() => import('./pages/GuideAssignmentCoach'))
 const GuideCommunicationCoach = lazy(() => import('./pages/GuideCommunicationCoach'))
 const GuideCheatSheet = lazy(() => import('./pages/GuideCheatSheet'))
 const Faq = lazy(() => import('./pages/Faq'))
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 
 function RouteFallback() {
   // The backend can take up to ~30s to respond on its very first request
@@ -140,6 +142,8 @@ export default function App() {
           <Routes>
             <Route path="shared/:type/:token" element={<Shared />} />
             <Route path="terms" element={<Terms />} />
+            <Route path="forgot-password" element={<ForgotPassword />} />
+            <Route path="reset-password" element={<ResetPassword />} />
             <Route path="guide" element={<Guide />} />
             <Route path="guide/talk-it-through" element={<GuideTalkItThrough />} />
             <Route path="guide/lesson-debrief" element={<GuideLessonDebrief />} />

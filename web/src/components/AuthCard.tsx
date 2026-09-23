@@ -154,6 +154,11 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
           className={inputClass}
           required
         />
+        {mode === 'login' && (
+          <Link to="/forgot-password" className="self-end text-xs font-semibold text-terracotta-600 hover:underline">
+            Forgot password?
+          </Link>
+        )}
         {error && <p className="text-sm text-terracotta-600">{error}</p>}
         <button
           type="submit"

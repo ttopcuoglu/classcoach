@@ -7,8 +7,8 @@
 //
 //   RESEND_API_KEY       required to send at all
 //   INQUIRY_ALERT_TO     default info@wivoza.com
-//   INQUIRY_ALERT_FROM   default "Wivoza <alerts@wivoza.com>" — the domain
-//                        must be verified in Resend
+//   INQUIRY_ALERT_FROM   default "Wivoza <alerts@send.wivoza.com>" — the
+//                        domain must be verified in Resend
 
 type InquiryForAlert = {
   name: string
@@ -32,7 +32,7 @@ export async function sendInquiryAlert(inquiry: InquiryForAlert): Promise<void> 
   if (!apiKey) return
 
   const to = process.env.INQUIRY_ALERT_TO || 'info@wivoza.com'
-  const from = process.env.INQUIRY_ALERT_FROM || 'Wivoza <alerts@wivoza.com>'
+  const from = process.env.INQUIRY_ALERT_FROM || 'Wivoza <alerts@send.wivoza.com>'
 
   // Plain text on purpose: every field was typed by an anonymous visitor, and
   // text/plain can't be turned into markup or links by what they typed.

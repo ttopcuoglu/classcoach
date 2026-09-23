@@ -6,6 +6,7 @@ import VoiceBars from '../components/VoiceBars'
 import PastList from '../components/PastList'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import {
+  deleteDebrief,
   generateTalkTakeaway,
   getDebriefs,
   dismissFollowUpForDebrief,
@@ -519,6 +520,18 @@ export default function TalkToMe() {
   // Reopens a past conversation in full: its takeaway if it was wrapped up,
   // otherwise paused on the last exchange with Resume. Never with the mic
   // on — reading an old takeaway shouldn't start a conversation.
+  // Deleting takes the conversation and its check-in with it, so it asks
+  // first; the row disappears as soon as the server confirms.
+  async function handleDeletePast(id: string) {
+    if (!confirm('Delete this conversation? Its takeaway and any check-in Coach scheduled from it go too. This cannot be undone.')) return
+    try {
+      await deleteDebrief(id)
+      setPastTalks((talks) => talks.filter((t) => t.id !== id))
+    } catch {
+      alert('Could not delete that conversation. Please try again.')
+    }
+  }
+
   function handleOpenPast(past: Debrief) {
     const lastUser = [...(past.conversation ?? [])].reverse().find((m) => m.role === 'user')
     setDebrief(past)
@@ -1067,6 +1080,7 @@ export default function TalkToMe() {
                     const past = pastTalks.find((d) => d.id === id)
                     if (past) handleOpenPast(past)
                   }}
+                  onDelete={handleDeletePast}
                 />
               </div>
             )}

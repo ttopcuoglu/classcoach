@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from 'node:crypto'
 import bcrypt from 'bcryptjs'
 import { OAuth2Client } from 'google-auth-library'
 import { Router } from 'express'
@@ -12,6 +13,7 @@ import {
 import { verifyAppleIdentityToken } from '../lib/appleAuth.ts'
 import { withPlusAccess } from '../lib/billing.ts'
 import { resolveSignInRole } from '../lib/organization.ts'
+import { sendNoPasswordEmail, sendPasswordResetEmail } from '../lib/authEmail.ts'
 import { prisma } from '../lib/prisma.ts'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -315,6 +317,100 @@ authRouter.post('/login', async (req, res) => {
   res.cookie(SESSION_COOKIE, token, COOKIE_OPTIONS)
   const { passwordHash: _passwordHash, ...safeUser } = user
   res.json({ ...safeUser, token })
+})
+
+// "Forgot password": always answers the same way, whether or not the email
+// belongs to an account — otherwise this endpoint becomes a way to find out
+// who has one. The token is emailed; only its hash is stored.
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000
+
+function hashResetToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex')
+}
+
+authRouter.post('/forgot-password', async (req, res) => {
+  const { email } = req.body ?? {}
+  if (typeof email !== 'string' || !email.includes('@')) {
+    res.status(400).json({ error: 'email is required' })
+    return
+  }
+
+  const ip = req.ip ?? 'unknown'
+  if (!checkLoginRateLimit(`forgot:${ip}`)) {
+    res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' })
+    return
+  }
+  // Answered before the email is sent: the reply must not take longer for an
+  // address that exists than for one that doesn't.
+  res.json({ ok: true })
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      select: { id: true, email: true, passwordHash: true, suspendedAt: true },
+    })
+    if (!user || user.suspendedAt) return
+    if (!user.passwordHash) {
+      await sendNoPasswordEmail(user.email)
+      return
+    }
+
+    const token = randomBytes(32).toString('base64url')
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordResetTokenHash: hashResetToken(token),
+        passwordResetExpiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+      },
+    })
+    await sendPasswordResetEmail(user.email, token)
+  } catch (error) {
+    console.error('[auth] password reset request failed:', error)
+  }
+})
+
+// Sets the new password and signs the teacher in, so they don't have to type
+// what they just chose a second time. The token is single-use.
+authRouter.post('/reset-password', async (req, res) => {
+  const { token, password } = req.body ?? {}
+  if (typeof token !== 'string' || typeof password !== 'string') {
+    res.status(400).json({ error: 'token and password are required' })
+    return
+  }
+  if (password.length < 8) {
+    res.status(400).json({ error: 'Password must be at least 8 characters.' })
+    return
+  }
+
+  const ip = req.ip ?? 'unknown'
+  if (!checkLoginRateLimit(`reset:${ip}`)) {
+    res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' })
+    return
+  }
+
+  const user = await prisma.user.findFirst({
+    where: { passwordResetTokenHash: hashResetToken(token), passwordResetExpiresAt: { gt: new Date() } },
+    select: { id: true, suspendedAt: true },
+  })
+  if (!user || user.suspendedAt) {
+    res.status(400).json({ error: 'That reset link has expired or was already used. Ask for a new one.' })
+    return
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash: await bcrypt.hash(password, PASSWORD_SALT_ROUNDS),
+      passwordResetTokenHash: null,
+      passwordResetExpiresAt: null,
+    },
+    omit: SAFE_USER_OMIT,
+    include: USER_INCLUDE_ORG,
+  })
+
+  const sessionToken = signSession({ userId: updated.id, role: updated.role })
+  res.cookie(SESSION_COOKIE, sessionToken, COOKIE_OPTIONS)
+  res.json({ ...updated, token: sessionToken })
 })
 
 authRouter.get('/me', requireAuth, async (req, res) => {
