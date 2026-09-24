@@ -56,7 +56,9 @@ export function VideoFacade({
     >
       {playing ? (
         <iframe
-          src={`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0`}
+          // cc_load_policy=0: the promo carries its own on-screen text, so
+          // YouTube's auto-captions would sit on top of it in a black box.
+          src={`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0&cc_load_policy=0`}
           title={title}
           allow="autoplay; encrypted-media; picture-in-picture"
           allowFullScreen
