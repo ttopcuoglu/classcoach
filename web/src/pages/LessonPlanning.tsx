@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AnswerSection, { NumberedCard } from '../components/AnswerSection'
 import PastList, { type PastItem } from '../components/PastList'
-import { ShareIcon, StarIcon } from '../components/icons'
+import { ShareIcon, StarIcon, UploadIcon, ClipboardIcon, CloseIcon } from '../components/icons'
 import CoachingChat from '../components/CoachingChat'
 import ExportModal from '../components/ExportModal'
 import { PanelHeader } from '../components/PanelHeader'
@@ -21,6 +21,7 @@ import {
   sendLessonPlanChat,
   setLessonPlanSaved,
   shareLessonPlan,
+  extractAssignmentText,
   submitLessonPlanFeedback,
   submitPresentationReview,
   type LessonPlan,
@@ -597,6 +598,14 @@ function FeedbackPanel() {
   const feedbackProgress = useSimulatedProgress(submitting, 12000)
   const [error, setError] = useState<string | null>(null)
 
+  // Upload as an alternative to pasting — the extracted text lands in the same
+  // editable textarea, so a rough OCR/parse can still be fixed before submitting.
+  const [fileName, setFileName] = useState<string | null>(null)
+  const [extracting, setExtracting] = useState(false)
+  const [extractMs, setExtractMs] = useState(5000)
+  const extractProgress = useSimulatedProgress(extracting, extractMs)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+
   const [allPlans, setAllPlans] = useState<LessonPlan[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
 
@@ -618,6 +627,28 @@ function FeedbackPanel() {
   }, [])
 
   const canSubmit = planText.trim().length > 0
+
+  async function handleFile(file: File) {
+    setFileName(file.name)
+    setExtractMs(Math.min(20000, 3000 + (file.size / 1_048_576) * 1500))
+    setExtracting(true)
+    setUploadError(null)
+    try {
+      const { text } = await extractAssignmentText(file)
+      setPlanText(text)
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : 'Could not read that file. Please try pasting the text instead.')
+      setFileName(null)
+    } finally {
+      setExtracting(false)
+    }
+  }
+
+  function handleRemoveFile() {
+    setFileName(null)
+    setPlanText('')
+    setUploadError(null)
+  }
 
   async function handlePresentationFeedback() {
     if (!plan || deliveryLoading) return
@@ -644,6 +675,8 @@ function FeedbackPanel() {
       setAllPlans((prev) => [result, ...prev])
       setChatDraft('')
       setChatError(null)
+      setFileName(null)
+      setUploadError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not get coaching feedback. Please try again.')
     } finally {
@@ -734,19 +767,90 @@ function FeedbackPanel() {
         {!plan ? (
           <div className="flex flex-col gap-4">
             <PanelHeader eyebrow="Lesson Planning" title="Get feedback">
-              Paste or write a plan you already have and get coaching feedback on it.
+              Paste or write a plan you already have, or upload a file, and get coaching feedback on it.
             </PanelHeader>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-ink">Your lesson plan</span>
-              <textarea
-                value={planText}
-                onChange={(e) => setPlanText(e.target.value)}
-                disabled={submitting}
-                rows={8}
-                placeholder="Paste or write your plan — Do Now, main activities, closure, etc."
-                className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
-              />
-            </label>
+
+            {extracting ? (
+              <div className="flex justify-center rounded-2xl border-2 border-dashed border-terracotta/30 bg-peach-tint/30 px-4 py-8">
+                <ProgressRing
+                  progress={extractProgress}
+                  size={84}
+                  label="Reading your file"
+                  hint="Pulling the text out — this only takes a moment."
+                  className="text-forest"
+                />
+              </div>
+            ) : fileName ? (
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-hairline bg-cream px-4 py-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-peach-tint text-terracotta-600">
+                    <ClipboardIcon className="h-4.5 w-4.5" />
+                  </span>
+                  <p className="truncate text-sm font-medium text-ink">{fileName}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <label className="cursor-pointer text-xs font-semibold text-ink-soft hover:text-forest">
+                    Replace
+                    <input
+                      type="file"
+                      accept=".docx,.pdf,.pptx,.txt,.jpg,.jpeg,.png"
+                      className="hidden"
+                      onChange={(e) => {
+                        const selected = e.target.files?.[0]
+                        if (selected) void handleFile(selected)
+                        e.target.value = ''
+                      }}
+                    />
+                  </label>
+                  <button type="button" onClick={handleRemoveFile} aria-label="Remove file" className="text-ink-soft hover:text-forest">
+                    <CloseIcon className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {!extracting && !fileName && (
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium text-ink">Your lesson plan</span>
+                <textarea
+                  value={planText}
+                  onChange={(e) => setPlanText(e.target.value)}
+                  disabled={submitting}
+                  rows={8}
+                  placeholder="Paste or write your plan — Do Now, main activities, closure, etc."
+                  className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
+                />
+              </label>
+            )}
+            {!extracting && !fileName && (
+              <label className="flex cursor-pointer items-center gap-1.5 self-start text-xs font-semibold text-ink-soft hover:text-forest">
+                <UploadIcon className="h-3.5 w-3.5" />
+                Or upload a .docx, .pdf, .pptx, .txt, .jpg, or .png file
+                <input
+                  type="file"
+                  accept=".docx,.pdf,.pptx,.txt,.jpg,.jpeg,.png"
+                  className="hidden"
+                  onChange={(e) => {
+                    const selected = e.target.files?.[0]
+                    if (selected) void handleFile(selected)
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+            )}
+            {fileName && !extracting && (
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium text-ink">Edit before submitting, if needed</span>
+                <textarea
+                  value={planText}
+                  onChange={(e) => setPlanText(e.target.value)}
+                  disabled={submitting}
+                  rows={8}
+                  className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
+                />
+              </label>
+            )}
+            {uploadError && <p className="text-sm text-terracotta">{uploadError}</p>}
 
             {submitting && (
               <div className="flex justify-center py-1 text-forest">
