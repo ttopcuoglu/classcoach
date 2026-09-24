@@ -11,9 +11,9 @@ import { ArrowRightIcon, CheckIcon } from './icons'
 export const PLAYLIST_URL = 'https://www.youtube.com/playlist?list=PLcoaDQMmtVBU'
 
 export const INTRO_VIDEO = {
-  id: 'vG1IPMu8pLQ',
-  thumb: '/videos/meet-wivoza.webp',
-  title: 'Meet Wivoza — An AI Instructional Coach for K-12 Teachers',
+  id: 'WFd7fWH3fr0',
+  thumb: '/videos/meet-wivoza-new.webp',
+  title: 'Every teacher deserves a place to practice — Wivoza',
 }
 
 export const GET_STARTED_VIDEO = {
