@@ -3,6 +3,7 @@ import { Router } from 'express'
 import mammoth from 'mammoth'
 import multer from 'multer'
 import { PDFParse } from 'pdf-parse'
+import * as XLSX from 'xlsx'
 import { createWorker, type Worker } from 'tesseract.js'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { Prisma } from '../generated/prisma/client.ts'
@@ -520,6 +521,21 @@ function stripPdfPageMarkers(text: string): string {
 // scan (surfacing as an opaque 502 rather than a real error response).
 const MAX_OCR_PAGES = 3
 
+// Every sheet becomes a small labeled CSV block — plain enough for Claude to
+// read as a document, and honest about which sheet a row came from when a
+// workbook has more than one.
+function extractXlsxText(buffer: Buffer): string {
+  const workbook = XLSX.read(buffer, { type: 'buffer' })
+  return workbook.SheetNames.map((name) => {
+    const sheet = workbook.Sheets[name]
+    const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false }).trim()
+    if (!csv) return ''
+    return workbook.SheetNames.length > 1 ? `Sheet: ${name}\n${csv}` : csv
+  })
+    .filter(Boolean)
+    .join('\n\n')
+}
+
 async function extractPdfText(buffer: Buffer): Promise<string> {
   const parser = new PDFParse({ data: buffer })
   try {
@@ -555,12 +571,14 @@ assignmentCoachRouter.post('/extract-text', upload.single('file'), async (req, r
       text = await extractPdfText(req.file.buffer)
     } else if (name.endsWith('.pptx')) {
       text = await extractPptxText(req.file.buffer)
+    } else if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+      text = extractXlsxText(req.file.buffer)
     } else if (name.endsWith('.txt')) {
       text = req.file.buffer.toString('utf-8')
     } else if (IMAGE_EXTENSIONS.some((ext) => name.endsWith(ext))) {
       text = await ocrImageBuffer(req.file.buffer)
     } else {
-      res.status(400).json({ error: 'Please upload a .docx, .pdf, .pptx, .txt, .jpg, or .png file.' })
+      res.status(400).json({ error: 'Please upload a .docx, .pdf, .pptx, .xlsx, .xls, .txt, .jpg, or .png file.' })
       return
     }
     if (!text.trim()) {

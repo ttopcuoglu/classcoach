@@ -71,7 +71,7 @@ const AI_LEVELS = [
 const STEPS = [
   {
     title: 'Add the assignment',
-    body: 'Paste the text, or upload it — .docx, .pdf, .pptx, .txt, and even a photo of a worksheet as .jpg or .png. There’s no form to fill in: grade level, subject, assignment type, and estimated time all get read from the assignment itself.',
+    body: 'Paste the text, or upload it — .docx, .pdf, .pptx, .xlsx, .xls, .txt, and even a photo of a worksheet as .jpg or .png. There’s no form to fill in: grade level, subject, assignment type, and estimated time all get read from the assignment itself.',
   },
   {
     title: 'Make the one real choice',
@@ -355,7 +355,7 @@ export default function GuideAssignmentCoach() {
                 {
                   icon: UploadIcon,
                   title: 'A photo works',
-                  body: 'Uploads take .docx, .pdf, .txt — and .jpg or .png, so a picture of a paper worksheet is a valid way in.',
+                  body: 'Uploads take .docx, .pdf, .xlsx, .xls, .txt — and .jpg or .png, so a picture of a paper worksheet is a valid way in.',
                 },
                 {
                   icon: ChecklistIcon,

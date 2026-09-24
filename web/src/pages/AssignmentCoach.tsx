@@ -620,7 +620,7 @@ function AddAssignmentScreen({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".docx,.pdf,.pptx,.txt,.jpg,.jpeg,.png"
+                  accept=".docx,.pdf,.pptx,.xlsx,.xls,.txt,.jpg,.jpeg,.png"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0]
@@ -649,7 +649,7 @@ function AddAssignmentScreen({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".docx,.pdf,.pptx,.txt,.jpg,.jpeg,.png"
+                  accept=".docx,.pdf,.pptx,.xlsx,.xls,.txt,.jpg,.jpeg,.png"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0]

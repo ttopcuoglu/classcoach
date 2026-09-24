@@ -325,7 +325,7 @@ export default function PrepareConversation() {
                   )}
                   <input
                     type="file"
-                    accept=".docx,.pdf,.txt,.jpg,.jpeg,.png"
+                    accept=".docx,.pdf,.xlsx,.xls,.txt,.jpg,.jpeg,.png"
                     className="hidden"
                     disabled={submitting || uploading}
                     onChange={(e) => {

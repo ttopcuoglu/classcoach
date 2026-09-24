@@ -793,7 +793,7 @@ function FeedbackPanel() {
                     Replace
                     <input
                       type="file"
-                      accept=".docx,.pdf,.pptx,.txt,.jpg,.jpeg,.png"
+                      accept=".docx,.pdf,.pptx,.xlsx,.xls,.txt,.jpg,.jpeg,.png"
                       className="hidden"
                       onChange={(e) => {
                         const selected = e.target.files?.[0]
@@ -825,10 +825,10 @@ function FeedbackPanel() {
             {!extracting && !fileName && (
               <label className="flex cursor-pointer items-center gap-1.5 self-start text-xs font-semibold text-ink-soft hover:text-forest">
                 <UploadIcon className="h-3.5 w-3.5" />
-                Or upload a .docx, .pdf, .pptx, .txt, .jpg, or .png file
+                Or upload a .docx, .pdf, .pptx, .xlsx, .xls, .txt, .jpg, or .png file
                 <input
                   type="file"
-                  accept=".docx,.pdf,.pptx,.txt,.jpg,.jpeg,.png"
+                  accept=".docx,.pdf,.pptx,.xlsx,.xls,.txt,.jpg,.jpeg,.png"
                   className="hidden"
                   onChange={(e) => {
                     const selected = e.target.files?.[0]
