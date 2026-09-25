@@ -20,6 +20,7 @@ import {
   QuoteIcon,
   SparkleIcon,
   TargetIcon,
+  YouTubeIcon,
 } from '../components/icons'
 import { introVideo, VideoFacade } from '../components/TrainingVideos'
 
@@ -945,6 +946,17 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             </a>
             <a href="/terms" className="hover:text-ink">
               Terms
+            </a>
+            <a
+              href="https://www.youtube.com/@WivozaCoach"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Wivoza on YouTube"
+              title="Wivoza on YouTube"
+              className="inline-flex items-center gap-1.5 hover:text-terracotta"
+            >
+              <YouTubeIcon className="h-5 w-5" />
+              <span className="sm:hidden">YouTube</span>
             </a>
             <span>&copy; 2026 Edinexa Technologies LLC. All rights reserved.</span>
           </div>
