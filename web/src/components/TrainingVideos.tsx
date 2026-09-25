@@ -15,9 +15,9 @@ export const PLAYLIST_URL = 'https://www.youtube.com/playlist?list=PLcoaDQMmtVBU
 // default, so a stray or stale link can never leave the section empty.
 const INTRO_VIDEOS = {
   default: {
-    id: 'WFd7fWH3fr0',
-    thumb: '/videos/meet-wivoza-new.webp',
-    title: 'Every teacher deserves a place to practice — Wivoza',
+    id: 'fb8vZCBzp8k',
+    thumb: '/videos/meet-wivoza-mixed.webp',
+    title: 'What you can\u2019t see while you\u2019re teaching — Wivoza',
   },
   veteran: {
     id: 'A85O4rhdYkk',
