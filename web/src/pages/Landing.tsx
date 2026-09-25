@@ -23,6 +23,7 @@ import {
   YouTubeIcon,
 } from '../components/icons'
 import { introVideo, VideoFacade } from '../components/TrainingVideos'
+import FooterContact from '../components/FooterContact'
 
 const PROCESS = [
   {
@@ -961,6 +962,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             <span>&copy; 2026 Edinexa Technologies LLC. All rights reserved.</span>
           </div>
         </div>
+        <FooterContact />
       </footer>
       <SupportChat />
     </div>

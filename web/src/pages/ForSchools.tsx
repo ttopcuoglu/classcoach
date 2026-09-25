@@ -12,6 +12,7 @@ import {
 } from '../components/icons'
 import { submitSchoolInquiry, type SchoolInquiryInput } from '../lib/api'
 import { SCHOOLS_VIDEO, VideoFacade } from '../components/TrainingVideos'
+import FooterContact from '../components/FooterContact'
 
 const OFFER = [
   {
@@ -562,6 +563,7 @@ export default function ForSchools() {
             <span>&copy; 2026 Edinexa Technologies LLC. All rights reserved.</span>
           </div>
         </div>
+        <FooterContact />
       </footer>
       <SupportChat />
     </div>

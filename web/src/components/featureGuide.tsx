@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import SupportChat from './SupportChat'
 import { ArrowRightIcon } from './icons'
+import FooterContact from './FooterContact'
 
 // The shared chrome for every teacher-facing feature guide (/guide/<feature>).
 // /guide is the complete reference — every field, tab, and button. These are
@@ -238,6 +239,7 @@ export function GuideShell({ appTo, children }: { appTo: string; children: React
             <span>&copy; 2026 Edinexa Technologies LLC. All rights reserved.</span>
           </div>
         </div>
+        <FooterContact widthClassName="max-w-5xl" />
       </footer>
       <SupportChat />
     </div>

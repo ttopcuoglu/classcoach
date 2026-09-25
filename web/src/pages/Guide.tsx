@@ -23,6 +23,7 @@ import {
   UserIcon,
   WaveformIcon,
 } from '../components/icons'
+import FooterContact from '../components/FooterContact'
 
 // Old pastel icon tints mapped onto the app's solid badges.
 const TINT_BADGES: Record<string, string> = {
@@ -672,6 +673,7 @@ export default function Guide() {
             <span>&copy; 2026 Edinexa Technologies LLC. All rights reserved.</span>
           </div>
         </div>
+        <FooterContact />
       </footer>
       <SupportChat />
     </div>

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import SupportChat from '../components/SupportChat'
 import { ArrowRightIcon, SparkleIcon } from '../components/icons'
+import FooterContact from '../components/FooterContact'
 
 type QA = { q: string; a: React.ReactNode }
 type Category = { id: string; label: string; tint: string; items: QA[] }
@@ -250,6 +251,7 @@ export default function Faq() {
             <span>&copy; 2026 Edinexa Technologies LLC. All rights reserved.</span>
           </div>
         </div>
+        <FooterContact />
       </footer>
       <SupportChat />
     </div>
