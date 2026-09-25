@@ -10,11 +10,28 @@ import { ArrowRightIcon, CheckIcon } from './icons'
 // no request to Google until someone actually presses play.
 export const PLAYLIST_URL = 'https://www.youtube.com/playlist?list=PLcoaDQMmtVBU'
 
-export const INTRO_VIDEO = {
-  id: 'WFd7fWH3fr0',
-  thumb: '/videos/meet-wivoza-new.webp',
-  title: 'Every teacher deserves a place to practice — Wivoza',
+// The home page's intro film, and the cuts we swap in for people arriving from
+// a matching ad (wivoza.com/?v=veteran). Anything unrecognised falls back to the
+// default, so a stray or stale link can never leave the section empty.
+const INTRO_VIDEOS = {
+  default: {
+    id: 'WFd7fWH3fr0',
+    thumb: '/videos/meet-wivoza-new.webp',
+    title: 'Every teacher deserves a place to practice — Wivoza',
+  },
+  veteran: {
+    id: 'A85O4rhdYkk',
+    thumb: '/videos/meet-wivoza-veteran.webp',
+    title: 'After twenty years, the lesson runs itself — Wivoza',
+  },
+} as const
+
+export function introVideo(search: string) {
+  const key = new URLSearchParams(search).get('v')
+  return INTRO_VIDEOS[key as keyof typeof INTRO_VIDEOS] ?? INTRO_VIDEOS.default
 }
+
+export const INTRO_VIDEO = INTRO_VIDEOS.default
 
 export const GET_STARTED_VIDEO = {
   id: 'bao2qZHXzZA',

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import SupportChat from '../components/SupportChat'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import AuthCard from '../components/AuthCard'
 import {
   ArrowRightIcon,
@@ -21,7 +21,7 @@ import {
   SparkleIcon,
   TargetIcon,
 } from '../components/icons'
-import { INTRO_VIDEO, VideoFacade } from '../components/TrainingVideos'
+import { introVideo, VideoFacade } from '../components/TrainingVideos'
 
 const PROCESS = [
   {
@@ -314,6 +314,9 @@ function ReportMockup() {
 
 export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  // ?v=veteran and friends swap the intro film for the cut that matches the ad
+  // someone just clicked; everyone else gets the default.
+  const intro = introVideo(useLocation().search)
   return (
     // overflow-x-clip: the hero mockup's glow and floating badges deliberately
     // hang past its edges, and at 1024px they ran past the window too, so the
@@ -534,7 +537,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             A quick look at how Wivoza helps you prepare, reflect, and try one next step.
           </p>
         </div>
-        <VideoFacade {...INTRO_VIDEO} />
+        <VideoFacade {...intro} />
       </section>
 
       {/* Process */}
