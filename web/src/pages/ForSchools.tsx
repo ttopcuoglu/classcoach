@@ -11,6 +11,7 @@ import {
   ShieldIcon,
 } from '../components/icons'
 import { submitSchoolInquiry, type SchoolInquiryInput } from '../lib/api'
+import { SCHOOLS_VIDEO, VideoFacade } from '../components/TrainingVideos'
 
 const OFFER = [
   {
@@ -324,6 +325,24 @@ export default function ForSchools() {
             Tell us about your school
             <ArrowRightIcon className="h-4 w-4" />
           </a>
+        </div>
+      </section>
+
+      {/* The film: the claim above, then the proof, before any detail. */}
+      <section id="see-it" className="mx-auto w-full max-w-4xl px-6 pb-4 pt-2">
+        <div className="text-center">
+          <span className="font-heading text-xs font-bold uppercase tracking-[0.18em] text-terracotta">
+            See it in action
+          </span>
+          <h2 className="mt-2 font-heading text-3xl font-extrabold text-forest">
+            Forty seconds, start to finish<span className="text-terracotta">.</span>
+          </h2>
+          <p className="mx-auto mt-3 max-w-2xl text-ink-soft">
+            What your teachers get, what you see, and what you never see.
+          </p>
+        </div>
+        <div className="mt-6">
+          <VideoFacade {...SCHOOLS_VIDEO} />
         </div>
       </section>
 

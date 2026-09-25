@@ -33,6 +33,14 @@ export function introVideo(search: string) {
 
 export const INTRO_VIDEO = INTRO_VIDEOS.default
 
+// The For Schools page's own film: the same coaching seen from a principal's
+// side of the desk.
+export const SCHOOLS_VIDEO = {
+  id: '6jL1xdbkIaM',
+  thumb: '/videos/for-schools.webp',
+  title: 'Coaching for every teacher. Surveillance for none. — Wivoza for Schools',
+}
+
 export const GET_STARTED_VIDEO = {
   id: 'bao2qZHXzZA',
   thumb: '/videos/get-started.webp',
