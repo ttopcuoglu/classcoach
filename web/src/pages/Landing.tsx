@@ -22,7 +22,7 @@ import {
   TargetIcon,
   YouTubeIcon,
 } from '../components/icons'
-import { introVideo, VideoFacade } from '../components/TrainingVideos'
+import { introVideo, MEET_PLAYLIST_ID, VideoFacade } from '../components/TrainingVideos'
 import FooterContact from '../components/FooterContact'
 
 const PROCESS = [
@@ -539,7 +539,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             A quick look at how Wivoza helps you prepare, reflect, and try one next step.
           </p>
         </div>
-        <VideoFacade {...intro} />
+        <VideoFacade {...intro} list={MEET_PLAYLIST_ID} />
       </section>
 
       {/* Process */}

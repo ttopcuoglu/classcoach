@@ -10,6 +10,11 @@ import { ArrowRightIcon, CheckIcon } from './icons'
 // no request to Google until someone actually presses play.
 export const PLAYLIST_URL = 'https://www.youtube.com/playlist?list=PLcoaDQMmtVBU'
 
+// The two intro cuts, as a YouTube playlist. Handed to the home page's player
+// so whatever plays next is the other cut rather than whichever video YouTube
+// would otherwise pick off the channel.
+export const MEET_PLAYLIST_ID = 'PLBSPy7XdoPcs'
+
 // The home page's intro film, and the cuts we swap in for people arriving from
 // a matching ad (wivoza.com/?v=veteran). Anything unrecognised falls back to the
 // default, so a stray or stale link can never leave the section empty.
@@ -67,11 +72,15 @@ export function VideoFacade({
   thumb,
   title,
   size = 'large',
+  list,
 }: {
   id: string
   thumb: string
   title: string
   size?: 'large' | 'card'
+  // A YouTube playlist to follow for whatever plays next. Left off, the player
+  // falls back to YouTube's own suggestions from this channel.
+  list?: string
 }) {
   const [playing, setPlaying] = useState(false)
   const large = size === 'large'
@@ -83,7 +92,7 @@ export function VideoFacade({
         <iframe
           // cc_load_policy=0: the promo carries its own on-screen text, so
           // YouTube's auto-captions would sit on top of it in a black box.
-          src={`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0&cc_load_policy=0`}
+          src={`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0&cc_load_policy=0${list ? `&list=${list}` : ''}`}
           title={title}
           allow="autoplay; encrypted-media; picture-in-picture"
           allowFullScreen
