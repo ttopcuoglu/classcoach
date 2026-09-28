@@ -1,5 +1,5 @@
 import { FOCUS_AREAS, type FocusArea } from './focusAreas.ts'
-import { gradeLevelLabel } from './gradeLevels.ts'
+import { COURSE_LEVEL_GUIDANCE, gradeBandLabel } from './teachingContext.ts'
 
 // Composes the area-aware parts of the Ask / Practice system prompts.
 //
@@ -86,15 +86,26 @@ Hard limits for this area:
 ${area.safety}`
 }
 
-/// Grade level and subject, so coaching and scenarios land in the teacher's
-/// actual classroom rather than a generic one. A single grade rather than a
-/// three-year band, because what a 6th grader can be asked to do and what an
-/// 8th grader can be asked to do are not the same thing.
-export function teachingContextBlock(gradeLevel?: string | null, subject?: string | null): string {
+/// The teacher's room, so coaching and scenarios land somewhere real. Each
+/// field narrows the one before it, and the level is the one that changes the
+/// coaching most — the same Algebra 2 lesson in an honors section and in an
+/// inclusion section are different problems.
+export function teachingContextBlock(ctx: {
+  gradeBand?: string | null
+  subject?: string | null
+  course?: string | null
+  courseLevel?: string | null
+}): string {
   const lines = [
-    gradeLevel ? `Grade: ${gradeLevelLabel(gradeLevel)}` : null,
-    subject ? `Subject: ${subject}` : null,
+    ctx.gradeBand ? `Grade band: ${gradeBandLabel(ctx.gradeBand)}` : null,
+    ctx.subject ? `Subject: ${ctx.subject}` : null,
+    ctx.course ? `Course: ${ctx.course}` : null,
+    ctx.courseLevel ? `Level: ${ctx.courseLevel}` : null,
   ].filter(Boolean)
   if (lines.length === 0) return ''
-  return `\n\nThis teacher's classroom:\n${lines.join('\n')}\nWrite for this exact grade, not the band around it: the vocabulary, the attention span, the social dynamics, the length of a task, and what a student can already do all differ year to year. Set examples, analogies, and scenarios in this subject rather than a generic classroom, and never contradict this context.`
+
+  const levelNote = ctx.courseLevel ? COURSE_LEVEL_GUIDANCE[ctx.courseLevel] : null
+  return `\n\nThis teacher's classroom:\n${lines.join('\n')}${
+    levelNote ? `\n\nWhat that level means here: ${levelNote}` : ''
+  }\nSet examples, analogies, and scenarios in this room — its content, its students, its constraints — rather than a generic classroom, and never contradict this context.`
 }

@@ -1,0 +1,77 @@
+// What Ask & Practice asks about the teacher's room, so coaching and scenarios
+// land somewhere real rather than in a generic classroom.
+//
+// Four fields, each narrowing the one before it: grade band, subject, and — at
+// 9-12, where a subject splits into genuinely different courses — the course
+// and the level it's taught at. A 9th-grade Algebra 1 inclusion section and an
+// AP Calculus section are not the same room, and a scenario written for one is
+// useless in the other.
+
+export const GRADE_BANDS = ['K-5', '6-8', '9-12'] as const
+
+export type GradeBand = (typeof GRADE_BANDS)[number]
+
+export function pickGradeBand(value: unknown): GradeBand {
+  if (typeof value === 'string' && (GRADE_BANDS as readonly string[]).includes(value)) {
+    return value as GradeBand
+  }
+  return '6-8'
+}
+
+export function gradeBandLabel(band: string): string {
+  return band === 'K-5' ? 'elementary (K-5)' : band === '6-8' ? 'middle school (6-8)' : 'high school (9-12)'
+}
+
+// AP used to sit in this list. It moved to COURSE_LEVELS below, where it
+// belongs: AP is how a course is taught, not what subject it is — an AP Biology
+// teacher teaches Science.
+export const SUBJECTS = [
+  'ELA',
+  'Math',
+  'Science',
+  'History/SS',
+  'Technology',
+  'Fine Arts',
+] as const
+
+export const OTHER_SUBJECT = 'Other'
+
+/// The courses a subject splits into at 9-12. Offered only for that band —
+/// "Algebra 2" means something specific in a high school schedule, while a 4th
+/// grade teacher teaches math, full stop.
+export const COURSES_BY_SUBJECT: Record<string, readonly string[]> = {
+  ELA: ['English 9', 'English 10', 'English 11', 'English 12', 'Creative Writing', 'Journalism'],
+  Math: ['Algebra 1', 'Geometry', 'Algebra 2', 'Pre-Calculus', 'Calculus', 'Statistics'],
+  Science: ['Biology', 'Chemistry', 'Physics', 'Environmental Science', 'Anatomy', 'Computer Science'],
+  'History/SS': ['World History', 'US History', 'Government', 'Economics', 'Psychology', 'Geography'],
+  Technology: ['Computer Science', 'Engineering', 'Robotics', 'Digital Media', 'Business/IT'],
+  'Fine Arts': ['Visual Art', 'Music', 'Theater', 'Dance', 'Film'],
+}
+
+export function coursesFor(gradeBand: string | null | undefined, subject: string | null | undefined): readonly string[] {
+  if (gradeBand !== '9-12' || !subject) return []
+  return COURSES_BY_SUBJECT[subject] ?? []
+}
+
+/// How the section is taught. Distinct from the course: the same Algebra 2 runs
+/// as an honors section and as an inclusion section, and what a teacher needs
+/// from a coach differs sharply between them.
+export const COURSE_LEVELS = ['AP', 'Honors', 'Regular', 'Inclusion'] as const
+
+export type CourseLevel = (typeof COURSE_LEVELS)[number]
+
+export function isCourseLevel(value: unknown): value is CourseLevel {
+  return typeof value === 'string' && (COURSE_LEVELS as readonly string[]).includes(value)
+}
+
+/// What each level should change about the coaching, spelled out for the model
+/// — otherwise "Inclusion" reads as a label rather than a working constraint.
+export const COURSE_LEVEL_GUIDANCE: Record<string, string> = {
+  AP: 'An AP section: an external exam with a fixed syllabus and a hard date, students who mostly opted in, real pace pressure, and a wide gap between students who can do the work and students who are holding on.',
+  Honors:
+    'An honors section: capable, often compliant students, a faster pace, and the specific risk that performance gets mistaken for understanding. Coaching should push depth, not more work.',
+  Regular:
+    'A regular section: the widest mix of readiness, motivation, and outside circumstance in the building. Assume nothing about prior knowledge.',
+  Inclusion:
+    'An inclusion or co-taught section: students with IEPs and 504 plans alongside general-education peers, usually with a co-teacher or paraprofessional in the room. Coaching must respect accommodations as non-negotiable, treat the co-teacher as a partner rather than an aide, and never suggest anything that would single a student out.',
+}

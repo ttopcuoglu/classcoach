@@ -85,7 +85,7 @@ attemptsRouter.post('/', async (req, res) => {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 1024,
-      system: `${feedbackSystemPrompt(areaForScenario(scenario))}${teachingContextBlock(scenario.gradeLevel, scenario.subject)}${buildExperienceContextBlock(user?.experienceLevel)}`,
+      system: `${feedbackSystemPrompt(areaForScenario(scenario))}${teachingContextBlock(scenario)}${buildExperienceContextBlock(user?.experienceLevel)}`,
       messages: [{ role: 'user', content: context }],
     })
 
@@ -150,7 +150,7 @@ attemptsRouter.post('/:id/chat', async (req, res) => {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 300,
-      system: `${attemptChatSystemPrompt(areaForScenario(attempt.scenario))}${teachingContextBlock(attempt.scenario.gradeLevel, attempt.scenario.subject)}${buildExperienceContextBlock(user?.experienceLevel)}`,
+      system: `${attemptChatSystemPrompt(areaForScenario(attempt.scenario))}${teachingContextBlock(attempt.scenario)}${buildExperienceContextBlock(user?.experienceLevel)}`,
       messages: toClaudeMessages(existing, trimmed),
     })
     const reply = response.content

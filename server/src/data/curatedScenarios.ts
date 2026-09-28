@@ -1,4 +1,5 @@
-import type { DIFFICULTY_LEVELS, GRADE_BANDS } from '../lib/scenarioCategories.ts'
+import type { DIFFICULTY_LEVELS } from '../lib/scenarioCategories.ts'
+import type { GRADE_BANDS } from '../lib/teachingContext.ts'
 
 export type CuratedScenario = {
   text: string

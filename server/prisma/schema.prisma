@@ -167,15 +167,14 @@ model Scenario {
   // layer from `category`, which identifies its area on its own.
   focusArea  String?
   category   String
-  // The single grade this was written for, e.g. "K" or "7". gradeBand is kept
-  // alongside it, derived, because the curated fallback bank is written per
-  // band and every row predating grade levels has a band and no level.
-  gradeLevel String?
   gradeBand  String
-  // The teacher's subject this scenario was written for, when they gave one.
-  // Was passed to generation and thrown away before; kept now so a content or
-  // delivery scenario can be shown and re-run in the subject it was built for.
+  // The room this scenario was written for. subject was passed to generation
+  // and thrown away before; kept now so a scenario can be shown and re-run in
+  // the room it was built for. course is 9-12 only (Algebra 2, Chemistry);
+  // courseLevel is AP | Honors | Regular | Inclusion.
   subject    String?
+  course     String?
+  courseLevel String?
   difficulty String   @default("intermediate")
   source     String // "generated" | "curated"
   createdAt  DateTime @default(now())
@@ -224,12 +223,13 @@ model Debrief {
   // before the area axis existed — all of which are classroom management.
   focusArea    String?
   category     String?
-  // The grade and subject in play for this question, so coaching lands in the
-  // teacher's actual classroom. Defaulted from their profile, overridable per
-  // question. gradeBand is retained for rows written before grade levels.
-  gradeLevel   String?
+  // The room in play for this question, so coaching lands somewhere real.
+  // Defaulted from the teacher's profile, overridable per question. course is
+  // 9-12 only; courseLevel is AP | Honors | Regular | Inclusion.
   gradeBand    String?
   subject      String?
+  course       String?
+  courseLevel  String?
   feedback     String?
   followUp     String? // "next time" guidance — analogous to ScenarioAttempt.modelResponse
   rating       Int? // same private growth-tracking rating as ScenarioAttempt

@@ -26,7 +26,7 @@ import { extractTag, stripTag } from '../lib/extractTag.ts'
 import type { CoachFollowUp, Debrief } from '../generated/prisma/client.ts'
 import { prisma } from '../lib/prisma.ts'
 import { categoryInArea, isKnownCategory } from '../lib/scenarioCategories.ts'
-import { isGradeLevel } from '../lib/gradeLevels.ts'
+import { isCourseLevel, pickGradeBand } from '../lib/teachingContext.ts'
 import { findFocusArea, focusAreaForSubCategory, type FocusArea } from '../lib/focusAreas.ts'
 import {
   classificationBlock,
@@ -192,7 +192,7 @@ debriefRouter.get('/', async (req, res) => {
 })
 
 debriefRouter.post('/', async (req, res) => {
-  const { incidentText, focusArea, gradeLevel, subject } = req.body ?? {}
+  const { incidentText, focusArea, gradeBand, subject, course, courseLevel } = req.body ?? {}
   if (typeof incidentText !== 'string' || incidentText.trim().length === 0) {
     res.status(400).json({ error: 'incidentText is required' })
     return
@@ -201,8 +201,13 @@ debriefRouter.post('/', async (req, res) => {
   // domain and constrains the sub-category it can assign. Left unset, the
   // coach works out the area itself.
   const pickedArea = findFocusArea(focusArea)
-  const askGradeLevel = isGradeLevel(gradeLevel) ? gradeLevel : null
+  const askGradeBand = typeof gradeBand === 'string' ? pickGradeBand(gradeBand) : null
   const askSubject = typeof subject === 'string' && subject.trim() ? subject.trim() : null
+  // Course is offered only at 9-12, so anything sent with another band is
+  // stale client state rather than a real choice.
+  const askCourse =
+    askGradeBand === '9-12' && typeof course === 'string' && course.trim() ? course.trim() : null
+  const askCourseLevel = isCourseLevel(courseLevel) ? courseLevel : null
 
   const allowed = await checkAndLogUsage(req.user!.userId, 'debrief_feedback')
   if (!allowed) {
@@ -218,7 +223,7 @@ debriefRouter.post('/', async (req, res) => {
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
 
     const context = `What happened: ${incidentText}`
-    const basePrompt = `${askSystemPrompt(pickedArea)}${teachingContextBlock(askGradeLevel, askSubject)}`
+    const basePrompt = `${askSystemPrompt(pickedArea)}${teachingContextBlock({ gradeBand: askGradeBand, subject: askSubject, course: askCourse, courseLevel: askCourseLevel })}`
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 1024,
@@ -259,8 +264,10 @@ debriefRouter.post('/', async (req, res) => {
         incidentText,
         focusArea: focusAreaValue,
         category,
-        gradeLevel: askGradeLevel,
+        gradeBand: askGradeBand,
         subject: askSubject,
+        course: askCourse,
+        courseLevel: askCourseLevel,
         feedback,
         wordsToTry,
         followUp,
@@ -524,7 +531,7 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
   // otherwise a grading question gets a behavior-management voice on turn two.
   const basePrompt = isTalk
     ? TALK_SYSTEM_PROMPT
-    : `${askChatSystemPrompt(findFocusArea(debrief.focusArea))}${teachingContextBlock(debrief.gradeLevel, debrief.subject)}`
+    : `${askChatSystemPrompt(findFocusArea(debrief.focusArea))}${teachingContextBlock(debrief)}`
   const baseMaxTokens = isTalk ? 110 : 300
 
   await streamCoachReply(res, isTalk ? 'talk_chat' : 'debrief_chat', {
@@ -655,7 +662,7 @@ debriefRouter.post('/:id/chat', async (req, res) => {
     // otherwise a grading question gets a behavior-management voice on turn two.
     const basePrompt = isTalk
       ? TALK_SYSTEM_PROMPT
-      : `${askChatSystemPrompt(findFocusArea(debrief.focusArea))}${teachingContextBlock(debrief.gradeLevel, debrief.subject)}`
+      : `${askChatSystemPrompt(findFocusArea(debrief.focusArea))}${teachingContextBlock(debrief)}`
     const baseMaxTokens = isTalk ? 110 : 300
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,

@@ -5,8 +5,8 @@ import { getCuratedFallback } from '../lib/curatedFallback.ts'
 import { findFocusArea, focusAreaForSubCategory } from '../lib/focusAreas.ts'
 import { scenarioAreaBlock } from '../lib/focusAreaPrompt.ts'
 import { prisma } from '../lib/prisma.ts'
-import { bandForGrade, gradeLevelLabel, pickGradeLevel } from '../lib/gradeLevels.ts'
 import { pickDifficulty } from '../lib/scenarioCategories.ts'
+import { coursesFor, gradeBandLabel, isCourseLevel, pickGradeBand } from '../lib/teachingContext.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const scenariosRouter = Router()
@@ -41,19 +41,22 @@ scenariosRouter.get('/', async (req, res) => {
 })
 
 scenariosRouter.post('/generate', async (req, res) => {
-  const { focusArea, category, gradeLevel, difficulty, subject } = req.body ?? {}
+  const { focusArea, category, gradeBand, difficulty, subject, course, courseLevel } = req.body ?? {}
   // An explicit sub-category names its own area, so honour it rather than
   // letting the weighted area pick overrule it — otherwise asking for
   // `defiance` with no area set could come back as a grading scenario.
   const impliedArea = focusArea ?? focusAreaForSubCategory(category)?.value
   const chosenArea = await pickWeightedFocusArea(req.user!.userId, impliedArea)
   const chosenCategory = await pickWeightedCategory(req.user!.userId, chosenArea.value, category)
-  // The teacher picks one grade; the band is derived, and kept only so the
-  // curated fallback bank — written per band — can still match.
-  const chosenGradeLevel = pickGradeLevel(gradeLevel)
-  const chosenGradeBand = bandForGrade(chosenGradeLevel)
+  const chosenGradeBand = pickGradeBand(gradeBand)
   const chosenDifficulty = await pickWeightedDifficulty(req.user!.userId, chosenCategory, difficulty)
   const chosenSubject = typeof subject === 'string' && subject.trim() ? subject.trim() : null
+  // Courses exist only at 9-12, and only within the subject that offers them.
+  const chosenCourse =
+    typeof course === 'string' && coursesFor(chosenGradeBand, chosenSubject).includes(course)
+      ? course
+      : null
+  const chosenCourseLevel = isCourseLevel(courseLevel) ? courseLevel : null
 
   const allowed = await checkAndLogUsage(req.user!.userId, 'scenario_generate')
   if (!allowed) {
@@ -66,13 +69,14 @@ scenariosRouter.post('/generate', async (req, res) => {
       chosenArea.subCategories.find((c) => c.value === chosenCategory)?.label ?? chosenCategory
     const context = [
       `Sub-category: ${chosenCategory} (${subCategoryLabel})`,
-      `Grade: ${gradeLevelLabel(chosenGradeLevel)}`,
+      `Grade band: ${gradeBandLabel(chosenGradeBand)}`,
       `Difficulty: ${chosenDifficulty}`,
       chosenSubject ? `Subject: ${chosenSubject}` : null,
       chosenSubject
         ? 'Set the scenario in this subject — its content, its room, its materials — not a generic classroom.'
         : null,
-      `Write for ${gradeLevelLabel(chosenGradeLevel)} specifically. A scenario that would read the same one grade up or down is not specific enough.`,
+      chosenCourse ? `Course: ${chosenCourse}` : null,
+      chosenCourseLevel ? `Level: ${chosenCourseLevel}` : null,
     ]
       .filter(Boolean)
       .join('\n')
@@ -95,9 +99,10 @@ scenariosRouter.post('/generate', async (req, res) => {
         text,
         focusArea: chosenArea.value,
         category: chosenCategory,
-        gradeLevel: chosenGradeLevel,
         gradeBand: chosenGradeBand,
         subject: chosenSubject,
+        course: chosenCourse,
+        courseLevel: chosenCourseLevel,
         difficulty: chosenDifficulty,
         source: 'generated',
       },
@@ -124,7 +129,7 @@ scenariosRouter.get('/:id', async (req, res) => {
 })
 
 scenariosRouter.post('/', async (req, res) => {
-  const { text, focusArea, category, gradeBand, gradeLevel, subject, difficulty, source } = req.body ?? {}
+  const { text, focusArea, category, gradeBand, subject, difficulty, source } = req.body ?? {}
   if (
     typeof text !== 'string' ||
     typeof category !== 'string' ||
@@ -142,7 +147,6 @@ scenariosRouter.post('/', async (req, res) => {
       focusArea: area?.value ?? null,
       category,
       gradeBand,
-      gradeLevel: typeof gradeLevel === 'string' ? gradeLevel : null,
       subject: typeof subject === 'string' && subject.trim() ? subject.trim() : null,
       source,
       difficulty: pickDifficulty(difficulty),
