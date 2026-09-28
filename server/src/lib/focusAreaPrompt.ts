@@ -88,24 +88,36 @@ ${area.safety}`
 
 /// The teacher's room, so coaching and scenarios land somewhere real. Each
 /// field narrows the one before it, and the level is the one that changes the
-/// coaching most — the same Algebra 2 lesson in an honors section and in an
+/// coaching most — the same Algebra 2 lesson in an honours section and in an
 /// inclusion section are different problems.
 export function teachingContextBlock(ctx: {
   gradeBand?: string | null
   subject?: string | null
   course?: string | null
+  /// What they are teaching right now. The only field that changes weekly, and
+  /// the only one that says what the coaching should actually be ABOUT.
+  topic?: string | null
   courseLevel?: string | null
 }): string {
   const lines = [
     ctx.gradeBand ? `Grade band: ${gradeBandLabel(ctx.gradeBand)}` : null,
     ctx.subject ? `Subject: ${ctx.subject}` : null,
     ctx.course ? `Course: ${ctx.course}` : null,
+    ctx.topic ? `Topic or unit right now: ${ctx.topic}` : null,
     ctx.courseLevel ? `Level: ${ctx.courseLevel}` : null,
   ].filter(Boolean)
   if (lines.length === 0) return ''
 
   const levelNote = ctx.courseLevel ? COURSE_LEVEL_GUIDANCE[ctx.courseLevel] : null
+  // Subject and course say what room this is. Topic says what is happening in it
+  // this week, so it governs content rather than just colouring it: a teacher
+  // who is on photosynthesis on Thursday gains nothing from a protein-synthesis
+  // scenario, however good it is.
+  const topicNote = ctx.topic
+    ? `\n\nThis teacher is teaching ${ctx.topic} right now. Make the substance of your answer about ${ctx.topic} specifically — the misconception, the explanation, the student work, the example all come from it. Anything that would read the same for another topic in this subject is not specific enough. If you are not confident about the details of ${ctx.topic}, coach them on how to find where students go wrong in it rather than asserting content you are unsure of.`
+    : ''
+
   return `\n\nThis teacher's classroom:\n${lines.join('\n')}${
     levelNote ? `\n\nWhat that level means here: ${levelNote}` : ''
-  }\nSet examples, analogies, and scenarios in this room — its content, its students, its constraints — rather than a generic classroom, and never contradict this context.`
+  }${topicNote}\nSet examples, analogies, and scenarios in this room — its content, its students, its constraints — rather than a generic classroom, and never contradict this context.`
 }

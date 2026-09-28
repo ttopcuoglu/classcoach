@@ -41,7 +41,7 @@ scenariosRouter.get('/', async (req, res) => {
 })
 
 scenariosRouter.post('/generate', async (req, res) => {
-  const { focusArea, category, gradeBand, difficulty, subject, course, courseLevel } = req.body ?? {}
+  const { focusArea, category, gradeBand, difficulty, subject, course, topic, courseLevel } = req.body ?? {}
   // An explicit sub-category names its own area, so honour it rather than
   // letting the weighted area pick overrule it — otherwise asking for
   // `defiance` with no area set could come back as a grading scenario.
@@ -66,6 +66,9 @@ scenariosRouter.post('/generate', async (req, res) => {
       ? course.trim().slice(0, 80)
       : null
   const chosenCourseLevel = asksAboutContent && isCourseLevel(courseLevel) ? courseLevel : null
+  // Free text, and only where content is the subject of the coaching at all.
+  const chosenTopic =
+    asksAboutContent && typeof topic === 'string' && topic.trim() ? topic.trim().slice(0, 120) : null
 
   const allowed = await checkAndLogUsage(req.user!.userId, 'scenario_generate')
   if (!allowed) {
@@ -85,6 +88,10 @@ scenariosRouter.post('/generate', async (req, res) => {
         ? 'Set the scenario in this subject — its content, its room, its materials — not a generic classroom.'
         : null,
       chosenCourse ? `Course: ${chosenCourse}` : null,
+      chosenTopic ? `Topic: ${chosenTopic}` : null,
+      chosenTopic
+        ? `Write the scenario ABOUT ${chosenTopic}. The misconception, the student work, the question a student asks — all of it comes from ${chosenTopic}. A scenario that would read the same for another topic in this subject is not specific enough.`
+        : null,
       chosenCourseLevel ? `Level: ${chosenCourseLevel}` : null,
     ]
       .filter(Boolean)
@@ -115,6 +122,7 @@ scenariosRouter.post('/generate', async (req, res) => {
         gradeBand: chosenGradeBand,
         subject: chosenSubject,
         course: chosenCourse,
+        topic: chosenTopic,
         courseLevel: chosenCourseLevel,
         difficulty: chosenDifficulty,
         source: 'generated',

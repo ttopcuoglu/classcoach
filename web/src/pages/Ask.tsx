@@ -102,7 +102,12 @@ export default function Ask({
         // Subject, course and level are only asked for under Teaching and
         // Learning, so they're only sent from there.
         ...(focusArea === TEACHING_AND_LEARNING
-          ? { subject: room.subject, course: room.course, courseLevel: room.courseLevel }
+          ? {
+              subject: room.subject,
+              course: room.course,
+              topic: room.topic,
+              courseLevel: room.courseLevel,
+            }
           : {}),
       })
       setDebrief(result)

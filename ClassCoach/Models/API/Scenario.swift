@@ -15,6 +15,8 @@ struct Scenario: Codable, Identifiable {
     let subject: String?
     /// 9-12 only — the course a subject splits into (Algebra 2, Chemistry).
     let course: String?
+    /// What the teacher was teaching that week.
+    let topic: String?
     /// AP | Honors | Regular | Inclusion.
     let courseLevel: String?
     let difficulty: String

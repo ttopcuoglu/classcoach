@@ -174,6 +174,9 @@ model Scenario {
   // courseLevel is AP | Honors | Regular | Inclusion.
   subject    String?
   course     String?
+  // What the teacher was teaching that week. The only room field that changes
+  // weekly, and the one that decides what a scenario is actually about.
+  topic      String?
   courseLevel String?
   difficulty String   @default("intermediate")
   source     String // "generated" | "curated"
@@ -229,6 +232,7 @@ model Debrief {
   gradeBand    String?
   subject      String?
   course       String?
+  topic        String?
   courseLevel  String?
   feedback     String?
   followUp     String? // "next time" guidance — analogous to ScenarioAttempt.modelResponse

@@ -197,7 +197,7 @@ debriefRouter.get('/', async (req, res) => {
 })
 
 debriefRouter.post('/', async (req, res) => {
-  const { incidentText, focusArea, gradeBand, subject, course, courseLevel } = req.body ?? {}
+  const { incidentText, focusArea, gradeBand, subject, course, topic, courseLevel } = req.body ?? {}
   if (typeof incidentText !== 'string' || incidentText.trim().length === 0) {
     res.status(400).json({ error: 'incidentText is required' })
     return
@@ -222,6 +222,8 @@ debriefRouter.post('/', async (req, res) => {
       ? course.trim().slice(0, 80)
       : null
   const askCourseLevel = asksAboutContent && isCourseLevel(courseLevel) ? courseLevel : null
+  const askTopic =
+    asksAboutContent && typeof topic === 'string' && topic.trim() ? topic.trim().slice(0, 120) : null
 
   const allowed = await checkAndLogUsage(req.user!.userId, 'debrief_feedback')
   if (!allowed) {
@@ -237,7 +239,13 @@ debriefRouter.post('/', async (req, res) => {
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
 
     const context = `What happened: ${incidentText}`
-    const basePrompt = `${askSystemPrompt(pickedArea)}${teachingContextBlock({ gradeBand: askGradeBand, subject: askSubject, course: askCourse, courseLevel: askCourseLevel })}`
+    const basePrompt = `${askSystemPrompt(pickedArea)}${teachingContextBlock({
+      gradeBand: askGradeBand,
+      subject: askSubject,
+      course: askCourse,
+      topic: askTopic,
+      courseLevel: askCourseLevel,
+    })}`
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       // The classification tags sit at the END of the response, so a cap that
@@ -287,6 +295,7 @@ debriefRouter.post('/', async (req, res) => {
         gradeBand: askGradeBand,
         subject: askSubject,
         course: askCourse,
+        topic: askTopic,
         courseLevel: askCourseLevel,
         feedback,
         wordsToTry,

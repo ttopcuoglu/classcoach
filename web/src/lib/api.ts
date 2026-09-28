@@ -14,6 +14,8 @@ export type Scenario = {
   subject: string | null
   /// 9-12 only — the course a subject splits into (Algebra 2, Chemistry).
   course: string | null
+  /// What the teacher was teaching that week.
+  topic: string | null
   /// AP | Honors | Regular | Inclusion.
   courseLevel: string | null
   difficulty: string
@@ -930,6 +932,7 @@ export function generateScenario(opts: {
   difficulty?: string
   subject?: string
   course?: string
+  topic?: string
   courseLevel?: string
 }): Promise<Scenario> {
   return request('/api/scenarios/generate', { method: 'POST', body: JSON.stringify(opts) })
@@ -1042,7 +1045,14 @@ export function getDebriefs(params?: {
 
 export function submitDebrief(
   incidentText: string,
-  opts?: { focusArea?: string; gradeBand?: string; subject?: string; course?: string; courseLevel?: string },
+  opts?: {
+    focusArea?: string
+    gradeBand?: string
+    subject?: string
+    course?: string
+    topic?: string
+    courseLevel?: string
+  },
 ): Promise<Debrief> {
   return request('/api/debriefs', {
     method: 'POST',

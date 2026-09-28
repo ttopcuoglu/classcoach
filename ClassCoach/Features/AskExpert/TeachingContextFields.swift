@@ -12,6 +12,9 @@ struct TeachingContextValue: Equatable {
     var subject: String?
     /// 9-12 only — the course a subject splits into (Algebra 2, Chemistry).
     var course: String?
+    /// What they are teaching right now. Free text, and the only room field
+    /// that changes weekly — so it is never defaulted or remembered.
+    var topic: String?
     var courseLevel: String?
     /// The teacher picked "Other"; the free-text field then owns `subject`.
     var usingOtherSubject = false
@@ -101,6 +104,27 @@ struct TeachingContextFields: View {
                         ))
                         .textFieldStyle(.roundedBorder)
                         .padding(.horizontal)
+                    }
+                }
+            }
+
+            // Subject and course say what room this is; topic says what is
+            // happening in it this week. Practice has no other channel for it —
+            // a teacher types nothing before a scenario is generated — so
+            // without this the model picks the topic.
+            if showSubjectAndLevel {
+                field("Topic or unit (optional)") {
+                    TextField("What are you teaching right now?", text: Binding(
+                        get: { value.topic ?? "" },
+                        set: { value.topic = $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
+                    ))
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal)
+                    if let topic = value.topic {
+                        Text("Scenarios and coaching will be about \(topic).")
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .padding(.horizontal)
                     }
                 }
             }

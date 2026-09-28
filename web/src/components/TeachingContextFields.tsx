@@ -14,6 +14,9 @@ export type TeachingContext = {
   subject?: string
   /// 9-12 only — the course a subject splits into (Algebra 2, Chemistry).
   course?: string
+  /// What they are teaching right now. Free text, and the only room field that
+  /// changes weekly — so it is never defaulted or remembered.
+  topic?: string
   courseLevel?: string
   /// The teacher picked "Other"; the free-text box then owns `subject`.
   otherSubject: boolean
@@ -25,6 +28,7 @@ export const DEFAULT_TEACHING_CONTEXT: TeachingContext = {
   gradeBand: '6-8',
   subject: undefined,
   course: undefined,
+  topic: undefined,
   courseLevel: undefined,
   otherSubject: false,
   otherCourse: false,
@@ -172,6 +176,32 @@ export default function TeachingContextFields({
               />
             )}
           </div>
+        </div>
+      )}
+
+      {/* Subject and course say what room this is; topic says what is happening
+          in it this week. Practice has no other channel for it — a teacher
+          types nothing before a scenario is generated — so without this the
+          model picks the topic, and a protein-synthesis scenario is no use to
+          someone teaching photosynthesis on Thursday. Free text, because you
+          cannot enumerate topics; never defaulted, because it changes weekly. */}
+      {showSubjectAndLevel && (
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">
+            Topic or unit <span className="font-medium normal-case tracking-normal text-cream/50">(optional)</span>
+          </p>
+          <input
+            type="text"
+            value={value.topic ?? ''}
+            onChange={(e) => set({ topic: e.target.value.trim() ? e.target.value : undefined })}
+            placeholder="What are you teaching right now? e.g. photosynthesis"
+            aria-label="Topic or unit"
+            disabled={disabled}
+            className="mt-1.5 w-full max-w-sm rounded-full border-0 bg-cream px-4 py-2 text-xs text-ink placeholder:text-ink-soft focus:outline-none focus:ring-2 focus:ring-gold"
+          />
+          {value.topic && (
+            <p className="mt-1.5 text-xs text-cream/50">Scenarios and coaching will be about {value.topic}.</p>
+          )}
         </div>
       )}
 

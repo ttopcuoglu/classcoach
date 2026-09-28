@@ -409,6 +409,7 @@ struct TryItOutContent: View {
                 // Only asked for under Teaching and Learning, so only sent from there.
                 subject: asksAboutContent ? room.subject : nil,
                 course: asksAboutContent ? room.course : nil,
+                topic: asksAboutContent ? room.topic : nil,
                 courseLevel: asksAboutContent ? room.courseLevel : nil
             )
             attempt = ScenarioAttempt(

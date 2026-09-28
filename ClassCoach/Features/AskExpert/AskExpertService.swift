@@ -14,6 +14,7 @@ enum AskExpertService {
         let gradeBand: String?
         let subject: String?
         let course: String?
+        let topic: String?
         let courseLevel: String?
     }
 
@@ -23,6 +24,7 @@ enum AskExpertService {
         gradeBand: String?,
         subject: String?,
         course: String?,
+        topic: String?,
         courseLevel: String?
     ) async throws -> Debrief {
         try await APIClient.shared.request(
@@ -30,7 +32,7 @@ enum AskExpertService {
             method: "POST",
             body: SubmitBody(
                 incidentText: incidentText, focusArea: focusArea,
-                gradeBand: gradeBand, subject: subject, course: course, courseLevel: courseLevel
+                gradeBand: gradeBand, subject: subject, course: course, topic: topic, courseLevel: courseLevel
             )
         )
     }

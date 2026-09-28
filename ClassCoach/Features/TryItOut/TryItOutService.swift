@@ -10,6 +10,7 @@ enum TryItOutService {
         let difficulty: String?
         let subject: String?
         let course: String?
+        let topic: String?
         let courseLevel: String?
     }
 
@@ -20,6 +21,7 @@ enum TryItOutService {
         difficulty: String?,
         subject: String?,
         course: String?,
+        topic: String?,
         courseLevel: String?
     ) async throws -> Scenario {
         try await APIClient.shared.request(
@@ -27,7 +29,7 @@ enum TryItOutService {
             method: "POST",
             body: GenerateScenarioBody(
                 focusArea: focusArea, category: category, gradeBand: gradeBand,
-                difficulty: difficulty, subject: subject, course: course, courseLevel: courseLevel
+                difficulty: difficulty, subject: subject, course: course, topic: topic, courseLevel: courseLevel
             )
         )
     }
