@@ -10,6 +10,8 @@ import ShareButton from '../components/ShareButton'
 import { MicIcon, StarIcon } from '../components/icons'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { categoryLabel } from '../lib/categories'
+import { findFocusArea, focusAreaForCategory, focusAreaLabel } from '../lib/focusAreas'
+import { GRADE_BANDS } from '../lib/gradeBands'
 import { isExperienced } from '../lib/experience'
 import { takeAskPrefill } from '../lib/communicationsPrefill'
 import {
@@ -65,8 +67,21 @@ const STARTING_POINTS: { label: string; placeholder: string; dot: string; select
 
 const STARTER_TINTS = ['bg-peach-tint/60', 'bg-gold-tint/60', 'bg-mint-tint/60', 'bg-peach-tint/30']
 
-export default function Ask() {
+// Same list Practice offers, so the two tabs agree.
+const COMMON_SUBJECTS = ['Math', 'Science', 'English', 'Social Studies', 'Art', 'PE']
+
+// `focusArea` comes from the Ask & Practice shell (CoachChat). It's optional:
+// with no area picked the coach works out which of the six this is, so a
+// teacher never has to classify their own problem before asking about it.
+export default function Ask({
+  focusArea,
+  onPickArea,
+}: {
+  focusArea?: string
+  onPickArea?: (value: string) => void
+}) {
   const navigate = useNavigate()
+  const area = findFocusArea(focusArea)
   const [incidentText, setIncidentText] = useState('')
   const [placeholder, setPlaceholder] = useState('Describe what happened, or ask a question...')
   const [startingPoint, setStartingPoint] = useState<string | null>(null)
@@ -85,13 +100,28 @@ export default function Ask() {
   const [chatSending, setChatSending] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
 
+  // Defaulted from the teacher's profile and overridable per question, so
+  // coaching lands in their actual room. Content and delivery questions are
+  // close to useless without them — "how do I teach this" depends entirely on
+  // what "this" is.
+  const [gradeBand, setGradeBand] = useState<(typeof GRADE_BANDS)[number]>('6-8')
+  const [subject, setSubject] = useState<string | undefined>(undefined)
+  const [showContext, setShowContext] = useState(false)
+
   const { supported: speechSupported, listening, toggleListening } = useSpeechToText((text) =>
     setIncidentText((prev) => (prev ? `${prev} ${text}` : text)),
   )
 
   useEffect(() => {
     getProfile()
-      .then((profile) => setStarters(isExperienced(profile.experienceLevel) ? EXPERIENCED_STARTERS : NEW_TEACHER_STARTERS))
+      .then((profile) => {
+        setStarters(isExperienced(profile.experienceLevel) ? EXPERIENCED_STARTERS : NEW_TEACHER_STARTERS)
+        const levels = profile.gradeLevels?.toLowerCase() ?? ''
+        if (/\b(9|10|11|12)\b|9-12|high ?school/.test(levels)) setGradeBand('9-12')
+        else if (/\bk\b|kindergarten|\b[1-5](st|nd|rd|th)?\b|elementary|k-5/.test(levels)) setGradeBand('K-5')
+        const firstSubject = profile.subjects?.split(',')[0]?.trim()
+        if (firstSubject) setSubject(firstSubject)
+      })
       .catch(() => setStarters(NEW_TEACHER_STARTERS))
   }, [])
 
@@ -128,7 +158,7 @@ export default function Ask() {
     setSubmitting(true)
     setError(null)
     try {
-      const result = await submitDebrief(text)
+      const result = await submitDebrief(text, { focusArea, gradeBand, subject })
       setDebrief(result)
       setAllDebriefs((prev) => [result, ...prev])
     } catch {
@@ -210,7 +240,10 @@ export default function Ask() {
 
   function handlePracticeThis() {
     if (debrief?.category) sessionStorage.setItem('classcoach.suggestedCategory', debrief.category)
-    navigate('/coach-chat?tab=practice')
+    // Carry the area over, so a grading question rehearses a grading scenario
+    // rather than whatever Practice happened to be set to.
+    const target = debrief?.focusArea ?? focusAreaForCategory(debrief?.category)?.value ?? focusArea
+    navigate(`/coach-chat?tab=practice${target ? `&area=${target}` : ''}`)
   }
 
   return (
@@ -221,8 +254,9 @@ export default function Ask() {
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Ask your coach</p>
               <p className="mt-2 max-w-2xl text-sm text-cream/70">
-                Describe something that happened, or ask a classroom management question — you'll get
-                practical coaching either way.
+                {area
+                  ? `Describe something that happened, or ask a question about ${area.label.toLowerCase()} — you'll get practical coaching either way.`
+                  : "Describe something that happened, or ask a question about any part of the job — you'll get practical coaching either way."}
               </p>
             </div>
 
@@ -262,6 +296,69 @@ export default function Ask() {
               />
             </label>
 
+            <div className="rounded-2xl bg-cream/10 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-cream/80">
+                  <span className="font-semibold text-cream">Your room:</span> grades {gradeBand}
+                  {subject ? ` · ${subject}` : ' · no subject set'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowContext((v) => !v)}
+                  aria-expanded={showContext}
+                  className="text-sm font-semibold text-gold hover:text-cream"
+                >
+                  {showContext ? 'Hide' : 'Change'}
+                </button>
+              </div>
+              {showContext && (
+                <div className="mt-4 flex flex-col gap-3">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Grade band</p>
+                    <div className="mt-1.5 flex flex-wrap gap-2">
+                      {GRADE_BANDS.map((band) => (
+                        <button
+                          key={band}
+                          type="button"
+                          onClick={() => setGradeBand(band)}
+                          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                            gradeBand === band ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
+                          }`}
+                        >
+                          Grades {band}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Subject</p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      {COMMON_SUBJECTS.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setSubject((prev) => (prev === s ? undefined : s))}
+                          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                            subject === s ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
+                          }`}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                      <input
+                        type="text"
+                        value={COMMON_SUBJECTS.includes(subject ?? '') ? '' : subject ?? ''}
+                        onChange={(e) => setSubject(e.target.value.trim() ? e.target.value : undefined)}
+                        placeholder="or type yours"
+                        aria-label="Subject"
+                        className="w-36 rounded-full border-0 bg-cream px-3 py-1.5 text-xs text-ink placeholder:text-ink-soft focus:outline-none focus:ring-2 focus:ring-gold"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex flex-wrap items-center justify-between gap-3">
               {speechSupported ? (
                 <button
@@ -299,11 +396,29 @@ export default function Ask() {
         ) : (
           <div className="flex flex-col gap-4">
             <div>
-              {debrief.category && (
-                <span className="rounded-full bg-mint-tint/60 px-2.5 py-1 text-xs font-semibold text-forest">
-                  {categoryLabel(debrief.category)}
-                </span>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Which of the six this was coached as — the teacher's pick, or the
+                    coach's read when they didn't pick. Worth showing: it's how a
+                    teacher finds out the coach understood what kind of problem
+                    this is, and it's a one-tap way into the matching Practice. */}
+                {(debrief.focusArea ?? focusAreaForCategory(debrief.category)?.value) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const value = debrief.focusArea ?? focusAreaForCategory(debrief.category)?.value
+                      if (value) onPickArea?.(value)
+                    }}
+                    className="rounded-full bg-forest px-2.5 py-1 text-xs font-semibold text-cream transition-colors hover:bg-forest/90"
+                  >
+                    {focusAreaLabel(debrief.focusArea ?? focusAreaForCategory(debrief.category)?.value)}
+                  </button>
+                )}
+                {debrief.category && (
+                  <span className="rounded-full bg-mint-tint/60 px-2.5 py-1 text-xs font-semibold text-forest">
+                    {categoryLabel(debrief.category)}
+                  </span>
+                )}
+              </div>
               <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">
                 What happened
               </p>
@@ -397,7 +512,7 @@ export default function Ask() {
         <div>
           <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Or start with one of these</h2>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {(starters ?? []).map((starter, i) => (
+            {(area ? area.askStarters : starters ?? []).map((starter, i) => (
               <button
                 key={starter}
                 type="button"
@@ -418,7 +533,9 @@ export default function Ask() {
         items={allDebriefs.map((d) => ({
           id: d.id,
           createdAt: d.createdAt,
-          label: d.category ? categoryLabel(d.category) : null,
+          label:
+            focusAreaLabel(d.focusArea ?? focusAreaForCategory(d.category)?.value) ??
+            (d.category ? categoryLabel(d.category) : null),
           text: d.incidentText,
           saved: d.saved,
         }))}

@@ -41,7 +41,11 @@ scenariosRouter.get('/', async (req, res) => {
 
 scenariosRouter.post('/generate', async (req, res) => {
   const { focusArea, category, gradeBand, difficulty, subject } = req.body ?? {}
-  const chosenArea = await pickWeightedFocusArea(req.user!.userId, focusArea)
+  // An explicit sub-category names its own area, so honour it rather than
+  // letting the weighted area pick overrule it — otherwise asking for
+  // `defiance` with no area set could come back as a grading scenario.
+  const impliedArea = focusArea ?? focusAreaForSubCategory(category)?.value
+  const chosenArea = await pickWeightedFocusArea(req.user!.userId, impliedArea)
   const chosenCategory = await pickWeightedCategory(req.user!.userId, chosenArea.value, category)
   const chosenGradeBand = pickGradeBand(gradeBand)
   const chosenDifficulty = await pickWeightedDifficulty(req.user!.userId, chosenCategory, difficulty)

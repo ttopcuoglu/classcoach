@@ -14,6 +14,7 @@ import {
   formatReportDate,
 } from '../components/report'
 import { categoryLabel } from '../lib/categories'
+import { focusAreaForCategory, focusAreaLabel } from '../lib/focusAreas'
 import { getAttempts, getDebriefs, type Debrief, type ScenarioAttempt } from '../lib/api'
 
 // One printable report for both halves of Ask & Practice. They are different
@@ -58,8 +59,12 @@ export default function AskPracticeExport() {
             // for display and the printed chip has to match.
             items={
               [
+                focusAreaLabel(
+                  attempt.scenario.focusArea ?? focusAreaForCategory(attempt.scenario.category)?.value,
+                ),
                 categoryLabel(attempt.scenario.category),
                 attempt.scenario.gradeBand,
+                attempt.scenario.subject,
                 capitalize(attempt.scenario.difficulty),
               ].filter(Boolean) as string[]
             }
@@ -123,9 +128,19 @@ export default function AskPracticeExport() {
         meta={formatReportDate(ask.createdAt)}
         badge={ask.triedAt ? 'Tried in class' : undefined}
       />
-      {ask.category && (
+      {(ask.focusArea || ask.category) && (
         <div className="mt-5">
-          <ChipRow items={[categoryLabel(ask.category)]} accent={A.mint} />
+          <ChipRow
+            items={
+              [
+                focusAreaLabel(ask.focusArea ?? focusAreaForCategory(ask.category)?.value),
+                ask.category ? categoryLabel(ask.category) : null,
+                ask.gradeBand,
+                ask.subject,
+              ].filter(Boolean) as string[]
+            }
+            accent={A.mint}
+          />
         </div>
       )}
 

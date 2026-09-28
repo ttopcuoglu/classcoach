@@ -24,6 +24,8 @@ import {
 // Teacher's guide to Ask & Practice. Layout and section order come from
 // components/featureGuide.tsx; everything below is content only.
 
+import { FOCUS_AREAS } from '../lib/focusAreas'
+
 const BENEFITS = [
   { title: 'Get an answer, not a reading list', body: 'You asked about one student on one day. That’s what comes back.' },
   { title: 'Find the words while it’s calm', body: 'The right sentence is easier to write at 3:40 than to invent at 10:15.' },
@@ -36,15 +38,20 @@ const BENEFITS = [
 
 const MOMENTS = [
   'A student said something and you froze',
-  'You already responded and it didn’t go well',
+  'You explained it twice and half the room still doesn’t have it',
+  'A parent email is sitting in your inbox unanswered',
+  'You’re not sure the grade you just entered is defensible',
+  'A co-teacher undercut you in front of the class',
+  'One idea in this unit goes wrong every single year',
   'A hard conversation is on tomorrow’s calendar',
-  'A routine keeps falling apart at the same point',
-  'You want to sound firmer without sounding harsh',
-  'You’re new to this grade band and reading the room wrong',
   'You have five spare minutes and nothing to grade',
 ]
 
 const STEPS = [
+  {
+    title: 'Pick what it’s about — or don’t',
+    body: 'Six areas cover what teachers actually bring to a coach: delivery of instruction, teaching specific content, classroom management, grading, parent communication, and colleagues. Choosing one narrows the coaching and the scenarios. Skipping it is fine too — start typing and your coach works out which one it is.',
+  },
   {
     title: 'Pick the tab that matches your moment',
     body: 'Ask is for something that already happened, or a real question you have right now. Practice is for something that hasn’t happened yet and you’d rather not improvise.',
@@ -76,7 +83,7 @@ const LANES = [
     name: 'Practice',
     when: 'A rehearsal — low stakes, nobody watching.',
     detail:
-      'Filter by situation, grade band (K–5, 6–8, 9–12), and difficulty — Guided, Independent, or Challenge. Take one scenario, or a Quick Session of three back to back. Respond, then compare with a model.',
+      'Filter by situation, grade band (K–5, 6–8, 9–12), subject, and difficulty — Guided, Independent, or Challenge. What a scenario looks like depends on the area: a room that’s stopped following you, a misconception in a student’s own words, a piece of work on a rubric boundary, the text of a parent email, a line a colleague just said. Take one, or a Quick Session of three.',
   },
 ]
 
@@ -204,6 +211,32 @@ export default function GuideAskPractice() {
               ))}
             </div>
           </div>
+        </GuideSection>
+
+        {/* The six areas */}
+        <GuideSection
+          id="six-areas"
+          eyebrow="What you can bring"
+          title="Six areas, not just behavior"
+          lede="Ask & Practice used to be about student behavior only. It now covers the six things teachers actually come to a coach with — and each one works in both modes."
+        >
+          <div className="mt-8 grid gap-4 sm:grid-cols-2">
+            {FOCUS_AREAS.map((a) => (
+              <div key={a.value} className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+                <p className="font-heading text-lg font-bold text-forest">{a.label}</p>
+                <p className="mt-1 text-sm font-semibold text-terracotta-600">{a.blurb}</p>
+                <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Ask</p>
+                <p className="mt-1 text-sm italic leading-relaxed text-ink">&ldquo;{a.askExample}&rdquo;</p>
+                <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Practice</p>
+                <p className="mt-1 text-sm italic leading-relaxed text-ink">&ldquo;{a.practiceExample}&rdquo;</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-6 text-sm leading-relaxed text-ink-soft">
+            Parent communication and colleagues overlap with Communication Coach on purpose. Come here for a quick
+            question or one rehearsed exchange; go to Communication Coach when you need the actual email drafted or a
+            whole meeting prepared.
+          </p>
         </GuideSection>
 
         {/* How it works */}

@@ -6,8 +6,12 @@ export type ChatMessage = { role: 'user' | 'assistant'; text: string; createdAt:
 export type Scenario = {
   id: string
   text: string
+  // One of the six focus areas (see lib/focusAreas.ts). Null on rows written
+  // before the area axis existed — derive it from `category` in that case.
+  focusArea: string | null
   category: string
   gradeBand: string
+  subject: string | null
   difficulty: string
   source: string
   createdAt: string
@@ -293,7 +297,13 @@ export type TalkTakeaway = { explored: string; tryNext: string; notice: string }
 export type Debrief = {
   id: string
   incidentText: string
+  // The area this question belongs to — the teacher's pick, or the coach's
+  // read when they didn't pick one. Null on Talk It Through rows and on rows
+  // written before the area axis existed.
+  focusArea: string | null
   category: string | null
+  gradeBand: string | null
+  subject: string | null
   feedback: string | null
   wordsToTry: string | null
   followUp: string | null
@@ -907,16 +917,14 @@ export function deleteOrganization(id: string): Promise<{ status: string }> {
   return request(`/api/admin/organizations/${id}`, { method: 'DELETE' })
 }
 
-export function generateScenario(
-  category?: string,
-  gradeBand?: string,
-  difficulty?: string,
-  subject?: string,
-): Promise<Scenario> {
-  return request('/api/scenarios/generate', {
-    method: 'POST',
-    body: JSON.stringify({ category, gradeBand, difficulty, subject }),
-  })
+export function generateScenario(opts: {
+  focusArea?: string
+  category?: string
+  gradeBand?: string
+  difficulty?: string
+  subject?: string
+}): Promise<Scenario> {
+  return request('/api/scenarios/generate', { method: 'POST', body: JSON.stringify(opts) })
 }
 
 export function getAttempts(params?: { saved?: boolean }): Promise<ScenarioAttempt[]> {
@@ -1011,16 +1019,27 @@ export async function analyzeDemoClip(audioBlob: Blob): Promise<DemoAnalysisResu
   return res.json()
 }
 
-export function getDebriefs(params?: { saved?: boolean; source?: DebriefSource }): Promise<Debrief[]> {
+export function getDebriefs(params?: {
+  saved?: boolean
+  source?: DebriefSource
+  focusArea?: string
+}): Promise<Debrief[]> {
   const query = new URLSearchParams()
   if (params?.saved) query.set('saved', 'true')
   if (params?.source) query.set('source', params.source)
+  if (params?.focusArea) query.set('focusArea', params.focusArea)
   const queryString = query.toString()
   return request(`/api/debriefs${queryString ? `?${queryString}` : ''}`)
 }
 
-export function submitDebrief(incidentText: string): Promise<Debrief> {
-  return request('/api/debriefs', { method: 'POST', body: JSON.stringify({ incidentText }) })
+export function submitDebrief(
+  incidentText: string,
+  opts?: { focusArea?: string; gradeBand?: string; subject?: string },
+): Promise<Debrief> {
+  return request('/api/debriefs', {
+    method: 'POST',
+    body: JSON.stringify({ incidentText, ...opts }),
+  })
 }
 
 export function sendDebriefChat(id: string, message: string): Promise<Debrief> {

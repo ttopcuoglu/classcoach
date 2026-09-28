@@ -112,7 +112,8 @@ const ACTION_CARDS = [
     accent: ACCENTS.gold,
     tag: 'Safe practice',
     title: 'Ask & Practice',
-    description: 'Ask a straight question, or rehearse a difficult classroom moment before it happens.',
+    description:
+      'Teaching, content, behavior, grading, parents, colleagues — ask a straight question, or rehearse it first.',
     linkLabel: 'Ask or rehearse',
   },
 ]

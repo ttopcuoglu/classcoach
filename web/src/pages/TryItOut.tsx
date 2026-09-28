@@ -9,7 +9,8 @@ import { ArrowUpIcon, MicIcon, StarIcon } from '../components/icons'
 import { ProgressRing, WorkingRing } from '../components/ProgressRing'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { useSpeechToText } from '../hooks/useSpeechToText'
-import { CATEGORIES, categoryLabel } from '../lib/categories'
+import { categoryLabel } from '../lib/categories'
+import { findFocusArea, focusAreaForCategory, subCategoriesFor } from '../lib/focusAreas'
 import { isExperienced } from '../lib/experience'
 import { GRADE_BANDS } from '../lib/gradeBands'
 import {
@@ -34,6 +35,9 @@ const DIFFICULTIES: { label: string; value?: string }[] = [
 
 type StarterScenario = { label: string; category: string }
 
+// The "no area picked" set — still behavior-flavored, because that's what a
+// teacher who hasn't chosen is most often here for. Once an area IS picked, its
+// own `practiceStarters` replace these (see `starters` below).
 const STARTER_SCENARIOS: StarterScenario[] = [
   { label: 'A student is checked out and not participating', category: 'disengagement' },
   { label: 'A student pushes back when you ask them to do something', category: 'defiance' },
@@ -47,18 +51,37 @@ const EXPERIENCED_SCENARIOS: StarterScenario[] = [
   { label: 'A conflict between students has spilled in from outside class', category: 'peer_conflict' },
 ]
 
+// Offered as chips next to the free-text subject field, so the common case is
+// one tap and an unusual subject is still typeable.
+const COMMON_SUBJECTS = ['Math', 'Science', 'English', 'Social Studies', 'Art', 'PE']
+
 const SESSION_LENGTH = 3
 
 function difficultyLabel(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
-export default function TryItOut() {
+// `focusArea` comes from the Ask & Practice shell (CoachChat), so switching
+// between Ask and Practice keeps the area the teacher chose.
+export default function TryItOut({ focusArea }: { focusArea?: string }) {
   const [category, setCategory] = useState<string | undefined>(undefined)
   const [gradeBand, setGradeBand] = useState<(typeof GRADE_BANDS)[number]>('6-8')
   const [difficulty, setDifficulty] = useState<string | undefined>(undefined)
   const [subject, setSubject] = useState<string | undefined>(undefined)
   const [starterScenarios, setStarterScenarios] = useState<StarterScenario[] | null>(null)
+  const area = findFocusArea(focusArea)
+
+  // A sub-category from a different area would silently contradict the area on
+  // the next generate, so changing area clears a mismatched one. Only when an
+  // area is actually selected: with none, a bare sub-category is still valid —
+  // the server derives the area from it (see scenarios.ts), which is how the
+  // onboarding track's suggested category keeps working.
+  useEffect(() => {
+    if (focusArea && category && focusAreaForCategory(category)?.value !== focusArea) {
+      setCategory(undefined)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusArea])
 
   const [attempt, setAttempt] = useState<ScenarioAttempt | null>(null)
   const [responseText, setResponseText] = useState('')
@@ -166,7 +189,13 @@ export default function TryItOut() {
     setChatDraft('')
     setChatError(null)
     try {
-      const scenario = await generateScenario(categoryOverride ?? category, gradeBand, difficulty, subject)
+      const scenario = await generateScenario({
+        focusArea,
+        category: categoryOverride ?? category,
+        gradeBand,
+        difficulty,
+        subject,
+      })
       setAttempt({
         id: `draft-${scenario.id}`,
         scenarioId: scenario.id,
@@ -314,6 +343,10 @@ export default function TryItOut() {
   const hasFeedback = attempt && (attempt.feedback || attempt.modelResponse)
   const difficultyText = (DIFFICULTIES.find((d) => d.value === difficulty)?.label ?? 'Any difficulty').toLowerCase()
   const situationText = category ? categoryLabel(category).toLowerCase() : 'any situation'
+  // An area's own openers when one is chosen; otherwise the experience-based
+  // behavior set, which is what Practice has always opened with.
+  const starters = area ? area.practiceStarters : starterScenarios ?? []
+  const subCategories = subCategoriesFor(focusArea)
   const sessionAttempts = sessionState?.done
     ? sessionState.attemptIds.map((id) => allAttempts.find((a) => a.id === id)).filter((a): a is ScenarioAttempt => !!a)
     : []
@@ -392,7 +425,7 @@ export default function TryItOut() {
             <p className="mt-2 font-heading text-2xl font-bold text-cream">Ready when you are.</p>
             <p className="mt-1 text-sm text-cream/70">Pick a moment to rehearse, or let Wivoza build a new one for you.</p>
             <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {(starterScenarios ?? []).map((s, i) => (
+              {starters.map((s, i) => (
                 <button
                   key={s.label}
                   type="button"
@@ -424,8 +457,8 @@ export default function TryItOut() {
             <div className="mt-5 rounded-2xl bg-cream/10 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm text-cream/80">
-                  <span className="font-semibold text-cream">New scenarios:</span> {situationText} · grades {gradeBand} ·{' '}
-                  {difficultyText}
+                  <span className="font-semibold text-cream">New scenarios:</span> {situationText} · grades {gradeBand}
+                  {subject ? ` · ${subject}` : ''} · {difficultyText}
                 </p>
                 <button
                   type="button"
@@ -440,25 +473,34 @@ export default function TryItOut() {
                 <div className="mt-4 flex flex-col gap-3">
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Situation</p>
-                    <div className="mt-1.5 flex flex-wrap gap-2">
-                      {CATEGORIES.map(({ label, value }) => {
-                        const count = value ? categoryTally.get(value) : undefined
-                        return (
-                          <button
-                            key={label}
-                            type="button"
-                            onClick={() => setCategory(value)}
-                            title={count ? `You've practiced this ${count === 1 ? 'once' : `${count} times`}` : undefined}
-                            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                              category === value ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
-                            }`}
-                          >
-                            {label === 'All' ? 'Any situation' : label}
-                            {count ? ` · ${count} practiced` : ''}
-                          </button>
-                        )
-                      })}
-                    </div>
+                    {area ? (
+                      <div className="mt-1.5 flex flex-wrap gap-2">
+                        {[{ label: 'Any situation', value: undefined }, ...subCategories].map(({ label, value }) => {
+                          const count = value ? categoryTally.get(value) : undefined
+                          return (
+                            <button
+                              key={label}
+                              type="button"
+                              onClick={() => setCategory(value)}
+                              title={count ? `You've practiced this ${count === 1 ? 'once' : `${count} times`}` : undefined}
+                              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                                category === value ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
+                              }`}
+                            >
+                              {label}
+                              {count ? ` · ${count} practiced` : ''}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      // Showing all thirty-one sub-categories at once would be a wall
+                      // of chips, so this narrows only once an area is chosen.
+                      <p className="mt-1.5 text-sm text-cream/60">
+                        Pick a focus area above to narrow this — otherwise your coach chooses, weighted toward
+                        what you&rsquo;ve practiced least.
+                      </p>
+                    )}
                   </div>
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Grade band</p>
@@ -476,6 +518,34 @@ export default function TryItOut() {
                         </button>
                       ))}
                     </div>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Subject</p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      {COMMON_SUBJECTS.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setSubject((prev) => (prev === s ? undefined : s))}
+                          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                            subject === s ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
+                          }`}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                      <input
+                        type="text"
+                        value={COMMON_SUBJECTS.includes(subject ?? '') ? '' : subject ?? ''}
+                        onChange={(e) => setSubject(e.target.value.trim() ? e.target.value : undefined)}
+                        placeholder="or type yours"
+                        aria-label="Subject"
+                        className="w-36 rounded-full border-0 bg-cream px-3 py-1.5 text-xs text-ink placeholder:text-ink-soft focus:outline-none focus:ring-2 focus:ring-gold"
+                      />
+                    </div>
+                    <p className="mt-1.5 text-xs text-cream/50">
+                      Content and delivery scenarios are written for this subject and grade.
+                    </p>
                   </div>
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Difficulty</p>
