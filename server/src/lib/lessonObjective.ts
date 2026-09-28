@@ -213,20 +213,25 @@ export async function enrichLessonContent(
   lessonContent: LessonContentResult,
   segments: Segment[],
 ): Promise<LessonContentResult> {
-  // `found: null` means the recording was too short to have a start to check,
-  // which no amount of reading will change.
-  if (lessonContent.statedObjective.found === null) return lessonContent
-
   const read = await readLessonObjective(segments)
   if (!read.quote && !read.summary) return lessonContent
+
+  // `found: null` is the phrase detector saying the recording was too short to
+  // have an opening to scan. That floor belonged to a scan that needed a
+  // phase; reading the transcript does not, and a twenty-four second clip that
+  // opens "today we are going to look at how plants make their own food"
+  // plainly did state one. So a quote overrides it — but its absence does not,
+  // because "nobody said one in twenty seconds" is not a finding about the
+  // lesson, and the teacher keeps the honest "start not captured".
+  const foundNothing = lessonContent.statedObjective.found === null
+    ? { found: null, quote: null, timestampSec: null, source: 'model' as const }
+    : { found: false, quote: null, timestampSec: null, source: 'model' as const }
 
   return {
     ...lessonContent,
     summary: read.summary ?? lessonContent.summary ?? null,
     statedObjective: read.quote
       ? { found: true, quote: read.quote, timestampSec: read.timestampSec, source: 'model' }
-      : // The model read the whole transcript and found none. That is a
-        // stronger negative than the phrase detector's, so it wins.
-        { found: false, quote: null, timestampSec: null, source: 'model' },
+      : foundNothing,
   }
 }
