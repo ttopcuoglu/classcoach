@@ -50,11 +50,8 @@ struct TryItOutContent: View {
 
     @EnvironmentObject private var authManager: AuthManager
     @State private var category: String?
-    @State private var gradeLevel = "7"
     @State private var difficulty: String?
-    @State private var subject: String?
-    /// Set when the teacher picks "Other" — the free-text box then owns `subject`.
-    @State private var usingOtherSubject = false
+    @State private var room = TeachingContextValue()
 
     @State private var attempt: ScenarioAttempt?
     @State private var responseText = ""
@@ -99,24 +96,7 @@ struct TryItOutContent: View {
                     ChipRow(items: subCategoryChips(focusArea), selection: category) { category = $0 }
                 }
                 ChipRow(items: difficulties, selection: difficulty) { difficulty = $0 }
-                ChipRow(items: gradeLevelChips, selection: gradeLevel) { gradeLevel = $0 ?? "7" }
-                ChipRow(
-                    items: subjects.map { ($0, Optional($0)) } + [(otherSubjectLabel, Optional(otherSubjectLabel))],
-                    selection: usingOtherSubject ? otherSubjectLabel : subject
-                ) { picked in
-                    usingOtherSubject = picked == otherSubjectLabel
-                    subject = usingOtherSubject ? nil : picked
-                }
-                // Only shown once "Other" is picked, so the common case is
-                // seven chips rather than seven chips and an empty box.
-                if usingOtherSubject {
-                    TextField("Which subject?", text: Binding(
-                        get: { subject ?? "" },
-                        set: { subject = $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
-                    ))
-                    .textFieldStyle(.roundedBorder)
-                    .padding(.horizontal)
-                }
+                TeachingContextFields(value: $room)
 
                 scenarioCard
 
@@ -212,7 +192,9 @@ struct TryItOutContent: View {
                 [
                     focusAreaLabel(attempt.scenario.focusArea ?? focusAreaForCategory(attempt.scenario.category)?.value),
                     categoryLabel(attempt.scenario.category),
-                    attempt.scenario.gradeLevel.map(gradeLevelLabel) ?? "Grades \(attempt.scenario.gradeBand)",
+                    "Grades \(attempt.scenario.gradeBand)",
+                    attempt.scenario.course ?? attempt.scenario.subject,
+                    attempt.scenario.courseLevel,
                     attempt.scenario.subject,
                     difficultyLabel(attempt.scenario.difficulty),
                 ].compactMap { $0 }.joined(separator: " · ")
@@ -394,8 +376,9 @@ struct TryItOutContent: View {
         chatError = nil
         do {
             let scenario = try await TryItOutService.generateScenario(
-                focusArea: focusArea, category: category, gradeLevel: gradeLevel,
-                difficulty: difficulty, subject: subject
+                focusArea: focusArea, category: category, gradeBand: room.gradeBand,
+                difficulty: difficulty, subject: room.subject, course: room.course,
+                courseLevel: room.courseLevel
             )
             attempt = ScenarioAttempt(
                 id: "draft-\(scenario.id)", scenarioId: scenario.id, responseText: "",

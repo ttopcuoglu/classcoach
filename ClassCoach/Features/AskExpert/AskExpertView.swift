@@ -42,10 +42,7 @@ struct AskExpertContent: View {
     @State private var error: String?
     // Defaulted from the profile, overridable per question — content and
     // delivery questions are unanswerable without them.
-    @State private var gradeLevel = "7"
-    @State private var subject: String?
-    /// Set when the teacher picks "Other" — the free-text box then owns `subject`.
-    @State private var usingOtherSubject = false
+    @State private var room = TeachingContextValue()
     @State private var showContext = false
 
     @State private var allDebriefs: [Debrief] = []
@@ -174,43 +171,11 @@ struct AskExpertContent: View {
         }
     }
 
-    /// Grade band and subject, collapsed to one line by default — the coaching
-    /// needs them, but a teacher shouldn't have to set them to ask a question.
+    /// Always visible: what room this is isn't optional context, it's what
+    /// separates coaching about a 4th grade math lesson from coaching about an
+    /// AP Calculus section. It used to sit behind a "Change" fold.
     private var teachingContextRow: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Your room: \(gradeLevelLabel(gradeLevel))\(subject.map { " · \($0)" } ?? "")")
-                    .font(.footnote)
-                    .foregroundStyle(AppTheme.textSecondary)
-                Spacer()
-                Button(showContext ? "Hide" : "Change") {
-                    withAnimation { showContext.toggle() }
-                }
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(AppTheme.terracotta600)
-            }
-            if showContext {
-                ChipRow(items: gradeLevelChips, selection: gradeLevel) { gradeLevel = $0 ?? "7" }
-                ChipRow(
-                    items: subjects.map { ($0, Optional($0)) } + [(otherSubjectLabel, Optional(otherSubjectLabel))],
-                    selection: usingOtherSubject ? otherSubjectLabel : subject
-                ) { picked in
-                    usingOtherSubject = picked == otherSubjectLabel
-                    subject = usingOtherSubject ? nil : picked
-                }
-                // Only shown once "Other" is picked, so the common case is
-                // seven chips rather than seven chips and an empty box.
-                if usingOtherSubject {
-                    TextField("Which subject?", text: Binding(
-                        get: { subject ?? "" },
-                        set: { subject = $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
-                    ))
-                    .textFieldStyle(.roundedBorder)
-                }
-            }
-        }
-        .padding(12)
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 14))
+        TeachingContextFields(value: $room)
     }
 
     @ViewBuilder
@@ -226,6 +191,11 @@ struct AskExpertContent: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .background(AppTheme.primary, in: Capsule())
+                }
+                if let course = debrief.course ?? debrief.subject {
+                    Text([course, debrief.courseLevel].compactMap { $0 }.joined(separator: " · "))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
                 }
                 if let category = debrief.category {
                     Text(categoryLabel(category))
@@ -341,11 +311,11 @@ struct AskExpertContent: View {
     /// Same profile-to-grade-band rules as web/src/pages/Ask.tsx.
     private func seedTeachingContext() {
         guard let user = authManager.currentUser else { return }
-        gradeLevel = gradeFromProfile(user.gradeLevels)
-        if subject == nil, let mapped = subjectFromProfile(user.subjects) {
-            subject = mapped
-            // A profile subject that isn't one of the seven lands in "Other".
-            usingOtherSubject = !subjects.contains(mapped)
+        room.gradeBand = bandFromProfile(user.gradeLevels)
+        if room.subject == nil, let mapped = subjectFromProfile(user.subjects) {
+            room.subject = mapped
+            // A profile subject that isn't one of the six lands in "Other".
+            room.usingOtherSubject = !subjects.contains(mapped)
         }
     }
 
@@ -356,7 +326,8 @@ struct AskExpertContent: View {
         error = nil
         do {
             let result = try await AskExpertService.submitDebrief(
-                incidentText: text, focusArea: focusArea, gradeLevel: gradeLevel, subject: subject
+                incidentText: text, focusArea: focusArea, gradeBand: room.gradeBand,
+                subject: room.subject, course: room.course, courseLevel: room.courseLevel
             )
             debrief = result
             allDebriefs.insert(result, at: 0)

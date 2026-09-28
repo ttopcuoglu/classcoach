@@ -11,11 +11,12 @@ struct Scenario: Codable, Identifiable {
     /// before the area axis existed — derive it from `category` in that case.
     let focusArea: String?
     let category: String
-    /// The single grade this was written for ("K", "7"). Nil on rows written
-    /// before grade levels; `gradeBand` covers those.
-    let gradeLevel: String?
     let gradeBand: String
     let subject: String?
+    /// 9-12 only — the course a subject splits into (Algebra 2, Chemistry).
+    let course: String?
+    /// AP | Honors | Regular | Inclusion.
+    let courseLevel: String?
     let difficulty: String
     let source: String
     let createdAt: String

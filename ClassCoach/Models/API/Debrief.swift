@@ -11,8 +11,10 @@ struct Debrief: Codable, Identifiable {
     /// rows written before the area axis existed.
     let focusArea: String?
     let category: String?
-    let gradeLevel: String?
+    let gradeBand: String?
     let subject: String?
+    let course: String?
+    let courseLevel: String?
     let feedback: String?
     let followUp: String?
     let rating: Int?

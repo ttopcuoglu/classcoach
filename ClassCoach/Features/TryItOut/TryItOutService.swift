@@ -6,24 +6,28 @@ enum TryItOutService {
     private struct GenerateScenarioBody: Encodable {
         let focusArea: String?
         let category: String?
-        let gradeLevel: String?
+        let gradeBand: String?
         let difficulty: String?
         let subject: String?
+        let course: String?
+        let courseLevel: String?
     }
 
     static func generateScenario(
         focusArea: String?,
         category: String?,
-        gradeLevel: String?,
+        gradeBand: String?,
         difficulty: String?,
-        subject: String?
+        subject: String?,
+        course: String?,
+        courseLevel: String?
     ) async throws -> Scenario {
         try await APIClient.shared.request(
             "/api/scenarios/generate",
             method: "POST",
             body: GenerateScenarioBody(
-                focusArea: focusArea, category: category, gradeLevel: gradeLevel,
-                difficulty: difficulty, subject: subject
+                focusArea: focusArea, category: category, gradeBand: gradeBand,
+                difficulty: difficulty, subject: subject, course: course, courseLevel: courseLevel
             )
         )
     }
