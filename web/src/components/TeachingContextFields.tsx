@@ -1,0 +1,161 @@
+import {
+  COURSE_LEVELS,
+  COURSE_LEVEL_BLURB,
+  GRADE_BANDS,
+  OTHER_SUBJECT,
+  SUBJECTS,
+  coursesFor,
+} from '../lib/teachingContext'
+
+export type TeachingContext = {
+  gradeBand: string
+  subject?: string
+  /// 9-12 only — the course a subject splits into (Algebra 2, Chemistry).
+  course?: string
+  courseLevel?: string
+  /// The teacher picked "Other"; the free-text box then owns `subject`.
+  otherSubject: boolean
+}
+
+export const DEFAULT_TEACHING_CONTEXT: TeachingContext = {
+  gradeBand: '6-8',
+  subject: undefined,
+  course: undefined,
+  courseLevel: undefined,
+  otherSubject: false,
+}
+
+// Shared by Ask and Practice, because both need the same four answers and they
+// have to agree. Rendered on the dark stage card in both places.
+//
+// Always visible — this used to sit behind a "Change" fold, which made the room
+// look optional. It isn't: it's what separates coaching about a 4th grade math
+// lesson from coaching about an AP Calculus section.
+export default function TeachingContextFields({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: TeachingContext
+  onChange: (next: TeachingContext) => void
+  disabled?: boolean
+}) {
+  const courses = coursesFor(value.gradeBand, value.otherSubject ? undefined : value.subject)
+
+  function set(patch: Partial<TeachingContext>) {
+    onChange({ ...value, ...patch })
+  }
+
+  const chip = (selected: boolean) =>
+    `rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-60 ${
+      selected ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
+    }`
+
+  return (
+    <div className="flex flex-col gap-3.5 rounded-2xl bg-cream/10 p-4">
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Grade band</p>
+        <div className="mt-1.5 flex flex-wrap gap-2">
+          {GRADE_BANDS.map((band) => (
+            <button
+              key={band}
+              type="button"
+              disabled={disabled}
+              // Courses belong to 9-12, so leaving that band drops the course
+              // rather than silently sending a stale one.
+              onClick={() => set({ gradeBand: band, course: band === '9-12' ? value.course : undefined })}
+              className={chip(value.gradeBand === band)}
+            >
+              Grades {band}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Subject</p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          {SUBJECTS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              disabled={disabled}
+              onClick={() =>
+                set(
+                  value.subject === s && !value.otherSubject
+                    ? { subject: undefined, course: undefined, otherSubject: false }
+                    : { subject: s, course: undefined, otherSubject: false },
+                )
+              }
+              className={chip(!value.otherSubject && value.subject === s)}
+            >
+              {s}
+            </button>
+          ))}
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => set({ otherSubject: true, subject: undefined, course: undefined })}
+            className={chip(value.otherSubject)}
+          >
+            {OTHER_SUBJECT}
+          </button>
+          {value.otherSubject && (
+            <input
+              type="text"
+              value={value.subject ?? ''}
+              onChange={(e) => set({ subject: e.target.value.trim() ? e.target.value : undefined })}
+              placeholder="Which subject?"
+              aria-label="Subject"
+              disabled={disabled}
+              className="w-40 rounded-full border-0 bg-cream px-3 py-1.5 text-xs text-ink placeholder:text-ink-soft focus:outline-none focus:ring-2 focus:ring-gold"
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Only at 9-12, and only once a subject is chosen: "Math" describes a 4th
+          grade classroom, but says almost nothing about a high school schedule. */}
+      {courses.length > 0 && (
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Course</p>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {courses.map((c) => (
+              <button
+                key={c}
+                type="button"
+                disabled={disabled}
+                onClick={() => set({ course: value.course === c ? undefined : c })}
+                className={chip(value.course === c)}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Level</p>
+        <div className="mt-1.5 flex flex-wrap gap-2">
+          {COURSE_LEVELS.map((level) => (
+            <button
+              key={level}
+              type="button"
+              disabled={disabled}
+              onClick={() => set({ courseLevel: value.courseLevel === level ? undefined : level })}
+              className={chip(value.courseLevel === level)}
+            >
+              {level}
+            </button>
+          ))}
+        </div>
+        <p className="mt-1.5 text-xs text-cream/50">
+          {value.courseLevel
+            ? COURSE_LEVEL_BLURB[value.courseLevel]
+            : 'Changes the coaching more than anything else here — an inclusion section and an AP section are different jobs.'}
+        </p>
+      </div>
+    </div>
+  )
+}

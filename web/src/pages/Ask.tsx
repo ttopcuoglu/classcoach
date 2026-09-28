@@ -11,7 +11,11 @@ import { MicIcon, StarIcon } from '../components/icons'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { categoryLabel } from '../lib/categories'
 import { FOCUS_AREAS, findFocusArea, focusAreaForCategory, focusAreaLabel } from '../lib/focusAreas'
-import { GRADE_LEVELS, OTHER_SUBJECT, SUBJECTS, gradeFromProfile, gradeLevelLabel, subjectFromProfile } from '../lib/gradeLevels'
+import TeachingContextFields, {
+  DEFAULT_TEACHING_CONTEXT,
+  type TeachingContext,
+} from '../components/TeachingContextFields'
+import { SUBJECTS, bandFromProfile, subjectFromProfile } from '../lib/teachingContext'
 import { isExperienced } from '../lib/experience'
 import { takeAskPrefill } from '../lib/communicationsPrefill'
 import {
@@ -76,11 +80,7 @@ export default function Ask({
   // coaching lands in their actual room. Teaching questions are close to
   // useless without them — "how do I teach this" depends entirely on what
   // "this" is, and on who is in front of you.
-  const [gradeLevel, setGradeLevel] = useState<string>('7')
-  const [subject, setSubject] = useState<string | undefined>(undefined)
-  // Set when the teacher picks "Other" — the free-text box then owns `subject`.
-  const [otherSubject, setOtherSubject] = useState(false)
-  const [showContext, setShowContext] = useState(false)
+  const [room, setRoom] = useState<TeachingContext>(DEFAULT_TEACHING_CONTEXT)
 
   const { supported: speechSupported, listening, toggleListening } = useSpeechToText((text) =>
     setIncidentText((prev) => (prev ? `${prev} ${text}` : text)),
@@ -90,13 +90,14 @@ export default function Ask({
     getProfile()
       .then((profile) => {
         setStarters(isExperienced(profile.experienceLevel) ? EXPERIENCED_STARTERS : NEW_TEACHER_STARTERS)
-        setGradeLevel(gradeFromProfile(profile.gradeLevels))
         const mapped = subjectFromProfile(profile.subjects)
-        if (mapped) {
-          setSubject(mapped)
-          // A profile subject that isn't one of the seven lands in "Other".
-          setOtherSubject(!(SUBJECTS as readonly string[]).includes(mapped))
-        }
+        setRoom((prev) => ({
+          ...prev,
+          gradeBand: bandFromProfile(profile.gradeLevels),
+          subject: mapped,
+          // A profile subject that isn't one of the six lands in "Other".
+          otherSubject: !!mapped && !(SUBJECTS as readonly string[]).includes(mapped),
+        }))
       })
       .catch(() => setStarters(NEW_TEACHER_STARTERS))
   }, [])
@@ -134,7 +135,13 @@ export default function Ask({
     setSubmitting(true)
     setError(null)
     try {
-      const result = await submitDebrief(text, { focusArea, gradeLevel, subject })
+      const result = await submitDebrief(text, {
+        focusArea,
+        gradeBand: room.gradeBand,
+        subject: room.subject,
+        course: room.course,
+        courseLevel: room.courseLevel,
+      })
       setDebrief(result)
       setAllDebriefs((prev) => [result, ...prev])
     } catch {
@@ -248,120 +255,38 @@ export default function Ask({
               />
             </label>
 
-            {/* Settings, not a step: the room reads as one quiet line beside
-                the submit button, and only opens when a teacher wants to change
-                it. It used to be its own card above the button, which made
-                setting a grade band look like something you had to do first. */}
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  {speechSupported && (
-                    <button
-                      type="button"
-                      onClick={toggleListening}
-                      disabled={submitting}
-                      className={`flex w-fit items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
-                        listening
-                          ? 'border-terracotta bg-terracotta text-cream'
-                          : 'border-cream/25 text-cream/80 hover:border-cream/60 hover:text-cream'
-                      }`}
-                    >
-                      <MicIcon className="h-3.5 w-3.5" />
-                      {listening ? 'Listening... tap to stop' : 'Speak instead'}
-                    </button>
-                  )}
-                  <p className="text-xs text-cream/60">
-                    {gradeLevelLabel(gradeLevel)}
-                    {subject ? ` · ${subject}` : ''}{' '}
-                    <button
-                      type="button"
-                      onClick={() => setShowContext((v) => !v)}
-                      aria-expanded={showContext}
-                      className="font-semibold text-gold underline decoration-cream/20 underline-offset-4 hover:text-cream"
-                    >
-                      {showContext ? 'Hide' : 'Change'}
-                    </button>
-                  </p>
-                </div>
+            {/* Always visible: what room this is isn't optional context, it's
+                what separates coaching about a 4th grade math lesson from
+                coaching about an AP Calculus section. It used to sit behind a
+                "Change" fold, which made it look like a detail. */}
+            <TeachingContextFields value={room} onChange={setRoom} disabled={submitting} />
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {speechSupported ? (
                 <button
                   type="button"
-                  onClick={() => handleSubmit()}
-                  disabled={submitting || !incidentText.trim()}
-                  className="rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90 disabled:bg-cream/10 disabled:text-cream/40 disabled:shadow-none"
+                  onClick={toggleListening}
+                  disabled={submitting}
+                  className={`flex w-fit items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                    listening
+                      ? 'border-terracotta bg-terracotta text-cream'
+                      : 'border-cream/25 text-cream/80 hover:border-cream/60 hover:text-cream'
+                  }`}
                 >
-                  {submitting ? 'Getting coaching...' : 'Get coaching'}
+                  <MicIcon className="h-3.5 w-3.5" />
+                  {listening ? 'Listening... tap to stop' : 'Speak instead'}
                 </button>
-              </div>
-
-              {showContext && (
-                <div className="flex flex-col gap-3 rounded-2xl bg-cream/10 p-4">
-                  <div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Grade level</p>
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {GRADE_LEVELS.map((level) => (
-                        <button
-                          key={level}
-                          type="button"
-                          onClick={() => setGradeLevel(level)}
-                          aria-label={gradeLevelLabel(level)}
-                          className={`min-w-9 rounded-full px-2.5 py-1.5 text-xs font-semibold transition-colors ${
-                            gradeLevel === level ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
-                          }`}
-                        >
-                          {level}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Subject</p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                      {SUBJECTS.map((s) => (
-                        <button
-                          key={s}
-                          type="button"
-                          onClick={() => {
-                            setOtherSubject(false)
-                            setSubject((prev) => (prev === s ? undefined : s))
-                          }}
-                          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                            !otherSubject && subject === s
-                              ? 'bg-gold text-forest'
-                              : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
-                          }`}
-                        >
-                          {s}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOtherSubject(true)
-                          setSubject(undefined)
-                        }}
-                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                          otherSubject ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
-                        }`}
-                      >
-                        {OTHER_SUBJECT}
-                      </button>
-                      {/* Only shown once "Other" is picked, so the common case is
-                          seven chips rather than seven chips and an empty box. */}
-                      {otherSubject && (
-                        <input
-                          type="text"
-                          value={subject ?? ''}
-                          onChange={(e) => setSubject(e.target.value.trim() ? e.target.value : undefined)}
-                          placeholder="Which subject?"
-                          aria-label="Subject"
-                          autoFocus
-                          className="w-40 rounded-full border-0 bg-cream px-3 py-1.5 text-xs text-ink placeholder:text-ink-soft focus:outline-none focus:ring-2 focus:ring-gold"
-                        />
-                      )}
-                    </div>
-                  </div>
-                </div>
+              ) : (
+                <span />
               )}
+              <button
+                type="button"
+                onClick={() => handleSubmit()}
+                disabled={submitting || !incidentText.trim()}
+                className="rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90 disabled:bg-cream/10 disabled:text-cream/40 disabled:shadow-none"
+              >
+                {submitting ? 'Getting coaching...' : 'Get coaching'}
+              </button>
             </div>
 
             {submitting && (

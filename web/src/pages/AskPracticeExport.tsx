@@ -15,7 +15,6 @@ import {
 } from '../components/report'
 import { categoryLabel } from '../lib/categories'
 import { focusAreaForCategory, focusAreaLabel } from '../lib/focusAreas'
-import { gradeLevelLabel } from '../lib/gradeLevels'
 import { getAttempts, getDebriefs, type Debrief, type ScenarioAttempt } from '../lib/api'
 
 // One printable report for both halves of Ask & Practice. They are different
@@ -64,9 +63,9 @@ export default function AskPracticeExport() {
                   attempt.scenario.focusArea ?? focusAreaForCategory(attempt.scenario.category)?.value,
                 ),
                 categoryLabel(attempt.scenario.category),
-                attempt.scenario.gradeLevel
-                  ? gradeLevelLabel(attempt.scenario.gradeLevel)
-                  : `Grades ${attempt.scenario.gradeBand}`,
+                `Grades ${attempt.scenario.gradeBand}`,
+                attempt.scenario.course,
+                attempt.scenario.courseLevel,
                 attempt.scenario.subject,
                 capitalize(attempt.scenario.difficulty),
               ].filter(Boolean) as string[]
@@ -138,7 +137,9 @@ export default function AskPracticeExport() {
               [
                 focusAreaLabel(ask.focusArea ?? focusAreaForCategory(ask.category)?.value),
                 ask.category ? categoryLabel(ask.category) : null,
-                ask.gradeLevel ? gradeLevelLabel(ask.gradeLevel) : null,
+                ask.gradeBand ? `Grades ${ask.gradeBand}` : null,
+                ask.course,
+                ask.courseLevel,
                 ask.subject,
               ].filter(Boolean) as string[]
             }
