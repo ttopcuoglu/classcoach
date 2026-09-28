@@ -22,11 +22,16 @@ export type Starter = {
   bands?: readonly string[]
   subjects?: readonly string[]
   levels?: readonly string[]
+  /// Who is in the room — matches if ANY listed value is present.
+  makeup?: readonly string[]
 }
 
 /// How many of a starter's declared constraints the room satisfies. Null when
 /// the room contradicts one, which disqualifies it entirely.
 function specificity(starter: Starter, room: TeachingContext, area?: string): number | null {
+  if (starter.makeup) {
+    if (area !== 'teaching_and_learning' || !starter.makeup.some((m) => room.classMakeup.includes(m))) return null
+  }
   let score = 0
   if (starter.bands) {
     if (!starter.bands.includes(room.gradeBand)) return null
@@ -38,6 +43,7 @@ function specificity(starter: Starter, room: TeachingContext, area?: string): nu
     if (area !== 'teaching_and_learning' || !room.subject || !starter.subjects.includes(room.subject)) return null
     score++
   }
+  if (starter.makeup) score++
   if (starter.levels) {
     if (area !== 'teaching_and_learning' || !room.courseLevel || !starter.levels.includes(room.courseLevel)) {
       return null
@@ -98,8 +104,10 @@ export const ASK_STARTERS: Record<string, readonly Starter[]> = {
     { text: 'My strongest students coast until the exam panics them.', levels: ['AP'] },
     { text: 'They do everything I ask and I still am not sure they are learning.', levels: ['Honors'] },
     { text: 'The range of readiness in one room is about four years wide.', levels: ['Regular'] },
-    { text: 'My co-teacher and I are not really splitting the teaching.', levels: ['Inclusion'] },
-    { text: 'The accommodations are in place and the work is still out of reach.', levels: ['Inclusion'] },
+    { text: 'My co-teacher and I are not really splitting the teaching.', makeup: ['inclusion'] },
+    { text: 'The accommodations are in place and the work is still out of reach.', makeup: ['inclusion'] },
+    { text: 'They understand the idea and cannot get it into English on the page.', makeup: ['english_learners'] },
+    { text: 'I cannot tell whether it is the concept or the vocabulary stopping them.', makeup: ['english_learners'] },
     // By subject.
     { text: 'My {course} students can do the procedure but cannot say why it works.', subjects: ['Math'] },
     { text: 'They freeze the moment a problem does not look like my example.', subjects: ['Math'] },

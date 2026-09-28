@@ -16,6 +16,7 @@ struct Debrief: Codable, Identifiable {
     let course: String?
     let topic: String?
     let courseLevel: String?
+    let classMakeup: [String]?
     let feedback: String?
     let followUp: String?
     let rating: Int?

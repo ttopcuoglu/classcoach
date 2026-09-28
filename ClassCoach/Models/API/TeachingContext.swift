@@ -57,17 +57,43 @@ func coursesFor(gradeBand: String, subject: String?) -> [String] {
 /// closed set. "Other" takes whatever the teacher actually calls it.
 let otherCourseLabel = "Other"
 
-/// How the section is taught. Distinct from the course: the same Algebra 2 runs
-/// as an honors section and as an inclusion section, and what a teacher needs
-/// from a coach differs sharply between them.
-let courseLevels = ["AP", "Honors", "Regular", "Inclusion"]
+/// How the section is tracked. Band-aware: AP is a College Board programme and
+/// does not exist before high school, and honours tracks start around 6th grade.
+///
+/// Rigour only. Who is in the room is a separate question below — as one
+/// single-select the two forced a false choice, since a co-taught Algebra 1 with
+/// fourteen English learners is Regular AND inclusion AND ESL.
+let courseLevelsByBand: [String: [String]] = [
+    "K-2": ["Regular"],
+    "3-5": ["Regular"],
+    "6-8": ["Honors", "Regular"],
+    "9-12": ["AP", "Honors", "Regular"],
+]
+
+func courseLevelsFor(_ gradeBand: String) -> [String] {
+    courseLevelsByBand[gradeBand] ?? []
+}
 
 /// One line of plain English per level, so a teacher knows what picking it changes.
 let courseLevelBlurb: [String: String] = [
     "AP": "Fixed syllabus, an exam date, real pace pressure.",
     "Honors": "Capable and compliant — depth matters more than more work.",
     "Regular": "The widest mix of readiness in the building.",
-    "Inclusion": "IEPs and 504s, accommodations, usually a co-teacher in the room.",
+]
+
+/// Who is in the room. Multi-select, and kept apart from the level: inclusion is
+/// a disability framework (IEPs, 504s, a co-teacher) while English learners sit
+/// under a different law and need different moves. Treating an English learner
+/// as though they had a learning disability is a classic harmful error, and one
+/// shared chip would have taught the coach to make it.
+let classMakeup: [(value: String, label: String)] = [
+    ("inclusion", "Co-taught / inclusion"),
+    ("english_learners", "English learners"),
+]
+
+let classMakeupBlurb: [String: String] = [
+    "inclusion": "IEPs and 504s, accommodations, usually a co-teacher in the room.",
+    "english_learners": "Learning the content and the language at once.",
 ]
 
 /// Best guess at a band from the free-text `gradeLevels` on a profile.

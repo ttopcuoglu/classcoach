@@ -107,6 +107,7 @@ export default function Ask({
               course: room.course,
               topic: room.topic,
               courseLevel: room.courseLevel,
+              classMakeup: room.classMakeup,
             }
           : {}),
       })

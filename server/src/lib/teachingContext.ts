@@ -96,25 +96,63 @@ export function offersCourses(gradeBand: string | null | undefined, subject: str
 // closed set. "Other" takes whatever the teacher actually calls it.
 export const OTHER_COURSE = 'Other'
 
-/// How the section is taught. Distinct from the course: the same Algebra 2 runs
-/// as an honors section and as an inclusion section, and what a teacher needs
-/// from a coach differs sharply between them.
-export const COURSE_LEVELS = ['AP', 'Honors', 'Regular', 'Inclusion'] as const
-
-export type CourseLevel = (typeof COURSE_LEVELS)[number]
-
-export function isCourseLevel(value: unknown): value is CourseLevel {
-  return typeof value === 'string' && (COURSE_LEVELS as readonly string[]).includes(value)
+/// How the section is tracked. Band-aware: AP is a College Board programme and
+/// does not exist before high school, and honours tracks start around 6th
+/// grade — a 2nd grade teacher could previously pick AP and have the coach told
+/// there was an external exam with a fixed syllabus.
+///
+/// This is a rigour axis only. Who is in the room is a separate question, and
+/// mixing the two into one single-select forced a false choice: a co-taught
+/// Algebra 1 with fourteen English learners is Regular AND inclusion AND ESL.
+export const COURSE_LEVELS_BY_BAND: Record<string, readonly string[]> = {
+  'K-2': ['Regular'],
+  '3-5': ['Regular'],
+  '6-8': ['Honors', 'Regular'],
+  '9-12': ['AP', 'Honors', 'Regular'],
 }
 
-/// What each level should change about the coaching, spelled out for the model
-/// — otherwise "Inclusion" reads as a label rather than a working constraint.
+export function courseLevelsFor(gradeBand: string | null | undefined): readonly string[] {
+  if (!gradeBand) return []
+  return COURSE_LEVELS_BY_BAND[gradeBand] ?? []
+}
+
+export function isCourseLevelFor(value: unknown, gradeBand: string | null | undefined): value is string {
+  return typeof value === 'string' && courseLevelsFor(gradeBand).includes(value)
+}
+
 export const COURSE_LEVEL_GUIDANCE: Record<string, string> = {
   AP: 'An AP section: an external exam with a fixed syllabus and a hard date, students who mostly opted in, real pace pressure, and a wide gap between students who can do the work and students who are holding on.',
   Honors:
-    'An honors section: capable, often compliant students, a faster pace, and the specific risk that performance gets mistaken for understanding. Coaching should push depth, not more work.',
+    'An honours or accelerated section: capable, often compliant students, a faster pace, and the specific risk that performance gets mistaken for understanding. Coaching should push depth, not more work.',
   Regular:
     'A regular section: the widest mix of readiness, motivation, and outside circumstance in the building. Assume nothing about prior knowledge.',
-  Inclusion:
-    'An inclusion or co-taught section: students with IEPs and 504 plans alongside general-education peers, usually with a co-teacher or paraprofessional in the room. Coaching must respect accommodations as non-negotiable, treat the co-teacher as a partner rather than an aide, and never suggest anything that would single a student out.',
 }
+
+/// Who is in the room. Multi-select, and deliberately NOT part of the level:
+/// these are not tracking choices, they describe the students and the supports,
+/// and a section is routinely more than one of them at once.
+export const CLASS_MAKEUP = [
+  { value: 'inclusion', label: 'Co-taught / inclusion' },
+  { value: 'english_learners', label: 'English learners' },
+] as const
+
+export const CLASS_MAKEUP_VALUES: readonly string[] = CLASS_MAKEUP.map((m) => m.value)
+
+export function pickClassMakeup(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value.filter((v): v is string => typeof v === 'string' && CLASS_MAKEUP_VALUES.includes(v)))]
+}
+
+/// Kept apart on purpose. Inclusion is a disability framework — IDEA, IEPs and
+/// 504 plans, accommodations, usually a co-teacher. English learners sit under
+/// a different law and need different moves: comprehensible input, vocabulary
+/// front-loading, translanguaging. Treating an English learner as though they
+/// had a learning disability is one of the classic harmful errors in the field,
+/// and folding the two into one option would have taught the coach to make it.
+export const CLASS_MAKEUP_GUIDANCE: Record<string, string> = {
+  inclusion:
+    'Students with IEPs and 504 plans are in this room alongside general-education peers, usually with a co-teacher or paraprofessional. Accommodations are non-negotiable, the co-teacher is a partner rather than an aide, and nothing you suggest may single a student out.',
+  english_learners:
+    'This room includes English learners at a range of proficiencies. They are learning the content and the language at once, so the barrier is usually access to the language of the task rather than the thinking behind it — never treat limited English as limited ability, and never treat it as a disability. Useful moves: front-load the vocabulary the task actually requires, make input comprehensible with visuals and demonstration, allow a home language for thinking and drafting, give real wait time, and assess the content rather than the English it is expressed in.',
+}
+

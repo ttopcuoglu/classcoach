@@ -178,6 +178,9 @@ model Scenario {
   // weekly, and the one that decides what a scenario is actually about.
   topic      String?
   courseLevel String?
+  // Who is in the room — "inclusion" | "english_learners". Multi-select, and
+  // separate from courseLevel: a section is routinely more than one at once.
+  classMakeup String[] @default([])
   difficulty String   @default("intermediate")
   source     String // "generated" | "curated"
   createdAt  DateTime @default(now())
@@ -234,6 +237,7 @@ model Debrief {
   course       String?
   topic        String?
   courseLevel  String?
+  classMakeup  String[] @default([])
   feedback     String?
   followUp     String? // "next time" guidance — analogous to ScenarioAttempt.modelResponse
   rating       Int? // same private growth-tracking rating as ScenarioAttempt

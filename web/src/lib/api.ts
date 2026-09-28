@@ -16,8 +16,10 @@ export type Scenario = {
   course: string | null
   /// What the teacher was teaching that week.
   topic: string | null
-  /// AP | Honors | Regular | Inclusion.
+  /// AP | Honors | Regular.
   courseLevel: string | null
+  /// "inclusion" | "english_learners" — who is in the room.
+  classMakeup: string[]
   difficulty: string
   source: string
   createdAt: string
@@ -934,6 +936,7 @@ export function generateScenario(opts: {
   course?: string
   topic?: string
   courseLevel?: string
+  classMakeup?: string[]
 }): Promise<Scenario> {
   return request('/api/scenarios/generate', { method: 'POST', body: JSON.stringify(opts) })
 }
@@ -1052,6 +1055,7 @@ export function submitDebrief(
     course?: string
     topic?: string
     courseLevel?: string
+    classMakeup?: string[]
   },
 ): Promise<Debrief> {
   return request('/api/debriefs', {

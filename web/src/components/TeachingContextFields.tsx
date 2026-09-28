@@ -1,11 +1,13 @@
 import { TEACHING_AND_LEARNING } from '../lib/focusAreas'
 import {
-  COURSE_LEVELS,
+  CLASS_MAKEUP,
+  CLASS_MAKEUP_BLURB,
   COURSE_LEVEL_BLURB,
   GRADE_BANDS,
   OTHER_COURSE,
   OTHER_SUBJECT,
   SUBJECTS,
+  courseLevelsFor,
   coursesFor,
 } from '../lib/teachingContext'
 
@@ -18,6 +20,8 @@ export type TeachingContext = {
   /// changes weekly — so it is never defaulted or remembered.
   topic?: string
   courseLevel?: string
+  /// Who is in the room — multi-select, separate from the level.
+  classMakeup: string[]
   /// The teacher picked "Other"; the free-text box then owns `subject`.
   otherSubject: boolean
   /// Same, for the course — middle school naming varies by district.
@@ -30,6 +34,7 @@ export const DEFAULT_TEACHING_CONTEXT: TeachingContext = {
   course: undefined,
   topic: undefined,
   courseLevel: undefined,
+  classMakeup: [],
   otherSubject: false,
   otherCourse: false,
 }
@@ -56,6 +61,7 @@ export default function TeachingContextFields({
 }) {
   const showSubjectAndLevel = focusArea === TEACHING_AND_LEARNING
   const courses = coursesFor(value.gradeBand, value.otherSubject ? undefined : value.subject)
+  const levels = courseLevelsFor(value.gradeBand)
 
   function set(patch: Partial<TeachingContext>) {
     onChange({ ...value, ...patch })
@@ -80,7 +86,18 @@ export default function TeachingContextFields({
               // course. The topic survives on purpose: photosynthesis is taught
               // in 6-8 Science as well as 9-12 Biology, so moving band is not a
               // contradiction the way changing subject is.
-              onClick={() => set({ gradeBand: band, course: undefined, otherCourse: false })}
+              onClick={() =>
+                set({
+                  gradeBand: band,
+                  course: undefined,
+                  otherCourse: false,
+                  // AP does not exist below 9-12, so a level that the new band
+                  // does not offer goes rather than travelling with them.
+                  courseLevel: courseLevelsFor(band).includes(value.courseLevel ?? '')
+                    ? value.courseLevel
+                    : undefined,
+                })
+              }
               aria-pressed={value.gradeBand === band}
               className={chip(value.gradeBand === band)}
             >
@@ -209,29 +226,69 @@ export default function TeachingContextFields({
         </div>
       )}
 
-      {showSubjectAndLevel && (
-      <div>
-        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Level</p>
-        <div className="mt-1.5 flex flex-wrap gap-2">
-          {COURSE_LEVELS.map((level) => (
-            <button
-              key={level}
-              type="button"
-              disabled={disabled}
-              onClick={() => set({ courseLevel: value.courseLevel === level ? undefined : level })}
-              aria-pressed={value.courseLevel === level}
-              className={chip(value.courseLevel === level)}
-            >
-              {level}
-            </button>
-          ))}
+      {showSubjectAndLevel && levels.length > 0 && (
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Level</p>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {levels.map((level) => (
+              <button
+                key={level}
+                type="button"
+                disabled={disabled}
+                onClick={() => set({ courseLevel: value.courseLevel === level ? undefined : level })}
+                aria-pressed={value.courseLevel === level}
+                className={chip(value.courseLevel === level)}
+              >
+                {level}
+              </button>
+            ))}
+          </div>
+          {value.courseLevel && (
+            <p className="mt-1.5 text-xs text-cream/50">{COURSE_LEVEL_BLURB[value.courseLevel]}</p>
+          )}
         </div>
-        <p className="mt-1.5 text-xs text-cream/50">
-          {value.courseLevel
-            ? COURSE_LEVEL_BLURB[value.courseLevel]
-            : 'Changes the coaching more than anything else here — an inclusion section and an AP section are different jobs.'}
-        </p>
-      </div>
+      )}
+
+      {/* Multi-select, and separate from the level. Inclusion is a disability
+          framework; English learners sit under a different law and need
+          different moves. One shared single-select would have forced a teacher
+          with both to pick, and whichever they picked the coach would have seen
+          a third of their room. */}
+      {showSubjectAndLevel && (
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">
+            Who&rsquo;s in the room{' '}
+            <span className="font-medium normal-case tracking-normal text-cream/50">(any that apply)</span>
+          </p>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {CLASS_MAKEUP.map(({ value: m, label }) => {
+              const on = value.classMakeup.includes(m)
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() =>
+                    set({
+                      classMakeup: on
+                        ? value.classMakeup.filter((x) => x !== m)
+                        : [...value.classMakeup, m],
+                    })
+                  }
+                  aria-pressed={on}
+                  className={chip(on)}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+          {value.classMakeup.length > 0 && (
+            <p className="mt-1.5 text-xs text-cream/50">
+              {value.classMakeup.map((m) => CLASS_MAKEUP_BLURB[m]).join(' ')}
+            </p>
+          )}
+        </div>
       )}
     </div>
   )

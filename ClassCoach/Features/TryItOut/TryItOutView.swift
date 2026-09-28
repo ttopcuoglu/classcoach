@@ -243,7 +243,7 @@ struct TryItOutContent: View {
             // response under pressure are different skills, and only the second
             // happens in a real classroom — so the hint scaffolds the thinking
             // and leaves the words to the teacher.
-            let hints = hintsFor(focusArea: focusArea, courseLevel: room.courseLevel)
+            let hints = hintsFor(focusArea: focusArea, courseLevel: room.courseLevel, classMakeup: room.makeup)
             VStack(alignment: .leading, spacing: 6) {
                 Button(hintIndex == nil ? "Not sure where to start?" : "Another way in") {
                     withAnimation { hintIndex = hintIndex.map { ($0 + 1) % hints.count } ?? 0 }
@@ -410,7 +410,8 @@ struct TryItOutContent: View {
                 subject: asksAboutContent ? room.subject : nil,
                 course: asksAboutContent ? room.course : nil,
                 topic: asksAboutContent ? room.topic : nil,
-                courseLevel: asksAboutContent ? room.courseLevel : nil
+                courseLevel: asksAboutContent ? room.courseLevel : nil,
+                classMakeup: asksAboutContent ? room.makeup : []
             )
             attempt = ScenarioAttempt(
                 id: "draft-\(scenario.id)", scenarioId: scenario.id, responseText: "",

@@ -310,7 +310,8 @@ struct AskExpertContent: View {
                 subject: asksAboutContent ? room.subject : nil,
                 course: asksAboutContent ? room.course : nil,
                 topic: asksAboutContent ? room.topic : nil,
-                courseLevel: asksAboutContent ? room.courseLevel : nil
+                courseLevel: asksAboutContent ? room.courseLevel : nil,
+                classMakeup: asksAboutContent ? room.makeup : []
             )
             debrief = result
             allDebriefs.insert(result, at: 0)

@@ -3,10 +3,16 @@ import { pickWeightedCategory, pickWeightedDifficulty, pickWeightedFocusArea } f
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { getCuratedFallback } from '../lib/curatedFallback.ts'
 import { TEACHING_AND_LEARNING, findFocusArea, focusAreaForSubCategory } from '../lib/focusAreas.ts'
-import { scenarioAreaBlock } from '../lib/focusAreaPrompt.ts'
+import { scenarioAreaBlock, teachingContextBlock } from '../lib/focusAreaPrompt.ts'
 import { prisma } from '../lib/prisma.ts'
 import { pickDifficulty } from '../lib/scenarioCategories.ts'
-import { gradeBandLabel, isCourseLevel, offersCourses, pickGradeBand } from '../lib/teachingContext.ts'
+import {
+  gradeBandLabel,
+  isCourseLevelFor,
+  offersCourses,
+  pickClassMakeup,
+  pickGradeBand,
+} from '../lib/teachingContext.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const scenariosRouter = Router()
@@ -41,7 +47,8 @@ scenariosRouter.get('/', async (req, res) => {
 })
 
 scenariosRouter.post('/generate', async (req, res) => {
-  const { focusArea, category, gradeBand, difficulty, subject, course, topic, courseLevel } = req.body ?? {}
+  const { focusArea, category, gradeBand, difficulty, subject, course, topic, courseLevel, classMakeup } =
+    req.body ?? {}
   // An explicit sub-category names its own area, so honour it rather than
   // letting the weighted area pick overrule it — otherwise asking for
   // `defiance` with no area set could come back as a grading scenario.
@@ -65,7 +72,10 @@ scenariosRouter.post('/generate', async (req, res) => {
     typeof course === 'string' && course.trim()
       ? course.trim().slice(0, 80)
       : null
-  const chosenCourseLevel = asksAboutContent && isCourseLevel(courseLevel) ? courseLevel : null
+  // Band-aware: AP does not exist below 9-12, so a stale one is dropped.
+  const chosenCourseLevel =
+    asksAboutContent && isCourseLevelFor(courseLevel, chosenGradeBand) ? courseLevel : null
+  const chosenMakeup = asksAboutContent ? pickClassMakeup(classMakeup) : []
   // Free text, and only where content is the subject of the coaching at all.
   const chosenTopic =
     asksAboutContent && typeof topic === 'string' && topic.trim() ? topic.trim().slice(0, 120) : null
@@ -93,6 +103,7 @@ scenariosRouter.post('/generate', async (req, res) => {
         ? `Write the scenario ABOUT ${chosenTopic}. The misconception, the student work, the question a student asks — all of it comes from ${chosenTopic}. A scenario that would read the same for another topic in this subject is not specific enough.`
         : null,
       chosenCourseLevel ? `Level: ${chosenCourseLevel}` : null,
+      chosenMakeup.length ? `Who is in the room: ${chosenMakeup.join(', ')}` : null,
     ]
       .filter(Boolean)
       .join('\n')
@@ -104,7 +115,14 @@ scenariosRouter.post('/generate', async (req, res) => {
       // max_tokens budget — at 400 tokens one thinking block would return an
       // empty scenario and silently drop the teacher into the curated fallback.
       thinking: { type: 'disabled' },
-      system: `${SCENARIO_RULES}\n\n${scenarioAreaBlock(chosenArea)}`,
+      system: `${SCENARIO_RULES}\n\n${scenarioAreaBlock(chosenArea)}${teachingContextBlock({
+        gradeBand: chosenGradeBand,
+        subject: chosenSubject,
+        course: chosenCourse,
+        topic: chosenTopic,
+        courseLevel: chosenCourseLevel,
+        classMakeup: chosenMakeup,
+      })}`,
       messages: [{ role: 'user', content: context }],
     })
 
@@ -124,6 +142,7 @@ scenariosRouter.post('/generate', async (req, res) => {
         course: chosenCourse,
         topic: chosenTopic,
         courseLevel: chosenCourseLevel,
+        classMakeup: chosenMakeup,
         difficulty: chosenDifficulty,
         source: 'generated',
       },

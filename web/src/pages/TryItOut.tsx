@@ -178,6 +178,7 @@ export default function TryItOut({
               course: room.course,
               topic: room.topic,
               courseLevel: room.courseLevel,
+              classMakeup: room.classMakeup,
             }
           : {}),
       })
@@ -330,7 +331,7 @@ export default function TryItOut({
   // 9-12 rehearsal should not open with the same three scenarios.
   const subCategories = subCategoriesFor(focusArea)
   // Sharpest first: the level knows most about the room, then the section.
-  const hints = hintsFor(focusArea, room.courseLevel)
+  const hints = hintsFor(focusArea, room.courseLevel, room.classMakeup)
   const situationText = category ? categoryLabel(category).toLowerCase() : 'any situation'
   const difficultyText = (
     DIFFICULTIES.find((d) => d.value === difficulty)?.label ?? 'Any difficulty'

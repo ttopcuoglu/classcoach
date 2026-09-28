@@ -12,6 +12,7 @@ enum TryItOutService {
         let course: String?
         let topic: String?
         let courseLevel: String?
+        let classMakeup: [String]
     }
 
     static func generateScenario(
@@ -22,14 +23,15 @@ enum TryItOutService {
         subject: String?,
         course: String?,
         topic: String?,
-        courseLevel: String?
+        courseLevel: String?,
+        classMakeup: [String]
     ) async throws -> Scenario {
         try await APIClient.shared.request(
             "/api/scenarios/generate",
             method: "POST",
             body: GenerateScenarioBody(
                 focusArea: focusArea, category: category, gradeBand: gradeBand,
-                difficulty: difficulty, subject: subject, course: course, topic: topic, courseLevel: courseLevel
+                difficulty: difficulty, subject: subject, course: course, topic: topic, courseLevel: courseLevel, classMakeup: classMakeup
             )
         )
     }

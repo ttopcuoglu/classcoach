@@ -18,6 +18,8 @@ struct Starter {
     var bands: [String]? = nil
     var subjects: [String]? = nil
     var levels: [String]? = nil
+    /// Who is in the room — matches if ANY listed value is present.
+    var makeup: [String]? = nil
 }
 
 /// A course name drops into a sentence as written ("my Algebra 2 students"); a
@@ -48,6 +50,10 @@ private func specificity(_ starter: Starter, _ room: TeachingContextValue, _ are
     }
     if let levels = starter.levels {
         guard area == teachingAndLearning, let l = room.courseLevel, levels.contains(l) else { return nil }
+        score += 1
+    }
+    if let makeup = starter.makeup {
+        guard area == teachingAndLearning, makeup.contains(where: room.makeup.contains) else { return nil }
         score += 1
     }
     return score
@@ -82,8 +88,8 @@ func pickStarters(
         let text = fill(starter.text, room, area)
         if seen.contains(text) { continue }
         seen.insert(text)
-        out.append(Starter(text: text, bands: starter.bands,
-                           subjects: starter.subjects, levels: starter.levels))
+        out.append(Starter(text: text, bands: starter.bands, subjects: starter.subjects,
+                           levels: starter.levels, makeup: starter.makeup))
         if out.count == count { break }
     }
     return out
@@ -95,8 +101,10 @@ let askStartersByArea: [String: [Starter]] = [
         Starter(text: "My strongest students coast until the exam panics them.", levels: ["AP"]),
         Starter(text: "They do everything I ask and I still am not sure they are learning.", levels: ["Honors"]),
         Starter(text: "The range of readiness in one room is about four years wide.", levels: ["Regular"]),
-        Starter(text: "My co-teacher and I are not really splitting the teaching.", levels: ["Inclusion"]),
-        Starter(text: "The accommodations are in place and the work is still out of reach.", levels: ["Inclusion"]),
+        Starter(text: "My co-teacher and I are not really splitting the teaching.", makeup: ["inclusion"]),
+        Starter(text: "The accommodations are in place and the work is still out of reach.", makeup: ["inclusion"]),
+        Starter(text: "They understand the idea and cannot get it into English on the page.", makeup: ["english_learners"]),
+        Starter(text: "I cannot tell whether it is the concept or the vocabulary stopping them.", makeup: ["english_learners"]),
         Starter(text: "My {course} students can do the procedure but cannot say why it works.", subjects: ["Math"]),
         Starter(text: "They freeze the moment a problem does not look like my example.", subjects: ["Math"]),
         Starter(text: "They can summarize what they read but they cannot analyze it.", subjects: ["ELA"]),

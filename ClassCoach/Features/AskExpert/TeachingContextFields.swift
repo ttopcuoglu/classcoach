@@ -16,6 +16,8 @@ struct TeachingContextValue: Equatable {
     /// that changes weekly — so it is never defaulted or remembered.
     var topic: String?
     var courseLevel: String?
+    /// Who is in the room — multi-select, separate from the level.
+    var makeup: [String] = []
     /// The teacher picked "Other"; the free-text field then owns `subject`.
     var usingOtherSubject = false
     /// Same, for the course — middle school naming varies by district.
@@ -63,6 +65,11 @@ struct TeachingContextFields: View {
                     // subject is.
                     value.course = nil
                     value.usingOtherCourse = false
+                    // AP does not exist below 9-12, so a level the new band does
+                    // not offer goes rather than travelling with them.
+                    if !courseLevelsFor(value.gradeBand).contains(value.courseLevel ?? "") {
+                        value.courseLevel = nil
+                    }
                 }
             }
 
@@ -136,21 +143,53 @@ struct TeachingContextFields: View {
                 }
             }
 
-            if showSubjectAndLevel {
-            field("Level") {
-                ChipRow(
-                    items: courseLevels.map { ($0, Optional($0)) },
-                    selection: value.courseLevel
-                ) { value.courseLevel = $0 }
-                Text(
-                    value.courseLevel.flatMap { courseLevelBlurb[$0] }
-                        ?? "Changes the coaching more than anything else here — an inclusion section and an AP section are different jobs."
-                )
-                .font(.caption)
-                .foregroundStyle(AppTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal)
+            if showSubjectAndLevel, !courseLevelsFor(value.gradeBand).isEmpty {
+                field("Level") {
+                    ChipRow(
+                        items: courseLevelsFor(value.gradeBand).map { ($0, Optional($0)) },
+                        selection: value.courseLevel
+                    ) { value.courseLevel = $0 }
+                    if let l = value.courseLevel, let blurb = courseLevelBlurb[l] {
+                        Text(blurb)
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .padding(.horizontal)
+                    }
+                }
             }
+
+            // Multi-select, and separate from the level — a teacher with both
+            // would otherwise have to pick, and the coach would see a third of
+            // their room.
+            if showSubjectAndLevel {
+                field("Who's in the room (any that apply)") {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(classMakeup, id: \.value) { item in
+                                let on = value.makeup.contains(item.value)
+                                Button(item.label) {
+                                    if on { value.makeup.removeAll { $0 == item.value } }
+                                    else { value.makeup.append(item.value) }
+                                }
+                                .font(.subheadline.weight(on ? .semibold : .medium))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .foregroundStyle(on ? AppTheme.cream : AppTheme.textSecondary)
+                                .background(on ? AppTheme.forest : AppTheme.card, in: Capsule())
+                                .overlay(Capsule().strokeBorder(on ? .clear : AppTheme.hairline))
+                                .accessibilityAddTraits(on ? .isSelected : [])
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                    if !value.makeup.isEmpty {
+                        Text(value.makeup.compactMap { classMakeupBlurb[$0] }.joined(separator: " "))
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal)
+                    }
+                }
             }
         }
         .padding(.vertical, 12)

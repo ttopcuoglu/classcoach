@@ -17,8 +17,10 @@ struct Scenario: Codable, Identifiable {
     let course: String?
     /// What the teacher was teaching that week.
     let topic: String?
-    /// AP | Honors | Regular | Inclusion.
+    /// AP | Honors | Regular.
     let courseLevel: String?
+    /// "inclusion" | "english_learners" — who is in the room.
+    let classMakeup: [String]?
     let difficulty: String
     let source: String
     let createdAt: String

@@ -15,11 +15,20 @@ import Foundation
 
 /// Keyed by course level, which only Teaching and Learning asks for — the
 /// sharpest hints available, since the teacher has told us the most.
-private let hintsByLevel: [String: [String]] = [
-    "Inclusion": [
+/// Who is in the room — the sharpest hints available, because they know the
+/// most about who a teacher is actually facing.
+private let hintsByMakeup: [String: [String]] = [
+    "inclusion": [
         "What is your co-teacher doing while you handle this?",
         "Is the barrier the thinking itself, or how the task is presented?",
     ],
+    "english_learners": [
+        "Is it the concept they are stuck on, or the language the task is written in?",
+        "Which words would they need before this makes sense?",
+    ],
+]
+
+private let hintsByLevel: [String: [String]] = [
     "AP": [
         "What would you cut to make room for this, and what does cutting it cost?",
         "Which students are holding on rather than keeping up?",
@@ -63,9 +72,10 @@ private let generalHints = [
 /// asks for it. A teacher who picks Inclusion there and switches to Classroom
 /// Management still carries the value in state, hidden; the routes already
 /// discard it in that case, and the hints have to agree.
-func hintsFor(focusArea: String?, courseLevel: String?) -> [String] {
-    let usableLevel = focusArea == teachingAndLearning ? courseLevel : nil
-    let level = usableLevel.flatMap { hintsByLevel[$0] } ?? []
+func hintsFor(focusArea: String?, courseLevel: String?, classMakeup: [String] = []) -> [String] {
+    let usable = focusArea == teachingAndLearning
+    let makeup = usable ? classMakeup.flatMap { hintsByMakeup[$0] ?? [] } : []
+    let level = usable ? (courseLevel.flatMap { hintsByLevel[$0] } ?? []) : []
     let area = focusArea.flatMap { hintsByArea[$0] } ?? []
-    return level + area + generalHints
+    return makeup + level + area + generalHints
 }

@@ -1,5 +1,5 @@
 import { FOCUS_AREAS, type FocusArea } from './focusAreas.ts'
-import { COURSE_LEVEL_GUIDANCE, gradeBandLabel } from './teachingContext.ts'
+import { CLASS_MAKEUP, CLASS_MAKEUP_GUIDANCE, COURSE_LEVEL_GUIDANCE, gradeBandLabel } from './teachingContext.ts'
 
 // Composes the area-aware parts of the Ask / Practice system prompts.
 //
@@ -98,6 +98,8 @@ export function teachingContextBlock(ctx: {
   /// the only one that says what the coaching should actually be ABOUT.
   topic?: string | null
   courseLevel?: string | null
+  /// Who is in the room — multi-select, and separate from the level on purpose.
+  classMakeup?: string[] | null
 }): string {
   const lines = [
     ctx.gradeBand ? `Grade band: ${gradeBandLabel(ctx.gradeBand)}` : null,
@@ -105,10 +107,21 @@ export function teachingContextBlock(ctx: {
     ctx.course ? `Course: ${ctx.course}` : null,
     ctx.topic ? `Topic or unit right now: ${ctx.topic}` : null,
     ctx.courseLevel ? `Level: ${ctx.courseLevel}` : null,
+    ctx.classMakeup?.length
+      ? `Who is in the room: ${ctx.classMakeup
+          .map((m) => CLASS_MAKEUP.find((c) => c.value === m)?.label ?? m)
+          .join(', ')}`
+      : null,
   ].filter(Boolean)
   if (lines.length === 0) return ''
 
   const levelNote = ctx.courseLevel ? COURSE_LEVEL_GUIDANCE[ctx.courseLevel] : null
+  // One note per makeup rather than a merged one: inclusion and English
+  // learners need different moves, and blurring them is the error this field
+  // exists to prevent.
+  const makeupNotes = (ctx.classMakeup ?? [])
+    .map((m) => CLASS_MAKEUP_GUIDANCE[m])
+    .filter(Boolean)
   // Subject and course say what room this is. Topic says what is happening in it
   // this week, so it governs content rather than just colouring it: a teacher
   // who is on photosynthesis on Thursday gains nothing from a protein-synthesis
@@ -119,5 +132,5 @@ export function teachingContextBlock(ctx: {
 
   return `\n\nThis teacher's classroom:\n${lines.join('\n')}${
     levelNote ? `\n\nWhat that level means here: ${levelNote}` : ''
-  }${topicNote}\nSet examples, analogies, and scenarios in this room — its content, its students, its constraints — rather than a generic classroom, and never contradict this context.`
+  }${makeupNotes.length ? `\n\n${makeupNotes.map((n) => `Who is in this room: ${n}`).join('\n\n')}` : ''}${topicNote}\nSet examples, analogies, and scenarios in this room — its content, its students, its constraints — rather than a generic classroom, and never contradict this context.`
 }

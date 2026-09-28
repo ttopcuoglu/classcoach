@@ -16,13 +16,21 @@ import { TEACHING_AND_LEARNING } from './focusAreas'
 // for almost every teacher anyway. A hint only novices can see is also a label,
 // in a product whose promise is that nothing here is scored or watched.
 
-/// Keyed by course level, which only Teaching and Learning asks for — so these
-/// are the sharpest hints available when a teacher has told us the most.
-const BY_LEVEL: Record<string, readonly string[]> = {
-  Inclusion: [
+/// Who is in the room — the sharpest hints available, because they know the
+/// most about who a teacher is actually facing.
+const BY_MAKEUP: Record<string, readonly string[]> = {
+  inclusion: [
     'What is your co-teacher doing while you handle this?',
     'Is the barrier the thinking itself, or how the task is presented?',
   ],
+  english_learners: [
+    'Is it the concept they are stuck on, or the language the task is written in?',
+    'Which words would they need before this makes sense?',
+  ],
+}
+
+/// Keyed by course level, which only Teaching and Learning asks for.
+const BY_LEVEL: Record<string, readonly string[]> = {
   AP: [
     'What would you cut to make room for this, and what does cutting it cost?',
     'Which students are holding on rather than keeping up?',
@@ -67,9 +75,10 @@ const GENERAL: readonly string[] = [
 /// Management still carries the value in state, hidden; the routes already
 /// discard it in that case, and the hints have to agree or the screen would
 /// suggest something the coaching never saw.
-export function hintsFor(focusArea?: string, courseLevel?: string): string[] {
-  const usableLevel = focusArea === TEACHING_AND_LEARNING ? courseLevel : undefined
-  const level = usableLevel ? BY_LEVEL[usableLevel] ?? [] : []
+export function hintsFor(focusArea?: string, courseLevel?: string, classMakeup: string[] = []): string[] {
+  const usable = focusArea === TEACHING_AND_LEARNING
+  const makeup = usable ? classMakeup.flatMap((m) => BY_MAKEUP[m] ?? []) : []
+  const level = usable && courseLevel ? BY_LEVEL[courseLevel] ?? [] : []
   const area = focusArea ? BY_AREA[focusArea] ?? [] : []
-  return [...level, ...area, ...GENERAL]
+  return [...makeup, ...level, ...area, ...GENERAL]
 }

@@ -60,12 +60,24 @@ export function coursesFor(
 // set. "Other" takes whatever the teacher actually calls it.
 export const OTHER_COURSE = 'Other'
 
-/// How the section is taught. Distinct from the course: the same Algebra 2 runs
-/// as an honors section and as an inclusion section, and what a teacher needs
-/// from a coach differs sharply between them.
-export const COURSE_LEVELS = ['AP', 'Honors', 'Regular', 'Inclusion'] as const
+/// How the section is tracked. Band-aware: AP is a College Board programme and
+/// does not exist before high school, and honours tracks start around 6th
+/// grade — a 2nd grade teacher could previously pick AP.
+///
+/// Rigour only. Who is in the room is a separate question below, because as one
+/// single-select the two forced a false choice: a co-taught Algebra 1 with
+/// fourteen English learners is Regular AND inclusion AND ESL.
+export const COURSE_LEVELS_BY_BAND: Record<string, readonly string[]> = {
+  'K-2': ['Regular'],
+  '3-5': ['Regular'],
+  '6-8': ['Honors', 'Regular'],
+  '9-12': ['AP', 'Honors', 'Regular'],
+}
 
-export type CourseLevel = (typeof COURSE_LEVELS)[number]
+export function courseLevelsFor(gradeBand: string | null | undefined): readonly string[] {
+  if (!gradeBand) return []
+  return COURSE_LEVELS_BY_BAND[gradeBand] ?? []
+}
 
 /// One line of plain English per level, shown under the chips so a teacher
 /// knows what picking it will change.
@@ -73,7 +85,21 @@ export const COURSE_LEVEL_BLURB: Record<string, string> = {
   AP: 'Fixed syllabus, an exam date, real pace pressure.',
   Honors: 'Capable and compliant — depth matters more than more work.',
   Regular: 'The widest mix of readiness in the building.',
-  Inclusion: 'IEPs and 504s, accommodations, usually a co-teacher in the room.',
+}
+
+/// Who is in the room. Multi-select, and kept apart from the level on purpose:
+/// inclusion is a disability framework (IEPs, 504s, a co-teacher) while English
+/// learners sit under a different law and need different moves. Treating an
+/// English learner as though they had a learning disability is a classic
+/// harmful error, and one shared chip would have taught the coach to make it.
+export const CLASS_MAKEUP = [
+  { value: 'inclusion', label: 'Co-taught / inclusion' },
+  { value: 'english_learners', label: 'English learners' },
+] as const
+
+export const CLASS_MAKEUP_BLURB: Record<string, string> = {
+  inclusion: 'IEPs and 504s, accommodations, usually a co-teacher in the room.',
+  english_learners: 'Learning the content and the language at once.',
 }
 
 /// Best guess at a band from the free-text `gradeLevels` on a teacher's profile.

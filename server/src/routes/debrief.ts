@@ -26,7 +26,12 @@ import { extractTag, stripStructuralTags, stripTag } from '../lib/extractTag.ts'
 import type { CoachFollowUp, Debrief } from '../generated/prisma/client.ts'
 import { prisma } from '../lib/prisma.ts'
 import { categoryInArea, isKnownCategory } from '../lib/scenarioCategories.ts'
-import { isCourseLevel, offersCourses, pickGradeBand } from '../lib/teachingContext.ts'
+import {
+  isCourseLevelFor,
+  offersCourses,
+  pickClassMakeup,
+  pickGradeBand,
+} from '../lib/teachingContext.ts'
 import {
   TEACHING_AND_LEARNING,
   findFocusArea,
@@ -197,7 +202,8 @@ debriefRouter.get('/', async (req, res) => {
 })
 
 debriefRouter.post('/', async (req, res) => {
-  const { incidentText, focusArea, gradeBand, subject, course, topic, courseLevel } = req.body ?? {}
+  const { incidentText, focusArea, gradeBand, subject, course, topic, courseLevel, classMakeup } =
+    req.body ?? {}
   if (typeof incidentText !== 'string' || incidentText.trim().length === 0) {
     res.status(400).json({ error: 'incidentText is required' })
     return
@@ -221,7 +227,9 @@ debriefRouter.post('/', async (req, res) => {
     typeof course === 'string' && course.trim()
       ? course.trim().slice(0, 80)
       : null
-  const askCourseLevel = asksAboutContent && isCourseLevel(courseLevel) ? courseLevel : null
+  const askCourseLevel =
+    asksAboutContent && isCourseLevelFor(courseLevel, askGradeBand) ? courseLevel : null
+  const askMakeup = asksAboutContent ? pickClassMakeup(classMakeup) : []
   const askTopic =
     asksAboutContent && typeof topic === 'string' && topic.trim() ? topic.trim().slice(0, 120) : null
 
@@ -245,6 +253,7 @@ debriefRouter.post('/', async (req, res) => {
       course: askCourse,
       topic: askTopic,
       courseLevel: askCourseLevel,
+      classMakeup: askMakeup,
     })}`
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -297,6 +306,7 @@ debriefRouter.post('/', async (req, res) => {
         course: askCourse,
         topic: askTopic,
         courseLevel: askCourseLevel,
+        classMakeup: askMakeup,
         feedback,
         wordsToTry,
         followUp,
