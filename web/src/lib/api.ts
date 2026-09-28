@@ -603,6 +603,9 @@ export type AudioSessionStatus =
   | 'transcribing'
   | 'tagging'
   | 'analyzed'
+  // Transcription ended badly, or a restart killed it mid-flight. Carries a
+  // `failureReason` the teacher can act on.
+  | 'failed'
   | 'locked'
 
 export type AudioHighlight = { label: string; timestampSec: number; excerpt: string; durationSec?: number }
@@ -681,6 +684,10 @@ export type AudioSession = {
   consentConfirmed: boolean
   status: AudioSessionStatus
   durationSec: number | null
+  // Set when transcription is handed to the server; what a "Processing 41%"
+  // row is drawn from on a device that never did the recording.
+  transcribeStartedAt?: string | null
+  failureReason?: string | null
   teacherTalkPct: number | null
   studentTalkPct: number | null
   questionCount: number | null
@@ -1692,12 +1699,22 @@ export function updateAudioSession(
 
 // Uses fetch directly rather than the JSON-only request() helper, since it
 // needs to send FormData (the recorded audio blob), not a JSON body.
-export async function transcribeAudioSession(
+/// Hands the audio over and returns as soon as the server has it. Deepgram
+/// takes roughly 0.15x the recording's length — eight minutes for a fifty
+/// minute class — and the teacher is not made to watch that: the session goes
+/// on transcribing server-side and the list row reports it.
+///
+/// `durationSec` is sent so the row can draw a progress estimate on a device
+/// that never did the recording.
+export async function startTranscription(
   id: string,
   audioBlob: Blob,
-): Promise<{ speakers: SpeakerSample[] }> {
+  durationSec: number,
+): Promise<void> {
   const formData = new FormData()
   formData.append('audio', audioBlob, 'session-audio')
+  formData.append('mode', 'async')
+  formData.append('durationSec', String(Math.round(durationSec)))
   const res = await fetch(`${API_BASE_URL}/api/audio-sessions/${id}/transcribe`, {
     method: 'POST',
     credentials: 'include',
@@ -1707,7 +1724,12 @@ export async function transcribeAudioSession(
     const body = await res.json().catch(() => null)
     throw new Error(body?.error ?? `Request failed with status ${res.status}`)
   }
-  return res.json()
+}
+
+/// The speaker cards, once transcription has finished. Separate from the
+/// upload now that the upload no longer waits around to return them.
+export function getSpeakerSamples(id: string): Promise<{ speakers: SpeakerSample[] }> {
+  return request(`/api/audio-sessions/${id}/speakers`)
 }
 
 export function tagSpeakers(id: string, rawSpeakerTags: string[]): Promise<AudioSessionWithSegments> {

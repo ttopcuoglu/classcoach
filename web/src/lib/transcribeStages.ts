@@ -14,12 +14,16 @@
 // estimate that drives the ring. They describe the work, in order; they never
 // claim to have detected it.
 
+// The upload is the client's part and the only part a teacher has to stay for.
+// It is short, and it has exactly one thing to say.
+export const UPLOAD_STAGE = 'Sending your audio'
+
+// Everything after the upload runs on the server, which is why these are
+// keyed to the session row rather than to a request in flight.
 export const TRANSCRIBE_STAGES: { from: number; text: string }[] = [
-  { from: 0, text: 'Sending your audio' },
-  { from: 15, text: 'Transcribing what was said' },
-  { from: 45, text: 'Separating the voices in the room' },
-  { from: 65, text: 'Counting questions, wait time and talk share' },
-  { from: 85, text: 'Reading the lesson for what it covered' },
+  { from: 0, text: 'Transcribing what was said' },
+  { from: 40, text: 'Separating the voices in the room' },
+  { from: 75, text: 'Almost there' },
 ]
 
 export function transcribeStage(progress: number): string {
@@ -32,8 +36,8 @@ export function transcribeStage(progress: number): string {
 }
 
 /// The same 0.15x factor the progress curve uses, so the sentence and the ring
-/// can never disagree. Rounded generously: a teacher told "about 7 minutes"
-/// who waits 8 feels misled, and one told "up to 10" who waits 8 does not.
+/// can never disagree. Rounded up: a teacher told "around 8 minutes" who waits
+/// 8 is fine, one told "a minute" who waits 8 reaches for the button.
 export function transcribeHint(recordingSec: number): string {
   const estimateSec = Math.max(20, recordingSec * 0.15)
   if (estimateSec < 60) return 'Usually under a minute for a short clip.'

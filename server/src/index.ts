@@ -5,7 +5,7 @@ import express from 'express'
 import { adminRouter } from './routes/admin.ts'
 import { assignmentCoachRouter } from './routes/assignmentCoach.ts'
 import { attemptsRouter } from './routes/attempts.ts'
-import { audioSessionsRouter } from './routes/audioSessions.ts'
+import { audioSessionsRouter, failOrphanedTranscriptions } from './routes/audioSessions.ts'
 import { authRouter } from './routes/auth.ts'
 import { billingRouter } from './routes/billing.ts'
 import { billingWebhookRouter } from './routes/billingWebhook.ts'
@@ -95,6 +95,11 @@ attachLiveSttServer(server, FRONTEND_ORIGINS)
 
 // Deletes Lesson Debrief sessions past each teacher's retention setting.
 startRetentionSweeps()
+
+// A transcription started by the previous process did not survive it. Release
+// those rows at boot so nobody is left watching a progress ring with no job
+// behind it.
+void failOrphanedTranscriptions()
 
 // Talk It Through over Telegram; inert unless TELEGRAM_BOT_TOKEN is set.
 startTelegramBot()

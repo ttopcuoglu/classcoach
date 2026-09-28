@@ -8,7 +8,7 @@ import { NumberedCard } from '../components/AnswerSection'
 import { ACCENT_CYCLE, ACCENTS, StatTile, type Accent } from '../components/report'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
-import { transcribeHint, transcribeStage } from '../lib/transcribeStages'
+import { UPLOAD_STAGE, transcribeHint, transcribeStage } from '../lib/transcribeStages'
 import { HATCH_STYLE } from '../lib/chartPatterns'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import { createPlaybackQueue, primeAudioElement, splitIntoSentences, type PlaybackQueue } from '../lib/voicePlayback'
@@ -24,7 +24,8 @@ import {
   sendReflectMessage,
   summarizeReflectConversation,
   tagSpeakers,
-  transcribeAudioSession,
+  startTranscription,
+  getSpeakerSamples,
   updateAudioSession,
   updateProfile,
   type AudioCfuLogEntry,
@@ -113,6 +114,18 @@ export default function AudioCoaching() {
       .finally(() => setHistoryLoading(false))
   }
 
+  // A row that says "Processing" has to stop saying it without being asked.
+  // Only while something is actually running, so an idle list makes no
+  // requests at all.
+  const hasTranscribing = sessions.some((s) => s.status === 'transcribing')
+  useEffect(() => {
+    if (!hasTranscribing) return
+    const poll = window.setInterval(() => {
+      getAudioSessions().then(setSessions).catch(() => {})
+    }, 5000)
+    return () => window.clearInterval(poll)
+  }, [hasTranscribing])
+
   useEffect(() => {
     refreshHistory()
     getProfile()
@@ -193,6 +206,7 @@ export default function AudioCoaching() {
         session={active}
         speakers={speakers}
         onUpdate={setActive}
+        onSpeakers={setSpeakers}
         onExit={handleExit}
         sessions={sessions}
         focusMetric={focusMetric}
@@ -235,7 +249,6 @@ export default function AudioCoaching() {
         session={active}
         teacherName={teacherName}
         onUpdate={setActive}
-        onSpeakers={setSpeakers}
         onExit={handleExit}
       />
 
@@ -280,6 +293,7 @@ function SessionFlow({
   session,
   speakers,
   onUpdate,
+  onSpeakers,
   onExit,
   sessions,
   focusMetric,
@@ -289,6 +303,7 @@ function SessionFlow({
   session: AudioSessionWithSegments
   speakers: SpeakerSample[]
   onUpdate: (s: AudioSessionWithSegments) => void
+  onSpeakers: (s: SpeakerSample[]) => void
   onExit: () => void
   sessions: AudioSession[]
   focusMetric: FocusMetric | null
@@ -296,9 +311,21 @@ function SessionFlow({
   talkVoice: TalkVoice | null
 }) {
   if (session.status === 'transcribing') {
+    return <TranscribingPanel session={session} onUpdate={onUpdate} onSpeakers={onSpeakers} onExit={onExit} />
+  }
+  if (session.status === 'failed') {
     return (
       <div className="rounded-3xl bg-forest p-8 text-center">
-        <p className="text-sm text-cream/80">Transcribing your session...</p>
+        <p className="text-sm text-cream">
+          {session.failureReason ?? 'Transcription failed. Please try again.'}
+        </p>
+        <button
+          type="button"
+          onClick={onExit}
+          className="mt-4 rounded-full bg-cream px-6 py-2.5 text-sm font-semibold text-forest"
+        >
+          Back to sessions
+        </button>
       </div>
     )
   }
@@ -322,13 +349,11 @@ function RecordingPanel({
   session,
   teacherName = null,
   onUpdate,
-  onSpeakers,
   onExit,
 }: {
   session: AudioSessionWithSegments | null
   teacherName?: string | null
   onUpdate: (s: AudioSessionWithSegments) => void
-  onSpeakers: (s: SpeakerSample[]) => void
   onExit: () => void
 }) {
   const [phase, setPhase] = useState<'idle' | 'recording' | 'paused' | 'uploading'>('idle')
@@ -412,7 +437,11 @@ function RecordingPanel({
       setUploadProgress(0)
       return
     }
-    const estimatedMs = Math.max(3000, uploadDurationRef.current * 150)
+    // Upload only now — the transcription's own eight minutes moved to the
+    // server. Bandwidth-bound and unknowable, so this is a rough 0.02x of the
+    // recording's length: fast enough not to crawl, slow enough not to sit at
+    // 92% for most of the transfer.
+    const estimatedMs = Math.max(2000, uploadDurationRef.current * 20)
     const start = Date.now()
     const interval = window.setInterval(() => {
       const elapsed = Date.now() - start
@@ -517,11 +546,18 @@ function RecordingPanel({
     setPhase('uploading')
     setError(null)
     try {
-      const { speakers } = await transcribeAudioSession(session.id, blob)
-      onSpeakers(speakers)
-      onUpdate({ ...session, status: 'tagging', durationSec: Math.round(finalElapsed) })
+      await startTranscription(session.id, blob, finalElapsed)
+      // Handed over. Deepgram's eight minutes happen server-side now, so the
+      // teacher goes back to the list and the row reports it — they can shut
+      // the laptop.
+      onUpdate({
+        ...session,
+        status: 'transcribing',
+        durationSec: Math.round(finalElapsed),
+        transcribeStartedAt: new Date().toISOString(),
+      })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Transcription failed. Please try again.')
+      setError(e instanceof Error ? e.message : 'Could not send your recording. Please try again.')
       setPhase('idle')
     }
   }
@@ -565,7 +601,7 @@ function RecordingPanel({
             {phase === 'idle' && 'Ready to record'}
             {phase === 'recording' && 'Recording'}
             {phase === 'paused' && 'Paused'}
-            {phase === 'uploading' && `${transcribeStage(uploadProgress)}\u2026`}
+            {phase === 'uploading' && `${UPLOAD_STAGE}\u2026`}
           </p>
 
           <div className="flex items-center gap-4">
@@ -620,8 +656,8 @@ function RecordingPanel({
                 <ProgressRing
                   progress={uploadProgress}
                   size={88}
-                  label={transcribeStage(uploadProgress)}
-                  hint={transcribeHint(uploadDurationRef.current)}
+                  label={UPLOAD_STAGE}
+                  hint="Once this finishes you can leave — the rest happens on our side."
                 />
               </div>
             )}
@@ -641,6 +677,96 @@ function RecordingPanel({
       </p>
     </div>
   )
+}
+
+/// The screen between Stop and tagging, now that transcription outlives the
+/// request that started it.
+///
+/// Nothing here is load-bearing: the work is running on the server whether or
+/// not this component is mounted, so a teacher who closes the tab and comes
+/// back to a "Processing" row loses nothing. That is the whole point of the
+/// change — the percentage is company, not a leash.
+function TranscribingPanel({
+  session,
+  onUpdate,
+  onSpeakers,
+  onExit,
+}: {
+  session: AudioSessionWithSegments
+  onUpdate: (s: AudioSessionWithSegments) => void
+  onSpeakers: (s: SpeakerSample[]) => void
+  onExit: () => void
+}) {
+  const progress = useTranscriptionProgress(session)
+
+  useEffect(() => {
+    let cancelled = false
+    const poll = window.setInterval(async () => {
+      try {
+        const latest = await getAudioSession(session.id)
+        if (cancelled || latest.status === 'transcribing') return
+        if (latest.status === 'tagging') {
+          const { speakers } = await getSpeakerSamples(session.id)
+          if (cancelled) return
+          onSpeakers(speakers)
+        }
+        onUpdate(latest)
+      } catch {
+        // A poll that fails changes nothing — the job is server-side, and the
+        // next tick will pick the answer up.
+      }
+    }, 5000)
+    return () => {
+      cancelled = true
+      window.clearInterval(poll)
+    }
+  }, [session.id, onSpeakers, onUpdate])
+
+  return (
+    <div className="rounded-3xl bg-forest p-8 text-center text-cream">
+      <div className="flex justify-center text-gold">
+        <ProgressRing
+          progress={progress}
+          size={88}
+          label={transcribeStage(progress)}
+          hint={transcribeHint(session.durationSec ?? 0)}
+        />
+      </div>
+      <p className="mt-5 text-sm text-cream/80">
+        You can close this page — your recording keeps processing, and it will be waiting for you here.
+      </p>
+      <button
+        type="button"
+        onClick={onExit}
+        className="mt-4 rounded-full bg-cream px-6 py-2.5 text-sm font-semibold text-forest transition-opacity hover:opacity-90"
+      >
+        Back to sessions
+      </button>
+    </div>
+  )
+}
+
+/// How far along a server-side transcription is, from when it started and how
+/// long the recording was. Same asymptotic curve and same 0.15x factor as the
+/// upload ring, but anchored to a timestamp in the database rather than to
+/// when this component mounted — so the number is the same on the phone that
+/// recorded it and the laptop opened ten minutes later, and survives a reload.
+function useTranscriptionProgress(session: AudioSession): number {
+  const [progress, setProgress] = useState(0)
+
+  useEffect(() => {
+    function compute() {
+      const startedAt = session.transcribeStartedAt ? Date.parse(session.transcribeStartedAt) : NaN
+      if (!Number.isFinite(startedAt)) return 0
+      const tau = Math.max(3000, (session.durationSec ?? 0) * 150)
+      return 92 * (1 - Math.exp(-(Date.now() - startedAt) / tau))
+    }
+    setProgress(compute())
+    const tick = window.setInterval(() => setProgress(compute()), 500)
+    return () => window.clearInterval(tick)
+  }, [session.transcribeStartedAt, session.durationSec])
+
+  return progress
 }
 
 function TagSpeakersPanel({
@@ -5391,12 +5517,22 @@ function SessionCard({
   onOpen: () => void
   onDelete: () => void
 }) {
+  // Transcription runs on the server, so this row is where a teacher who shut
+  // the laptop the moment they pressed Stop finds out how it is going.
+  const transcribeProgress = useTranscriptionProgress(session)
   const status =
     session.status === 'locked'
       ? { label: 'Locked', className: 'bg-cream text-ink-soft' }
       : session.status === 'analyzed'
         ? { label: 'Ready to review', className: 'bg-mint-tint text-forest' }
-        : { label: 'In progress', className: 'bg-gold-tint text-forest' }
+        : session.status === 'transcribing'
+          ? {
+              label: `Processing · ${Math.round(transcribeProgress)}%`,
+              className: 'bg-gold-tint text-forest',
+            }
+          : session.status === 'failed'
+            ? { label: "Couldn't process", className: 'bg-peach-tint text-terracotta-600' }
+            : { label: 'In progress', className: 'bg-gold-tint text-forest' }
   return (
     <div className="group flex items-center justify-between gap-4 rounded-2xl border border-hairline bg-cream-card p-4 transition-colors hover:border-terracotta/40 sm:p-5">
       <button type="button" onClick={onOpen} className="flex flex-1 items-center gap-4 text-left">

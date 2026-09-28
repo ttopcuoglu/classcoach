@@ -276,6 +276,126 @@ audioSessionsRouter.patch('/:id', async (req, res) => {
   res.json(session)
 })
 
+/// The speaker cards the tagging screen needs, derived from stored segments.
+///
+/// Every distinct raw speaker tag that has at least one segment gets a card,
+/// even if none of its utterances happened to have non-blank text — skipping a
+/// tag entirely here used to mean a session could reach TagSpeakersPanel with
+/// zero speaker cards and no way forward, even though diarization genuinely
+/// found distinct voices.
+function speakerSamplesFrom(segments: { rawSpeakerTag: string; text: string }[]) {
+  const samples = new Map<string, string>()
+  for (const segment of segments) {
+    if (!samples.has(segment.rawSpeakerTag)) {
+      samples.set(segment.rawSpeakerTag, segment.text.trim() || '(no clear words captured)')
+    } else if (segment.text.trim() && samples.get(segment.rawSpeakerTag) === '(no clear words captured)') {
+      samples.set(segment.rawSpeakerTag, segment.text)
+    }
+  }
+  return Array.from(samples.entries()).map(([rawSpeakerTag, sample]) => ({ rawSpeakerTag, sample }))
+}
+
+/// Deepgram, then segments, then `tagging`. Roughly 0.15x the recording's
+/// length, which is eight minutes for a fifty-minute class — far too long to
+/// hold an HTTP request open, so in async mode this runs detached and the
+/// client polls the row instead.
+///
+/// `audioBuffer` is never written to disk, logged, or attached to the row,
+/// here or in async mode: it lives in memory for exactly as long as the
+/// Deepgram call and is then unreferenced. Moving when the response is sent
+/// did not move where the audio goes.
+async function runTranscription(sessionId: string, audioBuffer: Buffer, mimetype: string) {
+  const utterances = await transcribeAudio(audioBuffer, mimetype)
+  if (utterances.length === 0) {
+    const error = new Error('No speech was detected in this recording.')
+    ;(error as Error & { code?: string }).code = 'NO_SPEECH'
+    throw error
+  }
+
+  const segments = await prisma.$transaction(
+    utterances.map((u) =>
+      prisma.transcriptSegment.create({
+        data: {
+          sessionId,
+          rawSpeakerTag: `Speaker ${u.speaker}`,
+          speakerLabel: `Speaker ${u.speaker}`,
+          startSec: u.start,
+          endSec: u.end,
+          text: u.transcript,
+        },
+      }),
+    ),
+  )
+
+  const durationSec = Math.round(Math.max(...utterances.map((u) => u.end)))
+  await prisma.audioSession.update({
+    where: { id: sessionId },
+    data: { status: 'tagging', durationSec, failureReason: null },
+  })
+  return speakerSamplesFrom(segments)
+}
+
+/// A job that ended badly has to leave the row in a state the teacher can act
+/// on. Silence would leave "Processing" spinning forever, which is worse than
+/// the eight-minute wait this replaced.
+async function markTranscriptionFailed(sessionId: string, message: string) {
+  try {
+    await prisma.audioSession.update({
+      where: { id: sessionId },
+      data: { status: 'failed', failureReason: message },
+    })
+  } catch (error) {
+    console.error('[audio-sessions] could not record transcription failure:', error)
+  }
+}
+
+/// A background transcription lives in this process, so a restart — every
+/// deploy is one — kills it and leaves the row saying "Processing" with
+/// nothing behind it. Called once at boot: anything still transcribing is by
+/// definition orphaned, because a job that survived would have finished or
+/// failed inside its own request.
+///
+/// The cutoff is a safety margin for the rare case where two instances
+/// overlap during a rolling restart; a genuinely running job younger than
+/// this is left alone.
+const ORPHANED_TRANSCRIPTION_MINUTES = 30
+
+export async function failOrphanedTranscriptions() {
+  const cutoff = new Date(Date.now() - ORPHANED_TRANSCRIPTION_MINUTES * 60 * 1000)
+  try {
+    const { count } = await prisma.audioSession.updateMany({
+      where: {
+        status: 'transcribing',
+        OR: [{ transcribeStartedAt: { lt: cutoff } }, { transcribeStartedAt: null }],
+      },
+      data: {
+        status: 'failed',
+        failureReason: 'Transcription was interrupted. Your recording was not saved — please record again.',
+      },
+    })
+    if (count > 0) console.log(`[audio-sessions] released ${count} interrupted transcription(s)`)
+  } catch (error) {
+    console.error('[audio-sessions] could not sweep interrupted transcriptions:', error)
+  }
+}
+
+audioSessionsRouter.get('/:id/speakers', async (req, res) => {
+  const session = await prisma.audioSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+    select: { id: true },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  const segments = await prisma.transcriptSegment.findMany({
+    where: { sessionId: session.id },
+    orderBy: { startSec: 'asc' },
+    select: { rawSpeakerTag: true, text: true },
+  })
+  res.json({ speakers: speakerSamplesFrom(segments) })
+})
+
 audioSessionsRouter.post('/:id/transcribe', upload.single('audio'), async (req, res) => {
   const sessionId = req.params.id as string
   const session = await prisma.audioSession.findFirst({
@@ -287,6 +407,36 @@ audioSessionsRouter.post('/:id/transcribe', upload.single('audio'), async (req, 
   }
   if (!req.file) {
     res.status(400).json({ error: 'No audio file received' })
+    return
+  }
+
+  // Clients that don't ask for async get the original behaviour: one request
+  // that returns the speaker cards. Builds already in teachers' hands depend
+  // on that, so the synchronous path stays until they are gone.
+  if (req.body?.mode === 'async') {
+    const recordedSec = Number(req.body?.durationSec)
+    const { buffer, mimetype } = req.file
+    await prisma.audioSession.update({
+      where: { id: sessionId },
+      data: {
+        status: 'transcribing',
+        transcribeStartedAt: new Date(),
+        failureReason: null,
+        // The client knows how long it recorded; storing it now is what lets
+        // any other device draw a progress estimate for this job.
+        ...(Number.isFinite(recordedSec) && recordedSec > 0 ? { durationSec: Math.round(recordedSec) } : {}),
+      },
+    })
+    res.status(202).json({ status: 'transcribing' })
+
+    void runTranscription(sessionId, buffer, mimetype).catch(async (error) => {
+      console.error('[audio-sessions] background transcription failed:', error)
+      const noSpeech = (error as Error & { code?: string }).code === 'NO_SPEECH'
+      await markTranscriptionFailed(
+        sessionId,
+        noSpeech ? 'No speech was detected in this recording.' : 'Transcription failed. Please try again.',
+      )
+    })
     return
   }
 
@@ -321,23 +471,7 @@ audioSessionsRouter.post('/:id/transcribe', upload.single('audio'), async (req, 
       data: { status: 'tagging', durationSec },
     })
 
-    // Every distinct raw speaker tag that has at least one segment gets a
-    // card, even if none of its utterances happened to have non-blank text
-    // — skipping a tag entirely here used to mean a session could reach
-    // TagSpeakersPanel with zero speaker cards and no way forward, even
-    // though diarization genuinely found distinct voices.
-    const speakerSamples = new Map<string, string>()
-    for (const segment of segments) {
-      if (!speakerSamples.has(segment.rawSpeakerTag)) {
-        speakerSamples.set(segment.rawSpeakerTag, segment.text.trim() || '(no clear words captured)')
-      } else if (segment.text.trim() && speakerSamples.get(segment.rawSpeakerTag) === '(no clear words captured)') {
-        speakerSamples.set(segment.rawSpeakerTag, segment.text)
-      }
-    }
-
-    res.json({
-      speakers: Array.from(speakerSamples.entries()).map(([rawSpeakerTag, sample]) => ({ rawSpeakerTag, sample })),
-    })
+    res.json({ speakers: speakerSamplesFrom(segments) })
   } catch (error) {
     console.error('[audio-sessions] transcription failed:', error)
     res.status(502).json({ error: 'Transcription failed. Please try again.' })

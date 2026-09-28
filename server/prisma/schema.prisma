@@ -545,6 +545,13 @@ model AudioSession {
   status           String    @default("setup")
   durationSec      Int?
 
+  // Transcription runs server-side and outlives the request that started it,
+  // so the teacher can lock their phone the moment they press Stop. These two
+  // are what a "Processing 41%" row is drawn from on any device, and what the
+  // startup sweep uses to find jobs a restart killed mid-flight.
+  transcribeStartedAt DateTime?
+  failureReason       String?
+
   // Trended across sessions, kept as real columns for cheap history queries
   teacherTalkPct   Float?
   studentTalkPct   Float?
