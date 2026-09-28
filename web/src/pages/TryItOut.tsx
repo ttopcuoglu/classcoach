@@ -53,6 +53,8 @@ export default function TryItOut({
 }) {
   const [category, setCategory] = useState<string | undefined>(undefined)
   const [difficulty, setDifficulty] = useState<string | undefined>(undefined)
+  // Collapsed by default: most teachers want any situation at any difficulty.
+  const [narrowing, setNarrowing] = useState(false)
   const area = findFocusArea(focusArea)
 
   // A sub-category from a different area would silently contradict the area on
@@ -317,6 +319,10 @@ export default function TryItOut({
   // Re-picked whenever the section or the room changes — a K-5 rehearsal and a
   // 9-12 rehearsal should not open with the same three scenarios.
   const subCategories = subCategoriesFor(focusArea)
+  const situationText = category ? categoryLabel(category).toLowerCase() : 'any situation'
+  const difficultyText = (
+    DIFFICULTIES.find((d) => d.value === difficulty)?.label ?? 'Any difficulty'
+  ).toLowerCase()
   const sessionAttempts = sessionState?.done
     ? sessionState.attemptIds.map((id) => allAttempts.find((a) => a.id === id)).filter((a): a is ScenarioAttempt => !!a)
     : []
@@ -407,9 +413,27 @@ export default function TryItOut({
                 />
               </div>
             )}
-            {/* Always visible: what scenarios get built from isn't optional
-                context. It used to sit behind a "Hide"/"Change" fold. */}
+            {/* Situation and difficulty are refinements, not the room: most
+                teachers want any situation at any difficulty, so they rest as
+                one line and open when someone wants to narrow. The room below
+                stays visible, because the coaching depends on it. */}
             <div className="mt-5 flex flex-col gap-3.5 rounded-2xl bg-cream/10 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-cream/80">
+                  <span className="font-semibold text-cream">Scenarios:</span> {situationText} · {difficultyText}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setNarrowing((v) => !v)}
+                  aria-expanded={narrowing}
+                  className="text-sm font-semibold text-gold hover:text-cream"
+                >
+                  {narrowing ? 'Hide' : 'Change'}
+                </button>
+              </div>
+
+              {narrowing && (
+              <>
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Situation</p>
                 {area ? (
@@ -459,6 +483,8 @@ export default function TryItOut({
                   ))}
                 </div>
               </div>
+              </>
+              )}
             </div>
 
             <div className="mt-3">
