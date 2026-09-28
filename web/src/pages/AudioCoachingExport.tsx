@@ -225,13 +225,21 @@ export default function AudioCoachingExport() {
         {/* Clarity & content */}
         {content && (
           <ReportSection n={++n} title="Clarity & Content" blurb="What the lesson said it was about, in its own words." accent={A.forest}>
+            {content.summary && (
+              <div className="break-inside-avoid rounded-2xl bg-mint-tint/50 p-5">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-forest">What this lesson covered</p>
+                <p className="mt-1.5 text-sm text-ink">{content.summary}</p>
+              </div>
+            )}
             <div className="break-inside-avoid rounded-2xl bg-mint-tint/50 p-5">
               <p className="text-[11px] font-bold uppercase tracking-wide text-forest">Stated objective</p>
               <p className="mt-1.5 text-sm text-ink">
                 {content.statedObjective?.found && content.statedObjective.quote
                   ? `“${content.statedObjective.quote}”`
                   : content.statedObjective?.found === false
-                    ? "Not heard near the start of the recording (an objective posted on the board wouldn't show up). Even one sentence naming the goal aloud can anchor a lesson."
+                    ? content.statedObjective?.source === 'model'
+                      ? "Not said aloud anywhere in this recording (one posted on the board wouldn't show up). Even one sentence naming the goal aloud can anchor a lesson."
+                      : "Not heard near the start of the recording (an objective posted on the board wouldn't show up). Even one sentence naming the goal aloud can anchor a lesson."
                     : "The start of the lesson wasn't captured, so a stated objective couldn't be checked."}
               </p>
             </div>

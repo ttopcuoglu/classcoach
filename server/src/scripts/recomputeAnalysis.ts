@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import { analyzeTranscript, detectLessonContent, type Segment } from '../lib/audioAnalysis.ts'
+import { enrichLessonContent } from '../lib/lessonObjective.ts'
 import { prisma } from '../lib/prisma.ts'
 
 // Re-runs the analysis over a session's stored transcript.
@@ -83,7 +84,9 @@ async function main() {
   if (segments.length === 0) throw new Error(`Session ${session.id} has no transcript segments.`)
 
   const analysis = analyzeTranscript(segments)
-  const lessonContent = detectLessonContent(segments, analysis.phases)
+  // Same path the transcribe route takes, model read included — a recompute
+  // that skipped it would leave the report a version behind the code.
+  const lessonContent = await enrichLessonContent(detectLessonContent(segments, analysis.phases), segments)
 
   const before = (session.questionLog ?? []) as { text: string; type: string }[]
   const after = analysis.questionLog
@@ -96,6 +99,8 @@ async function main() {
   console.log(`higher    ${pct(session.higherOrderPct)} -> ${pct(analysis.higherOrderPct)}`)
   console.log(`sequences ${before.length} -> ${after.length}`)
   if (dropped.length) console.log(`dropped   ${dropped.map((t) => JSON.stringify(t)).join(', ')}`)
+  console.log(`objective ${JSON.stringify(lessonContent.statedObjective.quote)} (${lessonContent.statedObjective.source ?? '—'})`)
+  console.log(`summary   ${lessonContent.summary ?? '—'}`)
 
   if (!write) {
     console.log('\n(dry run — pass --write to save)')

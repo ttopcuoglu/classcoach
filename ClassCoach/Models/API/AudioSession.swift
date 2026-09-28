@@ -54,6 +54,11 @@ struct AudioLessonContent: Decodable {
     let statedObjectiveFound: Bool?
     let statedObjectiveQuote: String?
     let statedObjectiveTimestampSec: Double?
+    /// Which detector answered — "phrase" or "model". Absent on reports
+    /// analysed before Claude read the transcript for this.
+    let statedObjectiveSource: String?
+    /// What the lesson covered. Absent on those same older reports.
+    let summary: String?
     let connections: [AudioQuote]
     let vocabulary: [AudioQuote]
     let subject: String?
@@ -64,10 +69,10 @@ struct AudioLessonContent: Decodable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case topicTerms, statedObjective, connections, vocabulary, subject
+        case topicTerms, statedObjective, summary, connections, vocabulary, subject
     }
     private enum ObjectiveKeys: String, CodingKey {
-        case found, quote, timestampSec
+        case found, quote, timestampSec, source
     }
 
     init(from decoder: Decoder) throws {
@@ -83,11 +88,14 @@ struct AudioLessonContent: Decodable {
             statedObjectiveFound = try? objective.decode(Bool.self, forKey: .found)
             statedObjectiveQuote = try? objective.decode(String.self, forKey: .quote)
             statedObjectiveTimestampSec = try? objective.decode(Double.self, forKey: .timestampSec)
+            statedObjectiveSource = try? objective.decode(String.self, forKey: .source)
         } else {
             statedObjectiveFound = nil
             statedObjectiveQuote = nil
             statedObjectiveTimestampSec = nil
+            statedObjectiveSource = nil
         }
+        summary = try? container.decode(String.self, forKey: .summary)
         connections = (try? container.decode([AudioQuote].self, forKey: .connections)) ?? []
         vocabulary = (try? container.decode([AudioQuote].self, forKey: .vocabulary)) ?? []
         subject = try? container.decode(String.self, forKey: .subject)

@@ -4021,6 +4021,13 @@ function LessonContentTab({
           )}
         </div>
 
+        {lessonContent?.summary && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">What this lesson covered</p>
+            <p className="mt-1 text-sm text-ink">{lessonContent.summary}</p>
+          </div>
+        )}
+
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Stated objective</p>
           {!lessonContent || lessonContent.statedObjective.found === null ? (
@@ -4036,8 +4043,9 @@ function LessonContentTab({
             </p>
           ) : (
             <p className="mt-1 text-sm text-ink-soft">
-              Not heard near the start of the recording. An objective posted on the board or slides wouldn't show up
-              here.
+              {lessonContent?.statedObjective.source === 'model'
+                ? "Not said aloud anywhere in this recording. One posted on the board or a slide wouldn't show up here."
+                : "Not heard near the start of the recording. An objective posted on the board or slides wouldn't show up here."}
             </p>
           )}
         </div>

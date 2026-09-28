@@ -2,6 +2,7 @@ import { Router } from 'express'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { analyzeTranscript, buildContentExhibits, detectLessonContent, type Segment } from '../lib/audioAnalysis.ts'
+import { enrichLessonContent } from '../lib/lessonObjective.ts'
 import { checkFeatureAccess, hasActivePlan, startOfCurrentMonth } from '../lib/billing.ts'
 import {
   applyMemoryUpdate,
@@ -390,7 +391,10 @@ audioSessionsRouter.post('/:id/tag-speaker', async (req, res) => {
   ).map((s) => ({ speakerLabel: s.speakerLabel, startSec: s.startSec, endSec: s.endSec, text: s.text }))
 
   const analysis = analyzeTranscript(segments)
-  const lessonContent = detectLessonContent(segments, analysis.phases)
+  // The phrase scan first, then Claude reads the transcript and overrides it.
+  // Best-effort by design: if that call fails the phrase answer stands, so a
+  // teacher waiting on a transcript never loses it to this.
+  const lessonContent = await enrichLessonContent(detectLessonContent(segments, analysis.phases), segments)
 
   // Notes are no longer auto-generated from raw metrics here — they're
   // populated later from the Reflect tab's actual coaching conversation

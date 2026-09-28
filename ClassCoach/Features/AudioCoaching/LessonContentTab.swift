@@ -18,6 +18,7 @@ struct LessonContentTab: View {
 
             if let content {
                 topicTermsSection(content)
+                summarySection(content)
                 objectiveSection(content)
                 quotesSection(title: "REAL-WORLD / PRIOR-KNOWLEDGE CONNECTIONS", quotes: content.connections)
                 quotesSection(title: "DEFINED VOCABULARY", quotes: content.vocabulary)
@@ -85,6 +86,17 @@ struct LessonContentTab: View {
     }
 
     @ViewBuilder
+    private func summarySection(_ content: AudioLessonContent) -> some View {
+        if let summary = content.summary, !summary.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("WHAT THIS LESSON COVERED").font(.caption.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
+                Text(summary).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    @ViewBuilder
     private func objectiveSection(_ content: AudioLessonContent) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("STATED OBJECTIVE").font(.caption.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
@@ -94,7 +106,11 @@ struct LessonContentTab: View {
                 Text("Detected: \"\(quote)\"\(content.statedObjectiveTimestampSec.map { " (\(ReportConfidence.formatDuration($0)))" } ?? "")")
                     .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
             } else {
-                Text("Not heard near the start of the recording. An objective posted on the board or slides wouldn't show up here.").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                Text(content.statedObjectiveSource == "model"
+                     ? "Not said aloud anywhere in this recording. One posted on the board or a slide wouldn't show up here."
+                     : "Not heard near the start of the recording. An objective posted on the board or slides wouldn't show up here.")
+                    .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

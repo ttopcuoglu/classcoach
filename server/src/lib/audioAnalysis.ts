@@ -189,7 +189,18 @@ export type TopicTerm = { term: string; count: number }
 
 export type LessonContentResult = {
   topicTerms: { teacher: TopicTerm[]; student: TopicTerm[] }
-  statedObjective: { found: boolean | null; quote: string | null; timestampSec: number | null }
+  statedObjective: {
+    found: boolean | null
+    quote: string | null
+    timestampSec: number | null
+    /// Which detector answered. 'phrase' is the fixed-phrase scan in this
+    /// file; 'model' is `lessonObjective.ts` reading the whole transcript.
+    /// Kept so the report can be honest about how it knows.
+    source?: 'phrase' | 'model'
+  }
+  /// What the lesson covered, in one or two sentences. Null when no model
+  /// read happened or the transcript was too fragmentary to say.
+  summary?: string | null
   connections: { quote: string; timestampSec: number }[]
   vocabulary: { quote: string; timestampSec: number }[]
   subject: string | null
@@ -255,15 +266,17 @@ function detectStatedObjective(segments: Segment[], phases: Phase[]): LessonCont
   if (recordedSec < MIN_PHASE_DURATION_SEC) {
     return { found: null, quote: null, timestampSec: null }
   }
+  // Everything below is the fallback path — see `lessonObjective.ts`, which
+  // reads the whole transcript and overrides this when the model answers.
   const openingEndSec = phases.find((p) => p.label === 'Opening')?.endSec ?? 0
   const windowEndSec = Math.max(openingEndSec, OBJECTIVE_SEARCH_MIN_SEC)
   const openingTeacherSegments = segments.filter((s) => s.speakerLabel === 'Teacher' && s.startSec < windowEndSec)
   for (const segment of openingTeacherSegments) {
     if (countPhraseMatches(segment.text, OBJECTIVE_PHRASES) > 0) {
-      return { found: true, quote: segment.text, timestampSec: segment.startSec }
+      return { found: true, quote: segment.text, timestampSec: segment.startSec, source: 'phrase' }
     }
   }
-  return { found: false, quote: null, timestampSec: null }
+  return { found: false, quote: null, timestampSec: null, source: 'phrase' }
 }
 
 function detectPhraseQuotes(
