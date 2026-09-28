@@ -76,8 +76,10 @@ export default function TeachingContextFields({
               key={band}
               type="button"
               disabled={disabled}
-              // Courses belong to 9-12, so leaving that band drops the course
-              // rather than silently sending a stale one.
+              // A course list is band-specific, so changing band drops the
+              // course. The topic survives on purpose: photosynthesis is taught
+              // in 6-8 Science as well as 9-12 Biology, so moving band is not a
+              // contradiction the way changing subject is.
               onClick={() => set({ gradeBand: band, course: undefined, otherCourse: false })}
               aria-pressed={value.gradeBand === band}
               className={chip(value.gradeBand === band)}
@@ -100,8 +102,8 @@ export default function TeachingContextFields({
               onClick={() =>
                 set(
                   value.subject === s && !value.otherSubject
-                    ? { subject: undefined, course: undefined, otherSubject: false, otherCourse: false }
-                    : { subject: s, course: undefined, otherSubject: false, otherCourse: false },
+                    ? { subject: undefined, course: undefined, topic: undefined, otherSubject: false, otherCourse: false }
+                    : { subject: s, course: undefined, topic: undefined, otherSubject: false, otherCourse: false },
                 )
               }
               aria-pressed={!value.otherSubject && value.subject === s}
@@ -113,7 +115,9 @@ export default function TeachingContextFields({
           <button
             type="button"
             disabled={disabled}
-            onClick={() => set({ otherSubject: true, subject: undefined, course: undefined, otherCourse: false })}
+            onClick={() =>
+              set({ otherSubject: true, subject: undefined, course: undefined, topic: undefined, otherCourse: false })
+            }
             aria-pressed={value.otherSubject}
             className={chip(value.otherSubject)}
           >

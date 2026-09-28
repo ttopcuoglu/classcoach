@@ -56,8 +56,11 @@ struct TeachingContextFields: View {
             field("Grade band") {
                 ChipRow(items: gradeBandChips, selection: value.gradeBand) { picked in
                     value.gradeBand = picked ?? "6-8"
-                    // A course belongs to a band, so changing band drops it
-                    // rather than silently sending a stale one.
+                    // A course list is band-specific, so changing band drops
+                    // the course. The topic survives on purpose: photosynthesis
+                    // is taught in 6-8 Science as well as 9-12 Biology, so
+                    // moving band is not a contradiction the way changing
+                    // subject is.
                     value.course = nil
                     value.usingOtherCourse = false
                 }
@@ -73,6 +76,10 @@ struct TeachingContextFields: View {
                     value.subject = value.usingOtherSubject ? nil : picked
                     value.course = nil
                     value.usingOtherCourse = false
+                    // A topic belongs to a subject. Keeping it across a subject
+                    // change lets the two contradict each other, and the server
+                    // cannot catch it because the topic is free text.
+                    value.topic = nil
                 }
                 if value.usingOtherSubject {
                     TextField("Which subject?", text: Binding(
