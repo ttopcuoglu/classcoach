@@ -44,7 +44,10 @@ struct TryItOutView: View {
 struct TryItOutContent: View {
     /// One of the six focus areas, from the Ask & Practice shell. Nil lets the
     /// coach choose, weighted toward what this teacher has practiced least.
+    /// Unlike Ask, this is the primary control here: it decides what scenario
+    /// the teacher gets handed.
     var focusArea: String? = nil
+    var onPickArea: ((String?) -> Void)? = nil
 
     @EnvironmentObject private var authManager: AuthManager
     @State private var category: String?
@@ -88,6 +91,7 @@ struct TryItOutContent: View {
                         "\($0.blurb) Set the details, then practice what you'd say."
                     } ?? "Pick a topic, difficulty, grade band, and subject, then practice what you'd say."
                 )
+                ChipRow(items: focusAreaChips(anyLabel: "Any area"), selection: focusArea) { onPickArea?($0) }
                 // Showing all thirty-one sub-categories at once would be a wall
                 // of chips, so this narrows only once an area is chosen.
                 if area != nil {

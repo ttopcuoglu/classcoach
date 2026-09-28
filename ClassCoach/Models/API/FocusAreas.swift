@@ -9,6 +9,8 @@ import Foundation
 struct FocusArea: Identifiable {
     let value: String
     let label: String
+    /// One or two words, for the chip rows where the full label would wrap.
+    let shortLabel: String
     /// What this area covers, in a teacher's words.
     let blurb: String
     /// One example of each mode, so the picker teaches what the area is for.
@@ -31,6 +33,7 @@ let focusAreas: [FocusArea] = [
     FocusArea(
         value: "delivery_of_instruction",
         label: "Delivery of Instruction",
+        shortLabel: "Delivery",
         blurb: "How you explain, question, check, and pace.",
         askExample: "My explanations run long and I lose half the room.",
         practiceExample: "Half the class still looks blank after two explanations.",
@@ -56,6 +59,7 @@ let focusAreas: [FocusArea] = [
     FocusArea(
         value: "content_pedagogy",
         label: "Teaching Specific Content",
+        shortLabel: "Content",
         blurb: "How to teach this topic so it lands.",
         askExample: "How do I teach mitosis so it is not just vocabulary?",
         practiceExample: "A student says plants get their food from the soil.",
@@ -80,6 +84,7 @@ let focusAreas: [FocusArea] = [
     FocusArea(
         value: "classroom_management",
         label: "Classroom Management",
+        shortLabel: "Classroom",
         blurb: "Behavior, routines, and getting the room with you.",
         askExample: "My class talks over directions.",
         practiceExample: "A student refuses to move to their assigned seat.",
@@ -105,6 +110,7 @@ let focusAreas: [FocusArea] = [
     FocusArea(
         value: "grading",
         label: "Grading & Feedback",
+        shortLabel: "Grading",
         blurb: "Fair grades, feedback that lands, a load you can carry.",
         askExample: "How do I grade fairly when effort and mastery disagree?",
         practiceExample: "Strong tests, four missing assignments, a 71 in the book.",
@@ -129,6 +135,7 @@ let focusAreas: [FocusArea] = [
     FocusArea(
         value: "parent_communication",
         label: "Parent Communication",
+        shortLabel: "Parents",
         blurb: "Hard emails, conferences, and hard news — said well.",
         askExample: "A parent email is accusatory and I do not know how to answer.",
         practiceExample: "A parent writes: \"That is not what I expect from her teacher.\"",
@@ -153,6 +160,7 @@ let focusAreas: [FocusArea] = [
     FocusArea(
         value: "colleagues",
         label: "Colleagues & Team",
+        shortLabel: "Colleagues",
         blurb: "Co-teachers, meetings, admin asks, honest disagreement.",
         askExample: "A co-teacher keeps overriding me in front of students.",
         practiceExample: "Your co-teacher re-explains your task, mid-class.",
@@ -191,6 +199,11 @@ func focusAreaLabel(_ value: String?) -> String? {
 func focusAreaForCategory(_ category: String?) -> FocusArea? {
     guard let category else { return nil }
     return focusAreas.first { $0.subCategories.contains { $0.value == category } }
+}
+
+/// The six areas as `ChipRow` items, with an "any" option first.
+func focusAreaChips(anyLabel: String) -> [(label: String, value: String?)] {
+    [(anyLabel, nil)] + focusAreas.map { ($0.shortLabel, Optional($0.value)) }
 }
 
 /// Sub-categories for one area, with an "any" option first, ready for `ChipRow`.

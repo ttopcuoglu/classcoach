@@ -34,8 +34,10 @@ struct AskExpertView: View {
 struct AskExpertContent: View {
     /// One of the six focus areas, from the Ask & Practice shell. Nil is the
     /// normal case: the coach works out which area the question belongs to, so
-    /// a teacher never has to classify their own problem first.
+    /// a teacher never has to classify their own problem first. Here the area
+    /// only changes which starter questions are on offer.
     var focusArea: String? = nil
+    var onPickArea: ((String?) -> Void)? = nil
 
     @EnvironmentObject private var authManager: AuthManager
     @State private var incidentText = ""
@@ -146,6 +148,10 @@ struct AskExpertContent: View {
                 .font(.caption2.weight(.bold)).tracking(0.8)
                 .foregroundStyle(AppTheme.terracotta600)
                 .padding(.top, 4)
+            // The six areas sit with the examples rather than above the text
+            // box: on Ask the coach infers the area, so this is a way to browse,
+            // not a step to complete.
+            ChipRow(items: focusAreaChips(anyLabel: "All"), selection: focusArea) { onPickArea?($0) }
             ForEach(Array(starters.enumerated()), id: \.offset) { index, starter in
                 Button {
                     Task { await submit(starter) }

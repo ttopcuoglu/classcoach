@@ -10,7 +10,7 @@ import ShareButton from '../components/ShareButton'
 import { MicIcon, StarIcon } from '../components/icons'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { categoryLabel } from '../lib/categories'
-import { findFocusArea, focusAreaForCategory, focusAreaLabel } from '../lib/focusAreas'
+import { FOCUS_AREAS, findFocusArea, focusAreaForCategory, focusAreaLabel } from '../lib/focusAreas'
 import { GRADE_BANDS } from '../lib/gradeBands'
 import { isExperienced } from '../lib/experience'
 import { takeAskPrefill } from '../lib/communicationsPrefill'
@@ -41,30 +41,6 @@ const EXPERIENCED_STARTERS = [
   'How can I tell whether my questions are really making students think?',
 ]
 
-// Each starting point carries one of the report's accent colours, so the
-// three read as distinct choices on the dark card rather than a row of
-// identical pills.
-const STARTING_POINTS: { label: string; placeholder: string; dot: string; selected: string }[] = [
-  {
-    label: 'Find the words',
-    placeholder: 'Describe the moment — what would you like to say next time?',
-    dot: 'bg-terracotta',
-    selected: 'border-terracotta bg-terracotta text-cream',
-  },
-  {
-    label: 'Reflect on a moment',
-    placeholder: 'What happened, and how do you feel about how it went?',
-    dot: 'bg-gold',
-    selected: 'border-gold bg-gold text-forest',
-  },
-  {
-    label: 'Build a routine',
-    placeholder: 'What routine or expectation are you trying to set up?',
-    dot: 'bg-mint-tint',
-    selected: 'border-mint-tint bg-mint-tint text-forest',
-  },
-]
-
 const STARTER_TINTS = ['bg-peach-tint/60', 'bg-gold-tint/60', 'bg-mint-tint/60', 'bg-peach-tint/30']
 
 // Same list Practice offers, so the two tabs agree.
@@ -78,13 +54,11 @@ export default function Ask({
   onPickArea,
 }: {
   focusArea?: string
-  onPickArea?: (value: string) => void
+  onPickArea?: (value: string | null) => void
 }) {
   const navigate = useNavigate()
   const area = findFocusArea(focusArea)
   const [incidentText, setIncidentText] = useState('')
-  const [placeholder, setPlaceholder] = useState('Describe what happened, or ask a question...')
-  const [startingPoint, setStartingPoint] = useState<string | null>(null)
   const [debrief, setDebrief] = useState<Debrief | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const askProgress = useSimulatedProgress(submitting, 9000)
@@ -260,30 +234,6 @@ export default function Ask({
               </p>
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              {STARTING_POINTS.map((point) => {
-                const selected = startingPoint === point.label
-                return (
-                  <button
-                    key={point.label}
-                    type="button"
-                    onClick={() => {
-                      setStartingPoint(point.label)
-                      setPlaceholder(point.placeholder)
-                    }}
-                    disabled={submitting}
-                    aria-pressed={selected}
-                    className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-60 ${
-                      selected ? point.selected : 'border-cream/20 bg-cream/5 text-cream hover:bg-cream/10'
-                    }`}
-                  >
-                    {!selected && <span className={`h-2 w-2 rounded-full ${point.dot}`} />}
-                    {point.label}
-                  </button>
-                )
-              })}
-            </div>
-
             <label className="flex flex-col gap-2">
               <span className="font-heading text-2xl font-bold text-cream">What's going on?</span>
               <textarea
@@ -291,28 +241,58 @@ export default function Ask({
                 onChange={(e) => setIncidentText(e.target.value)}
                 disabled={submitting}
                 rows={5}
-                placeholder={placeholder}
+                placeholder="Describe what happened, or ask a question..."
                 className="rounded-2xl border-0 bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:outline-none focus:ring-2 focus:ring-gold disabled:opacity-60"
               />
             </label>
 
-            <div className="rounded-2xl bg-cream/10 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm text-cream/80">
-                  <span className="font-semibold text-cream">Your room:</span> grades {gradeBand}
-                  {subject ? ` · ${subject}` : ' · no subject set'}
-                </p>
+            {/* Settings, not a step: the room reads as one quiet line beside
+                the submit button, and only opens when a teacher wants to change
+                it. It used to be its own card above the button, which made
+                setting a grade band look like something you had to do first. */}
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  {speechSupported && (
+                    <button
+                      type="button"
+                      onClick={toggleListening}
+                      disabled={submitting}
+                      className={`flex w-fit items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                        listening
+                          ? 'border-terracotta bg-terracotta text-cream'
+                          : 'border-cream/25 text-cream/80 hover:border-cream/60 hover:text-cream'
+                      }`}
+                    >
+                      <MicIcon className="h-3.5 w-3.5" />
+                      {listening ? 'Listening... tap to stop' : 'Speak instead'}
+                    </button>
+                  )}
+                  <p className="text-xs text-cream/60">
+                    Grades {gradeBand}
+                    {subject ? ` · ${subject}` : ''}{' '}
+                    <button
+                      type="button"
+                      onClick={() => setShowContext((v) => !v)}
+                      aria-expanded={showContext}
+                      className="font-semibold text-gold underline decoration-cream/20 underline-offset-4 hover:text-cream"
+                    >
+                      {showContext ? 'Hide' : 'Change'}
+                    </button>
+                  </p>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setShowContext((v) => !v)}
-                  aria-expanded={showContext}
-                  className="text-sm font-semibold text-gold hover:text-cream"
+                  onClick={() => handleSubmit()}
+                  disabled={submitting || !incidentText.trim()}
+                  className="rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90 disabled:bg-cream/10 disabled:text-cream/40 disabled:shadow-none"
                 >
-                  {showContext ? 'Hide' : 'Change'}
+                  {submitting ? 'Getting coaching...' : 'Get coaching'}
                 </button>
               </div>
+
               {showContext && (
-                <div className="mt-4 flex flex-col gap-3">
+                <div className="flex flex-col gap-3 rounded-2xl bg-cream/10 p-4">
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Grade band</p>
                     <div className="mt-1.5 flex flex-wrap gap-2">
@@ -357,34 +337,6 @@ export default function Ask({
                   </div>
                 </div>
               )}
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              {speechSupported ? (
-                <button
-                  type="button"
-                  onClick={toggleListening}
-                  disabled={submitting}
-                  className={`flex w-fit items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
-                    listening
-                      ? 'border-terracotta bg-terracotta text-cream'
-                      : 'border-cream/25 text-cream/80 hover:border-cream/60 hover:text-cream'
-                  }`}
-                >
-                  <MicIcon className="h-3.5 w-3.5" />
-                  {listening ? 'Listening... tap to stop' : 'Speak instead'}
-                </button>
-              ) : (
-                <span />
-              )}
-              <button
-                type="button"
-                onClick={() => handleSubmit()}
-                disabled={submitting || !incidentText.trim()}
-                className="rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90 disabled:bg-cream/10 disabled:text-cream/40 disabled:shadow-none"
-              >
-                {submitting ? 'Getting coaching...' : 'Get coaching'}
-              </button>
             </div>
 
             {submitting && (
@@ -511,6 +463,27 @@ export default function Ask({
       {!debrief && (
         <div>
           <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Or start with one of these</h2>
+          {/* The six areas live here rather than above the textarea: the coach
+              infers the area from what a teacher writes, so on Ask the picker
+              isn't a step — it just changes which examples are on offer. */}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {[{ shortLabel: 'All', value: null }, ...FOCUS_AREAS].map((a) => {
+              const selected = (a.value ?? undefined) === focusArea
+              return (
+                <button
+                  key={a.shortLabel}
+                  type="button"
+                  onClick={() => onPickArea?.(a.value)}
+                  aria-pressed={selected}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    selected ? 'bg-forest text-cream' : 'bg-cream-card text-ink-soft hover:text-ink'
+                  }`}
+                >
+                  {a.shortLabel}
+                </button>
+              )
+            })}
+          </div>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {(area ? area.askStarters : starters ?? []).map((starter, i) => (
               <button

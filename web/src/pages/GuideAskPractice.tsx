@@ -49,16 +49,16 @@ const MOMENTS = [
 
 const STEPS = [
   {
-    title: 'Pick what it’s about — or don’t',
-    body: 'Six areas cover what teachers actually bring to a coach: delivery of instruction, teaching specific content, classroom management, grading, parent communication, and colleagues. Choosing one narrows the coaching and the scenarios. Skipping it is fine too — start typing and your coach works out which one it is.',
-  },
-  {
     title: 'Pick the tab that matches your moment',
     body: 'Ask is for something that already happened, or a real question you have right now. Practice is for something that hasn’t happened yet and you’d rather not improvise.',
   },
   {
     title: 'Say what’s going on',
-    body: 'In Ask, type it or tap “Speak instead” — and if you’re not sure how to start, three starting points reshape the prompt for you: find the words, reflect on a moment, or build a routine. In Practice, set any filters you want and generate a scenario.',
+    body: 'In Ask, just type it, or tap “Speak instead.” You don’t have to say which of the six areas it belongs to — your coach works that out from your own words, and tells you which one it answered as. If you’d rather browse, the six areas sit under the box and change the example questions on offer.',
+  },
+  {
+    title: 'Or set up a rehearsal',
+    body: 'In Practice you do pick an area, because it decides what you get handed: a room that’s stopped following you, a misconception in a student’s words, a piece of work on a rubric boundary, a parent email, a line a colleague said. Then narrow by situation, grade band, subject, and difficulty if you want to.',
   },
   {
     title: 'Get something you can use',
@@ -76,7 +76,7 @@ const LANES = [
     name: 'Ask',
     when: 'Something real — it happened, or it’s about to.',
     detail:
-      'Describe the moment or ask a straight question. Four starter questions are there if you’re stuck. You get coaching, specific words to try, and one next step — plus an open follow-up chat.',
+      'Describe the moment or ask a straight question — about any of the six areas, and you never have to say which. Starter questions are there if you’re stuck. You get coaching, specific words to try, and one next step, plus an open follow-up chat.',
   },
   {
     icon: ScenarioIcon,
@@ -90,7 +90,7 @@ const LANES = [
 const STORY = [
   'Fourth period, Ms. Ruiz asks a student to put his phone away. He says “you can’t make me,” loudly, and the room goes quiet and interested.',
   'What she actually says is “fine, keep it, see what happens on the test” — which ends the moment and which she regrets before the bell.',
-  'That afternoon she opens Ask, picks “Find the words,” and describes it. The coaching names what made it hard: the audience. Words to try gives her a low-volume, low-audience line and a way to move on without a standoff. One next step is to handle the phone privately, after the transition, not in front of twenty-eight people.',
+  'That afternoon she opens Ask and describes it. She never says this is a classroom management problem; the coaching works that out and tells her so. It names what made the moment hard: the audience. Words to try gives her a low-volume, low-audience line and a way to move on without a standoff. One next step is to handle the phone privately, after the transition, not in front of twenty-eight people.',
   'Then she taps Practice this. Same situation, now a rehearsal. She runs it three times — Guided, then Independent, then Challenge, where the student escalates instead of folding.',
   'Her third attempt still isn’t the model response. It’s shorter and it sounds like her, which is the version she’ll actually say out loud.',
   'It happens again the following week. She isn’t smooth, and he doesn’t hand over the phone. But she doesn’t say the thing she’ll regret, and the class goes back to work — which is the part that mattered.',

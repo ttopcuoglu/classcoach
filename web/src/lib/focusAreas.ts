@@ -13,6 +13,8 @@ export type FocusArea = {
   label: string
   /// Shown under the label on the picker — what this area covers, in a teacher's words.
   blurb: string
+  /// One or two words, for the chip rows where the full label would wrap.
+  shortLabel: string
   /// One example of each mode, so the picker teaches what the area is for.
   askExample: string
   practiceExample: string
@@ -34,6 +36,7 @@ export const FOCUS_AREAS: FocusArea[] = [
   {
     value: 'delivery_of_instruction',
     label: 'Delivery of Instruction',
+    shortLabel: 'Delivery',
     blurb: 'How you explain, question, check, and pace.',
     askExample: 'My explanations run long and I lose half the room.',
     practiceExample: 'Half the class still looks blank after two explanations.',
@@ -61,6 +64,7 @@ export const FOCUS_AREAS: FocusArea[] = [
   {
     value: 'content_pedagogy',
     label: 'Teaching Specific Content',
+    shortLabel: 'Content',
     blurb: 'How to teach this topic so it lands.',
     askExample: 'How do I teach mitosis so it is not just vocabulary?',
     practiceExample: 'A student says plants get their food from the soil.',
@@ -87,6 +91,7 @@ export const FOCUS_AREAS: FocusArea[] = [
   {
     value: 'classroom_management',
     label: 'Classroom Management',
+    shortLabel: 'Classroom',
     blurb: 'Behavior, routines, and getting the room with you.',
     askExample: 'My class talks over directions.',
     practiceExample: 'A student refuses to move to their assigned seat.',
@@ -114,6 +119,7 @@ export const FOCUS_AREAS: FocusArea[] = [
   {
     value: 'grading',
     label: 'Grading & Feedback',
+    shortLabel: 'Grading',
     blurb: 'Fair grades, feedback that lands, a load you can carry.',
     askExample: 'How do I grade fairly when effort and mastery disagree?',
     practiceExample: 'Strong tests, four missing assignments, a 71 in the book.',
@@ -140,6 +146,7 @@ export const FOCUS_AREAS: FocusArea[] = [
   {
     value: 'parent_communication',
     label: 'Parent Communication',
+    shortLabel: 'Parents',
     blurb: 'Hard emails, conferences, and hard news — said well.',
     askExample: 'A parent email is accusatory and I do not know how to answer.',
     practiceExample: 'A parent writes: "That is not what I expect from her teacher."',
@@ -169,6 +176,7 @@ export const FOCUS_AREAS: FocusArea[] = [
   {
     value: 'colleagues',
     label: 'Colleagues & Team',
+    shortLabel: 'Colleagues',
     blurb: 'Co-teachers, meetings, admin asks, honest disagreement.',
     askExample: 'A co-teacher keeps overriding me in front of students.',
     practiceExample: 'Your co-teacher re-explains your task, mid-class.',
