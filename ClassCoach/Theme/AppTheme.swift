@@ -77,3 +77,24 @@ enum AppInfo {
         return build.isEmpty ? short : "\(short) (\(build))"
     }
 }
+
+extension View {
+    /// Keeps the last row of a scrolling form clear of the floating tab bar.
+    ///
+    /// From iOS 26 the tab bar hovers over the content rather than reserving
+    /// space for itself, and SwiftUI only adds the clearance back automatically
+    /// to a scroll view that is the tab's own root. Ours are not: Ask &
+    /// Practice puts the section chips above them, so the scroll view is a
+    /// child of a stack and the bar lands on top of whatever the teacher
+    /// scrolled to — on a six-row room form that meant "Who's in the room" was
+    /// invisible. Earlier versions inset the content themselves, so the margin
+    /// is only added where the bar actually floats.
+    @ViewBuilder
+    func clearsFloatingTabBar() -> some View {
+        if #available(iOS 26.0, *) {
+            contentMargins(.bottom, 88, for: .scrollContent)
+        } else {
+            self
+        }
+    }
+}

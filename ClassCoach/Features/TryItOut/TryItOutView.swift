@@ -88,6 +88,7 @@ struct TryItOutContent: View {
             .padding()
         }
         .background(AppTheme.background)
+        .clearsFloatingTabBar()
         .task { await loadHistory() }
         // A sub-category from a different area would silently contradict the
         // area on the next generate, so changing area clears a mismatched one.

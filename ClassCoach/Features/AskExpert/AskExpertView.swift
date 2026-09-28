@@ -75,6 +75,7 @@ struct AskExpertContent: View {
             .padding()
         }
         .background(AppTheme.background)
+        .clearsFloatingTabBar()
         .task { await loadHistory() }
     }
 
