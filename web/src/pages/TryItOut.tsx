@@ -12,7 +12,7 @@ import { useSpeechToText } from '../hooks/useSpeechToText'
 import { categoryLabel } from '../lib/categories'
 import { FOCUS_AREAS, findFocusArea, focusAreaForCategory, subCategoriesFor } from '../lib/focusAreas'
 import { isExperienced } from '../lib/experience'
-import { GRADE_BANDS } from '../lib/gradeBands'
+import { GRADE_LEVELS, OTHER_SUBJECT, SUBJECTS, gradeFromProfile, gradeLevelLabel, subjectFromProfile } from '../lib/gradeLevels'
 import {
   generateScenario,
   getAttempts,
@@ -51,10 +51,6 @@ const EXPERIENCED_SCENARIOS: StarterScenario[] = [
   { label: 'A conflict between students has spilled in from outside class', category: 'peer_conflict' },
 ]
 
-// Offered as chips next to the free-text subject field, so the common case is
-// one tap and an unusual subject is still typeable.
-const COMMON_SUBJECTS = ['Math', 'Science', 'English', 'Social Studies', 'Art', 'PE']
-
 const SESSION_LENGTH = 3
 
 function difficultyLabel(value: string) {
@@ -73,9 +69,11 @@ export default function TryItOut({
   onPickArea?: (value: string | null) => void
 }) {
   const [category, setCategory] = useState<string | undefined>(undefined)
-  const [gradeBand, setGradeBand] = useState<(typeof GRADE_BANDS)[number]>('6-8')
+  const [gradeLevel, setGradeLevel] = useState<string>('7')
   const [difficulty, setDifficulty] = useState<string | undefined>(undefined)
   const [subject, setSubject] = useState<string | undefined>(undefined)
+  // Set when the teacher picks "Other" — the free-text box then owns `subject`.
+  const [otherSubject, setOtherSubject] = useState(false)
   const [starterScenarios, setStarterScenarios] = useState<StarterScenario[] | null>(null)
   const area = findFocusArea(focusArea)
 
@@ -141,11 +139,12 @@ export default function TryItOut({
 
     getProfile()
       .then((profile) => {
-        const levels = profile.gradeLevels?.toLowerCase() ?? ''
-        if (/\b(9|10|11|12)\b|9-12|high ?school/.test(levels)) setGradeBand('9-12')
-        else if (/\bk\b|kindergarten|\b[1-5](st|nd|rd|th)?\b|elementary|k-5/.test(levels)) setGradeBand('K-5')
-        const firstSubject = profile.subjects?.split(',')[0]?.trim()
-        if (firstSubject) setSubject(firstSubject)
+        setGradeLevel(gradeFromProfile(profile.gradeLevels))
+        const mapped = subjectFromProfile(profile.subjects)
+        if (mapped) {
+          setSubject(mapped)
+          setOtherSubject(!(SUBJECTS as readonly string[]).includes(mapped))
+        }
         setStarterScenarios(isExperienced(profile.experienceLevel) ? EXPERIENCED_SCENARIOS : STARTER_SCENARIOS)
       })
       .catch(() => setStarterScenarios(STARTER_SCENARIOS))
@@ -200,7 +199,7 @@ export default function TryItOut({
       const scenario = await generateScenario({
         focusArea,
         category: categoryOverride ?? category,
-        gradeBand,
+        gradeLevel,
         difficulty,
         subject,
       })
@@ -485,7 +484,8 @@ export default function TryItOut({
             <div className="mt-5 rounded-2xl bg-cream/10 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm text-cream/80">
-                  <span className="font-semibold text-cream">New scenarios:</span> {situationText} · grades {gradeBand}
+                  <span className="font-semibold text-cream">New scenarios:</span> {situationText} ·{' '}
+                  {gradeLevelLabel(gradeLevel)}
                   {subject ? ` · ${subject}` : ''} · {difficultyText}
                 </p>
                 <button
@@ -531,18 +531,19 @@ export default function TryItOut({
                     )}
                   </div>
                   <div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Grade band</p>
-                    <div className="mt-1.5 flex flex-wrap gap-2">
-                      {GRADE_BANDS.map((band) => (
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Grade level</p>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {GRADE_LEVELS.map((level) => (
                         <button
-                          key={band}
+                          key={level}
                           type="button"
-                          onClick={() => setGradeBand(band)}
-                          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                            gradeBand === band ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
+                          onClick={() => setGradeLevel(level)}
+                          aria-label={gradeLevelLabel(level)}
+                          className={`min-w-9 rounded-full px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                            gradeLevel === level ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
                           }`}
                         >
-                          Grades {band}
+                          {level}
                         </button>
                       ))}
                     </div>
@@ -550,29 +551,51 @@ export default function TryItOut({
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Subject</p>
                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                      {COMMON_SUBJECTS.map((s) => (
+                      {SUBJECTS.map((s) => (
                         <button
                           key={s}
                           type="button"
-                          onClick={() => setSubject((prev) => (prev === s ? undefined : s))}
+                          onClick={() => {
+                            setOtherSubject(false)
+                            setSubject((prev) => (prev === s ? undefined : s))
+                          }}
                           className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                            subject === s ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
+                            !otherSubject && subject === s
+                              ? 'bg-gold text-forest'
+                              : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
                           }`}
                         >
                           {s}
                         </button>
                       ))}
-                      <input
-                        type="text"
-                        value={COMMON_SUBJECTS.includes(subject ?? '') ? '' : subject ?? ''}
-                        onChange={(e) => setSubject(e.target.value.trim() ? e.target.value : undefined)}
-                        placeholder="or type yours"
-                        aria-label="Subject"
-                        className="w-36 rounded-full border-0 bg-cream px-3 py-1.5 text-xs text-ink placeholder:text-ink-soft focus:outline-none focus:ring-2 focus:ring-gold"
-                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOtherSubject(true)
+                          setSubject(undefined)
+                        }}
+                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                          otherSubject ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
+                        }`}
+                      >
+                        {OTHER_SUBJECT}
+                      </button>
+                      {/* Only shown once "Other" is picked, so the common case is
+                          seven chips rather than seven chips and an empty box. */}
+                      {otherSubject && (
+                        <input
+                          type="text"
+                          value={subject ?? ''}
+                          onChange={(e) => setSubject(e.target.value.trim() ? e.target.value : undefined)}
+                          placeholder="Which subject?"
+                          aria-label="Subject"
+                          autoFocus
+                          className="w-40 rounded-full border-0 bg-cream px-3 py-1.5 text-xs text-ink placeholder:text-ink-soft focus:outline-none focus:ring-2 focus:ring-gold"
+                        />
+                      )}
                     </div>
                     <p className="mt-1.5 text-xs text-cream/50">
-                      Content and delivery scenarios are written for this subject and grade.
+                      Scenarios are written for this exact grade and subject.
                     </p>
                   </div>
                   <div>
@@ -623,7 +646,11 @@ export default function TryItOut({
                 </p>
               )}
               <span className="rounded-full bg-cream/10 px-3 py-1 text-xs font-semibold text-cream">
-                {categoryLabel(attempt.scenario.category)} · Grades {attempt.scenario.gradeBand} ·{' '}
+                {categoryLabel(attempt.scenario.category)} ·{' '}
+                {attempt.scenario.gradeLevel
+                  ? gradeLevelLabel(attempt.scenario.gradeLevel)
+                  : `Grades ${attempt.scenario.gradeBand}`}
+                {attempt.scenario.subject ? ` · ${attempt.scenario.subject}` : ''} ·{' '}
                 {difficultyLabel(attempt.scenario.difficulty)}
               </span>
               <p className="mt-4 text-base leading-relaxed text-cream">{attempt.scenario.text}</p>

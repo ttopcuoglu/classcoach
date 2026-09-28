@@ -113,7 +113,7 @@ const ACTION_CARDS = [
     tag: 'Safe practice',
     title: 'Ask & Practice',
     description:
-      'Teaching, content, behavior, grading, parents, colleagues — ask a straight question, or rehearse it first.',
+      'Teaching, behavior, parents, the professional side — ask a straight question, or rehearse it first.',
     linkLabel: 'Ask or rehearse',
   },
 ]

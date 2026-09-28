@@ -11,14 +11,14 @@ enum AskExpertService {
         let incidentText: String
         /// Optional — nil lets the coach work out which of the six areas this is.
         let focusArea: String?
-        let gradeBand: String?
+        let gradeLevel: String?
         let subject: String?
     }
 
     static func submitDebrief(
         incidentText: String,
         focusArea: String?,
-        gradeBand: String?,
+        gradeLevel: String?,
         subject: String?
     ) async throws -> Debrief {
         try await APIClient.shared.request(
@@ -26,7 +26,7 @@ enum AskExpertService {
             method: "POST",
             body: SubmitBody(
                 incidentText: incidentText, focusArea: focusArea,
-                gradeBand: gradeBand, subject: subject
+                gradeLevel: gradeLevel, subject: subject
             )
         )
     }

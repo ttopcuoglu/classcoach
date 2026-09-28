@@ -11,7 +11,6 @@ private func difficultyLabel(_ value: String) -> String {
     value.prefix(1).uppercased() + value.dropFirst()
 }
 
-private let gradeBands = ["K-5", "6-8", "9-12"]
 
 /// Quick ways into a scenario when no focus area is chosen — same lists as
 /// `STARTER_SCENARIOS` and `EXPERIENCED_SCENARIOS` in web/src/pages/TryItOut.tsx.
@@ -51,9 +50,11 @@ struct TryItOutContent: View {
 
     @EnvironmentObject private var authManager: AuthManager
     @State private var category: String?
-    @State private var gradeBand = "6-8"
+    @State private var gradeLevel = "7"
     @State private var difficulty: String?
     @State private var subject: String?
+    /// Set when the teacher picks "Other" — the free-text box then owns `subject`.
+    @State private var usingOtherSubject = false
 
     @State private var attempt: ScenarioAttempt?
     @State private var responseText = ""
@@ -98,11 +99,24 @@ struct TryItOutContent: View {
                     ChipRow(items: subCategoryChips(focusArea), selection: category) { category = $0 }
                 }
                 ChipRow(items: difficulties, selection: difficulty) { difficulty = $0 }
-                gradeBandPicker
+                ChipRow(items: gradeLevelChips, selection: gradeLevel) { gradeLevel = $0 ?? "7" }
                 ChipRow(
-                    items: [("Any subject", nil)] + commonSubjects.map { ($0, Optional($0)) },
-                    selection: subject
-                ) { subject = $0 }
+                    items: subjects.map { ($0, Optional($0)) } + [(otherSubjectLabel, Optional(otherSubjectLabel))],
+                    selection: usingOtherSubject ? otherSubjectLabel : subject
+                ) { picked in
+                    usingOtherSubject = picked == otherSubjectLabel
+                    subject = usingOtherSubject ? nil : picked
+                }
+                // Only shown once "Other" is picked, so the common case is
+                // seven chips rather than seven chips and an empty box.
+                if usingOtherSubject {
+                    TextField("Which subject?", text: Binding(
+                        get: { subject ?? "" },
+                        set: { subject = $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
+                    ))
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal)
+                }
 
                 scenarioCard
 
@@ -122,15 +136,6 @@ struct TryItOutContent: View {
     }
 
     // MARK: - Filter rows
-
-    private var gradeBandPicker: some View {
-        Picker("Grade band", selection: $gradeBand) {
-            ForEach(gradeBands, id: \.self) { band in
-                Text("Grades \(band)").tag(band)
-            }
-        }
-        .pickerStyle(.segmented)
-    }
 
     // MARK: - Main card
 
@@ -207,7 +212,7 @@ struct TryItOutContent: View {
                 [
                     focusAreaLabel(attempt.scenario.focusArea ?? focusAreaForCategory(attempt.scenario.category)?.value),
                     categoryLabel(attempt.scenario.category),
-                    "Grades \(attempt.scenario.gradeBand)",
+                    attempt.scenario.gradeLevel.map(gradeLevelLabel) ?? "Grades \(attempt.scenario.gradeBand)",
                     attempt.scenario.subject,
                     difficultyLabel(attempt.scenario.difficulty),
                 ].compactMap { $0 }.joined(separator: " · ")
@@ -389,7 +394,7 @@ struct TryItOutContent: View {
         chatError = nil
         do {
             let scenario = try await TryItOutService.generateScenario(
-                focusArea: focusArea, category: category, gradeBand: gradeBand,
+                focusArea: focusArea, category: category, gradeLevel: gradeLevel,
                 difficulty: difficulty, subject: subject
             )
             attempt = ScenarioAttempt(

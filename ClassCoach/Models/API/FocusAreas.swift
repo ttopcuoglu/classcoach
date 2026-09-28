@@ -1,6 +1,6 @@
 import Foundation
 
-/// The six things teachers bring to a coach — the top level of Ask & Practice.
+/// The four things teachers bring to a coach — the top level of Ask & Practice.
 /// Mirrors `web/src/lib/focusAreas.ts`, labels and sub-categories only; the
 /// coaching instructions that make each area behave differently are server-side.
 ///
@@ -21,7 +21,7 @@ struct FocusArea: Identifiable {
     let askStarters: [String]
     /// Practice openers, each carrying the sub-category to generate from.
     let practiceStarters: [(label: String, category: String)]
-    /// For the two areas that overlap Communication Coach: a quick question or
+    /// For the areas that overlap Communication Coach: a quick question or
     /// one rehearsed exchange belongs here, an actual drafted email or a whole
     /// prepared meeting belongs there. Nil for the other four.
     var handoffNote: String? = nil
@@ -31,54 +31,32 @@ struct FocusArea: Identifiable {
 
 let focusAreas: [FocusArea] = [
     FocusArea(
-        value: "delivery_of_instruction",
-        label: "Delivery of Instruction",
-        shortLabel: "Delivery",
-        blurb: "How you explain, question, check, and pace.",
-        askExample: "My explanations run long and I lose half the room.",
-        practiceExample: "Half the class still looks blank after two explanations.",
+        value: "teaching_and_learning",
+        label: "Teaching and Learning",
+        shortLabel: "Teaching",
+        blurb: "Explaining, questioning, checking, pacing — and grading what comes back.",
+        askExample: "I explain it well and half the room still does not have it.",
+        practiceExample: "A student says plants get their food from the soil.",
         subCategories: [
             ("Explaining clearly", "explaining_clearly"),
             ("Checking for understanding", "checking_understanding"),
             ("Questioning & discussion", "questioning_discussion"),
             ("Pacing & chunking", "pacing_chunking"),
-            ("Openings & hooks", "openings_hooks"),
             ("Reaching every level", "reaching_every_level"),
+            ("Student misconceptions", "misconceptions"),
+            ("Planning & sequencing", "content_sequencing"),
+            ("Feedback & grading", "feedback_and_grading"),
         ],
         askStarters: [
             "I explain something well and half the room still doesn't have it.",
             "The same three students answer every question I ask.",
-            "I always run out of time before the part that matters.",
+            "There's one idea in this unit they get wrong every single year.",
+            "I can't tell if my grades are fair or just consistent.",
         ],
         practiceStarters: [
             ("Half the class looks blank after two explanations", "checking_understanding"),
-            ("A discussion where only three students ever talk", "questioning_discussion"),
-            ("A good student question that would derail the lesson", "explaining_clearly"),
-        ]
-    ),
-    FocusArea(
-        value: "content_pedagogy",
-        label: "Teaching Specific Content",
-        shortLabel: "Content",
-        blurb: "How to teach this topic so it lands.",
-        askExample: "How do I teach mitosis so it is not just vocabulary?",
-        practiceExample: "A student says plants get their food from the soil.",
-        subCategories: [
-            ("Student misconceptions", "misconceptions"),
-            ("Building an explanation", "building_explanation"),
-            ("Examples & analogies", "examples_analogies"),
-            ("Sequencing the content", "content_sequencing"),
-            ("Academic vocabulary", "academic_vocabulary"),
-        ],
-        askStarters: [
-            "My students can do the procedure but can't say why it works.",
-            "There's one idea in this unit they get wrong every single year.",
-            "I need a better way into this topic than the one I've been using.",
-        ],
-        practiceStarters: [
             ("A misconception that survives everything you try", "misconceptions"),
-            ("A topic you have to build an explanation for from scratch", "building_explanation"),
-            ("Choosing between two analogies for a hard idea", "examples_analogies"),
+            ("A piece of work sitting between two rubric levels", "feedback_and_grading"),
         ]
     ),
     FocusArea(
@@ -100,36 +78,12 @@ let focusAreas: [FocusArea] = [
             "My class talks over directions.",
             "A student pushed back in front of everyone and I froze.",
             "My routines work but they've gone stale.",
+            "Getting started takes five minutes every single day.",
         ],
         practiceStarters: [
             ("A student is checked out and not participating", "disengagement"),
             ("A student pushes back when you ask them to do something", "defiance"),
             ("The class is slow to settle into a routine", "transitions"),
-        ]
-    ),
-    FocusArea(
-        value: "grading",
-        label: "Grading & Feedback",
-        shortLabel: "Grading",
-        blurb: "Fair grades, feedback that lands, a load you can carry.",
-        askExample: "How do I grade fairly when effort and mastery disagree?",
-        practiceExample: "Strong tests, four missing assignments, a 71 in the book.",
-        subCategories: [
-            ("Feedback that lands", "feedback_that_lands"),
-            ("Rubrics & consistency", "rubrics_consistency"),
-            ("Grade disputes", "grade_disputes"),
-            ("Late & missing work", "late_and_missing"),
-            ("Grading workload", "grading_workload"),
-        ],
-        askStarters: [
-            "I can't tell if my grades are fair or just consistent.",
-            "A student is contesting a grade and I'm not sure I can defend it.",
-            "I spend every Sunday grading and I don't think anyone reads it.",
-        ],
-        practiceStarters: [
-            ("A piece of work sitting between two rubric levels", "rubrics_consistency"),
-            ("Strong tests, missing homework, a failing average", "late_and_missing"),
-            ("A student asks why they got a lower grade than a friend", "grade_disputes"),
         ]
     ),
     FocusArea(
@@ -149,6 +103,7 @@ let focusAreas: [FocusArea] = [
             "A parent email is stressing me out.",
             "I have to tell a parent something they won't want to hear.",
             "A conference is coming up and I'm dreading it.",
+            "A parent only ever hears from me when something is wrong.",
         ],
         practiceStarters: [
             ("An accusatory parent email you have to answer", "difficult_parent_email"),
@@ -158,10 +113,10 @@ let focusAreas: [FocusArea] = [
         handoffNote: "Need the actual email drafted, or a conference prepared? That's Communication Coach, under More."
     ),
     FocusArea(
-        value: "colleagues",
-        label: "Colleagues & Team",
-        shortLabel: "Colleagues",
-        blurb: "Co-teachers, meetings, admin asks, honest disagreement.",
+        value: "professionalism",
+        label: "Professionalism",
+        shortLabel: "Professional",
+        blurb: "Co-teachers, admin, team time, paperwork, and growing as a teacher.",
         askExample: "A co-teacher keeps overriding me in front of students.",
         practiceExample: "Your co-teacher re-explains your task, mid-class.",
         subCategories: [
@@ -169,12 +124,14 @@ let focusAreas: [FocusArea] = [
             ("Disagreeing with a peer", "disagreeing_with_a_peer"),
             ("Talking with admin", "talking_with_admin"),
             ("Team & PLC time", "team_and_plc_time"),
-            ("Mentoring", "mentoring"),
+            ("Mentoring & growth", "mentoring"),
+            ("Records & deadlines", "records_and_deadlines"),
         ],
         askStarters: [
             "My co-teacher keeps overriding me in front of students.",
             "I need to raise a concern with someone more senior than me.",
             "Our team meetings never get to the work we planned.",
+            "I'm behind on paperwork and it's starting to show.",
         ],
         practiceStarters: [
             ("A co-teacher contradicts you mid-lesson", "co_teaching"),

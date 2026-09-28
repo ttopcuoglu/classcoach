@@ -10,6 +10,9 @@ export type Scenario = {
   // before the area axis existed — derive it from `category` in that case.
   focusArea: string | null
   category: string
+  /// The single grade this was written for ("K", "7"). Null on rows written
+  /// before grade levels; `gradeBand` covers those.
+  gradeLevel: string | null
   gradeBand: string
   subject: string | null
   difficulty: string
@@ -302,7 +305,7 @@ export type Debrief = {
   // written before the area axis existed.
   focusArea: string | null
   category: string | null
-  gradeBand: string | null
+  gradeLevel: string | null
   subject: string | null
   feedback: string | null
   wordsToTry: string | null
@@ -920,7 +923,7 @@ export function deleteOrganization(id: string): Promise<{ status: string }> {
 export function generateScenario(opts: {
   focusArea?: string
   category?: string
-  gradeBand?: string
+  gradeLevel?: string
   difficulty?: string
   subject?: string
 }): Promise<Scenario> {
@@ -1034,7 +1037,7 @@ export function getDebriefs(params?: {
 
 export function submitDebrief(
   incidentText: string,
-  opts?: { focusArea?: string; gradeBand?: string; subject?: string },
+  opts?: { focusArea?: string; gradeLevel?: string; subject?: string },
 ): Promise<Debrief> {
   return request('/api/debriefs', {
     method: 'POST',

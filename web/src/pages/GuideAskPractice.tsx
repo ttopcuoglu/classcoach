@@ -54,11 +54,11 @@ const STEPS = [
   },
   {
     title: 'Say what’s going on',
-    body: 'In Ask, just type it, or tap “Speak instead.” You don’t have to say which of the six areas it belongs to — your coach works that out from your own words, and tells you which one it answered as. If you’d rather browse, the six areas sit under the box and change the example questions on offer.',
+    body: 'In Ask, just type it, or tap “Speak instead.” You don’t have to say which of the four sections it belongs to — your coach works that out from your own words, and tells you which one it answered as. If you’d rather browse, the four sections sit under the box and change the example questions on offer.',
   },
   {
     title: 'Or set up a rehearsal',
-    body: 'In Practice you do pick an area, because it decides what you get handed: a room that’s stopped following you, a misconception in a student’s words, a piece of work on a rubric boundary, a parent email, a line a colleague said. Then narrow by situation, grade band, subject, and difficulty if you want to.',
+    body: 'In Practice you do pick an area, because it decides what you get handed: a room that’s stopped following you, a misconception in a student’s words, a piece of work on a rubric boundary, a parent email, a line a colleague said. Then narrow by situation, grade level, subject, and difficulty if you want to.',
   },
   {
     title: 'Get something you can use',
@@ -76,14 +76,14 @@ const LANES = [
     name: 'Ask',
     when: 'Something real — it happened, or it’s about to.',
     detail:
-      'Describe the moment or ask a straight question — about any of the six areas, and you never have to say which. Starter questions are there if you’re stuck. You get coaching, specific words to try, and one next step, plus an open follow-up chat.',
+      'Describe the moment or ask a straight question — about any of the four sections, and you never have to say which. Starter questions are there if you’re stuck. You get coaching, specific words to try, and one next step, plus an open follow-up chat.',
   },
   {
     icon: ScenarioIcon,
     name: 'Practice',
     when: 'A rehearsal — low stakes, nobody watching.',
     detail:
-      'Filter by situation, grade band (K–5, 6–8, 9–12), subject, and difficulty — Guided, Independent, or Challenge. What a scenario looks like depends on the area: a room that’s stopped following you, a misconception in a student’s own words, a piece of work on a rubric boundary, the text of a parent email, a line a colleague just said. Take one, or a Quick Session of three.',
+      'Filter by situation, grade level (K through 12 — the exact grade, not a band), subject, and difficulty — Guided, Independent, or Challenge. What a scenario looks like depends on the area: a room that’s stopped following you, a misconception in a student’s own words, a piece of work on a rubric boundary, the text of a parent email, a line a colleague just said. Take one, or a Quick Session of three.',
   },
 ]
 
@@ -213,12 +213,12 @@ export default function GuideAskPractice() {
           </div>
         </GuideSection>
 
-        {/* The six areas */}
+        {/* The four sections */}
         <GuideSection
-          id="six-areas"
+          id="four-sections"
           eyebrow="What you can bring"
-          title="Six areas, not just behavior"
-          lede="Ask & Practice used to be about student behavior only. It now covers the six things teachers actually come to a coach with — and each one works in both modes."
+          title="Four sections, not just behavior"
+          lede="Ask &amp; Practice used to be about student behavior only. It now covers the four things teachers actually come to a coach with — and each one works in both modes."
         >
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             {FOCUS_AREAS.map((a) => (
@@ -233,7 +233,7 @@ export default function GuideAskPractice() {
             ))}
           </div>
           <p className="mt-6 text-sm leading-relaxed text-ink-soft">
-            Parent communication and colleagues overlap with Communication Coach on purpose. Come here for a quick
+            Parent Communication and Professionalism overlap with Communication Coach on purpose. Come here for a quick
             question or one rehearsed exchange; go to Communication Coach when you need the actual email drafted or a
             whole meeting prepared.
           </p>
