@@ -4,31 +4,48 @@ import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { buildExperienceContextBlock } from '../lib/experience.ts'
 import { extractTag } from '../lib/extractTag.ts'
+import { findFocusArea, focusAreaForSubCategory, type FocusArea } from '../lib/focusAreas.ts'
+import { coachIdentity, ratingStandard, teachingContextBlock } from '../lib/focusAreaPrompt.ts'
 import { prisma } from '../lib/prisma.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const attemptsRouter = Router()
 
-const FEEDBACK_SYSTEM_PROMPT = `You are a warm, practical classroom management coach for grades 6-12 teachers, reviewing how a teacher says they'd handle a practice scenario. Coach, don't grade.
+// Built per attempt from the scenario's focus area: what "a good response"
+// means is not the same standard for de-escalating a defiant student, sequencing
+// an explanation, and answering an angry parent email, and the model response
+// has to come out in the right channel — words said out loud in a classroom, or
+// a sentence that can go in an email.
+function feedbackSystemPrompt(area: FocusArea | null): string {
+  return `${coachIdentity(area)} You are reviewing how a teacher says they'd handle a practice scenario. Coach, don't grade.
 
 Write in plain text only — no markdown (no **bold**, no # headings). Use a blank line between paragraphs and a leading "-" for list items.
 
 Respond with exactly these three sections and nothing outside them:
 
 <feedback>
-Constructive feedback on their approach, what worked well, and 1-3 alternative or additional strategies grounded in classroom management best practice (clear/consistent expectations, de-escalation, restorative practices). Keep it skimmable, encouraging, and practical — never academic or jargon-heavy.
+Constructive feedback on their approach, what worked well, and 1-3 alternative or additional strategies grounded in ${ratingStandard(area)}. Keep it skimmable, encouraging, and practical — never academic or jargon-heavy.
 </feedback>
 <model_response>
-A model example of what the teacher could say or do in the moment, written as the teacher's own words/actions.
+A model example of what the teacher could say, write, or do, in their own words. Match the channel the scenario actually has: spoken words for a moment in front of students, a written reply for an email, an opening line for a conference or a conversation with a colleague, an explanation or question sequence for a teaching problem, a decision with its reasoning for a grading call.
 </model_response>
 <rating>
-A single integer 1-5 rating your honest private assessment of how effectively this response follows classroom management best practice. This is never shown to the teacher — it's used only to track their growth over time — so rate honestly rather than generously. Output only the digit, nothing else.
+A single integer 1-5 rating your honest private assessment of how well this response follows ${ratingStandard(area)}. This is never shown to the teacher — it's used only to track their growth over time — so rate honestly rather than generously. Output only the digit, nothing else.
 </rating>
 ${CORE_COACHING_RULES}`
+}
 
-const ATTEMPT_CHAT_SYSTEM_PROMPT = `You are a warm, practical classroom management coach for grades 6-12 teachers, continuing a conversation about a practice scenario you already gave feedback on. Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says: if they push back, ask a follow-up, or want to try a different angle, engage with that directly rather than repeating your first assessment. Stay grounded in the scenario and their response; never invent details that weren't given to you.
+function attemptChatSystemPrompt(area: FocusArea | null): string {
+  return `${coachIdentity(area)} You are continuing a conversation about a practice scenario you already gave feedback on. Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says: if they push back, ask a follow-up, or want to try a different angle, engage with that directly rather than repeating your first assessment. Stay grounded in the scenario and their response; never invent details that weren't given to you.
 ${CORE_COACHING_RULES}`
+}
+
+/// A scenario's area: the stored value, or derived from its sub-category for
+/// rows written before the area axis existed.
+function areaForScenario(scenario: { focusArea: string | null; category: string }): FocusArea | null {
+  return findFocusArea(scenario.focusArea) ?? focusAreaForSubCategory(scenario.category)
+}
 
 attemptsRouter.get('/', async (req, res) => {
   const { scenarioId, saved } = req.query
@@ -68,7 +85,7 @@ attemptsRouter.post('/', async (req, res) => {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 1024,
-      system: `${FEEDBACK_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}`,
+      system: `${feedbackSystemPrompt(areaForScenario(scenario))}${teachingContextBlock(scenario.gradeBand, scenario.subject)}${buildExperienceContextBlock(user?.experienceLevel)}`,
       messages: [{ role: 'user', content: context }],
     })
 
@@ -104,8 +121,11 @@ attemptsRouter.post('/:id/chat', async (req, res) => {
     return
   }
 
+  // Includes the scenario so follow-up turns keep the area's coaching voice
+  // rather than drifting back to a generic one.
   const attempt = await prisma.scenarioAttempt.findFirst({
     where: { id: req.params.id, userId: req.user!.userId },
+    include: { scenario: true },
   })
   if (!attempt) {
     res.status(404).json({ error: 'Attempt not found' })
@@ -130,7 +150,7 @@ attemptsRouter.post('/:id/chat', async (req, res) => {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 300,
-      system: `${ATTEMPT_CHAT_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}`,
+      system: `${attemptChatSystemPrompt(areaForScenario(attempt.scenario))}${teachingContextBlock(attempt.scenario.gradeBand, attempt.scenario.subject)}${buildExperienceContextBlock(user?.experienceLevel)}`,
       messages: toClaudeMessages(existing, trimmed),
     })
     const reply = response.content

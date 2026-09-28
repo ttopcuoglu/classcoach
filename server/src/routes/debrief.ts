@@ -25,7 +25,15 @@ import { transcribeAudio } from '../lib/deepgram.ts'
 import { extractTag, stripTag } from '../lib/extractTag.ts'
 import type { CoachFollowUp, Debrief } from '../generated/prisma/client.ts'
 import { prisma } from '../lib/prisma.ts'
-import { SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
+import { categoryInArea, isKnownCategory, pickGradeBand } from '../lib/scenarioCategories.ts'
+import { findFocusArea, focusAreaForSubCategory, type FocusArea } from '../lib/focusAreas.ts'
+import {
+  classificationBlock,
+  coachIdentity,
+  incidentShape,
+  ratingStandard,
+  teachingContextBlock,
+} from '../lib/focusAreaPrompt.ts'
 import { reconcileTail, takeCompleteSentences, visibleSoFar } from '../lib/sentenceStream.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
 import { startTiming } from '../lib/turnTiming.ts'
@@ -86,34 +94,43 @@ debriefRouter.post('/transcribe', upload.single('audio'), async (req, res) => {
   }
 })
 
-const ASK_SYSTEM_PROMPT = `You are a warm, practical classroom management coach for grades 6-12 teachers. A teacher has written in — figure out which of these two situations it is before responding:
+// Built per request rather than defined once, because the coach's domain, the
+// standard it judges against, and what "already happened" even means all
+// depend on the focus area. `area` is null when the teacher didn't pick one,
+// in which case the coach infers it — a teacher who types "a parent email is
+// stressing me out" should never have to classify it first.
+function askSystemPrompt(area: FocusArea | null): string {
+  return `${coachIdentity(area)}
 
-- A real incident that ALREADY HAPPENED in their classroom (a specific moment, not a hypothetical). Respond with reflective, forward-looking coaching: help them make sense of what happened and plan for next time.
-- A general classroom-management question, not tied to a specific incident (e.g. "what's a good way to set expectations on day one?"). Respond with a direct, concrete answer plus actionable steps.
+A teacher has written in — figure out which of these two situations it is before responding:
+
+- Something that ALREADY HAPPENED: ${incidentShape(area)}. Respond with reflective, forward-looking coaching: help them make sense of it and plan for next time.
+- A general question, not tied to a specific event (e.g. "what's a good way to set expectations on day one?", "how much feedback is enough?"). Respond with a direct, concrete answer plus actionable steps.
 
 Coach, don't grade, either way. Write in plain text only — no markdown (no **bold**, no # headings). Use a blank line between paragraphs and a leading "-" for list items.
 
 Respond with exactly these sections and nothing outside them:
 
 <feedback>
-For a real incident: a tentative, hedged read on what may be happening — use language like "one possibility is..." or "this may suggest...", never assert a student's motive as fact. Cover what worked and what to consider differently, grounded in classroom management best practice (clear/consistent expectations, de-escalation, restorative practices). For a general question: a direct, concrete answer. Either way, keep it skimmable, encouraging, and practical.
+For something that happened: a tentative, hedged read on what may be going on — use language like "one possibility is..." or "this may suggest...", and never assert anyone's motive as fact, whether that's a student, a parent, or a colleague. Cover what worked and what to consider differently, grounded in ${ratingStandard(area)}. For a general question: a direct, concrete answer. Either way, keep it skimmable, encouraging, and practical.
 </feedback>
 <words_to_try>
-1-2 short, specific lines of language the teacher could actually say in the moment — phrasing to adapt to their own voice, not a script to recite verbatim. For a general question, give a phrase or framing that applies.
+1-2 short, specific lines the teacher could actually say or write — phrasing to adapt to their own voice, not a script to recite verbatim. Match the channel the situation actually has: something to say out loud in a classroom moment, a line to open a conference with, a sentence that can go in an email, or an opening for a conversation with a colleague. For a general question, give a phrase or framing that applies.
 </words_to_try>
 <follow_up>
-For a real incident: a concrete next step — how to follow up with the student(s) involved, repair the relationship if needed, or handle it differently if it happens again. For a general question: a natural extension, like a related consideration or an offer to help them practice/draft something. Never leave this empty.
+For something that happened: a concrete next step — how to follow up with the people involved, repair the relationship if needed, or handle it differently next time. For a general question: a natural extension, like a related consideration or an offer to help them practice or draft something. Never leave this empty.
 </follow_up>
-<category>
-If this describes a real incident that clearly fits one of these categories, output its exact value: defiance, disengagement, peer_conflict, disruption, transitions, technology_misuse. Otherwise (a general question, or an incident that doesn't clearly fit one of those), output the literal word none. Output only the value, nothing else.
-</category>
+${classificationBlock(area)}
 <rating>
-For a real incident: a single integer 1-5, your honest private assessment of how effectively it was handled, per classroom management best practice. This is never shown to the teacher — it's used only to track their growth over time — so rate honestly rather than generously. For a general question, there's nothing to rate — output 0. Output only the digit, nothing else.
+For something that happened: a single integer 1-5, your honest private assessment of how effectively it was handled, per ${ratingStandard(area)}. This is never shown to the teacher — it's used only to track their growth over time — so rate honestly rather than generously. For a general question, there's nothing to rate — output 0. Output only the digit, nothing else.
 </rating>
 ${CORE_COACHING_RULES}`
+}
 
-const ASK_CHAT_SYSTEM_PROMPT = `You are a warm, practical classroom management coach for grades 6-12 teachers, continuing a conversation you already gave coaching feedback in. Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says: if they push back, ask a follow-up, or want to think through a different angle, engage with that directly rather than repeating your first assessment. Stay grounded in what they've told you; never invent details.
+function askChatSystemPrompt(area: FocusArea | null): string {
+  return `${coachIdentity(area)} You are continuing a conversation you already gave coaching feedback in. Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says: if they push back, ask a follow-up, or want to think through a different angle, engage with that directly rather than repeating your first assessment. Stay grounded in what they've told you; never invent details.
 ${CORE_COACHING_RULES}`
+}
 
 // Used for both the first "Talk to Me" turn and every follow-up — same
 // persona/pacing throughout a live spoken conversation, unlike Ask's
@@ -150,16 +167,21 @@ The short, warm question you'll ask the teacher a few days from now to see how t
 </check_in>
 ${CORE_COACHING_RULES}`
 
-function isValidCategory(value: unknown): value is string {
-  return typeof value === 'string' && (SCENARIO_CATEGORIES as readonly string[]).includes(value)
+// A category is only accepted when it belongs to the area in play, so a
+// grading question can never come back tagged `defiance`.
+function validCategory(value: unknown, focusArea: string | null): string | null {
+  if (!isKnownCategory(value)) return null
+  if (focusArea && !categoryInArea(value, focusArea)) return null
+  return value
 }
 
 debriefRouter.get('/', async (req, res) => {
-  const { saved, category, source } = req.query
+  const { saved, focusArea, category, source } = req.query
   const debriefs = await prisma.debrief.findMany({
     where: {
       userId: req.user!.userId,
       ...(saved === 'true' ? { saved: true } : {}),
+      ...(typeof focusArea === 'string' ? { focusArea } : {}),
       ...(typeof category === 'string' ? { category } : {}),
       ...(source === 'ask_tab' ? { OR: [{ source: 'ask_tab' }, { source: null }] } : typeof source === 'string' ? { source } : {}),
     },
@@ -169,11 +191,17 @@ debriefRouter.get('/', async (req, res) => {
 })
 
 debriefRouter.post('/', async (req, res) => {
-  const { incidentText } = req.body ?? {}
+  const { incidentText, focusArea, gradeBand, subject } = req.body ?? {}
   if (typeof incidentText !== 'string' || incidentText.trim().length === 0) {
     res.status(400).json({ error: 'incidentText is required' })
     return
   }
+  // Optional: the teacher may pick an area up front, which narrows the coach's
+  // domain and constrains the sub-category it can assign. Left unset, the
+  // coach works out the area itself.
+  const pickedArea = findFocusArea(focusArea)
+  const askGradeBand = typeof gradeBand === 'string' ? pickGradeBand(gradeBand) : null
+  const askSubject = typeof subject === 'string' && subject.trim() ? subject.trim() : null
 
   const allowed = await checkAndLogUsage(req.user!.userId, 'debrief_feedback')
   if (!allowed) {
@@ -189,13 +217,14 @@ debriefRouter.post('/', async (req, res) => {
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
 
     const context = `What happened: ${incidentText}`
+    const basePrompt = `${askSystemPrompt(pickedArea)}${teachingContextBlock(askGradeBand, askSubject)}`
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 1024,
       thinking: { type: 'disabled' },
       system: memoryOn
-        ? `${ASK_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
-        : `${ASK_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}`,
+        ? `${basePrompt}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+        : `${basePrompt}${buildExperienceContextBlock(user?.experienceLevel)}`,
       messages: [{ role: 'user', content: context }],
     })
 
@@ -208,8 +237,14 @@ debriefRouter.post('/', async (req, res) => {
     const feedback = extractTag(text, 'feedback') ?? text.trim()
     const wordsToTry = extractTag(text, 'words_to_try')
     const followUp = extractTag(text, 'follow_up')
+    // The teacher's pick wins; otherwise take the coach's read, and fall back to
+    // the area the assigned sub-category belongs to if the tag came back malformed.
+    const inferredArea = findFocusArea(extractTag(text, 'focus_area'))
     const categoryTag = extractTag(text, 'category')
-    const category = categoryTag && isValidCategory(categoryTag) ? categoryTag : null
+    const resolvedArea = pickedArea ?? inferredArea
+    const category = validCategory(categoryTag, resolvedArea?.value ?? null)
+    const focusAreaValue =
+      resolvedArea?.value ?? focusAreaForSubCategory(category)?.value ?? null
     const ratingText = extractTag(text, 'rating')
     const parsedRating = ratingText ? Number.parseInt(ratingText, 10) : NaN
     const rating = parsedRating >= 1 && parsedRating <= 5 ? parsedRating : null
@@ -218,7 +253,19 @@ debriefRouter.post('/', async (req, res) => {
     const conversation = appendTurn([], context, seedReply)
 
     const debrief = await prisma.debrief.create({
-      data: { userId: req.user!.userId, incidentText, category, feedback, wordsToTry, followUp, rating, conversation },
+      data: {
+        userId: req.user!.userId,
+        incidentText,
+        focusArea: focusAreaValue,
+        category,
+        gradeBand: askGradeBand,
+        subject: askSubject,
+        feedback,
+        wordsToTry,
+        followUp,
+        rating,
+        conversation,
+      },
     })
 
     if (memoryOn) {
@@ -472,7 +519,11 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
 
   const trimmed = message.trim()
   const memoryOn = (user?.coachMemoryEnabled ?? false) && hasActivePlanFor(user)
-  const basePrompt = isTalk ? TALK_SYSTEM_PROMPT : ASK_CHAT_SYSTEM_PROMPT
+  // Follow-up turns stay in the area this conversation was classified into —
+  // otherwise a grading question gets a behavior-management voice on turn two.
+  const basePrompt = isTalk
+    ? TALK_SYSTEM_PROMPT
+    : `${askChatSystemPrompt(findFocusArea(debrief.focusArea))}${teachingContextBlock(debrief.gradeBand, debrief.subject)}`
   const baseMaxTokens = isTalk ? 110 : 300
 
   await streamCoachReply(res, isTalk ? 'talk_chat' : 'debrief_chat', {
@@ -599,7 +650,11 @@ debriefRouter.post('/:id/chat', async (req, res) => {
     })
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
 
-    const basePrompt = isTalk ? TALK_SYSTEM_PROMPT : ASK_CHAT_SYSTEM_PROMPT
+    // Follow-up turns stay in the area this conversation was classified into —
+    // otherwise a grading question gets a behavior-management voice on turn two.
+    const basePrompt = isTalk
+      ? TALK_SYSTEM_PROMPT
+      : `${askChatSystemPrompt(findFocusArea(debrief.focusArea))}${teachingContextBlock(debrief.gradeBand, debrief.subject)}`
     const baseMaxTokens = isTalk ? 110 : 300
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,

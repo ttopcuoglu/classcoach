@@ -152,7 +152,9 @@ model UsageLog {
 }
 
 // Category is one of: defiance, disengagement, peer_conflict, disruption,
-// transitions, technology_misuse. GradeBand is "6-8" or "9-12". Difficulty is
+// transitions, technology_misuse — which are now Classroom Management's
+// sub-categories, one of six focus areas; see server/src/lib/focusAreas.ts for
+// the full list. GradeBand is "K-5", "6-8" or "9-12". Difficulty is
 // "beginner" | "intermediate" | "advanced". SQLite has no native enum support
 // in Prisma, so these are validated at the application layer instead of the
 // schema layer. Scenarios are shared content (curated + generated), not
@@ -160,8 +162,16 @@ model UsageLog {
 model Scenario {
   id         String   @id @default(cuid())
   text       String
+  // One of the six focus areas (see server/src/lib/focusAreas.ts). Null on
+  // rows written before the area axis existed; resolved at the application
+  // layer from `category`, which identifies its area on its own.
+  focusArea  String?
   category   String
   gradeBand  String
+  // The teacher's subject this scenario was written for, when they gave one.
+  // Was passed to generation and thrown away before; kept now so a content or
+  // delivery scenario can be shown and re-run in the subject it was built for.
+  subject    String?
   difficulty String   @default("intermediate")
   source     String // "generated" | "curated"
   createdAt  DateTime @default(now())
@@ -194,17 +204,27 @@ model ScenarioAttempt {
 }
 
 // Backs the "Ask" tab — a teacher either reflecting on something that
-// already happened, or asking a general classroom-management question, as
-// opposed to ScenarioAttempt's hypothetical practice. category is inferred
-// by Claude from the free-text input (one of the same 6 categories as
-// Scenario, or null when nothing fits — e.g. a general question), not
-// user-picked.
+// already happened, or asking a general question about any of the six focus
+// areas, as opposed to ScenarioAttempt's hypothetical practice. focusArea and
+// category are inferred by Claude from the free-text input (the same taxonomy
+// Scenario uses, or null when nothing fits — e.g. a broad general question);
+// the teacher may also pick an area up front, which constrains the inference
+// rather than replacing it.
 model Debrief {
   id           String   @id @default(cuid())
   userId       String
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   incidentText String
+  // One of the six focus areas, inferred by Claude from the free text (or
+  // taken from the teacher's pick when they made one). Null on rows written
+  // before the area axis existed — all of which are classroom management.
+  focusArea    String?
   category     String?
+  // The grade band and subject in play for this question, so coaching lands in
+  // the teacher's actual classroom. Defaulted from their profile, overridable
+  // per question.
+  gradeBand    String?
+  subject      String?
   feedback     String?
   followUp     String? // "next time" guidance — analogous to ScenarioAttempt.modelResponse
   rating       Int? // same private growth-tracking rating as ScenarioAttempt

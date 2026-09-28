@@ -16,7 +16,13 @@ for (const scenario of CURATED_SCENARIOS) {
   if (existingId) {
     await prisma.scenario.update({
       where: { id: existingId },
-      data: { category: scenario.category, gradeBand: scenario.gradeBand, difficulty: scenario.difficulty },
+      data: {
+        focusArea: scenario.focusArea,
+        category: scenario.category,
+        gradeBand: scenario.gradeBand,
+        subject: scenario.subject ?? null,
+        difficulty: scenario.difficulty,
+      },
     })
     updated++
   } else {

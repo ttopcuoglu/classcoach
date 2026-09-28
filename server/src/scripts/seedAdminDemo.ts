@@ -588,7 +588,7 @@ async function insert(principalEmail: string, demoTeacherEmail: string, staff: P
         lessonCount += 1
       } else if (a.kind === 'ask') {
         await prisma.debrief.create({
-          data: { userId: user.id, incidentText: a.text, category: a.category, source: 'ask_tab', feedback: 'Start with a calm, private check-in, then name one clear expectation for next time.', createdAt: a.at },
+          data: { userId: user.id, incidentText: a.text, focusArea: 'classroom_management', category: a.category, source: 'ask_tab', feedback: 'Start with a calm, private check-in, then name one clear expectation for next time.', createdAt: a.at },
         })
       } else if (a.kind === 'talk') {
         await prisma.debrief.create({

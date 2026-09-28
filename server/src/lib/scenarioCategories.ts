@@ -1,21 +1,33 @@
-export const SCENARIO_CATEGORIES = [
-  'defiance',
-  'disengagement',
-  'peer_conflict',
-  'disruption',
-  'transitions',
-  'technology_misuse',
-] as const
+import { ALL_SUB_CATEGORIES, findFocusArea, subCategoryValues } from './focusAreas.ts'
+
+// Category is now the SECOND level of the taxonomy: every value belongs to
+// exactly one focus area (see focusAreas.ts). The six original behavior
+// values are still here, as Classroom Management's sub-categories, so nothing
+// already stored in Scenario.category / Debrief.category needed rewriting.
+export const SCENARIO_CATEGORIES = ALL_SUB_CATEGORIES
 
 export const GRADE_BANDS = ['K-5', '6-8', '9-12'] as const
 
 export const DIFFICULTY_LEVELS = ['beginner', 'intermediate', 'advanced'] as const
 
-export function pickCategory(value: unknown): (typeof SCENARIO_CATEGORIES)[number] {
-  if (typeof value === 'string' && (SCENARIO_CATEGORIES as readonly string[]).includes(value)) {
-    return value as (typeof SCENARIO_CATEGORIES)[number]
-  }
-  return SCENARIO_CATEGORIES[Math.floor(Math.random() * SCENARIO_CATEGORIES.length)]
+/// Validate a category, optionally constrained to one focus area — a grading
+/// request must never come back with `defiance` just because the model echoed
+/// a value from a different area's list.
+export function pickCategory(value: unknown, focusArea?: unknown): string {
+  const allowed = subCategoryValues(focusArea)
+  if (typeof value === 'string' && allowed.includes(value)) return value
+  return allowed[Math.floor(Math.random() * allowed.length)]
+}
+
+export function isKnownCategory(value: unknown): value is string {
+  return typeof value === 'string' && ALL_SUB_CATEGORIES.includes(value)
+}
+
+/// True when this category belongs to the given focus area.
+export function categoryInArea(category: unknown, focusArea: unknown): boolean {
+  const area = findFocusArea(focusArea)
+  if (!area) return isKnownCategory(category)
+  return typeof category === 'string' && area.subCategories.some((c) => c.value === category)
 }
 
 export function pickGradeBand(value: unknown): (typeof GRADE_BANDS)[number] {
