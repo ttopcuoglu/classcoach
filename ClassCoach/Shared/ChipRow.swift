@@ -23,6 +23,9 @@ struct ChipRow: View {
                         .foregroundStyle(isActive ? AppTheme.cream : AppTheme.textSecondary)
                         .background(isActive ? AppTheme.forest : AppTheme.card, in: Capsule())
                         .overlay(Capsule().strokeBorder(isActive ? .clear : AppTheme.hairline))
+                        // Otherwise the selected chip is signalled by colour
+                        // alone and VoiceOver reads it as a plain button.
+                        .accessibilityAddTraits(isActive ? .isSelected : [])
                 }
             }
         }

@@ -445,6 +445,7 @@ export default function TryItOut({
                           key={label}
                           type="button"
                           onClick={() => setCategory(value)}
+                          aria-pressed={category === value}
                           title={count ? `You've practiced this ${count === 1 ? 'once' : `${count} times`}` : undefined}
                           className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
                             category === value ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
@@ -474,6 +475,7 @@ export default function TryItOut({
                       key={label}
                       type="button"
                       onClick={() => setDifficulty(value)}
+                      aria-pressed={difficulty === value}
                       className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
                         difficulty === value ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
                       }`}

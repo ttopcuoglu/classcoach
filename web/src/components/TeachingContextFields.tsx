@@ -71,6 +71,7 @@ export default function TeachingContextFields({
               // Courses belong to 9-12, so leaving that band drops the course
               // rather than silently sending a stale one.
               onClick={() => set({ gradeBand: band, course: band === '9-12' ? value.course : undefined })}
+              aria-pressed={value.gradeBand === band}
               className={chip(value.gradeBand === band)}
             >
               Grades {band}
@@ -95,6 +96,7 @@ export default function TeachingContextFields({
                     : { subject: s, course: undefined, otherSubject: false },
                 )
               }
+              aria-pressed={!value.otherSubject && value.subject === s}
               className={chip(!value.otherSubject && value.subject === s)}
             >
               {s}
@@ -104,6 +106,7 @@ export default function TeachingContextFields({
             type="button"
             disabled={disabled}
             onClick={() => set({ otherSubject: true, subject: undefined, course: undefined })}
+            aria-pressed={value.otherSubject}
             className={chip(value.otherSubject)}
           >
             {OTHER_SUBJECT}
@@ -135,6 +138,7 @@ export default function TeachingContextFields({
                 type="button"
                 disabled={disabled}
                 onClick={() => set({ course: value.course === c ? undefined : c })}
+                aria-pressed={value.course === c}
                 className={chip(value.course === c)}
               >
                 {c}
@@ -154,6 +158,7 @@ export default function TeachingContextFields({
               type="button"
               disabled={disabled}
               onClick={() => set({ courseLevel: value.courseLevel === level ? undefined : level })}
+              aria-pressed={value.courseLevel === level}
               className={chip(value.courseLevel === level)}
             >
               {level}
