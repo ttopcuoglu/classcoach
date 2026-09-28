@@ -167,6 +167,10 @@ model Scenario {
   // layer from `category`, which identifies its area on its own.
   focusArea  String?
   category   String
+  // The single grade this was written for, e.g. "K" or "7". gradeBand is kept
+  // alongside it, derived, because the curated fallback bank is written per
+  // band and every row predating grade levels has a band and no level.
+  gradeLevel String?
   gradeBand  String
   // The teacher's subject this scenario was written for, when they gave one.
   // Was passed to generation and thrown away before; kept now so a content or
@@ -220,9 +224,10 @@ model Debrief {
   // before the area axis existed — all of which are classroom management.
   focusArea    String?
   category     String?
-  // The grade band and subject in play for this question, so coaching lands in
-  // the teacher's actual classroom. Defaulted from their profile, overridable
-  // per question.
+  // The grade and subject in play for this question, so coaching lands in the
+  // teacher's actual classroom. Defaulted from their profile, overridable per
+  // question. gradeBand is retained for rows written before grade levels.
+  gradeLevel   String?
   gradeBand    String?
   subject      String?
   feedback     String?

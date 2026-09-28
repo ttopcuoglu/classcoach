@@ -198,40 +198,40 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
     difficulty: 'advanced',
   },
 
-  // --- delivery_of_instruction ---
+  // --- teaching_and_learning: delivery ---
   {
     text: 'You have explained regrouping in subtraction twice, once with base-ten blocks and once on the board. You ask "who\'s got it?" and eleven hands go up out of twenty-four. The other thirteen are looking at their papers.',
-    focusArea: 'delivery_of_instruction',
+    focusArea: 'teaching_and_learning',
     category: 'checking_understanding',
     gradeBand: 'K-5',
     difficulty: 'beginner',
   },
   {
     text: 'Four minutes into your explanation of how a bill becomes a law, you notice two students have stopped writing and one is staring at the clock. You still have three steps to go and eight minutes of class left.',
-    focusArea: 'delivery_of_instruction',
+    focusArea: 'teaching_and_learning',
     category: 'pacing_chunking',
     gradeBand: '6-8',
     difficulty: 'intermediate',
   },
   {
     text: 'You ask an open question about the ending of the novel. The same three students answer, as they have all week. When you wait, the silence stretches and one of the three jumps in to fill it.',
-    focusArea: 'delivery_of_instruction',
+    focusArea: 'teaching_and_learning',
     category: 'questioning_discussion',
     gradeBand: '9-12',
     difficulty: 'intermediate',
   },
   {
     text: 'You are mid-way through a worked example on the board when a student asks, "But why does the sign flip there?" It is a genuinely good question, it is not what today\'s objective is about, and you have nine minutes left to get the class to independent practice.',
-    focusArea: 'delivery_of_instruction',
+    focusArea: 'teaching_and_learning',
     category: 'explaining_clearly',
     gradeBand: '9-12',
     difficulty: 'advanced',
   },
 
-  // --- content_pedagogy ---
+  // --- teaching_and_learning: content ---
   {
     text: 'A student explains that plants get their food from the soil, "like how we get food from the fridge." Three other students nod. Your unit on photosynthesis starts tomorrow.',
-    focusArea: 'content_pedagogy',
+    focusArea: 'teaching_and_learning',
     category: 'misconceptions',
     gradeBand: 'K-5',
     difficulty: 'beginner',
@@ -239,7 +239,7 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
   },
   {
     text: 'When you ask why 1/3 is bigger than 1/4, a student says, "Because 4 is bigger than 3, so fourths are bigger." She can shade the right fraction bars correctly every time.',
-    focusArea: 'content_pedagogy',
+    focusArea: 'teaching_and_learning',
     category: 'misconceptions',
     gradeBand: '6-8',
     difficulty: 'intermediate',
@@ -247,39 +247,39 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
   },
   {
     text: 'Your students can balance chemical equations reliably. When you ask one why the atoms have to balance, he says, "Because that\'s the rule for getting the answer right." Nobody in the room offers anything else.',
-    focusArea: 'content_pedagogy',
-    category: 'building_explanation',
+    focusArea: 'teaching_and_learning',
+    category: 'explaining_clearly',
     gradeBand: '9-12',
     difficulty: 'advanced',
     subject: 'Science',
   },
 
-  // --- grading ---
+  // --- teaching_and_learning: feedback & grading ---
   {
     text: 'A narrative has vivid ideas, a real ending, and spelling errors in nearly every sentence. Your rubric has separate rows for ideas and conventions, and the total lands it at the same score as a dull, clean piece you graded ten minutes ago.',
-    focusArea: 'grading',
-    category: 'rubrics_consistency',
+    focusArea: 'teaching_and_learning',
+    category: 'feedback_and_grading',
     gradeBand: 'K-5',
     difficulty: 'intermediate',
   },
   {
     text: 'A student has a 96 and a 91 on the two unit tests and four missing homework assignments. The gradebook shows a 71. Report cards are due Friday.',
-    focusArea: 'grading',
-    category: 'late_and_missing',
+    focusArea: 'teaching_and_learning',
+    category: 'feedback_and_grading',
     gradeBand: '6-8',
     difficulty: 'advanced',
   },
   {
     text: 'A student emails: "I got a 78 on the essay and my friend got an 88 and we basically wrote the same thing. Can you explain what the difference is?" You reread both. They are not the same, but the rubric language does not obviously show why.',
-    focusArea: 'grading',
-    category: 'grade_disputes',
+    focusArea: 'teaching_and_learning',
+    category: 'feedback_and_grading',
     gradeBand: '9-12',
     difficulty: 'intermediate',
   },
   {
     text: 'You have thirty-one lab reports to return before the unit test on Thursday, and about forty minutes tonight. Last time you wrote full comments on every one and saw no evidence anyone read them.',
-    focusArea: 'grading',
-    category: 'grading_workload',
+    focusArea: 'teaching_and_learning',
+    category: 'feedback_and_grading',
     gradeBand: '9-12',
     difficulty: 'beginner',
   },
@@ -314,31 +314,31 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
     difficulty: 'beginner',
   },
 
-  // --- colleagues ---
+  // --- professionalism ---
   {
     text: 'In front of the whole class, your co-teacher says, "Actually, let\'s do it the way I showed you yesterday" and starts re-explaining the task differently. Students look between the two of you.',
-    focusArea: 'colleagues',
+    focusArea: 'professionalism',
     category: 'co_teaching',
     gradeBand: 'K-5',
     difficulty: 'intermediate',
   },
   {
     text: 'In a department meeting, your chair says the team will give the same common assessment in the same week, and you think the test does not match what your students have actually been taught. Three colleagues have already nodded.',
-    focusArea: 'colleagues',
+    focusArea: 'professionalism',
     category: 'talking_with_admin',
     gradeBand: '6-8',
     difficulty: 'advanced',
   },
   {
     text: 'A colleague you share a student with says, in the workroom, "Oh, him — I gave up on that one in September." Two other teachers are within earshot.',
-    focusArea: 'colleagues',
+    focusArea: 'professionalism',
     category: 'disagreeing_with_a_peer',
     gradeBand: '9-12',
     difficulty: 'intermediate',
   },
   {
     text: 'Your PLC has forty-five minutes. Twenty of them have gone to a conversation about the bell schedule, and the student work you all agreed to look at is still in a folder on the table.',
-    focusArea: 'colleagues',
+    focusArea: 'professionalism',
     category: 'team_and_plc_time',
     gradeBand: '6-8',
     difficulty: 'beginner',

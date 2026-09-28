@@ -1,16 +1,16 @@
-// The six things teachers actually bring to a coach. Until now Ask & Practice
-// was classroom-management-only: every system prompt said "classroom
-// management coach" and the one category list was entirely student behavior.
+// The four things teachers bring to a coach. Until recently Ask & Practice was
+// classroom-management-only: every system prompt said "classroom management
+// coach" and the one category list was entirely student behavior.
 //
-// Focus area is the new top level. The original six categories survive
-// unchanged as `classroom_management`'s sub-categories, so every existing
-// Debrief.category / Scenario.category row stays valid and the adaptive
-// weighting, private growth ratings, and curated fallback bank keep working.
+// Focus area is the top level. The six original categories survive unchanged as
+// `classroom_management`'s sub-categories, so every existing Debrief.category /
+// Scenario.category row stays valid and the adaptive weighting, private growth
+// ratings, and curated fallback bank keep working.
 //
 // Everything a system prompt needs to coach an area lives here rather than in
 // the route files, because the prompts are the substance of this feature — a
-// picker with six options in front of a coach that still talks about
-// de-escalation is six doors into the same room. `web/src/lib/focusAreas.ts`
+// picker with four options in front of a coach that still talks about
+// de-escalation is four doors into the same room. `web/src/lib/focusAreas.ts`
 // and `ClassCoach/Models/API/FocusAreas.swift` mirror the labels only; the
 // coaching text is server-side and never shipped to a client.
 
@@ -23,19 +23,18 @@ export type FocusArea = {
   blurb: string
 
   // --- Ask ---
-  /// Completes "You are a warm, practical ___ for grades 6-12 teachers."
+  /// Completes "You are a warm, practical ___ for K-12 teachers."
   coachRole: string
-  /// What "something that already happened" looks like here. Outside
-  /// classroom management an incident is rarely a moment in front of
-  /// students — it can be an email thread, a returned assignment, or a
-  /// hallway conversation.
+  /// What "something that already happened" looks like here. Outside classroom
+  /// management an incident is rarely a moment in front of students — it can be
+  /// an email thread, a returned assignment, or a hallway conversation.
   incidentShape: string
   /// The standard <feedback> is grounded in and <rating> is scored against.
   bestPractice: string
 
   // --- Practice ---
   /// What a practice scenario in this area actually IS. The behavior-shaped
-  /// "a student does X" is wrong for four of the six areas.
+  /// "a student does X" is wrong for three of the four areas.
   practiceArtifact: string
   /// What beginner / intermediate / advanced mean here.
   difficultyTiers: string
@@ -47,52 +46,30 @@ export type FocusArea = {
 
 export const FOCUS_AREAS: FocusArea[] = [
   {
-    value: 'delivery_of_instruction',
-    label: 'Delivery of Instruction',
-    blurb: 'How you explain, question, check, and pace — the moment-to-moment teaching.',
+    value: 'teaching_and_learning',
+    label: 'Teaching and Learning',
+    blurb: 'Explaining, questioning, checking, pacing — and how you grade what comes back.',
     coachRole:
-      'instructional coach who helps teachers with how they deliver instruction — explaining, questioning, checking for understanding, pacing, and keeping a room of students with them',
+      'instructional coach who helps teachers with how they teach and how they assess: explaining, questioning, checking for understanding, pacing, getting a specific topic to land, and grading the work that comes back. The teacher knows their content; what they need is how to make it land — never imply a knowledge gap, and never re-explain their subject to them as though they were the student',
     incidentShape:
-      'a lesson or part of a lesson that already happened — an explanation that did not land, a discussion that went flat, a check for understanding that told them nothing, a class that was lost by minute ten',
+      'a lesson, a topic, or a stack of work they have already handled — an explanation that did not land, a discussion that went flat, a check for understanding that told them nothing, a misconception that survived everything they tried, a grade a student pushed back on, feedback nobody read',
     bestPractice:
-      'instructional best practice (a clear learning goal students can name, modeling and think-alouds, worked examples before independent practice, frequent low-stakes checks for understanding that sample the whole room rather than the raised hands, real wait time, warm cold-calling, chunking, and releasing responsibility gradually)',
+      'instructional and assessment best practice: a clear learning goal students can name, modeling and think-alouds, worked examples before independent practice, frequent low-stakes checks that sample the whole room rather than the raised hands, real wait time, warm cold-calling, chunking, gradual release; surfacing a misconception and confronting it directly rather than teaching over it, concrete before abstract, multiple representations, questions that make the student do the intellectual work; and grades that report what a student knows rather than how compliant they were, feedback that is specific, actionable and arrives while the student can still use it, consistent rubric application, and a grading load the teacher can actually sustain',
     practiceArtifact:
-      'a delivery moment the teacher has to handle out loud, written as the situation they are standing in with a concrete detail — what they just said, what students just did, what a student just asked. For example: an explanation they have already given twice and half the room still looks blank; a discussion where the same three students answer everything; the need to check understanding in ninety seconds before moving on; a worked example that a student has just derailed with a reasonable question',
+      "a teaching or assessment moment the teacher has to handle, written as the situation they are standing in with a concrete detail — what they just said, what a student just asked, what is actually on the page in front of them. Good shapes: an explanation they have already given twice while half the room still looks blank; a discussion where the same three students answer everything; a misconception in the student's own words (\"the heavier ball lands first because more gravity pulls on it\"), never \"a student is confused about the content\"; a worked example a student has just derailed with a reasonable question; a described piece of student work sitting right on a boundary between two rubric levels, with the numbers or rubric language the decision turns on; a student whose test scores are strong and whose missing homework is sinking the average",
     difficultyTiers:
-      '"beginner" gives one clear instructional problem with a well-known move available (a check for understanding is missing; the goal was never stated). "intermediate" adds a real constraint — little time left, a mixed-readiness room, a topic that resists a quick analogy. "advanced" puts two good instructional goals in tension: depth against coverage, keeping the strong students moving against not losing the rest, honoring a good student question against protecting the lesson arc',
+      '"beginner" gives one clear problem with a well-known move available — a check for understanding is missing, the goal was never stated, a common misconception with a documented fix, one principle that settles the grading call. "intermediate" adds a real constraint or genuine ambiguity: little time left, a mixed-readiness room, a misconception that is partly right and has to be built on, two defensible grades and a policy that does not quite cover the case. "advanced" puts two good goals in tension — depth against coverage, keeping the strong students moving against not losing the rest, fairness to this student against consistency for the rest of the class, or an idea that is genuinely hard to represent at all',
     safety:
-      'Keep the problem about the teaching itself. Student behavior may appear as texture but must never be the thing to solve — that is Classroom Management, a different area.',
+      'Keep the problem about the teaching or the assessment itself. Student behavior may appear as texture but must never be the thing to solve — that is Classroom Management, a different area. Never invent subject facts you are not sure of; if a topic\'s specifics matter and you do not know them, coach the teacher on how to find the misconception rather than asserting content. Never write an academic-dishonesty investigation or an IEP/504 compliance decision — those need a specialist, not a coach — and never advise anything that would disclose one student\'s grades to another family.',
     subCategories: [
       { value: 'explaining_clearly', label: 'Explaining clearly' },
       { value: 'checking_understanding', label: 'Checking for understanding' },
       { value: 'questioning_discussion', label: 'Questioning & discussion' },
       { value: 'pacing_chunking', label: 'Pacing & chunking' },
-      { value: 'openings_hooks', label: 'Openings & hooks' },
       { value: 'reaching_every_level', label: 'Reaching every level' },
-    ],
-  },
-  {
-    value: 'content_pedagogy',
-    label: 'Teaching Specific Content',
-    blurb: 'Not whether you know the content — how to teach this topic so it lands.',
-    coachRole:
-      'pedagogical-content coach who helps teachers work out how to TEACH a specific topic. The teacher knows their content; what they need is how to make this particular idea land — never imply they have a knowledge gap, and never re-explain the subject matter to them as though they were the student',
-    incidentShape:
-      'a specific topic they already taught that did not land — the lesson on a concept where students could do the procedure but not say why, a unit where a misconception survived everything they tried, an explanation that worked last year and not this year',
-    bestPractice:
-      'pedagogical content knowledge (surfacing a misconception and confronting it directly rather than teaching over it, concrete before abstract, multiple representations of the same idea, well-chosen worked examples and analogies with their limits named out loud, questions that make the student do the intellectual work, and knowing the specific places this topic usually breaks)',
-    practiceArtifact:
-      'a content-teaching challenge in the teacher\'s own subject and grade. Always name the specific topic AND the specific wrong idea, in the student\'s own words — "a student says the heavier ball hits the ground first because it has more gravity pulling on it," never "a student is confused about the content." Other good shapes: a topic to build a first explanation for, a student question that reveals the whole class has missed the idea, choosing between two analogies, or sequencing three sub-ideas in the right order',
-    difficultyTiers:
-      '"beginner" is a common, well-documented misconception with a known instructional fix. "intermediate" is a misconception that is partly right, so it cannot simply be corrected — it has to be built on. "advanced" is an idea that is genuinely hard to represent (an abstraction with no good concrete analogue, or a topic where the usual analogy actively creates the next misconception)',
-    safety:
-      'Never invent subject facts you are not sure of; if a topic\'s specifics matter and you do not know them, coach the teacher on how to find the misconception rather than asserting content. Keep the focus on teaching the idea, not on student behavior.',
-    subCategories: [
       { value: 'misconceptions', label: 'Student misconceptions' },
-      { value: 'building_explanation', label: 'Building an explanation' },
-      { value: 'examples_analogies', label: 'Examples & analogies' },
-      { value: 'content_sequencing', label: 'Sequencing the content' },
-      { value: 'academic_vocabulary', label: 'Academic vocabulary' },
+      { value: 'content_sequencing', label: 'Planning & sequencing' },
+      { value: 'feedback_and_grading', label: 'Feedback & grading' },
     ],
   },
   {
@@ -105,7 +82,7 @@ export const FOCUS_AREAS: FocusArea[] = [
     bestPractice:
       'classroom management best practice (clear and consistent expectations, de-escalation, restorative practices)',
     practiceArtifact:
-      'an everyday classroom management challenge, concrete and specific — a short realistic dialogue snippet helps. For grade band "K-5", use age-appropriate elementary behaviors and language (sharing conflicts, following directions, tattling, difficulty sitting still, minor tantrums) and avoid teen-specific dynamics like phones, sarcasm, or eye-rolling',
+      'an everyday classroom management challenge, concrete and specific — a short realistic dialogue snippet helps. In the early grades, use age-appropriate behaviors and language (sharing conflicts, following directions, tattling, difficulty sitting still, minor tantrums) and avoid teen-specific dynamics like phones, sarcasm, or eye-rolling',
     difficultyTiers:
       '"beginner" has a single clear behavior with an obvious response. "intermediate" adds some ambiguity or a mildly reluctant student. "advanced" has competing considerations — multiple students, conflicting needs, or a defiance layer stacked on the core issue',
     safety: 'Never include weapons, abuse, self-harm, or other extreme or rare situations.',
@@ -119,29 +96,6 @@ export const FOCUS_AREAS: FocusArea[] = [
     ],
   },
   {
-    value: 'grading',
-    label: 'Grading & Feedback',
-    blurb: 'Fair grades, feedback that lands, and a workload you can sustain.',
-    coachRole: 'coach who helps teachers with grading, feedback, and assessment decisions',
-    incidentShape:
-      'a grading decision they already made or are sitting on — a grade a student or parent pushed back on, a stack they gave feedback on that nobody read, a rubric that put two very different pieces of work at the same score, a late-work call they are not sure was fair',
-    bestPractice:
-      'assessment best practice (grades that report what a student knows rather than how compliant they were, behavior and achievement reported separately, feedback that is specific, actionable, and arrives while the student can still use it, consistent rubric application with the criteria shared in advance, opportunities to revise toward mastery, and a grading load the teacher can actually sustain)',
-    practiceArtifact:
-      'a grading judgment call with enough specifics to actually decide — never a general question dressed up as a scenario. Good shapes: a described piece of student work sitting right on a boundary between two rubric levels; a student whose test scores are strong and whose missing homework is sinking the average; a late assignment with a reason attached; a rubric that has put a thoughtful-but-messy piece and a polished-but-shallow piece at the same score; a stack of thirty to give useful feedback on with forty minutes before it stops mattering. Include the numbers or the rubric language the decision turns on',
-    difficultyTiers:
-      '"beginner" has one clear principle that resolves it. "intermediate" has two defensible answers and a policy that does not quite cover the case. "advanced" puts fairness to this student against consistency for the rest of the class, or a defensible grade against a relationship the teacher needs to keep',
-    safety:
-      'Never write an academic-dishonesty investigation, an IEP/504 or special-education compliance decision, or a grade-change demand from an administrator — those need a specialist, not a coach. Keep it to ordinary grading judgment. Never advise anything that would disclose one student\'s grades to another family.',
-    subCategories: [
-      { value: 'feedback_that_lands', label: 'Feedback that lands' },
-      { value: 'rubrics_consistency', label: 'Rubrics & consistency' },
-      { value: 'grade_disputes', label: 'Grade disputes' },
-      { value: 'late_and_missing', label: 'Late & missing work' },
-      { value: 'grading_workload', label: 'Grading workload' },
-    ],
-  },
-  {
     value: 'parent_communication',
     label: 'Parent Communication',
     blurb: 'Hard emails, conferences, and hard news — said well.',
@@ -151,11 +105,11 @@ export const FOCUS_AREAS: FocusArea[] = [
     bestPractice:
       'family-communication best practice (lead with the student and something true and specific about them, describe observable facts rather than labels or diagnoses, no jargon, assume the parent wants the same thing you do, name one concrete next step and who owns it, offer a real chance for the parent to respond, and keep a written record of what was agreed)',
     practiceArtifact:
-      'a parent moment the teacher has to respond to right now, with the parent\'s actual words quoted. Good shapes: the full text of a short parent email — three or four sentences, in a real parent\'s voice, not a caricature; the first thing a parent says when they sit down at a conference; what a parent says thirty seconds into a phone call the teacher initiated with hard news. Give the teacher enough background about the student to answer honestly',
+      "a parent moment the teacher has to respond to right now, with the parent's actual words quoted. Good shapes: the full text of a short parent email — three or four sentences, in a real parent's voice, not a caricature; the first thing a parent says when they sit down at a conference; what a parent says thirty seconds into a phone call the teacher initiated with hard news. Give the teacher enough background about the student to answer honestly",
     difficultyTiers:
       '"beginner" is a concerned parent asking a fair question. "intermediate" is a parent who is upset and partly right, so the reply cannot just be a defense. "advanced" is a parent who is angry, has copied an administrator, or is asking for something the teacher cannot give — and still has a legitimate underlying concern',
     safety:
-      'Never write abuse, neglect, custody disputes, threats, or anything that would be a mandated-reporter situation — those are not coaching scenarios. Never invent a real, identifiable person. Keep it to a difficult but ordinary parent exchange, and never advise anything that discloses another student\'s information.',
+      "Never write abuse, neglect, custody disputes, threats, or anything that would be a mandated-reporter situation — those are not coaching scenarios. Never invent a real, identifiable person. Keep it to a difficult but ordinary parent exchange, and never advise anything that discloses another student's information.",
     subCategories: [
       { value: 'difficult_parent_email', label: 'A difficult email' },
       { value: 'conferences', label: 'Conferences' },
@@ -164,17 +118,17 @@ export const FOCUS_AREAS: FocusArea[] = [
     ],
   },
   {
-    value: 'colleagues',
-    label: 'Colleagues & Team',
-    blurb: 'Co-teachers, department meetings, admin asks, and honest disagreement.',
+    value: 'professionalism',
+    label: 'Professionalism',
+    blurb: 'Co-teachers, admin, team time, paperwork, and growing as a teacher.',
     coachRole:
-      'coach who helps teachers navigate working relationships with colleagues, co-teachers, and administrators',
+      'coach who helps teachers with the professional side of the job — working relationships with colleagues, co-teachers and administrators, team and PLC time, records and deadlines, and their own growth',
     incidentShape:
-      'something that already happened with a colleague — a co-teacher who contradicted them in front of students, a meeting where their concern got waved off, a peer who said something about a shared student, an admin request they agreed to and resent',
+      'something that already happened outside the lesson — a co-teacher who contradicted them in front of students, a meeting where their concern got waved off, a peer who said something about a shared student, an admin request they agreed to and resented, a deadline or piece of documentation they missed',
     bestPractice:
-      'professional-collaboration best practice (separate the person from the problem, open with the interest you actually share — usually a student, describe observable behavior rather than attributing motive, ask what you might be missing before you conclude, make a specific request rather than a complaint, and know what genuinely needs escalating and to whom)',
+      'professional-practice best practice (separate the person from the problem, open with the interest you actually share — usually a student, describe observable behavior rather than attributing motive, ask what you might be missing before you conclude, make a specific request rather than a complaint, keep accurate and timely records, meet the commitments you make, seek feedback rather than waiting for it, and know what genuinely needs escalating and to whom)',
     practiceArtifact:
-      'a colleague moment with the other person\'s actual words, written as the line the teacher has to respond to. Good shapes: what a co-teacher said, in front of students, that undercut them; what a department head asked for in a meeting that the teacher thinks is wrong for kids; what a peer said about a student they share; what an administrator said when the teacher raised a concern. Give the working relationship enough history that the teacher\'s answer has a cost',
+      "a professional moment with the other person's actual words, written as the line the teacher has to respond to. Good shapes: what a co-teacher said, in front of students, that undercut them; what a department head asked for in a meeting that the teacher thinks is wrong for kids; what a peer said about a student they share; what an administrator said when the teacher raised a concern; a PLC that has spent twenty of its forty-five minutes on the bell schedule. Give the working relationship enough history that the teacher's answer has a cost",
     difficultyTiers:
       '"beginner" is a small, clearly raisable friction with a willing colleague. "intermediate" is a colleague who is defensive or senior, where being right is not enough. "advanced" has a power difference and a real professional cost to speaking up, or a colleague whose approach the teacher disagrees with on behalf of students',
     safety:
@@ -184,7 +138,8 @@ export const FOCUS_AREAS: FocusArea[] = [
       { value: 'disagreeing_with_a_peer', label: 'Disagreeing with a peer' },
       { value: 'talking_with_admin', label: 'Talking with admin' },
       { value: 'team_and_plc_time', label: 'Team & PLC time' },
-      { value: 'mentoring', label: 'Mentoring' },
+      { value: 'mentoring', label: 'Mentoring & growth' },
+      { value: 'records_and_deadlines', label: 'Records & deadlines' },
     ],
   },
 ]

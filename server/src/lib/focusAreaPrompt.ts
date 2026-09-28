@@ -1,11 +1,12 @@
 import { FOCUS_AREAS, type FocusArea } from './focusAreas.ts'
+import { gradeLevelLabel } from './gradeLevels.ts'
 
 // Composes the area-aware parts of the Ask / Practice system prompts.
 //
-// One prompt per concern with an injected area block, rather than six copies
+// One prompt per concern with an injected area block, rather than four copies
 // per concern: the coaching stance, the plain-text rule, and the tag contract
-// are identical across all six areas — only the coach's domain, the standard
-// being applied, and what counts as "something that happened" change. Six
+// are identical across all four areas — only the coach's domain, the standard
+// being applied, and what counts as "something that happened" change. Four
 // copies of each prompt would drift within a month.
 //
 // The scenario writer is the one genuine exception (see `scenarioAreaBlock`):
@@ -28,9 +29,9 @@ const SUB_CATEGORY_MENU = FOCUS_AREAS.map(
 /// prompts alike.
 export function coachIdentity(area: FocusArea | null): string {
   if (area) {
-    return `You are a warm, practical ${area.coachRole}, working with grades 6-12 teachers. Everything you say is judged against ${area.bestPractice}.`
+    return `You are a warm, practical ${area.coachRole}, working with K-12 teachers. Everything you say is judged against ${area.bestPractice}.`
   }
-  return `You are a warm, practical instructional coach for grades 6-12 teachers. Teachers bring you six different kinds of problem, and the right answer depends on which one this is:
+  return `You are a warm, practical instructional coach for K-12 teachers. Teachers bring you four different kinds of problem, and the right answer depends on which one this is:
 
 ${AREA_MENU}
 
@@ -85,13 +86,15 @@ Hard limits for this area:
 ${area.safety}`
 }
 
-/// Grade band and subject, so a content or delivery scenario is set in the
-/// teacher's actual classroom rather than a generic one.
-export function teachingContextBlock(gradeBand?: string | null, subject?: string | null): string {
+/// Grade level and subject, so coaching and scenarios land in the teacher's
+/// actual classroom rather than a generic one. A single grade rather than a
+/// three-year band, because what a 6th grader can be asked to do and what an
+/// 8th grader can be asked to do are not the same thing.
+export function teachingContextBlock(gradeLevel?: string | null, subject?: string | null): string {
   const lines = [
-    gradeBand ? `Grade band: ${gradeBand}` : null,
+    gradeLevel ? `Grade: ${gradeLevelLabel(gradeLevel)}` : null,
     subject ? `Subject: ${subject}` : null,
   ].filter(Boolean)
   if (lines.length === 0) return ''
-  return `\n\nThis teacher's classroom:\n${lines.join('\n')}\nUse this context — set examples, analogies, and scenarios in this subject and grade rather than a generic classroom. Never contradict it.`
+  return `\n\nThis teacher's classroom:\n${lines.join('\n')}\nWrite for this exact grade, not the band around it: the vocabulary, the attention span, the social dynamics, the length of a task, and what a student can already do all differ year to year. Set examples, analogies, and scenarios in this subject rather than a generic classroom, and never contradict this context.`
 }
