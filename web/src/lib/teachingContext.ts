@@ -88,17 +88,18 @@ export const COURSE_LEVEL_BLURB: Record<string, string> = {
 }
 
 /// Who is in the room. Multi-select, and kept apart from the level on purpose:
-/// inclusion is a disability framework (IEPs, 504s, a co-teacher) while English
+/// SPED/504 is a disability framework (IDEA, IEPs, 504 plans) while English
 /// learners sit under a different law and need different moves. Treating an
 /// English learner as though they had a learning disability is a classic
 /// harmful error, and one shared chip would have taught the coach to make it.
 export const CLASS_MAKEUP = [
-  { value: 'inclusion', label: 'Co-taught / inclusion' },
+  // Value stays `inclusion` — see the note in `server/src/lib/teachingContext.ts`.
+  { value: 'inclusion', label: 'SPED / 504' },
   { value: 'english_learners', label: 'English learners' },
 ] as const
 
 export const CLASS_MAKEUP_BLURB: Record<string, string> = {
-  inclusion: 'IEPs and 504s, accommodations, usually a co-teacher in the room.',
+  inclusion: 'Students on IEPs and 504 plans, with accommodations you have to meet.',
   english_learners: 'Learning the content and the language at once.',
 }
 

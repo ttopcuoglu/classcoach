@@ -132,6 +132,10 @@ struct TalkToMeView: View {
                             controls
                         }
 
+                        if onStartScreen {
+                            startPromptCards
+                        }
+
                         if onStartScreen && !savedTalks.isEmpty {
                             pastConversations
                         }
@@ -269,6 +273,8 @@ struct TalkToMeView: View {
         return ExperienceLevel.isExperienced(authManager.currentUser?.experienceLevel) ? experiencedPrompts : examplePrompts
     }
 
+    /// The heading only. The example prompts are a separate view so the body can
+    /// put "Start Talking" between them — see `startPromptCards`.
     private var startScreen: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
@@ -299,27 +305,37 @@ struct TalkToMeView: View {
                 .background(AppTheme.goldTint.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
             }
 
-            VStack(spacing: 8) {
-                ForEach(startPrompts, id: \.self) { prompt in
-                    Button {
-                        submit(prompt, typed: true)
-                    } label: {
-                        HStack {
-                            Text("\u{201C}\(prompt)\u{201D}")
-                                .font(.subheadline)
-                                .foregroundStyle(AppTheme.textPrimary)
-                                .multilineTextAlignment(.leading)
-                            Spacer()
-                            Image(systemName: "arrow.right")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(AppTheme.accent)
-                        }
-                        .padding(.horizontal, 14).padding(.vertical, 12)
-                        .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
-                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.black.opacity(0.06)))
+        }
+        .padding(.horizontal)
+    }
+
+    /// Examples, below the buttons. A teacher who knows what they want to say
+    /// should not have to scroll past four suggestions to find the microphone,
+    /// and one who doesn't still has them a thumb away.
+    private var startPromptCards: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("OR START FROM ONE OF THESE")
+                .font(.caption2.weight(.bold)).tracking(0.8)
+                .foregroundStyle(AppTheme.terracotta600)
+            ForEach(startPrompts, id: \.self) { prompt in
+                Button {
+                    submit(prompt, typed: true)
+                } label: {
+                    HStack {
+                        Text("\u{201C}\(prompt)\u{201D}")
+                            .font(.subheadline)
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .multilineTextAlignment(.leading)
+                        Spacer()
+                        Image(systemName: "arrow.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AppTheme.accent)
                     }
-                    .buttonStyle(.plain)
+                    .padding(.horizontal, 14).padding(.vertical, 12)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.black.opacity(0.06)))
                 }
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal)

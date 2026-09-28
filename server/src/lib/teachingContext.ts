@@ -132,7 +132,10 @@ export const COURSE_LEVEL_GUIDANCE: Record<string, string> = {
 /// these are not tracking choices, they describe the students and the supports,
 /// and a section is routinely more than one of them at once.
 export const CLASS_MAKEUP = [
-  { value: 'inclusion', label: 'Co-taught / inclusion' },
+  // The stored value stays `inclusion`: production rows already carry it in
+  // Debrief.classMakeup and Scenario.classMakeup, and renaming it would need a
+  // migration over two TEXT[] columns to buy nothing a teacher can see.
+  { value: 'inclusion', label: 'SPED / 504' },
   { value: 'english_learners', label: 'English learners' },
 ] as const
 
@@ -143,15 +146,15 @@ export function pickClassMakeup(value: unknown): string[] {
   return [...new Set(value.filter((v): v is string => typeof v === 'string' && CLASS_MAKEUP_VALUES.includes(v)))]
 }
 
-/// Kept apart on purpose. Inclusion is a disability framework — IDEA, IEPs and
-/// 504 plans, accommodations, usually a co-teacher. English learners sit under
+/// Kept apart on purpose. SPED/504 is a disability framework — IDEA, IEPs and
+/// 504 plans, accommodations. English learners sit under
 /// a different law and need different moves: comprehensible input, vocabulary
 /// front-loading, translanguaging. Treating an English learner as though they
 /// had a learning disability is one of the classic harmful errors in the field,
 /// and folding the two into one option would have taught the coach to make it.
 export const CLASS_MAKEUP_GUIDANCE: Record<string, string> = {
   inclusion:
-    'Students with IEPs and 504 plans are in this room alongside general-education peers, usually with a co-teacher or paraprofessional. Accommodations are non-negotiable, the co-teacher is a partner rather than an aide, and nothing you suggest may single a student out.',
+    'Students with IEPs and 504 plans are in this room alongside general-education peers. Their accommodations and modifications are legal obligations rather than suggestions, and nothing you propose may single a student out in front of the class. Do not assume a second adult: some of these rooms are co-taught and some are one teacher alone with thirty kids and five very different plans, so offer moves that work either way — and where there is a co-teacher or paraprofessional, treat them as a partner rather than an aide. A disability is not a statement about intelligence: a student on an IEP may be the strongest thinker in the room and still need the task presented differently.',
   english_learners:
     'This room includes English learners at a range of proficiencies. They are learning the content and the language at once, so the barrier is usually access to the language of the task rather than the thinking behind it — never treat limited English as limited ability, and never treat it as a disability. Useful moves: front-load the vocabulary the task actually requires, make input comprehensible with visuals and demonstration, allow a home language for thinking and drafting, give real wait time, and assess the content rather than the English it is expressed in. English proficiency and content ability are independent of each other: this room contains English learners who are AHEAD of their English-fluent peers in the subject, ones who are average, and ones who are behind, exactly as it does for every other student. Do not default to casting the English learner as the one who is struggling, quiet, or behind — a teacher who only ever rehearses that version learns a stereotype. An English learner is as likely to be the student who spots the flaw in your explanation, finishes first, or already met this content in another language and another curriculum.',
 }

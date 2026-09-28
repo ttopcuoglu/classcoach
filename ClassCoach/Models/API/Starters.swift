@@ -102,6 +102,7 @@ let askStartersByArea: [String: [Starter]] = [
         Starter(text: "They do everything I ask and I still am not sure they are learning.", levels: ["Honors"]),
         Starter(text: "The range of readiness in one room is about four years wide.", levels: ["Regular"]),
         Starter(text: "My co-teacher and I are not really splitting the teaching.", makeup: ["inclusion"]),
+        Starter(text: "I am modifying this five different ways and teaching it once.", makeup: ["inclusion"]),
         Starter(text: "The accommodations are in place and the work is still out of reach.", makeup: ["inclusion"]),
         Starter(text: "They understand the idea and cannot get it into English on the page.", makeup: ["english_learners"]),
         Starter(text: "I cannot tell whether it is the concept or the vocabulary stopping them.", makeup: ["english_learners"]),

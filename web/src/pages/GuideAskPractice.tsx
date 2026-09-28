@@ -58,7 +58,7 @@ const STEPS = [
   },
   {
     title: 'Or set up a rehearsal',
-    body: 'In Practice you do pick an area, because it decides what you get handed: a room that’s stopped following you, a misconception in a student’s words, a piece of work on a rubric boundary, a parent email, a line a colleague said. Then set the room. Every section asks your grade band. Teaching and Learning also asks your subject, and from 6th grade up the actual course — Math 7, Algebra 1, Biology — plus whether it’s AP, honors or regular, and who is in the room — co-taught/inclusion, English learners, or both. Those last two change the coaching more than anything else on the screen, and they are kept apart on purpose: an English learner is not a student with a disability.',
+    body: 'In Practice you do pick an area, because it decides what you get handed: a room that’s stopped following you, a misconception in a student’s words, a piece of work on a rubric boundary, a parent email, a line a colleague said. Then set the room. Every section asks your grade band. Teaching and Learning also asks your subject, and from 6th grade up the actual course — Math 7, Algebra 1, Biology — plus whether it’s AP, honors or regular, and who is in the room — SPED/504, English learners, or both. Those last two change the coaching more than anything else on the screen, and they are kept apart on purpose: an English learner is not a student with a disability.',
   },
   {
     title: 'Get something you can use',

@@ -82,17 +82,18 @@ let courseLevelBlurb: [String: String] = [
 ]
 
 /// Who is in the room. Multi-select, and kept apart from the level: inclusion is
-/// a disability framework (IEPs, 504s, a co-teacher) while English learners sit
+/// a disability framework (IDEA, IEPs, 504 plans) while English learners sit
 /// under a different law and need different moves. Treating an English learner
 /// as though they had a learning disability is a classic harmful error, and one
 /// shared chip would have taught the coach to make it.
 let classMakeup: [(value: String, label: String)] = [
-    ("inclusion", "Co-taught / inclusion"),
+    // Value stays "inclusion" — see the note in `server/src/lib/teachingContext.ts`.
+    ("inclusion", "SPED / 504"),
     ("english_learners", "English learners"),
 ]
 
 let classMakeupBlurb: [String: String] = [
-    "inclusion": "IEPs and 504s, accommodations, usually a co-teacher in the room.",
+    "inclusion": "Students on IEPs and 504 plans, with accommodations you have to meet.",
     "english_learners": "Learning the content and the language at once.",
 ]
 

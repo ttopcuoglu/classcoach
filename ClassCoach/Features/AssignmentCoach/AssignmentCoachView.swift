@@ -128,6 +128,11 @@ struct AssignmentCoachView: View {
                 historySection
             }
             .padding()
+            // "Show all" is the last thing in the list and the iOS 26 tab bar
+            // floats just under it. The automatic inset clears it by about
+            // 10pt, which is enough not to overlap and not enough to tap
+            // confidently.
+            .padding(.bottom, 24)
         }
     }
 

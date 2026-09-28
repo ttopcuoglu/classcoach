@@ -19,7 +19,7 @@ import Foundation
 /// most about who a teacher is actually facing.
 private let hintsByMakeup: [String: [String]] = [
     "inclusion": [
-        "What is your co-teacher doing while you handle this?",
+        "Which part of this is the disability, and which part is the task design?",
         "Is the barrier the thinking itself, or how the task is presented?",
     ],
     "english_learners": [
