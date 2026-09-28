@@ -11,16 +11,11 @@ import { MicIcon, StarIcon } from '../components/icons'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { categoryLabel } from '../lib/categories'
 import { TEACHING_AND_LEARNING, findFocusArea, focusAreaForCategory, focusAreaLabel } from '../lib/focusAreas'
-import TeachingContextFields, {
-  DEFAULT_TEACHING_CONTEXT,
-  type TeachingContext,
-} from '../components/TeachingContextFields'
-import { SUBJECTS, bandFromProfile, subjectFromProfile } from '../lib/teachingContext'
+import TeachingContextFields, { type TeachingContext } from '../components/TeachingContextFields'
 import { ASK_STARTERS, GENERAL_ASK_STARTERS, pickStarters } from '../lib/starters'
 import { takeAskPrefill } from '../lib/communicationsPrefill'
 import {
   getDebriefs,
-  getProfile,
   markDebriefTried,
   saveDebriefReflection,
   sendDebriefChat,
@@ -39,9 +34,14 @@ const STARTER_TINTS = ['bg-peach-tint/60', 'bg-gold-tint/60', 'bg-mint-tint/60',
 export default function Ask({
   focusArea,
   onPickArea,
+  room,
+  onRoomChange,
 }: {
   focusArea?: string
   onPickArea?: (value: string | null) => void
+  /// Owned by the shell so switching to Practice keeps the room a teacher set.
+  room: TeachingContext
+  onRoomChange: (next: TeachingContext) => void
 }) {
   const navigate = useNavigate()
   const area = findFocusArea(focusArea)
@@ -58,30 +58,10 @@ export default function Ask({
   const [chatSending, setChatSending] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
 
-  // Defaulted from the teacher's profile and overridable per question, so
-  // coaching lands in their actual room. Teaching questions are close to
-  // useless without them — "how do I teach this" depends entirely on what
-  // "this" is, and on who is in front of you.
-  const [room, setRoom] = useState<TeachingContext>(DEFAULT_TEACHING_CONTEXT)
 
   const { supported: speechSupported, listening, toggleListening } = useSpeechToText((text) =>
     setIncidentText((prev) => (prev ? `${prev} ${text}` : text)),
   )
-
-  useEffect(() => {
-    getProfile()
-      .then((profile) => {
-        const mapped = subjectFromProfile(profile.subjects)
-        setRoom((prev) => ({
-          ...prev,
-          gradeBand: bandFromProfile(profile.gradeLevels),
-          subject: mapped,
-          // A profile subject that isn't one of the six lands in "Other".
-          otherSubject: !!mapped && !(SUBJECTS as readonly string[]).includes(mapped),
-        }))
-      })
-      .catch(() => {})
-  }, [])
 
   // Opened from Home's Recent work: show that conversation — its coaching
   // and follow-up chat — rather than an empty form.
@@ -254,7 +234,7 @@ export default function Ask({
             <TeachingContextFields
               focusArea={focusArea}
               value={room}
-              onChange={setRoom}
+              onChange={onRoomChange}
               disabled={submitting}
             />
 

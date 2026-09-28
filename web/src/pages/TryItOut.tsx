@@ -12,15 +12,10 @@ import { useSpeechToText } from '../hooks/useSpeechToText'
 import { categoryLabel } from '../lib/categories'
 import { TEACHING_AND_LEARNING, findFocusArea, focusAreaForCategory, subCategoriesFor } from '../lib/focusAreas'
 import { GENERAL_PRACTICE_STARTERS, PRACTICE_STARTERS, pickStarters } from '../lib/starters'
-import TeachingContextFields, {
-  DEFAULT_TEACHING_CONTEXT,
-  type TeachingContext,
-} from '../components/TeachingContextFields'
-import { SUBJECTS, bandFromProfile, subjectFromProfile } from '../lib/teachingContext'
+import TeachingContextFields, { type TeachingContext } from '../components/TeachingContextFields'
 import {
   generateScenario,
   getAttempts,
-  getProfile,
   markAttemptTried,
   saveAttemptReflection,
   sendAttemptChat,
@@ -47,10 +42,18 @@ function difficultyLabel(value: string) {
 // between Ask and Practice keeps the area the teacher chose. Unlike Ask — where
 // the coach infers the area from the teacher's own words — here it's the
 // primary control, because it decides what scenario they get handed.
-export default function TryItOut({ focusArea }: { focusArea?: string }) {
+export default function TryItOut({
+  focusArea,
+  room,
+  onRoomChange,
+}: {
+  focusArea?: string
+  /// Owned by the shell so switching to Ask keeps the room a teacher set.
+  room: TeachingContext
+  onRoomChange: (next: TeachingContext) => void
+}) {
   const [category, setCategory] = useState<string | undefined>(undefined)
   const [difficulty, setDifficulty] = useState<string | undefined>(undefined)
-  const [room, setRoom] = useState<TeachingContext>(DEFAULT_TEACHING_CONTEXT)
   const area = findFocusArea(focusArea)
 
   // A sub-category from a different area would silently contradict the area on
@@ -108,18 +111,6 @@ export default function TryItOut({ focusArea }: { focusArea?: string }) {
       })
       .catch(() => {})
       .finally(() => setHistoryLoading(false))
-
-    getProfile()
-      .then((profile) => {
-        const mapped = subjectFromProfile(profile.subjects)
-        setRoom((prev) => ({
-          ...prev,
-          gradeBand: bandFromProfile(profile.gradeLevels),
-          subject: mapped,
-          otherSubject: !!mapped && !(SUBJECTS as readonly string[]).includes(mapped),
-        }))
-      })
-      .catch(() => {})
 
     const suggested = sessionStorage.getItem('classcoach.suggestedCategory')
     if (suggested) setCategory(suggested)
@@ -510,7 +501,7 @@ export default function TryItOut({ focusArea }: { focusArea?: string }) {
               <TeachingContextFields
                 focusArea={focusArea}
                 value={room}
-                onChange={setRoom}
+                onChange={onRoomChange}
                 disabled={generating}
               />
             </div>

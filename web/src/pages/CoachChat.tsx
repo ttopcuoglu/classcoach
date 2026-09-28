@@ -1,7 +1,11 @@
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import Ask from './Ask'
 import TryItOut from './TryItOut'
+import { DEFAULT_TEACHING_CONTEXT, type TeachingContext } from '../components/TeachingContextFields'
 import { FOCUS_AREAS, findFocusArea } from '../lib/focusAreas'
+import { SUBJECTS, bandFromProfile, subjectFromProfile } from '../lib/teachingContext'
+import { getProfile } from '../lib/api'
 
 // The section is the main choice on this screen, so it lives here, above the
 // Ask/Practice switch, and both tabs read it. It is one row of chips rather
@@ -13,10 +17,31 @@ import { FOCUS_AREAS, findFocusArea } from '../lib/focusAreas'
 // section from the text. On Practice the coach has to choose what to hand them,
 // so leaving it on All means the coach picks, weighted toward what this teacher
 // has practiced least.
+//
+// The room lives here for the same reason the section does: a teacher who sets
+// their grade band on Ask and switches to Practice is still in the same room,
+// and having each tab keep its own copy meant setting it twice — and fetching
+// the profile twice to default it.
 export default function CoachChat() {
   const [searchParams, setSearchParams] = useSearchParams()
   const tab = searchParams.get('tab') === 'practice' ? 'practice' : 'ask'
   const area = findFocusArea(searchParams.get('area'))
+  const [room, setRoom] = useState<TeachingContext>(DEFAULT_TEACHING_CONTEXT)
+
+  useEffect(() => {
+    getProfile()
+      .then((profile) => {
+        const mapped = subjectFromProfile(profile.subjects)
+        setRoom((prev) => ({
+          ...prev,
+          gradeBand: bandFromProfile(profile.gradeLevels),
+          subject: mapped,
+          // A profile subject that isn't one of the six lands in "Other".
+          otherSubject: !!mapped && !(SUBJECTS as readonly string[]).includes(mapped),
+        }))
+      })
+      .catch(() => {})
+  }, [])
 
   function update(next: { tab?: 'practice' | 'ask'; area?: string | null }) {
     const params = new URLSearchParams(searchParams)
@@ -109,9 +134,14 @@ export default function CoachChat() {
       </div>
 
       {tab === 'practice' ? (
-        <TryItOut focusArea={area?.value} />
+        <TryItOut focusArea={area?.value} room={room} onRoomChange={setRoom} />
       ) : (
-        <Ask focusArea={area?.value} onPickArea={(value) => update({ area: value })} />
+        <Ask
+          focusArea={area?.value}
+          onPickArea={(value) => update({ area: value })}
+          room={room}
+          onRoomChange={setRoom}
+        />
       )}
     </div>
   )

@@ -15,6 +15,21 @@ struct TeachingContextValue: Equatable {
     var courseLevel: String?
     /// The teacher picked "Other"; the free-text field then owns `subject`.
     var usingOtherSubject = false
+
+    /// Defaults from the teacher's profile, once. Called by whoever owns the
+    /// room — the Ask & Practice shell, or a standalone tab.
+    mutating func seed(from user: User?) {
+        guard let user, !seeded else { return }
+        seeded = true
+        gradeBand = bandFromProfile(user.gradeLevels)
+        if subject == nil, let mapped = subjectFromProfile(user.subjects) {
+            subject = mapped
+            // A profile subject that isn't one of the six lands in "Other".
+            usingOtherSubject = !subjects.contains(mapped)
+        }
+    }
+
+    private var seeded = false
 }
 
 struct TeachingContextFields: View {

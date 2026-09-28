@@ -3,9 +3,14 @@ import SwiftUI
 /// Thin wrapper for standalone tab use — see `TryItOutView`'s matching
 /// comment for why `AskExpertContent` is separated out.
 struct AskExpertView: View {
+    @EnvironmentObject private var authManager: AuthManager
+    /// The standalone tab has no shell to own the room, so it holds its own.
+    @State private var room = TeachingContextValue()
+
     var body: some View {
         NavigationStack {
-            AskExpertContent()
+            AskExpertContent(room: $room)
+                .onAppear { room.seed(from: authManager.currentUser) }
                 .navigationTitle("Ask an Expert")
         }
     }
@@ -25,7 +30,7 @@ struct AskExpertContent: View {
     @State private var error: String?
     // Defaulted from the profile, overridable per question — content and
     // delivery questions are unanswerable without them.
-    @State private var room = TeachingContextValue()
+    @Binding var room: TeachingContextValue
     @State private var showContext = false
 
     @State private var allDebriefs: [Debrief] = []
@@ -70,7 +75,6 @@ struct AskExpertContent: View {
             .padding()
         }
         .background(AppTheme.background)
-        .onAppear(perform: seedTeachingContext)
         .task { await loadHistory() }
     }
 
@@ -292,17 +296,6 @@ struct AskExpertContent: View {
             // Best-effort — an empty saved list is a fine fallback.
         }
         historyLoading = false
-    }
-
-    /// Same profile-to-grade-band rules as web/src/pages/Ask.tsx.
-    private func seedTeachingContext() {
-        guard let user = authManager.currentUser else { return }
-        room.gradeBand = bandFromProfile(user.gradeLevels)
-        if room.subject == nil, let mapped = subjectFromProfile(user.subjects) {
-            room.subject = mapped
-            // A profile subject that isn't one of the six lands in "Other".
-            room.usingOtherSubject = !subjects.contains(mapped)
-        }
     }
 
     private func submit(_ override: String? = nil) async {

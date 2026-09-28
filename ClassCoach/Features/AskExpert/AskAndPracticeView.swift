@@ -11,8 +11,13 @@ import SwiftUI
 /// directions" should never have to classify it first, and the coach infers the
 /// section from the text.
 struct AskAndPracticeView: View {
+    @EnvironmentObject private var authManager: AuthManager
     @State private var tab = "ask"
     @State private var focusArea: String?
+    /// The room lives here for the same reason the section does: a teacher who
+    /// sets their grade band on Ask and switches to Practice is still in the
+    /// same room, and a copy per tab meant setting it twice.
+    @State private var room = TeachingContextValue()
 
     var body: some View {
         NavigationStack {
@@ -51,13 +56,14 @@ struct AskAndPracticeView: View {
                 }
 
                 if tab == "practice" {
-                    TryItOutContent(focusArea: focusArea)
+                    TryItOutContent(focusArea: focusArea, room: $room)
                 } else {
-                    AskExpertContent(focusArea: focusArea)
+                    AskExpertContent(focusArea: focusArea, room: $room)
                 }
             }
             .background(AppTheme.background)
             .navigationTitle("Ask & Practice")
+            .onAppear { room.seed(from: authManager.currentUser) }
         }
     }
 }

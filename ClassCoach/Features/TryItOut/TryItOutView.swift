@@ -17,9 +17,14 @@ private func difficultyLabel(_ value: String) -> String {
 /// since nesting `NavigationStack`s causes duplicate/broken back buttons
 /// (see the same issue noted for Profile's "More"-hosted sub-pages).
 struct TryItOutView: View {
+    @EnvironmentObject private var authManager: AuthManager
+    /// The standalone tab has no shell to own the room, so it holds its own.
+    @State private var room = TeachingContextValue()
+
     var body: some View {
         NavigationStack {
-            TryItOutContent()
+            TryItOutContent(room: $room)
+                .onAppear { room.seed(from: authManager.currentUser) }
                 .navigationTitle("Try It Out")
         }
     }
@@ -35,7 +40,7 @@ struct TryItOutContent: View {
     @EnvironmentObject private var authManager: AuthManager
     @State private var category: String?
     @State private var difficulty: String?
-    @State private var room = TeachingContextValue()
+    @Binding var room: TeachingContextValue
 
     @State private var attempt: ScenarioAttempt?
     @State private var responseText = ""
