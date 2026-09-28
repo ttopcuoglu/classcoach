@@ -478,6 +478,34 @@ function splitSentences(text: string): { sentence: string; endedWithQuestion: bo
   return sentences
 }
 
+// Things a teacher says that Deepgram punctuates as questions because the
+// pitch rose, and that no teacher would call a question: "Okay?", "Right?",
+// the tag they drop at the end of a sentence to check the room is still with
+// them. Counted as questions they inflate the denominator of the higher-order
+// percentage, so a teacher with the habit is told their questioning is weaker
+// than it was, and the sequence list fills with one-word entries whose
+// question mark the display has already stripped.
+//
+// Only consulted when `classifyQuestion` found nothing, and only when the
+// token is the WHOLE sentence — "Okay, what did we learn yesterday?" is one
+// sentence, not a bare "okay", and stays a question.
+const BARE_ACKNOWLEDGMENTS = new Set([
+  'okay', 'ok', 'right', 'alright', 'all right', 'yeah', 'yes', 'yep', 'no',
+  'sure', 'correct', 'good', 'hmm', 'huh', 'mhm', 'uh huh', 'mm hmm',
+])
+
+// Deliberately absent: "make sense" and "does that make sense". They are weak
+// comprehension checks, but they are checks — a teacher who asks one is doing
+// something the teacher who says "Okay?" is not.
+function isBareAcknowledgment(sentence: string): boolean {
+  const normalized = sentence
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+  return BARE_ACKNOWLEDGMENTS.has(normalized)
+}
+
 function classifyQuestion(sentence: string): 'higher_order' | 'recall' | null {
   const s = sentence.toLowerCase()
   if (HIGHER_ORDER_STARTERS.some((p) => s.startsWith(p) || s.includes(` ${p}`))) return 'higher_order'
@@ -669,8 +697,15 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       // move (a CFU prompt, a redirection, a transition, a task directive,
       // or a new question of their own) are excluded here so they aren't
       // double-counted as feedback too.
+      // Same test the question loop uses, guard included: a turn that is only
+      // "Okay?" is no longer a question, so after a student answer it is what
+      // it always was — a short, generic piece of feedback.
       const isQuestionSegment = splitSentences(segment.text).some(
-        ({ sentence, endedWithQuestion }) => endedWithQuestion || classifyQuestion(sentence) !== null,
+        ({ sentence, endedWithQuestion }) => {
+          const classification = classifyQuestion(sentence)
+          if (!endedWithQuestion && !classification) return false
+          return classification !== null || !isBareAcknowledgment(sentence)
+        },
       )
       const isFeedbackEligible =
         precedingWasStudent && !cfuPhrase && redirectionHits === 0 && !transitionMatched && !directivePhrase && !isQuestionSegment
@@ -692,6 +727,9 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       sentences.forEach(({ sentence, endedWithQuestion }, sentenceIndex) => {
         const classification = classifyQuestion(sentence)
         if (!endedWithQuestion && !classification) return
+        // Before questionCount++, so one guard fixes the count, the
+        // higher-order percentage and the sequence list at once.
+        if (!classification && isBareAcknowledgment(sentence)) return
         if (sentenceIndex === sentences.length - 1) segmentEndsWithQuestion = true
 
         questionCount++
