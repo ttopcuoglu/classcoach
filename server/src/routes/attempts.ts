@@ -3,7 +3,7 @@ import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { buildExperienceContextBlock } from '../lib/experience.ts'
-import { extractTag } from '../lib/extractTag.ts'
+import { extractTag, stripStructuralTags } from '../lib/extractTag.ts'
 import { findFocusArea, focusAreaForSubCategory, type FocusArea } from '../lib/focusAreas.ts'
 import { coachIdentity, ratingStandard, teachingContextBlock } from '../lib/focusAreaPrompt.ts'
 import { prisma } from '../lib/prisma.ts'
@@ -94,7 +94,7 @@ attemptsRouter.post('/', async (req, res) => {
       .map((block) => block.text)
       .join('\n')
 
-    const feedback = extractTag(text, 'feedback') ?? text.trim()
+    const feedback = extractTag(text, 'feedback') ?? stripStructuralTags(text)
     const modelResponse = extractTag(text, 'model_response')
     const ratingText = extractTag(text, 'rating')
     const parsedRating = ratingText ? Number.parseInt(ratingText, 10) : NaN

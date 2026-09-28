@@ -7,7 +7,7 @@ import { checkFeatureAccess, countUsageLogActionsThisMonth, LESSON_PLANNING_ACTI
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES, INSTRUCTION_PRIORITY_NOTICE } from '../lib/coachPersona.ts'
 import { carryOriginalPictures, parseSlidesOutput, themeFromContext } from '../lib/exportModels.ts'
-import { extractTag } from '../lib/extractTag.ts'
+import { extractTag, stripStructuralTags } from '../lib/extractTag.ts'
 import { findImage } from '../lib/imageSearch.ts'
 import { extractPdfImages, extractPptxImages, orderedSlideParts, type OriginalImage } from '../lib/originalImages.ts'
 import { prisma } from '../lib/prisma.ts'
@@ -628,7 +628,7 @@ async function runFeedback(
     .map((block) => block.text)
     .join('\n')
 
-  const feedback = extractTag(text, 'feedback') ?? text.trim()
+  const feedback = extractTag(text, 'feedback') ?? stripStructuralTags(text)
   if (!feedback) {
     console.error(
       '[lesson-plans] empty feedback from Claude — stop_reason:',
@@ -752,7 +752,7 @@ lessonPlansRouter.post('/:id/chat', async (req, res) => {
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('\n')
-    const reply = extractTag(text, 'message') ?? text.trim()
+    const reply = extractTag(text, 'message') ?? stripStructuralTags(text)
     const revisedPlan = extractTag(text, 'revised_plan')
 
     const updated = await prisma.lessonPlan.update({

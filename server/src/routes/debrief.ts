@@ -22,7 +22,7 @@ import {
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
 import { transcribeAudio } from '../lib/deepgram.ts'
-import { extractTag, stripTag } from '../lib/extractTag.ts'
+import { extractTag, stripStructuralTags, stripTag } from '../lib/extractTag.ts'
 import type { CoachFollowUp, Debrief } from '../generated/prisma/client.ts'
 import { prisma } from '../lib/prisma.ts'
 import { categoryInArea, isKnownCategory } from '../lib/scenarioCategories.ts'
@@ -237,7 +237,13 @@ debriefRouter.post('/', async (req, res) => {
     const basePrompt = `${askSystemPrompt(pickedArea)}${teachingContextBlock({ gradeBand: askGradeBand, subject: askSubject, course: askCourse, courseLevel: askCourseLevel })}`
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 1024,
+      // The classification tags sit at the END of the response, so a cap that
+      // bites costs the category and rating silently — no growth tracking, no
+      // "Practice this" suggestion, no private rating — while the visible
+      // coaching still looks complete. The per-area prompts produce longer
+      // answers than the single classroom-management one did, and a real Ask
+      // answer came in at ~920 tokens against the old 1024 cap.
+      max_tokens: 1600,
       thinking: { type: 'disabled' },
       system: memoryOn
         ? `${basePrompt}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
@@ -251,7 +257,7 @@ debriefRouter.post('/', async (req, res) => {
       .join('\n')
     flagIfUnsafe(text, 'debrief.ask')
 
-    const feedback = extractTag(text, 'feedback') ?? text.trim()
+    const feedback = extractTag(text, 'feedback') ?? stripStructuralTags(text)
     const wordsToTry = extractTag(text, 'words_to_try')
     const followUp = extractTag(text, 'follow_up')
     // The teacher's pick wins; otherwise take the coach's read, and fall back to
