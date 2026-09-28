@@ -11,7 +11,7 @@ import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { categoryLabel } from '../lib/categories'
 import { TEACHING_AND_LEARNING, findFocusArea, focusAreaForCategory, subCategoriesFor } from '../lib/focusAreas'
-import { isExperienced } from '../lib/experience'
+import { GENERAL_PRACTICE_STARTERS, PRACTICE_STARTERS, pickStarters } from '../lib/starters'
 import TeachingContextFields, {
   DEFAULT_TEACHING_CONTEXT,
   type TeachingContext,
@@ -37,24 +37,6 @@ const DIFFICULTIES: { label: string; value?: string }[] = [
   { label: 'Challenge', value: 'advanced' },
 ]
 
-type StarterScenario = { label: string; category: string }
-
-// The "no area picked" set — still behavior-flavored, because that's what a
-// teacher who hasn't chosen is most often here for. Once an area IS picked, its
-// own `practiceStarters` replace these (see `starters` below).
-const STARTER_SCENARIOS: StarterScenario[] = [
-  { label: 'A student is checked out and not participating', category: 'disengagement' },
-  { label: 'A student pushes back when you ask them to do something', category: 'defiance' },
-  { label: 'The class is slow to settle into a routine', category: 'transitions' },
-]
-
-// Harder, less textbook moments for teachers six or more years in.
-const EXPERIENCED_SCENARIOS: StarterScenario[] = [
-  { label: 'A capable student has quietly stopped trying', category: 'disengagement' },
-  { label: 'A student challenges you in front of the class — and has a point', category: 'defiance' },
-  { label: 'A conflict between students has spilled in from outside class', category: 'peer_conflict' },
-]
-
 const SESSION_LENGTH = 3
 
 function difficultyLabel(value: string) {
@@ -69,7 +51,6 @@ export default function TryItOut({ focusArea }: { focusArea?: string }) {
   const [category, setCategory] = useState<string | undefined>(undefined)
   const [difficulty, setDifficulty] = useState<string | undefined>(undefined)
   const [room, setRoom] = useState<TeachingContext>(DEFAULT_TEACHING_CONTEXT)
-  const [starterScenarios, setStarterScenarios] = useState<StarterScenario[] | null>(null)
   const area = findFocusArea(focusArea)
 
   // A sub-category from a different area would silently contradict the area on
@@ -137,9 +118,8 @@ export default function TryItOut({ focusArea }: { focusArea?: string }) {
           subject: mapped,
           otherSubject: !!mapped && !(SUBJECTS as readonly string[]).includes(mapped),
         }))
-        setStarterScenarios(isExperienced(profile.experienceLevel) ? EXPERIENCED_SCENARIOS : STARTER_SCENARIOS)
       })
-      .catch(() => setStarterScenarios(STARTER_SCENARIOS))
+      .catch(() => {})
 
     const suggested = sessionStorage.getItem('classcoach.suggestedCategory')
     if (suggested) setCategory(suggested)
@@ -344,9 +324,14 @@ export default function TryItOut({ focusArea }: { focusArea?: string }) {
   }
 
   const hasFeedback = attempt && (attempt.feedback || attempt.modelResponse)
-  // An area's own openers when one is chosen; otherwise the experience-based
-  // behavior set, which is what Practice has always opened with.
-  const starters = area ? area.practiceStarters : starterScenarios ?? []
+  // Re-picked whenever the section or the room changes — a K-5 rehearsal and a
+  // 9-12 rehearsal should not open with the same three scenarios.
+  const starters = pickStarters(
+    (focusArea && PRACTICE_STARTERS[focusArea]) || GENERAL_PRACTICE_STARTERS,
+    room,
+    focusArea,
+    3,
+  )
   const subCategories = subCategoriesFor(focusArea)
   const sessionAttempts = sessionState?.done
     ? sessionState.attemptIds.map((id) => allAttempts.find((a) => a.id === id)).filter((a): a is ScenarioAttempt => !!a)
@@ -430,7 +415,7 @@ export default function TryItOut({ focusArea }: { focusArea?: string }) {
             <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
               {starters.map((s, i) => (
                 <button
-                  key={s.label}
+                  key={s.text}
                   type="button"
                   onClick={() => {
                     setCategory(s.category)
@@ -444,7 +429,7 @@ export default function TryItOut({ focusArea }: { focusArea?: string }) {
                   <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
                     {categoryLabel(s.category)}
                   </span>
-                  <p className="mt-1.5">{s.label}</p>
+                  <p className="mt-1.5">{s.text}</p>
                 </button>
               ))}
             </div>

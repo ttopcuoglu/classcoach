@@ -12,21 +12,6 @@ private func difficultyLabel(_ value: String) -> String {
 }
 
 
-/// Quick ways into a scenario when no focus area is chosen — same lists as
-/// `STARTER_SCENARIOS` and `EXPERIENCED_SCENARIOS` in web/src/pages/TryItOut.tsx.
-/// Once an area IS chosen, its own `practiceStarters` replace these.
-private let starterScenarios: [(label: String, category: String)] = [
-    ("A student is checked out and not participating", "disengagement"),
-    ("A student pushes back when you ask them to do something", "defiance"),
-    ("The class is slow to settle into a routine", "transitions"),
-]
-
-private let experiencedScenarios: [(label: String, category: String)] = [
-    ("A capable student has quietly stopped trying", "disengagement"),
-    ("A student challenges you in front of the class — and has a point", "defiance"),
-    ("A conflict between students has spilled in from outside class", "peer_conflict"),
-]
-
 /// Thin wrapper for standalone tab use — `TryItOutContent` is reused
 /// without this `NavigationStack` inside the combined Ask & Practice view,
 /// since nesting `NavigationStack`s causes duplicate/broken back buttons
@@ -69,12 +54,13 @@ struct TryItOutContent: View {
 
     private var asksAboutContent: Bool { focusArea == teachingAndLearning }
 
-    /// The area's own openers when one is chosen; otherwise the experience-based
-    /// behavior set Practice has always opened with.
-    private var starters: [(label: String, category: String)] {
-        if let area { return area.practiceStarters }
-        return ExperienceLevel.isExperienced(authManager.currentUser?.experienceLevel)
-            ? experiencedScenarios : starterScenarios
+    /// Re-picked whenever the section or the room changes — a K-5 rehearsal and
+    /// a 9-12 rehearsal should not open with the same three scenarios.
+    private var starters: [Starter] {
+        pickStarters(
+            focusArea.flatMap { practiceStartersByArea[$0] } ?? generalPracticeStarters,
+            room: room, area: focusArea, count: 3
+        )
     }
 
     private var savedAttempts: [ScenarioAttempt] { allAttempts.filter(\.saved) }
@@ -153,10 +139,10 @@ struct TryItOutContent: View {
                     Task { await generateScenario() }
                 } label: {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(categoryLabel(starter.category).uppercased())
+                        Text(categoryLabel(starter.category ?? "").uppercased())
                             .font(.caption2.weight(.bold)).tracking(0.8)
                             .foregroundStyle(AppTheme.terracotta600)
-                        Text(starter.label)
+                        Text(starter.text)
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(AppTheme.forest)
                             .multilineTextAlignment(.leading)

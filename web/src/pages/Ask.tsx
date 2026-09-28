@@ -16,7 +16,7 @@ import TeachingContextFields, {
   type TeachingContext,
 } from '../components/TeachingContextFields'
 import { SUBJECTS, bandFromProfile, subjectFromProfile } from '../lib/teachingContext'
-import { isExperienced } from '../lib/experience'
+import { ASK_STARTERS, GENERAL_ASK_STARTERS, pickStarters } from '../lib/starters'
 import { takeAskPrefill } from '../lib/communicationsPrefill'
 import {
   getDebriefs,
@@ -29,21 +29,6 @@ import {
   submitDebrief,
   type Debrief,
 } from '../lib/api'
-
-const NEW_TEACHER_STARTERS = [
-  'How do I handle a student who constantly interrupts?',
-  "What's a good way to set expectations on day one?",
-  'A student refuses to put their phone away — what now?',
-  'How do I de-escalate two students arguing in class?',
-]
-
-// For teachers with six or more years in: refinement, not survival.
-const EXPERIENCED_STARTERS = [
-  'My discussions are fine — how do I get students building on each other, not just answering me?',
-  'How do I push my strongest students without leaving others behind?',
-  'My routines work, but they’ve gone stale. How do I refresh them mid-year?',
-  'How can I tell whether my questions are really making students think?',
-]
 
 const STARTER_TINTS = ['bg-peach-tint/60', 'bg-gold-tint/60', 'bg-mint-tint/60', 'bg-peach-tint/30']
 
@@ -68,9 +53,6 @@ export default function Ask({
 
   const [allDebriefs, setAllDebriefs] = useState<Debrief[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
-  // Null until the profile loads, so an experienced teacher never sees the
-  // new-teacher starters flash up first.
-  const [starters, setStarters] = useState<string[] | null>(null)
 
   const [chatDraft, setChatDraft] = useState('')
   const [chatSending, setChatSending] = useState(false)
@@ -89,7 +71,6 @@ export default function Ask({
   useEffect(() => {
     getProfile()
       .then((profile) => {
-        setStarters(isExperienced(profile.experienceLevel) ? EXPERIENCED_STARTERS : NEW_TEACHER_STARTERS)
         const mapped = subjectFromProfile(profile.subjects)
         setRoom((prev) => ({
           ...prev,
@@ -99,7 +80,7 @@ export default function Ask({
           otherSubject: !!mapped && !(SUBJECTS as readonly string[]).includes(mapped),
         }))
       })
-      .catch(() => setStarters(NEW_TEACHER_STARTERS))
+      .catch(() => {})
   }, [])
 
   // Opened from Home's Recent work: show that conversation — its coaching
@@ -231,6 +212,15 @@ export default function Ask({
     navigate(`/coach-chat?tab=practice${target ? `&area=${target}` : ''}`)
   }
 
+  // Re-picked whenever the section or the room changes, which is the point: a
+  // 2nd grade art teacher and an AP Calculus teacher should not be offered the
+  // same four example questions.
+  const starters = pickStarters(
+    (focusArea && ASK_STARTERS[focusArea]) || GENERAL_ASK_STARTERS,
+    room,
+    focusArea,
+    4,
+  )
   return (
     <div className="flex flex-col gap-6">
       <div className={debrief ? 'rounded-2xl border border-hairline bg-cream-card p-6' : 'rounded-3xl bg-forest p-6 text-cream sm:p-8'}>
@@ -421,7 +411,7 @@ export default function Ask({
         <div>
           <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Or start with one of these</h2>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {(area ? area.askStarters : starters ?? []).map((starter, i) => (
+            {starters.map(({ text: starter }, i) => (
               <button
                 key={starter}
                 type="button"

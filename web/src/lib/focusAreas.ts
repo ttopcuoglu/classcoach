@@ -23,11 +23,6 @@ export type FocusArea = {
   askExample: string
   practiceExample: string
   subCategories: SubCategory[]
-  /// First-person openers for Ask — sent verbatim as the teacher's first turn,
-  /// so they have to be things a teacher would actually say out loud.
-  askStarters: string[]
-  /// Practice openers. Each carries the sub-category it should generate from.
-  practiceStarters: { label: string; category: string }[]
   /// For the areas that overlap Communication Coach: where to send a teacher
   /// who needs the actual artifact rather than a quick rehearsal.
   handoff?: { label: string; to: string }
@@ -51,17 +46,6 @@ export const FOCUS_AREAS: FocusArea[] = [
       { label: 'Planning & sequencing', value: 'content_sequencing' },
       { label: 'Feedback & grading', value: 'feedback_and_grading' },
     ],
-    askStarters: [
-      "I explain something well and half the room still doesn't have it.",
-      'The same three students answer every question I ask.',
-      "There's one idea in this unit they get wrong every single year.",
-      "I can't tell if my grades are fair or just consistent.",
-    ],
-    practiceStarters: [
-      { label: 'Half the class looks blank after two explanations', category: 'checking_understanding' },
-      { label: 'A misconception that survives everything you try', category: 'misconceptions' },
-      { label: 'A piece of work sitting between two rubric levels', category: 'feedback_and_grading' },
-    ],
   },
   {
     value: 'classroom_management',
@@ -77,17 +61,6 @@ export const FOCUS_AREAS: FocusArea[] = [
       { label: 'Interruptions & redirection', value: 'disruption' },
       { label: 'Routines & transitions', value: 'transitions' },
       { label: 'Devices & digital routines', value: 'technology_misuse' },
-    ],
-    askStarters: [
-      'My class talks over directions.',
-      'A student pushed back in front of everyone and I froze.',
-      "My routines work but they've gone stale.",
-      'Getting started takes five minutes every single day.',
-    ],
-    practiceStarters: [
-      { label: 'A student is checked out and not participating', category: 'disengagement' },
-      { label: 'A student pushes back when you ask them to do something', category: 'defiance' },
-      { label: 'The class is slow to settle into a routine', category: 'transitions' },
     ],
   },
   {
@@ -107,17 +80,6 @@ export const FOCUS_AREAS: FocusArea[] = [
       label: 'Need the actual email drafted, or a conference prepared? Communication Coach does that.',
       to: '/communications',
     },
-    askStarters: [
-      'A parent email is stressing me out.',
-      "I have to tell a parent something they won't want to hear.",
-      "A conference is coming up and I'm dreading it.",
-      'A parent only ever hears from me when something is wrong.',
-    ],
-    practiceStarters: [
-      { label: 'An accusatory parent email you have to answer', category: 'difficult_parent_email' },
-      { label: 'A parent opens a conference by criticizing your class', category: 'conferences' },
-      { label: 'A phone call about a student who is going to fail', category: 'delivering_hard_news' },
-    ],
   },
   {
     value: 'professionalism',
@@ -138,17 +100,6 @@ export const FOCUS_AREAS: FocusArea[] = [
       label: 'Need to prepare a whole meeting, or draft the message first? Communication Coach does that.',
       to: '/communications?tool=prepare',
     },
-    askStarters: [
-      'My co-teacher keeps overriding me in front of students.',
-      'I need to raise a concern with someone more senior than me.',
-      'Our team meetings never get to the work we planned.',
-      "I'm behind on paperwork and it's starting to show.",
-    ],
-    practiceStarters: [
-      { label: 'A co-teacher contradicts you mid-lesson', category: 'co_teaching' },
-      { label: 'Your department decides something you think is wrong for kids', category: 'talking_with_admin' },
-      { label: 'A colleague writes off a student you share', category: 'disagreeing_with_a_peer' },
-    ],
   },
 ]
 

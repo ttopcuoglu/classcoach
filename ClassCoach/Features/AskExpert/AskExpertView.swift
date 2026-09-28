@@ -1,21 +1,5 @@
 import SwiftUI
 
-private let starterQuestions = [
-    "How do I handle a student who constantly interrupts?",
-    "What's a good way to set expectations on day one?",
-    "A student refuses to put their phone away — what now?",
-    "How do I de-escalate two students arguing in class?",
-]
-
-/// For teachers six or more years in: refinement, not survival. Same list as
-/// `EXPERIENCED_STARTERS` in web/src/pages/Ask.tsx.
-private let experiencedStarterQuestions = [
-    "My discussions are fine — how do I get students building on each other, not just answering me?",
-    "How do I push my strongest students without leaving others behind?",
-    "My routines work, but they've gone stale. How do I refresh them mid-year?",
-    "How can I tell whether my questions are really making students think?",
-]
-
 /// Thin wrapper for standalone tab use — see `TryItOutView`'s matching
 /// comment for why `AskExpertContent` is separated out.
 struct AskExpertView: View {
@@ -56,9 +40,14 @@ struct AskExpertContent: View {
 
     private var asksAboutContent: Bool { focusArea == teachingAndLearning }
 
-    private var starters: [String] {
-        if let area { return area.askStarters }
-        return ExperienceLevel.isExperienced(authManager.currentUser?.experienceLevel) ? experiencedStarterQuestions : starterQuestions
+    /// Re-picked whenever the section or the room changes, which is the point:
+    /// a 2nd grade art teacher and an AP Calculus teacher should not be offered
+    /// the same four example questions.
+    private var starters: [Starter] {
+        pickStarters(
+            focusArea.flatMap { askStartersByArea[$0] } ?? generalAskStarters,
+            room: room, area: focusArea, count: 4
+        )
     }
 
     var body: some View {
@@ -146,10 +135,10 @@ struct AskExpertContent: View {
                 .padding(.top, 4)
             ForEach(Array(starters.enumerated()), id: \.offset) { index, starter in
                 Button {
-                    Task { await submit(starter) }
+                    Task { await submit(starter.text) }
                 } label: {
                     HStack(alignment: .top, spacing: 10) {
-                        Text(starter)
+                        Text(starter.text)
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(AppTheme.forest)
                             .multilineTextAlignment(.leading)
