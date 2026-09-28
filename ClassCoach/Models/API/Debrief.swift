@@ -6,7 +6,13 @@ import Foundation
 struct Debrief: Codable, Identifiable {
     let id: String
     let incidentText: String
+    /// The area this question was coached as — the teacher's pick, or the
+    /// coach's read when they didn't pick. Nil on Talk It Through rows and on
+    /// rows written before the area axis existed.
+    let focusArea: String?
     let category: String?
+    let gradeBand: String?
+    let subject: String?
     let feedback: String?
     let followUp: String?
     let rating: Int?

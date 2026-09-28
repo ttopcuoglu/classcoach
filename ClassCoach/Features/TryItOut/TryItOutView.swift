@@ -13,8 +13,9 @@ private func difficultyLabel(_ value: String) -> String {
 
 private let gradeBands = ["K-5", "6-8", "9-12"]
 
-/// Quick ways into a scenario — same lists as `STARTER_SCENARIOS` and
-/// `EXPERIENCED_SCENARIOS` in web/src/pages/TryItOut.tsx.
+/// Quick ways into a scenario when no focus area is chosen — same lists as
+/// `STARTER_SCENARIOS` and `EXPERIENCED_SCENARIOS` in web/src/pages/TryItOut.tsx.
+/// Once an area IS chosen, its own `practiceStarters` replace these.
 private let starterScenarios: [(label: String, category: String)] = [
     ("A student is checked out and not participating", "disengagement"),
     ("A student pushes back when you ask them to do something", "defiance"),
@@ -41,10 +42,15 @@ struct TryItOutView: View {
 }
 
 struct TryItOutContent: View {
+    /// One of the six focus areas, from the Ask & Practice shell. Nil lets the
+    /// coach choose, weighted toward what this teacher has practiced least.
+    var focusArea: String? = nil
+
     @EnvironmentObject private var authManager: AuthManager
     @State private var category: String?
     @State private var gradeBand = "6-8"
     @State private var difficulty: String?
+    @State private var subject: String?
 
     @State private var attempt: ScenarioAttempt?
     @State private var responseText = ""
@@ -59,6 +65,16 @@ struct TryItOutContent: View {
     @State private var chatSending = false
     @State private var chatError: String?
 
+    private var area: FocusArea? { findFocusArea(focusArea) }
+
+    /// The area's own openers when one is chosen; otherwise the experience-based
+    /// behavior set Practice has always opened with.
+    private var starters: [(label: String, category: String)] {
+        if let area { return area.practiceStarters }
+        return ExperienceLevel.isExperienced(authManager.currentUser?.experienceLevel)
+            ? experiencedScenarios : starterScenarios
+    }
+
     private var savedAttempts: [ScenarioAttempt] { allAttempts.filter(\.saved) }
     private var hasFeedback: Bool { attempt?.feedback != nil || attempt?.modelResponse != nil }
 
@@ -68,11 +84,21 @@ struct TryItOutContent: View {
                 PanelHeader(
                     eyebrow: "Practice a scenario",
                     title: "Rehearse a hard moment",
-                    subtitle: "Pick a topic, difficulty, and grade band, then practice what you'd say."
+                    subtitle: area.map {
+                        "\($0.blurb) Set the details, then practice what you'd say."
+                    } ?? "Pick a topic, difficulty, grade band, and subject, then practice what you'd say."
                 )
-                ChipRow(items: scenarioCategories, selection: category) { category = $0 }
+                // Showing all thirty-one sub-categories at once would be a wall
+                // of chips, so this narrows only once an area is chosen.
+                if area != nil {
+                    ChipRow(items: subCategoryChips(focusArea), selection: category) { category = $0 }
+                }
                 ChipRow(items: difficulties, selection: difficulty) { difficulty = $0 }
                 gradeBandPicker
+                ChipRow(
+                    items: [("Any subject", nil)] + commonSubjects.map { ($0, Optional($0)) },
+                    selection: subject
+                ) { subject = $0 }
 
                 scenarioCard
 
@@ -82,6 +108,13 @@ struct TryItOutContent: View {
         }
         .background(AppTheme.background)
         .task { await loadHistory() }
+        // A sub-category from a different area would silently contradict the
+        // area on the next generate, so changing area clears a mismatched one.
+        .onChange(of: focusArea) { _, newValue in
+            if let newValue, let category, focusAreaForCategory(category)?.value != newValue {
+                self.category = nil
+            }
+        }
     }
 
     // MARK: - Filter rows
@@ -125,7 +158,6 @@ struct TryItOutContent: View {
                 .font(.subheadline)
                 .foregroundStyle(AppTheme.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            let starters = ExperienceLevel.isExperienced(authManager.currentUser?.experienceLevel) ? experiencedScenarios : starterScenarios
             ForEach(Array(starters.enumerated()), id: \.offset) { index, starter in
                 Button {
                     category = starter.category
@@ -167,7 +199,15 @@ struct TryItOutContent: View {
     @ViewBuilder
     private func scenarioDetail(_ attempt: ScenarioAttempt) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("\(categoryLabel(attempt.scenario.category)) · Grades \(attempt.scenario.gradeBand) · \(difficultyLabel(attempt.scenario.difficulty))")
+            Text(
+                [
+                    focusAreaLabel(attempt.scenario.focusArea ?? focusAreaForCategory(attempt.scenario.category)?.value),
+                    categoryLabel(attempt.scenario.category),
+                    "Grades \(attempt.scenario.gradeBand)",
+                    attempt.scenario.subject,
+                    difficultyLabel(attempt.scenario.difficulty),
+                ].compactMap { $0 }.joined(separator: " · ")
+            )
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(AppTheme.primary)
                 .padding(.horizontal, 10)
@@ -345,7 +385,8 @@ struct TryItOutContent: View {
         chatError = nil
         do {
             let scenario = try await TryItOutService.generateScenario(
-                category: category, gradeBand: gradeBand, difficulty: difficulty, subject: nil
+                focusArea: focusArea, category: category, gradeBand: gradeBand,
+                difficulty: difficulty, subject: subject
             )
             attempt = ScenarioAttempt(
                 id: "draft-\(scenario.id)", scenarioId: scenario.id, responseText: "",

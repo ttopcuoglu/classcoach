@@ -7,8 +7,12 @@ import Foundation
 struct Scenario: Codable, Identifiable {
     let id: String
     let text: String
+    /// One of the six focus areas (see FocusAreas.swift). Null on rows written
+    /// before the area axis existed — derive it from `category` in that case.
+    let focusArea: String?
     let category: String
     let gradeBand: String
+    let subject: String?
     let difficulty: String
     let source: String
     let createdAt: String

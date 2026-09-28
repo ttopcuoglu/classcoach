@@ -26,6 +26,7 @@
 		7A5A2E31CE2E4E366BE6A526 /* Scenario.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DAB353C2E35233EA2C16166 /* Scenario.swift */; };
 		BD7438888C3E04B89D29A2A2 /* TryItOutService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9674160BA6B8D289506548A9 /* TryItOutService.swift */; };
 		C5EC6B67818C4290C83B8B0E /* Categories.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3585852E3B968C6EEFABBF1 /* Categories.swift */; };
+		A1F0CA5E7B4D41A2B9E30C11 /* FocusAreas.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B7E4419C6F48A7B1035E22 /* FocusAreas.swift */; };
 		CCDF36F3881AA2A2F3BA9BF1 /* Debrief.swift in Sources */ = {isa = PBXBuildFile; fileRef = 573742D57C4437D7A7D62716 /* Debrief.swift */; };
 		72F6C87CCC8E956C2DBA8717 /* AskExpertService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B2592BD0E7C621A293E1527 /* AskExpertService.swift */; };
 		A340FF93A49CD9ABBF612600 /* ProfileService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDBC5B77E7A9F6BCC3763338 /* ProfileService.swift */; };
@@ -92,6 +93,7 @@
 		0DAB353C2E35233EA2C16166 /* Scenario.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Scenario.swift; sourceTree = "<group>"; };
 		9674160BA6B8D289506548A9 /* TryItOutService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TryItOutService.swift; sourceTree = "<group>"; };
 		E3585852E3B968C6EEFABBF1 /* Categories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Categories.swift; sourceTree = "<group>"; };
+		D2B7E4419C6F48A7B1035E22 /* FocusAreas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusAreas.swift; sourceTree = "<group>"; };
 		573742D57C4437D7A7D62716 /* Debrief.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Debrief.swift; sourceTree = "<group>"; };
 		5B2592BD0E7C621A293E1527 /* AskExpertService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskExpertService.swift; sourceTree = "<group>"; };
 		CDBC5B77E7A9F6BCC3763338 /* ProfileService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileService.swift; sourceTree = "<group>"; };
@@ -343,6 +345,7 @@
 				19DE5932552612DEBB7B5013 /* User.swift */,
 				0DAB353C2E35233EA2C16166 /* Scenario.swift */,
 				E3585852E3B968C6EEFABBF1 /* Categories.swift */,
+				D2B7E4419C6F48A7B1035E22 /* FocusAreas.swift */,
 				573742D57C4437D7A7D62716 /* Debrief.swift */,
 				0F0D16967E152069F018B84C /* Communications.swift */,
 				FF861A7A0783469A73D3ACB0 /* LessonPlan.swift */,
@@ -472,6 +475,7 @@
 				7A5A2E31CE2E4E366BE6A526 /* Scenario.swift in Sources */,
 				BD7438888C3E04B89D29A2A2 /* TryItOutService.swift in Sources */,
 				C5EC6B67818C4290C83B8B0E /* Categories.swift in Sources */,
+				A1F0CA5E7B4D41A2B9E30C11 /* FocusAreas.swift in Sources */,
 				CCDF36F3881AA2A2F3BA9BF1 /* Debrief.swift in Sources */,
 				72F6C87CCC8E956C2DBA8717 /* AskExpertService.swift in Sources */,
 				A340FF93A49CD9ABBF612600 /* ProfileService.swift in Sources */,

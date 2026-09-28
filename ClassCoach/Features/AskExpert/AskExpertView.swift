@@ -1,5 +1,9 @@
 import SwiftUI
 
+/// Offered as chips beside the free-text field — mirrors `COMMON_SUBJECTS` in
+/// web/src/pages/TryItOut.tsx.
+let commonSubjects = ["Math", "Science", "English", "Social Studies", "Art", "PE"]
+
 private let starterQuestions = [
     "How do I handle a student who constantly interrupts?",
     "What's a good way to set expectations on day one?",
@@ -28,11 +32,21 @@ struct AskExpertView: View {
 }
 
 struct AskExpertContent: View {
+    /// One of the six focus areas, from the Ask & Practice shell. Nil is the
+    /// normal case: the coach works out which area the question belongs to, so
+    /// a teacher never has to classify their own problem first.
+    var focusArea: String? = nil
+
     @EnvironmentObject private var authManager: AuthManager
     @State private var incidentText = ""
     @State private var debrief: Debrief?
     @State private var submitting = false
     @State private var error: String?
+    // Defaulted from the profile, overridable per question — content and
+    // delivery questions are unanswerable without them.
+    @State private var gradeBand = "6-8"
+    @State private var subject: String?
+    @State private var showContext = false
 
     @State private var allDebriefs: [Debrief] = []
     @State private var historyLoading = true
@@ -42,8 +56,11 @@ struct AskExpertContent: View {
     @State private var chatError: String?
 
     private var savedDebriefs: [Debrief] { allDebriefs.filter(\.saved) }
+    private var area: FocusArea? { findFocusArea(focusArea) }
+
     private var starters: [String] {
-        ExperienceLevel.isExperienced(authManager.currentUser?.experienceLevel) ? experiencedStarterQuestions : starterQuestions
+        if let area { return area.askStarters }
+        return ExperienceLevel.isExperienced(authManager.currentUser?.experienceLevel) ? experiencedStarterQuestions : starterQuestions
     }
 
     var body: some View {
@@ -53,7 +70,9 @@ struct AskExpertContent: View {
                     PanelHeader(
                         eyebrow: "Ask your coach",
                         title: "What's going on?",
-                        subtitle: "Describe something that happened, or ask a classroom management question — you'll get practical coaching either way."
+                        subtitle: area.map {
+                            "Describe something that happened, or ask a question about \($0.label.lowercased()) — you'll get practical coaching either way."
+                        } ?? "Describe something that happened, or ask a question about any part of the job — you'll get practical coaching either way."
                     )
                 }
 
@@ -64,6 +83,7 @@ struct AskExpertContent: View {
             .padding()
         }
         .background(AppTheme.background)
+        .onAppear(perform: seedTeachingContext)
         .task { await loadHistory() }
     }
 
@@ -104,6 +124,8 @@ struct AskExpertContent: View {
                 .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
                 .disabled(submitting)
+
+            teachingContextRow
 
             ProgressRing(active: submitting, estimatedSeconds: 9, label: "Reading what you wrote", hint: "Usually about ten seconds.")
 
@@ -148,10 +170,50 @@ struct AskExpertContent: View {
         }
     }
 
+    /// Grade band and subject, collapsed to one line by default — the coaching
+    /// needs them, but a teacher shouldn't have to set them to ask a question.
+    private var teachingContextRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Your room: grades \(gradeBand)\(subject.map { " · \($0)" } ?? "")")
+                    .font(.footnote)
+                    .foregroundStyle(AppTheme.textSecondary)
+                Spacer()
+                Button(showContext ? "Hide" : "Change") {
+                    withAnimation { showContext.toggle() }
+                }
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(AppTheme.terracotta600)
+            }
+            if showContext {
+                Picker("Grade band", selection: $gradeBand) {
+                    ForEach(["K-5", "6-8", "9-12"], id: \.self) { Text("Grades \($0)").tag($0) }
+                }
+                .pickerStyle(.segmented)
+                ChipRow(
+                    items: [("Any subject", nil)] + commonSubjects.map { ($0, Optional($0)) },
+                    selection: subject
+                ) { subject = $0 }
+            }
+        }
+        .padding(12)
+        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 14))
+    }
+
     @ViewBuilder
     private func answerView(_ debrief: Debrief) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
+                // Which of the six this was coached as — the teacher's pick, or
+                // the coach's read when they didn't pick one.
+                if let areaLabel = focusAreaLabel(debrief.focusArea ?? focusAreaForCategory(debrief.category)?.value) {
+                    Text(areaLabel)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.cream)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(AppTheme.primary, in: Capsule())
+                }
                 if let category = debrief.category {
                     Text(categoryLabel(category))
                         .font(.caption.weight(.semibold))
@@ -263,13 +325,29 @@ struct AskExpertContent: View {
         historyLoading = false
     }
 
+    /// Same profile-to-grade-band rules as web/src/pages/Ask.tsx.
+    private func seedTeachingContext() {
+        guard let user = authManager.currentUser else { return }
+        let levels = user.gradeLevels?.lowercased() ?? ""
+        if levels.range(of: "\\b(9|10|11|12)\\b|9-12|high ?school", options: .regularExpression) != nil {
+            gradeBand = "9-12"
+        } else if levels.range(of: "\\bk\\b|kindergarten|\\b[1-5](st|nd|rd|th)?\\b|elementary|k-5", options: .regularExpression) != nil {
+            gradeBand = "K-5"
+        }
+        if subject == nil, let first = user.subjects?.split(separator: ",").first?.trimmingCharacters(in: .whitespaces), !first.isEmpty {
+            subject = first
+        }
+    }
+
     private func submit(_ override: String? = nil) async {
         let text = (override ?? incidentText).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !submitting else { return }
         submitting = true
         error = nil
         do {
-            let result = try await AskExpertService.submitDebrief(incidentText: text)
+            let result = try await AskExpertService.submitDebrief(
+                incidentText: text, focusArea: focusArea, gradeBand: gradeBand, subject: subject
+            )
             debrief = result
             allDebriefs.insert(result, at: 0)
         } catch {

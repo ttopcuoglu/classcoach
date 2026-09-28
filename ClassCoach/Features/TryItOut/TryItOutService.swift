@@ -4,6 +4,7 @@ import Foundation
 /// functions in `web/src/lib/api.ts` against the same endpoints.
 enum TryItOutService {
     private struct GenerateScenarioBody: Encodable {
+        let focusArea: String?
         let category: String?
         let gradeBand: String?
         let difficulty: String?
@@ -11,6 +12,7 @@ enum TryItOutService {
     }
 
     static func generateScenario(
+        focusArea: String?,
         category: String?,
         gradeBand: String?,
         difficulty: String?,
@@ -19,7 +21,10 @@ enum TryItOutService {
         try await APIClient.shared.request(
             "/api/scenarios/generate",
             method: "POST",
-            body: GenerateScenarioBody(category: category, gradeBand: gradeBand, difficulty: difficulty, subject: subject)
+            body: GenerateScenarioBody(
+                focusArea: focusArea, category: category, gradeBand: gradeBand,
+                difficulty: difficulty, subject: subject
+            )
         )
     }
 
