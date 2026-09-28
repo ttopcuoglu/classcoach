@@ -24,7 +24,7 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
     text: 'During clean-up time, a student refuses to put away the blocks they were using and says, "No, I\'m not done!" when you ask a second time.',
     focusArea: 'classroom_management',
     category: 'defiance',
-    gradeBand: 'K-5',
+    gradeBand: 'K-2',
     difficulty: 'beginner',
   },
   {
@@ -54,7 +54,7 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
     text: "During independent reading time, a student is flipping through the pages of their book without actually reading, and says, \"I don't want to read this one,\" when you check in.",
     focusArea: 'classroom_management',
     category: 'disengagement',
-    gradeBand: 'K-5',
+    gradeBand: '3-5',
     difficulty: 'beginner',
   },
   {
@@ -84,7 +84,7 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
     text: 'Two students both grab the same crayon at the art table and start pulling on it, with one shouting, "I had it first!"',
     focusArea: 'classroom_management',
     category: 'peer_conflict',
-    gradeBand: 'K-5',
+    gradeBand: 'K-2',
     difficulty: 'beginner',
   },
   {
@@ -114,7 +114,7 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
     text: "A student keeps making animal noises during story time, and a couple of nearby classmates start giggling instead of listening.",
     focusArea: 'classroom_management',
     category: 'disruption',
-    gradeBand: 'K-5',
+    gradeBand: 'K-2',
     difficulty: 'beginner',
   },
   {
@@ -144,7 +144,7 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
     text: "When it's time to line up for recess, several students are still wandering around the room instead of forming a line, and one starts wrestling a friend for a spot near the front.",
     focusArea: 'classroom_management',
     category: 'transitions',
-    gradeBand: 'K-5',
+    gradeBand: 'K-2',
     difficulty: 'beginner',
   },
   {
@@ -174,7 +174,7 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
     text: "During computer center time, a student switches away from the reading app to a game app when they think you're not looking.",
     focusArea: 'classroom_management',
     category: 'technology_misuse',
-    gradeBand: 'K-5',
+    gradeBand: 'K-2',
     difficulty: 'beginner',
   },
   {
@@ -204,7 +204,7 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
     text: 'You have explained regrouping in subtraction twice, once with base-ten blocks and once on the board. You ask "who\'s got it?" and eleven hands go up out of twenty-four. The other thirteen are looking at their papers.',
     focusArea: 'teaching_and_learning',
     category: 'checking_understanding',
-    gradeBand: 'K-5',
+    gradeBand: '3-5',
     difficulty: 'beginner',
   },
   {
@@ -234,7 +234,7 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
     text: 'A student explains that plants get their food from the soil, "like how we get food from the fridge." Three other students nod. Your unit on photosynthesis starts tomorrow.',
     focusArea: 'teaching_and_learning',
     category: 'misconceptions',
-    gradeBand: 'K-5',
+    gradeBand: '3-5',
     difficulty: 'beginner',
     subject: 'Science',
   },
@@ -260,7 +260,7 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
     text: 'A narrative has vivid ideas, a real ending, and spelling errors in nearly every sentence. Your rubric has separate rows for ideas and conventions, and the total lands it at the same score as a dull, clean piece you graded ten minutes ago.',
     focusArea: 'teaching_and_learning',
     category: 'feedback_and_grading',
-    gradeBand: 'K-5',
+    gradeBand: '3-5',
     difficulty: 'intermediate',
   },
   {
@@ -290,7 +290,7 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
     text: 'A parent emails: "Maya says she asked you for help three times today and you told her to figure it out herself. That is not what I expect from her teacher. Please explain." You remember the day differently, and you were with a small group at the time.',
     focusArea: 'parent_communication',
     category: 'difficult_parent_email',
-    gradeBand: 'K-5',
+    gradeBand: '3-5',
     difficulty: 'intermediate',
   },
   {
@@ -320,7 +320,7 @@ export const CURATED_SCENARIOS: CuratedScenario[] = [
     text: 'In front of the whole class, your co-teacher says, "Actually, let\'s do it the way I showed you yesterday" and starts re-explaining the task differently. Students look between the two of you.',
     focusArea: 'professionalism',
     category: 'co_teaching',
-    gradeBand: 'K-5',
+    gradeBand: '3-5',
     difficulty: 'intermediate',
   },
   {

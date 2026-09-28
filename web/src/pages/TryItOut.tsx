@@ -316,7 +316,7 @@ export default function TryItOut({
   }
 
   const hasFeedback = attempt && (attempt.feedback || attempt.modelResponse)
-  // Re-picked whenever the section or the room changes — a K-5 rehearsal and a
+  // Re-picked whenever the section or the room changes — a K-2 rehearsal and a
   // 9-12 rehearsal should not open with the same three scenarios.
   const subCategories = subCategoriesFor(focusArea)
   const situationText = category ? categoryLabel(category).toLowerCase() : 'any situation'

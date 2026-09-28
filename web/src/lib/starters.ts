@@ -114,8 +114,10 @@ export const ASK_STARTERS: Record<string, readonly Starter[]> = {
     { text: 'I cannot get them past "I am just not good at this."', subjects: ['Fine Arts'] },
     { text: 'Critique turns into "it is nice" and stops there.', subjects: ['Fine Arts'] },
     // By band.
-    { text: 'They can do it with me and not on their own.', bands: ['K-5'] },
-    { text: 'They finish at wildly different times and I lose the room.', bands: ['K-5'] },
+    { text: 'They can do it with me and not on their own.', bands: ['K-2', '3-5'] },
+    { text: 'They finish at wildly different times and I lose the room.', bands: ['K-2', '3-5'] },
+    { text: 'They can read every word on the page and not tell me what it meant.', bands: ['3-5'] },
+    { text: 'They can do it right after I show them and not twenty minutes later.', bands: ['K-2'] },
     { text: 'They will do the work but they will not explain their thinking.', bands: ['6-8'] },
     { text: 'They can pass my test and still not understand it.', bands: ['9-12'] },
     // General.
@@ -125,9 +127,10 @@ export const ASK_STARTERS: Record<string, readonly Starter[]> = {
     { text: 'I run out of time before the part that actually matters.' },
   ],
   classroom_management: [
-    { text: 'Lining up takes five minutes every single time.', bands: ['K-5'] },
-    { text: 'Two of mine cannot sit anywhere near each other.', bands: ['K-5'] },
-    { text: 'Tattling has taken over my whole morning.', bands: ['K-5'] },
+    { text: 'Lining up takes five minutes every single time.', bands: ['K-2'] },
+    { text: 'Two of mine cannot sit anywhere near each other.', bands: ['K-2', '3-5'] },
+    { text: 'Tattling has taken over my whole morning.', bands: ['K-2'] },
+    { text: 'Group work turns into two doing it and three watching.', bands: ['3-5'] },
     { text: 'A student pushed back in front of everyone and I froze.', bands: ['6-8'] },
     { text: 'The side conversations start the second I stop talking.', bands: ['6-8'] },
     { text: 'Phones keep coming out no matter what I say.', bands: ['6-8', '9-12'] },
@@ -139,8 +142,8 @@ export const ASK_STARTERS: Record<string, readonly Starter[]> = {
     { text: 'Getting started takes five minutes every single day.' },
   ],
   parent_communication: [
-    { text: 'A parent wants a daily report and I cannot sustain it.', bands: ['K-5'] },
-    { text: 'A parent is upset about something at recess that I did not see.', bands: ['K-5'] },
+    { text: 'A parent wants a daily report and I cannot sustain it.', bands: ['K-2', '3-5'] },
+    { text: 'A parent is upset about something at recess that I did not see.', bands: ['K-2', '3-5'] },
     { text: 'A parent says their child is being singled out.', bands: ['6-8'] },
     { text: 'A parent only ever hears from me when something is wrong.', bands: ['6-8'] },
     { text: 'A parent is contesting a grade that affects a GPA.', bands: ['9-12'] },
@@ -150,7 +153,7 @@ export const ASK_STARTERS: Record<string, readonly Starter[]> = {
     { text: "A conference is coming up and I'm dreading it." },
   ],
   professionalism: [
-    { text: 'My grade-level team does everything together and I want to try something else.', bands: ['K-5'] },
+    { text: 'My grade-level team does everything together and I want to try something else.', bands: ['K-2', '3-5'] },
     { text: 'My department wants a common assessment I do not think fits my kids.', bands: ['9-12'] },
     { text: 'My co-teacher keeps overriding me in front of students.' },
     { text: 'I need to raise a concern with someone more senior than me.' },
@@ -162,8 +165,8 @@ export const ASK_STARTERS: Record<string, readonly Starter[]> = {
 /// Shown when no section is picked — the coach infers the area from the text,
 /// so these span all four and still narrow by grade band.
 export const GENERAL_ASK_STARTERS: readonly Starter[] = [
-  { text: 'Lining up takes five minutes every single time.', bands: ['K-5'] },
-  { text: 'They can do it with me and not on their own.', bands: ['K-5'] },
+  { text: 'Lining up takes five minutes every single time.', bands: ['K-2'] },
+  { text: 'They can do it with me and not on their own.', bands: ['K-2', '3-5'] },
   { text: 'The side conversations start the second I stop talking.', bands: ['6-8'] },
   { text: 'They will do the work but they will not explain their thinking.', bands: ['6-8'] },
   { text: 'They are perfectly compliant and completely checked out.', bands: ['9-12'] },

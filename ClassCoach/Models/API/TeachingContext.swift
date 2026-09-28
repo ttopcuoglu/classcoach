@@ -7,7 +7,10 @@ import Foundation
 /// 9-12, where a subject splits into genuinely different courses — the course
 /// and the level it's taught at. A 9th-grade Algebra 1 inclusion section and an
 /// AP Calculus section are not the same room.
-let gradeBands = ["K-5", "6-8", "9-12"]
+/// K-5 used to be one band, and it was the weakest of the three: a kindergarten
+/// room and a 5th grade room differ more than 9th and 10th do, and elementary
+/// has no course to disambiguate it.
+let gradeBands = ["K-2", "3-5", "6-8", "9-12"]
 
 let gradeBandChips: [(label: String, value: String?)] = gradeBands.map { ("Grades \($0)", Optional($0)) }
 
@@ -51,7 +54,8 @@ let courseLevelBlurb: [String: String] = [
 func bandFromProfile(_ text: String?) -> String {
     let lower = (text ?? "").lowercased()
     if lower.range(of: #"\b(9|10|11|12)\b|9-12|high ?school"#, options: .regularExpression) != nil { return "9-12" }
-    if lower.range(of: #"\bk\b|kindergarten|\b[1-5](st|nd|rd|th)?\b|elementary|k-5"#, options: .regularExpression) != nil { return "K-5" }
+    if lower.range(of: #"\bk\b|kindergarten|\b[12](st|nd)?\b|k-2|primary"#, options: .regularExpression) != nil { return "K-2" }
+    if lower.range(of: #"\b[3-5](rd|th)?\b|3-5|elementary|k-5"#, options: .regularExpression) != nil { return "3-5" }
     return "6-8"
 }
 

@@ -35,7 +35,7 @@ struct TeachingContextValue: Equatable {
 struct TeachingContextFields: View {
     /// Subject, course and level open only under Teaching and Learning, where
     /// they're what the coaching is about. Grade band is asked for every
-    /// section — a K-5 room and a 9-12 room differ whether the question is
+    /// section — a K-2 room and a 9-12 room differ whether the question is
     /// about behavior, a parent, or a colleague.
     var focusArea: String?
     @Binding var value: TeachingContextValue

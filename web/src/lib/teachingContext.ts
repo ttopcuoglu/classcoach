@@ -6,7 +6,11 @@
 // and the level it's taught at. A 9th-grade Algebra 1 inclusion section and an
 // AP Calculus section are not the same room.
 
-export const GRADE_BANDS = ['K-5', '6-8', '9-12'] as const
+// K-5 used to be one band, and it was the weakest of the three: a kindergarten
+// room and a 5th grade room differ more than 9th and 10th do, and elementary
+// has no course to disambiguate it. The reporting side already counted K-2 and
+// 3-5 separately.
+export const GRADE_BANDS = ['K-2', '3-5', '6-8', '9-12'] as const
 
 export type GradeBand = (typeof GRADE_BANDS)[number]
 
@@ -56,7 +60,8 @@ export const COURSE_LEVEL_BLURB: Record<string, string> = {
 export function bandFromProfile(gradeLevels: string | null | undefined): GradeBand {
   const text = (gradeLevels ?? '').toLowerCase()
   if (/\b(9|10|11|12)\b|9-12|high ?school/.test(text)) return '9-12'
-  if (/\bk\b|kindergarten|\b[1-5](st|nd|rd|th)?\b|elementary|k-5/.test(text)) return 'K-5'
+  if (/\bk\b|kindergarten|\b[12](st|nd)?\b|k-2|primary/.test(text)) return 'K-2'
+  if (/\b[3-5](rd|th)?\b|3-5|elementary|k-5/.test(text)) return '3-5'
   return '6-8'
 }
 

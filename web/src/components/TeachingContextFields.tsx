@@ -30,7 +30,7 @@ export const DEFAULT_TEACHING_CONTEXT: TeachingContext = {
 // to agree. Rendered on the dark stage card in both places, always visible —
 // this used to sit behind a "Change" fold, which made the room look optional.
 //
-// Grade band is asked for every section: a K-5 room and a 9-12 room differ
+// Grade band is asked for every section: a K-2 room and a 9-12 room differ
 // whether the question is about behavior, a parent, or a colleague. Subject,
 // course and level open only under Teaching and Learning, where they're what
 // the coaching is actually about — a parent email doesn't get better for

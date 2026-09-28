@@ -7,7 +7,12 @@
 // AP Calculus section are not the same room, and a scenario written for one is
 // useless in the other.
 
-export const GRADE_BANDS = ['K-5', '6-8', '9-12'] as const
+// K-5 used to be one band. It was the weakest of the three by a distance: a
+// kindergarten room and a 5th grade room differ more than 9th and 10th do, and
+// elementary has no course to disambiguate it, so the band carried all the
+// weight alone. The reporting side already counted K-2 and 3-5 separately
+// (see admin.ts and breakdownGroups.ts, which rolls the two back up into K-5).
+export const GRADE_BANDS = ['K-2', '3-5', '6-8', '9-12'] as const
 
 export type GradeBand = (typeof GRADE_BANDS)[number]
 
@@ -19,7 +24,16 @@ export function pickGradeBand(value: unknown): GradeBand {
 }
 
 export function gradeBandLabel(band: string): string {
-  return band === 'K-5' ? 'elementary (K-5)' : band === '6-8' ? 'middle school (6-8)' : 'high school (9-12)'
+  switch (band) {
+    case 'K-2':
+      return 'primary (K-2)'
+    case '3-5':
+      return 'upper elementary (3-5)'
+    case '6-8':
+      return 'middle school (6-8)'
+    default:
+      return 'high school (9-12)'
+  }
 }
 
 // AP used to sit in this list. It moved to COURSE_LEVELS below, where it
