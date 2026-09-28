@@ -10,7 +10,7 @@ import ShareButton from '../components/ShareButton'
 import { MicIcon, StarIcon } from '../components/icons'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { categoryLabel } from '../lib/categories'
-import { FOCUS_AREAS, findFocusArea, focusAreaForCategory, focusAreaLabel } from '../lib/focusAreas'
+import { TEACHING_AND_LEARNING, findFocusArea, focusAreaForCategory, focusAreaLabel } from '../lib/focusAreas'
 import TeachingContextFields, {
   DEFAULT_TEACHING_CONTEXT,
   type TeachingContext,
@@ -138,9 +138,11 @@ export default function Ask({
       const result = await submitDebrief(text, {
         focusArea,
         gradeBand: room.gradeBand,
-        subject: room.subject,
-        course: room.course,
-        courseLevel: room.courseLevel,
+        // Subject, course and level are only asked for under Teaching and
+        // Learning, so they're only sent from there.
+        ...(focusArea === TEACHING_AND_LEARNING
+          ? { subject: room.subject, course: room.course, courseLevel: room.courseLevel }
+          : {}),
       })
       setDebrief(result)
       setAllDebriefs((prev) => [result, ...prev])
@@ -259,7 +261,12 @@ export default function Ask({
                 what separates coaching about a 4th grade math lesson from
                 coaching about an AP Calculus section. It used to sit behind a
                 "Change" fold, which made it look like a detail. */}
-            <TeachingContextFields value={room} onChange={setRoom} disabled={submitting} />
+            <TeachingContextFields
+              focusArea={focusArea}
+              value={room}
+              onChange={setRoom}
+              disabled={submitting}
+            />
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               {speechSupported ? (
@@ -413,27 +420,6 @@ export default function Ask({
       {!debrief && (
         <div>
           <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Or start with one of these</h2>
-          {/* The six areas live here rather than above the textarea: the coach
-              infers the area from what a teacher writes, so on Ask the picker
-              isn't a step — it just changes which examples are on offer. */}
-          <div className="mt-3 flex flex-wrap gap-2">
-            {[{ shortLabel: 'All', value: null }, ...FOCUS_AREAS].map((a) => {
-              const selected = (a.value ?? undefined) === focusArea
-              return (
-                <button
-                  key={a.shortLabel}
-                  type="button"
-                  onClick={() => onPickArea?.(a.value)}
-                  aria-pressed={selected}
-                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                    selected ? 'bg-forest text-cream' : 'bg-cream-card text-ink-soft hover:text-ink'
-                  }`}
-                >
-                  {a.shortLabel}
-                </button>
-              )
-            })}
-          </div>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {(area ? area.askStarters : starters ?? []).map((starter, i) => (
               <button

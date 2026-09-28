@@ -1,18 +1,18 @@
 import { Link, useSearchParams } from 'react-router-dom'
 import Ask from './Ask'
 import TryItOut from './TryItOut'
-import { findFocusArea } from '../lib/focusAreas'
+import { FOCUS_AREAS, findFocusArea } from '../lib/focusAreas'
 
-// The shell owns the focus area and nothing else. It used to render a six-card
-// grid here, above both tabs — which put eleven controls between a teacher and
-// the box where they type, and showed ten example prompts on one screen (six in
-// the cards, four in the starters below) that all did the same job.
+// The section is the main choice on this screen, so it lives here, above the
+// Ask/Practice switch, and both tabs read it. It is one row of chips rather
+// than the card grid this started as — four options with a sentence each put
+// eleven controls above the box where a teacher types.
 //
-// The area is now picked where it actually does work, which differs by tab:
-// on Practice it decides what scenario you get handed, so it's the primary
-// control there; on Ask the coach infers it from what you type, so it's just a
-// filter on the starter questions. Either tab's pick still lives here, in the
-// URL, so switching tabs keeps it.
+// It stays optional on Ask: a teacher who writes "my class talks over
+// directions" should never have to classify it first, and the coach infers the
+// section from the text. On Practice the coach has to choose what to hand them,
+// so leaving it on All means the coach picks, weighted toward what this teacher
+// has practiced least.
 export default function CoachChat() {
   const [searchParams, setSearchParams] = useSearchParams()
   const tab = searchParams.get('tab') === 'practice' ? 'practice' : 'ask'
@@ -50,30 +50,33 @@ export default function CoachChat() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => update({ tab: 'ask' })}
-            className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-              tab === 'ask' ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
-            }`}
-          >
-            Ask
-          </button>
-          <button
-            type="button"
-            onClick={() => update({ tab: 'practice' })}
-            className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-              tab === 'practice' ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
-            }`}
-          >
-            Practice
-          </button>
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
+          What's this about?
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {[{ label: 'Not sure yet', value: null }, ...FOCUS_AREAS.map((a) => ({ label: a.label, value: a.value }))].map(
+            ({ label, value }) => {
+              const selected = (value ?? undefined) === area?.value
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => update({ area: value })}
+                  aria-pressed={selected}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                    selected ? 'bg-forest text-cream' : 'bg-cream-card text-ink-soft hover:text-ink'
+                  }`}
+                >
+                  {label}
+                </button>
+              )
+            },
+          )}
         </div>
+        {area && <p className="text-xs text-ink-soft">{area.blurb}</p>}
         {/* Parent and colleague work overlaps Communication Coach on purpose: a
             quick question or one rehearsed exchange belongs here, an actual
-            drafted email or a prepared meeting belongs there. One line, shown
-            only once that area is in play. */}
+            drafted email or a prepared meeting belongs there. */}
         {area?.handoff && (
           <Link
             to={area.handoff.to}
@@ -84,8 +87,29 @@ export default function CoachChat() {
         )}
       </div>
 
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => update({ tab: 'ask' })}
+          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+            tab === 'ask' ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
+          }`}
+        >
+          Ask
+        </button>
+        <button
+          type="button"
+          onClick={() => update({ tab: 'practice' })}
+          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+            tab === 'practice' ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
+          }`}
+        >
+          Practice
+        </button>
+      </div>
+
       {tab === 'practice' ? (
-        <TryItOut focusArea={area?.value} onPickArea={(value) => update({ area: value })} />
+        <TryItOut focusArea={area?.value} />
       ) : (
         <Ask focusArea={area?.value} onPickArea={(value) => update({ area: value })} />
       )}

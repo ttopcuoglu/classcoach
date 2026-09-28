@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { pickWeightedCategory, pickWeightedDifficulty, pickWeightedFocusArea } from '../lib/adaptivePractice.ts'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { getCuratedFallback } from '../lib/curatedFallback.ts'
-import { findFocusArea, focusAreaForSubCategory } from '../lib/focusAreas.ts'
+import { TEACHING_AND_LEARNING, findFocusArea, focusAreaForSubCategory } from '../lib/focusAreas.ts'
 import { scenarioAreaBlock } from '../lib/focusAreaPrompt.ts'
 import { prisma } from '../lib/prisma.ts'
 import { pickDifficulty } from '../lib/scenarioCategories.ts'
@@ -50,13 +50,17 @@ scenariosRouter.post('/generate', async (req, res) => {
   const chosenCategory = await pickWeightedCategory(req.user!.userId, chosenArea.value, category)
   const chosenGradeBand = pickGradeBand(gradeBand)
   const chosenDifficulty = await pickWeightedDifficulty(req.user!.userId, chosenCategory, difficulty)
-  const chosenSubject = typeof subject === 'string' && subject.trim() ? subject.trim() : null
+  // Subject, course and level are only asked for under Teaching and Learning;
+  // anything sent with another section is stale client state, not a choice.
+  const asksAboutContent = chosenArea.value === TEACHING_AND_LEARNING
+  const chosenSubject =
+    asksAboutContent && typeof subject === 'string' && subject.trim() ? subject.trim() : null
   // Courses exist only at 9-12, and only within the subject that offers them.
   const chosenCourse =
     typeof course === 'string' && coursesFor(chosenGradeBand, chosenSubject).includes(course)
       ? course
       : null
-  const chosenCourseLevel = isCourseLevel(courseLevel) ? courseLevel : null
+  const chosenCourseLevel = asksAboutContent && isCourseLevel(courseLevel) ? courseLevel : null
 
   const allowed = await checkAndLogUsage(req.user!.userId, 'scenario_generate')
   if (!allowed) {

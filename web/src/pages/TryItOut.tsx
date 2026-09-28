@@ -10,7 +10,7 @@ import { ProgressRing, WorkingRing } from '../components/ProgressRing'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { categoryLabel } from '../lib/categories'
-import { FOCUS_AREAS, findFocusArea, focusAreaForCategory, subCategoriesFor } from '../lib/focusAreas'
+import { TEACHING_AND_LEARNING, findFocusArea, focusAreaForCategory, subCategoriesFor } from '../lib/focusAreas'
 import { isExperienced } from '../lib/experience'
 import TeachingContextFields, {
   DEFAULT_TEACHING_CONTEXT,
@@ -65,13 +65,7 @@ function difficultyLabel(value: string) {
 // between Ask and Practice keeps the area the teacher chose. Unlike Ask — where
 // the coach infers the area from the teacher's own words — here it's the
 // primary control, because it decides what scenario they get handed.
-export default function TryItOut({
-  focusArea,
-  onPickArea,
-}: {
-  focusArea?: string
-  onPickArea?: (value: string | null) => void
-}) {
+export default function TryItOut({ focusArea }: { focusArea?: string }) {
   const [category, setCategory] = useState<string | undefined>(undefined)
   const [difficulty, setDifficulty] = useState<string | undefined>(undefined)
   const [room, setRoom] = useState<TeachingContext>(DEFAULT_TEACHING_CONTEXT)
@@ -199,9 +193,11 @@ export default function TryItOut({
         category: categoryOverride ?? category,
         difficulty,
         gradeBand: room.gradeBand,
-        subject: room.subject,
-        course: room.course,
-        courseLevel: room.courseLevel,
+        // Subject, course and level are only asked for under Teaching and
+        // Learning, so they're only sent from there.
+        ...(focusArea === TEACHING_AND_LEARNING
+          ? { subject: room.subject, course: room.course, courseLevel: room.courseLevel }
+          : {}),
       })
       setAttempt({
         id: `draft-${scenario.id}`,
@@ -431,24 +427,6 @@ export default function TryItOut({
             <p className="mt-1 text-sm text-cream/70">
               {area ? area.blurb : 'Pick a moment to rehearse, or let Wivoza build a new one for you.'}
             </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {[{ shortLabel: 'Any area', value: null }, ...FOCUS_AREAS].map((a) => {
-                const selected = (a.value ?? undefined) === focusArea
-                return (
-                  <button
-                    key={a.shortLabel}
-                    type="button"
-                    onClick={() => onPickArea?.(a.value)}
-                    aria-pressed={selected}
-                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                      selected ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
-                    }`}
-                  >
-                    {a.shortLabel}
-                  </button>
-                )
-              })}
-            </div>
             <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
               {starters.map((s, i) => (
                 <button
@@ -534,7 +512,12 @@ export default function TryItOut({
             </div>
 
             <div className="mt-3">
-              <TeachingContextFields value={room} onChange={setRoom} disabled={generating} />
+              <TeachingContextFields
+                focusArea={focusArea}
+                value={room}
+                onChange={setRoom}
+                disabled={generating}
+              />
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-2">

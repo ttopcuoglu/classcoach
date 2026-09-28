@@ -18,7 +18,14 @@ struct TeachingContextValue: Equatable {
 }
 
 struct TeachingContextFields: View {
+    /// Subject, course and level open only under Teaching and Learning, where
+    /// they're what the coaching is about. Grade band is asked for every
+    /// section — a K-5 room and a 9-12 room differ whether the question is
+    /// about behavior, a parent, or a colleague.
+    var focusArea: String?
     @Binding var value: TeachingContextValue
+
+    private var showSubjectAndLevel: Bool { focusArea == teachingAndLearning }
 
     private var courses: [String] {
         coursesFor(gradeBand: value.gradeBand, subject: value.usingOtherSubject ? nil : value.subject)
@@ -35,6 +42,7 @@ struct TeachingContextFields: View {
                 }
             }
 
+            if showSubjectAndLevel {
             field("Subject") {
                 ChipRow(
                     items: subjects.map { ($0, Optional($0)) } + [(otherSubjectLabel, Optional(otherSubjectLabel))],
@@ -53,11 +61,12 @@ struct TeachingContextFields: View {
                     .padding(.horizontal)
                 }
             }
+            }
 
             // Only at 9-12, and only once a subject is chosen: "Math" describes
             // a 4th grade classroom, but says almost nothing about a high
             // school schedule.
-            if !courses.isEmpty {
+            if showSubjectAndLevel, !courses.isEmpty {
                 field("Course") {
                     ChipRow(
                         items: courses.map { ($0, Optional($0)) },
@@ -66,6 +75,7 @@ struct TeachingContextFields: View {
                 }
             }
 
+            if showSubjectAndLevel {
             field("Level") {
                 ChipRow(
                     items: courseLevels.map { ($0, Optional($0)) },
@@ -79,6 +89,7 @@ struct TeachingContextFields: View {
                 .foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal)
+            }
             }
         }
         .padding(.vertical, 12)

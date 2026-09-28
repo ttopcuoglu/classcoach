@@ -33,7 +33,6 @@ struct AskExpertContent: View {
     /// a teacher never has to classify their own problem first. Here the area
     /// only changes which starter questions are on offer.
     var focusArea: String? = nil
-    var onPickArea: ((String?) -> Void)? = nil
 
     @EnvironmentObject private var authManager: AuthManager
     @State private var incidentText = ""
@@ -54,6 +53,8 @@ struct AskExpertContent: View {
 
     private var savedDebriefs: [Debrief] { allDebriefs.filter(\.saved) }
     private var area: FocusArea? { findFocusArea(focusArea) }
+
+    private var asksAboutContent: Bool { focusArea == teachingAndLearning }
 
     private var starters: [String] {
         if let area { return area.askStarters }
@@ -143,10 +144,6 @@ struct AskExpertContent: View {
                 .font(.caption2.weight(.bold)).tracking(0.8)
                 .foregroundStyle(AppTheme.terracotta600)
                 .padding(.top, 4)
-            // The six areas sit with the examples rather than above the text
-            // box: on Ask the coach infers the area, so this is a way to browse,
-            // not a step to complete.
-            ChipRow(items: focusAreaChips(anyLabel: "All"), selection: focusArea) { onPickArea?($0) }
             ForEach(Array(starters.enumerated()), id: \.offset) { index, starter in
                 Button {
                     Task { await submit(starter) }
@@ -175,7 +172,7 @@ struct AskExpertContent: View {
     /// separates coaching about a 4th grade math lesson from coaching about an
     /// AP Calculus section. It used to sit behind a "Change" fold.
     private var teachingContextRow: some View {
-        TeachingContextFields(value: $room)
+        TeachingContextFields(focusArea: focusArea, value: $room)
     }
 
     @ViewBuilder
@@ -327,7 +324,10 @@ struct AskExpertContent: View {
         do {
             let result = try await AskExpertService.submitDebrief(
                 incidentText: text, focusArea: focusArea, gradeBand: room.gradeBand,
-                subject: room.subject, course: room.course, courseLevel: room.courseLevel
+                // Only asked for under Teaching and Learning, so only sent from there.
+                subject: asksAboutContent ? room.subject : nil,
+                course: asksAboutContent ? room.course : nil,
+                courseLevel: asksAboutContent ? room.courseLevel : nil
             )
             debrief = result
             allDebriefs.insert(result, at: 0)

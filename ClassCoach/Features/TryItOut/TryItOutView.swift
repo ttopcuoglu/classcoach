@@ -46,7 +46,6 @@ struct TryItOutContent: View {
     /// Unlike Ask, this is the primary control here: it decides what scenario
     /// the teacher gets handed.
     var focusArea: String? = nil
-    var onPickArea: ((String?) -> Void)? = nil
 
     @EnvironmentObject private var authManager: AuthManager
     @State private var category: String?
@@ -67,6 +66,8 @@ struct TryItOutContent: View {
     @State private var chatError: String?
 
     private var area: FocusArea? { findFocusArea(focusArea) }
+
+    private var asksAboutContent: Bool { focusArea == teachingAndLearning }
 
     /// The area's own openers when one is chosen; otherwise the experience-based
     /// behavior set Practice has always opened with.
@@ -89,14 +90,13 @@ struct TryItOutContent: View {
                         "\($0.blurb) Set the details, then practice what you'd say."
                     } ?? "Pick a topic, difficulty, grade band, and subject, then practice what you'd say."
                 )
-                ChipRow(items: focusAreaChips(anyLabel: "Any area"), selection: focusArea) { onPickArea?($0) }
                 // Showing all thirty-one sub-categories at once would be a wall
                 // of chips, so this narrows only once an area is chosen.
                 if area != nil {
                     ChipRow(items: subCategoryChips(focusArea), selection: category) { category = $0 }
                 }
                 ChipRow(items: difficulties, selection: difficulty) { difficulty = $0 }
-                TeachingContextFields(value: $room)
+                TeachingContextFields(focusArea: focusArea, value: $room)
 
                 scenarioCard
 
@@ -377,8 +377,11 @@ struct TryItOutContent: View {
         do {
             let scenario = try await TryItOutService.generateScenario(
                 focusArea: focusArea, category: category, gradeBand: room.gradeBand,
-                difficulty: difficulty, subject: room.subject, course: room.course,
-                courseLevel: room.courseLevel
+                difficulty: difficulty,
+                // Only asked for under Teaching and Learning, so only sent from there.
+                subject: asksAboutContent ? room.subject : nil,
+                course: asksAboutContent ? room.course : nil,
+                courseLevel: asksAboutContent ? room.courseLevel : nil
             )
             attempt = ScenarioAttempt(
                 id: "draft-\(scenario.id)", scenarioId: scenario.id, responseText: "",

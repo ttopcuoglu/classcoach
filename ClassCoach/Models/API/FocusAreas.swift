@@ -6,6 +6,10 @@ import Foundation
 ///
 /// The six original behavior categories are Classroom Management's
 /// sub-categories here, which is why nothing already saved needed relabelling.
+/// The one section that asks about subject, course and level — those fields are
+/// what its coaching is about, and mean nothing for the other three.
+let teachingAndLearning = "teaching_and_learning"
+
 struct FocusArea: Identifiable {
     let value: String
     let label: String

@@ -1,3 +1,4 @@
+import { TEACHING_AND_LEARNING } from '../lib/focusAreas'
 import {
   COURSE_LEVELS,
   COURSE_LEVEL_BLURB,
@@ -25,21 +26,27 @@ export const DEFAULT_TEACHING_CONTEXT: TeachingContext = {
   otherSubject: false,
 }
 
-// Shared by Ask and Practice, because both need the same four answers and they
-// have to agree. Rendered on the dark stage card in both places.
+// Shared by Ask and Practice, because both need the same answers and they have
+// to agree. Rendered on the dark stage card in both places, always visible —
+// this used to sit behind a "Change" fold, which made the room look optional.
 //
-// Always visible — this used to sit behind a "Change" fold, which made the room
-// look optional. It isn't: it's what separates coaching about a 4th grade math
-// lesson from coaching about an AP Calculus section.
+// Grade band is asked for every section: a K-5 room and a 9-12 room differ
+// whether the question is about behavior, a parent, or a colleague. Subject,
+// course and level open only under Teaching and Learning, where they're what
+// the coaching is actually about — a parent email doesn't get better for
+// knowing it came from an honors section.
 export default function TeachingContextFields({
+  focusArea,
   value,
   onChange,
   disabled,
 }: {
+  focusArea?: string
   value: TeachingContext
   onChange: (next: TeachingContext) => void
   disabled?: boolean
 }) {
+  const showSubjectAndLevel = focusArea === TEACHING_AND_LEARNING
   const courses = coursesFor(value.gradeBand, value.otherSubject ? undefined : value.subject)
 
   function set(patch: Partial<TeachingContext>) {
@@ -72,6 +79,7 @@ export default function TeachingContextFields({
         </div>
       </div>
 
+      {showSubjectAndLevel && (
       <div>
         <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Subject</p>
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
@@ -113,10 +121,11 @@ export default function TeachingContextFields({
           )}
         </div>
       </div>
+      )}
 
       {/* Only at 9-12, and only once a subject is chosen: "Math" describes a 4th
           grade classroom, but says almost nothing about a high school schedule. */}
-      {courses.length > 0 && (
+      {showSubjectAndLevel && courses.length > 0 && (
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Course</p>
           <div className="mt-1.5 flex flex-wrap gap-2">
@@ -135,6 +144,7 @@ export default function TeachingContextFields({
         </div>
       )}
 
+      {showSubjectAndLevel && (
       <div>
         <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Level</p>
         <div className="mt-1.5 flex flex-wrap gap-2">
@@ -156,6 +166,7 @@ export default function TeachingContextFields({
             : 'Changes the coaching more than anything else here — an inclusion section and an AP section are different jobs.'}
         </p>
       </div>
+      )}
     </div>
   )
 }

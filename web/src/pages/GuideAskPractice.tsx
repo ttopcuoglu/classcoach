@@ -54,11 +54,11 @@ const STEPS = [
   },
   {
     title: 'Say what’s going on',
-    body: 'In Ask, just type it, or tap “Speak instead.” You don’t have to say which of the four sections it belongs to — your coach works that out from your own words, and tells you which one it answered as. Under the box sits your room — grade band, subject, and at high school the course and its level — already filled in from your profile, and the four sections, which change the example questions on offer.',
+    body: 'In Ask, just type it, or tap “Speak instead.” You don’t have to say which of the four sections it belongs to — your coach works that out from your own words, and tells you which one it answered as. The four sections sit at the top of the screen, and under the box sits your room.',
   },
   {
     title: 'Or set up a rehearsal',
-    body: 'In Practice you do pick an area, because it decides what you get handed: a room that’s stopped following you, a misconception in a student’s words, a piece of work on a rubric boundary, a parent email, a line a colleague said. Then set the room: grade band, subject, and — at 9-12 — the actual course and whether it’s AP, honors, regular, or inclusion. That last one changes the coaching more than anything else on the screen.',
+    body: 'In Practice you do pick an area, because it decides what you get handed: a room that’s stopped following you, a misconception in a student’s words, a piece of work on a rubric boundary, a parent email, a line a colleague said. Then set the room. Every section asks your grade band. Teaching and Learning also asks your subject, and at 9-12 the actual course — Algebra 2, Chemistry — and whether it’s AP, honors, regular, or inclusion. That last one changes the coaching more than anything else on the screen.',
   },
   {
     title: 'Get something you can use',
@@ -83,7 +83,7 @@ const LANES = [
     name: 'Practice',
     when: 'A rehearsal — low stakes, nobody watching.',
     detail:
-      'Filter by situation and difficulty — Guided, Independent, or Challenge — and describe your room: grade band (K–5, 6–8, 9–12), subject, and at high school the course itself (Algebra 2, Chemistry) and its level (AP, Honors, Regular, Inclusion). What a scenario looks like depends on the area: a room that’s stopped following you, a misconception in a student’s own words, a piece of work on a rubric boundary, the text of a parent email, a line a colleague just said. Take one, or a Quick Session of three.',
+      'Filter by situation and difficulty — Guided, Independent, or Challenge — and describe your room: grade band (K–5, 6–8, 9–12) always, plus subject, course and level when you’re working on Teaching and Learning. What a scenario looks like depends on the area: a room that’s stopped following you, a misconception in a student’s own words, a piece of work on a rubric boundary, the text of a parent email, a line a colleague just said. Take one, or a Quick Session of three.',
   },
 ]
 

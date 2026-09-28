@@ -27,7 +27,12 @@ import type { CoachFollowUp, Debrief } from '../generated/prisma/client.ts'
 import { prisma } from '../lib/prisma.ts'
 import { categoryInArea, isKnownCategory } from '../lib/scenarioCategories.ts'
 import { isCourseLevel, pickGradeBand } from '../lib/teachingContext.ts'
-import { findFocusArea, focusAreaForSubCategory, type FocusArea } from '../lib/focusAreas.ts'
+import {
+  TEACHING_AND_LEARNING,
+  findFocusArea,
+  focusAreaForSubCategory,
+  type FocusArea,
+} from '../lib/focusAreas.ts'
 import {
   classificationBlock,
   coachIdentity,
@@ -202,12 +207,18 @@ debriefRouter.post('/', async (req, res) => {
   // coach works out the area itself.
   const pickedArea = findFocusArea(focusArea)
   const askGradeBand = typeof gradeBand === 'string' ? pickGradeBand(gradeBand) : null
-  const askSubject = typeof subject === 'string' && subject.trim() ? subject.trim() : null
+  // Subject, course and level are only asked for under Teaching and Learning;
+  // anything sent with another section is stale client state, not a choice.
+  const asksAboutContent = pickedArea?.value === TEACHING_AND_LEARNING
+  const askSubject =
+    asksAboutContent && typeof subject === 'string' && subject.trim() ? subject.trim() : null
   // Course is offered only at 9-12, so anything sent with another band is
   // stale client state rather than a real choice.
   const askCourse =
-    askGradeBand === '9-12' && typeof course === 'string' && course.trim() ? course.trim() : null
-  const askCourseLevel = isCourseLevel(courseLevel) ? courseLevel : null
+    asksAboutContent && askGradeBand === '9-12' && typeof course === 'string' && course.trim()
+      ? course.trim()
+      : null
+  const askCourseLevel = asksAboutContent && isCourseLevel(courseLevel) ? courseLevel : null
 
   const allowed = await checkAndLogUsage(req.user!.userId, 'debrief_feedback')
   if (!allowed) {

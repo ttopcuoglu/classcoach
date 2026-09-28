@@ -14,6 +14,10 @@
 // and `ClassCoach/Models/API/FocusAreas.swift` mirror the labels only; the
 // coaching text is server-side and never shipped to a client.
 
+/// The one section that asks about subject, course and level — those fields
+/// are what its coaching is about, and mean nothing for the other three.
+export const TEACHING_AND_LEARNING = 'teaching_and_learning'
+
 export type SubCategory = { value: string; label: string }
 
 export type FocusArea = {

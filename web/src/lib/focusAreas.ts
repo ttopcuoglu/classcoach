@@ -6,6 +6,10 @@
 // The six original categories are Classroom Management's sub-categories here,
 // which is why nothing already saved needed relabelling.
 
+/// The one section that asks about subject, course and level — those fields
+/// are what its coaching is about, and mean nothing for the other three.
+export const TEACHING_AND_LEARNING = 'teaching_and_learning'
+
 export type SubCategory = { label: string; value: string }
 
 export type FocusArea = {
