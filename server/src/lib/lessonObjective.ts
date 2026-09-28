@@ -72,6 +72,77 @@ function normalizeForMatch(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
+function words(text: string): string[] {
+  return normalizeForMatch(text).split(' ').filter((w) => w.length > 3)
+}
+
+/// The teacher's speech as one continuous string, plus where each segment
+/// starts in it.
+///
+/// Deepgram splits on pauses, not sentences, so one spoken sentence routinely
+/// arrives as two or three segments — "Alright." / "So" / "we are going to
+/// make a list as a class now." Checking a quote against the timestamped
+/// transcript therefore fails for any sentence that crosses a boundary, which
+/// is most of them. Flattening first is what makes the check mean "did the
+/// teacher say this", rather than "did one segment happen to contain it".
+function flattenTeacherSpeech(segments: Segment[]): { flat: string; offsets: { at: number; startSec: number }[] } {
+  const offsets: { at: number; startSec: number }[] = []
+  let flat = ''
+  for (const segment of segments) {
+    if (segment.speakerLabel !== 'Teacher') continue
+    const piece = normalizeForMatch(segment.text)
+    if (!piece) continue
+    if (flat) flat += ' '
+    offsets.push({ at: flat.length, startSec: segment.startSec })
+    flat += piece
+  }
+  return { flat, offsets }
+}
+
+function startSecAtOffset(offsets: { at: number; startSec: number }[], offset: number): number | null {
+  let found: number | null = null
+  for (const o of offsets) {
+    if (o.at <= offset) found = o.startSec
+    else break
+  }
+  return found
+}
+
+/// The model is good at finding the moment and unreliable at transcribing it:
+/// asked for an exact sentence it will tidy the grammar, merge two lines, or
+/// drop a filler. Rejecting those outright turned a real objective into "not
+/// said aloud", which is a worse lie than the paraphrase was.
+///
+/// So the model locates and the transcript quotes. The segment it pointed at
+/// supplies the words, and it only counts if most of what the model claimed to
+/// be quoting is actually in that segment — enough to catch a tidied sentence,
+/// not enough to let an invented one through by landing near a timestamp.
+function quoteFromSegment(
+  segments: Segment[],
+  timestampSec: number | null,
+  claimed: string,
+): { quote: string; timestampSec: number } | null {
+  if (timestampSec == null) return null
+  const teacherSegments = segments.filter((s) => s.speakerLabel === 'Teacher')
+  if (teacherSegments.length === 0) return null
+
+  // A window rather than one segment, because a sentence is usually spread
+  // over several of them.
+  const window = teacherSegments.filter((s) => Math.abs(s.startSec - timestampSec) <= 20)
+  if (window.length === 0) return null
+
+  const claimedWords = words(claimed)
+  if (claimedWords.length < 4) return null
+  const windowWords = new Set(window.flatMap((s) => words(s.text)))
+  const overlap = claimedWords.filter((w) => windowWords.has(w)).length / claimedWords.length
+  if (overlap < 0.6) return null
+
+  return {
+    quote: window.map((s) => s.text.trim()).join(' ').replace(/\s+/g, ' ').trim(),
+    timestampSec: window[0].startSec,
+  }
+}
+
 export type ObjectiveFromModel = {
   quote: string | null
   timestampSec: number | null
@@ -109,20 +180,26 @@ export async function readLessonObjective(segments: Segment[]): Promise<Objectiv
       return { quote: null, timestampSec: null, summary }
     }
 
-    // The one check that makes a quote trustworthy: it has to be in the
-    // transcript. A model asked for an exact sentence mostly gives one, and
-    // the times it doesn't are exactly the times a teacher would be told they
-    // said something they never said.
-    if (!normalizeForMatch(transcript).includes(normalizeForMatch(rawQuote))) {
-      console.warn('[lessonObjective] discarded a quote that is not in the transcript')
-      return { quote: null, timestampSec: null, summary }
+    const claimedTime = parseTimestamp(extractTag(text, 'objective_time'))
+
+    // The check that makes a quote trustworthy: the teacher has to have said
+    // these words, in this order. Against the flattened speech, so a sentence
+    // spoken across three segments still counts as having been said.
+    const { flat, offsets } = flattenTeacherSpeech(segments)
+    const offset = flat.indexOf(normalizeForMatch(rawQuote))
+    if (offset !== -1) {
+      return { quote: rawQuote, timestampSec: startSecAtOffset(offsets, offset) ?? claimedTime, summary }
     }
 
-    return {
-      quote: rawQuote,
-      timestampSec: parseTimestamp(extractTag(text, 'objective_time')),
-      summary,
+    // Not verbatim. Take the words from the segment the model pointed at
+    // rather than from the model.
+    const recovered = quoteFromSegment(segments, claimedTime, rawQuote)
+    if (recovered) {
+      return { quote: recovered.quote, timestampSec: recovered.timestampSec, summary }
     }
+
+    console.warn('[lessonObjective] discarded a quote that is in neither the transcript nor the segment it cited')
+    return { quote: null, timestampSec: null, summary }
   } catch (error) {
     console.error('[lessonObjective] failed:', error)
     return empty
