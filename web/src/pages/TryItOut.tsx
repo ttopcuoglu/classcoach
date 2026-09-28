@@ -326,6 +326,11 @@ export default function TryItOut({ focusArea }: { focusArea?: string }) {
   const hasFeedback = attempt && (attempt.feedback || attempt.modelResponse)
   // Re-picked whenever the section or the room changes — a K-5 rehearsal and a
   // 9-12 rehearsal should not open with the same three scenarios.
+  // Named only under Teaching and Learning, which is the only section that asks
+  // for a subject or course.
+  const roomLabel =
+    focusArea === TEACHING_AND_LEARNING ? room.course ?? room.subject ?? null : null
+
   const starters = pickStarters(
     (focusArea && PRACTICE_STARTERS[focusArea]) || GENERAL_PRACTICE_STARTERS,
     room,
@@ -426,8 +431,13 @@ export default function TryItOut({ focusArea }: { focusArea?: string }) {
                     ['bg-peach-tint', 'bg-gold-tint', 'bg-mint-tint'][i % 3]
                   }`}
                 >
+                  {/* The course rides in the eyebrow rather than the scenario
+                      text: it genuinely changes what gets generated, and a
+                      teacher who picks Biology should see that land somewhere.
+                      Putting it in the sentence instead would mean fighting
+                      "a English discussion" grammar in every template. */}
                   <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
-                    {categoryLabel(s.category)}
+                    {[categoryLabel(s.category), roomLabel].filter(Boolean).join(' · ')}
                   </span>
                   <p className="mt-1.5">{s.text}</p>
                 </button>

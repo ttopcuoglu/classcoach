@@ -54,6 +54,10 @@ struct TryItOutContent: View {
 
     private var asksAboutContent: Bool { focusArea == teachingAndLearning }
 
+    /// Named only under Teaching and Learning, the only section that asks for a
+    /// subject or course.
+    private var roomLabel: String? { asksAboutContent ? room.course ?? room.subject : nil }
+
     /// Re-picked whenever the section or the room changes — a K-5 rehearsal and
     /// a 9-12 rehearsal should not open with the same three scenarios.
     private var starters: [Starter] {
@@ -139,7 +143,14 @@ struct TryItOutContent: View {
                     Task { await generateScenario() }
                 } label: {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(categoryLabel(starter.category ?? "").uppercased())
+                        // The course rides in the eyebrow rather than the
+                        // scenario text: it genuinely changes what gets
+                        // generated, and a teacher who picks Biology should see
+                        // that land somewhere.
+                        Text(
+                            [categoryLabel(starter.category ?? ""), roomLabel]
+                                .compactMap { $0 }.joined(separator: " · ").uppercased()
+                        )
                             .font(.caption2.weight(.bold)).tracking(0.8)
                             .foregroundStyle(AppTheme.terracotta600)
                         Text(starter.text)
