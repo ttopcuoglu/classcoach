@@ -1,7 +1,11 @@
 import Foundation
 
-// The example questions and scenarios under each tab. Mirrors
-// `web/src/lib/starters.ts` — same bank, same matching rule.
+// The example questions under Ask. Mirrors `web/src/lib/starters.ts` — same
+// bank, same matching rule.
+//
+// Practice has no equivalent: there the coach writes the scenario, so a teacher
+// never has to phrase anything, and the Situation chips already steer what they
+// get.
 //
 // Each starter can declare which rooms it belongs to. The picker takes the most
 // specific matches first and tops up with general ones, so the list is always
@@ -11,8 +15,6 @@ struct Starter {
     /// May contain {course} — the course if one is set, else the subject, else a
     /// neutral fallback. Written so it reads naturally in all three cases.
     let text: String
-    /// Practice only: the sub-category a scenario should be generated from.
-    var category: String? = nil
     var bands: [String]? = nil
     var subjects: [String]? = nil
     var levels: [String]? = nil
@@ -80,10 +82,8 @@ func pickStarters(
         let text = fill(starter.text, room, area)
         if seen.contains(text) { continue }
         seen.insert(text)
-        var filled = starter
-        filled = Starter(text: text, category: starter.category, bands: starter.bands,
-                         subjects: starter.subjects, levels: starter.levels)
-        out.append(filled)
+        out.append(Starter(text: text, bands: starter.bands,
+                           subjects: starter.subjects, levels: starter.levels))
         if out.count == count { break }
     }
     return out
@@ -166,61 +166,4 @@ let generalAskStarters: [Starter] = [
         Starter(text: "I explain something well and half the room still doesn't have it."),
         Starter(text: "A parent email is stressing me out."),
         Starter(text: "My co-teacher keeps overriding me in front of students."),
-]
-
-let practiceStartersByArea: [String: [Starter]] = [
-    "teaching_and_learning": [
-        Starter(text: "Your co-teacher is mid-lesson and two students are lost", category: "reaching_every_level", levels: ["Inclusion"]),
-        Starter(text: "An accommodation makes the task impossible as written", category: "reaching_every_level", levels: ["Inclusion"]),
-        Starter(text: "You are three weeks behind the pacing guide", category: "pacing_chunking", levels: ["AP"]),
-        Starter(text: "Strong work that shows no real understanding", category: "checking_understanding", levels: ["Honors"]),
-        Starter(text: "A student gets the right answer with wrong reasoning", category: "misconceptions", subjects: ["Math"]),
-        Starter(text: "A discussion that never leaves the plot", category: "questioning_discussion", subjects: ["ELA"]),
-        Starter(text: "A misconception that survives the lab", category: "misconceptions", subjects: ["Science"]),
-        Starter(text: "A student takes a biased source at face value", category: "misconceptions", subjects: ["History/SS"]),
-        Starter(text: "They finished the tutorial and cannot start alone", category: "explaining_clearly", subjects: ["Technology"]),
-        Starter(text: "A critique that stops at \"it looks nice\"", category: "questioning_discussion", subjects: ["Fine Arts"]),
-        Starter(text: "They can do it with you and not alone", category: "explaining_clearly", bands: ["K-5"]),
-        Starter(text: "A test everyone passed and nobody understood", category: "checking_understanding", bands: ["9-12"]),
-        Starter(text: "Half the class looks blank after two explanations", category: "checking_understanding"),
-        Starter(text: "A misconception that survives everything you try", category: "misconceptions"),
-        Starter(text: "A piece of work sitting between two rubric levels", category: "feedback_and_grading"),
-    ],
-    "classroom_management": [
-        Starter(text: "Clean-up time and nobody is cleaning up", category: "transitions", bands: ["K-5"]),
-        Starter(text: "Two students both grabbed the same thing", category: "peer_conflict", bands: ["K-5"]),
-        Starter(text: "A phone slides under the desk as you walk past", category: "technology_misuse", bands: ["6-8"]),
-        Starter(text: "A student says \"you can’t make me\" in front of everyone", category: "defiance", bands: ["6-8"]),
-        Starter(text: "Five students walk in after the bell, again", category: "transitions", bands: ["9-12"]),
-        Starter(text: "A capable student has quietly stopped trying", category: "disengagement", bands: ["9-12"]),
-        Starter(text: "A student is checked out and not participating", category: "disengagement"),
-        Starter(text: "A student pushes back when you ask them to do something", category: "defiance"),
-        Starter(text: "The class is slow to settle into a routine", category: "transitions"),
-    ],
-    "parent_communication": [
-        Starter(text: "A parent is upset about something at recess", category: "difficult_parent_email", bands: ["K-5"]),
-        Starter(text: "A parent asks for a daily written update", category: "building_partnership", bands: ["K-5"]),
-        Starter(text: "A parent says their child is being singled out", category: "difficult_parent_email", bands: ["6-8"]),
-        Starter(text: "A parent contests a grade that affects a GPA", category: "difficult_parent_email", bands: ["9-12"]),
-        Starter(text: "A call about a student who is going to fail the semester", category: "delivering_hard_news", bands: ["9-12"]),
-        Starter(text: "An accusatory parent email you have to answer", category: "difficult_parent_email"),
-        Starter(text: "A parent opens a conference by criticizing your class", category: "conferences"),
-        Starter(text: "A phone call about a student who is going to fail", category: "delivering_hard_news"),
-    ],
-    "professionalism": [
-        Starter(text: "Your grade-level team has already agreed without you", category: "team_and_plc_time", bands: ["K-5"]),
-        Starter(text: "Your department mandates an assessment you disagree with", category: "talking_with_admin", bands: ["9-12"]),
-        Starter(text: "A co-teacher contradicts you mid-lesson", category: "co_teaching"),
-        Starter(text: "Your department decides something you think is wrong for kids", category: "talking_with_admin"),
-        Starter(text: "A colleague writes off a student you share", category: "disagreeing_with_a_peer"),
-    ],
-]
-
-let generalPracticeStarters: [Starter] = [
-        Starter(text: "Clean-up time and nobody is cleaning up", category: "transitions", bands: ["K-5"]),
-        Starter(text: "A phone slides under the desk as you walk past", category: "technology_misuse", bands: ["6-8"]),
-        Starter(text: "A capable student has quietly stopped trying", category: "disengagement", bands: ["9-12"]),
-        Starter(text: "A student is checked out and not participating", category: "disengagement"),
-        Starter(text: "Half the class looks blank after two explanations", category: "checking_understanding"),
-        Starter(text: "An accusatory parent email you have to answer", category: "difficult_parent_email"),
 ]

@@ -1,9 +1,13 @@
 import type { TeachingContext } from '../components/TeachingContextFields'
 
-// The example questions and scenarios under each tab. They used to be four
-// fixed lines per section, which meant a 2nd grade art teacher and an AP
-// Calculus teacher were offered the same "the same three students answer every
-// question" — true of both, useful to neither.
+// The example questions under Ask. They used to be four fixed lines per
+// section, which meant a 2nd grade art teacher and an AP Calculus teacher were
+// offered the same "the same three students answer every question" — true of
+// both, useful to neither.
+//
+// Practice has no equivalent: there the coach writes the scenario, so a teacher
+// never has to phrase anything, and the Situation chips already steer what they
+// get. Cards there only duplicated those chips while discarding their own text.
 //
 // Each starter can declare which rooms it belongs to. The picker takes the most
 // specific matches first and tops up with general ones, so a starter list is
@@ -19,8 +23,6 @@ export type Starter = {
   subjects?: readonly string[]
   levels?: readonly string[]
 }
-
-export type PracticeStarter = Starter & { category: string }
 
 /// How many of a starter's declared constraints the room satisfies. Null when
 /// the room contradicts one, which disqualifies it entirely.
@@ -88,10 +90,6 @@ export function pickStarters<T extends Starter>(
   }
   return out
 }
-
-// ---------------------------------------------------------------------------
-// Ask
-// ---------------------------------------------------------------------------
 
 export const ASK_STARTERS: Record<string, readonly Starter[]> = {
   teaching_and_learning: [
@@ -174,78 +172,4 @@ export const GENERAL_ASK_STARTERS: readonly Starter[] = [
   { text: "I explain something well and half the room still doesn't have it." },
   { text: 'A parent email is stressing me out.' },
   { text: 'My co-teacher keeps overriding me in front of students.' },
-]
-
-// ---------------------------------------------------------------------------
-// Practice
-// ---------------------------------------------------------------------------
-
-export const PRACTICE_STARTERS: Record<string, readonly PracticeStarter[]> = {
-  teaching_and_learning: [
-    {
-      text: 'Your co-teacher is mid-lesson and two students are lost',
-      category: 'reaching_every_level',
-      levels: ['Inclusion'],
-    },
-    {
-      text: 'An accommodation makes the task impossible as written',
-      category: 'reaching_every_level',
-      levels: ['Inclusion'],
-    },
-    { text: 'You are three weeks behind the pacing guide', category: 'pacing_chunking', levels: ['AP'] },
-    { text: 'Strong work that shows no real understanding', category: 'checking_understanding', levels: ['Honors'] },
-    {
-      text: 'A student gets the right answer with wrong reasoning',
-      category: 'misconceptions',
-      subjects: ['Math'],
-    },
-    { text: 'A discussion that never leaves the plot', category: 'questioning_discussion', subjects: ['ELA'] },
-    { text: 'A misconception that survives the lab', category: 'misconceptions', subjects: ['Science'] },
-    { text: 'A student takes a biased source at face value', category: 'misconceptions', subjects: ['History/SS'] },
-    { text: 'They finished the tutorial and cannot start alone', category: 'explaining_clearly', subjects: ['Technology'] },
-    { text: 'A critique that stops at "it looks nice"', category: 'questioning_discussion', subjects: ['Fine Arts'] },
-    { text: 'They can do it with you and not alone', category: 'explaining_clearly', bands: ['K-5'] },
-    { text: 'A test everyone passed and nobody understood', category: 'checking_understanding', bands: ['9-12'] },
-    { text: 'Half the class looks blank after two explanations', category: 'checking_understanding' },
-    { text: 'A misconception that survives everything you try', category: 'misconceptions' },
-    { text: 'A piece of work sitting between two rubric levels', category: 'feedback_and_grading' },
-  ],
-  classroom_management: [
-    { text: 'Clean-up time and nobody is cleaning up', category: 'transitions', bands: ['K-5'] },
-    { text: 'Two students both grabbed the same thing', category: 'peer_conflict', bands: ['K-5'] },
-    { text: 'A phone slides under the desk as you walk past', category: 'technology_misuse', bands: ['6-8'] },
-    { text: 'A student says "you can’t make me" in front of everyone', category: 'defiance', bands: ['6-8'] },
-    { text: 'Five students walk in after the bell, again', category: 'transitions', bands: ['9-12'] },
-    { text: 'A capable student has quietly stopped trying', category: 'disengagement', bands: ['9-12'] },
-    { text: 'A student is checked out and not participating', category: 'disengagement' },
-    { text: 'A student pushes back when you ask them to do something', category: 'defiance' },
-    { text: 'The class is slow to settle into a routine', category: 'transitions' },
-  ],
-  parent_communication: [
-    { text: 'A parent is upset about something at recess', category: 'difficult_parent_email', bands: ['K-5'] },
-    { text: 'A parent asks for a daily written update', category: 'building_partnership', bands: ['K-5'] },
-    { text: 'A parent says their child is being singled out', category: 'difficult_parent_email', bands: ['6-8'] },
-    { text: 'A parent contests a grade that affects a GPA', category: 'difficult_parent_email', bands: ['9-12'] },
-    { text: 'A call about a student who is going to fail the semester', category: 'delivering_hard_news', bands: ['9-12'] },
-    { text: 'An accusatory parent email you have to answer', category: 'difficult_parent_email' },
-    { text: 'A parent opens a conference by criticizing your class', category: 'conferences' },
-    { text: 'A phone call about a student who is going to fail', category: 'delivering_hard_news' },
-  ],
-  professionalism: [
-    { text: 'Your grade-level team has already agreed without you', category: 'team_and_plc_time', bands: ['K-5'] },
-    { text: 'Your department mandates an assessment you disagree with', category: 'talking_with_admin', bands: ['9-12'] },
-    { text: 'A co-teacher contradicts you mid-lesson', category: 'co_teaching' },
-    { text: 'Your department decides something you think is wrong for kids', category: 'talking_with_admin' },
-    { text: 'A colleague writes off a student you share', category: 'disagreeing_with_a_peer' },
-  ],
-}
-
-/// No section picked: the coach picks the area, so these span all four.
-export const GENERAL_PRACTICE_STARTERS: readonly PracticeStarter[] = [
-  { text: 'Clean-up time and nobody is cleaning up', category: 'transitions', bands: ['K-5'] },
-  { text: 'A phone slides under the desk as you walk past', category: 'technology_misuse', bands: ['6-8'] },
-  { text: 'A capable student has quietly stopped trying', category: 'disengagement', bands: ['9-12'] },
-  { text: 'A student is checked out and not participating', category: 'disengagement' },
-  { text: 'Half the class looks blank after two explanations', category: 'checking_understanding' },
-  { text: 'An accusatory parent email you have to answer', category: 'difficult_parent_email' },
 ]

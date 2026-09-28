@@ -11,7 +11,6 @@ import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { categoryLabel } from '../lib/categories'
 import { TEACHING_AND_LEARNING, findFocusArea, focusAreaForCategory, subCategoriesFor } from '../lib/focusAreas'
-import { GENERAL_PRACTICE_STARTERS, PRACTICE_STARTERS, pickStarters } from '../lib/starters'
 import TeachingContextFields, { type TeachingContext } from '../components/TeachingContextFields'
 import {
   generateScenario,
@@ -317,17 +316,6 @@ export default function TryItOut({
   const hasFeedback = attempt && (attempt.feedback || attempt.modelResponse)
   // Re-picked whenever the section or the room changes — a K-5 rehearsal and a
   // 9-12 rehearsal should not open with the same three scenarios.
-  // Named only under Teaching and Learning, which is the only section that asks
-  // for a subject or course.
-  const roomLabel =
-    focusArea === TEACHING_AND_LEARNING ? room.course ?? room.subject ?? null : null
-
-  const starters = pickStarters(
-    (focusArea && PRACTICE_STARTERS[focusArea]) || GENERAL_PRACTICE_STARTERS,
-    room,
-    focusArea,
-    3,
-  )
   const subCategories = subCategoriesFor(focusArea)
   const sessionAttempts = sessionState?.done
     ? sessionState.attemptIds.map((id) => allAttempts.find((a) => a.id === id)).filter((a): a is ScenarioAttempt => !!a)
@@ -406,34 +394,10 @@ export default function TryItOut({
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Practice a scenario</p>
             <p className="mt-2 font-heading text-2xl font-bold text-cream">Ready when you are.</p>
             <p className="mt-1 text-sm text-cream/70">
-              {area ? area.blurb : 'Pick a moment to rehearse, or let Wivoza build a new one for you.'}
+              {area
+                ? area.blurb
+                : 'Set the situation and your room, then let Wivoza build a scenario for you.'}
             </p>
-            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {starters.map((s, i) => (
-                <button
-                  key={s.text}
-                  type="button"
-                  onClick={() => {
-                    setCategory(s.category)
-                    handleNewScenario(s.category)
-                  }}
-                  disabled={generating}
-                  className={`rounded-2xl p-4 text-left text-sm font-medium text-forest transition-transform hover:-translate-y-0.5 disabled:opacity-60 ${
-                    ['bg-peach-tint', 'bg-gold-tint', 'bg-mint-tint'][i % 3]
-                  }`}
-                >
-                  {/* The course rides in the eyebrow rather than the scenario
-                      text: it genuinely changes what gets generated, and a
-                      teacher who picks Biology should see that land somewhere.
-                      Putting it in the sentence instead would mean fighting
-                      "a English discussion" grammar in every template. */}
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
-                    {[categoryLabel(s.category), roomLabel].filter(Boolean).join(' · ')}
-                  </span>
-                  <p className="mt-1.5">{s.text}</p>
-                </button>
-              ))}
-            </div>
             {(generating || submitting) && (
               <div className={`mt-4 flex justify-center ${attempt ? 'text-forest' : 'text-gold'}`}>
                 <ProgressRing

@@ -59,18 +59,6 @@ struct TryItOutContent: View {
 
     private var asksAboutContent: Bool { focusArea == teachingAndLearning }
 
-    /// Named only under Teaching and Learning, the only section that asks for a
-    /// subject or course.
-    private var roomLabel: String? { asksAboutContent ? room.course ?? room.subject : nil }
-
-    /// Re-picked whenever the section or the room changes — a K-5 rehearsal and
-    /// a 9-12 rehearsal should not open with the same three scenarios.
-    private var starters: [Starter] {
-        pickStarters(
-            focusArea.flatMap { practiceStartersByArea[$0] } ?? generalPracticeStarters,
-            room: room, area: focusArea, count: 3
-        )
-    }
 
     private var savedAttempts: [ScenarioAttempt] { allAttempts.filter(\.saved) }
     private var hasFeedback: Bool { attempt?.feedback != nil || attempt?.modelResponse != nil }
@@ -138,38 +126,10 @@ struct TryItOutContent: View {
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            Text("Pick a moment to rehearse, or build a new one from the filters above.")
+            Text("Set the situation and your room above, then build a scenario.")
                 .font(.subheadline)
                 .foregroundStyle(AppTheme.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            ForEach(Array(starters.enumerated()), id: \.offset) { index, starter in
-                Button {
-                    category = starter.category
-                    Task { await generateScenario() }
-                } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        // The course rides in the eyebrow rather than the
-                        // scenario text: it genuinely changes what gets
-                        // generated, and a teacher who picks Biology should see
-                        // that land somewhere.
-                        Text(
-                            [categoryLabel(starter.category ?? ""), roomLabel]
-                                .compactMap { $0 }.joined(separator: " · ").uppercased()
-                        )
-                            .font(.caption2.weight(.bold)).tracking(0.8)
-                            .foregroundStyle(AppTheme.terracotta600)
-                        Text(starter.text)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(AppTheme.forest)
-                            .multilineTextAlignment(.leading)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .background([AppTheme.peachTint, AppTheme.goldTint, AppTheme.mintTint][index % 3], in: RoundedRectangle(cornerRadius: 14))
-                }
-                .buttonStyle(.plain)
-                .disabled(generating)
-            }
             ProgressRing(active: generating, estimatedSeconds: 8, label: "Building a scenario", hint: "Usually under ten seconds.")
             Button {
                 Task { await generateScenario() }
