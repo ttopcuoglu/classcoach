@@ -80,7 +80,8 @@ struct RecordingPanelView: View {
             case .idle: Text("Ready to record")
             case .recording: Text("Recording")
             case .paused: Text("Paused")
-            case .uploading: Text("Transcribing your session...")
+            // The ring below carries this label, so the caption steps back.
+            case .uploading: Text("Almost there")
             }
         }
         .font(.caption.weight(.semibold))
@@ -121,9 +122,20 @@ struct RecordingPanelView: View {
                 stopButton
             }
         case .uploading:
-            Text("This can take a minute for a full class period.")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.7))
+            // Web shows a ring with a percentage here and iOS showed two lines
+            // of text, so the same wait felt stalled on one platform and busy on
+            // the other. Deepgram's batch endpoint reports no completion
+            // fraction, so this is the same honest estimate web uses: scaled by
+            // how long the recording actually was, because a full class period
+            // genuinely takes longer to transcribe than a five-minute clip.
+            ProgressRing(
+                active: true,
+                estimatedSeconds: max(3, recorder.elapsedSec * 0.15),
+                label: "Transcribing your session",
+                hint: "This can take a minute for a full class period.",
+                tint: AppTheme.gold,
+                size: 88
+            )
         }
     }
 
