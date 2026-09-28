@@ -160,6 +160,11 @@ struct AudioSession: Decodable, Identifiable {
     let consentConfirmed: Bool
     let status: String
     let durationSec: Double?
+    /// Set when the server took the audio. Absent on sessions recorded before
+    /// transcription became a background job, and while an upload is still in
+    /// flight — a row with no start time simply shows no percentage.
+    let transcribeStartedAt: String?
+    let failureReason: String?
     let teacherTalkPct: Double?
     let studentTalkPct: Double?
     let questionCount: Int?
@@ -173,6 +178,14 @@ struct AudioSession: Decodable, Identifiable {
     let reflectConversation: [AudioReflectMessage]?
     let lessonContent: AudioLessonContent?
     let contentNotes: AudioContentNotes?
+
+    /// ISO-8601, with or without fractional seconds depending on the driver.
+    var transcribeStartedAtDate: Date? {
+        guard let transcribeStartedAt else { return nil }
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return withFraction.date(from: transcribeStartedAt) ?? ISO8601DateFormatter().date(from: transcribeStartedAt)
+    }
     let rubricLens: AudioRubricLens?
     /// A plain-language "Lesson at a glance" paragraph, generated after analysis.
     let classSummary: String?
@@ -185,7 +198,8 @@ struct AudioSession: Decodable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id, teacherName, classSubject, period, gradeLevel, sessionDate, consentConfirmed, status,
-             durationSec, teacherTalkPct, studentTalkPct, questionCount, higherOrderPct, avgWaitTimeSec,
+             durationSec, transcribeStartedAt, failureReason,
+             teacherTalkPct, studentTalkPct, questionCount, higherOrderPct, avgWaitTimeSec,
              cfuCount, metricsDetail, highlights, phases, questionLog, reflectConversation, lessonContent,
              contentNotes, rubricLens, classSummary, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
     }
@@ -201,6 +215,8 @@ struct AudioSession: Decodable, Identifiable {
         consentConfirmed = try container.decode(Bool.self, forKey: .consentConfirmed)
         status = try container.decode(String.self, forKey: .status)
         durationSec = try container.decodeIfPresent(Double.self, forKey: .durationSec)
+        transcribeStartedAt = try container.decodeIfPresent(String.self, forKey: .transcribeStartedAt)
+        failureReason = try container.decodeIfPresent(String.self, forKey: .failureReason)
         teacherTalkPct = try container.decodeIfPresent(Double.self, forKey: .teacherTalkPct)
         studentTalkPct = try container.decodeIfPresent(Double.self, forKey: .studentTalkPct)
         questionCount = try container.decodeIfPresent(Int.self, forKey: .questionCount)

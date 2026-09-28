@@ -7,6 +7,9 @@ import SwiftUI
 struct RecordingPanelView: View {
     let session: AudioSessionWithSegments?
     let onSessionUpdate: (AudioSessionWithSegments, [SpeakerSample]) -> Void
+    /// The recording has been handed to the background uploader. Nothing is
+    /// finished yet; the parent returns to the list and watches the row.
+    let onUploadStarted: () -> Void
     let onExit: () -> Void
 
     @StateObject private var recorder = AudioRecorder()
@@ -171,10 +174,17 @@ struct RecordingPanelView: View {
     private func handleStop() async {
         guard let result = recorder.stop(), let localSession else { return }
         do {
-            let speakers = try await AudioCoachingService.transcribe(sessionId: localSession.id, audioFileURL: result.fileURL)
-            let updated = try await AudioCoachingService.updateSession(id: localSession.id, status: "tagging", durationSec: result.elapsedSec)
+            // Handed to the system, not awaited: iOS finishes the transfer with
+            // the app suspended or the phone locked, and the server transcribes
+            // without us. The teacher goes back to the list, where the row
+            // reports progress.
+            try await AudioCoachingService.startTranscription(
+                sessionId: localSession.id,
+                audioFileURL: result.fileURL,
+                durationSec: result.elapsedSec
+            )
             recorder.reset()
-            onSessionUpdate(AudioSessionWithSegments(session: updated, segments: []), speakers)
+            onUploadStarted()
         } catch {
             self.error = error.localizedDescription
             recorder.reset()

@@ -8,6 +8,10 @@ struct AudioCoachingView: View {
     @State private var historyLoading = true
     @State private var loadingSessionId: String?
 
+    private var hasTranscribing: Bool {
+        sessions.contains { $0.status == "transcribing" }
+    }
+
     private var isRecordingPhase: Bool {
         guard let active else { return true }
         return ["setup", "recording", "paused"].contains(active.status)
@@ -27,6 +31,12 @@ struct AudioCoachingView: View {
                         RecordingPanelView(session: active, onSessionUpdate: { updated, spk in
                             active = updated
                             speakers = spk
+                        }, onUploadStarted: {
+                            // Nothing to wait for on this screen any more — the
+                            // upload is the system's job and the transcription
+                            // is the server's.
+                            active = nil
+                            Task { await loadHistory() }
                         }, onExit: {
                             active = nil
                         })
@@ -53,6 +63,27 @@ struct AudioCoachingView: View {
             .background(AppTheme.background)
             .navigationTitle("Lesson Debrief")
             .task { await loadHistory() }
+            // A row that says "Processing" has to stop saying it without being
+            // asked. Only while something is actually running, so an idle list
+            // makes no requests at all.
+            .task(id: hasTranscribing) {
+                guard hasTranscribing else { return }
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(5))
+                    if Task.isCancelled { return }
+                    await loadHistory()
+                }
+            }
+            // The background upload can land while this view is on screen, or
+            // in a process launched purely to be told. Either way the answer
+            // comes from the server, not from the notification.
+            .onReceive(NotificationCenter.default.publisher(for: BackgroundUploader.didFinishUpload)) { note in
+                if let message = note.userInfo?["message"] as? String,
+                   (note.userInfo?["success"] as? Bool) == false {
+                    error = message
+                }
+                Task { await loadHistory() }
+            }
         }
     }
 
@@ -87,7 +118,14 @@ struct AudioCoachingView: View {
     private func open(_ session: AudioSession) async {
         loadingSessionId = session.id
         do {
-            active = try await AudioCoachingService.getSession(id: session.id)
+            let full = try await AudioCoachingService.getSession(id: session.id)
+            // The cards used to arrive with the upload's response. Now the
+            // upload returns long before they exist, so they are fetched when
+            // the teacher actually opens the session to tag.
+            if full.status == "tagging" {
+                speakers = (try? await AudioCoachingService.speakers(sessionId: session.id)) ?? []
+            }
+            active = full
         } catch {
             self.error = error.localizedDescription
         }
@@ -115,14 +153,31 @@ private struct SessionCardView: View {
         switch session.status {
         case "locked": return "Locked"
         case "analyzed": return "Ready to review"
+        case "transcribing": return "Processing · \(Int(transcriptionProgress.rounded()))%"
+        case "failed": return "Couldn't process"
         default: return "In progress"
         }
+    }
+
+    /// The same curve and the same 0.15x factor the web uses, read from the
+    /// row rather than from anything local — so the number is the same here,
+    /// on the web, and after the app has been killed and relaunched.
+    ///
+    /// Recomputed whenever the row re-renders, which the five-second refresh
+    /// of the list already causes. No separate timer: a percentage that moves
+    /// every five seconds is enough to look alive, and a per-row clock in a
+    /// list is not worth what it costs.
+    private var transcriptionProgress: Double {
+        guard let started = session.transcribeStartedAtDate else { return 0 }
+        let tau = max(3, Double(session.durationSec ?? 0) * 0.15)
+        return 92 * (1 - exp(-Date().timeIntervalSince(started) / tau))
     }
 
     private var statusStyle: (fill: Color, ink: Color) {
         switch session.status {
         case "locked": return (AppTheme.cream, AppTheme.textSecondary)
         case "analyzed": return (AppTheme.mintTint, AppTheme.forest)
+        case "failed": return (AppTheme.peachTint, AppTheme.terracotta600)
         default: return (AppTheme.goldTint, AppTheme.forest)
         }
     }

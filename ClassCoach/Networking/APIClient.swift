@@ -32,6 +32,11 @@ final class APIClient {
         #endif
     }()
 
+    /// Exposed so `BackgroundUploader` builds its request against the same
+    /// host — a background session cannot reuse this class's URLSession, but
+    /// it must not drift to a different backend.
+    var uploadBaseURL: URL { baseURL }
+
     private init() {}
 
     /// Joins the base URL and a path that may carry its own query string

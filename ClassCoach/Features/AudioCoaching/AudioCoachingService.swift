@@ -52,6 +52,27 @@ enum AudioCoachingService {
         let speakers: [SpeakerSample]
     }
 
+    /// Hands the recording to a background `URLSession` and returns at once.
+    /// The system finishes the transfer even if the teacher locks the phone,
+    /// and the server transcribes without us — mirrors `startTranscription` in
+    /// `web/src/lib/api.ts`.
+    static func startTranscription(sessionId: String, audioFileURL: URL, durationSec: Double) async throws {
+        try BackgroundUploader.shared.startTranscription(
+            sessionId: sessionId,
+            audioFileURL: audioFileURL,
+            durationSec: durationSec,
+            token: await AuthManager.shared.token,
+            baseURL: APIClient.shared.uploadBaseURL
+        )
+    }
+
+    /// The speaker cards, once transcription has finished — the upload no
+    /// longer waits around to return them.
+    static func speakers(sessionId: String) async throws -> [SpeakerSample] {
+        let result: TranscribeResponse = try await APIClient.shared.request("/api/audio-sessions/\(sessionId)/speakers")
+        return result.speakers
+    }
+
     /// Uploads the recorded audio as multipart form data — same pattern as
     /// `web/src/lib/api.ts`'s `transcribeAudioSession` (field name `audio`).
     static func transcribe(sessionId: String, audioFileURL: URL) async throws -> [SpeakerSample] {
