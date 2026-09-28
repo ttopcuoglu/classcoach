@@ -40,19 +40,30 @@ struct AskAndPracticeView: View {
     @ViewBuilder
     private var areaPicker: some View {
         if let area = findFocusArea(focusArea) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(area.label)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AppTheme.primary)
-                    Text(area.blurb)
-                        .font(.footnote)
-                        .foregroundStyle(AppTheme.textSecondary)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(area.label)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppTheme.primary)
+                        Text(area.blurb)
+                            .font(.footnote)
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                    Spacer()
+                    Button("Change") { withAnimation { focusArea = nil } }
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(AppTheme.terracotta600)
                 }
-                Spacer()
-                Button("Change") { withAnimation { focusArea = nil } }
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(AppTheme.terracotta600)
+                // Parent and colleague work overlaps Communication Coach on
+                // purpose: a quick question or one rehearsed exchange belongs
+                // here, an actual drafted email or a prepared meeting there.
+                if let note = area.handoffNote {
+                    Text(note)
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .padding(14)
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))

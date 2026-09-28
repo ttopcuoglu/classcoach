@@ -61,6 +61,17 @@ export default function CoachChat() {
           >
             Change
           </button>
+          {/* Parent and colleague work overlaps Communication Coach on purpose:
+              a quick question or one rehearsed exchange belongs here, an actual
+              drafted email or a whole prepared meeting belongs there. */}
+          {area.handoff && (
+            <Link
+              to={area.handoff.to}
+              className="w-full text-xs text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta"
+            >
+              {area.handoff.label}
+            </Link>
+          )}
         </div>
       ) : (
         <div className="rounded-2xl border border-hairline bg-cream-card p-5">

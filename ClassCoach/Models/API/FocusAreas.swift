@@ -19,6 +19,10 @@ struct FocusArea: Identifiable {
     let askStarters: [String]
     /// Practice openers, each carrying the sub-category to generate from.
     let practiceStarters: [(label: String, category: String)]
+    /// For the two areas that overlap Communication Coach: a quick question or
+    /// one rehearsed exchange belongs here, an actual drafted email or a whole
+    /// prepared meeting belongs there. Nil for the other four.
+    var handoffNote: String? = nil
 
     var id: String { value }
 }
@@ -143,7 +147,8 @@ let focusAreas: [FocusArea] = [
             ("An accusatory parent email you have to answer", "difficult_parent_email"),
             ("A parent opens a conference by criticizing your class", "conferences"),
             ("A phone call about a student who is going to fail", "delivering_hard_news"),
-        ]
+        ],
+        handoffNote: "Need the actual email drafted, or a conference prepared? That's Communication Coach, under More."
     ),
     FocusArea(
         value: "colleagues",
@@ -167,7 +172,8 @@ let focusAreas: [FocusArea] = [
             ("A co-teacher contradicts you mid-lesson", "co_teaching"),
             ("Your department decides something you think is wrong for kids", "talking_with_admin"),
             ("A colleague writes off a student you share", "disagreeing_with_a_peer"),
-        ]
+        ],
+        handoffNote: "Need to prepare a whole meeting, or draft the message first? That's Communication Coach, under More."
     ),
 ]
 

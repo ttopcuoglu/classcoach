@@ -25,6 +25,9 @@ export type FocusArea = {
   askStarters: string[]
   /// Practice openers. Each carries the sub-category it should generate from.
   practiceStarters: { label: string; category: string }[]
+  /// For the two areas that overlap Communication Coach: where to send a
+  /// teacher who needs the actual artifact rather than a quick rehearsal.
+  handoff?: { label: string; to: string }
 }
 
 export const FOCUS_AREAS: FocusArea[] = [
@@ -148,6 +151,10 @@ export const FOCUS_AREAS: FocusArea[] = [
       { label: 'Delivering hard news', value: 'delivering_hard_news' },
       { label: 'Building a partnership', value: 'building_partnership' },
     ],
+    handoff: {
+      label: 'Need the actual email drafted, or a conference prepared? Communication Coach does that.',
+      to: '/communications',
+    },
     askStarters: [
       'A parent email is stressing me out.',
       "I have to tell a parent something they won't want to hear.",
@@ -174,6 +181,10 @@ export const FOCUS_AREAS: FocusArea[] = [
       { label: 'Team & PLC time', value: 'team_and_plc_time' },
       { label: 'Mentoring', value: 'mentoring' },
     ],
+    handoff: {
+      label: 'Need to prepare a whole meeting, or draft the message first? Communication Coach does that.',
+      to: '/communications?tool=prepare',
+    },
     askStarters: [
       'My co-teacher keeps overriding me in front of students.',
       'I need to raise a concern with someone more senior than me.',
