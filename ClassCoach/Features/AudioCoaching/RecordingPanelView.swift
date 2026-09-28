@@ -132,7 +132,8 @@ struct RecordingPanelView: View {
                 active: true,
                 estimatedSeconds: max(3, recorder.elapsedSec * 0.15),
                 label: "Transcribing your session",
-                hint: "This can take a minute for a full class period.",
+                stages: TranscribeStages.all,
+                hint: TranscribeStages.hint(recordingSec: recorder.elapsedSec),
                 tint: AppTheme.gold,
                 size: 88
             )

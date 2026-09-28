@@ -8,6 +8,7 @@ import { NumberedCard } from '../components/AnswerSection'
 import { ACCENT_CYCLE, ACCENTS, StatTile, type Accent } from '../components/report'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
+import { transcribeHint, transcribeStage } from '../lib/transcribeStages'
 import { HATCH_STYLE } from '../lib/chartPatterns'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import { createPlaybackQueue, primeAudioElement, splitIntoSentences, type PlaybackQueue } from '../lib/voicePlayback'
@@ -564,7 +565,7 @@ function RecordingPanel({
             {phase === 'idle' && 'Ready to record'}
             {phase === 'recording' && 'Recording'}
             {phase === 'paused' && 'Paused'}
-            {phase === 'uploading' && 'Transcribing your session...'}
+            {phase === 'uploading' && `${transcribeStage(uploadProgress)}\u2026`}
           </p>
 
           <div className="flex items-center gap-4">
@@ -619,8 +620,8 @@ function RecordingPanel({
                 <ProgressRing
                   progress={uploadProgress}
                   size={88}
-                  label="Transcribing your session"
-                  hint="This can take a minute for a full class period."
+                  label={transcribeStage(uploadProgress)}
+                  hint={transcribeHint(uploadDurationRef.current)}
                 />
               </div>
             )}

@@ -17,6 +17,10 @@ struct ProgressRing: View {
     var estimatedSeconds: Double = 6
     /// What Wivoza is doing right now, e.g. "Reading what you wrote".
     let label: String
+    /// Optional stages, shown in place of `label` and swapped as the arc fills.
+    /// For waits long enough that one unchanging line reads as frozen — see
+    /// `TranscribeStages.swift`. `label` stays the accessibility label.
+    var stages: [(from: Double, text: String)] = []
     /// Sub-line, e.g. "Usually about ten seconds."
     var hint: String?
     var tint: Color = AppTheme.forest
@@ -26,7 +30,14 @@ struct ProgressRing: View {
         // Inserting a fresh `RunningRing` each time `active` turns true is what
         // restarts the clock at 0% — its start date lives in its own @State.
         if active {
-            RunningRing(estimatedSeconds: estimatedSeconds, label: label, hint: hint, tint: tint, size: size)
+            RunningRing(
+                estimatedSeconds: estimatedSeconds,
+                label: label,
+                stages: stages,
+                hint: hint,
+                tint: tint,
+                size: size
+            )
         }
     }
 }
@@ -34,6 +45,7 @@ struct ProgressRing: View {
 private struct RunningRing: View {
     let estimatedSeconds: Double
     let label: String
+    let stages: [(from: Double, text: String)]
     let hint: String?
     let tint: Color
     let size: CGFloat
@@ -43,6 +55,14 @@ private struct RunningRing: View {
 
     /// Same ceiling as the web hook, so both platforms show the same numbers.
     private static let ceiling = 92.0
+
+    private func stageText(at pct: Double) -> String {
+        var current = label
+        for stage in stages {
+            if pct >= stage.from { current = stage.text } else { break }
+        }
+        return current
+    }
 
     private func progress(at date: Date) -> Double {
         // Guard against a caller passing 0/NaN and producing an instant 92%.
@@ -76,9 +96,11 @@ private struct RunningRing: View {
                 .padding(stroke / 2)
                 .frame(width: size, height: size)
 
-                Text(label)
+                Text(stageText(at: pct))
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: stageText(at: pct))
                 if let hint {
                     Text(hint)
                         .font(.caption)
