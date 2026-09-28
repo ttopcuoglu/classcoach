@@ -84,7 +84,16 @@ attemptsRouter.post('/', async (req, res) => {
     const context = `Scenario: ${scenario.text}\n\nTeacher's response: ${responseText}`
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 1024,
+      // The per-area prompts and the scenarios they produce are both longer
+      // than the single classroom-management pair they replaced, and the
+      // rating sits at the end of the response where a tight cap eats it.
+      max_tokens: 1400,
+      // This model defaults to adaptive extended thinking when the param is
+      // omitted, and thinking tokens come out of the same max_tokens budget —
+      // on a dense scenario it spent the whole budget thinking and returned
+      // zero text blocks, which stored a blank attempt and showed a teacher
+      // empty coaching. Same trap already documented in lessonPlans.ts.
+      thinking: { type: 'disabled' },
       system: `${feedbackSystemPrompt(areaForScenario(scenario))}${teachingContextBlock(scenario)}${buildExperienceContextBlock(user?.experienceLevel)}`,
       messages: [{ role: 'user', content: context }],
     })
@@ -93,6 +102,15 @@ attemptsRouter.post('/', async (req, res) => {
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('\n')
+
+    // An empty response means no usable coaching. Fail so the teacher sees
+    // "please try again" and can resubmit, rather than banking a blank attempt
+    // in their history that can never be recovered.
+    if (!text.trim()) {
+      console.error('[attempts] empty completion; stop_reason:', response.stop_reason)
+      res.status(502).json({ error: 'Claude request failed' })
+      return
+    }
 
     const feedback = extractTag(text, 'feedback') ?? stripStructuralTags(text)
     const modelResponse = extractTag(text, 'model_response')
@@ -150,6 +168,9 @@ attemptsRouter.post('/:id/chat', async (req, res) => {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 300,
+      // Same reason as the feedback call above — at 300 tokens a single
+      // thinking block would swallow the entire reply.
+      thinking: { type: 'disabled' },
       system: `${attemptChatSystemPrompt(areaForScenario(attempt.scenario))}${teachingContextBlock(attempt.scenario)}${buildExperienceContextBlock(user?.experienceLevel)}`,
       messages: toClaudeMessages(existing, trimmed),
     })

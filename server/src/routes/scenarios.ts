@@ -88,6 +88,10 @@ scenariosRouter.post('/generate', async (req, res) => {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 400,
+      // This model defaults to adaptive extended thinking, drawn from the same
+      // max_tokens budget — at 400 tokens one thinking block would return an
+      // empty scenario and silently drop the teacher into the curated fallback.
+      thinking: { type: 'disabled' },
       system: `${SCENARIO_RULES}\n\n${scenarioAreaBlock(chosenArea)}`,
       messages: [{ role: 'user', content: context }],
     })
