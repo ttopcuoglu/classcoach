@@ -50,22 +50,51 @@ export const SUBJECTS = [
 
 export const OTHER_SUBJECT = 'Other'
 
-/// The courses a subject splits into at 9-12. Offered only for that band —
-/// "Algebra 2" means something specific in a high school schedule, while a 4th
-/// grade teacher teaches math, full stop.
-export const COURSES_BY_SUBJECT: Record<string, readonly string[]> = {
-  ELA: ['English 9', 'English 10', 'English 11', 'English 12', 'Creative Writing', 'Journalism'],
-  Math: ['Algebra 1', 'Geometry', 'Algebra 2', 'Pre-Calculus', 'Calculus', 'Statistics'],
-  Science: ['Biology', 'Chemistry', 'Physics', 'Environmental Science', 'Anatomy', 'Computer Science'],
-  'History/SS': ['World History', 'US History', 'Government', 'Economics', 'Psychology', 'Geography'],
-  Technology: ['Computer Science', 'Engineering', 'Robotics', 'Digital Media', 'Business/IT'],
-  'Fine Arts': ['Visual Art', 'Music', 'Theater', 'Dance', 'Film'],
+/// The courses a subject splits into, per band. Middle school and high school
+/// both departmentalise, so both have real course names; K-2 and 3-5 do not,
+/// because one teacher owns every subject and there is nothing to name.
+///
+/// This is what actually pins a room down above elementary. "Algebra 1" says
+/// more than a grade number would — it is taken by 7th, 8th and 9th graders
+/// depending on track — and it is the difference between a 6th grade topic and
+/// an 8th grade one, which a band could never express.
+export const COURSES_BY_BAND_AND_SUBJECT: Record<string, Record<string, readonly string[]>> = {
+  '6-8': {
+    ELA: ['ELA 6', 'ELA 7', 'ELA 8'],
+    Math: ['Math 6', 'Math 7', 'Math 8', 'Pre-Algebra', 'Algebra 1'],
+    Science: ['Science 6', 'Science 7', 'Science 8', 'Life Science', 'Earth Science', 'Physical Science'],
+    'History/SS': ['World Geography', 'Ancient History', 'World History', 'US History', 'Civics'],
+    Technology: ['Computer Science', 'STEM & Robotics', 'Digital Media'],
+    'Fine Arts': ['Art', 'Band', 'Chorus', 'Theater'],
+  },
+  '9-12': {
+    ELA: ['English 9', 'English 10', 'English 11', 'English 12', 'Creative Writing', 'Journalism'],
+    Math: ['Algebra 1', 'Geometry', 'Algebra 2', 'Pre-Calculus', 'Calculus', 'Statistics'],
+    Science: ['Biology', 'Chemistry', 'Physics', 'Environmental Science', 'Anatomy', 'Computer Science'],
+    'History/SS': ['World History', 'US History', 'Government', 'Economics', 'Psychology', 'Geography'],
+    Technology: ['Computer Science', 'Engineering', 'Robotics', 'Digital Media', 'Business/IT'],
+    'Fine Arts': ['Visual Art', 'Music', 'Theater', 'Dance', 'Film'],
+  },
 }
 
-export function coursesFor(gradeBand: string | null | undefined, subject: string | null | undefined): readonly string[] {
-  if (gradeBand !== '9-12' || !subject) return []
-  return COURSES_BY_SUBJECT[subject] ?? []
+export function coursesFor(
+  gradeBand: string | null | undefined,
+  subject: string | null | undefined,
+): readonly string[] {
+  if (!gradeBand || !subject) return []
+  return COURSES_BY_BAND_AND_SUBJECT[gradeBand]?.[subject] ?? []
 }
+
+/// True when this band/subject offers courses at all — the test the routes use
+/// to decide whether a course is a real choice or stale client state.
+export function offersCourses(gradeBand: string | null | undefined, subject: string | null | undefined): boolean {
+  return coursesFor(gradeBand, subject).length > 0
+}
+
+// Middle school course naming varies far more by district than high school
+// does — "Math 7" here is "Course 2" there — so the list is a shortcut, not a
+// closed set. "Other" takes whatever the teacher actually calls it.
+export const OTHER_COURSE = 'Other'
 
 /// How the section is taught. Distinct from the course: the same Algebra 2 runs
 /// as an honors section and as an inclusion section, and what a teacher needs

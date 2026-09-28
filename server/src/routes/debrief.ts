@@ -26,7 +26,7 @@ import { extractTag, stripStructuralTags, stripTag } from '../lib/extractTag.ts'
 import type { CoachFollowUp, Debrief } from '../generated/prisma/client.ts'
 import { prisma } from '../lib/prisma.ts'
 import { categoryInArea, isKnownCategory } from '../lib/scenarioCategories.ts'
-import { isCourseLevel, pickGradeBand } from '../lib/teachingContext.ts'
+import { isCourseLevel, offersCourses, pickGradeBand } from '../lib/teachingContext.ts'
 import {
   TEACHING_AND_LEARNING,
   findFocusArea,
@@ -214,9 +214,12 @@ debriefRouter.post('/', async (req, res) => {
     asksAboutContent && typeof subject === 'string' && subject.trim() ? subject.trim() : null
   // Course is offered only at 9-12, so anything sent with another band is
   // stale client state rather than a real choice.
+  // Only where the band departmentalises (6-8 and 9-12) and the subject has
+  // courses; free text, because "Other" exists for district naming.
   const askCourse =
-    asksAboutContent && askGradeBand === '9-12' && typeof course === 'string' && course.trim()
-      ? course.trim()
+    asksAboutContent && offersCourses(askGradeBand, askSubject) &&
+    typeof course === 'string' && course.trim()
+      ? course.trim().slice(0, 80)
       : null
   const askCourseLevel = asksAboutContent && isCourseLevel(courseLevel) ? courseLevel : null
 

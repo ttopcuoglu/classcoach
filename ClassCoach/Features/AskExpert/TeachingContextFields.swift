@@ -15,6 +15,8 @@ struct TeachingContextValue: Equatable {
     var courseLevel: String?
     /// The teacher picked "Other"; the free-text field then owns `subject`.
     var usingOtherSubject = false
+    /// Same, for the course — middle school naming varies by district.
+    var usingOtherCourse = false
 
     /// Defaults from the teacher's profile, once. Called by whoever owns the
     /// room — the Ask & Practice shell, or a standalone tab.
@@ -51,9 +53,10 @@ struct TeachingContextFields: View {
             field("Grade band") {
                 ChipRow(items: gradeBandChips, selection: value.gradeBand) { picked in
                     value.gradeBand = picked ?? "6-8"
-                    // Courses belong to 9-12, so leaving that band drops the
-                    // course rather than silently sending a stale one.
-                    if value.gradeBand != "9-12" { value.course = nil }
+                    // A course belongs to a band, so changing band drops it
+                    // rather than silently sending a stale one.
+                    value.course = nil
+                    value.usingOtherCourse = false
                 }
             }
 
@@ -66,6 +69,7 @@ struct TeachingContextFields: View {
                     value.usingOtherSubject = picked == otherSubjectLabel
                     value.subject = value.usingOtherSubject ? nil : picked
                     value.course = nil
+                    value.usingOtherCourse = false
                 }
                 if value.usingOtherSubject {
                     TextField("Which subject?", text: Binding(
@@ -84,9 +88,20 @@ struct TeachingContextFields: View {
             if showSubjectAndLevel, !courses.isEmpty {
                 field("Course") {
                     ChipRow(
-                        items: courses.map { ($0, Optional($0)) },
-                        selection: value.course
-                    ) { value.course = $0 }
+                        items: courses.map { ($0, Optional($0)) } + [(otherCourseLabel, Optional(otherCourseLabel))],
+                        selection: value.usingOtherCourse ? otherCourseLabel : value.course
+                    ) { picked in
+                        value.usingOtherCourse = picked == otherCourseLabel
+                        value.course = value.usingOtherCourse ? nil : picked
+                    }
+                    if value.usingOtherCourse {
+                        TextField("What's it called?", text: Binding(
+                            get: { value.course ?? "" },
+                            set: { value.course = $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                        .padding(.horizontal)
+                    }
                 }
             }
 

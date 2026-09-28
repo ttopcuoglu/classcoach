@@ -6,7 +6,7 @@ import { TEACHING_AND_LEARNING, findFocusArea, focusAreaForSubCategory } from '.
 import { scenarioAreaBlock } from '../lib/focusAreaPrompt.ts'
 import { prisma } from '../lib/prisma.ts'
 import { pickDifficulty } from '../lib/scenarioCategories.ts'
-import { coursesFor, gradeBandLabel, isCourseLevel, pickGradeBand } from '../lib/teachingContext.ts'
+import { gradeBandLabel, isCourseLevel, offersCourses, pickGradeBand } from '../lib/teachingContext.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const scenariosRouter = Router()
@@ -55,10 +55,15 @@ scenariosRouter.post('/generate', async (req, res) => {
   const asksAboutContent = chosenArea.value === TEACHING_AND_LEARNING
   const chosenSubject =
     asksAboutContent && typeof subject === 'string' && subject.trim() ? subject.trim() : null
-  // Courses exist only at 9-12, and only within the subject that offers them.
+  // Courses exist only where the band departmentalises (6-8 and 9-12) and only
+  // within a subject that has them — so K-2 and 3-5 reject a course outright,
+  // which also catches stale client state after a band change. The value itself
+  // is free text, because "Other" exists: middle school naming varies too much
+  // by district for a fixed list to be honest.
   const chosenCourse =
-    typeof course === 'string' && coursesFor(chosenGradeBand, chosenSubject).includes(course)
-      ? course
+    asksAboutContent && offersCourses(chosenGradeBand, chosenSubject) &&
+    typeof course === 'string' && course.trim()
+      ? course.trim().slice(0, 80)
       : null
   const chosenCourseLevel = asksAboutContent && isCourseLevel(courseLevel) ? courseLevel : null
 

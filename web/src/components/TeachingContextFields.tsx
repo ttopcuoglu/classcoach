@@ -3,6 +3,7 @@ import {
   COURSE_LEVELS,
   COURSE_LEVEL_BLURB,
   GRADE_BANDS,
+  OTHER_COURSE,
   OTHER_SUBJECT,
   SUBJECTS,
   coursesFor,
@@ -16,6 +17,8 @@ export type TeachingContext = {
   courseLevel?: string
   /// The teacher picked "Other"; the free-text box then owns `subject`.
   otherSubject: boolean
+  /// Same, for the course — middle school naming varies by district.
+  otherCourse: boolean
 }
 
 export const DEFAULT_TEACHING_CONTEXT: TeachingContext = {
@@ -24,6 +27,7 @@ export const DEFAULT_TEACHING_CONTEXT: TeachingContext = {
   course: undefined,
   courseLevel: undefined,
   otherSubject: false,
+  otherCourse: false,
 }
 
 // Shared by Ask and Practice, because both need the same answers and they have
@@ -70,7 +74,7 @@ export default function TeachingContextFields({
               disabled={disabled}
               // Courses belong to 9-12, so leaving that band drops the course
               // rather than silently sending a stale one.
-              onClick={() => set({ gradeBand: band, course: band === '9-12' ? value.course : undefined })}
+              onClick={() => set({ gradeBand: band, course: undefined, otherCourse: false })}
               aria-pressed={value.gradeBand === band}
               className={chip(value.gradeBand === band)}
             >
@@ -92,8 +96,8 @@ export default function TeachingContextFields({
               onClick={() =>
                 set(
                   value.subject === s && !value.otherSubject
-                    ? { subject: undefined, course: undefined, otherSubject: false }
-                    : { subject: s, course: undefined, otherSubject: false },
+                    ? { subject: undefined, course: undefined, otherSubject: false, otherCourse: false }
+                    : { subject: s, course: undefined, otherSubject: false, otherCourse: false },
                 )
               }
               aria-pressed={!value.otherSubject && value.subject === s}
@@ -105,7 +109,7 @@ export default function TeachingContextFields({
           <button
             type="button"
             disabled={disabled}
-            onClick={() => set({ otherSubject: true, subject: undefined, course: undefined })}
+            onClick={() => set({ otherSubject: true, subject: undefined, course: undefined, otherCourse: false })}
             aria-pressed={value.otherSubject}
             className={chip(value.otherSubject)}
           >
@@ -126,24 +130,47 @@ export default function TeachingContextFields({
       </div>
       )}
 
-      {/* Only at 9-12, and only once a subject is chosen: "Math" describes a 4th
-          grade classroom, but says almost nothing about a high school schedule. */}
+      {/* Wherever the band departmentalises — 6-8 and 9-12 — and once a subject
+          is chosen. "Math" describes a 4th grade classroom, but says almost
+          nothing about a middle or high school schedule: Math 7 and Algebra 1
+          are different rooms, and that distinction is what a grade number was
+          never going to capture. */}
       {showSubjectAndLevel && courses.length > 0 && (
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Course</p>
-          <div className="mt-1.5 flex flex-wrap gap-2">
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
             {courses.map((c) => (
               <button
                 key={c}
                 type="button"
                 disabled={disabled}
-                onClick={() => set({ course: value.course === c ? undefined : c })}
-                aria-pressed={value.course === c}
-                className={chip(value.course === c)}
+                onClick={() => set({ course: value.course === c ? undefined : c, otherCourse: false })}
+                aria-pressed={!value.otherCourse && value.course === c}
+                className={chip(!value.otherCourse && value.course === c)}
               >
                 {c}
               </button>
             ))}
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => set({ otherCourse: true, course: undefined })}
+              aria-pressed={value.otherCourse}
+              className={chip(value.otherCourse)}
+            >
+              {OTHER_COURSE}
+            </button>
+            {value.otherCourse && (
+              <input
+                type="text"
+                value={value.course ?? ''}
+                onChange={(e) => set({ course: e.target.value.trim() ? e.target.value : undefined })}
+                placeholder="What's it called?"
+                aria-label="Course"
+                disabled={disabled}
+                className="w-44 rounded-full border-0 bg-cream px-3 py-1.5 text-xs text-ink placeholder:text-ink-soft focus:outline-none focus:ring-2 focus:ring-gold"
+              />
+            )}
           </div>
         </div>
       )}

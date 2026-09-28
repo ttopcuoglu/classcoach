@@ -58,7 +58,7 @@ const STEPS = [
   },
   {
     title: 'Or set up a rehearsal',
-    body: 'In Practice you do pick an area, because it decides what you get handed: a room that’s stopped following you, a misconception in a student’s words, a piece of work on a rubric boundary, a parent email, a line a colleague said. Then set the room. Every section asks your grade band. Teaching and Learning also asks your subject, and at 9-12 the actual course — Algebra 2, Chemistry — and whether it’s AP, honors, regular, or inclusion. That last one changes the coaching more than anything else on the screen.',
+    body: 'In Practice you do pick an area, because it decides what you get handed: a room that’s stopped following you, a misconception in a student’s words, a piece of work on a rubric boundary, a parent email, a line a colleague said. Then set the room. Every section asks your grade band. Teaching and Learning also asks your subject, and from 6th grade up the actual course — Math 7, Algebra 1, Biology — plus whether it’s AP, honors, regular, or inclusion. That last one changes the coaching more than anything else on the screen.',
   },
   {
     title: 'Get something you can use',
@@ -83,7 +83,7 @@ const LANES = [
     name: 'Practice',
     when: 'A rehearsal — low stakes, nobody watching.',
     detail:
-      'Filter by situation and difficulty — Guided, Independent, or Challenge — and describe your room: grade band (K–2, 3–5, 6–8, 9–12) always, plus subject, course and level when you’re working on Teaching and Learning. What a scenario looks like depends on the area: a room that’s stopped following you, a misconception in a student’s own words, a piece of work on a rubric boundary, the text of a parent email, a line a colleague just said. Take one, or a Quick Session of three.',
+      'Filter by situation and difficulty — Guided, Independent, or Challenge — and describe your room: grade band (K–2, 3–5, 6–8, 9–12) always, plus subject, course and level when you’re working on Teaching and Learning — courses from 6th grade up, where a schedule actually has them, with Other for whatever your district calls it. What a scenario looks like depends on the area: a room that’s stopped following you, a misconception in a student’s own words, a piece of work on a rubric boundary, the text of a parent email, a line a colleague just said. Take one, or a Quick Session of three.',
   },
 ]
 
