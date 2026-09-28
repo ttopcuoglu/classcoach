@@ -11,6 +11,7 @@ import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { categoryLabel } from '../lib/categories'
 import { TEACHING_AND_LEARNING, findFocusArea, focusAreaForCategory, subCategoriesFor } from '../lib/focusAreas'
+import { hintsFor } from '../lib/practiceHints'
 import TeachingContextFields, { type TeachingContext } from '../components/TeachingContextFields'
 import {
   generateScenario,
@@ -71,6 +72,9 @@ export default function TryItOut({
 
   const [attempt, setAttempt] = useState<ScenarioAttempt | null>(null)
   const [responseText, setResponseText] = useState('')
+  // Null until a teacher asks. Cycles rather than showing the whole list, so a
+  // hint stays a nudge rather than becoming a menu to choose from.
+  const [hintIndex, setHintIndex] = useState<number | null>(null)
   const [generating, setGenerating] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const workingProgress = useSimulatedProgress(generating || submitting, 8000)
@@ -157,6 +161,7 @@ export default function TryItOut({
     setError(null)
     setAttempt(null)
     setResponseText('')
+    setHintIndex(null)
     setChatDraft('')
     setChatError(null)
     try {
@@ -319,6 +324,8 @@ export default function TryItOut({
   // Re-picked whenever the section or the room changes — a K-2 rehearsal and a
   // 9-12 rehearsal should not open with the same three scenarios.
   const subCategories = subCategoriesFor(focusArea)
+  // Sharpest first: the level knows most about the room, then the section.
+  const hints = hintsFor(focusArea, room.courseLevel)
   const situationText = category ? categoryLabel(category).toLowerCase() : 'any situation'
   const difficultyText = (
     DIFFICULTIES.find((d) => d.value === difficulty)?.label ?? 'Any difficulty'
@@ -553,10 +560,33 @@ export default function TryItOut({
                     onChange={(e) => setResponseText(e.target.value)}
                     disabled={submitting}
                     rows={4}
-                    placeholder="Describe what you'd say or do..."
+                    placeholder="Your first move — what do you say, and what do you do?"
                     className="rounded-2xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
                   />
                 </label>
+
+                {/* A question, never an answer. Picking from options and
+                    composing a response under pressure are different skills,
+                    and only the second one happens in a real classroom — so the
+                    hint scaffolds the thinking and leaves the words to them. */}
+                <div className="flex flex-col gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setHintIndex((i) => (i === null ? 0 : (i + 1) % hints.length))}
+                    disabled={submitting}
+                    className="w-fit text-sm font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta"
+                  >
+                    {hintIndex === null ? 'Not sure where to start?' : 'Another way in'}
+                  </button>
+                  {hintIndex !== null && (
+                    <p
+                      aria-live="polite"
+                      className="rounded-2xl bg-gold-tint/50 px-4 py-3 text-sm italic text-ink"
+                    >
+                      {hints[hintIndex]}
+                    </p>
+                  )}
+                </div>
                 {speechSupported && (
                   <button
                     type="button"

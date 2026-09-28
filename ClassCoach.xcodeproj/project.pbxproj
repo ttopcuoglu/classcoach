@@ -29,6 +29,7 @@
 		A1F0CA5E7B4D41A2B9E30C11 /* FocusAreas.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B7E4419C6F48A7B1035E22 /* FocusAreas.swift */; };
 		C3E9A17D5B8F42C1A07D4E33 /* TeachingContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8D1B62E4A0C43D9B5E27A44 /* TeachingContext.swift */; };
 		D5B31A8E6C2F44D7B903E255 /* Starters.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C4E77B3F1D452EA61B8C99 /* Starters.swift */; };
+		F1A7C93D2E8B45C6A70D1B88 /* PracticeHints.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6E2B84F7A3D49E1B052C777 /* PracticeHints.swift */; };
 		CCDF36F3881AA2A2F3BA9BF1 /* Debrief.swift in Sources */ = {isa = PBXBuildFile; fileRef = 573742D57C4437D7A7D62716 /* Debrief.swift */; };
 		72F6C87CCC8E956C2DBA8717 /* AskExpertService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B2592BD0E7C621A293E1527 /* AskExpertService.swift */; };
 		A340FF93A49CD9ABBF612600 /* ProfileService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDBC5B77E7A9F6BCC3763338 /* ProfileService.swift */; };
@@ -99,6 +100,7 @@
 		D2B7E4419C6F48A7B1035E22 /* FocusAreas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusAreas.swift; sourceTree = "<group>"; };
 		F8D1B62E4A0C43D9B5E27A44 /* TeachingContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeachingContext.swift; sourceTree = "<group>"; };
 		A9C4E77B3F1D452EA61B8C99 /* Starters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Starters.swift; sourceTree = "<group>"; };
+		C6E2B84F7A3D49E1B052C777 /* PracticeHints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeHints.swift; sourceTree = "<group>"; };
 		573742D57C4437D7A7D62716 /* Debrief.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Debrief.swift; sourceTree = "<group>"; };
 		5B2592BD0E7C621A293E1527 /* AskExpertService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskExpertService.swift; sourceTree = "<group>"; };
 		CDBC5B77E7A9F6BCC3763338 /* ProfileService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileService.swift; sourceTree = "<group>"; };
@@ -355,6 +357,7 @@
 				D2B7E4419C6F48A7B1035E22 /* FocusAreas.swift */,
 				F8D1B62E4A0C43D9B5E27A44 /* TeachingContext.swift */,
 				A9C4E77B3F1D452EA61B8C99 /* Starters.swift */,
+				C6E2B84F7A3D49E1B052C777 /* PracticeHints.swift */,
 				573742D57C4437D7A7D62716 /* Debrief.swift */,
 				0F0D16967E152069F018B84C /* Communications.swift */,
 				FF861A7A0783469A73D3ACB0 /* LessonPlan.swift */,
@@ -487,6 +490,7 @@
 				A1F0CA5E7B4D41A2B9E30C11 /* FocusAreas.swift in Sources */,
 				C3E9A17D5B8F42C1A07D4E33 /* TeachingContext.swift in Sources */,
 				D5B31A8E6C2F44D7B903E255 /* Starters.swift in Sources */,
+				F1A7C93D2E8B45C6A70D1B88 /* PracticeHints.swift in Sources */,
 				CCDF36F3881AA2A2F3BA9BF1 /* Debrief.swift in Sources */,
 				72F6C87CCC8E956C2DBA8717 /* AskExpertService.swift in Sources */,
 				A340FF93A49CD9ABBF612600 /* ProfileService.swift in Sources */,

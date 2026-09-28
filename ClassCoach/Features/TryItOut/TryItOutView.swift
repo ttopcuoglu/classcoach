@@ -46,6 +46,9 @@ struct TryItOutContent: View {
 
     @State private var attempt: ScenarioAttempt?
     @State private var responseText = ""
+    /// Nil until a teacher asks. Cycles rather than showing the whole list, so a
+    /// hint stays a nudge rather than becoming a menu to choose from.
+    @State private var hintIndex: Int?
     @State private var generating = false
     @State private var submitting = false
     @State private var error: String?
@@ -236,6 +239,31 @@ struct TryItOutContent: View {
                 .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
                 .disabled(submitting)
 
+            // A question, never an answer. Picking from options and composing a
+            // response under pressure are different skills, and only the second
+            // happens in a real classroom — so the hint scaffolds the thinking
+            // and leaves the words to the teacher.
+            let hints = hintsFor(focusArea: focusArea, courseLevel: room.courseLevel)
+            VStack(alignment: .leading, spacing: 6) {
+                Button(hintIndex == nil ? "Not sure where to start?" : "Another way in") {
+                    withAnimation { hintIndex = hintIndex.map { ($0 + 1) % hints.count } ?? 0 }
+                }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(AppTheme.textSecondary)
+                .disabled(submitting)
+
+                if let i = hintIndex, hints.indices.contains(i) {
+                    Text(hints[i])
+                        .font(.subheadline.italic())
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(AppTheme.goldTint.opacity(0.5), in: RoundedRectangle(cornerRadius: 14))
+                        .accessibilityAddTraits(.updatesFrequently)
+                }
+            }
+
             ProgressRing(active: submitting, estimatedSeconds: 8, label: "Reading your response", hint: "Usually under ten seconds.")
 
             HStack {
@@ -371,6 +399,7 @@ struct TryItOutContent: View {
         error = nil
         attempt = nil
         responseText = ""
+        hintIndex = nil
         chatDraft = ""
         chatError = nil
         do {
