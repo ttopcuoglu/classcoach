@@ -125,16 +125,17 @@ struct DiscourseDetailsTab: View {
 
     private var cfuSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            CategorySectionView(title: "The numbers", coverage: "") {
-                StatView(label: "Verbal checks heard", metric: m.cfuMetric)
-                StatView(label: "Specific feedback", metric: m.feedbackRatio)
-            }
-            // The numbers above say how many and how often. This says when
-            // they happened, what the feedback did with a student's answer,
-            // and what a microphone cannot see — so it is worth the space the
-            // old note, which restated those same numbers, was not.
+            // No numbers card: "3 verbal checks" and "6 of 11" count fixed
+            // phrases, and a check made by reading over shoulders leaves no
+            // trace — so leading with them put a detector's blind spots at the
+            // top of a teacher's own lesson. The narrative says when the checks
+            // happened and what the feedback did with a student's answer.
             if let narrative = session.checksNarrative, !narrative.isEmpty {
                 CoachNoteView(text: narrative)
+            } else {
+                Text("This section fills in once the report has been summarised.")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.textSecondary)
             }
         }
     }

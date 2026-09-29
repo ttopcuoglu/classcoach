@@ -2572,9 +2572,6 @@ function ReportPanel({
 
             {insightsSection === 'understanding' && (
               <UnderstandingFeedbackTab
-                cfuMetric={cfuMetric}
-                feedbackRatio={feedbackRatio}
-                focusMetric={focusMetric}
                 checksNarrative={session.checksNarrative ?? null}
                 cfuLog={session.cfuLog}
                 feedbackLog={session.feedbackLog}
@@ -5167,20 +5164,6 @@ function QuestionsThinkingTab({
 const CFU_DETECTION_LIMITATION =
   'Spoken checks only — hand signals and written work are invisible to a recording.'
 
-function formatFeedbackSpecificityValue(
-  feedbackRatio: ConfidentMetric,
-  specificFeedbackCount: number | null,
-  feedbackTotal: number | null,
-): string {
-  if (specificFeedbackCount == null || feedbackTotal == null) return feedbackRatio.display
-  if (feedbackRatio.state === 'measured') {
-    return `${specificFeedbackCount} of ${feedbackTotal} moments · ${feedbackRatio.display}`
-  }
-  if (feedbackRatio.state === 'possible_detection') {
-    return `${specificFeedbackCount} of ${feedbackTotal} moments`
-  }
-  return feedbackRatio.display
-}
 
 function specificFeedbackShare(specificFeedbackCount: number | null, feedbackTotal: number | null): number | null {
   if (specificFeedbackCount == null || feedbackTotal == null || feedbackTotal <= 0) return null
@@ -5267,9 +5250,6 @@ function EvidenceItemCard({
 }
 
 function UnderstandingFeedbackTab({
-  cfuMetric,
-  feedbackRatio,
-  focusMetric,
   checksNarrative,
   cfuLog,
   feedbackLog,
@@ -5278,9 +5258,6 @@ function UnderstandingFeedbackTab({
   feedbackTotal,
   onDiscussWithCoach,
 }: {
-  cfuMetric: ReturnType<typeof getCountMetric>
-  feedbackRatio: ConfidentMetric
-  focusMetric: FocusMetric | null
   checksNarrative: string | null
   cfuLog: AudioCfuLogEntry[] | null
   feedbackLog: AudioFeedbackLogEntry[] | null
@@ -5324,35 +5301,21 @@ function UnderstandingFeedbackTab({
 
   return (
     <div className="flex flex-col gap-6">
-      <CategorySection title="The numbers" coverage="">
-        <div id="stat-cfu">
-          <Stat
-            label="Verbal checks heard"
-            value={cfuMetric.display}
-            muted={isMissingState(cfuMetric.state)}
-            reason={cfuMetric.reason}
-            sub={CFU_DETECTION_LIMITATION}
-            focused={focusMetric === 'cfuCount'}
-          />
-        </div>
-        <Stat
-          label="Specific feedback"
-          value={formatFeedbackSpecificityValue(feedbackRatio, specificFeedbackCount, feedbackTotal)}
-          muted={isMissingState(feedbackRatio.state)}
-          reason={feedbackRatio.reason}
-          focused={focusMetric === 'feedbackSpecificity'}
-        />
-      </CategorySection>
-
-      {/* A narrative that earns its place: the numbers above say how many and
-          how often, so this says when they happened, what the feedback did
-          with a student's answer, and what a microphone cannot see. */}
+      {/* Narrative first, and no numbers card. "3 verbal checks" and "6 of 11"
+          are counts of fixed phrases — a check made by reading over shoulders
+          leaves no trace — so leading with them put a detector's blind spots
+          at the top of a teacher's own lesson. The narrative says when the
+          checks happened and what the feedback did with a student's answer,
+          which is the part worth reading first. */}
       {checksNarrative && <CoachNote text={checksNarrative} />}
 
       {evidenceCandidates.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-ink">Evidence from the lesson</h3>
-          <div className="mt-2 flex flex-col gap-4">
+          <h3 className="text-base font-semibold text-ink">Evidence from the lesson</h3>
+          <p className="mt-0.5 text-sm text-ink-soft">
+            Your own words, at the moment you said them. {CFU_DETECTION_LIMITATION}
+          </p>
+          <div className="mt-3 flex flex-col gap-4">
             {visibleCandidates.map((candidate) => (
               <EvidenceItemCard
                 key={candidate.id}
@@ -5366,9 +5329,9 @@ function UnderstandingFeedbackTab({
             <button
               type="button"
               onClick={() => setShowAllEvidence((v) => !v)}
-              className="mt-2 text-sm font-medium text-forest hover:text-terracotta-600"
+              className="mt-3 w-full rounded-xl border border-hairline bg-cream-card px-4 py-3 text-sm font-semibold text-forest transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
             >
-              {showAllEvidence ? 'Show less' : `View all evidence (${evidenceCandidates.length})`}
+              {showAllEvidence ? 'Show fewer moments' : `Show all ${evidenceCandidates.length} moments`}
             </button>
           )}
         </div>
