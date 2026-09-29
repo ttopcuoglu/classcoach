@@ -113,7 +113,7 @@ async function main() {
   if (withSummary && write) {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 900,
+      max_tokens: 1800,
       thinking: { type: 'disabled' },
       system: buildClassSummarySystemPrompt(buildContentExhibits(segments), session.durationSec ?? 0, {
         teacherTalkPct: analysis.teacherTalkPct,
@@ -125,19 +125,30 @@ async function main() {
         studentVoiceDetected: segments.some((s) => s.speakerLabel === 'Student'),
         cfuMoments: analysis.cfuLog.slice(0, 12),
         feedbackMoments: analysis.feedbackLog.slice(0, 12),
+        directionMoments: analysis.directiveLog.slice(0, 10),
+        toneMoments: analysis.toneLog.slice(0, 10),
+        redirectionMoments: analysis.redirectionLog.slice(0, 10),
+        nameMentions: typeof analysis.metricsDetail.nameMentionCount === 'number' ? analysis.metricsDetail.nameMentionCount : null,
+        uniqueNames: typeof analysis.metricsDetail.uniqueNameCount === 'number' ? analysis.metricsDetail.uniqueNameCount : null,
       }),
       messages: [{ role: 'user', content: 'Write the summary now.' }],
     })
     const text = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n')
     const classSummary = extractTag(text, 'class_summary')
     const checksNarrative = extractTag(text, 'checks_note')
+    const climateNarrative = extractTag(text, 'climate_note')
     if (classSummary) {
       await prisma.audioSession.update({
         where: { id: session.id },
-        data: { classSummary, ...(checksNarrative ? { checksNarrative } : {}) },
+        data: {
+          classSummary,
+          ...(checksNarrative ? { checksNarrative } : {}),
+          ...(climateNarrative ? { climateNarrative } : {}),
+        },
       })
       console.log(`summary   rewritten (${classSummary.split(/\n\s*\n/).length} paragraphs)`)
       console.log(`checks    ${checksNarrative ? `${checksNarrative.split(/\s+/).length} words` : 'FAILED'}`)
+      console.log(`climate   ${climateNarrative ? `${climateNarrative.split(/\s+/).length} words` : 'FAILED'}`)
     } else {
       console.log('summary   FAILED — left as it was')
     }

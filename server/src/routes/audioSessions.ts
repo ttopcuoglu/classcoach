@@ -1085,9 +1085,10 @@ audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      // Three short paragraphs rather than a sentence, so the ceiling rises
-      // with it — a summary cut off mid-caveat is worse than a short one.
-      max_tokens: 900,
+      // Three short paragraphs plus two section notes. Measured rather than
+      // guessed: at 900 the last block was cut off entirely and the one before
+      // it came back at a third of its length.
+      max_tokens: 1800,
       system: buildClassSummarySystemPrompt(exhibits, session.durationSec ?? 0, {
         teacherTalkPct: session.teacherTalkPct,
         studentTalkPct: session.studentTalkPct,
