@@ -157,7 +157,7 @@ struct RecordingPanelView: View {
             // genuinely takes longer to transcribe than a five-minute clip.
             ProgressRing(
                 active: true,
-                estimatedSeconds: max(3, recorder.elapsedSec * 0.15),
+                estimatedSeconds: TranscribeStages.estimatedSeconds(recordingSec: recorder.elapsedSec),
                 label: "Transcribing your session",
                 stages: TranscribeStages.all,
                 hint: TranscribeStages.hint(recordingSec: recorder.elapsedSec),
@@ -205,7 +205,10 @@ struct RecordingPanelView: View {
 
     private func handleStop() async {
         guard let result = await recorder.stop(), let localSession else {
-            error = "Could not prepare the recording for upload."
+            // The recording is not gone: the chunks stay on disk and Lesson
+            // Debrief offers them back the next time it opens.
+            error = recorder.mergeError.map { "Could not prepare the recording to send (\($0)). It is saved — reopen Lesson Debrief to try again." }
+                ?? "Could not prepare the recording to send. It is saved — reopen Lesson Debrief to try again."
             return
         }
         do {

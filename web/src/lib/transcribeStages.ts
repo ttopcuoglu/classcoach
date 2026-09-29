@@ -35,13 +35,20 @@ export function transcribeStage(progress: number): string {
   return current
 }
 
-/// The same 0.15x factor the progress curve uses, so the sentence and the ring
-/// can never disagree. Rounded up: a teacher told "around 8 minutes" who waits
-/// 8 is fine, one told "a minute" who waits 8 reaches for the button.
+/// How long the wait after Stop actually is.
+///
+/// The old 0.15x came from a constant nobody had measured. Timed against a real
+/// call, Deepgram runs at about 0.005x — a fifty-minute class transcribes in
+/// seconds, not eight minutes. What is left is moving the audio, so the
+/// estimate scales with the upload rather than with the length of the lesson.
+export const SECONDS_PER_RECORDED_MINUTE = 1.5
+
+export function transcribeEstimateSec(recordingSec: number): number {
+  return Math.max(8, (recordingSec / 60) * SECONDS_PER_RECORDED_MINUTE)
+}
+
 export function transcribeHint(recordingSec: number): string {
-  const estimateSec = Math.max(20, recordingSec * 0.15)
-  if (estimateSec < 60) return 'Usually under a minute for a short clip.'
-  const minutes = Math.ceil(estimateSec / 60)
-  const classMinutes = Math.round(recordingSec / 60)
-  return `A ${classMinutes}-minute recording usually takes around ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`
+  return transcribeEstimateSec(recordingSec) < 90
+    ? 'This usually takes a few seconds.'
+    : 'About a minute for a full class period.'
 }

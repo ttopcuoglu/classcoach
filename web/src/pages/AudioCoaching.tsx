@@ -8,7 +8,7 @@ import { NumberedCard } from '../components/AnswerSection'
 import { ACCENT_CYCLE, ACCENTS, StatTile, type Accent } from '../components/report'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
-import { UPLOAD_STAGE, transcribeHint, transcribeStage } from '../lib/transcribeStages'
+import { UPLOAD_STAGE, transcribeEstimateSec, transcribeHint, transcribeStage } from '../lib/transcribeStages'
 import { HATCH_STYLE } from '../lib/chartPatterns'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import { createPlaybackQueue, primeAudioElement, splitIntoSentences, type PlaybackQueue } from '../lib/voicePlayback'
@@ -758,7 +758,7 @@ function useTranscriptionProgress(session: AudioSession): number {
     function compute() {
       const startedAt = session.transcribeStartedAt ? Date.parse(session.transcribeStartedAt) : NaN
       if (!Number.isFinite(startedAt)) return 0
-      const tau = Math.max(3000, (session.durationSec ?? 0) * 150)
+      const tau = transcribeEstimateSec(session.durationSec ?? 0) * 1000
       return 92 * (1 - Math.exp(-(Date.now() - startedAt) / tau))
     }
     setProgress(compute())

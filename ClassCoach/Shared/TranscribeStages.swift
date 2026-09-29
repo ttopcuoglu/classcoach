@@ -14,13 +14,22 @@ enum TranscribeStages {
         (85, "Reading the lesson for what it covered"),
     ]
 
-    /// Same 0.15x factor as the progress curve, so the sentence and the ring
-    /// can never disagree.
+    /// How long the wait after Stop actually is.
+    ///
+    /// The old 0.15x came from a constant nobody had measured. Timed against a
+    /// real call, Deepgram runs at about 0.005x — a fifty-minute class
+    /// transcribes in seconds, not eight minutes. What remains is merging the
+    /// chunks and getting roughly 12 MB onto the network, so the estimate
+    /// scales with the upload, not with how long the lesson was.
+    static let secondsPerRecordedMinute: Double = 1.5
+
+    static func estimatedSeconds(recordingSec: Double) -> Double {
+        max(8, recordingSec / 60 * secondsPerRecordedMinute)
+    }
+
     static func hint(recordingSec: Double) -> String {
-        let estimate = max(20, recordingSec * 0.15)
-        if estimate < 60 { return "Usually under a minute for a short clip." }
-        let minutes = Int(ceil(estimate / 60))
-        let classMinutes = Int((recordingSec / 60).rounded())
-        return "A \(classMinutes)-minute recording usually takes around \(minutes) \(minutes == 1 ? "minute" : "minutes")."
+        let estimate = estimatedSeconds(recordingSec: recordingSec)
+        if estimate < 90 { return "This usually takes a few seconds." }
+        return "About a minute for a full class period."
     }
 }

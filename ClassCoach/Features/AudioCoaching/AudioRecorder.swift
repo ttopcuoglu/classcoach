@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import UIKit
 import UserNotifications
 
 /// Native equivalent of `AudioCoaching.tsx`'s `RecordingPanel` recorder
@@ -24,6 +25,9 @@ final class AudioRecorder: NSObject, ObservableObject {
     /// happen to their lesson — it is the recorder that gives up, not the
     /// recording that is thrown away.
     @Published private(set) var reachedLimit = false
+    /// Why the merge failed, if it did — surfaced rather than swallowed, since
+    /// this is the step between a recorded lesson and a sent one.
+    @Published var mergeError: String?
 
     private var recorder: AVAudioRecorder?
     private var accumulatedSec: Double = 0
@@ -117,8 +121,27 @@ final class AudioRecorder: NSObject, ObservableObject {
         self.manifest = manifest
 
         phase = .uploading
-        guard let merged = try? await RecordingStore.merge(manifest) else { return nil }
-        return (accumulatedSec, merged)
+
+        // iOS suspends the app seconds after the screen locks, and a suspended
+        // export never finishes. A teacher who presses Stop and pockets the
+        // phone — which is every teacher at the end of a period — would come
+        // back to a progress ring frozen mid-merge. This asks for the time to
+        // finish the one step that must not be interrupted.
+        let assertion = await UIApplication.shared.beginBackgroundTask(withName: "merge-recording")
+        defer { if assertion != .invalid { UIApplication.shared.endBackgroundTask(assertion) } }
+
+        do {
+            return (accumulatedSec, try await RecordingStore.merge(manifest))
+        } catch {
+            // Leaving `phase` on .uploading was what turned a failed merge into
+            // a screen that spins forever with nothing to tap: no error, no
+            // retry, and the recording apparently lost. It is not lost — the
+            // chunks are still on disk and the unfinished-recording prompt will
+            // offer them back — so hand the UI back to the teacher.
+            mergeError = error.localizedDescription
+            phase = .idle
+            return nil
+        }
     }
 
     /// The upload has been QUEUED — not accepted, not transcribed. A
@@ -146,6 +169,7 @@ final class AudioRecorder: NSObject, ObservableObject {
         runStart = nil
         elapsedSec = 0
         reachedLimit = false
+        mergeError = nil
         phase = .idle
     }
 
