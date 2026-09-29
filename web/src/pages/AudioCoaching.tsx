@@ -3449,6 +3449,12 @@ function ReflectTab({
     if (!externalFocus) return
     setShowStartScreen(false)
     setShowTranscriptWindow(false)
+    // Reflect opens on the debrief once one exists, which is right when the
+    // teacher navigates there themselves and wrong when they arrive by
+    // pressing Discuss: they asked to talk about a section and were shown
+    // their saved notes instead, on every section, not just the one where it
+    // was noticed.
+    setReviewingNotes(false)
     // "Discuss this with Wivoza Coach" should feel like talking to someone
     // about the class, not filling in a box. The start screen's own voice
     // button set this and the external entry never did, so every arrival from
@@ -3462,7 +3468,13 @@ function ReflectTab({
     // no data, and mid-conversation the coach once answered with its earlier
     // talk-balance reply instead — so the switch is spelled out, along with
     // whatever the report actually measured for the new topic.
-    const measured = externalFocus.detail ? ` What the report shows about it: ${externalFocus.detail}` : ''
+    // Same framing the first-conversation branch uses. Without it, a teacher
+    // who already has a conversation — which is everyone with a debrief — got
+    // the page's text with none of the instruction about how to treat it, and
+    // the coach was free to re-derive a reading that contradicts the page.
+    const measured = externalFocus.detail
+      ? ` This is the report's own reading of that section, which the teacher has just finished reading: "${externalFocus.detail}" Open about this specifically. Treat it as accurate and build on it — do not re-derive your own reading from the raw numbers and do not contradict it.`
+      : ''
     if (started) {
       onSend(
         `Let's discuss this: ${externalFocus.label}`,
