@@ -5,6 +5,9 @@ import SwiftUI
 struct ReflectTab: View {
     let session: AudioSessionWithSegments
     let locked: Bool
+    /// A "Discuss this with Wivoza Coach" press from Summary or an Insights
+    /// page, waiting to be turned into a conversation. Cleared once consumed.
+    @Binding var focus: ReflectFocus?
     let onUpdate: (AudioSessionWithSegments) -> Void
 
     @EnvironmentObject private var authManager: AuthManager
@@ -30,9 +33,15 @@ struct ReflectTab: View {
     @State private var savedConfirmed = false
     @State private var summarizing = false
 
-    init(session: AudioSessionWithSegments, locked: Bool, onUpdate: @escaping (AudioSessionWithSegments) -> Void) {
+    init(
+        session: AudioSessionWithSegments,
+        locked: Bool,
+        focus: Binding<ReflectFocus?> = .constant(nil),
+        onUpdate: @escaping (AudioSessionWithSegments) -> Void
+    ) {
         self.session = session
         self.locked = locked
+        self._focus = focus
         self.onUpdate = onUpdate
         _conversation = State(initialValue: session.reflectConversation ?? [])
         _strengths = State(initialValue: session.strengths ?? "")
@@ -53,8 +62,15 @@ struct ReflectTab: View {
         }
         .onAppear {
             recorder.configure(onTurnComplete: { text in Task { await handleVoiceTurn(text) } })
+            Task { await consumeFocus() }
         }
         .onDisappear { stopVoice() }
+        // Reflect is rebuilt when the tab changes, so the press that set the
+        // focus normally arrives before `onAppear`. This covers a second press
+        // while Reflect is already on screen.
+        .onChange(of: focus) { _, newValue in
+            if newValue != nil { Task { await consumeFocus() } }
+        }
         .onChange(of: recorder.fatalError) { _, newValue in
             if let newValue {
                 error = newValue
@@ -353,14 +369,64 @@ struct ReflectTab: View {
         return AudioInsights.buildReflectContext(session, cfuMetric: m.cfuMetric, redirectionMetric: m.redirectionMetric, directiveMetric: m.directiveMetric, coverage: m.coverage)
     }
 
-    private func startReflect(voice: Bool) async {
+    /// Arriving from a "Discuss this with Wivoza Coach" press.
+    ///
+    /// The teacher asked to talk about a page, so this opens in voice — the
+    /// start screen's own Start talking button did that and an arrival from the
+    /// report never did, which landed every one of them in typing.
+    private func consumeFocus() async {
+        guard let pending = focus else { return }
+        focus = nil
+        guard !locked, !turnCapHit else { return }
+
+        // The label alone ("Clarity & Content in this lesson") carries no data.
+        // Handed the page's words AND the raw numbers, Coach will otherwise
+        // re-derive its own reading and the teacher hears one thing on the page
+        // and the opposite from the coach — so both branches say how to treat
+        // it, not just the first-conversation one.
+        let measured = pending.detail.map {
+            " This is the report's own reading of that section, which the teacher has just finished reading: \"\($0)\" Open about this specifically. Treat it as accurate and build on it — do not re-derive your own reading from the raw numbers and do not contradict it."
+        } ?? ""
+
+        if started {
+            voiceMode = true
+            voicePaused = false
+            let before = conversation.count
+            await sendMessage(
+                overrideText: "Let's discuss this: \(pending.label)",
+                extraContext: ["The teacher just switched to a new topic: \(pending.label).\(measured)"]
+            )
+            // Same guard `handleVoiceTurn` needs: a failed send would
+            // otherwise have Coach read its previous reply aloud as though it
+            // were an answer to the topic the teacher just chose.
+            guard conversation.count > before else {
+                voicePaused = true
+                return
+            }
+            await speakLatestReply()
+        } else if let detail = pending.detail {
+            await startReflect(
+                voice: true,
+                focus: "\(pending.focus). This is the report's own reading, which the teacher has just finished reading, quoted here: \"\(detail)\". Open about this specifically rather than about the lesson in general. Treat it as accurate and build on it — do not re-derive your own reading from the raw numbers and do not contradict it."
+            )
+        } else {
+            await startReflect(voice: true, focus: pending.focus)
+        }
+    }
+
+    private func startReflect(voice: Bool, focus openWith: String? = nil) async {
         sending = true
         error = nil
         voiceMode = voice
         voicePaused = false
         do {
+            // Prepended as one more plain-fact line ahead of the same context
+            // array, so Claude's own opening question leads with it. The route
+            // already accepts an arbitrary context, so nothing changes on the
+            // server.
+            let context = openWith.map { ["Start the conversation by asking about \($0)."] + reflectContext } ?? reflectContext
             let updated = try await AudioCoachingService.sendReflectMessage(
-                sessionId: session.id, message: nil, context: reflectContext, spoken: voice
+                sessionId: session.id, message: nil, context: context, spoken: voice
             )
             conversation = updated.reflectConversation ?? []
             onUpdate(AudioSessionWithSegments(session: updated, segments: session.segments))
@@ -373,21 +439,23 @@ struct ReflectTab: View {
         }
     }
 
-    private func sendMessage() async {
-        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// `overrideText` lets a topic switch send its own turn without going
+    /// through the draft field, the same way voice mode submits a transcript.
+    private func sendMessage(overrideText: String? = nil, extraContext: [String] = []) async {
+        let trimmed = (overrideText ?? draft).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        draft = ""
+        if overrideText == nil { draft = "" }
         sending = true
         error = nil
         do {
             let updated = try await AudioCoachingService.sendReflectMessage(
-                sessionId: session.id, message: trimmed, context: reflectContext, spoken: voiceMode
+                sessionId: session.id, message: trimmed, context: extraContext + reflectContext, spoken: voiceMode
             )
             conversation = updated.reflectConversation ?? []
             onUpdate(AudioSessionWithSegments(session: updated, segments: session.segments))
         } catch {
             self.error = error.localizedDescription
-            draft = trimmed
+            if overrideText == nil { draft = trimmed }
         }
         sending = false
     }

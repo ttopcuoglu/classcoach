@@ -56,6 +56,76 @@ enum InsightsSection: String, CaseIterable, Identifiable {
     }
 }
 
+/// A "Discuss this with Wivoza Coach" press, on its way to Reflect.
+///
+/// `label` names the page for the conversation's own turn, and `focus` is what
+/// Coach should open about. `detail` is the text the teacher has just finished
+/// reading: without it Coach only ever received the section's name and opened
+/// about the lesson in the abstract.
+struct ReflectFocus: Equatable {
+    let label: String
+    let focus: String
+    let detail: String?
+
+    static func forSummary(_ session: AudioSessionWithSegments) -> ReflectFocus {
+        ReflectFocus(
+            label: "The summary of this lesson",
+            focus: "what the report says about the summary of this lesson",
+            detail: session.classSummary
+        )
+    }
+
+    static func forSection(_ section: InsightsSection, in session: AudioSessionWithSegments) -> ReflectFocus {
+        let label = "\(section.title) in this lesson"
+        return ReflectFocus(
+            label: label,
+            focus: "what the report says about \(label)",
+            detail: narrativeForSection(session, section)
+        )
+    }
+}
+
+/// The narrative a teacher is looking at on an Insights sub-page, handed to
+/// Coach so "Discuss this" opens about that page rather than about the lesson
+/// in general. Clarity & Content carries notes rather than a narrative, so its
+/// own text is joined instead; Rubric Lens has neither, and its evidence is
+/// already the whole page.
+func narrativeForSection(_ session: AudioSessionWithSegments, _ section: InsightsSection) -> String? {
+    switch section {
+    case .talk: return session.talkNarrative
+    case .questions: return session.questionsNarrative
+    case .understanding: return session.checksNarrative
+    case .routines: return session.climateNarrative
+    case .content:
+        let notes = session.contentNotes?.notes ?? []
+        return notes.isEmpty ? nil : notes.map { "\($0.label): \($0.text)" }.joined(separator: " ")
+    case .rubric: return nil
+    }
+}
+
+/// One invitation to talk, at the foot of the page. Repeating it under every
+/// card did not make it more inviting.
+struct DiscussFooter: View {
+    var label = "Discuss this with Wivoza Coach"
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Text(label)
+                Spacer()
+                Image(systemName: "arrow.right")
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(AppTheme.forest)
+            .padding(.horizontal, 18).padding(.vertical, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
+        }
+    }
+}
+
 /// One of the report's accent colours: a solid badge colour, the tint its
 /// number cards sit on, and the text colour used on that tint.
 struct ReportAccent: Equatable {
@@ -94,6 +164,8 @@ struct ReportView: View {
     @State private var tab: ReportTab = .summary
     @State private var section: InsightsSection = .talk
     @State private var focusMetric: FocusMetric?
+    /// Set by a Discuss footer and consumed by Reflect on arrival.
+    @State private var reflectFocus: ReflectFocus?
 
     private var locked: Bool { session.status == "locked" }
     private var m: OverviewMetrics { OverviewMetrics(session) }
@@ -113,12 +185,13 @@ struct ReportView: View {
                     OverviewTab(
                         session: session,
                         onSetFocus: { metric in focusMetric = metric; tab = .myGrowth },
-                        onNavigateInsights: { target in section = target; tab = .insights }
+                        onNavigateInsights: { target in section = target; tab = .insights },
+                        onDiscuss: discuss
                     )
                 case .insights:
                     insights
                 case .reflect:
-                    ReflectTab(session: session, locked: locked, onUpdate: onUpdate)
+                    ReflectTab(session: session, locked: locked, focus: $reflectFocus, onUpdate: onUpdate)
                 case .myGrowth:
                     MyGrowthTab(currentSessionId: session.id, focusMetric: $focusMetric)
                 }
@@ -126,6 +199,13 @@ struct ReportView: View {
 
             disclaimer
         }
+    }
+
+    /// Both footers land here: hand Reflect the page the teacher was reading,
+    /// then show it to them.
+    private func discuss(_ focus: ReflectFocus) {
+        reflectFocus = focus
+        tab = .reflect
     }
 
     // MARK: Cover
@@ -229,6 +309,8 @@ struct ReportView: View {
                 }
             }
             .environment(\.reportAccent, section.accent)
+
+            DiscussFooter { discuss(.forSection(section, in: session)) }
         }
     }
 

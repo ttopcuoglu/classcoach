@@ -58,6 +58,7 @@ struct OverviewTab: View {
     let session: AudioSessionWithSegments
     let onSetFocus: (FocusMetric) -> Void
     let onNavigateInsights: (InsightsSection) -> Void
+    let onDiscuss: (ReflectFocus) -> Void
 
     private var m: OverviewMetrics { OverviewMetrics(session) }
 
@@ -119,6 +120,11 @@ struct OverviewTab: View {
             strengthCard
             priorityCard
             whoWasHeardCard
+
+            // Reading the summary and wanting to talk about it is the same
+            // impulse, so the way to do that sits at the end of the reading
+            // rather than under each card.
+            DiscussFooter { onDiscuss(.forSummary(session)) }
         }
     }
 
