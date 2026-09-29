@@ -119,7 +119,7 @@ function parseContentNotes(text: string, exhibits: { text: string; timestampSec:
 
 type ReflectMessage = { role: 'user' | 'assistant'; text: string; createdAt: string }
 
-function buildReflectSystemPrompt(context: string[], teacherName: string | null): string {
+export function buildReflectSystemPrompt(context: string[], teacherName: string | null, spoken = false): string {
   const nameLine = teacherName
     ? `The teacher's name is ${teacherName} — use it naturally now and then, the way a warm colleague would in conversation, never in every single reply and never forced.`
     : ''
@@ -129,6 +129,22 @@ This is not a written report — it's a live, back-and-forth chat, so talk like 
 reply short and to the point (1-3 sentences, no filler or throat-clearing), grounded only in the facts
 below and in what the teacher has said so far. Never invent a detail — a number, a quote, a moment —
 that isn't given to you.
+${
+    spoken
+      ? `
+THE TEACHER IS LISTENING, NOT READING. They may be driving home. This changes how you talk:
+
+- Two sentences at most, and often one. Say the thing and stop.
+- Exactly one question, at the very end, so it is the last thing they hear. Never ask two.
+- No lists, no "first... second...", nothing that needs to be seen to be followed.
+- One idea per turn. If you have a second thought, hold it — they can ask.
+- Say numbers and times the way a person speaks them: "about twelve minutes in", not "12:40";
+  "roughly a tenth of your questions", not "9.3%".
+- No parenthetical asides and no stacked hedges. One honest qualifier is enough; three is unlistenable.
+- Leave silence to think in. A short reply is a kindness here, not a lack of effort.
+`
+      : ''
+  }
 
 Bring real warmth. Teaching is hard — this conversation should leave the teacher feeling a little lighter
 and more hopeful about their own practice, not scrutinized. Be encouraging and supportive by default. A
@@ -565,7 +581,7 @@ audioSessionsRouter.post('/:id/tag-speaker', async (req, res) => {
 })
 
 audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
-  const { message, context } = req.body ?? {}
+  const { message, context, spoken } = req.body ?? {}
   const safeContext: string[] = Array.isArray(context) ? context.filter((c) => typeof c === 'string') : []
 
   const session = await prisma.audioSession.findFirst({
@@ -618,8 +634,8 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
       model: CLAUDE_MODEL,
       max_tokens: memoryOn ? 300 + MEMORY_UPDATE_TOKEN_BUFFER : 300,
       system: memoryOn
-        ? `${buildReflectSystemPrompt(safeContext, session.teacherName)}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
-        : `${buildReflectSystemPrompt(safeContext, session.teacherName)}${buildExperienceContextBlock(user?.experienceLevel)}`,
+        ? `${buildReflectSystemPrompt(safeContext, session.teacherName, spoken === true)}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+        : `${buildReflectSystemPrompt(safeContext, session.teacherName, spoken === true)}${buildExperienceContextBlock(user?.experienceLevel)}`,
       messages,
     })
     const text = response.content

@@ -349,7 +349,9 @@ struct ReflectTab: View {
         voiceMode = voice
         voicePaused = false
         do {
-            let updated = try await AudioCoachingService.sendReflectMessage(sessionId: session.id, message: nil, context: reflectContext)
+            let updated = try await AudioCoachingService.sendReflectMessage(
+                sessionId: session.id, message: nil, context: reflectContext, spoken: voice
+            )
             conversation = updated.reflectConversation ?? []
             onUpdate(AudioSessionWithSegments(session: updated, segments: session.segments))
             sending = false
@@ -368,7 +370,9 @@ struct ReflectTab: View {
         sending = true
         error = nil
         do {
-            let updated = try await AudioCoachingService.sendReflectMessage(sessionId: session.id, message: trimmed, context: reflectContext)
+            let updated = try await AudioCoachingService.sendReflectMessage(
+                sessionId: session.id, message: trimmed, context: reflectContext, spoken: voiceMode
+            )
             conversation = updated.reflectConversation ?? []
             onUpdate(AudioSessionWithSegments(session: updated, segments: session.segments))
         } catch {

@@ -2114,12 +2114,12 @@ function ReportPanel({
   // more plain-fact line ahead of the same context array, so Claude's own
   // generated opening question naturally leads with it. No backend change
   // needed: the route already accepts an arbitrary context: string[].
-  async function handleStartReflect(focus?: string) {
+  async function handleStartReflect(focus?: string, spoken = false) {
     setReflectSending(true)
     setReflectError(null)
     try {
       const context = focus ? [`Start the conversation by asking about ${focus}.`, ...reflectContext] : reflectContext
-      const updated = await sendReflectMessage(session.id, { context })
+      const updated = await sendReflectMessage(session.id, { context, spoken })
       onUpdate({ ...session, ...updated })
     } catch (err) {
       const kind = (err as { kind?: ReflectChatErrorKind })?.kind ?? 'other'
@@ -2132,7 +2132,7 @@ function ReportPanel({
   // overrideText lets voice mode submit a transcribed turn directly,
   // bypassing reflectDraft entirely — same convention as Ask.tsx's and
   // TalkToMe.tsx's own optional-override submit functions.
-  async function handleSendReflect(overrideText?: string, extraContext: string[] = []) {
+  async function handleSendReflect(overrideText?: string, extraContext: string[] = [], spoken = false) {
     const usingOverride = overrideText != null
     const trimmed = (overrideText ?? reflectDraft).trim()
     if (!trimmed || reflectSending) return
@@ -2140,7 +2140,11 @@ function ReportPanel({
     setReflectError(null)
     if (!usingOverride) setReflectDraft('')
     try {
-      const updated = await sendReflectMessage(session.id, { message: trimmed, context: [...extraContext, ...reflectContext] })
+      const updated = await sendReflectMessage(session.id, {
+        message: trimmed,
+        context: [...extraContext, ...reflectContext],
+        spoken,
+      })
       onUpdate({ ...session, ...updated })
     } catch (err) {
       const kind = (err as { kind?: ReflectChatErrorKind })?.kind ?? 'other'
@@ -3174,8 +3178,8 @@ function ReflectTab({
   reflectError: { kind: ReflectChatErrorKind; message: string } | null
   draft: string
   onDraftChange: (v: string) => void
-  onStart: (focus?: string) => void
-  onSend: (overrideText?: string, extraContext?: string[]) => void
+  onStart: (focus?: string, spoken?: boolean) => void
+  onSend: (overrideText?: string, extraContext?: string[], spoken?: boolean) => void
   locked: boolean
   talkVoice: TalkVoice | null
   strengths: string
@@ -3277,7 +3281,7 @@ function ReflectTab({
       return
     }
     setUserTranscript(text)
-    onSend(text)
+    onSend(text, [], voiceModeRef.current)
   }
 
   const {
@@ -3423,7 +3427,7 @@ function ReflectTab({
     setPickingTopic(false)
     setCurrentTimestampSec(timestampSec)
     setUserTranscript(message)
-    onSend(message)
+    onSend(message, [], voiceModeRef.current)
   }
 
   function handleCancelTopicPicker() {
@@ -3454,11 +3458,16 @@ function ReflectTab({
     // whatever the report actually measured for the new topic.
     const measured = externalFocus.detail ? ` What the report shows about it: ${externalFocus.detail}` : ''
     if (started) {
-      onSend(`Let's discuss this: ${externalFocus.label}`, [
-        `The teacher just switched to a new topic: ${externalFocus.label}.${measured}`,
-      ])
+      onSend(
+        `Let's discuss this: ${externalFocus.label}`,
+        [`The teacher just switched to a new topic: ${externalFocus.label}.${measured}`],
+        true,
+      )
     } else {
-      onStart(externalFocus.detail ? `${externalFocus.focus} (the report shows: ${externalFocus.detail})` : externalFocus.focus)
+      onStart(
+        externalFocus.detail ? `${externalFocus.focus} (the report shows: ${externalFocus.detail})` : externalFocus.focus,
+        true,
+      )
     }
     onExternalFocusHandled()
     // eslint-disable-next-line react-hooks/exhaustive-deps

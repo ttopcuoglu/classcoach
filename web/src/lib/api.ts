@@ -1754,7 +1754,9 @@ export type ReflectChatErrorKind = 'locked' | 'turn_cap' | 'daily_limit' | 'othe
 
 export async function sendReflectMessage(
   id: string,
-  data: { message?: string; context: string[] },
+  // `spoken` tells the coach it is being heard rather than read, which changes
+  // how it writes: one or two sentences, one question, no lists.
+  data: { message?: string; context: string[]; spoken?: boolean },
 ): Promise<AudioSession> {
   const res = await fetch(`${API_BASE_URL}/api/audio-sessions/${id}/reflect-chat`, {
     method: 'POST',

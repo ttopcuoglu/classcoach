@@ -105,13 +105,21 @@ enum AudioCoachingService {
     private struct ReflectBody: Encodable {
         let message: String?
         let context: [String]
+        let spoken: Bool
     }
 
-    static func sendReflectMessage(sessionId: String, message: String?, context: [String]) async throws -> AudioSession {
+    /// `spoken` tells the coach it is being heard rather than read — one or
+    /// two sentences, one question, no lists.
+    static func sendReflectMessage(
+        sessionId: String,
+        message: String?,
+        context: [String],
+        spoken: Bool = false
+    ) async throws -> AudioSession {
         try await APIClient.shared.request(
             "/api/audio-sessions/\(sessionId)/reflect-chat",
             method: "POST",
-            body: ReflectBody(message: message, context: context)
+            body: ReflectBody(message: message, context: context, spoken: spoken)
         )
     }
 
