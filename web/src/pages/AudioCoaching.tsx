@@ -27,10 +27,13 @@ import {
   getSpeakerSamples,
   updateAudioSession,
   updateProfile,
+  generateContentNotes,
   type AudioCfuLogEntry,
+  type AudioContentNotes,
   type AudioDirectiveLogEntry,
   type AudioFeedbackLogEntry,
   type AudioHighlight,
+  type AudioLessonContent,
   type AudioQuestionLogEntry,
   type AudioReflectMessage,
   type AudioRedirectionLogEntry,
@@ -2059,6 +2062,8 @@ function ReportPanel({
   const [reflectDraft, setReflectDraft] = useState('')
   const [summarizing, setSummarizing] = useState(false)
   const [summarizeError, setSummarizeError] = useState<string | null>(null)
+  const [contentNotesSending, setContentNotesSending] = useState(false)
+  const [contentNotesError, setContentNotesError] = useState<string | null>(null)
   const [rubricLensSending, setRubricLensSending] = useState(false)
   const [rubricLensError, setRubricLensError] = useState<string | null>(null)
   const [classSummarySending, setClassSummarySending] = useState(false)
@@ -2159,6 +2164,19 @@ function ReportPanel({
       setSummarizeError('Could not summarize your conversation. Please try again.')
     } finally {
       setSummarizing(false)
+    }
+  }
+
+  async function handleGenerateContentNotes() {
+    setContentNotesSending(true)
+    setContentNotesError(null)
+    try {
+      const updated = await generateContentNotes(session.id)
+      onUpdate({ ...session, ...updated })
+    } catch (err) {
+      setContentNotesError((err as Error).message || 'Could not generate content notes. Please try again.')
+    } finally {
+      setContentNotesSending(false)
     }
   }
 
@@ -2514,7 +2532,14 @@ function ReportPanel({
             )}
 
             {insightsSection === 'content' && (
-              <LessonContentTab contentNarrative={session.contentNarrative ?? null} />
+              <LessonContentTab
+                lessonContent={session.lessonContent}
+                contentNotes={session.contentNotes}
+                isShort={coverage.isShort}
+                sending={contentNotesSending}
+                error={contentNotesError}
+                onGenerate={handleGenerateContentNotes}
+              />
             )}
 
             {insightsSection === 'routines' && (
@@ -3991,17 +4016,100 @@ function ReflectTab({
 /// none". Everything still detected feeds the narrative instead of being
 /// listed beside it, so the section says what a subject specialist who
 /// listened would say, about the content and about how it was delivered.
-function LessonContentTab({ contentNarrative }: { contentNarrative: string | null }) {
+const CONTENT_NOTE_LABEL_STYLES: Record<string, string> = {
+  Clarity: 'bg-mint-tint/60 text-forest',
+  Vocabulary: 'bg-mint-tint/60 text-forest',
+  'Engagement with content': 'bg-mint-tint/60 text-forest',
+  'Worth double-checking': 'bg-peach-tint text-terracotta-600',
+}
+/// Content Specialist Notes, and nothing else.
+///
+/// The section used to list separate detections — topic-term clouds, the
+/// stated objective, real-world connections, defined vocabulary — each of
+/// which could read "None detected" while the lesson plainly contained the
+/// thing. The subject expertise is what a teacher came here for; the page
+/// closes with the same Discuss action every other page does.
+function LessonContentTab({
+  lessonContent,
+  contentNotes,
+  isShort,
+  sending,
+  error,
+  onGenerate,
+}: {
+  lessonContent: AudioLessonContent | null
+  contentNotes: AudioContentNotes | null
+  isShort: boolean
+  sending: boolean
+  error: string | null
+  onGenerate: () => void
+}) {
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  const subject = lessonContent?.subject ?? null
+  const visibleNotes = contentNotes?.notes.filter((n) => !dismissed.has(n.id)) ?? []
+
   return (
     <div className="flex flex-col gap-3">
-      {contentNarrative ? (
-        <CoachNote text={contentNarrative} />
-      ) : (
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Content Specialist Notes</h2>
+      {subject == null ? (
         <p className="text-sm text-ink-soft">
-          These notes are written when the report is summarised — open the Summary tab once and they will appear
-          here.
+          Not enough subject-specific content detected to generate notes this session.
         </p>
+      ) : !contentNotes ? (
+        <>
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={sending}
+            className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+          >
+            {sending ? 'Generating...' : 'Generate content specialist notes'}
+          </button>
+          <WorkingRing active={sending} estimatedMs={14000} label="Writing content specialist notes" className="text-forest" />
+        </>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-ink-soft">
+            These notes are generated from a short audio excerpt and may miss context. They're meant as a starting
+            point for your own reflection, not a factual review — please use your own subject expertise as the
+            final word.
+          </p>
+          {isShort && (
+            <p className="text-xs font-semibold text-terracotta-600">
+              This session is under {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes — content feedback from a
+              short sample is especially limited.
+            </p>
+          )}
+          {visibleNotes.length === 0 ? (
+            <p className="text-sm text-ink-soft">No notes to show.</p>
+          ) : (
+            visibleNotes.map((note) => (
+              <div key={note.id} className="rounded-xl border border-hairline bg-cream-card p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${CONTENT_NOTE_LABEL_STYLES[note.label] ?? 'bg-cream text-ink-soft'}`}
+                  >
+                    {note.label}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setDismissed((prev) => new Set(prev).add(note.id))}
+                    aria-label="Dismiss note"
+                    className="shrink-0 text-ink-soft hover:text-ink"
+                  >
+                    ×
+                  </button>
+                </div>
+                <p className="mt-2 text-sm text-ink">{note.text}</p>
+                <p className="mt-2 text-xs text-ink-soft">
+                  "{note.excerpt}" ({formatTime(note.timestampSec)})
+                </p>
+              </div>
+            ))
+          )}
+        </div>
       )}
+      {error && <p className="text-sm text-terracotta-600">{error}</p>}
     </div>
   )
 }
@@ -4248,7 +4356,10 @@ function ClimateRoutinesTab({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+      {/* Full width. This was a two-column grid built for a pair of cards; with
+          one card in it the next step sat in a half-width column beside empty
+          space, narrower than everything above it. */}
+      <div className="flex flex-col gap-6">
         {strengthText && (
           <div className="rounded-2xl border border-hairline bg-cream-card p-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-forest">Strength to keep</p>

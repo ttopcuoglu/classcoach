@@ -14,33 +14,71 @@ struct LessonContentTab: View {
     let session: AudioSessionWithSegments
     let onUpdate: (AudioSessionWithSegments) -> Void
 
+    @State private var generating = false
+    @State private var error: String?
+    @State private var dismissed: Set<String> = []
+
+    private var subject: String? { session.lessonContent?.subject }
+    private var visibleNotes: [AudioContentNote] {
+        (session.contentNotes?.notes ?? []).filter { !dismissed.contains($0.id) }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if let narrative = session.contentNarrative, !narrative.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(
-                        narrative.components(separatedBy: "\n\n")
-                            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                            .filter { !$0.isEmpty },
-                        id: \.self
-                    ) { para in
-                        Text(para)
-                            .font(.subheadline)
-                            .foregroundStyle(AppTheme.textPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+        VStack(alignment: .leading, spacing: 12) {
+            Text("CONTENT SPECIALIST NOTES")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(AppTheme.textSecondary)
+
+            if subject == nil {
+                Text("Not enough subject-specific content detected to generate notes this session.")
+                    .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+            } else if session.contentNotes == nil {
+                Button(generating ? "Generating…" : "Generate content specialist notes") {
+                    Task { await generate() }
                 }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
+                .disabled(generating)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AppTheme.cream)
+                .padding(.horizontal, 20).padding(.vertical, 10)
+                .background(generating ? AppTheme.hairline : AppTheme.terracotta, in: Capsule())
             } else {
-                Text("These notes are written when the report is summarised — open Summary once and they will appear here.")
-                    .font(.subheadline)
-                    .foregroundStyle(AppTheme.textSecondary)
+                Text("These notes are generated from a short audio excerpt and may miss context. They're a starting point for your own reflection, not a factual review — use your own subject expertise as the final word.")
+                    .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                ForEach(visibleNotes, id: \.id) { note in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(note.label.uppercased())
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(AppTheme.forest)
+                            .padding(.horizontal, 10).padding(.vertical, 4)
+                            .background(AppTheme.mintTint.opacity(0.6), in: Capsule())
+                        Text(note.text).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("\"\(note.excerpt)\" (\(ReportConfidence.formatDuration(note.timestampSec)))")
+                            .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+                }
+            }
+
+            if let error {
+                Text(error).font(.footnote).foregroundStyle(AppTheme.terracotta600)
             }
         }
     }
 
+    private func generate() async {
+        generating = true
+        defer { generating = false }
+        error = nil
+        do {
+            let updated = try await AudioCoachingService.generateContentNotes(sessionId: session.id)
+            onUpdate(AudioSessionWithSegments(session: updated, segments: session.segments))
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
 }
 
 /// Minimal flow layout for word-cloud-style chip wrapping — iOS 16+
