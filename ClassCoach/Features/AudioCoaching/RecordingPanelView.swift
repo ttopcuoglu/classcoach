@@ -204,11 +204,10 @@ struct RecordingPanelView: View {
     }
 
     private func handleStop() async {
-        guard let result = await recorder.stop(), let localSession else {
-            // The recording is not gone: the chunks stay on disk and Lesson
-            // Debrief offers them back the next time it opens.
-            error = recorder.mergeError.map { "Could not prepare the recording to send (\($0)). It is saved — reopen Lesson Debrief to try again." }
-                ?? "Could not prepare the recording to send. It is saved — reopen Lesson Debrief to try again."
+        guard let result = recorder.stop(), let localSession else {
+            // The recording is not gone: the file stays on disk and Lesson
+            // Debrief offers it back the next time it opens.
+            error = "Could not finish the recording. It is saved — reopen Lesson Debrief to try again."
             return
         }
         do {
@@ -221,9 +220,9 @@ struct RecordingPanelView: View {
                 audioFileURL: result.fileURL,
                 durationSec: result.elapsedSec
             )
-            // Chunks only — the merged file stays until the server reports a
-            // transcript for this session. Queued is not the same as safe.
-            recorder.handOff(merged: result.fileURL)
+            // The file stays until the server reports a transcript for this
+            // session. Queued is not the same as safe.
+            recorder.handOff()
             onUploadStarted()
         } catch {
             self.error = error.localizedDescription

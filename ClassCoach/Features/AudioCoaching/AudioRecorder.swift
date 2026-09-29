@@ -9,9 +9,9 @@ import UserNotifications
 /// on pause, restart the clock on resume) is replicated exactly so the
 /// displayed timer excludes paused time, same as web.
 ///
-/// Recording is chunked — see `RecordingStore` for why. The clock is not:
-/// rolling to a new file leaves `runStart` and `accumulatedSec` alone, so the
-/// timer a teacher watches never notices.
+/// One recording is one file — see `RecordingStore` for why chunking was
+/// tried and reverted. Stop therefore has nothing to do but finalise the file
+/// and hand it over.
 @MainActor
 final class AudioRecorder: NSObject, ObservableObject {
     enum Phase { case idle, recording, paused, uploading }
@@ -25,15 +25,11 @@ final class AudioRecorder: NSObject, ObservableObject {
     /// happen to their lesson — it is the recorder that gives up, not the
     /// recording that is thrown away.
     @Published private(set) var reachedLimit = false
-    /// Why the merge failed, if it did — surfaced rather than swallowed, since
-    /// this is the step between a recorded lesson and a sent one.
-    @Published var mergeError: String?
 
     private var recorder: AVAudioRecorder?
     private var accumulatedSec: Double = 0
     private var runStart: Date?
     private var timer: Timer?
-    private var rollTimer: Timer?
     private var manifest: RecordingStore.Manifest?
 
     private static let settings: [String: Any] = [
@@ -64,15 +60,20 @@ final class AudioRecorder: NSObject, ObservableObject {
             return false
         }
 
-        accumulatedSec = 0
-        runStart = Date()
-        guard startNextChunk() else {
+        do {
+            let next = try AVAudioRecorder(url: RecordingStore.audioURL(for: sessionId), settings: Self.settings)
+            next.delegate = self
+            next.record()
+            recorder = next
+        } catch {
             manifest = nil
             return false
         }
+
+        accumulatedSec = 0
+        runStart = Date()
         phase = .recording
         startTimer()
-        startRollTimer()
         // Asked now, while the teacher is holding the phone and has just
         // chosen to record. Asking when the limit fires — ninety minutes
         // later, with the phone in a drawer — puts the one prompt iOS ever
@@ -84,7 +85,6 @@ final class AudioRecorder: NSObject, ObservableObject {
 
     func pause() {
         recorder?.pause()
-        stopRollTimer()
         if let runStart {
             accumulatedSec += Date().timeIntervalSince(runStart)
         }
@@ -99,14 +99,14 @@ final class AudioRecorder: NSObject, ObservableObject {
         runStart = Date()
         phase = .recording
         startTimer()
-        startRollTimer()
     }
 
-    /// Stops recording and returns the final elapsed seconds and a single
-    /// merged file — the shape everything downstream already expects.
-    func stop() async -> (elapsedSec: Double, fileURL: URL)? {
+    /// Stops recording and returns the finished file. `AVAudioRecorder.stop()`
+    /// writes the index and closes the file, which is the whole of the work —
+    /// there is no merge to wait on any more, and so nothing between Stop and
+    /// the teacher getting their screen back.
+    func stop() -> (elapsedSec: Double, fileURL: URL)? {
         stopTimer()
-        stopRollTimer()
         if let runStart {
             accumulatedSec += Date().timeIntervalSince(runStart)
         }
@@ -121,27 +121,7 @@ final class AudioRecorder: NSObject, ObservableObject {
         self.manifest = manifest
 
         phase = .uploading
-
-        // iOS suspends the app seconds after the screen locks, and a suspended
-        // export never finishes. A teacher who presses Stop and pockets the
-        // phone — which is every teacher at the end of a period — would come
-        // back to a progress ring frozen mid-merge. This asks for the time to
-        // finish the one step that must not be interrupted.
-        let assertion = await UIApplication.shared.beginBackgroundTask(withName: "merge-recording")
-        defer { if assertion != .invalid { UIApplication.shared.endBackgroundTask(assertion) } }
-
-        do {
-            return (accumulatedSec, try await RecordingStore.merge(manifest))
-        } catch {
-            // Leaving `phase` on .uploading was what turned a failed merge into
-            // a screen that spins forever with nothing to tap: no error, no
-            // retry, and the recording apparently lost. It is not lost — the
-            // chunks are still on disk and the unfinished-recording prompt will
-            // offer them back — so hand the UI back to the teacher.
-            mergeError = error.localizedDescription
-            phase = .idle
-            return nil
-        }
+        return (accumulatedSec, RecordingStore.audioURL(for: manifest.sessionId))
     }
 
     /// The upload has been QUEUED — not accepted, not transcribed. A
@@ -150,59 +130,24 @@ final class AudioRecorder: NSObject, ObservableObject {
     /// the only copy: a rejected upload or a server restart mid-transcription
     /// would leave the teacher an error message and nothing else.
     ///
-    /// So the chunks go, because the merged file supersedes them, and the
-    /// merged file stays until `AudioCoachingView` sees the server report a
-    /// transcript for this session.
-    func handOff(merged: URL) {
-        if let manifest {
-            RecordingStore.retainMergedOnly(manifest, merged: merged)
-        }
+    /// The file therefore stays until `AudioCoachingView` sees the server
+    /// report a transcript for this session.
+    func handOff() {
         reset()
     }
 
     func reset() {
         stopTimer()
-        stopRollTimer()
         recorder = nil
         manifest = nil
         accumulatedSec = 0
         runStart = nil
         elapsedSec = 0
         reachedLimit = false
-        mergeError = nil
         phase = .idle
     }
 
-    // MARK: - Chunks
-
-    /// Finalises the current file and opens the next. The gap is a few tens of
-    /// milliseconds every five minutes, which can clip a word; avoiding even
-    /// that means driving `AVAudioEngine` and writing files by hand, which is
-    /// a great deal more code and more ways to get audio wrong.
-    private func roll() {
-        recorder?.stop()
-        persistElapsed()
-        _ = startNextChunk()
-    }
-
-    private func startNextChunk() -> Bool {
-        guard var manifest else { return false }
-        let url = RecordingStore.chunkURL(sessionId: manifest.sessionId, index: manifest.chunkNames.count)
-        do {
-            let next = try AVAudioRecorder(url: url, settings: Self.settings)
-            next.delegate = self
-            next.record()
-            recorder = next
-        } catch {
-            return false
-        }
-        manifest.chunkNames.append(url.lastPathComponent)
-        self.manifest = manifest
-        try? RecordingStore.save(manifest)
-        return true
-    }
-
-    /// Keeps the manifest's duration roughly current, so a recording recovered
+    /// Keeps the manifest's duration roughly current, so a recording found
     /// after a crash reports a sane length rather than zero.
     private func persistElapsed() {
         guard var manifest else { return }
@@ -210,18 +155,6 @@ final class AudioRecorder: NSObject, ObservableObject {
         manifest.accumulatedSec = accumulatedSec + running
         self.manifest = manifest
         try? RecordingStore.save(manifest)
-    }
-
-    private func startRollTimer() {
-        stopRollTimer()
-        rollTimer = Timer.scheduledTimer(withTimeInterval: RecordingStore.chunkSeconds, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.roll() }
-        }
-    }
-
-    private func stopRollTimer() {
-        rollTimer?.invalidate()
-        rollTimer = nil
     }
 
     // MARK: - Clock
@@ -241,8 +174,6 @@ final class AudioRecorder: NSObject, ObservableObject {
     private func tick() {
         let running = runStart.map { Date().timeIntervalSince($0) } ?? 0
         elapsedSec = accumulatedSec + running
-        // Checked here rather than on the five-minute roll, or a recording
-        // could run five minutes past its own limit.
         if !reachedLimit, elapsedSec >= RecordingStore.maxRecordingSeconds {
             reachedLimit = true
             notifyLimitReached()

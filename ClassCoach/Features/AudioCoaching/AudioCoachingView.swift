@@ -147,10 +147,17 @@ struct AudioCoachingView: View {
         recovering = true
         defer { recovering = false }
         do {
-            let merged = try await RecordingStore.merge(manifest)
+            // A recording the app never got to finish has no index and will
+            // not open — better to say so than to send something the server
+            // can only reject.
+            guard await RecordingStore.isPlayable(sessionId: manifest.sessionId) else {
+                RecordingStore.discard(sessionId: manifest.sessionId)
+                self.error = "That recording was cut off before it could be saved and can't be recovered."
+                return
+            }
             try await AudioCoachingService.startTranscription(
                 sessionId: manifest.sessionId,
-                audioFileURL: merged,
+                audioFileURL: RecordingStore.audioURL(for: manifest.sessionId),
                 durationSec: manifest.accumulatedSec
             )
             // Not discarded here either: this upload is queued, exactly like
@@ -181,7 +188,7 @@ struct AudioCoachingView: View {
         let cutoff = Date().addingTimeInterval(-Double(RecordingStore.keepLocalAudioDays) * 24 * 60 * 60)
         var recoverable: RecordingStore.Manifest?
 
-        for manifest in RecordingStore.unfinished() {
+        for manifest in RecordingStore.stored() {
             // Never touch the recording being made right now.
             if active?.id == manifest.sessionId, isRecordingPhase { continue }
 
