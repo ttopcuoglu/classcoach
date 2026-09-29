@@ -75,6 +75,10 @@ struct OverviewTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            // Right before the summary text, so the choice to listen is offered
+            // before the reading starts rather than after it is finished.
+            ListenInsteadButton(session: session)
+
             if let glance = session.classSummary ?? noticedSummary {
                 VStack(alignment: .leading, spacing: 6) {
                     eyebrow("Lesson at a glance", AppTheme.terracotta600)
