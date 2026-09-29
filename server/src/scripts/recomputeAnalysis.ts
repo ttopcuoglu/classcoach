@@ -1,6 +1,10 @@
 import 'dotenv/config'
 import { analyzeTranscript, detectLessonContent, type Segment } from '../lib/audioAnalysis.ts'
 import { enrichLessonContent } from '../lib/lessonObjective.ts'
+import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
+import { buildContentExhibits } from '../lib/audioAnalysis.ts'
+import { extractTag } from '../lib/extractTag.ts'
+import { buildClassSummarySystemPrompt } from '../routes/audioSessions.ts'
 import { prisma } from '../lib/prisma.ts'
 
 // Re-runs the analysis over a session's stored transcript.
@@ -24,6 +28,9 @@ const args = process.argv.slice(2)
 const write = args.includes('--write')
 const latest = args.includes('--latest')
 const list = args.includes('--list')
+/// Opt-in: the narrative costs its own model call, and most recomputes are
+/// about the counts rather than the prose.
+const withSummary = args.includes('--summary')
 const userFlag = args.indexOf('--user')
 const userEmail = userFlag === -1 ? null : args[userFlag + 1]
 const sessionId = args.find((a) => !a.startsWith('--') && a !== userEmail) ?? null
@@ -101,6 +108,33 @@ async function main() {
   if (dropped.length) console.log(`dropped   ${dropped.map((t) => JSON.stringify(t)).join(', ')}`)
   console.log(`objective ${JSON.stringify(lessonContent.statedObjective.quote)} (${lessonContent.statedObjective.source ?? '—'})`)
   console.log(`summary   ${lessonContent.summary ?? '—'}`)
+  console.log(`connect.  ${lessonContent.connections.length} | vocab ${lessonContent.vocabulary.length}`)
+
+  if (withSummary && write) {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 900,
+      thinking: { type: 'disabled' },
+      system: buildClassSummarySystemPrompt(buildContentExhibits(segments), session.durationSec ?? 0, {
+        teacherTalkPct: analysis.teacherTalkPct,
+        studentTalkPct: analysis.studentTalkPct,
+        questionCount: analysis.questionCount,
+        higherOrderPct: analysis.higherOrderPct,
+        avgWaitTimeSec: analysis.avgWaitTimeSec,
+        cfuCount: analysis.cfuCount,
+        studentVoiceDetected: segments.some((s) => s.speakerLabel === 'Student'),
+      }),
+      messages: [{ role: 'user', content: 'Write the summary now.' }],
+    })
+    const text = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n')
+    const classSummary = extractTag(text, 'class_summary')
+    if (classSummary) {
+      await prisma.audioSession.update({ where: { id: session.id }, data: { classSummary } })
+      console.log(`summary   rewritten (${classSummary.split(/\n\s*\n/).length} paragraphs)`)
+    } else {
+      console.log('summary   FAILED — left as it was')
+    }
+  }
 
   if (!write) {
     console.log('\n(dry run — pass --write to save)')
