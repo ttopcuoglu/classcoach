@@ -568,6 +568,57 @@ function hasEnoughToBeAQuestion(sentence: string): boolean {
 /// "Explain your reasoning." are directives, not questions, and counting them
 /// put instructions into the higher-order percentage — the single number a
 /// teacher is most likely to read as a judgement about their teaching.
+/// Deepgram splits on pauses, not sentences, so one spoken question routinely
+/// arrives as two utterances — "So how" then "much of each ingredient does Mia
+/// need?" Counting each piece that ends in a question mark turned one question
+/// into one-and-a-fragment, and printed the fragment in the teacher's sequence
+/// list as though that were what they said.
+///
+/// So a turn's text is carried forward until it actually ends a sentence, and
+/// the whole thing is attributed to where it started. Only the question path
+/// uses this: talk time and everything else still measure the real segments,
+/// because a joined segment would silently count the pause between them as
+/// speech.
+const MAX_JOIN_GAP_SEC = 2
+
+type PreparedSegment = { text: string; startSec: number }
+
+function joinFragmentedSpeech(ordered: Segment[]): PreparedSegment[] {
+  const prepared: PreparedSegment[] = []
+  let carried = ''
+  let carriedStart: number | null = null
+
+  ordered.forEach((segment, index) => {
+    const previous = ordered[index - 1]
+    const continues =
+      carried !== '' &&
+      previous != null &&
+      previous.speakerLabel === segment.speakerLabel &&
+      segment.startSec - previous.endSec <= MAX_JOIN_GAP_SEC
+    const text = continues ? `${carried} ${segment.text.trim()}`.trim() : segment.text.trim()
+    const startSec = continues && carriedStart != null ? carriedStart : segment.startSec
+
+    const next = ordered[index + 1]
+    const nextContinues =
+      next != null &&
+      next.speakerLabel === segment.speakerLabel &&
+      next.startSec - segment.endSec <= MAX_JOIN_GAP_SEC
+
+    if (!/[.?!]\s*$/.test(text) && nextContinues) {
+      carried = text
+      carriedStart = startSec
+      // Held back — it is the first half of something.
+      prepared.push({ text: '', startSec: segment.startSec })
+    } else {
+      carried = ''
+      carriedStart = null
+      prepared.push({ text, startSec })
+    }
+  })
+
+  return prepared
+}
+
 function classifyQuestion(sentence: string, endedWithQuestion: boolean): 'higher_order' | 'recall' | null {
   const s = sentence.toLowerCase()
   if (HIGHER_ORDER_STARTERS.some((p) => s.startsWith(p) || s.includes(` ${p}`))) return 'higher_order'
@@ -603,6 +654,7 @@ function round(value: number, digits = 1): number {
 
 export function analyzeTranscript(segments: Segment[]): AnalysisResult {
   const ordered = [...segments].sort((a, b) => a.startSec - b.startSec)
+  const prepared = joinFragmentedSpeech(ordered)
   const totalDurationSec = ordered.length ? Math.max(...ordered.map((s) => s.endSec)) : 0
 
   let teacherTalkSec = 0
@@ -762,7 +814,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       // Same test the question loop uses, guard included: a turn that is only
       // "Okay?" is no longer a question, so after a student answer it is what
       // it always was — a short, generic piece of feedback.
-      const isQuestionSegment = splitSentences(segment.text).some(
+      const isQuestionSegment = splitSentences(prepared[index].text).some(
         ({ sentence, endedWithQuestion }) => {
           const classification = classifyQuestion(sentence, endedWithQuestion)
           if (!endedWithQuestion && !classification) return false
@@ -786,7 +838,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
 
       let askedQuestionThisSegment = false
       let segmentEndsWithQuestion = false
-      const sentences = splitSentences(segment.text)
+      const sentences = splitSentences(prepared[index].text)
       sentences.forEach(({ sentence, endedWithQuestion }, sentenceIndex) => {
         const classification = classifyQuestion(sentence, endedWithQuestion)
         if (!endedWithQuestion && !classification) return
@@ -802,7 +854,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
         else recallQuestionCount++
 
         const entry: QuestionLogEntry = {
-          timestampSec: segment.startSec,
+          timestampSec: prepared[index].startSec,
           type: classification === 'higher_order' ? 'higher_order' : 'recall',
           waitTimeSec: null,
           text: sentence.trim(),

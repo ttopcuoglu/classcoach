@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "seed": "tsx src/scripts/seedCurated.ts"
+    "seed": "tsx src/scripts/seedCurated.ts",
+    "test": "node --import tsx --test src/**/*.test.ts"
   },
   "keywords": [],
   "author": "",
