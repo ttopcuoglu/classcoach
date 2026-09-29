@@ -78,7 +78,22 @@ struct OverviewTab: View {
             if let glance = session.classSummary ?? noticedSummary {
                 VStack(alignment: .leading, spacing: 6) {
                     eyebrow("Lesson at a glance", AppTheme.terracotta600)
-                    Text(glance).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                    // Three paragraphs now — content, strengths, then what to
+                    // weigh — so the blank lines have to survive rather than
+                    // collapsing into a wall of text.
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(
+                            glance.components(separatedBy: "\n\n")
+                                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                                .filter { !$0.isEmpty },
+                            id: \.self
+                        ) { para in
+                            Text(para)
+                                .font(.subheadline)
+                                .foregroundStyle(AppTheme.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)

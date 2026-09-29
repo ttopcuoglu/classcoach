@@ -2711,7 +2711,15 @@ function SummaryTab({
       {/* 1. Lesson at a glance */}
       <NumberedCard n={1} title="Lesson at a glance" subtitle="What happened in this lesson, and the four numbers behind it">
         {classSummary ? (
-          <p className="text-base leading-relaxed text-ink">{classSummary}</p>
+          // Three paragraphs now — content, strengths, then what to weigh —
+          // so blank lines have to survive rather than collapsing into a wall.
+          <div className="flex flex-col gap-3">
+            {classSummary.split(/\n\s*\n/).filter(Boolean).map((para, i) => (
+              <p key={i} className="text-base leading-relaxed text-ink">
+                {para.trim()}
+              </p>
+            ))}
+          </div>
         ) : classSummarySending ? (
           <div className="flex justify-center rounded-xl bg-cream-card/60 p-6 text-forest">
             <ProgressRing

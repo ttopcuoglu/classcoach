@@ -52,10 +52,22 @@ Most lessons do not contain one. A teacher who starts working without announcing
 
 2. THE SUMMARY. One or two plain sentences saying what this lesson actually covered — the content, not the teaching. "Photosynthesis, focusing on the role of chlorophyll and a lab on leaf pigments." Not "the teacher led a discussion and asked questions." If the transcript is too fragmentary to tell, say ${NONE} here too.
 
+3. REAL-WORLD AND PRIOR-KNOWLEDGE CONNECTIONS. Up to two moments where the teacher tied the content to something outside the lesson — everyday life, a job, a story, something the class did before. It does not have to announce itself: "that's going to be important in cooking because you want things to taste the same" is a cooking connection, and "remember what we did with slopes last week" is a prior-knowledge one. Copy the teacher's sentence EXACTLY and give the timestamp of its line.
+
+4. DEFINED VOCABULARY. Up to two moments where the teacher gave the meaning of a term, however informally — "equivalent just means they're worth the same", "we call that the numerator". Again, exact sentences and timestamps.
+
+For 3 and 4, ${NONE} is a real answer. Plenty of lessons contain neither, and inventing one is worse than reporting none.
+
 Write nothing outside these tags:
 <objective>the exact sentence, or ${NONE}</objective>
 <objective_time>m:ss of that line, or ${NONE}</objective_time>
-<summary>one or two sentences, or ${NONE}</summary>`
+<summary>one or two sentences, or ${NONE}</summary>
+<connections>
+one exact sentence per line, each followed by " @ m:ss", or ${NONE}
+</connections>
+<vocabulary>
+one exact sentence per line, each followed by " @ m:ss", or ${NONE}
+</vocabulary>`
 
 function parseTimestamp(value: string | null): number | null {
   if (!value) return null
@@ -143,17 +155,45 @@ function quoteFromSegment(
   }
 }
 
+export type Quoted = { quote: string; timestampSec: number }
+
 export type ObjectiveFromModel = {
   quote: string | null
   timestampSec: number | null
   summary: string | null
+  connections: Quoted[]
+  vocabulary: Quoted[]
+}
+
+/// Each line is "the teacher's sentence @ m:ss". Verified the same way the
+/// objective is — against the teacher's speech flattened into one string — so
+/// a sentence nobody said is dropped rather than shown to a teacher as theirs.
+function parseQuotedLines(
+  raw: string | null,
+  flat: string,
+  offsets: { at: number; startSec: number }[],
+  max: number,
+): Quoted[] {
+  if (!raw || raw.toUpperCase().includes(NONE)) return []
+  const out: Quoted[] = []
+  for (const line of raw.split('\n')) {
+    const match = line.match(/^(.*?)\s*@\s*(\d+:\d{1,2})\s*$/)
+    if (!match) continue
+    const quote = match[1].trim().replace(/^["']|["']$/g, '')
+    if (quote.length < 12) continue
+    const offset = flat.indexOf(normalizeForMatch(quote))
+    if (offset === -1) continue
+    out.push({ quote, timestampSec: startSecAtOffset(offsets, offset) ?? parseTimestamp(match[2]) ?? 0 })
+    if (out.length === max) break
+  }
+  return out
 }
 
 /// Best-effort. Any failure returns nulls and the caller keeps the phrase
 /// detector's answer — a report that loses one line is fine, a transcription
 /// that fails because of this is not.
 export async function readLessonObjective(segments: Segment[]): Promise<ObjectiveFromModel> {
-  const empty: ObjectiveFromModel = { quote: null, timestampSec: null, summary: null }
+  const empty: ObjectiveFromModel = { quote: null, timestampSec: null, summary: null, connections: [], vocabulary: [] }
   const transcript = transcriptForModel(segments)
   if (transcript.length < 200) return empty
 
@@ -176,8 +216,12 @@ export async function readLessonObjective(segments: Segment[]): Promise<Objectiv
     const rawSummary = extractTag(text, 'summary')
     const summary = !rawSummary || rawSummary.toUpperCase().includes(NONE) ? null : rawSummary
 
+    const { flat, offsets } = flattenTeacherSpeech(segments)
+    const connections = parseQuotedLines(extractTag(text, 'connections'), flat, offsets, 2)
+    const vocabulary = parseQuotedLines(extractTag(text, 'vocabulary'), flat, offsets, 2)
+
     if (!rawQuote || rawQuote.toUpperCase().includes(NONE)) {
-      return { quote: null, timestampSec: null, summary }
+      return { quote: null, timestampSec: null, summary, connections, vocabulary }
     }
 
     const claimedTime = parseTimestamp(extractTag(text, 'objective_time'))
@@ -185,21 +229,26 @@ export async function readLessonObjective(segments: Segment[]): Promise<Objectiv
     // The check that makes a quote trustworthy: the teacher has to have said
     // these words, in this order. Against the flattened speech, so a sentence
     // spoken across three segments still counts as having been said.
-    const { flat, offsets } = flattenTeacherSpeech(segments)
     const offset = flat.indexOf(normalizeForMatch(rawQuote))
     if (offset !== -1) {
-      return { quote: rawQuote, timestampSec: startSecAtOffset(offsets, offset) ?? claimedTime, summary }
+      return {
+        quote: rawQuote,
+        timestampSec: startSecAtOffset(offsets, offset) ?? claimedTime,
+        summary,
+        connections,
+        vocabulary,
+      }
     }
 
     // Not verbatim. Take the words from the segment the model pointed at
     // rather than from the model.
     const recovered = quoteFromSegment(segments, claimedTime, rawQuote)
     if (recovered) {
-      return { quote: recovered.quote, timestampSec: recovered.timestampSec, summary }
+      return { ...recovered, summary, connections, vocabulary }
     }
 
     console.warn('[lessonObjective] discarded a quote that is in neither the transcript nor the segment it cited')
-    return { quote: null, timestampSec: null, summary }
+    return { quote: null, timestampSec: null, summary, connections, vocabulary }
   } catch (error) {
     console.error('[lessonObjective] failed:', error)
     return empty
@@ -214,7 +263,9 @@ export async function enrichLessonContent(
   segments: Segment[],
 ): Promise<LessonContentResult> {
   const read = await readLessonObjective(segments)
-  if (!read.quote && !read.summary) return lessonContent
+  if (!read.quote && !read.summary && read.connections.length === 0 && read.vocabulary.length === 0) {
+    return lessonContent
+  }
 
   // `found: null` is the phrase detector saying the recording was too short to
   // have an opening to scan. That floor belonged to a scan that needed a
@@ -230,6 +281,12 @@ export async function enrichLessonContent(
   return {
     ...lessonContent,
     summary: read.summary ?? lessonContent.summary ?? null,
+    // The phrase scan looked for ten fixed openers — "in real life", "remember
+    // when we" — and missed a teacher tying ratios to cooking because she
+    // simply talked about cooking. What the model finds wins; what it finds
+    // nothing of falls back, since the scan never invents.
+    connections: read.connections.length > 0 ? read.connections : lessonContent.connections,
+    vocabulary: read.vocabulary.length > 0 ? read.vocabulary : lessonContent.vocabulary,
     statedObjective: read.quote
       ? { found: true, quote: read.quote, timestampSec: read.timestampSec, source: 'model' }
       : foundNothing,

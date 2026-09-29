@@ -894,27 +894,67 @@ audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
 // "A strength to keep"), grounded in a real quote/timestamp rather than
 // this prompt's paraphrase. Asking for both here produced two competing,
 // sometimes-inconsistent strength claims on the same page.
-export function buildClassSummarySystemPrompt(exhibits: { text: string; timestampSec: number }[], recordedSec: number): string {
+/// What the recording measured, handed to the summary as evidence it is
+/// allowed to cite. Without it the narrative can only describe content; with
+/// it, it can say what went well and what might be worth a look — which is
+/// what a teacher actually opens the report for.
+export type ClassSummaryMetrics = {
+  teacherTalkPct: number | null
+  studentTalkPct: number | null
+  questionCount: number | null
+  higherOrderPct: number | null
+  avgWaitTimeSec: number | null
+  cfuCount: number | null
+  studentVoiceDetected: boolean
+}
+
+export function buildClassSummarySystemPrompt(
+  exhibits: { text: string; timestampSec: number }[],
+  recordedSec: number,
+  metrics?: ClassSummaryMetrics,
+): string {
   const durationGuidance =
     recordedSec < 120
-      ? 'This is a very short clip — at this length, write exactly one plain, honest sentence about what little was captured.'
+      ? 'This is a very short clip. Write one plain, honest sentence about what little was captured and stop — there is not enough here to say anything about the teaching.'
       : recordedSec < 600
-        ? 'This is a short excerpt, not a full lesson — keep the summary to one sentence, clearly scoped to what\'s shown below, and avoid sweeping claims.'
-        : 'This is a substantial recording — write 1-2 sentences describing what the class was actually working on.'
+        ? 'This is a short excerpt, not a full lesson. Keep to two or three sentences, clearly scoped to what is shown below, and avoid sweeping claims.'
+        : 'This is a substantial recording. Write three short paragraphs, as described below.'
 
-  return `You are a warm, practical instructional coach writing a short summary of what a teacher's own recorded lesson was actually about, for the teacher to read about their own class. Describe, in plain general terms, what the class was actually discussing or working on — never invent a specific number, name, or fact that isn't evidenced below, and never claim more confidence than how much (or how little) was actually captured supports.
+  const measured = metrics
+    ? `What the recording measured. You may cite these numbers and no others:
+- teacher talk: ${metrics.teacherTalkPct ?? 'not measured'}%
+- student talk: ${metrics.studentTalkPct ?? 'not measured'}%${metrics.studentVoiceDetected ? '' : ' (NO student voice was separately detected at all)'}
+- questions asked: ${metrics.questionCount ?? 'not measured'}
+- of those, recognised as higher-order: ${metrics.higherOrderPct ?? 'not measured'}%
+- average wait time after a question: ${metrics.avgWaitTimeSec ?? 'not measured'}s
+- check-for-understanding moves heard: ${metrics.cfuCount ?? 'not measured'}`
+    : ''
+
+  return `You are a warm, practical instructional coach writing for a teacher about their own recorded lesson. Never invent a specific number, name, or fact that is not evidenced below, and never claim more confidence than what was captured supports.
 
 ${durationGuidance}
 
-Below are numbered excerpts of what the teacher said, in order. Paraphrase only — do not quote them directly or use quotation marks, and never state a specific number, name, or fact that isn't evidenced below.
+Structure, when the recording is long enough for three paragraphs:
+
+1. WHAT THE LESSON WAS ABOUT. Plain description of the content and how it was taught. No praise, no criticism.
+
+2. WHAT WENT WELL. Name specific things this teacher actually did — a connection they drew, a question they asked, a routine that worked, a moment they gave students room. Be concrete and generous. Vague praise is worse than none.
+
+3. WHAT MIGHT BE WORTH A LOOK. Offered as questions for the teacher to weigh, not verdicts. And every one of them must be tied to the single most important caveat: THIS IS A MICROPHONE IN A ROOM. It hears the teacher clearly and students poorly. A student who spoke quietly, from the back, or in a group did not reach it. A low student-talk number may mean the room was quiet, or may mean the recording could not hear it, and you must say so rather than letting the teacher read it as a verdict on their teaching. Never tell a teacher what happened in their room that you could not hear. Where you are unsure, say what the recording could and could not show and let them judge.
+
+If a number is missing or the transcript is too thin to support a paragraph, say so plainly and write less. Writing less is always allowed.
+
+${measured}
+
+Below are numbered excerpts of what the teacher said, in order. Paraphrase only — do not quote them directly or use quotation marks.
 
 ${exhibits.map((e, i) => `[${i + 1}] ${e.text}`).join('\n')}
 
-Write in plain text only, no markdown.
+Write in plain text, no markdown, no headings. Separate paragraphs with a blank line. Address the teacher as "you".
 
 Respond with exactly this block and nothing else:
 <class_summary>
-Your 1-2 sentence summary of what the lesson covered.
+Your summary.
 </class_summary>
 ${CORE_COACHING_RULES}
 ${TRANSCRIPT_RELIABILITY_NOTICE}`
@@ -965,8 +1005,18 @@ audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 300,
-      system: buildClassSummarySystemPrompt(exhibits, session.durationSec ?? 0),
+      // Three short paragraphs rather than a sentence, so the ceiling rises
+      // with it — a summary cut off mid-caveat is worse than a short one.
+      max_tokens: 900,
+      system: buildClassSummarySystemPrompt(exhibits, session.durationSec ?? 0, {
+        teacherTalkPct: session.teacherTalkPct,
+        studentTalkPct: session.studentTalkPct,
+        questionCount: session.questionCount,
+        higherOrderPct: session.higherOrderPct,
+        avgWaitTimeSec: session.avgWaitTimeSec,
+        cfuCount: session.cfuCount,
+        studentVoiceDetected: segments.some((s) => s.speakerLabel === 'Student'),
+      }),
       messages: [{ role: 'user', content: 'Write the summary now.' }],
     })
     const text = response.content
