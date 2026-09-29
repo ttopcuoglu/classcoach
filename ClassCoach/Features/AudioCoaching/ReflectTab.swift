@@ -29,7 +29,6 @@ struct ReflectTab: View {
     @State private var saving = false
     @State private var savedConfirmed = false
     @State private var summarizing = false
-    @State private var locking = false
 
     init(session: AudioSessionWithSegments, locked: Bool, onUpdate: @escaping (AudioSessionWithSegments) -> Void) {
         self.session = session
@@ -272,13 +271,17 @@ struct ReflectTab: View {
         listen()
     }
 
+    /// Which note is being edited, so losing focus can save it — the
+    /// replacement for the "Save notes" button.
+    @FocusState private var editingField: String?
+
     private var reflectionCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Your reflection").font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
                 Spacer()
                 if started && !locked {
-                    Button(summarizing ? "Summarizing..." : "Fill in from our conversation") {
+                    Button(summarizing ? "Writing…" : "Finish and write my debrief") {
                         Task { await summarize() }
                     }
                     .font(.caption.weight(.medium)).foregroundStyle(AppTheme.primary)
@@ -289,8 +292,8 @@ struct ReflectTab: View {
             ProgressRing(
                 active: summarizing,
                 estimatedSeconds: 12,
-                label: "Wrapping up your reflection",
-                hint: "Pulling your notes from the conversation."
+                label: "Writing your debrief",
+                hint: "From everything you and Coach have said."
             )
 
             labeledField("What went well", text: $strengths)
@@ -300,27 +303,33 @@ struct ReflectTab: View {
             DatePicker("Follow-up date", selection: $followUpDate, displayedComponents: .date)
                 .font(.subheadline)
                 .disabled(locked)
-
-            if !locked {
-                HStack {
-                    Button(saving ? "Saving..." : (savedConfirmed ? "Saved." : "Save notes")) {
-                        Task { await saveNotes() }
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .disabled(saving)
-                    Spacer()
-                    Button(locking ? "Locking..." : "Lock report") {
-                        Task { await lock() }
-                    }
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
-                    .padding(.horizontal, 16).padding(.vertical, 8)
-                    .background(AppTheme.forest, in: Capsule())
-                    .disabled(locking)
+                .onChange(of: followUpDate) { _, _ in
+                    if !locked { Task { await saveNotes() } }
                 }
+
+            // No "Save notes" and no "Lock report". The debrief is written
+            // when the conversation finishes and saved with it; an edit saves
+            // itself when the teacher stops typing. Locking made a living
+            // document final — no unlock, and it blocked both further
+            // conversation and any new debrief — which is the opposite of
+            // something you come back to and keep talking about.
+            if !locked, saving || savedConfirmed {
+                Text(saving
+                     ? "Saving…"
+                     : "Saved. Come back any time — carry on the conversation and this rewrites itself.")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding()
         .background(AppTheme.peachTint.opacity(0.5), in: RoundedRectangle(cornerRadius: 20))
+        // Saves when focus leaves a note, since there is no longer a button to
+        // press. `.onSubmit` does not fire for a multiline TextEditor, so the
+        // focus change is the signal.
+        .onChange(of: editingField) { previous, _ in
+            if previous != nil, !locked { Task { await saveNotes() } }
+        }
     }
 
     private func labeledField(_ title: String, text: Binding<String>, minHeight: CGFloat = 40) -> some View {
@@ -333,6 +342,7 @@ struct ReflectTab: View {
                 .scrollContentBackground(.hidden)
                 .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
                 .disabled(locked)
+                .focused($editingField, equals: title)
         }
     }
 
@@ -382,9 +392,16 @@ struct ReflectTab: View {
         sending = false
     }
 
+    /// Finishing a conversation writes the debrief AND saves it.
+    ///
+    /// It used to only fill the boxes and wait for a "Save notes" press, so a
+    /// teacher who talked to Coach in the car and then closed the app lost the
+    /// one thing the conversation was for. Re-runnable on purpose: come back,
+    /// say one more thing, finish again, and it is rewritten from the whole
+    /// conversation.
     private func summarize() async {
-        // Wrapping up the conversation ends it: Coach stops mid-sentence and
-        // the mic stays closed while the teacher works on their notes.
+        // Wrapping up ends the conversation: Coach stops mid-sentence and the
+        // mic stays closed.
         stopVoice()
         summarizing = true
         do {
@@ -392,10 +409,12 @@ struct ReflectTab: View {
             if let s = summary.strengths { strengths = s }
             if let g = summary.growthAreas { growthAreas = g }
             if let n = summary.nextStep { nextStep = n }
+            summarizing = false
+            await saveNotes()
         } catch {
             self.error = error.localizedDescription
+            summarizing = false
         }
-        summarizing = false
     }
 
     private func saveNotes() async {
@@ -415,15 +434,4 @@ struct ReflectTab: View {
         saving = false
     }
 
-    private func lock() async {
-        locking = true
-        await saveNotes()
-        do {
-            let updated = try await AudioCoachingService.updateSession(id: session.id, status: "locked")
-            onUpdate(AudioSessionWithSegments(session: updated, segments: session.segments))
-        } catch {
-            self.error = error.localizedDescription
-        }
-        locking = false
-    }
 }
