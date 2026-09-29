@@ -2604,12 +2604,8 @@ function ReportPanel({
                 directiveMetric={directiveMetric}
                 nameMentionMetric={nameMentionMetric}
                 uniqueNameCount={uniqueNameCount}
-                toneRatio={toneRatio}
-                positiveCount={positiveCount}
-                correctiveCount={correctiveCount}
                 redirectionMetric={redirectionMetric}
-                routinesInsight={routinesInsight}
-                climateInsight={climateInsight}
+                climateNarrative={session.climateNarrative ?? null}
                 focusMetric={focusMetric}
                 directiveLog={session.directiveLog}
                 toneLog={session.toneLog}
@@ -4419,12 +4415,8 @@ function ClimateRoutinesTab({
   directiveMetric,
   nameMentionMetric,
   uniqueNameCount,
-  toneRatio,
-  positiveCount,
-  correctiveCount,
   redirectionMetric,
-  routinesInsight,
-  climateInsight,
+  climateNarrative,
   focusMetric,
   directiveLog,
   toneLog,
@@ -4436,12 +4428,8 @@ function ClimateRoutinesTab({
   directiveMetric: ReturnType<typeof getCountMetric>
   nameMentionMetric: ReturnType<typeof getCountMetric>
   uniqueNameCount: number | null
-  toneRatio: ConfidentMetric
-  positiveCount: number | null
-  correctiveCount: number | null
   redirectionMetric: ReturnType<typeof getCountMetric>
-  routinesInsight: string | null
-  climateInsight: string | null
+  climateNarrative: string | null
   focusMetric: FocusMetric | null
   directiveLog: AudioDirectiveLogEntry[] | null
   toneLog: AudioToneLogEntry[] | null
@@ -4451,11 +4439,6 @@ function ClimateRoutinesTab({
 }) {
   const [showAllEvidence, setShowAllEvidence] = useState(false)
 
-  const toneTotal = positiveCount != null && correctiveCount != null ? positiveCount + correctiveCount : null
-  const positiveDisplay =
-    isMissingState(toneRatio.state) || positiveCount == null || toneTotal == null || toneTotal === 0
-      ? toneRatio.display
-      : `${positiveCount} of ${toneTotal} classified moments`
 
   const directiveCandidates: NoticeCandidate[] = (directiveLog ?? []).map((entry, i) => ({
     id: `directive-log-${i}`,
@@ -4515,62 +4498,42 @@ function ClimateRoutinesTab({
 
   return (
     <div className="flex flex-col gap-6">
-      <CategorySection title="Routines & transitions" coverage={categoryCoverage([transitionMetric, directiveMetric])}>
+      {/* One row, not two sections with a coverage line each. On a normal
+          lesson most of these are zero — the counters look for fixed phrases —
+          so five numbers under two headings read as five failures. */}
+      <CategorySection title="The numbers" coverage="">
+        <div id="stat-redirection">
+          <Stat
+            label="Student names"
+            value={
+              nameMentionMetric.state === 'measured' && uniqueNameCount != null
+                ? `${nameMentionMetric.display} across ${uniqueNameCount} names`
+                : nameMentionMetric.display
+            }
+            muted={isMissingState(nameMentionMetric.state)}
+            reason={nameMentionMetric.reason}
+            focused={focusMetric === 'nameMentionCount'}
+          />
+        </div>
         <Stat
-          label="Transition cues detected"
-          value={transitionMetric.display}
-          muted={isMissingState(transitionMetric.state)}
-          reason={transitionMetric.reason}
-        />
-        <Stat
-          label="Clear direction moments"
+          label="Clear directions"
           value={directiveMetric.display}
           muted={isMissingState(directiveMetric.state)}
           reason={directiveMetric.reason ?? "Count only — clarity isn't judged automatically."}
           focused={focusMetric === 'directiveCount'}
         />
+        <Stat
+          label="Redirections"
+          value={redirectionMetric.display}
+          muted={isMissingState(redirectionMetric.state)}
+          reason={redirectionMetric.reason ?? "Count only — tone isn't judged automatically."}
+          focused={focusMetric === 'redirectionCount'}
+        />
       </CategorySection>
-      <CoachNote text={routinesInsight} />
 
-      <CategorySection
-        title="Classroom language"
-        coverage={categoryCoverage([nameMentionMetric, toneRatio, redirectionMetric])}
-      >
-        <Stat
-          label="Student-name use"
-          value={
-            nameMentionMetric.state === 'measured' && uniqueNameCount != null
-              ? `${nameMentionMetric.display} mentions across ${uniqueNameCount} names`
-              : nameMentionMetric.display
-          }
-          muted={isMissingState(nameMentionMetric.state)}
-          reason={nameMentionMetric.reason}
-          sub="Name use does not indicate how evenly students participated or received attention."
-          focused={focusMetric === 'nameMentionCount'}
-        />
-        <Stat
-          label={
-            <>
-              Positive language
-              <InfoTooltip text="Positive: affirms effort, behavior, participation, or a specific contribution. Corrective: redirects behavior, attention, or task completion. The two aren't opposites — a corrective statement can still be respectful and effective." />
-            </>
-          }
-          value={positiveDisplay}
-          muted={isMissingState(toneRatio.state)}
-          reason={toneRatio.reason}
-          focused={focusMetric === 'toneRatio'}
-        />
-        <div id="stat-redirection">
-          <Stat
-            label="Redirections"
-            value={redirectionMetric.state === 'measured' ? `${redirectionMetric.display} moments` : redirectionMetric.display}
-            muted={isMissingState(redirectionMetric.state)}
-            reason={redirectionMetric.reason ?? "Count only — tone isn't judged automatically."}
-            focused={focusMetric === 'redirectionCount'}
-          />
-        </div>
-      </CategorySection>
-      <CoachNote text={climateInsight} />
+      {/* The two notes this replaces existed only to explain the zeros above
+          them. This says what the lesson actually sounded like. */}
+      {climateNarrative && <CoachNote text={climateNarrative} />}
 
       {evidenceCandidates.length > 0 && (
         <div>
@@ -4622,7 +4585,7 @@ function ClimateRoutinesTab({
                 id: 'routines-climate',
                 observation: 'Routines and classroom language this session',
                 whyItMatters:
-                  climateInsight ?? routinesInsight ?? "Let's talk through transitions and directions this session.",
+                  climateNarrative ?? "Let's talk through transitions and directions this session.",
                 timestampSec: null,
                 excerpt: null,
                 durationSec: null,

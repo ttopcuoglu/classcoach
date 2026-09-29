@@ -10,31 +10,25 @@ struct ClimateRoutinesTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             routinesSection
-            climateSection
         }
     }
 
+    /// One row of numbers, and a narrative instead of two notes.
+    ///
+    /// These counters look for fixed phrases, so on a well-run lesson most of
+    /// them are zero — a teacher who said "turn and talk for thirty seconds"
+    /// gave a direction the counter does not recognise. Five zeros under two
+    /// headings, each with a note explaining the zero, read as five failures.
     private var routinesSection: some View {
-        let transitionMetric = ReportConfidence.getCountMetric(count: (session.metricsDetail?["transitionCount"]).map { Int($0) }, recordedSec: recordedSec)
-        return VStack(alignment: .leading, spacing: 10) {
-            CategorySectionView(title: "Routines", coverage: ReportConfidence.categoryCoverage([transitionMetric.state, m.directiveMetric.state])) {
-                StatView(label: "Your transitions", metric: transitionMetric)
-                StatView(label: "Clear directions given", metric: withDefaultReason(m.directiveMetric, "Count only — clarity isn't judged automatically."))
-            }
-            CoachNoteView(text: AudioInsights.buildRoutinesInsight(m.directiveMetric, hasRepeatedInstructionHighlight: hasHighlight("Repeated instruction")))
-        }
-    }
-
-    private var climateSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            CategorySectionView(title: "Climate & Tone", coverage: ReportConfidence.categoryCoverage([m.nameMentionMetric.state, m.toneRatio.state, m.redirectionMetric.state])) {
-                StatView(label: "Student names used", metric: m.nameMentionMetric)
-                StatView(label: "Your positive / corrective ratio", metric: m.toneRatio)
-                StatView(label: "Your redirection language", metric: withDefaultReason(m.redirectionMetric, "Count only — tone isn't judged automatically."))
+            CategorySectionView(title: "The numbers", coverage: "") {
+                StatView(label: "Student names", metric: m.nameMentionMetric)
+                StatView(label: "Clear directions", metric: withDefaultReason(m.directiveMetric, "Count only — clarity isn't judged automatically."))
+                StatView(label: "Redirections", metric: withDefaultReason(m.redirectionMetric, "Count only — tone isn't judged automatically."))
             }
-            let positive = session.metricsDetail?["positivePhraseCount"].map { Int($0) }
-            let corrective = session.metricsDetail?["correctivePhraseCount"].map { Int($0) }
-            CoachNoteView(text: AudioInsights.buildClimateInsight(m.redirectionMetric, positiveCount: positive, correctiveCount: corrective))
+            if let narrative = session.climateNarrative, !narrative.isEmpty {
+                CoachNoteView(text: narrative)
+            }
         }
     }
 

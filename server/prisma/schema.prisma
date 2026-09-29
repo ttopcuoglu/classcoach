@@ -611,6 +611,7 @@ model AudioSession {
   // model call as classSummary, so it costs nothing extra, and kept separate
   // because it is about the pattern of checks rather than the lesson content.
   checksNarrative  String?
+  climateNarrative String?
 
   strengths        String?
   growthAreas      String?

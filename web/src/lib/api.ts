@@ -689,6 +689,7 @@ export type AudioSession = {
   // Written in the same model call as classSummary — see the Checks &
   // Feedback section. Absent on reports generated before it existed.
   checksNarrative?: string | null
+  climateNarrative?: string | null
   transcribeStartedAt?: string | null
   failureReason?: string | null
   teacherTalkPct: number | null

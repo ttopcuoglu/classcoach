@@ -911,6 +911,14 @@ export type ClassSummaryMetrics = {
   /// already looking at.
   cfuMoments?: { timestampSec: number; text: string }[]
   feedbackMoments?: { kind: string; timestampSec: number; text: string }[]
+  /// Climate & Routines is mostly zeros on a normal lesson, because it counts
+  /// fixed phrases. The moments that DID register are what a narrative can
+  /// speak to honestly.
+  directionMoments?: { timestampSec: number; text: string }[]
+  toneMoments?: { kind: string; timestampSec: number; text: string }[]
+  redirectionMoments?: { timestampSec: number; text: string }[]
+  nameMentions?: number | null
+  uniqueNames?: number | null
 }
 
 export function buildClassSummarySystemPrompt(
@@ -981,15 +989,51 @@ ${
       : 'No feedback moments were detected.'
   }
 
-Respond with exactly these two blocks and nothing else:
+Then THE CLIMATE NOTE: one short paragraph for a section about routines,
+directions and classroom language. That section counts fixed phrases, so on a
+perfectly well-run lesson most of its numbers are zero — a teacher who said
+"turn and talk to your partner for thirty seconds" gave a clear direction that
+the counter simply does not recognise. Never let a zero read as an absence.
+Say what the transcript shows about how this teacher moved the class between
+activities, how they spoke to students, and whether names were used — and
+where the count is zero, say plainly that the phrases it looks for did not
+appear, not that the teaching did not happen. If there is genuinely nothing to
+say, one honest sentence is the right answer.
+
+${
+    metrics?.directionMoments?.length
+      ? `Directions heard:\n${metrics.directionMoments.map((m) => `- ${mmss(m.timestampSec)} ${m.text}`).join('\n')}`
+      : 'No direction phrases were recognised.'
+  }
+${
+    metrics?.toneMoments?.length
+      ? `Tone moments:\n${metrics.toneMoments.map((m) => `- ${mmss(m.timestampSec)} (${m.kind}) ${m.text}`).join('\n')}`
+      : 'No positive or corrective phrases were recognised.'
+  }
+${
+    metrics?.redirectionMoments?.length
+      ? `Redirections:\n${metrics.redirectionMoments.map((m) => `- ${mmss(m.timestampSec)} ${m.text}`).join('\n')}`
+      : 'No redirection phrases were recognised.'
+  }
+Student names: ${metrics?.nameMentions ?? 'not measured'} mentions across ${metrics?.uniqueNames ?? 'not measured'} names.
+
+Respond with exactly these three blocks and nothing else:
 <class_summary>
 Your summary.
 </class_summary>
 <checks_note>
 Your one-paragraph checks note.
 </checks_note>
+<climate_note>
+Your one-paragraph climate note.
+</climate_note>
 ${CORE_COACHING_RULES}
 ${TRANSCRIPT_RELIABILITY_NOTICE}`
+}
+
+function metricNumber(detail: unknown, key: string): number | null {
+  const value = (detail as Record<string, unknown> | null)?.[key]
+  return typeof value === 'number' ? value : null
 }
 
 function mmss(sec: number): string {
@@ -1054,6 +1098,11 @@ audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
         studentVoiceDetected: segments.some((s) => s.speakerLabel === 'Student'),
         cfuMoments: ((session.cfuLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 12),
         feedbackMoments: ((session.feedbackLog ?? []) as { kind: string; timestampSec: number; text: string }[]).slice(0, 12),
+        directionMoments: ((session.directiveLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 10),
+        toneMoments: ((session.toneLog ?? []) as { kind: string; timestampSec: number; text: string }[]).slice(0, 10),
+        redirectionMoments: ((session.redirectionLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 10),
+        nameMentions: metricNumber(session.metricsDetail, 'nameMentionCount'),
+        uniqueNames: metricNumber(session.metricsDetail, 'uniqueNameCount'),
       }),
       messages: [{ role: 'user', content: 'Write the summary now.' }],
     })
@@ -1064,6 +1113,7 @@ audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
     flagIfUnsafe(text, 'audioSessions.classSummary')
 
     const checksNarrative = extractTag(text, 'checks_note')
+    const climateNarrative = extractTag(text, 'climate_note')
     const classSummary = extractTag(text, 'class_summary')
     if (!classSummary) {
       res.status(502).json({ error: 'Could not generate a class summary. Please try again.' })
@@ -1072,7 +1122,11 @@ audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
 
     const updated = await prisma.audioSession.update({
       where: { id: session.id },
-      data: { classSummary, ...(checksNarrative ? { checksNarrative } : {}) },
+      data: {
+        classSummary,
+        ...(checksNarrative ? { checksNarrative } : {}),
+        ...(climateNarrative ? { climateNarrative } : {}),
+      },
       include: { segments: { orderBy: { startSec: 'asc' } } },
     })
     res.json(updated)
