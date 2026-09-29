@@ -2264,8 +2264,14 @@ function ReportPanel({
 
   const reflectContext = buildReflectContext(session, cfuMetric, redirectionMetric, directiveMetric, coverage)
 
-  const talkInsight = buildTalkInsight(session, studentSegmentsMetric)
-  const questioningInsight = buildQuestioningInsight(session, higherOrderRatio, followUpMetric, waitTimeMetric)
+  // The written narrative when the report has one, and the rule-assembled
+  // sentence as the fallback for reports made before it existed. The
+  // rule-based version can only restate the metrics; the written one can say
+  // that a 9.3% higher-order figure undercounts the thinking actually asked
+  // for, which is the more useful thing for a teacher to read.
+  const talkInsight = session.talkNarrative ?? buildTalkInsight(session, studentSegmentsMetric)
+  const questioningInsight =
+    session.questionsNarrative ?? buildQuestioningInsight(session, higherOrderRatio, followUpMetric, waitTimeMetric)
   const feedbackTotal = genericCount != null && specificCount != null ? genericCount + specificCount : null
   const cfuInsight = buildCfuInsight(cfuMetric, feedbackRatio, specificCount, feedbackTotal)
   const hasRepeatedInstructionHighlight = (session.highlights ?? []).some((h) => h.label === 'Repeated instruction')

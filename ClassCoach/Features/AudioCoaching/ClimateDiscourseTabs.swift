@@ -83,6 +83,9 @@ struct DiscourseDetailsTab: View {
             return max(0, 100 - t - s)
         }()
         return VStack(alignment: .leading, spacing: 10) {
+            // Narrative first, and the written one when the report has it —
+            // the rule-assembled fallback can only restate the percentages.
+            CoachNoteView(text: session.talkNarrative ?? AudioInsights.buildTalkInsight(session))
             CategorySectionView(title: "Talk distribution", coverage: ReportConfidence.categoryCoverage([
                 ReportConfidence.getPresenceMetric(session.teacherTalkPct).state, ReportConfidence.getPresenceMetric(session.studentTalkPct).state,
             ])) {
@@ -91,12 +94,13 @@ struct DiscourseDetailsTab: View {
                 StatView(label: "Silence / other", metric: percentMetric(silencePct))
                 StatView(label: "Student voice segments", metric: ReportConfidence.getCountMetric(count: session.metricsDetail?["studentVoiceSegments"].map { Int($0) }, recordedSec: recordedSec))
             }
-            CoachNoteView(text: AudioInsights.buildTalkInsight(session))
         }
     }
 
     private var questioningSection: some View {
         VStack(alignment: .leading, spacing: 10) {
+            CoachNoteView(text: session.questionsNarrative
+                ?? AudioInsights.buildQuestioningInsight(session, higherOrderRatio: m.higherOrderRatio))
             CategorySectionView(title: "The numbers", coverage: ReportConfidence.categoryCoverage([
                 (m.higherOrderRatio ?? m.cfuMetric).state, m.followUpMetric.state, ReportConfidence.getPresenceMetric(session.avgWaitTimeSec).state,
             ])) {
@@ -104,7 +108,6 @@ struct DiscourseDetailsTab: View {
                 StatView(label: "Your follow-up questions", metric: m.followUpMetric)
                 StatView(label: "Your avg. wait time", metric: waitTimeMetric)
             }
-            CoachNoteView(text: AudioInsights.buildQuestioningInsight(session, higherOrderRatio: m.higherOrderRatio))
             QuestioningMixView(session: session)
         }
     }

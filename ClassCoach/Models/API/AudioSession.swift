@@ -196,6 +196,8 @@ struct AudioSession: Decodable, Identifiable {
     let climateNarrative: String?
     /// Content Specialist Notes — one expert narrative for Clarity & Content.
     let contentNarrative: String?
+    let talkNarrative: String?
+    let questionsNarrative: String?
     let strengths: String?
     let growthAreas: String?
     let nextStep: String?
@@ -208,7 +210,7 @@ struct AudioSession: Decodable, Identifiable {
              durationSec, transcribeStartedAt, failureReason,
              teacherTalkPct, studentTalkPct, questionCount, higherOrderPct, avgWaitTimeSec,
              cfuCount, metricsDetail, highlights, phases, questionLog, reflectConversation, lessonContent,
-             contentNotes, rubricLens, classSummary, checksNarrative, climateNarrative, contentNarrative, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
+             contentNotes, rubricLens, classSummary, checksNarrative, climateNarrative, contentNarrative, talkNarrative, questionsNarrative, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -253,6 +255,8 @@ struct AudioSession: Decodable, Identifiable {
         checksNarrative = try? container.decodeIfPresent(String.self, forKey: .checksNarrative)
         climateNarrative = try? container.decodeIfPresent(String.self, forKey: .climateNarrative)
         contentNarrative = try? container.decodeIfPresent(String.self, forKey: .contentNarrative)
+        talkNarrative = try? container.decodeIfPresent(String.self, forKey: .talkNarrative)
+        questionsNarrative = try? container.decodeIfPresent(String.self, forKey: .questionsNarrative)
         strengths = try container.decodeIfPresent(String.self, forKey: .strengths)
         growthAreas = try container.decodeIfPresent(String.self, forKey: .growthAreas)
         nextStep = try container.decodeIfPresent(String.self, forKey: .nextStep)
@@ -282,6 +286,8 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
     var checksNarrative: String? { session.checksNarrative }
     var climateNarrative: String? { session.climateNarrative }
     var contentNarrative: String? { session.contentNarrative }
+    var talkNarrative: String? { session.talkNarrative }
+    var questionsNarrative: String? { session.questionsNarrative }
     var classSubject: String? { session.classSubject }
     var teacherName: String? { session.teacherName }
     var period: String? { session.period }

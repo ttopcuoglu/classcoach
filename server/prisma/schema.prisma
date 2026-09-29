@@ -612,7 +612,13 @@ model AudioSession {
   // because it is about the pattern of checks rather than the lesson content.
   checksNarrative  String?
   climateNarrative String?
+  // contentNarrative is no longer written: the teacher preferred the existing
+  // Content Specialist Notes to a rewrite of them. Kept rather than dropped,
+  // since dropping a column is destructive and the three rows that have one
+  // cost nothing.
   contentNarrative String?
+  talkNarrative    String?
+  questionsNarrative String?
 
   strengths        String?
   growthAreas      String?

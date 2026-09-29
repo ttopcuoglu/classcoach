@@ -1025,38 +1025,25 @@ ${
   }
 Student names: ${metrics?.nameMentions ?? 'not measured'} mentions across ${metrics?.uniqueNames ?? 'not measured'} names.
 
-Then THE CONTENT SPECIALIST NOTE: two or three short paragraphs, written as a
-subject specialist who also knows how instruction lands. This is the one part
-of the report that is about the CONTENT and its DELIVERY rather than about
-talk ratios, so it should read like a knowledgeable colleague who listened.
+Then THE TALK NOTE: one short paragraph about who was heard and for how long.
+The numbers — teacher talk, student talk, silence — are on that screen, so do
+not restate them. Say what they cannot: where the long teacher stretches fell
+and what they were doing (explaining, setting up, recapping), where students
+got the floor, and whether the shape changed across the lesson. The caveat
+governs this section more than any other: a room microphone hears the teacher
+clearly and students poorly, so a low student number may be a quiet room or a
+mic that could not reach it, and a teacher must not read it as a verdict.
 
-Cover, in whatever order serves the lesson:
-- the content itself: what was taught, whether the explanation was sound, what
-  a specialist would notice about how the idea was built up, and any place the
-  representation or example chosen does particular work or has a known limit
-- how it was delivered: the order things came in, what was modelled versus
-  told, where the lesson slowed down or moved on, how an idea was made
-  concrete, and what the teacher did when an answer was not what they wanted
-- misconceptions: any that surfaced in what students said, and any that this
-  content classically produces and that the lesson either pre-empted or left
-  open
+Then THE QUESTIONS NOTE: one short paragraph about the questioning. Again the
+counts are already on screen. Say what kinds of questions these were, whether
+they built on each other or moved on, what happened after one was asked, and
+whether answers were followed up or accepted. Be honest that the higher-order
+figure comes from recognising certain openings — "why do you think", "how
+might" — so a question phrased another way is counted as recall even when it
+asked for real thinking. Never let that number stand as a judgement of the
+teacher's questioning.
 
-Be specific about the subject matter. "The rice-to-water ratio is a good
-choice because scaling it keeps a taste students can imagine" is worth saying;
-"good use of real-world examples" is not. Where you are not confident about
-the content itself, coach the teacher on how to find where students go wrong
-in it rather than asserting subject knowledge you do not have.
-
-The usual caveat holds: you heard the teacher clearly and the students poorly,
-and you did not see the board, the slides or what was on the page.
-
-${metrics?.subject ? `Detected subject area: ${metrics.subject}.` : ''}
-${metrics?.statedObjective ? `The objective, in the teacher's words: "${metrics.statedObjective}"` : 'No objective was stated aloud.'}
-${metrics?.lessonSummary ? `What the lesson covered: ${metrics.lessonSummary}` : ''}
-${metrics?.connections?.length ? `Connections made:\n${metrics.connections.map((c) => `- ${c}`).join('\n')}` : ''}
-${metrics?.vocabulary?.length ? `Vocabulary defined:\n${metrics.vocabulary.map((v) => `- ${v}`).join('\n')}` : ''}
-
-Respond with exactly these four blocks and nothing else:
+Respond with exactly these five blocks and nothing else:
 <class_summary>
 Your summary.
 </class_summary>
@@ -1066,9 +1053,12 @@ Your one-paragraph checks note.
 <climate_note>
 Your one-paragraph climate note.
 </climate_note>
-<content_note>
-Your two or three paragraph content specialist note.
-</content_note>
+<talk_note>
+Your one-paragraph talk note.
+</talk_note>
+<questions_note>
+Your one-paragraph questions note.
+</questions_note>
 ${CORE_COACHING_RULES}
 ${TRANSCRIPT_RELIABILITY_NOTICE}`
 }
@@ -1176,7 +1166,8 @@ audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
 
     const checksNarrative = extractTag(text, 'checks_note')
     const climateNarrative = extractTag(text, 'climate_note')
-    const contentNarrative = extractTag(text, 'content_note')
+    const talkNarrative = extractTag(text, 'talk_note')
+    const questionsNarrative = extractTag(text, 'questions_note')
     const classSummary = extractTag(text, 'class_summary')
     if (!classSummary) {
       res.status(502).json({ error: 'Could not generate a class summary. Please try again.' })
@@ -1189,7 +1180,8 @@ audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
         classSummary,
         ...(checksNarrative ? { checksNarrative } : {}),
         ...(climateNarrative ? { climateNarrative } : {}),
-        ...(contentNarrative ? { contentNarrative } : {}),
+        ...(talkNarrative ? { talkNarrative } : {}),
+        ...(questionsNarrative ? { questionsNarrative } : {}),
       },
       include: { segments: { orderBy: { startSec: 'asc' } } },
     })

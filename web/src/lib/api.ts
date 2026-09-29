@@ -691,6 +691,8 @@ export type AudioSession = {
   checksNarrative?: string | null
   climateNarrative?: string | null
   contentNarrative?: string | null
+  talkNarrative?: string | null
+  questionsNarrative?: string | null
   transcribeStartedAt?: string | null
   failureReason?: string | null
   teacherTalkPct: number | null

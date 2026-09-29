@@ -142,7 +142,8 @@ async function main() {
     const classSummary = extractTag(text, 'class_summary')
     const checksNarrative = extractTag(text, 'checks_note')
     const climateNarrative = extractTag(text, 'climate_note')
-    const contentNarrative = extractTag(text, 'content_note')
+    const talkNarrative = extractTag(text, 'talk_note')
+    const questionsNarrative = extractTag(text, 'questions_note')
     if (classSummary) {
       await prisma.audioSession.update({
         where: { id: session.id },
@@ -150,13 +151,15 @@ async function main() {
           classSummary,
           ...(checksNarrative ? { checksNarrative } : {}),
           ...(climateNarrative ? { climateNarrative } : {}),
-          ...(contentNarrative ? { contentNarrative } : {}),
+          ...(talkNarrative ? { talkNarrative } : {}),
+          ...(questionsNarrative ? { questionsNarrative } : {}),
         },
       })
       console.log(`summary   rewritten (${classSummary.split(/\n\s*\n/).length} paragraphs)`)
       console.log(`checks    ${checksNarrative ? `${checksNarrative.split(/\s+/).length} words` : 'FAILED'}`)
       console.log(`climate   ${climateNarrative ? `${climateNarrative.split(/\s+/).length} words` : 'FAILED'}`)
-      console.log(`content   ${contentNarrative ? `${contentNarrative.split(/\s+/).length} words` : 'FAILED'}`)
+      console.log(`talk      ${talkNarrative ? `${talkNarrative.split(/\s+/).length} words` : 'FAILED'}`)
+      console.log(`questions ${questionsNarrative ? `${questionsNarrative.split(/\s+/).length} words` : 'FAILED'}`)
     } else {
       console.log('summary   FAILED — left as it was')
     }
