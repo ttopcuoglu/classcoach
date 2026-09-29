@@ -218,9 +218,9 @@ struct RecordingPanelView: View {
                 audioFileURL: result.fileURL,
                 durationSec: result.elapsedSec
             )
-            // Only now are the chunks safe to delete — until the upload has
-            // been accepted they are the only copy of the class.
-            recorder.finish()
+            // Chunks only — the merged file stays until the server reports a
+            // transcript for this session. Queued is not the same as safe.
+            recorder.handOff(merged: result.fileURL)
             onUploadStarted()
         } catch {
             self.error = error.localizedDescription

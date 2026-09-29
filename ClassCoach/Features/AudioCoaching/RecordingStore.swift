@@ -93,6 +93,25 @@ enum RecordingStore {
         try? FileManager.default.removeItem(at: directory(for: sessionId))
     }
 
+    /// Local audio is not kept forever waiting for a confirmation that will
+    /// never come — a session the teacher deleted, an app signed into a
+    /// different account. A week is long enough for any real retry.
+    static let keepLocalAudioDays = 7
+
+    /// After a successful merge the chunks are redundant, but the merged file
+    /// is not: it is still the only copy until the server has a transcript.
+    /// This drops the chunks and leaves the manifest pointing at the merge, so
+    /// a retry re-sends exactly what the first attempt did.
+    static func retainMergedOnly(_ manifest: Manifest, merged: URL) {
+        let dir = directory(for: manifest.sessionId)
+        for name in manifest.chunkNames where name != merged.lastPathComponent {
+            try? FileManager.default.removeItem(at: dir.appendingPathComponent(name))
+        }
+        var updated = manifest
+        updated.chunkNames = [merged.lastPathComponent]
+        try? save(updated)
+    }
+
     /// Joins the chunks back into one m4a, so everything downstream — the
     /// background upload, the server, Deepgram's diarization — sees exactly
     /// what it saw before chunking existed.

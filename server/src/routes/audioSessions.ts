@@ -370,7 +370,10 @@ export async function failOrphanedTranscriptions() {
       },
       data: {
         status: 'failed',
-        failureReason: 'Transcription was interrupted. Your recording was not saved — please record again.',
+        // Not "record again": since the phone keeps its copy until a session
+        // has a transcript, an interrupted job is usually retryable from the
+        // device that made it.
+        failureReason: 'Transcription was interrupted. If you recorded this on your phone, open Lesson Debrief there to send it again.',
       },
     })
     if (count > 0) console.log(`[audio-sessions] released ${count} interrupted transcription(s)`)

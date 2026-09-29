@@ -121,12 +121,18 @@ final class AudioRecorder: NSObject, ObservableObject {
         return (accumulatedSec, merged)
     }
 
-    /// Called once the recording is safely handed over. Deleting the chunks is
-    /// the last step on purpose: until the upload has been accepted they are
-    /// the only copy.
-    func finish() {
-        if let sessionId = manifest?.sessionId {
-            RecordingStore.discard(sessionId: sessionId)
+    /// The upload has been QUEUED — not accepted, not transcribed. A
+    /// background task returns the moment it is handed to the system, so
+    /// deleting the audio here would throw the lesson away while it is still
+    /// the only copy: a rejected upload or a server restart mid-transcription
+    /// would leave the teacher an error message and nothing else.
+    ///
+    /// So the chunks go, because the merged file supersedes them, and the
+    /// merged file stays until `AudioCoachingView` sees the server report a
+    /// transcript for this session.
+    func handOff(merged: URL) {
+        if let manifest {
+            RecordingStore.retainMergedOnly(manifest, merged: merged)
         }
         reset()
     }

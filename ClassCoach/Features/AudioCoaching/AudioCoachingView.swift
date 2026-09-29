@@ -69,12 +69,7 @@ struct AudioCoachingView: View {
             }
             .background(AppTheme.background)
             .navigationTitle("Lesson Debrief")
-            .task {
-                await loadHistory()
-                // Only when nothing is being recorded right now, so an active
-                // session is never mistaken for an abandoned one.
-                if active == nil { unfinished = RecordingStore.unfinished().first }
-            }
+            .task { await loadHistory() }
             // A row that says "Processing" has to stop saying it without being
             // asked. Only while something is actually running, so an idle list
             // makes no requests at all.
@@ -158,7 +153,9 @@ struct AudioCoachingView: View {
                 audioFileURL: merged,
                 durationSec: manifest.accumulatedSec
             )
-            RecordingStore.discard(sessionId: manifest.sessionId)
+            // Not discarded here either: this upload is queued, exactly like
+            // the first one was. `reconcileLocalAudio` clears it once the
+            // server reports a transcript.
             await loadHistory()
         } catch {
             self.error = error.localizedDescription
@@ -168,6 +165,44 @@ struct AudioCoachingView: View {
     private func loadHistory() async {
         do { sessions = try await AudioCoachingService.getSessions() } catch {}
         historyLoading = false
+        reconcileLocalAudio()
+    }
+
+    /// Decides, from what the server actually reports, which recordings on
+    /// this phone are still the only copy.
+    ///
+    /// A background upload returns when it is queued, so "sent" means nothing
+    /// on its own: the server can reject it, and a restart can kill the
+    /// transcription with the audio only in its memory. The phone therefore
+    /// keeps the merged file until a session has a transcript — reaching
+    /// `tagging` is the first moment the lesson exists somewhere else.
+    private func reconcileLocalAudio() {
+        let byId = Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, $0) })
+        let cutoff = Date().addingTimeInterval(-Double(RecordingStore.keepLocalAudioDays) * 24 * 60 * 60)
+        var recoverable: RecordingStore.Manifest?
+
+        for manifest in RecordingStore.unfinished() {
+            // Never touch the recording being made right now.
+            if active?.id == manifest.sessionId, isRecordingPhase { continue }
+
+            if manifest.startedAt < cutoff {
+                RecordingStore.discard(sessionId: manifest.sessionId)
+                continue
+            }
+
+            switch byId[manifest.sessionId]?.status {
+            case "tagging", "analyzed", "locked":
+                // Transcribed. The audio has done its job.
+                RecordingStore.discard(sessionId: manifest.sessionId)
+            case "transcribing":
+                // In flight on the server. Hold the copy, say nothing.
+                continue
+            default:
+                // Never arrived, failed, or the session is gone. Offer it back.
+                if recoverable == nil { recoverable = manifest }
+            }
+        }
+        unfinished = recoverable
     }
 
     private func open(_ session: AudioSession) async {
