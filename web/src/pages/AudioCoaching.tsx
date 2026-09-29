@@ -2055,7 +2055,6 @@ function ReportPanel({
   const [followUpDate, setFollowUpDate] = useState(session.followUpDate ? session.followUpDate.slice(0, 10) : '')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [locking, setLocking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reflectSending, setReflectSending] = useState(false)
   const [reflectError, setReflectError] = useState<{ kind: ReflectChatErrorKind; message: string } | null>(null)
@@ -2095,19 +2094,6 @@ function ReportPanel({
     }
   }
 
-  async function handleLock() {
-    setLocking(true)
-    setError(null)
-    try {
-      await handleSaveNotes()
-      const updated = await updateAudioSession(session.id, { status: 'locked' })
-      onUpdate({ ...session, ...updated })
-    } catch {
-      setError('Could not lock the report. Please try again.')
-    } finally {
-      setLocking(false)
-    }
-  }
 
   // focus, when passed, is a specific highlight/metric to open with (from
   // one of Reflect's grounded starting-point chips) — prepended as one
@@ -2155,17 +2141,33 @@ function ReportPanel({
     }
   }
 
+  // Finishing a conversation writes the debrief. It used to only fill the
+  // boxes and wait for a "Save notes" press, so a teacher who talked to Coach
+  // and then closed the tab lost the thing they had the conversation for.
+  //
+  // It is re-runnable on purpose: come back a week later, say one more thing,
+  // finish again, and the debrief is rewritten from the whole conversation.
   async function handleSummarizeReflect() {
     setSummarizing(true)
     setSummarizeError(null)
     try {
       const summary = await summarizeReflectConversation(session.id)
-      if (summary.strengths != null) setStrengths(summary.strengths)
-      if (summary.growthAreas != null) setGrowthAreas(summary.growthAreas)
-      if (summary.nextStep != null) setNextStep(summary.nextStep)
-      setSaved(false)
+      const next = {
+        strengths: summary.strengths ?? strengths,
+        growthAreas: summary.growthAreas ?? growthAreas,
+        nextStep: summary.nextStep ?? nextStep,
+      }
+      setStrengths(next.strengths)
+      setGrowthAreas(next.growthAreas)
+      setNextStep(next.nextStep)
+      const updated = await updateAudioSession(session.id, {
+        ...next,
+        followUpDate: followUpDate ? new Date(followUpDate).toISOString() : null,
+      })
+      onUpdate({ ...session, ...updated })
+      setSaved(true)
     } catch {
-      setSummarizeError('Could not summarize your conversation. Please try again.')
+      setSummarizeError('Could not write your debrief. Please try again.')
     } finally {
       setSummarizing(false)
     }
@@ -2478,10 +2480,8 @@ function ReportPanel({
           }}
           saving={saving}
           saved={saved}
-          locking={locking}
           error={error}
           onSave={handleSaveNotes}
-          onLock={handleLock}
           onSummarize={handleSummarizeReflect}
           summarizing={summarizing}
           summarizeError={summarizeError}
@@ -3157,10 +3157,8 @@ function ReflectTab({
   onFollowUpDateChange,
   saving,
   saved,
-  locking,
   error,
   onSave,
-  onLock,
   onSummarize,
   summarizing,
   summarizeError,
@@ -3192,10 +3190,8 @@ function ReflectTab({
   onFollowUpDateChange: (v: string) => void
   saving: boolean
   saved: boolean
-  locking: boolean
   error: string | null
   onSave: () => void
-  onLock: () => void
   onSummarize: () => void
   summarizing: boolean
   summarizeError: string | null
@@ -3567,6 +3563,7 @@ function ReflectTab({
               <NumberedCard n={1} title="What I noticed" subtitle="What stood out to you in this lesson">
                 <textarea
                   aria-label="What I noticed"
+                  onBlur={onSave}
                   value={strengths}
                   onChange={(e) => onStrengthsChange(e.target.value)}
                   disabled={locked}
@@ -3578,6 +3575,7 @@ function ReflectTab({
               <NumberedCard n={2} title="What I want to explore" subtitle="A question or pattern you'd like to understand better">
                 <textarea
                   aria-label="What I want to explore"
+                  onBlur={onSave}
                   value={growthAreas}
                   onChange={(e) => onGrowthAreasChange(e.target.value)}
                   disabled={locked}
@@ -3590,6 +3588,7 @@ function ReflectTab({
                 <div className="flex flex-col gap-3">
                   <textarea
                     aria-label="My next step"
+                    onBlur={onSave}
                     value={nextStep}
                     onChange={(e) => onNextStepChange(e.target.value)}
                     disabled={locked}
@@ -3600,6 +3599,7 @@ function ReflectTab({
                     <span className="text-sm font-medium text-ink">Follow-up date</span>
                     <input
                       type="date"
+                      onBlur={onSave}
                       value={followUpDate}
                       onChange={(e) => onFollowUpDateChange(e.target.value)}
                       disabled={locked}
@@ -3613,26 +3613,16 @@ function ReflectTab({
                 <FocusSelector focusMetric={focusMetric} onChange={onFocusMetricChange} />
               </NumberedCard>
 
+              {/* No "Save notes" and no "Lock report". The debrief is written
+                  when the conversation finishes and saved with it; an edit
+                  saves itself when the field loses focus. A teacher wanted to
+                  talk, finish, and have a debrief — not to file it. And
+                  locking made a living document final, when the point is that
+                  coming back and saying one more thing rewrites it. */}
               {!locked && (
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={onSave}
-                    disabled={saving}
-                    className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
-                  >
-                    {saving ? 'Saving...' : 'Save notes'}
-                  </button>
-                  {saved && <span className="text-sm text-forest">Saved.</span>}
-                  <button
-                    type="button"
-                    onClick={onLock}
-                    disabled={locking}
-                    className="ml-auto rounded-lg border border-hairline px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-60"
-                  >
-                    {locking ? 'Locking...' : 'Lock report'}
-                  </button>
-                </div>
+                <p className="text-sm text-ink-soft">
+                  {saving ? 'Saving…' : saved ? 'Saved. Come back any time — carry on the conversation and this rewrites itself.' : ''}
+                </p>
               )}
               {error && <p className="text-sm text-terracotta-600">{error}</p>}
             </>
@@ -4005,7 +3995,8 @@ function ReflectTab({
           >
             <h3 className="font-heading text-lg font-bold text-forest">Finish this debrief?</h3>
             <p className="mt-1.5 text-sm text-ink-soft">
-              Your coach will create a summary of your reflection and next step.
+              Your coach will write your debrief and save it. You can come back any time, carry on the
+              conversation, and it will be rewritten.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
@@ -4020,7 +4011,7 @@ function ReflectTab({
                 onClick={handleFinish}
                 className="rounded-lg bg-terracotta px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
               >
-                Finish and Create Summary
+                Finish and write my debrief
               </button>
             </div>
           </div>
