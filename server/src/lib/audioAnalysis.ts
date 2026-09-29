@@ -519,10 +519,59 @@ function isBareAcknowledgment(sentence: string): boolean {
   return BARE_ACKNOWLEDGMENTS.has(normalized)
 }
 
-function classifyQuestion(sentence: string): 'higher_order' | 'recall' | null {
+// Words that open a question rather than a statement. Used to let a genuinely
+// short question through the length rule below — "Any others?" is two words
+// and is a real question; "Tomatoes?" is one word and is a teacher reading an
+// ingredient list with a rising pitch.
+//
+// Only openers that can carry a WHOLE short question. Auxiliaries are
+// deliberately absent: a real auxiliary question is three words anyway ("Do
+// you agree?", "Is it yummy?") so it clears the length rule on its own, while
+// listing them here rescued bare fragments like "have?" left behind when
+// Deepgram split a sentence.
+const INTERROGATIVE_OPENERS = [
+  'what', 'why', 'how', 'who', 'when', 'where', 'which', 'whose',
+  'any', 'anyone', 'anybody', 'questions',
+]
+
+function opensLikeAQuestion(sentence: string): boolean {
+  const first = normalizeWords(sentence)[0]
+  return first != null && INTERROGATIVE_OPENERS.includes(first)
+}
+
+function normalizeWords(sentence: string): string[] {
+  return sentence
+    .toLowerCase()
+    .replace(/[^a-z0-9'\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+}
+
+/// A question needs enough of itself to be one.
+///
+/// Deepgram punctuates rising pitch, and a teacher reading a list — "Tomato
+/// paste? Bell peppers? Onions?" — scored one question per ingredient. The
+/// same transcript also splits real questions across utterances, leaving
+/// pieces like "have" and "it called" that each ended up counted.
+///
+/// So a fragment has to earn it: three words, or an opening that only a
+/// question uses. "Any others?" passes on the second rule; "Tomatoes?" fails
+/// both, which is the distinction the ear makes too.
+const MIN_QUESTION_WORDS = 3
+
+function hasEnoughToBeAQuestion(sentence: string): boolean {
+  return normalizeWords(sentence).length >= MIN_QUESTION_WORDS || opensLikeAQuestion(sentence)
+}
+
+/// `endedWithQuestion` is passed in because two of these lists are openers a
+/// teacher also uses for instructions. "Compare with your neighbours." and
+/// "Explain your reasoning." are directives, not questions, and counting them
+/// put instructions into the higher-order percentage — the single number a
+/// teacher is most likely to read as a judgement about their teaching.
+function classifyQuestion(sentence: string, endedWithQuestion: boolean): 'higher_order' | 'recall' | null {
   const s = sentence.toLowerCase()
   if (HIGHER_ORDER_STARTERS.some((p) => s.startsWith(p) || s.includes(` ${p}`))) return 'higher_order'
-  if (HIGHER_ORDER_STARTERS_STRICT.some((p) => s.startsWith(p))) return 'higher_order'
+  if (endedWithQuestion && HIGHER_ORDER_STARTERS_STRICT.some((p) => s.startsWith(p))) return 'higher_order'
   if (RECALL_STARTERS.some((p) => s.startsWith(p))) return 'recall'
   return null
 }
@@ -535,7 +584,7 @@ export type DemoAnalysisTag = 'higher_order_question' | 'positive_language'
 export function analyzeDemoClip(transcript: string): { highlightedText: string | null; tag: DemoAnalysisTag | null } {
   const sentences = splitSentences(transcript)
   for (const { sentence } of sentences) {
-    if (classifyQuestion(sentence) === 'higher_order') {
+    if (classifyQuestion(sentence, true) === 'higher_order') {
       return { highlightedText: sentence, tag: 'higher_order_question' }
     }
   }
@@ -715,9 +764,10 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       // it always was — a short, generic piece of feedback.
       const isQuestionSegment = splitSentences(segment.text).some(
         ({ sentence, endedWithQuestion }) => {
-          const classification = classifyQuestion(sentence)
+          const classification = classifyQuestion(sentence, endedWithQuestion)
           if (!endedWithQuestion && !classification) return false
-          return classification !== null || !isBareAcknowledgment(sentence)
+          if (!classification && isBareAcknowledgment(sentence)) return false
+          return classification !== null || hasEnoughToBeAQuestion(sentence)
         },
       )
       const isFeedbackEligible =
@@ -738,11 +788,12 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       let segmentEndsWithQuestion = false
       const sentences = splitSentences(segment.text)
       sentences.forEach(({ sentence, endedWithQuestion }, sentenceIndex) => {
-        const classification = classifyQuestion(sentence)
+        const classification = classifyQuestion(sentence, endedWithQuestion)
         if (!endedWithQuestion && !classification) return
         // Before questionCount++, so one guard fixes the count, the
         // higher-order percentage and the sequence list at once.
         if (!classification && isBareAcknowledgment(sentence)) return
+        if (!classification && !hasEnoughToBeAQuestion(sentence)) return
         if (sentenceIndex === sentences.length - 1) segmentEndsWithQuestion = true
 
         questionCount++
