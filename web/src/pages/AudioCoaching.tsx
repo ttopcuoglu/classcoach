@@ -2345,15 +2345,21 @@ function ReportPanel({
 
   function handleDiscussWithCoach(candidate: NoticeCandidate) {
     setTab('reflect')
+    // "this moment" is right for one timestamped excerpt and wrong for a whole
+    // page — a teacher pressing Discuss at the foot of Checks & Feedback is
+    // not asking about a moment, they are asking about what they just read.
+    const aboutAMoment = candidate.timestampSec != null || candidate.excerpt != null
     setExternalFocus({
       label: candidate.observation,
-      focus: [
-        `this moment: ${candidate.observation}`,
-        candidate.excerpt ? `("${candidate.excerpt}")` : null,
-        candidate.timestampSec != null ? `around ${formatTime(candidate.timestampSec)}` : null,
-      ]
-        .filter(Boolean)
-        .join(' '),
+      focus: aboutAMoment
+        ? [
+            `this moment: ${candidate.observation}`,
+            candidate.excerpt ? `("${candidate.excerpt}")` : null,
+            candidate.timestampSec != null ? `around ${formatTime(candidate.timestampSec)}` : null,
+          ]
+            .filter(Boolean)
+            .join(' ')
+        : `what the report says about ${candidate.observation}`,
       detail: candidate.detail ?? null,
       timestampSec: candidate.timestampSec,
     })
@@ -2586,6 +2592,10 @@ function ReportPanel({
                   durationSec: null,
                   weight: 0,
                   focusMetric: null,
+                  // The words the teacher just read, so the coach opens about
+                  // THIS page rather than about the lesson in general. Without
+                  // it the coach only ever got the section's name.
+                  detail: narrativeForSection(session, insightsSection) ?? undefined,
                 })
               }
             />
@@ -2792,18 +2802,18 @@ function SummaryTab({
       <DiscussFooter
         label="Discuss this with Wivoza Coach"
         onClick={() =>
-          onDiscussWithCoach(
-            momentToRevisit ?? {
-              id: 'summary',
-              observation: 'This lesson',
-              whyItMatters: "Let's talk through what this report showed.",
-              timestampSec: null,
-              excerpt: null,
-              durationSec: null,
-              weight: 0,
-              focusMetric: null,
-            },
-          )
+          onDiscussWithCoach({
+            id: 'summary',
+            observation: 'The summary of this lesson',
+            whyItMatters: "Let's talk through what this report showed.",
+            timestampSec: momentToRevisit?.timestampSec ?? null,
+            excerpt: momentToRevisit?.excerpt ?? null,
+            durationSec: null,
+            weight: 0,
+            focusMetric: null,
+            // What the teacher just read at the top of the page.
+            detail: classSummary ?? undefined,
+          })
         }
       />
     </div>
@@ -3461,7 +3471,9 @@ function ReflectTab({
       )
     } else {
       onStart(
-        externalFocus.detail ? `${externalFocus.focus} (the report shows: ${externalFocus.detail})` : externalFocus.focus,
+        externalFocus.detail
+          ? `${externalFocus.focus}. This is the report's own reading, which the teacher has just finished reading, quoted here: "${externalFocus.detail}". Open about this specifically rather than about the lesson in general. Treat it as accurate and build on it — do not re-derive your own reading from the raw numbers and do not contradict it, or the teacher hears one thing on the page and the opposite from you.`
+          : externalFocus.focus,
         true,
       )
     }
@@ -5152,6 +5164,29 @@ function UnderstandingFeedbackTab({
 /// of evidence, "Plan a check with Wivoza", "Plan a transition with Wivoza" —
 /// so a single screen offered the same action five times in five wordings.
 /// Repeating an invitation does not make it more inviting.
+/// The narrative a teacher is looking at on an Insights sub-page, handed to
+/// Coach so "Discuss this" opens about that page rather than about the lesson
+/// in the abstract. Clarity & Content has notes rather than a narrative, so
+/// its own text is joined instead.
+function narrativeForSection(session: AudioSession, section: InsightsSection): string | null {
+  switch (section) {
+    case 'talk':
+      return session.talkNarrative ?? null
+    case 'questions':
+      return session.questionsNarrative ?? null
+    case 'understanding':
+      return session.checksNarrative ?? null
+    case 'routines':
+      return session.climateNarrative ?? null
+    case 'content': {
+      const notes = session.contentNotes?.notes ?? []
+      return notes.length > 0 ? notes.map((n) => `${n.label}: ${n.text}`).join(' ') : null
+    }
+    default:
+      return null
+  }
+}
+
 function DiscussFooter({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
