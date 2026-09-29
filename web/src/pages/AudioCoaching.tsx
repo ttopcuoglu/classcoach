@@ -3439,6 +3439,14 @@ function ReflectTab({
     if (!externalFocus) return
     setShowStartScreen(false)
     setShowTranscriptWindow(false)
+    // "Discuss this with Wivoza Coach" should feel like talking to someone
+    // about the class, not filling in a box. The start screen's own voice
+    // button set this and the external entry never did, so every arrival from
+    // the report landed in typing. If the browser refuses to play audio
+    // without a direct gesture, the existing voiceFatalError path drops back
+    // to typing — no worse than before.
+    primeAudio()
+    setVoiceMode(true)
     setCurrentTimestampSec(externalFocus.timestampSec)
     // The label alone ("Follow-up questions — your current focus") carries
     // no data, and mid-conversation the coach once answered with its earlier
