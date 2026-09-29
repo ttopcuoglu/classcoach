@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import UserNotifications
 
 /// Native equivalent of `AudioCoaching.tsx`'s `RecordingPanel` recorder
 /// logic — `AVAudioRecorder.pause()/record()` are the direct analogs of
@@ -17,6 +18,12 @@ final class AudioRecorder: NSObject, ObservableObject {
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var elapsedSec: Double = 0
     @Published var permissionDenied = false
+    /// Flips once when the recording has run itself out at
+    /// `RecordingStore.maxRecordingSeconds`. The view watches this and stops
+    /// exactly as if the teacher had pressed Stop, because that is what should
+    /// happen to their lesson — it is the recorder that gives up, not the
+    /// recording that is thrown away.
+    @Published private(set) var reachedLimit = false
 
     private var recorder: AVAudioRecorder?
     private var accumulatedSec: Double = 0
@@ -62,6 +69,12 @@ final class AudioRecorder: NSObject, ObservableObject {
         phase = .recording
         startTimer()
         startRollTimer()
+        // Asked now, while the teacher is holding the phone and has just
+        // chosen to record. Asking when the limit fires — ninety minutes
+        // later, with the phone in a drawer — puts the one prompt iOS ever
+        // gives in front of nobody, and a reflexive "Don't Allow" then costs
+        // the notification permanently.
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         return true
     }
 
@@ -126,6 +139,7 @@ final class AudioRecorder: NSObject, ObservableObject {
         accumulatedSec = 0
         runStart = nil
         elapsedSec = 0
+        reachedLimit = false
         phase = .idle
     }
 
@@ -197,6 +211,29 @@ final class AudioRecorder: NSObject, ObservableObject {
     private func tick() {
         let running = runStart.map { Date().timeIntervalSince($0) } ?? 0
         elapsedSec = accumulatedSec + running
+        // Checked here rather than on the five-minute roll, or a recording
+        // could run five minutes past its own limit.
+        if !reachedLimit, elapsedSec >= RecordingStore.maxRecordingSeconds {
+            reachedLimit = true
+            notifyLimitReached()
+        }
+    }
+
+    /// The whole point is a teacher who is not looking at their phone, so this
+    /// has to be a notification rather than anything on screen. Permission was
+    /// asked for at the start of the recording; here we only post. Best-effort:
+    /// the recording still ends itself if permission was refused.
+    private func notifyLimitReached() {
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            guard settings.authorizationStatus == .authorized else { return }
+            let content = UNMutableNotificationContent()
+            content.title = "Recording stopped"
+            let minutes = Int(RecordingStore.maxRecordingSeconds / 60)
+            content.body = "Lesson Debrief stopped after \(minutes) minutes and saved your recording."
+            content.sound = .default
+            center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+        }
     }
 
     private func requestPermission() async -> Bool {

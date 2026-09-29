@@ -75,6 +75,12 @@ struct RecordingPanelView: View {
         .padding(20)
         .background(AppTheme.forest, in: RoundedRectangle(cornerRadius: 24))
         .onAppear { localSession = session?.session }
+        // The recording ran itself out. Finish it exactly as a Stop would, so
+        // the teacher still gets the lesson rather than being told off for
+        // forgetting.
+        .onChange(of: recorder.reachedLimit) { _, hit in
+            if hit { Task { await handleStop() } }
+        }
         .alert("Microphone access needed", isPresented: $recorder.permissionDenied) {
             Button("OK", role: .cancel) {}
         } message: {

@@ -22,6 +22,16 @@ enum RecordingStore {
     /// period is a handful of files rather than a hundred.
     static let chunkSeconds: TimeInterval = 5 * 60
 
+    /// A recording ends itself here. Not a cost control — a forgotten recorder
+    /// costs a couple of dollars — but a consent one. `consentConfirmed` is
+    /// collected once, for a class. A session still running at 3pm has
+    /// recorded the hallway, the staff room, a conversation about a student
+    /// and people who were never in the room and never agreed to anything.
+    ///
+    /// Ninety minutes clears a block schedule and a double period. Anything
+    /// past that is far more likely to be a mistake than a lesson.
+    static let maxRecordingSeconds: TimeInterval = 90 * 60
+
     struct Manifest: Codable {
         let sessionId: String
         let startedAt: Date
