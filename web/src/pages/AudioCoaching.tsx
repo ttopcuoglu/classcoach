@@ -2575,7 +2575,6 @@ function ReportPanel({
                 cfuMetric={cfuMetric}
                 feedbackRatio={feedbackRatio}
                 focusMetric={focusMetric}
-                cfuInsight={cfuInsight}
                 cfuLog={session.cfuLog}
                 feedbackLog={session.feedbackLog}
                 segments={session.segments}
@@ -5202,7 +5201,7 @@ function QuestionsThinkingTab({
 }
 
 const CFU_DETECTION_LIMITATION =
-  'Wivoza detects verbal checks. Written responses, hand signals, student work, and other visual checks may not be captured.'
+  'Spoken checks only — hand signals and written work are invisible to a recording.'
 
 function formatFeedbackSpecificityValue(
   feedbackRatio: ConfidentMetric,
@@ -5307,7 +5306,6 @@ function UnderstandingFeedbackTab({
   cfuMetric,
   feedbackRatio,
   focusMetric,
-  cfuInsight,
   cfuLog,
   feedbackLog,
   segments,
@@ -5318,7 +5316,6 @@ function UnderstandingFeedbackTab({
   cfuMetric: ReturnType<typeof getCountMetric>
   feedbackRatio: ConfidentMetric
   focusMetric: FocusMetric | null
-  cfuInsight: string | null
   cfuLog: AudioCfuLogEntry[] | null
   feedbackLog: AudioFeedbackLogEntry[] | null
   segments: TranscriptSegment[]
@@ -5328,7 +5325,6 @@ function UnderstandingFeedbackTab({
 }) {
   const [showAllEvidence, setShowAllEvidence] = useState(false)
   const feedbackShare = specificFeedbackShare(specificFeedbackCount, feedbackTotal)
-  const showStrengthToKeep = feedbackRatio.state === 'measured' && feedbackShare != null && feedbackShare >= 0.5
 
   const cfuCandidates: NoticeCandidate[] = (cfuLog ?? []).map((entry, i) => ({
     id: `cfu-log-${i}`,
@@ -5362,13 +5358,10 @@ function UnderstandingFeedbackTab({
 
   return (
     <div className="flex flex-col gap-6">
-      <CategorySection
-        title="The numbers"
-        coverage={categoryCoverage([cfuMetric, feedbackRatio])}
-      >
+      <CategorySection title="The numbers" coverage="">
         <div id="stat-cfu">
           <Stat
-            label="Verbal checks for understanding detected"
+            label="Verbal checks heard"
             value={cfuMetric.display}
             muted={isMissingState(cfuMetric.state)}
             reason={cfuMetric.reason}
@@ -5385,7 +5378,8 @@ function UnderstandingFeedbackTab({
         />
       </CategorySection>
 
-      <CoachNote text={cfuInsight} />
+      {/* No coach note here: it restated both numbers that sit directly above
+          it, in the same words. */}
 
       {evidenceCandidates.length > 0 && (
         <div>
@@ -5412,19 +5406,9 @@ function UnderstandingFeedbackTab({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        {showStrengthToKeep && (
-          <div className="rounded-2xl border border-hairline bg-cream-card p-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-forest">
-              Strength to keep · {specificFeedbackCount} of {feedbackTotal} moments
-            </p>
-            <p className="mt-2 text-sm text-ink">
-              You regularly named something specific in a student's response instead of relying only on general
-              praise.
-            </p>
-          </div>
-        )}
-
+      {/* "Strength to keep" printed the specific-feedback ratio for a third
+          time on one screen, and the Summary tab already names a strength. */}
+      <div>
         <div className="rounded-2xl border border-hairline bg-cream-card p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-forest">One next step</p>
           <p className="mt-2 text-sm text-ink">{nextStep.headline}</p>
