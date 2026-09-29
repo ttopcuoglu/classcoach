@@ -25,6 +25,26 @@ struct LessonContentTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // Only when the lesson actually contained one — "None detected"
+            // over a lesson built on a cooking example said more about the
+            // detector than the teaching.
+            if let connections = session.lessonContent?.connections, !connections.isEmpty {
+                Text("REAL-WORLD / PRIOR-KNOWLEDGE CONNECTIONS")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(AppTheme.textSecondary)
+                ForEach(Array(connections.enumerated()), id: \.offset) { _, c in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\"\(c.quote)\"").font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(ReportConfidence.formatDuration(c.timestampSec))
+                            .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+                }
+            }
+
             Text("CONTENT SPECIALIST NOTES")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(AppTheme.textSecondary)

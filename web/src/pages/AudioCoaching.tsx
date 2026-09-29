@@ -4047,9 +4047,28 @@ function LessonContentTab({
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const subject = lessonContent?.subject ?? null
   const visibleNotes = contentNotes?.notes.filter((n) => !dismissed.has(n.id)) ?? []
+  const connections = lessonContent?.connections ?? []
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-5">
+      {/* Only when the lesson actually contained one. The old section printed
+          "None detected" over a lesson built on a cooking example, which said
+          more about the detector than the teaching — so silence is the right
+          answer when nothing was found. */}
+      {connections.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">
+            Real-world / prior-knowledge connections
+          </h2>
+          {connections.map((c) => (
+            <div key={`${c.timestampSec}-${c.quote.slice(0, 24)}`} className="rounded-xl border border-hairline bg-cream-card p-4">
+              <p className="text-sm text-ink">"{c.quote}"</p>
+              <p className="mt-1 text-xs text-ink-soft">{formatTime(c.timestampSec)}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
       <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Content Specialist Notes</h2>
       {subject == null ? (
         <p className="text-sm text-ink-soft">
@@ -4633,6 +4652,10 @@ function TalkParticipationTab({
         these insights are kept.
       </p>
 
+      {/* Narrative first, as in every other section: the reading before the
+          numbers it was drawn from. */}
+      {talkInsight && <CoachNote text={talkInsight} />}
+
       <PacingTimeline segments={session.segments} durationSec={session.durationSec} />
 
       {/* Talk distribution — the stats and the bar used to show the same
@@ -4689,7 +4712,6 @@ function TalkParticipationTab({
 
       {talkInsight && (
         <div>
-          <CoachNote text={talkInsight} />
           <button
             type="button"
             onClick={() =>
@@ -4795,6 +4817,9 @@ function QuestionsThinkingTab({
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Narrative first, as in every other section. */}
+      {questioningInsight && <CoachNote text={questioningInsight} />}
+
       <p className="text-sm text-ink-soft">
         {questionCount != null
           ? `You asked ${questionCount} question${questionCount === 1 ? '' : 's'} this session.`
@@ -4845,7 +4870,6 @@ function QuestionsThinkingTab({
       />
 
       <div>
-        <CoachNote text={questioningInsight} />
         {strengthCandidate && (
           <div className="mt-3 rounded-xl border border-hairline bg-cream-card p-4">
             <span className="text-xs font-semibold uppercase tracking-wide text-forest">Strength to keep</span>
