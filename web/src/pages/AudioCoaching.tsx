@@ -2575,6 +2575,7 @@ function ReportPanel({
                 cfuMetric={cfuMetric}
                 feedbackRatio={feedbackRatio}
                 focusMetric={focusMetric}
+                checksNarrative={session.checksNarrative ?? null}
                 cfuLog={session.cfuLog}
                 feedbackLog={session.feedbackLog}
                 segments={session.segments}
@@ -5306,6 +5307,7 @@ function UnderstandingFeedbackTab({
   cfuMetric,
   feedbackRatio,
   focusMetric,
+  checksNarrative,
   cfuLog,
   feedbackLog,
   segments,
@@ -5316,6 +5318,7 @@ function UnderstandingFeedbackTab({
   cfuMetric: ReturnType<typeof getCountMetric>
   feedbackRatio: ConfidentMetric
   focusMetric: FocusMetric | null
+  checksNarrative: string | null
   cfuLog: AudioCfuLogEntry[] | null
   feedbackLog: AudioFeedbackLogEntry[] | null
   segments: TranscriptSegment[]
@@ -5378,8 +5381,10 @@ function UnderstandingFeedbackTab({
         />
       </CategorySection>
 
-      {/* No coach note here: it restated both numbers that sit directly above
-          it, in the same words. */}
+      {/* A narrative that earns its place: the numbers above say how many and
+          how often, so this says when they happened, what the feedback did
+          with a student's answer, and what a microphone cannot see. */}
+      {checksNarrative && <CoachNote text={checksNarrative} />}
 
       {evidenceCandidates.length > 0 && (
         <div>

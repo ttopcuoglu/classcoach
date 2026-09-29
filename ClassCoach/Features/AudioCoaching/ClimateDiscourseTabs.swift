@@ -131,11 +131,17 @@ struct DiscourseDetailsTab: View {
 
     private var cfuSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            CategorySectionView(title: "The numbers", coverage: ReportConfidence.categoryCoverage([m.cfuMetric.state, m.feedbackRatio.state])) {
-                StatView(label: "Your checks for understanding", metric: m.cfuMetric)
-                StatView(label: "Your feedback specificity", metric: m.feedbackRatio)
+            CategorySectionView(title: "The numbers", coverage: "") {
+                StatView(label: "Verbal checks heard", metric: m.cfuMetric)
+                StatView(label: "Specific feedback", metric: m.feedbackRatio)
             }
-            CoachNoteView(text: AudioInsights.buildCfuInsight(m.cfuMetric))
+            // The numbers above say how many and how often. This says when
+            // they happened, what the feedback did with a student's answer,
+            // and what a microphone cannot see — so it is worth the space the
+            // old note, which restated those same numbers, was not.
+            if let narrative = session.checksNarrative, !narrative.isEmpty {
+                CoachNoteView(text: narrative)
+            }
         }
     }
 

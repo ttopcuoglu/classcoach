@@ -906,6 +906,11 @@ export type ClassSummaryMetrics = {
   avgWaitTimeSec: number | null
   cfuCount: number | null
   studentVoiceDetected: boolean
+  /// The actual moments, so the checks narrative can talk about when they
+  /// happened and what was said rather than restating a count the teacher is
+  /// already looking at.
+  cfuMoments?: { timestampSec: number; text: string }[]
+  feedbackMoments?: { kind: string; timestampSec: number; text: string }[]
 }
 
 export function buildClassSummarySystemPrompt(
@@ -952,12 +957,43 @@ ${exhibits.map((e, i) => `[${i + 1}] ${e.text}`).join('\n')}
 
 Write in plain text, no markdown, no headings. Separate paragraphs with a blank line. Address the teacher as "you".
 
-Respond with exactly this block and nothing else:
+Then, separately, write THE CHECKS NOTE: one short paragraph for a section of
+the report that shows two numbers — how many spoken checks for understanding
+were heard, and how often feedback named something specific. The numbers are
+already on that screen, so do not restate them. Say what they cannot: WHEN the
+checks happened and whether they were spread through the lesson or clustered;
+what the teacher's feedback actually did with a student's answer; and, if
+there is a long stretch with no check, name it as a question rather than a
+fault. Same microphone caveat applies — a check made by looking at faces or
+reading over shoulders leaves no trace here, and you must not imply its
+absence means it did not happen. If there is too little to say, say one honest
+sentence and stop.
+
+${
+    metrics?.cfuMoments?.length
+      ? `Checks heard:\n${metrics.cfuMoments.map((m) => `- ${mmss(m.timestampSec)} ${m.text}`).join('\n')}`
+      : 'No spoken checks for understanding were detected.'
+  }
+
+${
+    metrics?.feedbackMoments?.length
+      ? `Feedback moments:\n${metrics.feedbackMoments.map((m) => `- ${mmss(m.timestampSec)} (${m.kind}) ${m.text}`).join('\n')}`
+      : 'No feedback moments were detected.'
+  }
+
+Respond with exactly these two blocks and nothing else:
 <class_summary>
 Your summary.
 </class_summary>
+<checks_note>
+Your one-paragraph checks note.
+</checks_note>
 ${CORE_COACHING_RULES}
 ${TRANSCRIPT_RELIABILITY_NOTICE}`
+}
+
+function mmss(sec: number): string {
+  return `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 }
 
 audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
@@ -1016,6 +1052,8 @@ audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
         avgWaitTimeSec: session.avgWaitTimeSec,
         cfuCount: session.cfuCount,
         studentVoiceDetected: segments.some((s) => s.speakerLabel === 'Student'),
+        cfuMoments: ((session.cfuLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 12),
+        feedbackMoments: ((session.feedbackLog ?? []) as { kind: string; timestampSec: number; text: string }[]).slice(0, 12),
       }),
       messages: [{ role: 'user', content: 'Write the summary now.' }],
     })
@@ -1025,6 +1063,7 @@ audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
       .join('\n')
     flagIfUnsafe(text, 'audioSessions.classSummary')
 
+    const checksNarrative = extractTag(text, 'checks_note')
     const classSummary = extractTag(text, 'class_summary')
     if (!classSummary) {
       res.status(502).json({ error: 'Could not generate a class summary. Please try again.' })
@@ -1033,7 +1072,7 @@ audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
 
     const updated = await prisma.audioSession.update({
       where: { id: session.id },
-      data: { classSummary },
+      data: { classSummary, ...(checksNarrative ? { checksNarrative } : {}) },
       include: { segments: { orderBy: { startSec: 'asc' } } },
     })
     res.json(updated)

@@ -686,6 +686,9 @@ export type AudioSession = {
   durationSec: number | null
   // Set when transcription is handed to the server; what a "Processing 41%"
   // row is drawn from on a device that never did the recording.
+  // Written in the same model call as classSummary — see the Checks &
+  // Feedback section. Absent on reports generated before it existed.
+  checksNarrative?: string | null
   transcribeStartedAt?: string | null
   failureReason?: string | null
   teacherTalkPct: number | null

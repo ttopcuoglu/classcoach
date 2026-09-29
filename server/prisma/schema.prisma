@@ -607,6 +607,10 @@ model AudioSession {
   // cached forever after. Null = not yet attempted, or the one retryable
   // failure mode (a Claude/API error) — see the /:id/class-summary route.
   classSummary     String?
+  // A short narrative for the Checks & Feedback section. Written in the same
+  // model call as classSummary, so it costs nothing extra, and kept separate
+  // because it is about the pattern of checks rather than the lesson content.
+  checksNarrative  String?
 
   strengths        String?
   growthAreas      String?

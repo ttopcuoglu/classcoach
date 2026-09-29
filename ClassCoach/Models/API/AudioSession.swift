@@ -189,6 +189,9 @@ struct AudioSession: Decodable, Identifiable {
     let rubricLens: AudioRubricLens?
     /// A plain-language "Lesson at a glance" paragraph, generated after analysis.
     let classSummary: String?
+    /// Narrative for the Checks & Feedback section, written in the same model
+    /// call as `classSummary`. Absent on reports made before it existed.
+    let checksNarrative: String?
     let strengths: String?
     let growthAreas: String?
     let nextStep: String?
@@ -201,7 +204,7 @@ struct AudioSession: Decodable, Identifiable {
              durationSec, transcribeStartedAt, failureReason,
              teacherTalkPct, studentTalkPct, questionCount, higherOrderPct, avgWaitTimeSec,
              cfuCount, metricsDetail, highlights, phases, questionLog, reflectConversation, lessonContent,
-             contentNotes, rubricLens, classSummary, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
+             contentNotes, rubricLens, classSummary, checksNarrative, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -243,6 +246,7 @@ struct AudioSession: Decodable, Identifiable {
         // try? so an unexpected shape hides the lens instead of dropping the whole session.
         rubricLens = try? container.decodeIfPresent(AudioRubricLens.self, forKey: .rubricLens)
         classSummary = try? container.decodeIfPresent(String.self, forKey: .classSummary)
+        checksNarrative = try? container.decodeIfPresent(String.self, forKey: .checksNarrative)
         strengths = try container.decodeIfPresent(String.self, forKey: .strengths)
         growthAreas = try container.decodeIfPresent(String.self, forKey: .growthAreas)
         nextStep = try container.decodeIfPresent(String.self, forKey: .nextStep)
@@ -269,6 +273,7 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
     // Flattened accessors so call sites can read `withSegments.teacherTalkPct`
     // the same way the web app reads straight off the session object.
     var status: String { session.status }
+    var checksNarrative: String? { session.checksNarrative }
     var classSubject: String? { session.classSubject }
     var teacherName: String? { session.teacherName }
     var period: String? { session.period }
