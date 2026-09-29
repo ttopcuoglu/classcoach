@@ -2598,12 +2598,8 @@ function ReportPanel({
             {insightsSection === 'routines' && (
               <ClimateRoutinesTab
                 transitionMetric={transitionMetric}
-                directiveMetric={directiveMetric}
                 nameMentionMetric={nameMentionMetric}
-                uniqueNameCount={uniqueNameCount}
-                redirectionMetric={redirectionMetric}
                 climateNarrative={session.climateNarrative ?? null}
-                focusMetric={focusMetric}
                 directiveLog={session.directiveLog}
                 toneLog={session.toneLog}
                 redirectionLog={session.redirectionLog}
@@ -4409,12 +4405,8 @@ function RubricLensTab({
 
 function ClimateRoutinesTab({
   transitionMetric,
-  directiveMetric,
   nameMentionMetric,
-  uniqueNameCount,
-  redirectionMetric,
   climateNarrative,
-  focusMetric,
   directiveLog,
   toneLog,
   redirectionLog,
@@ -4422,12 +4414,8 @@ function ClimateRoutinesTab({
   onDiscussWithCoach,
 }: {
   transitionMetric: ReturnType<typeof getCountMetric>
-  directiveMetric: ReturnType<typeof getCountMetric>
   nameMentionMetric: ReturnType<typeof getCountMetric>
-  uniqueNameCount: number | null
-  redirectionMetric: ReturnType<typeof getCountMetric>
   climateNarrative: string | null
-  focusMetric: FocusMetric | null
   directiveLog: AudioDirectiveLogEntry[] | null
   toneLog: AudioToneLogEntry[] | null
   redirectionLog: AudioRedirectionLogEntry[] | null
@@ -4495,47 +4483,20 @@ function ClimateRoutinesTab({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* One row, not two sections with a coverage line each. On a normal
-          lesson most of these are zero — the counters look for fixed phrases —
-          so five numbers under two headings read as five failures. */}
-      <CategorySection title="The numbers" coverage="">
-        <div id="stat-redirection">
-          <Stat
-            label="Student names"
-            value={
-              nameMentionMetric.state === 'measured' && uniqueNameCount != null
-                ? `${nameMentionMetric.display} across ${uniqueNameCount} names`
-                : nameMentionMetric.display
-            }
-            muted={isMissingState(nameMentionMetric.state)}
-            reason={nameMentionMetric.reason}
-            focused={focusMetric === 'nameMentionCount'}
-          />
-        </div>
-        <Stat
-          label="Clear directions"
-          value={directiveMetric.display}
-          muted={isMissingState(directiveMetric.state)}
-          reason={directiveMetric.reason ?? "Count only — clarity isn't judged automatically."}
-          focused={focusMetric === 'directiveCount'}
-        />
-        <Stat
-          label="Redirections"
-          value={redirectionMetric.display}
-          muted={isMissingState(redirectionMetric.state)}
-          reason={redirectionMetric.reason ?? "Count only — tone isn't judged automatically."}
-          focused={focusMetric === 'redirectionCount'}
-        />
-      </CategorySection>
-
-      {/* The two notes this replaces existed only to explain the zeros above
-          them. This says what the lesson actually sounded like. */}
+      {/* Narrative first. The counters here match fixed phrases, so on a
+          well-run lesson most of them are zero — "turn and talk for thirty
+          seconds" is a clear direction that "clear directions: 0" does not
+          recognise. Leading with numbers that are artefacts of the detector
+          taught teachers to read their own lesson as a list of failures, so
+          the numbers card is gone and what is left is what was actually
+          heard. */}
       {climateNarrative && <CoachNote text={climateNarrative} />}
 
       {evidenceCandidates.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-ink">Evidence from the transcript</h3>
-          <div className="mt-2 flex flex-col gap-4">
+          <h3 className="text-base font-semibold text-ink">Evidence from the transcript</h3>
+          <p className="mt-0.5 text-sm text-ink-soft">Your own words, at the moment you said them.</p>
+          <div className="mt-3 flex flex-col gap-4">
             {visibleCandidates.map((candidate) => (
               <EvidenceItemCard
                 key={candidate.id}
@@ -4549,9 +4510,9 @@ function ClimateRoutinesTab({
             <button
               type="button"
               onClick={() => setShowAllEvidence((v) => !v)}
-              className="mt-2 text-sm font-medium text-forest hover:text-terracotta-600"
+              className="mt-3 w-full rounded-xl border border-hairline bg-cream-card px-4 py-3 text-sm font-semibold text-forest transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
             >
-              {showAllEvidence ? 'Show less' : `View all routine and climate moments (${evidenceCandidates.length})`}
+              {showAllEvidence ? 'Show fewer moments' : `Show all ${evidenceCandidates.length} moments`}
             </button>
           )}
         </div>
