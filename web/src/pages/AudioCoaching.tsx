@@ -1868,13 +1868,11 @@ function StrengthCard({
   strength,
   coverage,
   onViewDiscourse,
-  onDiscuss,
 }: {
   n: number
   strength: NoticeCandidate | null
   coverage: ReturnType<typeof getCoverage>
   onViewDiscourse: () => void
-  onDiscuss: (candidate: NoticeCandidate) => void
 }) {
   return (
     <NumberedCard n={n} title="A strength to keep" subtitle="Something that worked in this lesson — keep doing it">
@@ -1883,13 +1881,7 @@ function StrengthCard({
           <p className="text-sm font-semibold text-ink">{formatCandidateHeadline(strength)}</p>
           {strength.excerpt && <p className="text-sm text-ink-soft">"{strength.excerpt}"</p>}
           <p className="text-sm text-ink-soft">{strength.whyItMatters}</p>
-          <button
-            type="button"
-            onClick={() => onDiscuss(strength)}
-            className="mt-1 self-start text-sm font-medium text-forest hover:text-terracotta-600"
-          >
-            Discuss this →
-          </button>
+          {/* One Discuss action per page — see DiscussFooter. */}
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -1915,11 +1907,9 @@ function StrengthCard({
 // "Set as my focus" shortcut when it maps to a trended My Growth metric.
 function EvidenceMomentCard({
   moment,
-  onDiscuss,
   onSetFocus,
 }: {
   moment: NoticeCandidate
-  onDiscuss: (candidate: NoticeCandidate) => void
   onSetFocus: (metric: FocusMetric) => void
 }) {
   return (
@@ -1929,13 +1919,7 @@ function EvidenceMomentCard({
       {moment.excerpt && <p className="mt-1 text-sm text-ink-soft">"{moment.excerpt}"</p>}
       <p className="mt-1 text-sm text-ink-soft">{moment.whyItMatters}</p>
       <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2">
-        <button
-          type="button"
-          onClick={() => onDiscuss(moment)}
-          className="text-sm font-medium text-forest hover:text-terracotta-600"
-        >
-          Discuss this →
-        </button>
+        {/* One Discuss action per page — see DiscussFooter. */}
         {moment.focusMetric && (
           <button
             type="button"
@@ -2578,7 +2562,6 @@ function ReportPanel({
                 segments={session.segments}
                 specificFeedbackCount={specificCount}
                 feedbackTotal={feedbackTotal}
-                onDiscussWithCoach={handleDiscussWithCoach}
               />
             )}
 
@@ -2604,7 +2587,6 @@ function ReportPanel({
                 toneLog={session.toneLog}
                 redirectionLog={session.redirectionLog}
                 segments={session.segments}
-                onDiscussWithCoach={handleDiscussWithCoach}
               />
             )}
 
@@ -2618,6 +2600,21 @@ function ReportPanel({
                 onGenerate={handleGenerateRubricLens}
               />
             )}
+            <DiscussFooter
+              label="Discuss this with Wivoza Coach"
+              onClick={() =>
+                handleDiscussWithCoach({
+                  id: `insights-${insightsSection}`,
+                  observation: `${INSIGHTS_SECTIONS.find((s) => s.key === insightsSection)?.label ?? 'This section'} in this lesson`,
+                  whyItMatters: "Let's talk through what this part of the report showed.",
+                  timestampSec: null,
+                  excerpt: null,
+                  durationSec: null,
+                  weight: 0,
+                  focusMetric: null,
+                })
+              }
+            />
             </SectionAccentContext.Provider>
           </div>
         </div>
@@ -2741,7 +2738,6 @@ function SummaryTab({
         strength={strength}
         coverage={coverage}
         onViewDiscourse={() => onNavigateInsights('talk')}
-        onDiscuss={onDiscussWithCoach}
       />
 
       {/* 3. Your focus */}
@@ -2814,10 +2810,28 @@ function SummaryTab({
             onExplore={() => onNavigateInsights('questions')}
           />
           {momentToRevisit && (
-            <EvidenceMomentCard moment={momentToRevisit} onDiscuss={onDiscussWithCoach} onSetFocus={onFocusMetricChange} />
+            <EvidenceMomentCard moment={momentToRevisit} onSetFocus={onFocusMetricChange} />
           )}
         </div>
       </NumberedCard>
+
+      <DiscussFooter
+        label="Discuss this with Wivoza Coach"
+        onClick={() =>
+          onDiscussWithCoach(
+            momentToRevisit ?? {
+              id: 'summary',
+              observation: 'This lesson',
+              whyItMatters: "Let's talk through what this report showed.",
+              timestampSec: null,
+              excerpt: null,
+              durationSec: null,
+              weight: 0,
+              focusMetric: null,
+            },
+          )
+        }
+      />
     </div>
   )
 }
@@ -4411,7 +4425,6 @@ function ClimateRoutinesTab({
   toneLog,
   redirectionLog,
   segments,
-  onDiscussWithCoach,
 }: {
   transitionMetric: ReturnType<typeof getCountMetric>
   nameMentionMetric: ReturnType<typeof getCountMetric>
@@ -4420,7 +4433,6 @@ function ClimateRoutinesTab({
   toneLog: AudioToneLogEntry[] | null
   redirectionLog: AudioRedirectionLogEntry[] | null
   segments: TranscriptSegment[]
-  onDiscussWithCoach: (candidate: NoticeCandidate) => void
 }) {
   const [showAllEvidence, setShowAllEvidence] = useState(false)
 
@@ -4502,7 +4514,6 @@ function ClimateRoutinesTab({
                 key={candidate.id}
                 candidate={candidate}
                 segments={segments}
-                onDiscuss={onDiscussWithCoach}
               />
             ))}
           </div>
@@ -4536,25 +4547,6 @@ function ClimateRoutinesTab({
             Example: "With your partner, identify one example of the change we discussed. You have 60 seconds. Be
             ready to support your answer with a quotation."
           </p>
-          <button
-            type="button"
-            onClick={() =>
-              onDiscussWithCoach({
-                id: 'routines-climate',
-                observation: 'Routines and classroom language this session',
-                whyItMatters:
-                  climateNarrative ?? "Let's talk through transitions and directions this session.",
-                timestampSec: null,
-                excerpt: null,
-                durationSec: null,
-                weight: 0,
-                focusMetric: 'directiveCount',
-              })
-            }
-            className="mt-3 text-sm font-medium text-forest hover:text-terracotta-600"
-          >
-            Plan a transition with Wivoza →
-          </button>
         </div>
       </div>
     </div>
@@ -4728,12 +4720,10 @@ function TranscriptEvidenceCard({
   candidate,
   segments,
   questionLog,
-  onDiscuss,
 }: {
   candidate: NoticeCandidate
   segments: TranscriptSegment[]
   questionLog: AudioQuestionLogEntry[] | null
-  onDiscuss: (c: NoticeCandidate) => void
 }) {
   // Each highlight type has its own precise, reconstructable exchange — a
   // generic time window either misses the real span (a monologue) or can't
@@ -4764,13 +4754,7 @@ function TranscriptEvidenceCard({
         candidate.excerpt && <p className="mt-2 text-sm text-ink">"{candidate.excerpt}"</p>
       )}
       <p className="mt-2 text-sm text-ink-soft">{candidate.whyItMatters}</p>
-      <button
-        type="button"
-        onClick={() => onDiscuss(candidate)}
-        className="mt-2 text-sm font-medium text-forest hover:text-terracotta-600"
-      >
-        Discuss with Wivoza →
-      </button>
+      {/* The page carries one Discuss action at its end — see DiscussFooter. */}
     </div>
   )
 }
@@ -4905,7 +4889,6 @@ function TalkParticipationTab({
               candidate={exampleCandidate}
               segments={session.segments}
               questionLog={session.questionLog}
-              onDiscuss={onDiscussWithCoach}
             />
           </div>
         </div>
@@ -4916,7 +4899,6 @@ function TalkParticipationTab({
           candidate={monologueCandidate}
           segments={session.segments}
           questionLog={session.questionLog}
-          onDiscuss={onDiscussWithCoach}
         />
       )}
     </div>
@@ -5134,7 +5116,6 @@ function specificFeedbackShare(specificFeedbackCount: number | null, feedbackTot
 type UnderstandingNextStep = {
   headline: string
   example: string
-  buttonLabel: string
   discussLabel: string
   discussWhyItMatters: string
 }
@@ -5144,7 +5125,6 @@ function buildUnderstandingNextStep(feedbackShare: number | null): Understanding
     return {
       headline: 'Name something specific the next time you give feedback.',
       example: 'Instead of "good job," point to the exact thing a student did well or should reconsider.',
-      buttonLabel: 'Plan feedback with Wivoza →',
       discussLabel: 'Feedback specificity this session',
       discussWhyItMatters: "Let's talk through how to make feedback more specific next time.",
     }
@@ -5153,7 +5133,6 @@ function buildUnderstandingNextStep(feedbackShare: number | null): Understanding
     headline: 'At one transition point, ask students to restate the key idea in their own words before moving on.',
     example:
       'A quick verbal check — like "in one sentence, explain what we just covered" — takes seconds and surfaces confusion early.',
-    buttonLabel: 'Plan a check with Wivoza →',
     discussLabel: 'Checking for understanding this session',
     discussWhyItMatters: "Let's talk through where to build in a quick check for understanding.",
   }
@@ -5162,11 +5141,9 @@ function buildUnderstandingNextStep(feedbackShare: number | null): Understanding
 function EvidenceItemCard({
   candidate,
   segments,
-  onDiscuss,
 }: {
   candidate: NoticeCandidate
   segments: TranscriptSegment[]
-  onDiscuss: (c: NoticeCandidate) => void
 }) {
   // Both kinds of evidence here are one precise, real exchange — not a
   // window of surrounding talk, which in a densely-packed transcript can
@@ -5197,15 +5174,7 @@ function EvidenceItemCard({
         candidate.excerpt && <p className="mt-2 text-sm text-ink">"{candidate.excerpt}"</p>
       )}
       <p className="mt-2 text-sm text-ink-soft">{candidate.whyItMatters}</p>
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-        <button
-          type="button"
-          onClick={() => onDiscuss(candidate)}
-          className="text-sm font-medium text-forest hover:text-terracotta-600"
-        >
-          Discuss with Wivoza →
-        </button>
-      </div>
+      {/* The page carries one Discuss action at its end — see DiscussFooter. */}
     </div>
   )
 }
@@ -5217,7 +5186,6 @@ function UnderstandingFeedbackTab({
   segments,
   specificFeedbackCount,
   feedbackTotal,
-  onDiscussWithCoach,
 }: {
   checksNarrative: string | null
   cfuLog: AudioCfuLogEntry[] | null
@@ -5225,7 +5193,6 @@ function UnderstandingFeedbackTab({
   segments: TranscriptSegment[]
   specificFeedbackCount: number | null
   feedbackTotal: number | null
-  onDiscussWithCoach: (candidate: NoticeCandidate) => void
 }) {
   const [showAllEvidence, setShowAllEvidence] = useState(false)
   const feedbackShare = specificFeedbackShare(specificFeedbackCount, feedbackTotal)
@@ -5282,7 +5249,6 @@ function UnderstandingFeedbackTab({
                 key={candidate.id}
                 candidate={candidate}
                 segments={segments}
-                onDiscuss={onDiscussWithCoach}
               />
             ))}
           </div>
@@ -5305,27 +5271,28 @@ function UnderstandingFeedbackTab({
           <p className="text-xs font-semibold uppercase tracking-wide text-forest">One next step</p>
           <p className="mt-2 text-sm text-ink">{nextStep.headline}</p>
           <p className="mt-1 text-sm text-ink-soft">{nextStep.example}</p>
-          <button
-            type="button"
-            onClick={() =>
-              onDiscussWithCoach({
-                id: 'understanding-feedback',
-                observation: nextStep.discussLabel,
-                whyItMatters: nextStep.discussWhyItMatters,
-                timestampSec: null,
-                excerpt: null,
-                durationSec: null,
-                weight: 0,
-                focusMetric: 'cfuCount',
-              })
-            }
-            className="mt-3 text-sm font-medium text-forest hover:text-terracotta-600"
-          >
-            {nextStep.buttonLabel}
-          </button>
+          {/* One Discuss action per page — see DiscussFooter. */}
         </div>
       </div>
     </div>
+  )
+}
+
+/// One way to reach the coach, at the end of a page.
+///
+/// Every card used to carry its own — "Discuss with Wivoza" under each piece
+/// of evidence, "Plan a check with Wivoza", "Plan a transition with Wivoza" —
+/// so a single screen offered the same action five times in five wordings.
+/// Repeating an invitation does not make it more inviting.
+function DiscussFooter({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mt-2 w-full rounded-2xl border border-hairline bg-cream-card px-5 py-4 text-left text-sm font-semibold text-forest transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
+    >
+      {label} →
+    </button>
   )
 }
 
