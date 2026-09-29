@@ -2,6 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Export compliance, declared once here instead of by hand on every
+	     upload. Without it App Store Connect flags each build "Missing
+	     Compliance" and withholds it from testers, which is why uploaded
+	     builds kept not reaching a phone.
+
+	     false is the standard answer for this app: the only encryption it
+	     touches is the OS's own — HTTPS through URLSession and the Keychain
+	     for the auth token. There is no CryptoKit, CommonCrypto or custom
+	     cipher anywhere in the target. If that ever changes, so does this. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>GIDClientID</key>
 	<string>998364891076-c5dea8qji8kujo4paevmhf2k1ns6ljfg.apps.googleusercontent.com</string>
 	<key>NSMicrophoneUsageDescription</key>
