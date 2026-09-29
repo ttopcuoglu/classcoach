@@ -123,14 +123,21 @@ async function main() {
         avgWaitTimeSec: analysis.avgWaitTimeSec,
         cfuCount: analysis.cfuCount,
         studentVoiceDetected: segments.some((s) => s.speakerLabel === 'Student'),
+        cfuMoments: analysis.cfuLog.slice(0, 12),
+        feedbackMoments: analysis.feedbackLog.slice(0, 12),
       }),
       messages: [{ role: 'user', content: 'Write the summary now.' }],
     })
     const text = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n')
     const classSummary = extractTag(text, 'class_summary')
+    const checksNarrative = extractTag(text, 'checks_note')
     if (classSummary) {
-      await prisma.audioSession.update({ where: { id: session.id }, data: { classSummary } })
+      await prisma.audioSession.update({
+        where: { id: session.id },
+        data: { classSummary, ...(checksNarrative ? { checksNarrative } : {}) },
+      })
       console.log(`summary   rewritten (${classSummary.split(/\n\s*\n/).length} paragraphs)`)
+      console.log(`checks    ${checksNarrative ? `${checksNarrative.split(/\s+/).length} words` : 'FAILED'}`)
     } else {
       console.log('summary   FAILED — left as it was')
     }
