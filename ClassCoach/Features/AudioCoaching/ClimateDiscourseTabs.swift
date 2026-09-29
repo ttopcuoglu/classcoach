@@ -13,21 +13,21 @@ struct ClimateRoutinesTab: View {
         }
     }
 
-    /// One row of numbers, and a narrative instead of two notes.
+    /// Narrative only — no numbers card.
     ///
-    /// These counters look for fixed phrases, so on a well-run lesson most of
-    /// them are zero — a teacher who said "turn and talk for thirty seconds"
-    /// gave a direction the counter does not recognise. Five zeros under two
-    /// headings, each with a note explaining the zero, read as five failures.
+    /// These counters match fixed phrases, so on a well-run lesson most of
+    /// them are zero: "turn and talk for thirty seconds" is a clear direction
+    /// that "clear directions: 0" does not recognise. Leading with numbers
+    /// that are artefacts of the detector taught teachers to read their own
+    /// lesson as a list of failures.
     private var routinesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            CategorySectionView(title: "The numbers", coverage: "") {
-                StatView(label: "Student names", metric: m.nameMentionMetric)
-                StatView(label: "Clear directions", metric: withDefaultReason(m.directiveMetric, "Count only — clarity isn't judged automatically."))
-                StatView(label: "Redirections", metric: withDefaultReason(m.redirectionMetric, "Count only — tone isn't judged automatically."))
-            }
             if let narrative = session.climateNarrative, !narrative.isEmpty {
                 CoachNoteView(text: narrative)
+            } else {
+                Text("This section fills in once the report has been summarised.")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.textSecondary)
             }
         }
     }
