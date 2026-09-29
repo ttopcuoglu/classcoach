@@ -8,6 +8,13 @@ struct AudioCoachingView: View {
     @State private var historyLoading = true
     @State private var loadingSessionId: String?
 
+    /// A recording the app never reached Stop on — the phone died, iOS
+    /// reclaimed the app, someone force-quit it. Its chunks are still on disk
+    /// (see `RecordingStore`), and this is the only thing that will ever tell
+    /// the teacher so.
+    @State private var unfinished: RecordingStore.Manifest?
+    @State private var recovering = false
+
     private var hasTranscribing: Bool {
         sessions.contains { $0.status == "transcribing" }
     }
@@ -62,7 +69,12 @@ struct AudioCoachingView: View {
             }
             .background(AppTheme.background)
             .navigationTitle("Lesson Debrief")
-            .task { await loadHistory() }
+            .task {
+                await loadHistory()
+                // Only when nothing is being recorded right now, so an active
+                // session is never mistaken for an abandoned one.
+                if active == nil { unfinished = RecordingStore.unfinished().first }
+            }
             // A row that says "Processing" has to stop saying it without being
             // asked. Only while something is actually running, so an idle list
             // makes no requests at all.
@@ -77,6 +89,22 @@ struct AudioCoachingView: View {
             // The background upload can land while this view is on screen, or
             // in a process launched purely to be told. Either way the answer
             // comes from the server, not from the notification.
+            // `presenting:` hands each button the manifest, which matters:
+            // dismissing the alert clears `unfinished` before the button's
+            // action runs, so an action that read the state instead would find
+            // nil and do nothing at all — silently.
+            .alert("Unfinished recording", isPresented: Binding(
+                get: { unfinished != nil },
+                set: { if !$0 { unfinished = nil } }
+            ), presenting: unfinished) { manifest in
+                Button("Send it") { Task { await recoverUnfinished(manifest) } }
+                Button("Discard", role: .destructive) {
+                    RecordingStore.discard(sessionId: manifest.sessionId)
+                }
+                Button("Later", role: .cancel) {}
+            } message: { manifest in
+                Text(unfinishedMessage(manifest))
+            }
             .onReceive(NotificationCenter.default.publisher(for: BackgroundUploader.didFinishUpload)) { note in
                 if let message = note.userInfo?["message"] as? String,
                    (note.userInfo?["success"] as? Bool) == false {
@@ -107,6 +135,33 @@ struct AudioCoachingView: View {
                     )
                 }
             }
+        }
+    }
+
+    private func unfinishedMessage(_ manifest: RecordingStore.Manifest) -> String {
+        let minutes = max(1, Int((manifest.accumulatedSec / 60).rounded()))
+        let when = manifest.startedAt.formatted(date: .abbreviated, time: .shortened)
+        return "A recording from \(when) never finished sending — about \(minutes) minute\(minutes == 1 ? "" : "s") of it was saved. Send it now?"
+    }
+
+    /// Merges whatever chunks survived and hands them to the same background
+    /// upload a normal Stop uses. The last chunk is usually the damaged one;
+    /// `RecordingStore.merge` skips what it cannot open rather than losing the
+    /// rest of the class with it.
+    private func recoverUnfinished(_ manifest: RecordingStore.Manifest) async {
+        recovering = true
+        defer { recovering = false }
+        do {
+            let merged = try await RecordingStore.merge(manifest)
+            try await AudioCoachingService.startTranscription(
+                sessionId: manifest.sessionId,
+                audioFileURL: merged,
+                durationSec: manifest.accumulatedSec
+            )
+            RecordingStore.discard(sessionId: manifest.sessionId)
+            await loadHistory()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 

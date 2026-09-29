@@ -15,6 +15,11 @@ struct RecordingPanelView: View {
     @StateObject private var recorder = AudioRecorder()
     @State private var localSession: AudioSession?
     @State private var error: String?
+    @State private var batteryWarning: String?
+    /// Shown once. A teacher who has read it and pressed Record anyway has
+    /// made their decision, and repeating it every tap would only train them
+    /// to dismiss it.
+    @State private var batteryWarningAcknowledged = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -74,6 +79,19 @@ struct RecordingPanelView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Enable microphone access in Settings to record a session.")
+        }
+        .alert("Low battery", isPresented: Binding(
+            get: { batteryWarning != nil },
+            set: { if !$0 { batteryWarning = nil } }
+        )) {
+            Button("Record anyway") {
+                batteryWarning = nil
+                batteryWarningAcknowledged = true
+                Task { await handleRecord() }
+            }
+            Button("Not now", role: .cancel) { batteryWarning = nil }
+        } message: {
+            Text(batteryWarning ?? "")
         }
     }
 
@@ -157,6 +175,13 @@ struct RecordingPanelView: View {
 
     private func handleRecord() async {
         error = nil
+        // A class period is fifty minutes with the screen awake. Chunking means
+        // a dead phone now costs the last few minutes rather than the lesson,
+        // but not starting on 12% is better than recovering from it.
+        if let warning = BatteryCheck.warning(), !batteryWarningAcknowledged {
+            batteryWarning = warning
+            return
+        }
         if localSession == nil {
             do {
                 localSession = try await AudioCoachingService.createSession(teacherName: nil)
@@ -165,14 +190,18 @@ struct RecordingPanelView: View {
                 return
             }
         }
-        let started = await recorder.start()
+        guard let localSession else { return }
+        let started = await recorder.start(sessionId: localSession.id)
         if !started && !recorder.permissionDenied {
             error = "Could not start recording. Please try again."
         }
     }
 
     private func handleStop() async {
-        guard let result = recorder.stop(), let localSession else { return }
+        guard let result = await recorder.stop(), let localSession else {
+            error = "Could not prepare the recording for upload."
+            return
+        }
         do {
             // Handed to the system, not awaited: iOS finishes the transfer with
             // the app suspended or the phone locked, and the server transcribes
@@ -183,7 +212,9 @@ struct RecordingPanelView: View {
                 audioFileURL: result.fileURL,
                 durationSec: result.elapsedSec
             )
-            recorder.reset()
+            // Only now are the chunks safe to delete — until the upload has
+            // been accepted they are the only copy of the class.
+            recorder.finish()
             onUploadStarted()
         } catch {
             self.error = error.localizedDescription
