@@ -612,6 +612,7 @@ model AudioSession {
   // because it is about the pattern of checks rather than the lesson content.
   checksNarrative  String?
   climateNarrative String?
+  contentNarrative String?
 
   strengths        String?
   growthAreas      String?

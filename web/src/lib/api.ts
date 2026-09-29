@@ -690,6 +690,7 @@ export type AudioSession = {
   // Feedback section. Absent on reports generated before it existed.
   checksNarrative?: string | null
   climateNarrative?: string | null
+  contentNarrative?: string | null
   transcribeStartedAt?: string | null
   failureReason?: string | null
   teacherTalkPct: number | null

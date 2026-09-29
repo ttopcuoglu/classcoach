@@ -16,7 +16,6 @@ import {
   createAudioSession,
   deleteAudioSession,
   generateClassSummary,
-  generateContentNotes,
   generateRubricLens,
   getAudioSession,
   getAudioSessions,
@@ -29,11 +28,9 @@ import {
   updateAudioSession,
   updateProfile,
   type AudioCfuLogEntry,
-  type AudioContentNotes,
   type AudioDirectiveLogEntry,
   type AudioFeedbackLogEntry,
   type AudioHighlight,
-  type AudioLessonContent,
   type AudioQuestionLogEntry,
   type AudioReflectMessage,
   type AudioRedirectionLogEntry,
@@ -41,7 +38,6 @@ import {
   type AudioSession,
   type AudioSessionWithSegments,
   type AudioToneLogEntry,
-  type AudioTopicTerm,
   type FocusMetric,
   type ReflectChatErrorKind,
   type SpeakerSample,
@@ -1425,37 +1421,6 @@ function buildClimateInsight(
 // when lessonContent itself is null (session predates this field, or the
 // start of the lesson wasn't captured) — never speaks from nothing, same
 // discipline as every other builder in this file.
-function buildContentInsight(lessonContent: AudioLessonContent | null): string | null {
-  if (!lessonContent) return null
-  const parts: string[] = []
-  if (lessonContent.statedObjective.found === true) parts.push('stated a clear objective at the start')
-  if (lessonContent.connections.length > 0) {
-    parts.push(
-      lessonContent.connections.length === 1
-        ? 'connected the lesson to something familiar'
-        : `connected the lesson to something familiar ${lessonContent.connections.length} times`,
-    )
-  }
-  if (lessonContent.vocabulary.length > 0) {
-    parts.push(
-      `defined ${lessonContent.vocabulary.length} key vocabulary term${lessonContent.vocabulary.length === 1 ? '' : 's'}`,
-    )
-  }
-  if (parts.length === 0) {
-    if (lessonContent.statedObjective.found === false) {
-      return "None of the common spoken phrases for a stated objective, real-world connection, or vocabulary definition came through today (anything posted on the board wouldn't show up) — even one said aloud can anchor a lesson for students."
-    }
-    return null
-  }
-  const joined =
-    parts.length === 1
-      ? parts[0]
-      : parts.length === 2
-        ? `${parts[0]} and ${parts[1]}`
-        : `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`
-  return `Nice work today — you ${joined}.`
-}
-
 function CoachNote({ text }: { text: string | null }) {
   if (!text) return null
   return (
@@ -2094,8 +2059,6 @@ function ReportPanel({
   const [reflectDraft, setReflectDraft] = useState('')
   const [summarizing, setSummarizing] = useState(false)
   const [summarizeError, setSummarizeError] = useState<string | null>(null)
-  const [contentNotesSending, setContentNotesSending] = useState(false)
-  const [contentNotesError, setContentNotesError] = useState<string | null>(null)
   const [rubricLensSending, setRubricLensSending] = useState(false)
   const [rubricLensError, setRubricLensError] = useState<string | null>(null)
   const [classSummarySending, setClassSummarySending] = useState(false)
@@ -2199,19 +2162,6 @@ function ReportPanel({
     }
   }
 
-  async function handleGenerateContentNotes() {
-    setContentNotesSending(true)
-    setContentNotesError(null)
-    try {
-      const updated = await generateContentNotes(session.id)
-      onUpdate({ ...session, ...updated })
-    } catch (err) {
-      setContentNotesError((err as Error).message || 'Could not generate content notes. Please try again.')
-    } finally {
-      setContentNotesSending(false)
-    }
-  }
-
   async function handleGenerateRubricLens() {
     setRubricLensSending(true)
     setRubricLensError(null)
@@ -2240,7 +2190,6 @@ function ReportPanel({
   }, [tab, locked, session, onUpdate])
 
   const metrics = session.metricsDetail ?? {}
-  const lessonContent = session.lessonContent
   const recordedSec = session.durationSec ?? 0
   const coverage = getCoverage(session.durationSec, session.phases)
   const num = (key: string) => (typeof metrics[key] === 'number' ? (metrics[key] as number) : null)
@@ -2301,7 +2250,6 @@ function ReportPanel({
   const questioningInsight = buildQuestioningInsight(session, higherOrderRatio, followUpMetric, waitTimeMetric)
   const feedbackTotal = genericCount != null && specificCount != null ? genericCount + specificCount : null
   const cfuInsight = buildCfuInsight(cfuMetric, feedbackRatio, specificCount, feedbackTotal)
-  const contentInsight = buildContentInsight(lessonContent)
   const hasRepeatedInstructionHighlight = (session.highlights ?? []).some((h) => h.label === 'Repeated instruction')
   const routinesInsight = buildRoutinesInsight(directiveMetric, hasRepeatedInstructionHighlight, transitionMetric)
   const climateInsight = buildClimateInsight(
@@ -2566,16 +2514,7 @@ function ReportPanel({
             )}
 
             {insightsSection === 'content' && (
-              <LessonContentTab
-                session={session}
-                lessonContent={lessonContent}
-                contentInsight={contentInsight}
-                contentNotes={session.contentNotes}
-                isShort={coverage.isShort}
-                sending={contentNotesSending}
-                error={contentNotesError}
-                onGenerate={handleGenerateContentNotes}
-              />
+              <LessonContentTab contentNarrative={session.contentNarrative ?? null} />
             )}
 
             {insightsSection === 'routines' && (
@@ -4043,246 +3982,26 @@ function ReflectTab({
   )
 }
 
-const CONTENT_NOTE_LABEL_STYLES: Record<string, string> = {
-  Clarity: 'bg-mint-tint/60 text-forest',
-  Vocabulary: 'bg-mint-tint/60 text-forest',
-  'Engagement with content': 'bg-mint-tint/60 text-forest',
-  'Worth double-checking': 'bg-peach-tint text-terracotta-600',
-}
-
-function WordCloud({ words, colorClassName }: { words: AudioTopicTerm[]; colorClassName: string }) {
-  if (words.length === 0) return null
-  const counts = words.map((w) => w.count)
-  const max = Math.max(...counts)
-  const min = Math.min(...counts)
-  return (
-    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
-      {words.map((w) => {
-        const ratio = max === min ? 1 : (w.count - min) / (max - min)
-        const fontSize = 0.75 + ratio * 1.1
-        const opacity = 0.55 + ratio * 0.45
-        return (
-          <span
-            key={w.term}
-            title={`${w.count} mentions`}
-            className={`font-semibold leading-none ${colorClassName}`}
-            style={{ fontSize: `${fontSize}rem`, opacity }}
-          >
-            {w.term}
-          </span>
-        )
-      })}
-    </div>
-  )
-}
-
-function LessonContentTab({
-  session,
-  lessonContent,
-  contentInsight,
-  contentNotes,
-  isShort,
-  sending,
-  error,
-  onGenerate,
-}: {
-  session: AudioSession
-  lessonContent: AudioLessonContent | null
-  contentInsight: string | null
-  contentNotes: AudioContentNotes | null
-  isShort: boolean
-  sending: boolean
-  error: string | null
-  onGenerate: () => void
-}) {
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
-  const subject = lessonContent?.subject ?? null
-  const visibleNotes = contentNotes?.notes.filter((n) => !dismissed.has(n.id)) ?? []
-  // Matches the spec's two named conditions exactly (0% or not measured) —
-  // deliberately narrower than judgeTalkBalance's broader "thin" bucket,
-  // since a small-but-real amount of student talk still earns its own cloud.
-  const showStudentCloud = session.studentTalkPct != null && session.studentTalkPct !== 0
-
+/// Clarity & Content is one narrative now: Content Specialist Notes.
+///
+/// It used to be a list of separate detections — topic-term clouds, the stated
+/// objective, real-world connections, defined vocabulary, then a notes block —
+/// each of which could read "None detected" while the lesson plainly contained
+/// the thing. A teacher tying ratios to cooking saw "Real-world connections:
+/// none". Everything still detected feeds the narrative instead of being
+/// listed beside it, so the section says what a subject specialist who
+/// listened would say, about the content and about how it was delivered.
+function LessonContentTab({ contentNarrative }: { contentNarrative: string | null }) {
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs font-normal italic text-ink-soft">Flags & quotes only — not scored</p>
-      <CoachNote text={contentInsight} />
-      <div className="flex flex-col gap-4 rounded-2xl border border-hairline bg-cream-card p-6">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Topic terms detected</p>
-          {!lessonContent ? (
-            <p className="mt-1 text-sm text-ink-soft">No recurring subject-specific terms detected.</p>
-          ) : Array.isArray(lessonContent.topicTerms) ? (
-            lessonContent.topicTerms.length > 0 ? (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {lessonContent.topicTerms.map((term) => (
-                  <span key={term} className="rounded-full border border-hairline bg-cream px-3 py-1 text-xs text-ink">
-                    {term}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-1 text-sm text-ink-soft">No recurring subject-specific terms detected.</p>
-            )
-          ) : (
-            <>
-              <div className={`mt-2 ${showStudentCloud ? 'grid grid-cols-1 gap-6 sm:grid-cols-2' : ''}`}>
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-forest">Teacher</p>
-                  {lessonContent.topicTerms.teacher.length > 0 ? (
-                    <div className="mt-1.5">
-                      <WordCloud words={lessonContent.topicTerms.teacher} colorClassName="text-forest" />
-                    </div>
-                  ) : (
-                    <p className="mt-1 text-sm text-ink-soft">No recurring terms detected.</p>
-                  )}
-                </div>
-                {showStudentCloud && (
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-terracotta-600">Student</p>
-                    {lessonContent.topicTerms.student.length > 0 ? (
-                      <div className="mt-1.5">
-                        <WordCloud words={lessonContent.topicTerms.student} colorClassName="text-terracotta-600" />
-                      </div>
-                    ) : (
-                      <p className="mt-1 text-sm text-ink-soft">No recurring terms detected.</p>
-                    )}
-                  </div>
-                )}
-              </div>
-              {!showStudentCloud && (
-                <p className="mt-2 text-xs text-ink-soft">
-                  Student language couldn't be analyzed this session (little or no separately-detected student talk).
-                </p>
-              )}
-            </>
-          )}
-        </div>
-
-        {lessonContent?.summary && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">What this lesson covered</p>
-            <p className="mt-1 text-sm text-ink">{lessonContent.summary}</p>
-          </div>
-        )}
-
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Stated objective</p>
-          {!lessonContent || lessonContent.statedObjective.found === null ? (
-            <p className="mt-1 text-sm text-ink-soft" title="The recording was too short to check the start of the lesson.">
-              — Start of the lesson not captured
-            </p>
-          ) : lessonContent.statedObjective.found ? (
-            <p className="mt-1 text-sm text-ink">
-              Detected: "{lessonContent.statedObjective.quote}"{' '}
-              <span className="text-xs text-ink-soft">
-                ({formatTime(lessonContent.statedObjective.timestampSec ?? 0)})
-              </span>
-            </p>
-          ) : (
-            <p className="mt-1 text-sm text-ink-soft">
-              {lessonContent?.statedObjective.source === 'model'
-                ? "Not said aloud anywhere in this recording. One posted on the board or a slide wouldn't show up here."
-                : "Not heard near the start of the recording. An objective posted on the board or slides wouldn't show up here."}
-            </p>
-          )}
-        </div>
-
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-            Real-world / prior-knowledge connections
-          </p>
-          {lessonContent && lessonContent.connections.length > 0 ? (
-            <div className="mt-2 flex flex-col gap-1.5">
-              {lessonContent.connections.map((c, i) => (
-                <p key={i} className="text-sm text-ink">
-                  "{c.quote}" <span className="text-xs text-ink-soft">({formatTime(c.timestampSec)})</span>
-                </p>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-1 text-sm text-ink-soft">None detected.</p>
-          )}
-        </div>
-
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Defined vocabulary</p>
-          {lessonContent && lessonContent.vocabulary.length > 0 ? (
-            <div className="mt-2 flex flex-col gap-1.5">
-              {lessonContent.vocabulary.map((v, i) => (
-                <p key={i} className="text-sm text-ink">
-                  "{v.quote}" <span className="text-xs text-ink-soft">({formatTime(v.timestampSec)})</span>
-                </p>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-1 text-sm text-ink-soft">None detected.</p>
-          )}
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Content Specialist Notes</h2>
-        {subject == null ? (
-          <p className="text-sm text-ink-soft">
-            Not enough subject-specific content detected to generate notes this session.
-          </p>
-        ) : !contentNotes ? (
-          <>
-            <button
-              type="button"
-              onClick={onGenerate}
-              disabled={sending}
-              className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
-            >
-              {sending ? 'Generating...' : 'Generate content specialist notes'}
-            </button>
-            <WorkingRing active={sending} estimatedMs={14000} label="Writing content specialist notes" className="text-forest" />
-          </>
-        ) : (
-          <div className="flex flex-col gap-3">
-            <p className="text-xs text-ink-soft">
-              These notes are generated from a short audio excerpt and may miss context. They're meant as a
-              starting point for your own reflection, not a factual review — please use your own subject
-              expertise as the final word.
-            </p>
-            {isShort && (
-              <p className="text-xs font-semibold text-terracotta-600">
-                This session is under {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes — content feedback
-                from a short sample is especially limited.
-              </p>
-            )}
-            {visibleNotes.length === 0 ? (
-              <p className="text-sm text-ink-soft">No notes to show.</p>
-            ) : (
-              visibleNotes.map((note) => (
-                <div key={note.id} className="rounded-xl border border-hairline bg-cream-card p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${CONTENT_NOTE_LABEL_STYLES[note.label] ?? 'bg-cream text-ink-soft'}`}
-                    >
-                      {note.label}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setDismissed((prev) => new Set(prev).add(note.id))}
-                      aria-label="Dismiss note"
-                      className="shrink-0 text-ink-soft hover:text-ink"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <p className="mt-2 text-sm text-ink">{note.text}</p>
-                  <p className="mt-2 text-xs text-ink-soft">
-                    "{note.excerpt}" ({formatTime(note.timestampSec)})
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-        {error && <p className="text-sm text-terracotta-600">{error}</p>}
-      </div>
+      {contentNarrative ? (
+        <CoachNote text={contentNarrative} />
+      ) : (
+        <p className="text-sm text-ink-soft">
+          These notes are written when the report is summarised — open the Summary tab once and they will appear
+          here.
+        </p>
+      )}
     </div>
   )
 }

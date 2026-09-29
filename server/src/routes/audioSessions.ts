@@ -919,6 +919,14 @@ export type ClassSummaryMetrics = {
   redirectionMoments?: { timestampSec: number; text: string }[]
   nameMentions?: number | null
   uniqueNames?: number | null
+  /// Already read out of the transcript by `lessonObjective.ts`. Handed to
+  /// the content note so it can weave them into one expert reading rather
+  /// than the section listing each detection on its own.
+  statedObjective?: string | null
+  lessonSummary?: string | null
+  connections?: string[]
+  vocabulary?: string[]
+  subject?: string | null
 }
 
 export function buildClassSummarySystemPrompt(
@@ -1017,7 +1025,38 @@ ${
   }
 Student names: ${metrics?.nameMentions ?? 'not measured'} mentions across ${metrics?.uniqueNames ?? 'not measured'} names.
 
-Respond with exactly these three blocks and nothing else:
+Then THE CONTENT SPECIALIST NOTE: two or three short paragraphs, written as a
+subject specialist who also knows how instruction lands. This is the one part
+of the report that is about the CONTENT and its DELIVERY rather than about
+talk ratios, so it should read like a knowledgeable colleague who listened.
+
+Cover, in whatever order serves the lesson:
+- the content itself: what was taught, whether the explanation was sound, what
+  a specialist would notice about how the idea was built up, and any place the
+  representation or example chosen does particular work or has a known limit
+- how it was delivered: the order things came in, what was modelled versus
+  told, where the lesson slowed down or moved on, how an idea was made
+  concrete, and what the teacher did when an answer was not what they wanted
+- misconceptions: any that surfaced in what students said, and any that this
+  content classically produces and that the lesson either pre-empted or left
+  open
+
+Be specific about the subject matter. "The rice-to-water ratio is a good
+choice because scaling it keeps a taste students can imagine" is worth saying;
+"good use of real-world examples" is not. Where you are not confident about
+the content itself, coach the teacher on how to find where students go wrong
+in it rather than asserting subject knowledge you do not have.
+
+The usual caveat holds: you heard the teacher clearly and the students poorly,
+and you did not see the board, the slides or what was on the page.
+
+${metrics?.subject ? `Detected subject area: ${metrics.subject}.` : ''}
+${metrics?.statedObjective ? `The objective, in the teacher's words: "${metrics.statedObjective}"` : 'No objective was stated aloud.'}
+${metrics?.lessonSummary ? `What the lesson covered: ${metrics.lessonSummary}` : ''}
+${metrics?.connections?.length ? `Connections made:\n${metrics.connections.map((c) => `- ${c}`).join('\n')}` : ''}
+${metrics?.vocabulary?.length ? `Vocabulary defined:\n${metrics.vocabulary.map((v) => `- ${v}`).join('\n')}` : ''}
+
+Respond with exactly these four blocks and nothing else:
 <class_summary>
 Your summary.
 </class_summary>
@@ -1027,8 +1066,25 @@ Your one-paragraph checks note.
 <climate_note>
 Your one-paragraph climate note.
 </climate_note>
+<content_note>
+Your two or three paragraph content specialist note.
+</content_note>
 ${CORE_COACHING_RULES}
 ${TRANSCRIPT_RELIABILITY_NOTICE}`
+}
+
+function lessonContentField(content: unknown, key: string, nested?: string): string | null {
+  const value = (content as Record<string, unknown> | null)?.[key]
+  const resolved = nested ? (value as Record<string, unknown> | null)?.[nested] : value
+  return typeof resolved === 'string' && resolved.trim() ? resolved : null
+}
+
+function lessonContentQuotes(content: unknown, key: string): string[] {
+  const value = (content as Record<string, unknown> | null)?.[key]
+  if (!Array.isArray(value)) return []
+  return value
+    .map((v) => (v as { quote?: unknown })?.quote)
+    .filter((q): q is string => typeof q === 'string' && q.trim().length > 0)
 }
 
 function metricNumber(detail: unknown, key: string): number | null {
@@ -1088,7 +1144,7 @@ audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
       // Three short paragraphs plus two section notes. Measured rather than
       // guessed: at 900 the last block was cut off entirely and the one before
       // it came back at a third of its length.
-      max_tokens: 1800,
+      max_tokens: 3000,
       system: buildClassSummarySystemPrompt(exhibits, session.durationSec ?? 0, {
         teacherTalkPct: session.teacherTalkPct,
         studentTalkPct: session.studentTalkPct,
@@ -1104,6 +1160,11 @@ audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
         redirectionMoments: ((session.redirectionLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 10),
         nameMentions: metricNumber(session.metricsDetail, 'nameMentionCount'),
         uniqueNames: metricNumber(session.metricsDetail, 'uniqueNameCount'),
+        statedObjective: lessonContentField(session.lessonContent, 'statedObjective', 'quote'),
+        lessonSummary: lessonContentField(session.lessonContent, 'summary'),
+        connections: lessonContentQuotes(session.lessonContent, 'connections'),
+        vocabulary: lessonContentQuotes(session.lessonContent, 'vocabulary'),
+        subject: lessonContentField(session.lessonContent, 'subject'),
       }),
       messages: [{ role: 'user', content: 'Write the summary now.' }],
     })
@@ -1115,6 +1176,7 @@ audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
 
     const checksNarrative = extractTag(text, 'checks_note')
     const climateNarrative = extractTag(text, 'climate_note')
+    const contentNarrative = extractTag(text, 'content_note')
     const classSummary = extractTag(text, 'class_summary')
     if (!classSummary) {
       res.status(502).json({ error: 'Could not generate a class summary. Please try again.' })
@@ -1127,6 +1189,7 @@ audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
         classSummary,
         ...(checksNarrative ? { checksNarrative } : {}),
         ...(climateNarrative ? { climateNarrative } : {}),
+        ...(contentNarrative ? { contentNarrative } : {}),
       },
       include: { segments: { orderBy: { startSec: 'asc' } } },
     })
