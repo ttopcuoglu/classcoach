@@ -3502,6 +3502,16 @@ function ReflectTab({
     }
   }
 
+  /// Coming back to a finished debrief and picking the conversation up again:
+  /// the report closes, voice comes back on, and the mic opens, so the teacher
+  /// can simply start talking.
+  function handleResumeConversation() {
+    setReviewingNotes(false)
+    primeAudio()
+    setVoiceMode(true)
+    if (!locked && !turnCapHit) start()
+  }
+
   function handleFinish() {
     stopCoach()
     setVoiceMode(false)
@@ -3548,13 +3558,30 @@ function ReflectTab({
 
       {reviewingNotes ? (
         <div className="flex flex-col gap-6">
-          <button
-            type="button"
-            onClick={() => setReviewingNotes(false)}
-            className="self-start text-sm font-medium text-ink-soft hover:text-ink"
-          >
-            ← Back to conversation
-          </button>
+          {/* Finishing turns voice off. This used to only hide the report, so
+              a teacher who came back landed in the transcript with nobody
+              speaking and nobody listening, and no way to tell what to press.
+              It resumes the conversation properly — and it is a primary
+              action now, not a back link, because carrying on is the point of
+              coming back. */}
+          {!locked && (
+            <button
+              type="button"
+              onClick={handleResumeConversation}
+              className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90"
+            >
+              Carry on the conversation →
+            </button>
+          )}
+          {locked && (
+            <button
+              type="button"
+              onClick={() => setReviewingNotes(false)}
+              className="self-start text-sm font-medium text-ink-soft hover:text-ink"
+            >
+              ← Back to conversation
+            </button>
+          )}
 
           {summarizing ? (
             <div className="rounded-2xl border border-hairline bg-cream-card p-8">
