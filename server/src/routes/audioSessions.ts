@@ -15,7 +15,8 @@ import {
 import { buildExperienceContextBlock } from '../lib/experience.ts'
 import { CORE_COACHING_RULES, TRANSCRIPT_RELIABILITY_NOTICE } from '../lib/coachPersona.ts'
 import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
-import { transcribeAudio } from '../lib/deepgram.ts'
+import { transcribeAudioFile } from '../lib/deepgram.ts'
+import { unlink } from 'node:fs/promises'
 import { extractTag, stripTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
 import {
@@ -32,7 +33,26 @@ export const audioSessionsRouter = Router()
 
 // Audio only ever lives in memory long enough to reach Deepgram — never on
 // disk, never attached to the session row.
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } })
+// Disk, not memory. A 90-minute 16 kHz PCM recording is ~173 MB, and
+// memoryStorage made that 173 MB of Node heap for the length of the upload —
+// enough to take the instance down with two teachers stopping at once.
+//
+// The file is a scratch copy on the way to Deepgram and nothing else: it is
+// deleted as soon as transcription finishes or fails, on every path out of the
+// route. Nothing writes it to a permanent location, logs it, or attaches it to
+// a row — "audio is never saved" stays true.
+const upload = multer({ storage: multer.diskStorage({}), limits: { fileSize: 200 * 1024 * 1024 } })
+
+/// Best-effort: a scratch file that outlives its request is a privacy problem,
+/// but a failed unlink must never turn a finished transcription into an error.
+async function discardUpload(filePath: string | undefined) {
+  if (!filePath) return
+  try {
+    await unlink(filePath)
+  } catch (error) {
+    console.error('[audio-sessions] could not remove uploaded audio:', error)
+  }
+}
 
 const STATUSES = ['setup', 'recording', 'paused', 'transcribing', 'tagging', 'analyzed', 'locked']
 
@@ -340,8 +360,8 @@ function speakerSamplesFrom(segments: { rawSpeakerTag: string; text: string }[])
 /// here or in async mode: it lives in memory for exactly as long as the
 /// Deepgram call and is then unreferenced. Moving when the response is sent
 /// did not move where the audio goes.
-async function runTranscription(sessionId: string, audioBuffer: Buffer, mimetype: string) {
-  const utterances = await transcribeAudio(audioBuffer, mimetype)
+async function runTranscription(sessionId: string, audioPath: string, mimetype: string) {
+  const utterances = await transcribeAudioFile(audioPath, mimetype)
   if (utterances.length === 0) {
     const error = new Error('No speech was detected in this recording.')
     ;(error as Error & { code?: string }).code = 'NO_SPEECH'
@@ -441,6 +461,9 @@ audioSessionsRouter.post('/:id/transcribe', upload.single('audio'), async (req, 
     where: { id: sessionId, userId: req.user!.userId },
   })
   if (!session) {
+    // The upload is already on disk by the time this runs, so it has to go
+    // even though nothing will read it.
+    await discardUpload(req.file?.path)
     res.status(404).json({ error: 'Session not found' })
     return
   }
@@ -448,13 +471,14 @@ audioSessionsRouter.post('/:id/transcribe', upload.single('audio'), async (req, 
     res.status(400).json({ error: 'No audio file received' })
     return
   }
+  const audioPath = req.file.path
 
   // Clients that don't ask for async get the original behaviour: one request
   // that returns the speaker cards. Builds already in teachers' hands depend
   // on that, so the synchronous path stays until they are gone.
   if (req.body?.mode === 'async') {
     const recordedSec = Number(req.body?.durationSec)
-    const { buffer, mimetype } = req.file
+    const { mimetype } = req.file
     await prisma.audioSession.update({
       where: { id: sessionId },
       data: {
@@ -468,21 +492,22 @@ audioSessionsRouter.post('/:id/transcribe', upload.single('audio'), async (req, 
     })
     res.status(202).json({ status: 'transcribing' })
 
-    void runTranscription(sessionId, buffer, mimetype).catch(async (error) => {
-      console.error('[audio-sessions] background transcription failed:', error)
-      const noSpeech = (error as Error & { code?: string }).code === 'NO_SPEECH'
-      await markTranscriptionFailed(
-        sessionId,
-        noSpeech ? 'No speech was detected in this recording.' : 'Transcription failed. Please try again.',
-      )
-    })
+    void runTranscription(sessionId, audioPath, mimetype)
+      .catch(async (error) => {
+        console.error('[audio-sessions] background transcription failed:', error)
+        const noSpeech = (error as Error & { code?: string }).code === 'NO_SPEECH'
+        await markTranscriptionFailed(
+          sessionId,
+          noSpeech ? 'No speech was detected in this recording.' : 'Transcription failed. Please try again.',
+        )
+      })
+      // Whether it worked or not, the scratch copy goes.
+      .finally(() => discardUpload(audioPath))
     return
   }
 
   try {
-    const utterances = await transcribeAudio(req.file.buffer, req.file.mimetype)
-    // req.file.buffer is never referenced again after this point — nothing
-    // in this handler writes it to disk, logs it, or attaches it to the row.
+    const utterances = await transcribeAudioFile(audioPath, req.file.mimetype)
 
     if (utterances.length === 0) {
       res.status(422).json({ error: 'No speech was detected in this recording.' })
@@ -514,6 +539,9 @@ audioSessionsRouter.post('/:id/transcribe', upload.single('audio'), async (req, 
   } catch (error) {
     console.error('[audio-sessions] transcription failed:', error)
     res.status(502).json({ error: 'Transcription failed. Please try again.' })
+  } finally {
+    // The scratch copy is gone before this request is, on every path.
+    await discardUpload(audioPath)
   }
 })
 

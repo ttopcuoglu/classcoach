@@ -1,3 +1,5 @@
+import { createReadStream } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { DEFAULT_TALK_VOICE, isValidTalkVoice } from './talkVoices.ts'
 
 // One-shot (non-streaming) transcription against Deepgram's prerecorded
@@ -25,7 +27,27 @@ if (!process.env.DEEPGRAM_API_KEY) {
   )
 }
 
+/// A lesson recording is now 16 kHz PCM rather than AAC — ~1.9 MB a minute, so
+/// 90 minutes is ~173 MB. Read into a Buffer that is 173 MB of Node heap for the
+/// whole upload, per concurrent request; streamed off disk it is a few hundred
+/// KB. Short clips (a Talk It Through turn, onboarding) still come through
+/// `transcribeAudio` as a Buffer, where the difference does not matter.
+export async function transcribeAudioFile(filePath: string, contentType: string): Promise<DeepgramUtterance[]> {
+  const { size } = await stat(filePath)
+  // Content-Length set explicitly: a stream body would otherwise go out
+  // chunked, and Deepgram is happier being told the length up front.
+  return sendToDeepgram(createReadStream(filePath) as unknown as BodyInit, contentType, size)
+}
+
 export async function transcribeAudio(buffer: Buffer, contentType: string): Promise<DeepgramUtterance[]> {
+  return sendToDeepgram(buffer as unknown as BodyInit, contentType, buffer.byteLength)
+}
+
+async function sendToDeepgram(
+  body: BodyInit,
+  contentType: string,
+  byteLength: number,
+): Promise<DeepgramUtterance[]> {
   const apiKey = process.env.DEEPGRAM_API_KEY
   if (!apiKey) throw new Error('DEEPGRAM_API_KEY is not set')
 
@@ -38,9 +60,12 @@ export async function transcribeAudio(buffer: Buffer, contentType: string): Prom
       headers: {
         Authorization: `Token ${apiKey}`,
         'Content-Type': contentType || 'audio/webm',
+        'Content-Length': String(byteLength),
       },
-      body: buffer as unknown as BodyInit,
-    },
+      body,
+      // Required by undici whenever the body is a stream.
+      duplex: 'half',
+    } as RequestInit,
   )
 
   if (!response.ok) {
