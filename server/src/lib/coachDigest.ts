@@ -61,25 +61,45 @@ export function metricsAreRelevant(focusAreaValue: string | null | undefined): b
   return focusAreaValue != null && METRIC_RELEVANT_AREAS.has(focusAreaValue)
 }
 
-// Subject is the only room field both sides reliably carry: Debrief has
-// subject/gradeBand ("6-8"), AudioSession has classSubject/gradeLevel, and their
-// grade fields are not the same vocabulary. So subject is what has to match, and
-// a question with no subject on it gets no digest at all — Coach citing 3rd
-// period's numbers at a question about 5th is worse than Coach knowing nothing.
+// Subject is the only room field both sides carry in comparable form: Debrief
+// has subject/gradeBand ("6-8"), AudioSession has classSubject/gradeLevel, and
+// their grade fields are not the same vocabulary.
 function sameSubject(a: string | null, b: string | null): boolean {
   if (!a || !b) return false
   return a.trim().toLowerCase() === b.trim().toLowerCase()
 }
 
+// What the digest is actually protecting against is Coach citing 3rd period's
+// numbers at a question about 5th. A subject match is one way to prevent that,
+// but it is not the only one — and requiring it turned out to mean the digest
+// never fired at all, because Ask does not set a subject on its questions.
+// Every Ask row in production has subject null.
+//
+// So: match on subject when the question has one. When it doesn't, fall back on
+// the fact that there is nothing to confuse when a teacher has only recorded one
+// class — which is 21 of the 23 teachers who have recordings. A teacher with
+// several recorded subjects and a question that names none still gets nothing,
+// because that is the case the guard exists for.
+//
+// Sessions with no classSubject are left out entirely: the digest's contract is
+// to say which class and day a number came from, and an unlabelled recording
+// cannot honour it.
+export function selectDigestSessions(sessions: DigestSession[], subject: string | null): DigestSession[] {
+  const labelled = sessions.filter((s) => s.classSubject != null)
+  if (labelled.length === 0) return []
+  if (subject) return labelled.filter((s) => sameSubject(s.classSubject, subject))
+  const distinct = new Set(labelled.map((s) => s.classSubject!.trim().toLowerCase()))
+  return distinct.size === 1 ? labelled : []
+}
+
 export async function loadDigestSessions(userId: string, subject: string | null): Promise<DigestSession[]> {
-  if (!subject) return []
   const sessions = await prisma.audioSession.findMany({
-    where: { userId, status: { in: ['analyzed', 'locked'] } },
+    where: { userId, status: { in: ['analyzed', 'locked'] }, classSubject: { not: null } },
     orderBy: { sessionDate: 'desc' },
     take: 25,
     select: DIGEST_SELECT,
   })
-  return sessions.filter((s) => sameSubject(s.classSubject, subject))
+  return selectDigestSessions(sessions, subject)
 }
 
 function roomLabel(s: DigestSession): string {

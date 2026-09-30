@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { buildDigestBlock, metricsAreRelevant, type DigestSession } from './coachDigest.ts'
+import { buildDigestBlock, metricsAreRelevant, selectDigestSessions, type DigestSession } from './coachDigest.ts'
 
 // The digest hands Coach numbers about a teacher's own classroom. The ways that
 // goes wrong are all quiet: numbers shown for a question they say nothing about,
@@ -107,4 +107,31 @@ test('a trend needs two measured sessions, and follows the teacher\'s own metric
 test('no trend when the numbers are withheld anyway', () => {
   const two = [session({ avgWaitTimeSec: 1.24 }), session({ avgWaitTimeSec: 0.8 })]
   assert.ok(!buildDigestBlock(two, { includeMetrics: false, focusMetric: 'avgWaitTime' }).includes('→'))
+})
+
+// Ask sends no subject on its questions — every Ask row in production has
+// subject null — so a strict subject match meant the digest never fired for
+// anyone. These pin the fallback: unambiguous when the teacher has recorded one
+// class, silent when they have recorded several.
+test('a named subject still has to match', () => {
+  const chem = session()
+  const bio = session({ classSubject: 'Biology' })
+  assert.equal(selectDigestSessions([chem, bio], 'Chemistry').length, 1)
+  assert.equal(selectDigestSessions([chem, bio], 'Art').length, 0)
+  assert.equal(selectDigestSessions([chem], 'chemistry ').length, 1, 'case and spacing are not the point')
+})
+
+test('no subject on the question is fine when only one class was recorded', () => {
+  const only = [session(), session({ sessionDate: new Date('2026-09-17T14:00:00Z') })]
+  assert.equal(selectDigestSessions(only, null).length, 2)
+})
+
+test('no subject on the question stays silent when several were recorded', () => {
+  const several = [session(), session({ classSubject: 'Biology' })]
+  assert.deepEqual(selectDigestSessions(several, null), [], 'this is the wrong-class case the guard exists for')
+})
+
+test('unlabelled recordings are never used — the digest must name the class', () => {
+  assert.deepEqual(selectDigestSessions([session({ classSubject: null })], null), [])
+  assert.deepEqual(selectDigestSessions([session({ classSubject: null })], 'Chemistry'), [])
 })
