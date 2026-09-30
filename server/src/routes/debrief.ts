@@ -26,6 +26,7 @@ import { transcribeAudio } from '../lib/deepgram.ts'
 import { extractTag, stripStructuralTags, stripTag } from '../lib/extractTag.ts'
 import type { CoachFollowUp, Debrief } from '../generated/prisma/client.ts'
 import { prisma } from '../lib/prisma.ts'
+import { buildDigestFor } from '../lib/coachDigest.ts'
 import { cachedSystem, cacheStats, type SystemPrompt } from '../lib/promptCache.ts'
 import { categoryInArea, isKnownCategory } from '../lib/scenarioCategories.ts'
 import {
@@ -112,7 +113,9 @@ debriefRouter.post('/transcribe', upload.single('audio'), async (req, res) => {
 // depend on the focus area. `area` is null when the teacher didn't pick one,
 // in which case the coach infers it — a teacher who types "a parent email is
 // stressing me out" should never have to classify it first.
-function askSystemPrompt(area: FocusArea | null): string {
+// Exported so the prompt can be measured and exercised directly — token
+// counts against the cache minimum, and before/after checks on real replies.
+export function askSystemPrompt(area: FocusArea | null): string {
   return `${coachIdentity(area)}
 
 A teacher has written in — figure out which of these two situations it is before responding:
@@ -140,7 +143,7 @@ For something that happened: a single integer 1-5, your honest private assessmen
 ${CORE_COACHING_RULES}`
 }
 
-function askChatSystemPrompt(area: FocusArea | null): string {
+export function askChatSystemPrompt(area: FocusArea | null): string {
   return `${coachIdentity(area)} You are continuing a conversation you already gave coaching feedback in. Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says: if they push back, ask a follow-up, or want to think through a different angle, engage with that directly rather than repeating your first assessment. Stay grounded in what they've told you; never invent details.
 ${CORE_COACHING_RULES}`
 }
@@ -244,9 +247,18 @@ debriefRouter.post('/', async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.userId },
-      select: { coachMemory: true, coachMemoryEnabled: true, experienceLevel: true },
+      select: { coachMemory: true, coachMemoryEnabled: true, experienceLevel: true, focusMetric: true },
     })
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
+    // What this teacher's own recordings measured in the same subject. Empty
+    // unless the digest is switched on, the question names a subject they have
+    // recorded, and the area is one those numbers can speak to.
+    const digest = await buildDigestFor({
+      userId: req.user!.userId,
+      subject: askSubject,
+      focusAreaValue: pickedArea?.value ?? null,
+      focusMetric: user?.focusMetric ?? null,
+    })
 
     const context = `What happened: ${incidentText}`
     // Only the area's own prompt is identical across teachers; the room this
@@ -273,8 +285,8 @@ debriefRouter.post('/', async (req, res) => {
       system: cachedSystem(
         stablePrompt,
         memoryOn
-          ? `${roomBlock}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
-          : `${roomBlock}${buildExperienceContextBlock(user?.experienceLevel)}`,
+          ? `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+          : `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}`,
       ),
       messages: [{ role: 'user', content: context }],
     })
@@ -558,7 +570,7 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
     prisma.debrief.findFirst({ where: { id: req.params.id, userId } }),
     prisma.user.findUnique({
       where: { id: userId },
-      select: { ...PLAN_USER_SELECT, coachMemory: true, coachMemoryEnabled: true, experienceLevel: true },
+      select: { ...PLAN_USER_SELECT, coachMemory: true, coachMemoryEnabled: true, experienceLevel: true, focusMetric: true },
     }),
   ])
   if (!debrief) {
@@ -574,7 +586,21 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
   }
 
   const action = isTalk ? 'talk_to_me_chat' : 'debrief_chat'
-  const chatDenied = await checkUsage(userId, action, user)
+  // Alongside the usage check rather than after it — this route counts its
+  // round trips, and the digest needs a query of its own. Ask only: Talk It
+  // Through is the spoken surface, where an extra block costs time to first
+  // word and the teacher never asked for the report.
+  const [chatDenied, digest] = await Promise.all([
+    checkUsage(userId, action, user),
+    isTalk
+      ? Promise.resolve('')
+      : buildDigestFor({
+          userId,
+          subject: debrief.subject,
+          focusAreaValue: debrief.focusArea,
+          focusMetric: user?.focusMetric ?? null,
+        }),
+  ])
   if (chatDenied) {
     res.status(429).json({ error: chatDenied })
     return
@@ -599,8 +625,8 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
     system: cachedSystem(
       stablePrompt,
       memoryOn
-        ? `${roomBlock}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
-        : `${roomBlock}${buildExperienceContextBlock(user?.experienceLevel)}`,
+        ? `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
+        : `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}`,
     ),
     maxTokens: writeMemory ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
     messages: toClaudeMessages(existing, trimmed),
@@ -718,11 +744,19 @@ debriefRouter.post('/:id/chat', async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.userId },
-      select: { coachMemory: true, coachMemoryEnabled: true, experienceLevel: true },
+      select: { coachMemory: true, coachMemoryEnabled: true, experienceLevel: true, focusMetric: true },
     })
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
     // Memory is read every turn but rewritten only on some — see shouldWriteMemory.
     const writeMemory = memoryOn && shouldWriteMemory(countUserTurns(existing) + 1)
+    const digest = isTalk
+      ? ''
+      : await buildDigestFor({
+          userId: req.user!.userId,
+          subject: debrief.subject,
+          focusAreaValue: debrief.focusArea,
+          focusMetric: user?.focusMetric ?? null,
+        })
 
     // Follow-up turns stay in the area this conversation was classified into —
     // otherwise a grading question gets a behavior-management voice on turn two.
@@ -736,8 +770,8 @@ debriefRouter.post('/:id/chat', async (req, res) => {
       system: cachedSystem(
         stablePrompt,
         memoryOn
-          ? `${roomBlock}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
-          : `${roomBlock}${buildExperienceContextBlock(user?.experienceLevel)}`,
+          ? `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
+          : `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}`,
       ),
       messages: toClaudeMessages(existing, trimmed),
     })
