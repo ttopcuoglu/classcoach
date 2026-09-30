@@ -2394,7 +2394,7 @@ function ReportPanel({
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold">Wivoza · Lesson Debrief</p>
             <h1 className="mt-3 font-heading text-3xl font-extrabold leading-tight sm:text-4xl">
-              {session.classSubject || 'New Recording'}
+              {session.classSubject || session.period || 'Untitled lesson'}
               {session.period ? <span className="text-gold"> · {session.period}</span> : null}
             </h1>
             <p className="mt-2 text-sm text-cream/70">
@@ -5334,7 +5334,7 @@ function SessionCard({
         </span>
         <span className="min-w-0">
           <span className="block font-heading text-base font-bold text-forest">
-            {session.classSubject || 'New Recording'}
+            {session.classSubject || session.period || 'Untitled lesson'}
             {session.period ? <span className="text-terracotta"> · {session.period}</span> : ''}
           </span>
           <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-soft">

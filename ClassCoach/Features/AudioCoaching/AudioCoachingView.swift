@@ -329,7 +329,7 @@ private struct SessionCardView: View {
                         .frame(width: 40, height: 40)
                         .background(AppTheme.forest, in: RoundedRectangle(cornerRadius: 12))
                     VStack(alignment: .leading, spacing: 5) {
-                        (Text(session.classSubject ?? "New Recording")
+                        (Text(session.classSubject ?? session.period ?? "Untitled lesson")
                             + Text(session.period.map { " · \($0)" } ?? "").foregroundColor(AppTheme.terracotta))
                             .font(.heading(.subheadline)).foregroundStyle(AppTheme.forest)
                         Text(formattedDate(session.sessionDate))
