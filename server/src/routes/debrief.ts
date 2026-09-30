@@ -26,6 +26,7 @@ import { transcribeAudio } from '../lib/deepgram.ts'
 import { extractTag, stripStructuralTags, stripTag } from '../lib/extractTag.ts'
 import type { CoachFollowUp, Debrief } from '../generated/prisma/client.ts'
 import { prisma } from '../lib/prisma.ts'
+import { cachedSystem, cacheStats, type SystemPrompt } from '../lib/promptCache.ts'
 import { categoryInArea, isKnownCategory } from '../lib/scenarioCategories.ts'
 import {
   isCourseLevelFor,
@@ -248,14 +249,17 @@ debriefRouter.post('/', async (req, res) => {
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
 
     const context = `What happened: ${incidentText}`
-    const basePrompt = `${askSystemPrompt(pickedArea)}${teachingContextBlock({
+    // Only the area's own prompt is identical across teachers; the room this
+    // question is about is not, so it sits after the cache breakpoint.
+    const stablePrompt = askSystemPrompt(pickedArea)
+    const roomBlock = teachingContextBlock({
       gradeBand: askGradeBand,
       subject: askSubject,
       course: askCourse,
       topic: askTopic,
       courseLevel: askCourseLevel,
       classMakeup: askMakeup,
-    })}`
+    })
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       // The classification tags sit at the END of the response, so a cap that
@@ -266,9 +270,12 @@ debriefRouter.post('/', async (req, res) => {
       // answer came in at ~920 tokens against the old 1024 cap.
       max_tokens: 1600,
       thinking: { type: 'disabled' },
-      system: memoryOn
-        ? `${basePrompt}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
-        : `${basePrompt}${buildExperienceContextBlock(user?.experienceLevel)}`,
+      system: cachedSystem(
+        stablePrompt,
+        memoryOn
+          ? `${roomBlock}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+          : `${roomBlock}${buildExperienceContextBlock(user?.experienceLevel)}`,
+      ),
       messages: [{ role: 'user', content: context }],
     })
 
@@ -353,7 +360,7 @@ debriefRouter.post('/', async (req, res) => {
 // checked BEFORE the first byte goes out, because once the stream has begun
 // the status code is already sent and can no longer say 429.
 type StreamOptions = {
-  systemPrompt: string
+  system: SystemPrompt
   maxTokens: number
   messages: { role: 'user' | 'assistant'; content: string }[]
   safetyLabel: string
@@ -392,7 +399,7 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
       model: CLAUDE_MODEL,
       max_tokens: opts.maxTokens,
       thinking: { type: 'disabled' },
-      system: opts.systemPrompt,
+      system: opts.system,
       messages: opts.messages,
     })
 
@@ -439,7 +446,12 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
     timing.mark('persist')
     send({ type: 'done', debrief: record })
     res.end()
-    timing.end({ gate: `${opts.gateMs ?? 0}ms`, sentences: spoken.length + (tail ? 1 : 0), chars: reply.length })
+    timing.end({
+      gate: `${opts.gateMs ?? 0}ms`,
+      sentences: spoken.length + (tail ? 1 : 0),
+      chars: reply.length,
+      ...cacheStats(message.usage),
+    })
 
     // Deliberately after res.end(): memory is bookkeeping for the NEXT turn,
     // so making this turn wait on another write would be pure added latency.
@@ -495,13 +507,16 @@ debriefRouter.post('/talk/stream', async (req, res) => {
 
   const memoryOn = (user?.coachMemoryEnabled ?? false) && hasActivePlanFor(user)
   const followUp = await findPendingFollowUp(userId, followUpId)
-  const talkPrompt = `${TALK_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}`
+  // TALK_SYSTEM_PROMPT is byte-identical for every teacher, so it caches once
+  // and is reused across all of them; everything per-teacher follows it.
+  const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}`
 
   await streamCoachReply(res, 'talk_start', {
     gateMs: Date.now() - gateStart,
-    systemPrompt: memoryOn
-      ? `${talkPrompt}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
-      : talkPrompt,
+    system: cachedSystem(
+      TALK_SYSTEM_PROMPT,
+      memoryOn ? `${talkTail}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}` : talkTail,
+    ),
     maxTokens: memoryOn ? 110 + MEMORY_UPDATE_TOKEN_BUFFER : 110,
     messages: [{ role: 'user', content: trimmed }],
     safetyLabel: 'debrief.talk',
@@ -569,18 +584,22 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
   const memoryOn = (user?.coachMemoryEnabled ?? false) && hasActivePlanFor(user)
   // Follow-up turns stay in the area this conversation was classified into —
   // otherwise a grading question gets a behavior-management voice on turn two.
-  const basePrompt = isTalk
-    ? TALK_SYSTEM_PROMPT
-    : `${askChatSystemPrompt(findFocusArea(debrief.focusArea))}${teachingContextBlock(debrief)}`
+  const stablePrompt = isTalk ? TALK_SYSTEM_PROMPT : askChatSystemPrompt(findFocusArea(debrief.focusArea))
+  // Talk carries no room context; Ask's belongs to this conversation, not to
+  // every teacher, so either way it goes after the cache breakpoint.
+  const roomBlock = isTalk ? '' : teachingContextBlock(debrief)
   const baseMaxTokens = isTalk ? 110 : 300
   // Memory is read every turn but rewritten only on some — see shouldWriteMemory.
   const writeMemory = memoryOn && shouldWriteMemory(countUserTurns(existing) + 1)
 
   await streamCoachReply(res, isTalk ? 'talk_chat' : 'debrief_chat', {
     gateMs: Date.now() - gateStart,
-    systemPrompt: memoryOn
-      ? `${basePrompt}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
-      : `${basePrompt}${buildExperienceContextBlock(user?.experienceLevel)}`,
+    system: cachedSystem(
+      stablePrompt,
+      memoryOn
+        ? `${roomBlock}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
+        : `${roomBlock}${buildExperienceContextBlock(user?.experienceLevel)}`,
+    ),
     maxTokens: writeMemory ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
     messages: toClaudeMessages(existing, trimmed),
     safetyLabel: isTalk ? 'debrief.talk.chat' : 'debrief.ask.chat',
@@ -621,15 +640,16 @@ debriefRouter.post('/talk', async (req, res) => {
     })
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
     const followUp = await findPendingFollowUp(req.user!.userId, followUpId)
-    const talkPrompt = `${TALK_SYSTEM_PROMPT}${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}`
+    const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}`
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: memoryOn ? 110 + MEMORY_UPDATE_TOKEN_BUFFER : 110,
       thinking: { type: 'disabled' },
-      system: memoryOn
-        ? `${talkPrompt}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
-        : talkPrompt,
+      system: cachedSystem(
+        TALK_SYSTEM_PROMPT,
+        memoryOn ? `${talkTail}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}` : talkTail,
+      ),
       messages: [{ role: 'user', content: trimmed }],
     })
     const text = response.content
@@ -704,17 +724,19 @@ debriefRouter.post('/:id/chat', async (req, res) => {
 
     // Follow-up turns stay in the area this conversation was classified into —
     // otherwise a grading question gets a behavior-management voice on turn two.
-    const basePrompt = isTalk
-      ? TALK_SYSTEM_PROMPT
-      : `${askChatSystemPrompt(findFocusArea(debrief.focusArea))}${teachingContextBlock(debrief)}`
+    const stablePrompt = isTalk ? TALK_SYSTEM_PROMPT : askChatSystemPrompt(findFocusArea(debrief.focusArea))
+    const roomBlock = isTalk ? '' : teachingContextBlock(debrief)
     const baseMaxTokens = isTalk ? 110 : 300
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: writeMemory ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
       thinking: { type: 'disabled' },
-      system: memoryOn
-        ? `${basePrompt}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
-        : `${basePrompt}${buildExperienceContextBlock(user?.experienceLevel)}`,
+      system: cachedSystem(
+        stablePrompt,
+        memoryOn
+          ? `${roomBlock}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
+          : `${roomBlock}${buildExperienceContextBlock(user?.experienceLevel)}`,
+      ),
       messages: toClaudeMessages(existing, trimmed),
     })
     const text = response.content
