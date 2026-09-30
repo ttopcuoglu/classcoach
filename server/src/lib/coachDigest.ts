@@ -98,9 +98,10 @@ function sameSubject(a: string | null, b: string | null): boolean {
 
 // What the digest is actually protecting against is Coach citing 3rd period's
 // numbers at a question about 5th. A subject match is one way to prevent that,
-// but it is not the only one — and requiring it turned out to mean the digest
-// never fired at all, because Ask does not set a subject on its questions.
-// Every Ask row in production has subject null.
+// but it is not the only one — and requiring it would leave the digest silent
+// for most questions, because Ask only collects a subject when the teacher
+// picks Teaching and Learning up front (see debrief.ts's asksAboutContent).
+// Every other question arrives with no subject on it at all.
 //
 // So: match on subject when the question has one. When it doesn't, fall back on
 // the fact that there is nothing to confuse when a teacher has only recorded one

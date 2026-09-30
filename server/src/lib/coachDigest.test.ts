@@ -116,10 +116,10 @@ test('no trend when the numbers are withheld anyway', () => {
   assert.ok(!buildDigestBlock(two, { includeMetrics: false, focusMetric: 'avgWaitTime' }).includes('→'))
 })
 
-// Ask sends no subject on its questions — every Ask row in production has
-// subject null — so a strict subject match meant the digest never fired for
-// anyone. These pin the fallback: unambiguous when the teacher has recorded one
-// class, silent when they have recorded several.
+// Ask only collects a subject under Teaching and Learning, so most questions
+// arrive without one and a strict match would leave the digest silent for them.
+// These pin the fallback: unambiguous when the teacher has recorded one class,
+// silent when they have recorded several.
 test('a named subject still has to match', () => {
   const chem = session()
   const bio = session({ classSubject: 'Biology' })
