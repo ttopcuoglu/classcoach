@@ -55,6 +55,7 @@
 		A91E3AB0DF695B5C0D7750CA /* LessonPlanningView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2D7D552A2E51BEFFD552507 /* LessonPlanningView.swift */; };
 		AB9B8367E14E648F73712E10 /* AudioSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC41C84EDAEEF4D28A99A4D7 /* AudioSession.swift */; };
 		AB14C09003B590801CF3DBFA /* AudioCoachingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 327797D3C4B2F09DEF6D0800 /* AudioCoachingService.swift */; };
+		3A1D7C4E0930F1B28E4A0012 /* AudioCompressor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A1D7C4E0930F1B28E4A0011 /* AudioCompressor.swift */; };
 		2D53DF049145B1863DE9391E /* ReportConfidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 434C59F88122CBFEEFC6763E /* ReportConfidence.swift */; };
 		008F1D6CFD0DF874D2A901ED /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2E1EFECCF63BF8E8F291954 /* AudioRecorder.swift */; };
 		B8D4F2A1AC3E5F7B9D2A4C74 /* BatteryCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C3E1F09B2D4E6A8C1F3B64 /* BatteryCheck.swift */; };
@@ -131,6 +132,7 @@
 		A2D7D552A2E51BEFFD552507 /* LessonPlanningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonPlanningView.swift; sourceTree = "<group>"; };
 		EC41C84EDAEEF4D28A99A4D7 /* AudioSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSession.swift; sourceTree = "<group>"; };
 		327797D3C4B2F09DEF6D0800 /* AudioCoachingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCoachingService.swift; sourceTree = "<group>"; };
+		3A1D7C4E0930F1B28E4A0011 /* AudioCompressor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCompressor.swift; sourceTree = "<group>"; };
 		434C59F88122CBFEEFC6763E /* ReportConfidence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportConfidence.swift; sourceTree = "<group>"; };
 		F2E1EFECCF63BF8E8F291954 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
 		A7C3E1F09B2D4E6A8C1F3B64 /* BatteryCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryCheck.swift; sourceTree = "<group>"; };
@@ -255,6 +257,7 @@
 			children = (
 				B8892F7A1BF280494A988922 /* AudioCoachingView.swift */,
 				327797D3C4B2F09DEF6D0800 /* AudioCoachingService.swift */,
+				3A1D7C4E0930F1B28E4A0011 /* AudioCompressor.swift */,
 				3C9AFDB4ABE4BDD5479B070C /* RecordingPanelView.swift */,
 				F2E1EFECCF63BF8E8F291954 /* AudioRecorder.swift */,
 				A7C3E1F09B2D4E6A8C1F3B64 /* BatteryCheck.swift */,
@@ -531,6 +534,7 @@
 				A91E3AB0DF695B5C0D7750CA /* LessonPlanningView.swift in Sources */,
 				AB9B8367E14E648F73712E10 /* AudioSession.swift in Sources */,
 				AB14C09003B590801CF3DBFA /* AudioCoachingService.swift in Sources */,
+				3A1D7C4E0930F1B28E4A0012 /* AudioCompressor.swift in Sources */,
 				2D53DF049145B1863DE9391E /* ReportConfidence.swift in Sources */,
 				008F1D6CFD0DF874D2A901ED /* AudioRecorder.swift in Sources */,
 				B8D4F2A1AC3E5F7B9D2A4C74 /* BatteryCheck.swift in Sources */,
@@ -686,7 +690,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ClassCoach/ClassCoach.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = 22PX9634Q5;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
@@ -721,7 +725,7 @@
 				CODE_SIGN_STYLE = Manual;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				PROVISIONING_PROFILE_SPECIFIER = "Wivoza App Store";
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = 22PX9634Q5;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;

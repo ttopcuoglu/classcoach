@@ -57,9 +57,14 @@ enum AudioCoachingService {
     /// and the server transcribes without us — mirrors `startTranscription` in
     /// `web/src/lib/api.ts`.
     static func startTranscription(sessionId: String, audioFileURL: URL, durationSec: Double) async throws {
+        // Recording is uncompressed so an interrupted lesson survives; the
+        // upload does not have to be. See AudioCompressor. Every upload goes
+        // through here, so Stop and recovery both get it.
+        let upload = AudioCompressor.compressedForUpload(audioFileURL)
+        defer { AudioCompressor.discardCopy(upload, original: audioFileURL) }
         try BackgroundUploader.shared.startTranscription(
             sessionId: sessionId,
-            audioFileURL: audioFileURL,
+            audioFileURL: upload,
             durationSec: durationSec,
             token: await AuthManager.shared.token,
             baseURL: APIClient.shared.uploadBaseURL

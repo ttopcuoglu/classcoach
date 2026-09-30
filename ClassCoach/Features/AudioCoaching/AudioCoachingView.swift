@@ -222,6 +222,13 @@ struct AudioCoachingView: View {
             // Never touch the recording being made right now.
             if active?.id == manifest.sessionId, isRecordingPhase { continue }
 
+            // Already on its way. The server only learns a recording exists
+            // when it arrives, so for the length of a large upload its status
+            // still reads "setup" — which used to be read as "never sent" and
+            // offered back. Each "Send it" then queued another copy of the same
+            // file, and they competed for the same connection.
+            if BackgroundUploader.shared.isUploading(sessionId: manifest.sessionId) { continue }
+
             if manifest.startedAt < cutoff {
                 RecordingStore.discard(sessionId: manifest.sessionId)
                 continue

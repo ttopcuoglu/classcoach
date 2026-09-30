@@ -33,6 +33,11 @@ final class BackgroundUploader: NSObject {
 
     private let identifier = "com.wivoza.app.background-upload"
     private var bodyFiles: [Int: URL] = [:]
+    /// Sessions with an upload the system is still working on. The server does
+    /// not know a recording is coming until it arrives, so it cannot answer
+    /// this — and asking it meant a teacher was offered the same recording
+    /// back, over and over, while it was uploading perfectly well.
+    private var uploading: Set<String> = []
     private var responseData: [Int: Data] = [:]
     private let lock = NSLock()
 
@@ -49,6 +54,23 @@ final class BackgroundUploader: NSObject {
     /// re-adopted and its delegate callbacks arrive.
     func reconnect() {
         _ = session
+        // A previous process may have left uploads running; re-adopt what they
+        // were for, or this launch would offer those recordings back again.
+        session.getAllTasks { [weak self] tasks in
+            guard let self else { return }
+            let ids = tasks.compactMap { $0.taskDescription }
+            self.lock.lock()
+            self.uploading.formUnion(ids)
+            self.lock.unlock()
+        }
+    }
+
+    /// Whether this recording is already on its way. Checked before offering it
+    /// back to the teacher.
+    func isUploading(sessionId: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return uploading.contains(sessionId)
     }
 
     struct UploadResult {
@@ -86,6 +108,7 @@ final class BackgroundUploader: NSObject {
         task.taskDescription = sessionId
         lock.lock()
         bodyFiles[task.taskIdentifier] = bodyURL
+        uploading.insert(sessionId)
         lock.unlock()
         task.resume()
     }
@@ -156,6 +179,9 @@ extension BackgroundUploader: URLSessionDataDelegate {
             ?? task.originalRequest?.value(forHTTPHeaderField: "X-Wivoza-Session-Id")
             ?? ""
         let (_, data) = cleanUp(taskIdentifier: task.taskIdentifier)
+        lock.lock()
+        uploading.remove(sessionId)
+        lock.unlock()
         let status = (task.response as? HTTPURLResponse)?.statusCode ?? 0
 
         var message: String?
