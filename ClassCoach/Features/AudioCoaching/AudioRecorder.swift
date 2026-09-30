@@ -88,16 +88,21 @@ final class AudioRecorder: NSObject, ObservableObject {
             pausedByInterruption = false
             let options = (note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt)
                 .map(AVAudioSession.InterruptionOptions.init(rawValue:)) ?? []
-            guard options.contains(.shouldResume) else { return }
-            // The session was deactivated under us; record() fails until it is
-            // back. If it still will not resume, stay paused rather than
-            // pretending: the teacher sees it is not recording, and Stop
-            // finalises and sends whatever was captured up to here.
-            try? AVAudioSession.sharedInstance().setActive(true)
-            if recorder?.record() == true {
-                runStart = Date()
-                phase = .recording
-                startTimer()
+            // Deliberately NOT gated on .shouldResume. iOS sets that for an
+            // alarm or Siri but generally not for a phone call, and obeying it
+            // meant a teacher who took a call left the rest of the lesson
+            // unrecorded with the phone face-down in their pocket. For a
+            // classroom recording, carrying on is what was wanted; if the
+            // system really will not give the microphone back, record() fails
+            // and we stay paused, which is where we already were.
+            _ = options
+            if !resumeAfterInterruption() {
+                // The session can lag a moment behind the call ending.
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: 700_000_000)
+                    guard let self, self.phase == .paused else { return }
+                    if !self.resumeAfterInterruption() { self.warnCouldNotResume() }
+                }
             }
 
         @unknown default:
@@ -262,6 +267,36 @@ final class AudioRecorder: NSObject, ObservableObject {
             content.title = "Recording stopped"
             let minutes = Int(RecordingStore.maxRecordingSeconds / 60)
             content.body = "Lesson Debrief stopped after \(minutes) minutes and saved your recording."
+            content.sound = .default
+            center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+        }
+    }
+
+    /// Puts the recording back after the system took the microphone. Returns
+    /// false when it could not, which leaves the recorder paused rather than
+    /// claiming to record something it is not.
+    @discardableResult
+    private func resumeAfterInterruption() -> Bool {
+        guard phase == .paused, let recorder else { return false }
+        try? AVAudioSession.sharedInstance().setActive(true)
+        guard recorder.record() else { return false }
+        runStart = Date()
+        phase = .recording
+        startTimer()
+        return true
+    }
+
+    /// The one case where silence would cost a teacher the rest of their
+    /// lesson: the recording is paused, the phone is in a pocket, and nothing
+    /// on screen is going to be read. Uses the permission already asked for at
+    /// the start of the recording.
+    private func warnCouldNotResume() {
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            guard settings.authorizationStatus == .authorized else { return }
+            let content = UNMutableNotificationContent()
+            content.title = "Recording paused"
+            content.body = "Something interrupted your recording and it could not start again. Open Lesson Debrief to carry on or to save what was captured."
             content.sound = .default
             center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
         }
