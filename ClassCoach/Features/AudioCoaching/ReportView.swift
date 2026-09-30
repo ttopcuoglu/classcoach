@@ -231,7 +231,7 @@ struct ReportView: View {
                         .background(AppTheme.gold, in: Capsule())
                 }
             }
-            (Text(session.classSubject ?? session.period ?? "Untitled lesson")
+            (Text(session.displayTitle)
                 + Text(session.period.map { " · \($0)" } ?? "").foregroundColor(AppTheme.gold))
                 .font(.heading(.title2))
                 .foregroundStyle(.white)

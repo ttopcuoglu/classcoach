@@ -891,6 +891,30 @@ function TagSpeakersPanel({
   )
 }
 
+// What to call a recording in a list. "Untitled lesson" was accurate and
+// useless — every card said it — while analysis already works out what the
+// lesson covered, in lessonContent.summary. One sentence only: this is a card
+// title, and the report shows the summary in full anyway.
+function sessionTitle(session: { lessonContent?: AudioLessonContent | null; classSubject?: string | null; period?: string | null }): string {
+  const summary = session.lessonContent?.summary?.trim()
+  if (summary) {
+    // A sentence end counts only when a space or the end follows, and not in
+    // the first few words, or "Mr." and "e.g." end the title.
+    const match = /^.{20,}?[.!?](?=\s|$)/.exec(summary)
+    let out = match ? match[0] : summary
+    if (out.length > 90) {
+      const clipped = out.slice(0, 90)
+      out = clipped.slice(0, clipped.lastIndexOf(' ') > 0 ? clipped.lastIndexOf(' ') : 90) + '…'
+    }
+    out = out.replace(/[\s.]+$/, '')
+    if (out) return out
+  }
+  // Recordings analyzed before the lesson summary shipped (2026-09-28) have
+  // none, but most detected a subject — "Science" beats "Untitled lesson" for
+  // telling two old recordings apart.
+  return session.classSubject || session.lessonContent?.subject || session.period || 'Untitled lesson'
+}
+
 type ReportTab = 'summary' | 'insights' | 'reflect' | 'growth'
 type InsightsSection = 'talk' | 'questions' | 'understanding' | 'content' | 'routines' | 'rubric'
 type ReflectPath = 'full_report' | 'specific_moment' | 'how_it_felt' | 'ask_question'
@@ -2394,7 +2418,7 @@ function ReportPanel({
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold">Wivoza · Lesson Debrief</p>
             <h1 className="mt-3 font-heading text-3xl font-extrabold leading-tight sm:text-4xl">
-              {session.classSubject || session.period || 'Untitled lesson'}
+              {sessionTitle(session)}
               {session.period ? <span className="text-gold"> · {session.period}</span> : null}
             </h1>
             <p className="mt-2 text-sm text-cream/70">
@@ -5334,7 +5358,7 @@ function SessionCard({
         </span>
         <span className="min-w-0">
           <span className="block font-heading text-base font-bold text-forest">
-            {session.classSubject || session.period || 'Untitled lesson'}
+            {sessionTitle(session)}
             {session.period ? <span className="text-terracotta"> · {session.period}</span> : ''}
           </span>
           <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-soft">

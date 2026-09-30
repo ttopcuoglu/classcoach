@@ -306,6 +306,9 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
     var questionLog: [AudioQuestionLogEntry]? { session.questionLog }
     var reflectConversation: [AudioReflectMessage]? { session.reflectConversation }
     var lessonContent: AudioLessonContent? { session.lessonContent }
+    /// Forwarded so the report header names the lesson the same way the
+    /// list does — see AudioSession.displayTitle.
+    var displayTitle: String { session.displayTitle }
     var contentNotes: AudioContentNotes? { session.contentNotes }
     var rubricLens: AudioRubricLens? { session.rubricLens }
     var classSummary: String? { session.classSummary }
@@ -342,4 +345,50 @@ struct SpeakerSample: Decodable {
 enum FocusMetric: String, Codable, CaseIterable {
     case talkRatio, higherOrderPct, avgWaitTime, cfuCount, followUpQuestionCount
     case redirectionCount, toneRatio, directiveCount, nameMentionCount, feedbackSpecificity
+}
+
+extension AudioSession {
+    /// What to call this recording in a list.
+    ///
+    /// "Untitled lesson" was accurate and useless: every card said it, so the
+    /// list told a teacher nothing about which class was which. Analysis
+    /// already works out what the lesson covered — `lessonContent.summary`,
+    /// written by the model read that runs on every recording — so the title
+    /// is the lesson's own subject matter, at no extra cost and for recordings
+    /// already made. Falls back to the room the teacher labelled, then the
+    /// period, and only then to having nothing to say.
+    var displayTitle: String {
+        if let line = AudioSession.titleSentence(lessonContent?.summary) { return line }
+        if let classSubject, !classSubject.isEmpty { return classSubject }
+        // Recordings analysed before the lesson summary shipped (2026-09-28)
+        // have no summary to title from, but most of them did detect a
+        // subject — "Science" beats "Untitled lesson" for telling two old
+        // recordings apart.
+        if let detected = lessonContent?.subject, !detected.isEmpty { return detected }
+        if let period, !period.isEmpty { return period }
+        return "Untitled lesson"
+    }
+
+    /// One sentence, not the two the summary may run to — this is a card
+    /// title, and the report shows the summary in full anyway.
+    static func titleSentence(_ text: String?, limit: Int = 90) -> String? {
+        guard let text else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        // A sentence end only counts if a space or the end follows it, and not
+        // in the first few words — otherwise "Mr." or "e.g." ends the title.
+        let chars = Array(trimmed)
+        var cut: Int?
+        for i in 20..<min(chars.count, limit) where ".!?".contains(chars[i]) {
+            if i + 1 >= chars.count || chars[i + 1] == " " { cut = i; break }
+        }
+        var out = cut.map { String(chars[0...$0]) } ?? trimmed
+        if out.count > limit {
+            let clipped = String(out.prefix(limit))
+            out = (clipped.lastIndex(of: " ").map { String(clipped[..<$0]) } ?? clipped) + "…"
+        }
+        out = out.trimmingCharacters(in: CharacterSet(charactersIn: " ."))
+        return out.isEmpty ? nil : out
+    }
 }
