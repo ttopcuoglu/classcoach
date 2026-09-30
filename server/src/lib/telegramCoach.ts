@@ -18,7 +18,7 @@ import { generateTalkTakeaway, trimIfTruncated } from '../routes/debrief.ts'
 import { anthropic, CLAUDE_MODEL } from './anthropic.ts'
 import { hasActivePlanFor, PLAN_USER_SELECT } from './billing.ts'
 import { appendTurn, countUserTurns, TALK_TURN_CAP, toClaudeMessages, type ChatMessage } from './coachingChat.ts'
-import { applyMemoryUpdate, buildMemoryContextBlock, MEMORY_UPDATE_INSTRUCTION, MEMORY_UPDATE_TOKEN_BUFFER } from './coachMemory.ts'
+import { applyMemoryUpdate, buildMemoryContextBlock, MEMORY_UPDATE_INSTRUCTION, MEMORY_UPDATE_TOKEN_BUFFER, shouldWriteMemory } from './coachMemory.ts'
 import { CORE_COACHING_RULES } from './coachPersona.ts'
 import { flagIfUnsafe } from './coachSafetyCheck.ts'
 import { buildExperienceContextBlock } from './experience.ts'
@@ -345,6 +345,8 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
   void logUsage(user.id, action)
 
   const memoryOn = user.coachMemoryEnabled && hasActivePlanFor(user)
+  // Memory is read every turn but rewritten only on some — see shouldWriteMemory.
+  const writeMemory = memoryOn && shouldWriteMemory(countUserTurns(existing) + 1)
   const basePrompt = `${TALK_TEXT_SYSTEM_PROMPT}${buildExperienceContextBlock(user.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}`
 
   const stopTyping = keepTyping(chatId)
@@ -353,9 +355,9 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: memoryOn ? REPLY_MAX_TOKENS + MEMORY_UPDATE_TOKEN_BUFFER : REPLY_MAX_TOKENS,
+      max_tokens: writeMemory ? REPLY_MAX_TOKENS + MEMORY_UPDATE_TOKEN_BUFFER : REPLY_MAX_TOKENS,
       thinking: { type: 'disabled' },
-      system: memoryOn ? `${basePrompt}${buildMemoryContextBlock(user.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}` : basePrompt,
+      system: memoryOn ? `${basePrompt}${buildMemoryContextBlock(user.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}` : basePrompt,
       messages: toClaudeMessages(existing, text),
     })
     raw = response.content
@@ -385,7 +387,7 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
   await reply(chatId, coachText)
 
   // Bookkeeping for the next turn, after the teacher already has this one.
-  if (memoryOn) {
+  if (writeMemory) {
     const updated = applyMemoryUpdate(extractTag(raw, 'memory_update'), user.coachMemory)
     if (updated !== user.coachMemory) await prisma.user.update({ where: { id: user.id }, data: { coachMemory: updated } })
   }

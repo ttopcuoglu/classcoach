@@ -6,6 +6,33 @@ export const MAX_COACH_MEMORY_CHARS = 2000
 // straight into what the teacher sees (and, for Talk It Through, hears).
 export const MEMORY_UPDATE_TOKEN_BUFFER = 300
 
+// Memory is only ever needed ACROSS conversations, never within one: the turns
+// of the conversation in progress are already in `messages`, so Coach can see
+// everything said this session whether or not memory was rewritten on the last
+// turn. Rewriting it every turn therefore paid output rates (~200 tokens, five
+// times the input rate) to mostly retype the same 150 words — and on the
+// non-streaming routes the teacher waited out those tokens before seeing any
+// reply at all, since nothing is returned until the whole response lands.
+//
+// So memory is written on the teacher's first turn — a one-shot Ask, or a
+// conversation abandoned after one reply, is the common case and must not lose
+// its memory — and every MEMORY_WRITE_INTERVAL turns after that. At most the
+// last four turns of a long conversation go uncaptured, and the next
+// conversation's first turn picks the thread back up.
+//
+// Routes that only ever handle a first turn (Ask's creation, Talk It Through's
+// opening turn) never call this — they always write. A policy change here that
+// stops writing on turn 1 has to touch them too.
+export const MEMORY_WRITE_INTERVAL = 5
+
+// teacherTurnNumber is 1-based and counts the teacher's own turns including the
+// one being answered right now. 0 means Coach is opening and the teacher hasn't
+// said anything yet (Reflect's start turn), which has nothing to remember.
+export function shouldWriteMemory(teacherTurnNumber: number): boolean {
+  if (teacherTurnNumber < 1) return false
+  return teacherTurnNumber === 1 || teacherTurnNumber % MEMORY_WRITE_INTERVAL === 0
+}
+
 export function buildMemoryContextBlock(memory: string | null): string {
   if (!memory) return ''
   return `\n\nWhat you know about this teacher so far, from earlier conversations:\n${memory}\n`

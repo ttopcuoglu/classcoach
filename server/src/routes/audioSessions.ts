@@ -9,6 +9,7 @@ import {
   buildMemoryContextBlock,
   MEMORY_UPDATE_INSTRUCTION,
   MEMORY_UPDATE_TOKEN_BUFFER,
+  shouldWriteMemory,
 } from '../lib/coachMemory.ts'
 import { buildExperienceContextBlock } from '../lib/experience.ts'
 import { CORE_COACHING_RULES, TRANSCRIPT_RELIABILITY_NOTICE } from '../lib/coachPersona.ts'
@@ -624,6 +625,9 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
       select: { coachMemory: true, coachMemoryEnabled: true, experienceLevel: true },
     })
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
+    // Memory is read every turn but rewritten only on some — see shouldWriteMemory.
+    // A start turn has no teacher message yet, so it has nothing to remember.
+    const writeMemory = memoryOn && shouldWriteMemory(isStart ? 0 : userTurnCount + 1)
 
     const messages = [
       ...existing.map((m) => ({ role: m.role, content: m.text })),
@@ -632,9 +636,9 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: memoryOn ? 300 + MEMORY_UPDATE_TOKEN_BUFFER : 300,
+      max_tokens: writeMemory ? 300 + MEMORY_UPDATE_TOKEN_BUFFER : 300,
       system: memoryOn
-        ? `${buildReflectSystemPrompt(safeContext, session.teacherName, spoken === true)}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+        ? `${buildReflectSystemPrompt(safeContext, session.teacherName, spoken === true)}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
         : `${buildReflectSystemPrompt(safeContext, session.teacherName, spoken === true)}${buildExperienceContextBlock(user?.experienceLevel)}`,
       messages,
     })
@@ -663,7 +667,7 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
       data: { reflectConversation: [...existing, ...newTurns] },
     })
 
-    if (memoryOn) {
+    if (writeMemory) {
       const memoryUpdate = applyMemoryUpdate(extractTag(text, 'memory_update'), user!.coachMemory)
       if (memoryUpdate !== user!.coachMemory) {
         await prisma.user.update({ where: { id: req.user!.userId }, data: { coachMemory: memoryUpdate } })

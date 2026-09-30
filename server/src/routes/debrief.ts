@@ -7,6 +7,7 @@ import {
   buildMemoryContextBlock,
   MEMORY_UPDATE_INSTRUCTION,
   MEMORY_UPDATE_TOKEN_BUFFER,
+  shouldWriteMemory,
 } from '../lib/coachMemory.ts'
 import { buildExperienceContextBlock } from '../lib/experience.ts'
 import { buildFollowUpContextBlock, checkInQuestionFor, nextCheckInDate } from '../lib/followUps.ts'
@@ -572,13 +573,15 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
     ? TALK_SYSTEM_PROMPT
     : `${askChatSystemPrompt(findFocusArea(debrief.focusArea))}${teachingContextBlock(debrief)}`
   const baseMaxTokens = isTalk ? 110 : 300
+  // Memory is read every turn but rewritten only on some — see shouldWriteMemory.
+  const writeMemory = memoryOn && shouldWriteMemory(countUserTurns(existing) + 1)
 
   await streamCoachReply(res, isTalk ? 'talk_chat' : 'debrief_chat', {
     gateMs: Date.now() - gateStart,
     systemPrompt: memoryOn
-      ? `${basePrompt}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+      ? `${basePrompt}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
       : `${basePrompt}${buildExperienceContextBlock(user?.experienceLevel)}`,
-    maxTokens: memoryOn ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
+    maxTokens: writeMemory ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
     messages: toClaudeMessages(existing, trimmed),
     safetyLabel: isTalk ? 'debrief.talk.chat' : 'debrief.ask.chat',
     persist: (reply) =>
@@ -586,7 +589,7 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
         where: { id: debrief.id },
         data: { conversation: appendTurn(existing, trimmed, reply) },
       }),
-    afterPersist: memoryOn
+    afterPersist: writeMemory
       ? async (rawText) => {
           const updated = applyMemoryUpdate(extractTag(rawText, 'memory_update'), user!.coachMemory)
           if (updated !== user!.coachMemory) {
@@ -696,6 +699,8 @@ debriefRouter.post('/:id/chat', async (req, res) => {
       select: { coachMemory: true, coachMemoryEnabled: true, experienceLevel: true },
     })
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
+    // Memory is read every turn but rewritten only on some — see shouldWriteMemory.
+    const writeMemory = memoryOn && shouldWriteMemory(countUserTurns(existing) + 1)
 
     // Follow-up turns stay in the area this conversation was classified into —
     // otherwise a grading question gets a behavior-management voice on turn two.
@@ -705,10 +710,10 @@ debriefRouter.post('/:id/chat', async (req, res) => {
     const baseMaxTokens = isTalk ? 110 : 300
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: memoryOn ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
+      max_tokens: writeMemory ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
       thinking: { type: 'disabled' },
       system: memoryOn
-        ? `${basePrompt}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}`
+        ? `${basePrompt}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
         : `${basePrompt}${buildExperienceContextBlock(user?.experienceLevel)}`,
       messages: toClaudeMessages(existing, trimmed),
     })
@@ -730,7 +735,7 @@ debriefRouter.post('/:id/chat', async (req, res) => {
       data: { conversation: appendTurn(existing, trimmed, reply) },
     })
 
-    if (memoryOn) {
+    if (writeMemory) {
       const memoryUpdate = applyMemoryUpdate(extractTag(text, 'memory_update'), user!.coachMemory)
       if (memoryUpdate !== user!.coachMemory) {
         await prisma.user.update({ where: { id: req.user!.userId }, data: { coachMemory: memoryUpdate } })
