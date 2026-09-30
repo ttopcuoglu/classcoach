@@ -50,8 +50,13 @@ app.use('/api/assignment-coach/export-file', express.json({ limit: '40mb' }))
 app.use(express.json())
 app.use(cookieParser())
 
+// Render sets RENDER_GIT_COMMIT on every deploy, so health can answer the
+// one question a plain "ok" can't: which revision is actually serving. Short
+// form, to compare directly against `git log --oneline`.
+const COMMIT = process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? 'dev'
+
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok' })
+  res.json({ status: 'ok', commit: COMMIT })
 })
 
 // Public: sign-in itself, and shared read-only links (no session needed).
