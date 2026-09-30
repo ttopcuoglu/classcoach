@@ -4,6 +4,7 @@ import {
   createBillingPortalSession,
   createCheckoutSession,
   deleteAccount,
+  getCoachKnowledge,
   getProfile,
   getTelegramStatus,
   resetData,
@@ -70,6 +71,10 @@ export default function Profile() {
   const [resetError, setResetError] = useState<string | null>(null)
   const [resetDone, setResetDone] = useState(false)
 
+  const [coachDigestEnabled, setCoachDigestEnabled] = useState(false)
+  const [digestPreview, setDigestPreview] = useState<string | null>(null)
+  const [digestAvailable, setDigestAvailable] = useState(false)
+
   const [deletingAccount, setDeletingAccount] = useState(false)
   const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null)
 
@@ -92,6 +97,18 @@ export default function Profile() {
       })
       .catch(() => setSaveError('Could not load your profile.'))
       .finally(() => setLoading(false))
+    // Its own request: this is the only screen that needs it, and it runs a
+    // query the rest of the profile has no use for.
+    getCoachKnowledge()
+      .then((k) => {
+        setCoachDigestEnabled(k.digestEnabled)
+        setDigestPreview(k.digestPreview)
+        setDigestAvailable(k.digestAvailable)
+      })
+      .catch(() => {
+        // A failure here must not make the whole profile look broken — the
+        // section simply shows nothing extra.
+      })
   }, [])
 
   useEffect(() => {
@@ -119,6 +136,7 @@ export default function Profile() {
         experienceLevel,
         audioRetentionDays: audioRetentionDays ? Number(audioRetentionDays) : null,
         coachMemoryEnabled,
+        coachDigestEnabled,
         talkVoice,
       })
       setSaved(true)
@@ -367,14 +385,19 @@ export default function Profile() {
       <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
         <SectionHeading
           n={2}
-          title="What Coach remembers"
-          description="A short, running note about your recurring strengths and any ongoing challenges, built from your Ask, Talk It Through, and Lesson Debrief Reflect conversations. It's never shown to anyone else."
+          title="What Coach knows"
+          description="Everything Coach can draw on about you, in the words it's given them in. Nothing here is shown to anyone else — not your school, not an administrator."
         />
 
+        <h3 className="mt-5 text-sm font-semibold text-ink">From your conversations</h3>
+        <p className="mt-1 text-xs text-ink-soft">
+          A short, running note about your recurring strengths and any ongoing challenges, built from Ask, Talk It
+          Through, and Lesson Debrief Reflect.
+        </p>
         {coachMemory ? (
-          <p className="mt-4 rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5 text-sm text-ink">{coachMemory}</p>
+          <p className="mt-3 rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5 text-sm text-ink">{coachMemory}</p>
         ) : (
-          <p className="mt-4 text-sm text-ink-soft">Nothing yet — this builds up as you use these features.</p>
+          <p className="mt-3 text-sm text-ink-soft">Nothing yet — this builds up as you use these features.</p>
         )}
 
         <label className="mt-4 flex items-center gap-2.5 text-sm font-medium text-ink">
@@ -404,6 +427,62 @@ export default function Profile() {
           </div>
         )}
         {clearMemoryError && <p className="mt-2 text-sm text-terracotta-600">{clearMemoryError}</p>}
+
+        <div className="mt-7 border-t border-hairline pt-6">
+          <h3 className="text-sm font-semibold text-ink">From your class recordings</h3>
+          <p className="mt-1 text-xs text-ink-soft">
+            Lets Coach draw on what your own recordings measured when you ask about something it relates to — so you
+            don't have to re-explain your classroom every time. Only ever your own recordings, matched to the same
+            subject, and only the measured numbers, never a guess.
+          </p>
+
+          {digestAvailable ? (
+            <>
+              <label className="mt-4 flex items-center gap-2.5 text-sm font-medium text-ink">
+                <input
+                  type="checkbox"
+                  checked={coachDigestEnabled}
+                  onChange={(e) => {
+                    setCoachDigestEnabled(e.target.checked)
+                    setSaved(false)
+                  }}
+                  className="h-4 w-4 rounded border-hairline accent-terracotta focus:ring-terracotta/40"
+                />
+                Let Coach use what my recordings measured
+              </label>
+              <p className="mt-1 text-xs text-ink-soft">Use "Save changes" above to apply this.</p>
+            </>
+          ) : (
+            <p className="mt-4 text-sm text-ink-soft">
+              This isn't switched on yet. Nothing from your recordings is being shared with Coach outside Lesson
+              Debrief.
+            </p>
+          )}
+
+          {digestPreview ? (
+            <>
+              <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                {coachDigestEnabled && digestAvailable
+                  ? 'Exactly what Coach is told'
+                  : 'What Coach would be told, if you turned this on'}
+              </p>
+              {/* The server's own words, not a paraphrase — a screen meant to earn
+                  trust shouldn't show a tidied-up version of what actually gets sent.
+                  This is the most any question could surface; most see less. */}
+              <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-2xl bg-ink/5 p-5 font-sans text-xs leading-relaxed text-ink">
+                {digestPreview.trim()}
+              </pre>
+              <p className="mt-2 text-xs text-ink-soft">
+                This is the most Coach could ever see. A single question is matched to one subject and narrowed to what
+                you actually asked about, so it usually sees less than this — never more.
+              </p>
+            </>
+          ) : (
+            <p className="mt-4 text-sm text-ink-soft">
+              You have no analyzed recordings yet, so there's nothing here for Coach to draw on.
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">

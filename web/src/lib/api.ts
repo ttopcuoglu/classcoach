@@ -996,6 +996,21 @@ export function getProfile(): Promise<UserProfile> {
   return request('/api/profile')
 }
 
+// Everything Coach can draw on about this teacher, in the words it is given
+// them in. digestPreview is the most a question could ever surface, not what
+// any particular one did.
+export type CoachKnowledge = {
+  memory: string | null
+  memoryEnabled: boolean
+  digestEnabled: boolean
+  digestPreview: string | null
+  digestAvailable: boolean
+}
+
+export function getCoachKnowledge(): Promise<CoachKnowledge> {
+  return request('/api/profile/coach-knowledge')
+}
+
 export function updateProfile(data: {
   name?: string
   gradeLevels?: string
@@ -1011,6 +1026,7 @@ export function updateProfile(data: {
   completeOnboarding?: true
   joinCode?: string
   coachMemoryEnabled?: boolean
+  coachDigestEnabled?: boolean
   clearCoachMemory?: true
 }): Promise<UserProfile> {
   return request('/api/profile', { method: 'PUT', body: JSON.stringify(data) })

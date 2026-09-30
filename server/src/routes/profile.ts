@@ -5,6 +5,7 @@ import { resolveJoinCode } from '../lib/organization.ts'
 import { prisma } from '../lib/prisma.ts'
 import { isValidExperienceLevel } from '../lib/experience.ts'
 import { isValidTalkVoice } from '../lib/talkVoices.ts'
+import { DIGEST_ENABLED, previewDigestFor } from '../lib/coachDigest.ts'
 
 export const profileRouter = Router()
 
@@ -63,6 +64,7 @@ profileRouter.put('/', async (req, res) => {
     completeOnboarding,
     joinCode,
     coachMemoryEnabled,
+    coachDigestEnabled,
     clearCoachMemory,
   } = req.body ?? {}
   if (name !== undefined && typeof name !== 'string') {
@@ -117,6 +119,10 @@ profileRouter.put('/', async (req, res) => {
     res.status(400).json({ error: 'coachMemoryEnabled must be a boolean' })
     return
   }
+  if (coachDigestEnabled !== undefined && typeof coachDigestEnabled !== 'boolean') {
+    res.status(400).json({ error: 'coachDigestEnabled must be a boolean' })
+    return
+  }
   if (clearCoachMemory !== undefined && clearCoachMemory !== true) {
     res.status(400).json({ error: 'clearCoachMemory must be true if present' })
     return
@@ -158,6 +164,7 @@ profileRouter.put('/', async (req, res) => {
       schoolName,
       teachingGoal,
       coachMemoryEnabled,
+      coachDigestEnabled,
       ...orgFields,
       // Never trust a client-supplied date — the server owns this signal.
       ...(completeOnboarding === true ? { onboardingCompletedAt: new Date() } : {}),
@@ -167,6 +174,32 @@ profileRouter.put('/', async (req, res) => {
     include: USER_INCLUDE_ORG,
   })
   res.json(await withPlusAccess(updated))
+})
+
+// Everything Coach can draw on about this teacher, in the exact words it is
+// given them in — the "what Coach knows" screen reads this. The digest preview
+// is the maximum: a real question is matched by subject and narrowed by focus
+// area, so it sees this or less, never more. Returned whether or not the teacher
+// has consented, because deciding to share something means seeing it first.
+profileRouter.get('/coach-knowledge', async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user!.userId },
+    select: { coachMemory: true, coachMemoryEnabled: true, coachDigestEnabled: true, focusMetric: true },
+  })
+  if (!user) {
+    res.status(401).json({ error: 'Not signed in' })
+    return
+  }
+  const digestPreview = await previewDigestFor(req.user!.userId, user.focusMetric)
+  res.json({
+    memory: user.coachMemory,
+    memoryEnabled: user.coachMemoryEnabled,
+    digestEnabled: user.coachDigestEnabled,
+    digestPreview: digestPreview || null,
+    // False while the digest is still rolling out — the screen then explains
+    // that nothing is being shared yet rather than offering a dead switch.
+    digestAvailable: DIGEST_ENABLED,
+  })
 })
 
 // Clears the teacher's own data (saved scenarios, attempts, debriefs, parent
@@ -191,6 +224,7 @@ profileRouter.post('/reset', async (req, res) => {
       talkVoice: null,
       coachMemory: null,
       coachMemoryEnabled: true,
+      coachDigestEnabled: false,
     },
     omit: SAFE_USER_OMIT,
   })

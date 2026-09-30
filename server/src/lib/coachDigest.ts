@@ -159,13 +159,32 @@ export function buildDigestBlock(
   ].join('\n')
 }
 
+// The most a teacher's digest can ever hold, for the "what Coach knows" screen:
+// their most recently recorded subject with the numbers included. A real question
+// gets this or less, never more, so showing the maximum is the honest thing to
+// put in front of them. Deliberately NOT gated on consent — deciding whether to
+// share something requires seeing it first.
+export async function previewDigestFor(userId: string, focusMetric: string | null): Promise<string> {
+  const latest = await prisma.audioSession.findFirst({
+    where: { userId, status: { in: ['analyzed', 'locked'] } },
+    orderBy: { sessionDate: 'desc' },
+    select: { classSubject: true },
+  })
+  const sessions = await loadDigestSessions(userId, latest?.classSubject ?? null)
+  return buildDigestBlock(sessions, { includeMetrics: true, focusMetric })
+}
+
 export async function buildDigestFor(opts: {
   userId: string
   subject: string | null
   focusAreaValue: string | null
   focusMetric: string | null
+  // This teacher's own consent (User.coachDigestEnabled). Both this and the
+  // environment flag have to be true: the flag controls the rollout, the
+  // consent controls whether it applies to them.
+  enabled: boolean
 }): Promise<string> {
-  if (!DIGEST_ENABLED) return ''
+  if (!DIGEST_ENABLED || !opts.enabled) return ''
   const sessions = await loadDigestSessions(opts.userId, opts.subject)
   return buildDigestBlock(sessions, {
     includeMetrics: metricsAreRelevant(opts.focusAreaValue),

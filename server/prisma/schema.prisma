@@ -48,6 +48,11 @@ model User {
   // Teacher-controlled opt-out (Profile). When false, memory is neither
   // read nor updated — the prompt reverts to exactly today's behavior.
   coachMemoryEnabled    Boolean   @default(true)
+  // Consent for the recording digest — Coach reading what this teacher's own
+  // class recordings measured while they are in a different feature (see
+  // server/src/lib/coachDigest.ts). Deliberately separate from
+  // coachMemoryEnabled, and off until the teacher says otherwise.
+  coachDigestEnabled    Boolean   @default(false)
   organizationId        String? // null = independent teacher, not part of any district
   organization          Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   // "free" | "plus" — individual self-serve billing. Independent of
