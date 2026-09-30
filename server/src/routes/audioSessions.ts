@@ -4,6 +4,7 @@ import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { analyzeTranscript, buildContentExhibits, detectLessonContent, type Segment } from '../lib/audioAnalysis.ts'
 import { enrichLessonContent } from '../lib/lessonObjective.ts'
 import { checkFeatureAccess, hasActivePlan, startOfCurrentMonth } from '../lib/billing.ts'
+import { cachedSystem, cacheStats } from '../lib/promptCache.ts'
 import {
   applyMemoryUpdate,
   buildMemoryContextBlock,
@@ -120,11 +121,25 @@ function parseContentNotes(text: string, exhibits: { text: string; timestampSec:
 
 type ReflectMessage = { role: 'user' | 'assistant'; text: string; createdAt: string }
 
-export function buildReflectSystemPrompt(context: string[], teacherName: string | null, spoken = false): string {
+// Returned in two halves so the one that is identical for every teacher can sit
+// behind a cache breakpoint — see lib/promptCache.ts. The teacher's name used to
+// open this prompt, which made the whole of it per-teacher and so uncacheable;
+// it now introduces the session facts instead, next to the other things that are
+// true only of this conversation.
+//
+// CORE_COACHING_RULES stays at the very END, after the session facts, and must
+// not be hoisted into `stable` to make that half longer: `context` arrives from
+// the client, and the instruction-priority and privacy notices are deliberately
+// the last thing Coach reads.
+export function buildReflectSystemPrompt(
+  context: string[],
+  teacherName: string | null,
+  spoken = false,
+): { stable: string; volatile: string } {
   const nameLine = teacherName
-    ? `The teacher's name is ${teacherName} — use it naturally now and then, the way a warm colleague would in conversation, never in every single reply and never forced.`
+    ? `The teacher's name is ${teacherName} — use it naturally now and then, the way a warm colleague would in conversation, never in every single reply and never forced.\n\n`
     : ''
-  return `You are Coach — warm, friendly, funny, and genuinely encouraging, having a short, real-time reflective conversation with a teacher right after their own class recording was analyzed. ${nameLine}
+  const stable = `You are Coach — warm, friendly, funny, and genuinely encouraging, having a short, real-time reflective conversation with a teacher right after their own class recording was analyzed.
 
 This is not a written report — it's a live, back-and-forth chat, so talk like a real person: keep every
 reply short and to the point (1-3 sentences, no filler or throat-clearing), grounded only in the facts
@@ -174,9 +189,11 @@ new topic either, say so for that topic specifically.
 When you reference a specific moment from the context below, name its timestamp explicitly (e.g.,
 "around 12:40") rather than describing it vaguely.
 
-Write in plain text only — no markdown (no **bold**, no # headings, no bullet lists).
+Write in plain text only — no markdown (no **bold**, no # headings, no bullet lists).`
 
-Here is what's known about this session, and safe to reference (only measured or confidently-zero data —
+  const volatile = `
+
+${nameLine}Here is what's known about this session, and safe to reference (only measured or confidently-zero data —
 nothing here is a guess):
 ${context.map((line) => `- ${line}`).join('\n')}
 
@@ -184,6 +201,8 @@ If the teacher asks about something not covered above, say plainly that the data
 than guessing.
 ${TRANSCRIPT_RELIABILITY_NOTICE}
 ${CORE_COACHING_RULES}`
+
+  return { stable, volatile }
 }
 
 function isValidStatus(value: unknown): value is string {
@@ -628,6 +647,7 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
     // Memory is read every turn but rewritten only on some — see shouldWriteMemory.
     // A start turn has no teacher message yet, so it has nothing to remember.
     const writeMemory = memoryOn && shouldWriteMemory(isStart ? 0 : userTurnCount + 1)
+    const reflectPrompt = buildReflectSystemPrompt(safeContext, session.teacherName, spoken === true)
 
     const messages = [
       ...existing.map((m) => ({ role: m.role, content: m.text })),
@@ -637,9 +657,12 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: writeMemory ? 300 + MEMORY_UPDATE_TOKEN_BUFFER : 300,
-      system: memoryOn
-        ? `${buildReflectSystemPrompt(safeContext, session.teacherName, spoken === true)}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
-        : `${buildReflectSystemPrompt(safeContext, session.teacherName, spoken === true)}${buildExperienceContextBlock(user?.experienceLevel)}`,
+      system: cachedSystem(
+        reflectPrompt.stable,
+        memoryOn
+          ? `${reflectPrompt.volatile}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
+          : `${reflectPrompt.volatile}${buildExperienceContextBlock(user?.experienceLevel)}`,
+      ),
       messages,
     })
     const text = response.content
@@ -647,6 +670,10 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
       .map((block) => block.text)
       .join('\n')
     flagIfUnsafe(text, 'audioSessions.reflectChat')
+    // cacheRead: 0 here means the stable half stopped caching — most likely a
+    // per-teacher detail crept above the breakpoint, or the prompt got shorter
+    // than Sonnet 5's 1024-token minimum.
+    console.log('[audio-sessions] reflect chat', cacheStats(response.usage))
     const reply = stripTag(text, 'memory_update')
 
     if (!reply) {
