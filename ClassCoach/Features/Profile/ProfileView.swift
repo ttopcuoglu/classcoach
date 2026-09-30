@@ -33,6 +33,8 @@ struct ProfileView: View {
     @State private var settingsError: String?
     @State private var updatingSettings = false
     @State private var showClearMemoryConfirm = false
+    @State private var knowledge: ProfileService.CoachKnowledge?
+    @State private var showDigestDetail = false
     @State private var joinCode = ""
     @State private var joining = false
     @State private var joinError: String?
@@ -130,9 +132,56 @@ struct ProfileView: View {
                     .disabled(updatingSettings)
                 }
             } header: {
-                Text("What Coach Remembers")
+                Text("What Coach Knows · From Your Conversations")
             } footer: {
-                Text("A short, running note about your recurring strengths and ongoing challenges, built from your Ask, Talk It Through, and Lesson Debrief Reflect conversations. It's never shown to anyone else.")
+                Text("A short, running note about your recurring strengths and ongoing challenges, built from your Ask, Talk It Through, and Lesson Debrief Reflect conversations. It's never shown to anyone else — not your school, not an administrator.")
+            }
+
+            Section {
+                if let knowledge {
+                    if knowledge.digestAvailable {
+                        Toggle("Let Coach use what my recordings measured", isOn: Binding(
+                            get: { authManager.currentUser?.coachDigestEnabled ?? knowledge.digestEnabled },
+                            set: { enabled in
+                                Task { await updateSettings(ProfileService.SettingsBody(coachDigestEnabled: enabled)) }
+                            }
+                        ))
+                        .disabled(updatingSettings)
+                    } else {
+                        Text("This isn't switched on yet. Nothing from your recordings is being shared with Coach outside Lesson Debrief.")
+                            .font(.subheadline)
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+
+                    if let preview = knowledge.digestPreview, !preview.isEmpty {
+                        // Collapsed by default: this is a wall of text in a Form,
+                        // and a teacher who wants to read it will open it.
+                        DisclosureGroup(
+                            digestConsented ? "Exactly what Coach is told" : "What Coach would be told, if you turned this on",
+                            isExpanded: $showDigestDetail
+                        ) {
+                            // The server's own words, not a tidied-up paraphrase —
+                            // a screen meant to earn trust shouldn't show
+                            // something different from what actually gets sent.
+                            Text(preview.trimmingCharacters(in: .whitespacesAndNewlines))
+                                .font(.footnote)
+                                .foregroundStyle(AppTheme.textPrimary)
+                                .textSelection(.enabled)
+                        }
+                    } else {
+                        Text("You have no analyzed recordings yet, so there's nothing here for Coach to draw on.")
+                            .font(.subheadline)
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                } else {
+                    Text("Loading…")
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+            } header: {
+                Text("From Your Class Recordings")
+            } footer: {
+                Text("Lets Coach draw on what your own recordings measured when you ask about something it relates to, so you don't have to re-explain your classroom every time. Only ever your own recordings, matched to the same subject, and only the measured numbers — never a guess. A single question sees that or less, never more.")
             }
 
             Section {
@@ -280,7 +329,18 @@ struct ProfileView: View {
             authManager.setCurrentUser(user)
             applyToFields(user)
         }
+        // Its own request — only this screen needs it, and it runs a query the
+        // rest of the profile has no use for. A failure leaves the section
+        // showing nothing rather than making the whole screen look broken.
+        knowledge = try? await ProfileService.getCoachKnowledge()
         loaded = true
+    }
+
+    /// True only when the digest is both rolled out and consented to, so the
+    /// preview's title never implies Coach is using something it isn't.
+    private var digestConsented: Bool {
+        guard let knowledge, knowledge.digestAvailable else { return false }
+        return authManager.currentUser?.coachDigestEnabled ?? knowledge.digestEnabled
     }
 
     private func applyToFields(_ user: User) {

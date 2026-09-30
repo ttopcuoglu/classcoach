@@ -24,6 +24,10 @@ struct User: Codable, Identifiable {
     let coachMemory: String?
     /// Optional so an older server response without the field still decodes.
     let coachMemoryEnabled: Bool?
+    /// Consent for Coach drawing on what this teacher's own class recordings
+    /// measured, separate from `coachMemoryEnabled` and off by default.
+    /// Optional for the same reason as the field above.
+    let coachDigestEnabled: Bool?
 
     struct Organization: Codable {
         let name: String

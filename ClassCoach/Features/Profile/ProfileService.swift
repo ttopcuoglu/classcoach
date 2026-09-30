@@ -41,12 +41,32 @@ enum ProfileService {
         var talkVoice: String?
         var experienceLevel: String?
         var coachMemoryEnabled: Bool?
+        var coachDigestEnabled: Bool?
         var clearCoachMemory: Bool?
         var joinCode: String?
     }
 
     static func updateSettings(_ body: SettingsBody) async throws -> User {
         try await APIClient.shared.request("/api/profile", method: "PUT", body: body)
+    }
+
+    /// Everything Coach can draw on about this teacher, in the words it is
+    /// given them in. `digestPreview` is the MOST a question could ever
+    /// surface — a real one is matched by subject and narrowed by focus area,
+    /// so it sees this or less, never more.
+    struct CoachKnowledge: Decodable {
+        let memory: String?
+        let memoryEnabled: Bool
+        let digestEnabled: Bool
+        let digestPreview: String?
+        /// False while the digest is still rolling out server-side, so the
+        /// screen can say nothing is being shared rather than offer a dead
+        /// switch.
+        let digestAvailable: Bool
+    }
+
+    static func getCoachKnowledge() async throws -> CoachKnowledge {
+        try await APIClient.shared.request("/api/profile/coach-knowledge")
     }
 
     private struct ResetResponse: Decodable {
