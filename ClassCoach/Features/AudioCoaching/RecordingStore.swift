@@ -121,6 +121,21 @@ enum RecordingStore {
             .sorted { $0.startedAt > $1.startedAt }
     }
 
+    /// Moves a recording to a different session id. Used when the session it
+    /// was made under no longer exists on the server and a fresh one has to
+    /// take its place — the manifest has to follow, or reconcileLocalAudio
+    /// would keep offering back a recording that has already been sent.
+    static func rekey(from oldId: String, to newId: String) throws {
+        let from = directory(for: oldId)
+        let to = directory(for: newId)
+        try? FileManager.default.removeItem(at: to)
+        try FileManager.default.moveItem(at: from, to: to)
+        if var manifest = load(sessionId: newId) {
+            manifest = Manifest(sessionId: newId, startedAt: manifest.startedAt, accumulatedSec: manifest.accumulatedSec)
+            try save(manifest)
+        }
+    }
+
     static func discard(sessionId: String) {
         try? FileManager.default.removeItem(at: directory(for: sessionId))
     }

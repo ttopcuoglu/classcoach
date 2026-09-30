@@ -223,6 +223,13 @@ struct RecordingPanelView: View {
             // The file stays until the server reports a transcript for this
             // session. Queued is not the same as safe.
             recorder.handOff()
+            // The panel is not torn down between recordings — isRecordingPhase
+            // is true whenever there is no active session — so this @State
+            // survives, and without clearing it the next Record reused this
+            // session instead of creating one. Two lessons then shared a row,
+            // and if this one had since been deleted the next recording
+            // uploaded to a session the server no longer had.
+            self.localSession = nil
             onUploadStarted()
         } catch {
             self.error = error.localizedDescription

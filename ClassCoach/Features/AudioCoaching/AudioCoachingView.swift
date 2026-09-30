@@ -185,9 +185,21 @@ struct AudioCoachingView: View {
                 self.error = "That recording was cut off before it could be saved and can't be recovered."
                 return
             }
+            // The session this was recorded under may be gone — deleted from
+            // the list, or never created because an earlier bug had two
+            // recordings share one. Uploading to it then returns "Session not
+            // found" and the recording is stranded on the phone forever. A
+            // fresh session gives it somewhere to land, and the local copy
+            // moves with it so it stops being offered back.
+            var sessionId = manifest.sessionId
+            if !sessions.contains(where: { $0.id == sessionId }) {
+                let replacement = try await AudioCoachingService.createSession(teacherName: nil)
+                try RecordingStore.rekey(from: sessionId, to: replacement.id)
+                sessionId = replacement.id
+            }
             try await AudioCoachingService.startTranscription(
-                sessionId: manifest.sessionId,
-                audioFileURL: RecordingStore.audioURL(for: manifest.sessionId),
+                sessionId: sessionId,
+                audioFileURL: RecordingStore.audioURL(for: sessionId),
                 durationSec: manifest.accumulatedSec
             )
             // Not discarded here either: this upload is queued, exactly like
