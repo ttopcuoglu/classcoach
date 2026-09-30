@@ -162,8 +162,18 @@ enum RecordingStore {
     /// recording that will only fail at the server is worse than telling them
     /// nothing, so recovery asks this first.
     static func isPlayable(sessionId: String) async -> Bool {
+        await audioDuration(sessionId: sessionId) != nil
+    }
+
+    /// How much audio the file actually holds — which is not the same as the
+    /// time the app spent believing it was recording. An interruption stops
+    /// the recorder while the clock runs on, so the manifest can claim
+    /// minutes that were never captured. Recovery reports this instead, and
+    /// falls back to the manifest only when the file cannot be read at all.
+    static func audioDuration(sessionId: String) async -> Double? {
         let asset = AVURLAsset(url: audioURL(for: sessionId))
-        guard let duration = try? await asset.load(.duration) else { return false }
-        return duration.seconds > 0.5
+        guard let duration = try? await asset.load(.duration) else { return nil }
+        let seconds = duration.seconds
+        return seconds.isFinite && seconds > 0.5 ? seconds : nil
     }
 }

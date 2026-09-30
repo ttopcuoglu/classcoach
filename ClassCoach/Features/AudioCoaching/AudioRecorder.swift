@@ -31,6 +31,10 @@ final class AudioRecorder: NSObject, ObservableObject {
     private var runStart: Date?
     private var timer: Timer?
     private var manifest: RecordingStore.Manifest?
+    /// True only when the SYSTEM paused this recording — a call, an alarm,
+    /// Siri, another app taking the microphone. A teacher's own Pause must
+    /// never be undone by an interruption ending, so the two are kept apart.
+    private var pausedByInterruption = false
 
     /// 16 kHz mono PCM, not AAC — see RecordingStore's header. AAC cannot be
     /// recovered from a recording the app never got to finish, in any
@@ -49,6 +53,57 @@ final class AudioRecorder: NSObject, ObservableObject {
         AVLinearPCMIsFloatKey: false,
         AVLinearPCMIsBigEndianKey: false,
     ]
+
+    override init() {
+        super.init()
+        // Without this the recorder was never told it had been interrupted:
+        // iOS stops it, the app keeps its timer running and still says
+        // "recording", and the file quietly ends early. Registered once rather
+        // than per recording, because the handler does nothing unless a
+        // recording is in progress.
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] note in
+            MainActor.assumeIsolated { self?.handleInterruption(note) }
+        }
+    }
+
+    private func handleInterruption(_ note: Notification) {
+        guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
+
+        switch type {
+        case .began:
+            // iOS has already stopped the recorder. pause() does the rest of
+            // the bookkeeping — accumulate the elapsed run, stop the clock so
+            // it cannot overcount, and persist the manifest.
+            guard phase == .recording else { return }
+            pausedByInterruption = true
+            pause()
+
+        case .ended:
+            guard pausedByInterruption else { return }
+            pausedByInterruption = false
+            let options = (note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt)
+                .map(AVAudioSession.InterruptionOptions.init(rawValue:)) ?? []
+            guard options.contains(.shouldResume) else { return }
+            // The session was deactivated under us; record() fails until it is
+            // back. If it still will not resume, stay paused rather than
+            // pretending: the teacher sees it is not recording, and Stop
+            // finalises and sends whatever was captured up to here.
+            try? AVAudioSession.sharedInstance().setActive(true)
+            if recorder?.record() == true {
+                runStart = Date()
+                phase = .recording
+                startTimer()
+            }
+
+        @unknown default:
+            return
+        }
+    }
 
     func start(sessionId: String) async -> Bool {
         let granted = await requestPermission()
@@ -118,6 +173,7 @@ final class AudioRecorder: NSObject, ObservableObject {
     /// the teacher getting their screen back.
     func stop() -> (elapsedSec: Double, fileURL: URL)? {
         RecordingStore.endActive()
+        pausedByInterruption = false
         stopTimer()
         if let runStart {
             accumulatedSec += Date().timeIntervalSince(runStart)
@@ -150,6 +206,7 @@ final class AudioRecorder: NSObject, ObservableObject {
 
     func reset() {
         RecordingStore.endActive()
+        pausedByInterruption = false
         stopTimer()
         recorder = nil
         manifest = nil
@@ -219,10 +276,30 @@ final class AudioRecorder: NSObject, ObservableObject {
     }
 }
 
-extension AudioRecorder: AVAudioRecorderDelegate {}
 
 func formatTimerDisplay(_ sec: Double) -> String {
     let m = Int(sec) / 60
     let s = Int(sec) % 60
     return "\(m):\(String(format: "%02d", s))"
+}
+
+// The recorder has always set itself as the delegate and implemented none of
+// it, so an encoder failure mid-lesson was invisible: the clock ran on and the
+// screen still said "recording".
+extension AudioRecorder: AVAudioRecorderDelegate {
+    nonisolated func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
+        Task { @MainActor [weak self] in
+            guard let self, self.phase == .recording else { return }
+            print("[audio] encoder failed mid-recording: \(error?.localizedDescription ?? "unknown")")
+            // Stop the clock so it stops claiming time that is not in the file.
+            // Paused rather than stopped: Stop is the teacher's, and it sends
+            // what was captured.
+            self.pause()
+        }
+    }
+
+    nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
+        guard !flag else { return }
+        print("[audio] recording did not finish cleanly")
+    }
 }

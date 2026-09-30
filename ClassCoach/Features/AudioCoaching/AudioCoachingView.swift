@@ -21,6 +21,9 @@ struct AudioCoachingView: View {
     private struct Unfinished {
         let manifest: RecordingStore.Manifest
         let playable: Bool
+        /// Read from the file, not from the manifest's clock — see
+        /// RecordingStore.audioDuration.
+        let seconds: Double
     }
 
     @State private var unfinished: Unfinished?
@@ -160,7 +163,7 @@ struct AudioCoachingView: View {
     private func unfinishedMessage(_ pending: Unfinished) -> String {
         // Thirty seconds used to round up to "about 1 minute", which read as a
         // whole minute of a lesson lost when it was a few seconds of nothing.
-        let seconds = pending.manifest.accumulatedSec
+        let seconds = pending.seconds
         let minutes = Int((seconds / 60).rounded())
         let amount = seconds < 30 ? "less than a minute" : "about \(max(1, minutes)) minute\(minutes == 1 ? "" : "s")"
         let when = pending.manifest.startedAt.formatted(date: .abbreviated, time: .shortened)
@@ -283,8 +286,12 @@ struct AudioCoachingView: View {
         // teacher is told, so it is settled before the alert appears rather
         // than after they have tapped Send.
         Task {
-            let playable = await RecordingStore.isPlayable(sessionId: recoverable.sessionId)
-            unfinished = Unfinished(manifest: recoverable, playable: playable)
+            let captured = await RecordingStore.audioDuration(sessionId: recoverable.sessionId)
+            unfinished = Unfinished(
+                manifest: recoverable,
+                playable: captured != nil,
+                seconds: captured ?? recoverable.accumulatedSec
+            )
         }
     }
 
