@@ -111,8 +111,11 @@ final class BackgroundUploader: NSObject {
         }
 
         try write("--\(boundary)\r\n")
-        try write("Content-Disposition: form-data; name=\"audio\"; filename=\"session-audio.m4a\"\r\n")
-        try write("Content-Type: audio/m4a\r\n\r\n")
+        // Described from the file, not assumed: a recording made before the
+        // move to WAV can still be waiting here, and the server hands this
+        // straight to Deepgram.
+        try write("Content-Disposition: form-data; name=\"audio\"; filename=\"session-audio.\(audioFileURL.pathExtension)\"\r\n")
+        try write("Content-Type: \(RecordingStore.mimeType(for: audioFileURL))\r\n\r\n")
 
         // Chunked so peak memory stays flat regardless of how long the class was.
         let reader = try FileHandle(forReadingFrom: audioFileURL)

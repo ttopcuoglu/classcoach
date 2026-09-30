@@ -81,8 +81,8 @@ enum AudioCoachingService {
             "/api/audio-sessions/\(sessionId)/transcribe",
             fileData: audioData,
             fieldName: "audio",
-            filename: "session-audio.m4a",
-            mimeType: "audio/m4a"
+            filename: "session-audio.\(audioFileURL.pathExtension)",
+            mimeType: RecordingStore.mimeType(for: audioFileURL)
         )
         return result.speakers
     }

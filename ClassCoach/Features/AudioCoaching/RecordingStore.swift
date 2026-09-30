@@ -18,11 +18,21 @@ import AVFoundation
 /// session it belongs to, so a recording whose upload never arrived can be
 /// found and offered back rather than silently lost.
 ///
-/// The cost is honest and worth stating: a battery death mid-recording now
-/// loses the whole lesson again. An MPEG-4 file is only finalised on `stop()`,
-/// so a recording interrupted at minute forty has all its audio and no index
-/// and will not open. `BatteryCheck` is the mitigation, and it is a warning,
-/// not a guarantee.
+/// The format is 16 kHz mono WAV, and that is the whole reason a recording now
+/// survives the app not surviving. An MPEG-4 file is only indexed on `stop()`,
+/// so a recording interrupted at minute forty held all of its audio and none of
+/// the index, and would not open — a real lesson was lost that way. Moving to a
+/// different container does not help: AAC is variable-bitrate and needs a
+/// packet table written at the end wherever it lives. Uncompressed PCM needs no
+/// index at all, so a file that stops being written mid-lesson still plays up to
+/// the moment it stopped.
+///
+/// The cost is honest and worth stating: 16 kHz mono PCM is about 1.9 MB a
+/// minute against roughly 0.27 for the AAC it replaced, so a 45-minute class is
+/// ~88 MB rather than ~12 MB. That is a worse upload on cellular, and it is the
+/// price of a lesson not being lost outright. `BatteryCheck` still warns,
+/// because a phone that dies still ends the recording — it just no longer takes
+/// the recording with it.
 enum RecordingStore {
     /// A recording ends itself here. Not a cost control — a forgotten recorder
     /// costs a couple of dollars — but a consent one. `consentConfirmed` is
@@ -39,7 +49,11 @@ enum RecordingStore {
     /// different account. A week is long enough for any real retry.
     static let keepLocalAudioDays = 7
 
-    private static let fileName = "recording.m4a"
+    private static let fileName = "recording.wav"
+    /// Recordings made before the move to WAV. A teacher who updates the app
+    /// with one still waiting to send must not have it quietly vanish because
+    /// the code went looking for a different name.
+    private static let legacyFileName = "recording.m4a"
 
     struct Manifest: Codable {
         let sessionId: String
@@ -56,8 +70,22 @@ enum RecordingStore {
         root.appendingPathComponent(sessionId, isDirectory: true)
     }
 
+    /// Where this session's audio is, whichever format it was recorded in. A
+    /// new recording has neither file yet and gets the current name.
     static func audioURL(for sessionId: String) -> URL {
-        directory(for: sessionId).appendingPathComponent(fileName)
+        let dir = directory(for: sessionId)
+        let current = dir.appendingPathComponent(fileName)
+        if FileManager.default.fileExists(atPath: current.path) { return current }
+        let legacy = dir.appendingPathComponent(legacyFileName)
+        if FileManager.default.fileExists(atPath: legacy.path) { return legacy }
+        return current
+    }
+
+    /// What to tell the server a file is. Derived from the file rather than
+    /// hardcoded, because a legacy .m4a awaiting recovery still has to be
+    /// described correctly — the server passes this straight to Deepgram.
+    static func mimeType(for url: URL) -> String {
+        url.pathExtension.lowercased() == "wav" ? "audio/wav" : "audio/m4a"
     }
 
     private static func manifestURL(for sessionId: String) -> URL {

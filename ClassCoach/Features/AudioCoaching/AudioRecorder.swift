@@ -32,11 +32,22 @@ final class AudioRecorder: NSObject, ObservableObject {
     private var timer: Timer?
     private var manifest: RecordingStore.Manifest?
 
+    /// 16 kHz mono PCM, not AAC — see RecordingStore's header. AAC cannot be
+    /// recovered from a recording the app never got to finish, in any
+    /// container, because it needs a packet table written at the end. PCM needs
+    /// no index, so an interrupted file still holds everything up to the moment
+    /// it stopped. 16 kHz mono is also what speech recognition actually uses;
+    /// the 44.1 kHz this replaced was downsampled at the other end anyway.
+    ///
+    /// AVAudioRecorder takes the container from the file extension, so this
+    /// pairs with RecordingStore.fileName being .wav.
     private static let settings: [String: Any] = [
-        AVFormatIDKey: kAudioFormatMPEG4AAC,
-        AVSampleRateKey: 44100,
+        AVFormatIDKey: kAudioFormatLinearPCM,
+        AVSampleRateKey: 16000,
         AVNumberOfChannelsKey: 1,
-        AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue,
+        AVLinearPCMBitDepthKey: 16,
+        AVLinearPCMIsFloatKey: false,
+        AVLinearPCMIsBigEndianKey: false,
     ]
 
     func start(sessionId: String) async -> Bool {
