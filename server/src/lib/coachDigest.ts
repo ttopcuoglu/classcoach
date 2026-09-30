@@ -1,12 +1,39 @@
 import { prisma } from './prisma.ts'
 
-// Off until a teacher-facing control exists. The digest tells Coach things the
-// teacher gave to one feature while they are using another, which is a different
-// promise from `coachMemoryEnabled` (a narrative Coach writes about them) and
-// needs its own yes — plus a screen showing them what Coach can see. Until then
-// this stays behind the environment so it can be tried on a staging deploy
-// without changing anything for a real teacher.
-export const DIGEST_ENABLED = process.env.COACH_DIGEST_ENABLED === 'true'
+// COACH_DIGEST_ENABLED takes either `true`, which switches the digest on for
+// everyone, or a comma-separated list of emails, which switches it on for only
+// those accounts. Anything else, including unset, is off for everybody.
+//
+// The list exists because the first real check of this feature found it fired
+// on zero questions — the kind of failure that raises no error and that no
+// amount of synthetic testing caught. Running it on one real account against
+// real recordings for a few days is worth more than any staging environment,
+// and it does not put a new toggle in front of every teacher to do it.
+export type DigestRollout = { everyone: boolean; emails: Set<string> }
+
+export function parseDigestRollout(raw: string | undefined): DigestRollout {
+  const value = (raw ?? '').trim()
+  if (value.toLowerCase() === 'true') return { everyone: true, emails: new Set() }
+  const emails = value
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+  return { everyone: false, emails: new Set(emails) }
+}
+
+export function isDigestAllowed(rollout: DigestRollout, email: string | null | undefined): boolean {
+  if (rollout.everyone) return true
+  if (!email) return false
+  return rollout.emails.has(email.trim().toLowerCase())
+}
+
+const ROLLOUT = parseDigestRollout(process.env.COACH_DIGEST_ENABLED)
+
+/// Whether the digest is switched on for this account at all — before their own
+/// consent is even considered.
+export function digestAvailableFor(email: string | null | undefined): boolean {
+  return isDigestAllowed(ROLLOUT, email)
+}
 
 // How many recordings back the trend line looks.
 const TREND_SESSIONS = 4
@@ -196,15 +223,16 @@ export async function previewDigestFor(userId: string, focusMetric: string | nul
 
 export async function buildDigestFor(opts: {
   userId: string
+  email: string | null
   subject: string | null
   focusAreaValue: string | null
   focusMetric: string | null
-  // This teacher's own consent (User.coachDigestEnabled). Both this and the
-  // environment flag have to be true: the flag controls the rollout, the
-  // consent controls whether it applies to them.
+  // This teacher's own consent (User.coachDigestEnabled). Both the rollout and
+  // the consent have to allow it: the rollout controls who it is switched on
+  // for, the consent controls whether they have said yes.
   enabled: boolean
 }): Promise<string> {
-  if (!DIGEST_ENABLED || !opts.enabled) return ''
+  if (!opts.enabled || !digestAvailableFor(opts.email)) return ''
   const sessions = await loadDigestSessions(opts.userId, opts.subject)
   return buildDigestBlock(sessions, {
     includeMetrics: metricsAreRelevant(opts.focusAreaValue),

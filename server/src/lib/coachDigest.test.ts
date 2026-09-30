@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { buildDigestBlock, metricsAreRelevant, selectDigestSessions, type DigestSession } from './coachDigest.ts'
+import {
+  buildDigestBlock,
+  isDigestAllowed,
+  metricsAreRelevant,
+  parseDigestRollout,
+  selectDigestSessions,
+  type DigestSession,
+} from './coachDigest.ts'
 
 // The digest hands Coach numbers about a teacher's own classroom. The ways that
 // goes wrong are all quiet: numbers shown for a question they say nothing about,
@@ -134,4 +141,39 @@ test('no subject on the question stays silent when several were recorded', () =>
 test('unlabelled recordings are never used — the digest must name the class', () => {
   assert.deepEqual(selectDigestSessions([session({ classSubject: null })], null), [])
   assert.deepEqual(selectDigestSessions([session({ classSubject: null })], 'Chemistry'), [])
+})
+
+// The rollout switch decides who sees a new toggle appear in their settings, so
+// the failure that matters is it reading as "everyone" when it shouldn't.
+test('unset or empty means nobody', () => {
+  for (const raw of [undefined, '', '   ']) {
+    const r = parseDigestRollout(raw)
+    assert.equal(r.everyone, false)
+    assert.equal(isDigestAllowed(r, 'someone@example.com'), false)
+  }
+})
+
+test('true means everyone, including an account with no email', () => {
+  const r = parseDigestRollout('true')
+  assert.equal(isDigestAllowed(r, 'anyone@example.com'), true)
+  assert.equal(isDigestAllowed(r, null), true)
+})
+
+test('a list means only those accounts', () => {
+  const r = parseDigestRollout('a@example.com, b@example.com')
+  assert.equal(isDigestAllowed(r, 'a@example.com'), true)
+  assert.equal(isDigestAllowed(r, 'B@Example.com'), true, 'email case is not the point')
+  assert.equal(isDigestAllowed(r, ' a@example.com '), true, 'nor is stray whitespace')
+  assert.equal(isDigestAllowed(r, 'c@example.com'), false)
+  assert.equal(isDigestAllowed(r, null), false)
+})
+
+test('a value that is neither true nor an email list switches nobody on', () => {
+  for (const raw of ['false', '1', 'yes', 'TRUE ']) {
+    const r = parseDigestRollout(raw)
+    const on = isDigestAllowed(r, 'someone@example.com')
+    // "TRUE " is trimmed and lowercased, so it counts as everyone; the rest are
+    // treated as a one-item allowlist that no real email matches.
+    assert.equal(on, raw.trim().toLowerCase() === 'true')
+  }
 })

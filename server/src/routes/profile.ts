@@ -5,7 +5,7 @@ import { resolveJoinCode } from '../lib/organization.ts'
 import { prisma } from '../lib/prisma.ts'
 import { isValidExperienceLevel } from '../lib/experience.ts'
 import { isValidTalkVoice } from '../lib/talkVoices.ts'
-import { DIGEST_ENABLED, previewDigestFor } from '../lib/coachDigest.ts'
+import { digestAvailableFor, previewDigestFor } from '../lib/coachDigest.ts'
 
 export const profileRouter = Router()
 
@@ -185,6 +185,7 @@ profileRouter.get('/coach-knowledge', async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.userId },
     select: {
+      email: true,
       coachMemory: true,
       previousCoachMemory: true,
       coachMemoryEnabled: true,
@@ -207,7 +208,7 @@ profileRouter.get('/coach-knowledge', async (req, res) => {
     digestPreview: digestPreview || null,
     // False while the digest is still rolling out — the screen then explains
     // that nothing is being shared yet rather than offering a dead switch.
-    digestAvailable: DIGEST_ENABLED,
+    digestAvailable: digestAvailableFor(user.email),
   })
 })
 

@@ -247,7 +247,7 @@ debriefRouter.post('/', async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.userId },
-      select: { coachMemory: true, coachMemoryEnabled: true, experienceLevel: true, focusMetric: true, coachDigestEnabled: true },
+      select: { coachMemory: true, coachMemoryEnabled: true, experienceLevel: true, focusMetric: true, coachDigestEnabled: true, email: true },
     })
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
     // What this teacher's own recordings measured in the same subject. Empty
@@ -255,6 +255,7 @@ debriefRouter.post('/', async (req, res) => {
     // recorded, and the area is one those numbers can speak to.
     const digest = await buildDigestFor({
       userId: req.user!.userId,
+      email: user?.email ?? null,
       subject: askSubject,
       focusAreaValue: pickedArea?.value ?? null,
       focusMetric: user?.focusMetric ?? null,
@@ -565,7 +566,7 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
     prisma.debrief.findFirst({ where: { id: req.params.id, userId } }),
     prisma.user.findUnique({
       where: { id: userId },
-      select: { ...PLAN_USER_SELECT, coachMemory: true, coachMemoryEnabled: true, experienceLevel: true, focusMetric: true, coachDigestEnabled: true },
+      select: { ...PLAN_USER_SELECT, coachMemory: true, coachMemoryEnabled: true, experienceLevel: true, focusMetric: true, coachDigestEnabled: true, email: true },
     }),
   ])
   if (!debrief) {
@@ -591,6 +592,7 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
       ? Promise.resolve('')
       : buildDigestFor({
           userId,
+          email: user?.email ?? null,
           subject: debrief.subject,
           focusAreaValue: debrief.focusArea,
           focusMetric: user?.focusMetric ?? null,
@@ -734,7 +736,7 @@ debriefRouter.post('/:id/chat', async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.userId },
-      select: { coachMemory: true, coachMemoryEnabled: true, experienceLevel: true, focusMetric: true, coachDigestEnabled: true },
+      select: { coachMemory: true, coachMemoryEnabled: true, experienceLevel: true, focusMetric: true, coachDigestEnabled: true, email: true },
     })
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
     // Memory is read every turn but rewritten only on some — see shouldWriteMemory.
@@ -743,6 +745,7 @@ debriefRouter.post('/:id/chat', async (req, res) => {
       ? ''
       : await buildDigestFor({
           userId: req.user!.userId,
+          email: user?.email ?? null,
           subject: debrief.subject,
           focusAreaValue: debrief.focusArea,
           focusMetric: user?.focusMetric ?? null,
