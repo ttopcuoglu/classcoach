@@ -158,16 +158,19 @@ struct AudioCoachingView: View {
     }
 
     private func unfinishedMessage(_ pending: Unfinished) -> String {
-        let minutes = max(1, Int((pending.manifest.accumulatedSec / 60).rounded()))
-        let unit = "minute\(minutes == 1 ? "" : "s")"
+        // Thirty seconds used to round up to "about 1 minute", which read as a
+        // whole minute of a lesson lost when it was a few seconds of nothing.
+        let seconds = pending.manifest.accumulatedSec
+        let minutes = Int((seconds / 60).rounded())
+        let amount = seconds < 30 ? "less than a minute" : "about \(max(1, minutes)) minute\(minutes == 1 ? "" : "s")"
         let when = pending.manifest.startedAt.formatted(date: .abbreviated, time: .shortened)
         if pending.playable {
-            return "A recording from \(when) never finished sending — about \(minutes) \(unit) of it was saved. Send it now?"
+            return "A recording from \(when) never finished sending — \(amount) of it was saved. Send it now?"
         }
         // Say what was lost, not just that something was: "about 24 minutes"
         // is the difference between a mishap and a class the teacher needs to
         // know they have no record of.
-        return "The recording from \(when) was cut off before it could be saved — about \(minutes) \(unit) of it, and none of it can be recovered. Recording stops being recoverable if the app is closed or the phone dies before you press Stop."
+        return "The recording from \(when) was cut off before it could be saved — \(amount) of it, and none of it can be recovered. Recording stops being recoverable if the app is closed or the phone dies before you press Stop."
     }
 
     /// Merges whatever chunks survived and hands them to the same background
@@ -231,7 +234,12 @@ struct AudioCoachingView: View {
         var recoverable: RecordingStore.Manifest?
 
         for manifest in RecordingStore.stored() {
-            // Never touch the recording being made right now.
+            // Never touch the recording being made right now. Asked of the
+            // store rather than of `active`, which is nil for a recording the
+            // panel started itself — so this guard never fired, and a WAV with
+            // half a second in it was judged unrecoverable and deleted while it
+            // was still being written to.
+            if RecordingStore.activeSessionId == manifest.sessionId { continue }
             if active?.id == manifest.sessionId, isRecordingPhase { continue }
 
             // Already on its way. The server only learns a recording exists

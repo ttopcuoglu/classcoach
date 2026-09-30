@@ -92,9 +92,24 @@ enum RecordingStore {
         directory(for: sessionId).appendingPathComponent("manifest.json")
     }
 
+    /// The recording being made right now, if there is one.
+    ///
+    /// Deliberately in memory: a process that dies mid-lesson comes back with
+    /// this empty, which is exactly when the recording SHOULD be offered back.
+    /// It lives here because the list cannot ask the recorder — it does not own
+    /// one — and the session it used to compare against is never set for a
+    /// recording the panel started itself, so a live recording was being judged
+    /// as an abandoned one and deleted out from under itself.
+    private(set) static var activeSessionId: String?
+
+    static func endActive() {
+        activeSessionId = nil
+    }
+
     static func begin(sessionId: String) throws -> Manifest {
         let dir = directory(for: sessionId)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        activeSessionId = sessionId
         let manifest = Manifest(sessionId: sessionId, startedAt: Date(), accumulatedSec: 0)
         try save(manifest)
         return manifest

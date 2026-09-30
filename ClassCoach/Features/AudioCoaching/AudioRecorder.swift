@@ -117,6 +117,7 @@ final class AudioRecorder: NSObject, ObservableObject {
     /// there is no merge to wait on any more, and so nothing between Stop and
     /// the teacher getting their screen back.
     func stop() -> (elapsedSec: Double, fileURL: URL)? {
+        RecordingStore.endActive()
         stopTimer()
         if let runStart {
             accumulatedSec += Date().timeIntervalSince(runStart)
@@ -148,6 +149,7 @@ final class AudioRecorder: NSObject, ObservableObject {
     }
 
     func reset() {
+        RecordingStore.endActive()
         stopTimer()
         recorder = nil
         manifest = nil
