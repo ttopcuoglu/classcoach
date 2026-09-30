@@ -12,7 +12,18 @@ struct AudioCoachingView: View {
     /// reclaimed the app, someone force-quit it. Its chunks are still on disk
     /// (see `RecordingStore`), and this is the only thing that will ever tell
     /// the teacher so.
-    @State private var unfinished: RecordingStore.Manifest?
+    /// A recording the app never finished sending, and whether its file can
+    /// actually be opened. The two are separate facts: the manifest counts the
+    /// minutes that were recorded, while an .m4a killed before `stop()` has all
+    /// of that audio and no index. Offering "24 minutes were saved, send it?"
+    /// and only checking afterwards told a teacher they had their lesson back,
+    /// then took it away again on the next tap.
+    private struct Unfinished {
+        let manifest: RecordingStore.Manifest
+        let playable: Bool
+    }
+
+    @State private var unfinished: Unfinished?
     @State private var recovering = false
 
     private var hasTranscribing: Bool {
@@ -88,17 +99,30 @@ struct AudioCoachingView: View {
             // dismissing the alert clears `unfinished` before the button's
             // action runs, so an action that read the state instead would find
             // nil and do nothing at all — silently.
-            .alert("Unfinished recording", isPresented: Binding(
-                get: { unfinished != nil },
-                set: { if !$0 { unfinished = nil } }
-            ), presenting: unfinished) { manifest in
-                Button("Send it") { Task { await recoverUnfinished(manifest) } }
-                Button("Discard", role: .destructive) {
-                    RecordingStore.discard(sessionId: manifest.sessionId)
+            .alert(
+                unfinished?.playable == false ? "Recording lost" : "Unfinished recording",
+                isPresented: Binding(
+                    get: { unfinished != nil },
+                    set: { if !$0 { unfinished = nil } }
+                ),
+                presenting: unfinished
+            ) { pending in
+                if pending.playable {
+                    Button("Send it") { Task { await recoverUnfinished(pending.manifest) } }
+                    Button("Discard", role: .destructive) {
+                        RecordingStore.discard(sessionId: pending.manifest.sessionId)
+                    }
+                    Button("Later", role: .cancel) {}
+                } else {
+                    // Nothing to offer, but the teacher still has to be told —
+                    // a lesson they recorded is gone, and finding that out by
+                    // noticing it never appeared is worse than being told.
+                    Button("OK", role: .cancel) {
+                        RecordingStore.discard(sessionId: pending.manifest.sessionId)
+                    }
                 }
-                Button("Later", role: .cancel) {}
-            } message: { manifest in
-                Text(unfinishedMessage(manifest))
+            } message: { pending in
+                Text(unfinishedMessage(pending))
             }
             .onReceive(NotificationCenter.default.publisher(for: BackgroundUploader.didFinishUpload)) { note in
                 if let message = note.userInfo?["message"] as? String,
@@ -133,10 +157,17 @@ struct AudioCoachingView: View {
         }
     }
 
-    private func unfinishedMessage(_ manifest: RecordingStore.Manifest) -> String {
-        let minutes = max(1, Int((manifest.accumulatedSec / 60).rounded()))
-        let when = manifest.startedAt.formatted(date: .abbreviated, time: .shortened)
-        return "A recording from \(when) never finished sending — about \(minutes) minute\(minutes == 1 ? "" : "s") of it was saved. Send it now?"
+    private func unfinishedMessage(_ pending: Unfinished) -> String {
+        let minutes = max(1, Int((pending.manifest.accumulatedSec / 60).rounded()))
+        let unit = "minute\(minutes == 1 ? "" : "s")"
+        let when = pending.manifest.startedAt.formatted(date: .abbreviated, time: .shortened)
+        if pending.playable {
+            return "A recording from \(when) never finished sending — about \(minutes) \(unit) of it was saved. Send it now?"
+        }
+        // Say what was lost, not just that something was: "about 24 minutes"
+        // is the difference between a mishap and a class the teacher needs to
+        // know they have no record of.
+        return "The recording from \(when) was cut off before it could be saved — about \(minutes) \(unit) of it, and none of it can be recovered. Recording stops being recoverable if the app is closed or the phone dies before you press Stop."
     }
 
     /// Merges whatever chunks survived and hands them to the same background
@@ -147,9 +178,8 @@ struct AudioCoachingView: View {
         recovering = true
         defer { recovering = false }
         do {
-            // A recording the app never got to finish has no index and will
-            // not open — better to say so than to send something the server
-            // can only reject.
+            // Checked again rather than trusted: the alert settled this before
+            // it appeared, but a file can go between then and the tap.
             guard await RecordingStore.isPlayable(sessionId: manifest.sessionId) else {
                 RecordingStore.discard(sessionId: manifest.sessionId)
                 self.error = "That recording was cut off before it could be saved and can't be recovered."
@@ -205,11 +235,21 @@ struct AudioCoachingView: View {
                 // In flight on the server. Hold the copy, say nothing.
                 continue
             default:
-                // Never arrived, failed, or the session is gone. Offer it back.
+                // Never arrived, failed, or the session is gone.
                 if recoverable == nil { recoverable = manifest }
             }
         }
-        unfinished = recoverable
+        guard let recoverable else {
+            unfinished = nil
+            return
+        }
+        // Whether the file opens decides which of two different things the
+        // teacher is told, so it is settled before the alert appears rather
+        // than after they have tapped Send.
+        Task {
+            let playable = await RecordingStore.isPlayable(sessionId: recoverable.sessionId)
+            unfinished = Unfinished(manifest: recoverable, playable: playable)
+        }
     }
 
     private func open(_ session: AudioSession) async {
