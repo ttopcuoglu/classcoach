@@ -56,6 +56,8 @@ enum ProfileService {
     /// so it sees this or less, never more.
     struct CoachKnowledge: Decodable {
         let memory: String?
+        /// Whether there is an earlier version of the note to go back to.
+        let hasPreviousMemory: Bool
         let memoryEnabled: Bool
         let digestEnabled: Bool
         let digestPreview: String?
@@ -67,6 +69,12 @@ enum ProfileService {
 
     static func getCoachKnowledge() async throws -> CoachKnowledge {
         try await APIClient.shared.request("/api/profile/coach-knowledge")
+    }
+
+    /// One step back. Swaps the current note with the one it replaced, so
+    /// undoing an undo works too.
+    static func restoreCoachMemory() async throws -> User {
+        try await APIClient.shared.request("/api/profile/coach-memory/restore", method: "POST")
     }
 
     private struct ResetResponse: Decodable {

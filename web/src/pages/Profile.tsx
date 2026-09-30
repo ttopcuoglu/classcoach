@@ -5,6 +5,7 @@ import {
   createCheckoutSession,
   deleteAccount,
   getCoachKnowledge,
+  restoreCoachMemory,
   getProfile,
   getTelegramStatus,
   resetData,
@@ -71,6 +72,8 @@ export default function Profile() {
   const [resetError, setResetError] = useState<string | null>(null)
   const [resetDone, setResetDone] = useState(false)
 
+  const [hasPreviousMemory, setHasPreviousMemory] = useState(false)
+  const [restoringMemory, setRestoringMemory] = useState(false)
   const [coachDigestEnabled, setCoachDigestEnabled] = useState(false)
   const [digestPreview, setDigestPreview] = useState<string | null>(null)
   const [digestAvailable, setDigestAvailable] = useState(false)
@@ -101,6 +104,7 @@ export default function Profile() {
     // query the rest of the profile has no use for.
     getCoachKnowledge()
       .then((k) => {
+        setHasPreviousMemory(k.hasPreviousMemory)
         setCoachDigestEnabled(k.digestEnabled)
         setDigestPreview(k.digestPreview)
         setDigestAvailable(k.digestAvailable)
@@ -218,6 +222,22 @@ export default function Profile() {
       setClearMemoryError('Could not clear this. Please try again.')
     } finally {
       setClearingMemory(false)
+    }
+  }
+
+  // One step back, not a full history: the note Coach replaced on its last
+  // write. Swapping rather than discarding means this undoes itself, so a
+  // teacher who goes back and preferred the newer one isn't stuck.
+  async function handleRestoreMemory() {
+    setRestoringMemory(true)
+    setClearMemoryError(null)
+    try {
+      const updated = await restoreCoachMemory()
+      setCoachMemory(updated.coachMemory)
+    } catch {
+      setClearMemoryError('Could not go back. Please try again.')
+    } finally {
+      setRestoringMemory(false)
     }
   }
 
@@ -424,6 +444,16 @@ export default function Profile() {
             >
               {clearingMemory ? 'Clearing...' : 'Clear what Coach remembers'}
             </button>
+            {hasPreviousMemory && (
+              <button
+                type="button"
+                onClick={handleRestoreMemory}
+                disabled={restoringMemory}
+                className="rounded-full border border-hairline px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-ink/5 disabled:opacity-60"
+              >
+                {restoringMemory ? 'Going back...' : 'Go back to the previous version'}
+              </button>
+            )}
           </div>
         )}
         {clearMemoryError && <p className="mt-2 text-sm text-terracotta-600">{clearMemoryError}</p>}

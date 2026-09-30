@@ -3,7 +3,7 @@ import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { hasActivePlan, hasActivePlanFor, PLAN_USER_SELECT } from '../lib/billing.ts'
 import {
-  applyMemoryUpdate,
+  persistMemoryUpdate,
   buildMemoryContextBlock,
   MEMORY_UPDATE_INSTRUCTION,
   MEMORY_UPDATE_TOKEN_BUFFER,
@@ -337,10 +337,7 @@ debriefRouter.post('/', async (req, res) => {
     })
 
     if (memoryOn) {
-      const memoryUpdate = applyMemoryUpdate(extractTag(text, 'memory_update'), user!.coachMemory)
-      if (memoryUpdate !== user!.coachMemory) {
-        await prisma.user.update({ where: { id: req.user!.userId }, data: { coachMemory: memoryUpdate } })
-      }
+      await persistMemoryUpdate(req.user!.userId, extractTag(text, 'memory_update'), user!.coachMemory)
     }
 
     res.status(201).json(debrief)
@@ -548,10 +545,7 @@ debriefRouter.post('/talk/stream', async (req, res) => {
     },
     afterPersist: memoryOn
       ? async (rawText) => {
-          const updated = applyMemoryUpdate(extractTag(rawText, 'memory_update'), user!.coachMemory)
-          if (updated !== user!.coachMemory) {
-            await prisma.user.update({ where: { id: userId }, data: { coachMemory: updated } })
-          }
+          await persistMemoryUpdate(userId, extractTag(rawText, 'memory_update'), user!.coachMemory)
         }
       : undefined,
   })
@@ -640,10 +634,7 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
       }),
     afterPersist: writeMemory
       ? async (rawText) => {
-          const updated = applyMemoryUpdate(extractTag(rawText, 'memory_update'), user!.coachMemory)
-          if (updated !== user!.coachMemory) {
-            await prisma.user.update({ where: { id: userId }, data: { coachMemory: updated } })
-          }
+          await persistMemoryUpdate(userId, extractTag(rawText, 'memory_update'), user!.coachMemory)
         }
       : undefined,
   })
@@ -701,10 +692,7 @@ debriefRouter.post('/talk', async (req, res) => {
     if (followUp) await markFollowUpAnswered(followUp.id, debrief.id)
 
     if (memoryOn) {
-      const memoryUpdate = applyMemoryUpdate(extractTag(text, 'memory_update'), user!.coachMemory)
-      if (memoryUpdate !== user!.coachMemory) {
-        await prisma.user.update({ where: { id: req.user!.userId }, data: { coachMemory: memoryUpdate } })
-      }
+      await persistMemoryUpdate(req.user!.userId, extractTag(text, 'memory_update'), user!.coachMemory)
     }
 
     res.status(201).json(debrief)
@@ -797,10 +785,7 @@ debriefRouter.post('/:id/chat', async (req, res) => {
     })
 
     if (writeMemory) {
-      const memoryUpdate = applyMemoryUpdate(extractTag(text, 'memory_update'), user!.coachMemory)
-      if (memoryUpdate !== user!.coachMemory) {
-        await prisma.user.update({ where: { id: req.user!.userId }, data: { coachMemory: memoryUpdate } })
-      }
+      await persistMemoryUpdate(req.user!.userId, extractTag(text, 'memory_update'), user!.coachMemory)
     }
 
     res.json(updated)

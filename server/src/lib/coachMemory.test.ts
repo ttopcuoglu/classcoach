@@ -42,3 +42,20 @@ test('a long conversation writes a small fraction of its turns', () => {
 test('a turn with no memory tag leaves what was already stored alone', () => {
   assert.equal(applyMemoryUpdate(null, 'Recurring: wait time in 3rd period.'), 'Recurring: wait time in 3rd period.')
 })
+
+// persistMemoryUpdate only moves the old note into previousCoachMemory when the
+// write actually changes something. That guard is `updated === previous`, so
+// these pin the two cases it turns on — otherwise a run of no-op turns would
+// quietly spend the undo and leave it pointing at the live text.
+test('an unchanged note is returned identically, so a no-op write is skippable', () => {
+  const note = 'Recurring: wait time in 3rd period.'
+  assert.equal(applyMemoryUpdate(note, note), note)
+  assert.equal(applyMemoryUpdate(null, note), note)
+  assert.equal(applyMemoryUpdate('   ', note), note)
+})
+
+test('a real change comes back different, so the old note gets kept', () => {
+  const before = 'Recurring: wait time in 3rd period.'
+  const after = applyMemoryUpdate('Recurring: wait time improving; new: exit tickets.', before)
+  assert.notEqual(after, before)
+})

@@ -18,7 +18,7 @@ import { generateTalkTakeaway, trimIfTruncated } from '../routes/debrief.ts'
 import { anthropic, CLAUDE_MODEL } from './anthropic.ts'
 import { hasActivePlanFor, PLAN_USER_SELECT } from './billing.ts'
 import { appendTurn, countUserTurns, TALK_TURN_CAP, toClaudeMessages, type ChatMessage } from './coachingChat.ts'
-import { applyMemoryUpdate, buildMemoryContextBlock, MEMORY_UPDATE_INSTRUCTION, MEMORY_UPDATE_TOKEN_BUFFER, shouldWriteMemory } from './coachMemory.ts'
+import { buildMemoryContextBlock, MEMORY_UPDATE_INSTRUCTION, MEMORY_UPDATE_TOKEN_BUFFER, persistMemoryUpdate, shouldWriteMemory } from './coachMemory.ts'
 import { CORE_COACHING_RULES } from './coachPersona.ts'
 import { flagIfUnsafe } from './coachSafetyCheck.ts'
 import { buildExperienceContextBlock } from './experience.ts'
@@ -388,8 +388,7 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
 
   // Bookkeeping for the next turn, after the teacher already has this one.
   if (writeMemory) {
-    const updated = applyMemoryUpdate(extractTag(raw, 'memory_update'), user.coachMemory)
-    if (updated !== user.coachMemory) await prisma.user.update({ where: { id: user.id }, data: { coachMemory: updated } })
+    await persistMemoryUpdate(user.id, extractTag(raw, 'memory_update'), user.coachMemory)
   }
 }
 

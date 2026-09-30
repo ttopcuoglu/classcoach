@@ -184,7 +184,13 @@ profileRouter.put('/', async (req, res) => {
 profileRouter.get('/coach-knowledge', async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.userId },
-    select: { coachMemory: true, coachMemoryEnabled: true, coachDigestEnabled: true, focusMetric: true },
+    select: {
+      coachMemory: true,
+      previousCoachMemory: true,
+      coachMemoryEnabled: true,
+      coachDigestEnabled: true,
+      focusMetric: true,
+    },
   })
   if (!user) {
     res.status(401).json({ error: 'Not signed in' })
@@ -193,6 +199,9 @@ profileRouter.get('/coach-knowledge', async (req, res) => {
   const digestPreview = await previewDigestFor(req.user!.userId, user.focusMetric)
   res.json({
     memory: user.coachMemory,
+    // Whether there is a version to go back to, rather than the text of it —
+    // the screen offers an undo, it doesn't preview what undoing would give.
+    hasPreviousMemory: user.previousCoachMemory != null,
     memoryEnabled: user.coachMemoryEnabled,
     digestEnabled: user.coachDigestEnabled,
     digestPreview: digestPreview || null,
@@ -200,6 +209,32 @@ profileRouter.get('/coach-knowledge', async (req, res) => {
     // that nothing is being shared yet rather than offering a dead switch.
     digestAvailable: DIGEST_ENABLED,
   })
+})
+
+// One step of undo for Coach's memory. Every write that changes it keeps what
+// it replaced (see persistMemoryUpdate), because a single bad model turn could
+// otherwise destroy weeks of accumulated context with nothing to go back to.
+// Restoring swaps the two, so undoing an undo works as well.
+profileRouter.post('/coach-memory/restore', async (req, res) => {
+  const current = await prisma.user.findUnique({
+    where: { id: req.user!.userId },
+    select: { coachMemory: true, previousCoachMemory: true },
+  })
+  if (!current) {
+    res.status(401).json({ error: 'Not signed in' })
+    return
+  }
+  if (current.previousCoachMemory == null) {
+    res.status(409).json({ error: 'There is no earlier version to go back to.' })
+    return
+  }
+  const updated = await prisma.user.update({
+    where: { id: req.user!.userId },
+    data: { coachMemory: current.previousCoachMemory, previousCoachMemory: current.coachMemory },
+    omit: SAFE_USER_OMIT,
+    include: USER_INCLUDE_ORG,
+  })
+  res.json(await withPlusAccess(updated))
 })
 
 // Clears the teacher's own data (saved scenarios, attempts, debriefs, parent
@@ -223,6 +258,7 @@ profileRouter.post('/reset', async (req, res) => {
       focusMetric: null,
       talkVoice: null,
       coachMemory: null,
+      previousCoachMemory: null,
       coachMemoryEnabled: true,
       coachDigestEnabled: false,
     },

@@ -6,7 +6,7 @@ import { enrichLessonContent } from '../lib/lessonObjective.ts'
 import { checkFeatureAccess, hasActivePlan, startOfCurrentMonth } from '../lib/billing.ts'
 import { cachedSystem, cacheStats } from '../lib/promptCache.ts'
 import {
-  applyMemoryUpdate,
+  persistMemoryUpdate,
   buildMemoryContextBlock,
   MEMORY_UPDATE_INSTRUCTION,
   MEMORY_UPDATE_TOKEN_BUFFER,
@@ -695,10 +695,7 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
     })
 
     if (writeMemory) {
-      const memoryUpdate = applyMemoryUpdate(extractTag(text, 'memory_update'), user!.coachMemory)
-      if (memoryUpdate !== user!.coachMemory) {
-        await prisma.user.update({ where: { id: req.user!.userId }, data: { coachMemory: memoryUpdate } })
-      }
+      await persistMemoryUpdate(req.user!.userId, extractTag(text, 'memory_update'), user!.coachMemory)
     }
 
     res.json(updated)

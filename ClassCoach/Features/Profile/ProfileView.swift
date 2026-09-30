@@ -34,6 +34,7 @@ struct ProfileView: View {
     @State private var updatingSettings = false
     @State private var showClearMemoryConfirm = false
     @State private var knowledge: ProfileService.CoachKnowledge?
+    @State private var showRestoreMemoryConfirm = false
     @State private var showDigestDetail = false
     @State private var joinCode = ""
     @State private var joining = false
@@ -128,6 +129,12 @@ struct ProfileView: View {
                 if let memory = authManager.currentUser?.coachMemory, !memory.isEmpty {
                     Button("Clear What Coach Remembers", role: .destructive) {
                         showClearMemoryConfirm = true
+                    }
+                    .disabled(updatingSettings)
+                }
+                if knowledge?.hasPreviousMemory == true {
+                    Button("Go Back to the Previous Version") {
+                        showRestoreMemoryConfirm = true
                     }
                     .disabled(updatingSettings)
                 }
@@ -302,6 +309,14 @@ struct ProfileView: View {
         } message: {
             Text("This deletes your saved scenarios, attempts, and Q&A history, and clears your profile fields. This can't be undone.")
         }
+        .alert("Go back to the previous version?", isPresented: $showRestoreMemoryConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Go Back") {
+                Task { await restoreMemory() }
+            }
+        } message: {
+            Text("Coach goes back to the note it kept before its last update. You can swap back again if you prefer the newer one.")
+        }
         .alert("Clear what Coach remembers?", isPresented: $showClearMemoryConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Clear", role: .destructive) {
@@ -341,6 +356,22 @@ struct ProfileView: View {
     private var digestConsented: Bool {
         guard let knowledge, knowledge.digestAvailable else { return false }
         return authManager.currentUser?.coachDigestEnabled ?? knowledge.digestEnabled
+    }
+
+    /// One step back, not a full history — the note Coach replaced on its
+    /// last write. Refreshes `knowledge` afterwards so the button reflects
+    /// whether there is still something to go back to.
+    private func restoreMemory() async {
+        updatingSettings = true
+        settingsError = nil
+        do {
+            let updated = try await ProfileService.restoreCoachMemory()
+            authManager.setCurrentUser(updated)
+            knowledge = try? await ProfileService.getCoachKnowledge()
+        } catch {
+            settingsError = error.localizedDescription
+        }
+        updatingSettings = false
     }
 
     private func applyToFields(_ user: User) {

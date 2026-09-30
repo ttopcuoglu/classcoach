@@ -48,6 +48,10 @@ model User {
   // Teacher-controlled opt-out (Profile). When false, memory is neither
   // read nor updated — the prompt reverts to exactly today's behavior.
   coachMemoryEnabled    Boolean   @default(true)
+  // The value coachMemory held before the last write that changed it — one
+  // step of undo, since a single bad model turn could otherwise destroy weeks
+  // of accumulated context. Null until a second write has happened.
+  previousCoachMemory   String?
   // Consent for the recording digest — Coach reading what this teacher's own
   // class recordings measured while they are in a different feature (see
   // server/src/lib/coachDigest.ts). Deliberately separate from

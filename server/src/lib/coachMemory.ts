@@ -1,3 +1,5 @@
+import { prisma } from './prisma.ts'
+
 export const MAX_COACH_MEMORY_CHARS = 2000
 
 // Headroom to add to a reply's own max_tokens whenever MEMORY_UPDATE_INSTRUCTION
@@ -54,4 +56,24 @@ export function applyMemoryUpdate(rawTag: string | null, previous: string | null
   if (rawTag == null) return previous
   const trimmed = rawTag.trim()
   return trimmed ? trimmed.slice(0, MAX_COACH_MEMORY_CHARS) : previous
+}
+
+// The only place memory is written. Centralised so the undo copy cannot be
+// forgotten at one of the seven call sites that used to hand-roll this.
+//
+// Only a write that actually CHANGES something moves the old value into
+// previousCoachMemory — otherwise a run of no-op turns (the model handed back
+// the same 150 words) would quietly consume the undo and leave it pointing at
+// the same text as the live copy.
+export async function persistMemoryUpdate(
+  userId: string,
+  rawTag: string | null,
+  previous: string | null,
+): Promise<void> {
+  const updated = applyMemoryUpdate(rawTag, previous)
+  if (updated === previous) return
+  await prisma.user.update({
+    where: { id: userId },
+    data: { coachMemory: updated, previousCoachMemory: previous },
+  })
 }

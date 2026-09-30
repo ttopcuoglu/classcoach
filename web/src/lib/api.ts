@@ -1001,6 +1001,8 @@ export function getProfile(): Promise<UserProfile> {
 // any particular one did.
 export type CoachKnowledge = {
   memory: string | null
+  /// Whether there is an earlier version to go back to.
+  hasPreviousMemory: boolean
   memoryEnabled: boolean
   digestEnabled: boolean
   digestPreview: string | null
@@ -1009,6 +1011,12 @@ export type CoachKnowledge = {
 
 export function getCoachKnowledge(): Promise<CoachKnowledge> {
   return request('/api/profile/coach-knowledge')
+}
+
+// One step back. Swaps the current note with the one it replaced, so undoing
+// an undo works too.
+export function restoreCoachMemory(): Promise<UserProfile> {
+  return request('/api/profile/coach-memory/restore', { method: 'POST' })
 }
 
 export function updateProfile(data: {
