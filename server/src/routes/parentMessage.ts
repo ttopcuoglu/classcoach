@@ -128,9 +128,9 @@ parentMessageRouter.post('/', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'parent_message')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'parent_message')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -201,9 +201,9 @@ parentMessageRouter.post('/:id/chat', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'parent_message_chat')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'parent_message_chat')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 

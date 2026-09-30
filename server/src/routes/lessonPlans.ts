@@ -382,9 +382,9 @@ lessonPlansRouter.post('/:id/presentation-generate', presentationUpload.single('
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'lesson_plan_presentation_generate')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'lesson_plan_presentation_generate')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -450,9 +450,9 @@ lessonPlansRouter.post('/:id/lesson-deck', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'lesson_plan_delivery_deck')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'lesson_plan_delivery_deck')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -506,9 +506,9 @@ lessonPlansRouter.post('/presentation-review', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'lesson_plan_presentation_review')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'lesson_plan_presentation_review')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -693,9 +693,9 @@ lessonPlansRouter.post('/feedback', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'lesson_plan_feedback')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'lesson_plan_feedback')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -730,9 +730,9 @@ lessonPlansRouter.post('/:id/chat', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'lesson_plan_chat')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'lesson_plan_chat')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -806,9 +806,9 @@ lessonPlansRouter.post('/:id/presentation-feedback', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'lesson_plan_delivery_feedback')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'lesson_plan_delivery_feedback')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -868,9 +868,9 @@ lessonPlansRouter.post('/generate', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'lesson_plan_generate')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'lesson_plan_generate')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 

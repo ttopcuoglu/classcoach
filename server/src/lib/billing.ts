@@ -14,8 +14,13 @@ const FREE_MONTHLY_LIMITS: Record<FeatureArea, number> = {
 
 // Generous soft ceilings on the paid side — not a monetization lever,
 // just the same cost-protection spirit as the existing daily ceiling.
+//
+// lesson_debrief is the one that has to stay honest about cost: a recording is
+// transcription plus several passes over the transcript, ~$0.22 for a 45-minute
+// class, so 60 a month was $13 against a $9.99 subscription. 20 is still a
+// recording every school day, which no teacher comes near.
 const PAID_MONTHLY_LIMITS: Record<FeatureArea, number> = {
-  lesson_debrief: 60,
+  lesson_debrief: 20,
   lesson_planning: 60,
   communications: 100,
 }
@@ -24,6 +29,19 @@ const UPGRADE_MESSAGES: Record<FeatureArea, string> = {
   lesson_debrief: "You've used your 3 free Lesson Debrief recordings this month. Upgrade to Wivoza Plus in Profile & Settings for unlimited recordings.",
   lesson_planning: 'Lesson Planning is part of Wivoza Plus. Upgrade in Profile & Settings to unlock it.',
   communications: 'Messages is part of Wivoza Plus. Upgrade in Profile & Settings to unlock it.',
+}
+
+// A paid teacher who reaches the soft ceiling must never be told to upgrade —
+// they already have, and UPGRADE_MESSAGES is written for the free tier, down to
+// naming the 3 free recordings they are not on. The paid ceiling is cost
+// protection, not a paywall, so it says what it actually is and when it lifts.
+const PAID_CEILING_MESSAGES: Record<FeatureArea, string> = {
+  lesson_debrief:
+    "You've used this month's Lesson Debrief recordings. This resets on the 1st — get in touch if you need more before then.",
+  lesson_planning:
+    "You've used this month's Lesson Planning sessions. This resets on the 1st — get in touch if you need more before then.",
+  communications:
+    "You've used this month's Messages. This resets on the 1st — get in touch if you need more before then.",
 }
 
 export function startOfCurrentMonth(): Date {
@@ -174,8 +192,9 @@ export async function checkFeatureAccess(
 
   const paid = await hasActivePlan(userId)
   const limit = paid ? PAID_MONTHLY_LIMITS[area] : FREE_MONTHLY_LIMITS[area]
-  if (limit === 0) return { allowed: false, upgradeMessage: UPGRADE_MESSAGES[area] }
+  const message = paid ? PAID_CEILING_MESSAGES[area] : UPGRADE_MESSAGES[area]
+  if (limit === 0) return { allowed: false, upgradeMessage: message }
   const count = await countThisMonth()
-  if (count >= limit) return { allowed: false, upgradeMessage: UPGRADE_MESSAGES[area] }
+  if (count >= limit) return { allowed: false, upgradeMessage: message }
   return { allowed: true }
 }

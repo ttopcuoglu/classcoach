@@ -171,9 +171,9 @@ conversationPlanRouter.post('/', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'conversation_plan_feedback')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'conversation_plan_feedback')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -245,9 +245,9 @@ conversationPlanRouter.post('/:id/chat', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'conversation_plan_chat')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'conversation_plan_chat')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 

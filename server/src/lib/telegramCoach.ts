@@ -87,7 +87,6 @@ One ask: please leave out students' full names. "A student in 3rd period" works 
 
 const NOT_LINKED_TEXT = `Hi! I'm Coach from Wivoza. To talk with me here, connect this chat to your Wivoza account first: sign in at ${APP_URL}, open Profile, and tap "Connect Telegram." If Telegram doesn't show a Start button, just paste the connect link here.`
 
-const LIMIT_TEXT = "You've reached today's limit for coaching conversations. Let's pick this up tomorrow."
 const ERROR_TEXT = "Sorry, I couldn't come up with a reply just now. Please try sending that again."
 
 // ---------------------------------------------------------------------------
@@ -338,8 +337,9 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
   }
 
   const action = debrief ? 'talk_to_me_chat' : 'talk_to_me'
-  if (!(await checkUsage(user.id, action, user))) {
-    await reply(chatId, LIMIT_TEXT)
+  const denied = await checkUsage(user.id, action, user)
+  if (denied) {
+    await reply(chatId, denied)
     return
   }
   void logUsage(user.id, action)
@@ -416,8 +416,9 @@ async function finishConversation(chatId: string, user: BotUser, debriefId: stri
     await reply(chatId, "That conversation is already wrapped up. It's in Wivoza under Talk It Through.")
     return
   }
-  if (!(await checkUsage(user.id, 'talk_to_me_takeaway', user))) {
-    await reply(chatId, LIMIT_TEXT)
+  const denied = await checkUsage(user.id, 'talk_to_me_takeaway', user)
+  if (denied) {
+    await reply(chatId, denied)
     return
   }
   void logUsage(user.id, 'talk_to_me_takeaway')

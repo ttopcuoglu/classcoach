@@ -630,9 +630,9 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'reflect_chat')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'reflect_chat')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -727,9 +727,9 @@ audioSessionsRouter.post('/:id/reflect-summary', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'audio_session_notes')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'audio_session_notes')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -805,9 +805,9 @@ audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'content_notes')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'content_notes')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -886,9 +886,9 @@ audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'rubric_lens')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'rubric_lens')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -1169,9 +1169,9 @@ audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'class_summary')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'class_summary')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 

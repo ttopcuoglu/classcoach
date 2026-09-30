@@ -652,9 +652,9 @@ assignmentCoachRouter.post('/', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'assignment_coach')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'assignment_coach')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -757,9 +757,9 @@ assignmentCoachRouter.post('/:id/chat', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'assignment_coach_chat')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'assignment_coach_chat')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -811,9 +811,9 @@ assignmentCoachRouter.post('/:id/review', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'assignment_coach_review')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'assignment_coach_review')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -865,9 +865,9 @@ assignmentCoachRouter.post('/:id/ai-resistant', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'assignment_coach_ai_resistant')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'assignment_coach_ai_resistant')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -980,9 +980,9 @@ assignmentCoachRouter.post('/:id/revise', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'assignment_coach_finalize')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'assignment_coach_finalize')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -1079,9 +1079,9 @@ assignmentCoachRouter.post('/:id/export-preview', upload.single('file'), async (
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'assignment_coach_export')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'assignment_coach_export')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -1191,9 +1191,9 @@ assignmentCoachRouter.post('/:id/refine', async (req, res) => {
 
   const isRedesign = session.mode === 'redesign_ai'
   const usageAction = isRedesign ? 'assignment_coach_ai_resistant' : 'assignment_coach_review'
-  const allowed = await checkAndLogUsage(req.user!.userId, usageAction)
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, usageAction)
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 

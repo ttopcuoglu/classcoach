@@ -235,9 +235,9 @@ debriefRouter.post('/', async (req, res) => {
   const askTopic =
     asksAboutContent && typeof topic === 'string' && topic.trim() ? topic.trim().slice(0, 120) : null
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'debrief_feedback')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'debrief_feedback')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -496,8 +496,9 @@ debriefRouter.post('/talk/stream', async (req, res) => {
     where: { id: userId },
     select: { ...PLAN_USER_SELECT, coachMemory: true, coachMemoryEnabled: true, experienceLevel: true },
   })
-  if (!(await checkUsage(userId, 'talk_to_me', user))) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const talkDenied = await checkUsage(userId, 'talk_to_me', user)
+  if (talkDenied) {
+    res.status(429).json({ error: talkDenied })
     return
   }
   // Recording the call is accounting, not a precondition. Started here and
@@ -573,8 +574,9 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
   }
 
   const action = isTalk ? 'talk_to_me_chat' : 'debrief_chat'
-  if (!(await checkUsage(userId, action, user))) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const chatDenied = await checkUsage(userId, action, user)
+  if (chatDenied) {
+    res.status(429).json({ error: chatDenied })
     return
   }
   // Accounting, overlapped with the reply rather than run ahead of it.
@@ -626,9 +628,9 @@ debriefRouter.post('/talk', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'talk_to_me')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'talk_to_me')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -706,9 +708,9 @@ debriefRouter.post('/:id/chat', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, isTalk ? 'talk_to_me_chat' : 'debrief_chat')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, isTalk ? 'talk_to_me_chat' : 'debrief_chat')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -876,9 +878,9 @@ debriefRouter.post('/:id/takeaway', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'talk_to_me_takeaway')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'talk_to_me_takeaway')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 

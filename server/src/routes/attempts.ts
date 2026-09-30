@@ -73,9 +73,9 @@ attemptsRouter.post('/', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'attempt_feedback')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'attempt_feedback')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 
@@ -156,9 +156,9 @@ attemptsRouter.post('/:id/chat', async (req, res) => {
     return
   }
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'attempt_chat')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'attempt_chat')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 

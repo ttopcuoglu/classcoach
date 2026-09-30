@@ -80,9 +80,9 @@ scenariosRouter.post('/generate', async (req, res) => {
   const chosenTopic =
     asksAboutContent && typeof topic === 'string' && topic.trim() ? topic.trim().slice(0, 120) : null
 
-  const allowed = await checkAndLogUsage(req.user!.userId, 'scenario_generate')
-  if (!allowed) {
-    res.status(429).json({ error: "You've reached today's practice limit — try again tomorrow." })
+  const denied = await checkAndLogUsage(req.user!.userId, 'scenario_generate')
+  if (denied) {
+    res.status(429).json({ error: denied })
     return
   }
 

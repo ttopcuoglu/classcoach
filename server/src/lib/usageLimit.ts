@@ -1,4 +1,4 @@
-import { hasActivePlanFor, isDemoAccount, PLAN_USER_SELECT, type PlanUser } from './billing.ts'
+import { hasActivePlanFor, isDemoAccount, PLAN_USER_SELECT, startOfCurrentMonth, type PlanUser } from './billing.ts'
 import { prisma } from './prisma.ts'
 
 const DAILY_ACTION_LIMIT = Number(process.env.DAILY_ACTION_LIMIT) || 50
@@ -18,6 +18,24 @@ const PAID_DAILY_ACTION_LIMIT = Number(process.env.PAID_DAILY_ACTION_LIMIT) || 1
 // bounded (this is a shared API key), just bounded per-conversation-ish rather
 // than punishing depth.
 const DAILY_CONVERSATION_LIMIT = Number(process.env.DAILY_CONVERSATION_LIMIT) || 400
+
+// A daily ceiling bounds one bad day; it says nothing about a teacher who sits
+// at it. 400 conversational turns a day across a school month is ~8,000 calls —
+// more than the subscription is worth — and on the free tier it is unbounded
+// cost against no revenue at all, since Talk It Through and Ask are free
+// forever. So the conversational bucket carries a monthly ceiling as well as a
+// daily one: 300 free (15 turns a school day) and 1200 paid (60 a day), both far
+// above what a real teacher uses and both retunable from the environment
+// without a deploy.
+const MONTHLY_CONVERSATION_LIMIT = Number(process.env.MONTHLY_CONVERSATION_LIMIT) || 300
+const PAID_MONTHLY_CONVERSATION_LIMIT = Number(process.env.PAID_MONTHLY_CONVERSATION_LIMIT) || 1200
+
+// A denied call has to say which window it hit. "Try again tomorrow" is simply
+// untrue of a ceiling that resets on the 1st, and a teacher who reads it will
+// come back tomorrow and be told exactly the same thing.
+export const DAILY_LIMIT_MESSAGE = "You've reached today's practice limit — try again tomorrow."
+export const MONTHLY_LIMIT_MESSAGE =
+  "You've used this month's coaching conversations. This resets on the 1st — and Talk It Through is always here again then."
 
 export type UsageAction =
   | 'scenario_generate'
@@ -77,7 +95,9 @@ export type UsageUser = PlanUser
 // Reads only. Says whether this call is allowed, without recording it —
 // separated from the write so a caller on a latency-sensitive path can let
 // the recording happen alongside the Claude request instead of ahead of it.
-export async function checkUsage(userId: string, action: UsageAction, user?: UsageUser | null): Promise<boolean> {
+// Returns null when the call is allowed, or the message to show the teacher
+// when it is not — so no caller has to guess which window was hit.
+export async function checkUsage(userId: string, action: UsageAction, user?: UsageUser | null): Promise<string | null> {
   // One row, selected once, answers both the exemption check below and the
   // plan check further down. Callers that already have it pass it in; the
   // rest get a single query where there used to be two.
@@ -86,7 +106,7 @@ export async function checkUsage(userId: string, action: UsageAction, user?: Usa
       ? user
       : await prisma.user.findUnique({ where: { id: userId }, select: PLAN_USER_SELECT })
   // Superadmin and App Store review demo logins are logged but never capped.
-  if (loaded?.role === 'superadmin' || isDemoAccount(loaded?.email)) return true
+  if (loaded?.role === 'superadmin' || isDemoAccount(loaded?.email)) return null
 
   const startOfDay = new Date()
   startOfDay.setHours(0, 0, 0, 0)
@@ -94,22 +114,31 @@ export async function checkUsage(userId: string, action: UsageAction, user?: Usa
   // Two independent buckets: a long Talk It Through session can no longer
   // exhaust the budget that Lesson Debrief analysis or plan generation needs.
   const conversational = CONVERSATIONAL_ACTIONS.includes(action)
-  const countToday = await prisma.usageLog.count({
-    where: {
-      userId,
-      createdAt: { gte: startOfDay },
-      action: conversational
-        ? { in: [...CONVERSATIONAL_ACTIONS] }
-        : { notIn: [...CONVERSATIONAL_ACTIONS] },
-    },
-  })
+  const bucket = conversational
+    ? { in: [...CONVERSATIONAL_ACTIONS] }
+    : { notIn: [...CONVERSATIONAL_ACTIONS] }
 
-  const limit = conversational
+  // Both windows together rather than one after the other: this runs before
+  // Claude is even asked, and the teacher waits through all of it.
+  const [countToday, countThisMonth] = await Promise.all([
+    prisma.usageLog.count({ where: { userId, createdAt: { gte: startOfDay }, action: bucket } }),
+    conversational
+      ? prisma.usageLog.count({ where: { userId, createdAt: { gte: startOfCurrentMonth() }, action: bucket } })
+      : Promise.resolve(0),
+  ])
+
+  const paid = hasActivePlanFor(loaded)
+  const dailyLimit = conversational
     ? DAILY_CONVERSATION_LIMIT
-    : hasActivePlanFor(loaded)
+    : paid
       ? PAID_DAILY_ACTION_LIMIT
       : DAILY_ACTION_LIMIT
-  return countToday < limit
+  if (countToday >= dailyLimit) return DAILY_LIMIT_MESSAGE
+
+  const monthlyLimit = paid ? PAID_MONTHLY_CONVERSATION_LIMIT : MONTHLY_CONVERSATION_LIMIT
+  if (conversational && countThisMonth >= monthlyLimit) return MONTHLY_LIMIT_MESSAGE
+
+  return null
 }
 
 // The write half. Failing to record a call must never fail the call itself:
@@ -127,9 +156,9 @@ export async function logUsage(userId: string, action: UsageAction): Promise<voi
 // Counts today's Claude-costing calls for this user and logs this one if
 // they're still under the applicable daily cap. One shared API key funds every
 // teacher's usage, so this is the cost-protection backstop for a public app.
-export async function checkAndLogUsage(userId: string, action: UsageAction): Promise<boolean> {
-  const allowed = await checkUsage(userId, action)
-  if (!allowed) return false
+export async function checkAndLogUsage(userId: string, action: UsageAction): Promise<string | null> {
+  const denied = await checkUsage(userId, action)
+  if (denied) return denied
   await logUsage(userId, action)
-  return true
+  return null
 }
