@@ -239,7 +239,16 @@ struct AudioCoachingView: View {
             // still reads "setup" — which used to be read as "never sent" and
             // offered back. Each "Send it" then queued another copy of the same
             // file, and they competed for the same connection.
-            if BackgroundUploader.shared.isUploading(sessionId: manifest.sessionId) { continue }
+            //
+            // Only when it can actually land, though. An upload aimed at a
+            // session the server does not have will retry for days and never
+            // arrive, and skipping it left the recording neither sent nor
+            // offered back — invisible. Those get abandoned so recovery can
+            // give the recording a session that exists.
+            if BackgroundUploader.shared.isUploading(sessionId: manifest.sessionId) {
+                if byId[manifest.sessionId] != nil { continue }
+                BackgroundUploader.shared.cancelUploads(sessionId: manifest.sessionId)
+            }
 
             if manifest.startedAt < cutoff {
                 RecordingStore.discard(sessionId: manifest.sessionId)

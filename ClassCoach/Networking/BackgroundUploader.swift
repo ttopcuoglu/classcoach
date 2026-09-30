@@ -65,6 +65,19 @@ final class BackgroundUploader: NSObject {
         }
     }
 
+    /// Abandons any upload aimed at this session. For a task that cannot
+    /// succeed — the session it targets no longer exists, so the server can
+    /// only answer "Session not found" — background URLSession would otherwise
+    /// keep retrying it for days while the recording sat unoffered.
+    func cancelUploads(sessionId: String) {
+        lock.lock()
+        uploading.remove(sessionId)
+        lock.unlock()
+        session.getAllTasks { tasks in
+            for task in tasks where task.taskDescription == sessionId { task.cancel() }
+        }
+    }
+
     /// Whether this recording is already on its way. Checked before offering it
     /// back to the teacher.
     func isUploading(sessionId: String) -> Bool {
