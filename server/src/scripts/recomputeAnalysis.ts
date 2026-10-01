@@ -4,7 +4,7 @@ import { enrichLessonContent } from '../lib/lessonObjective.ts'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { buildContentExhibits } from '../lib/audioAnalysis.ts'
 import { extractTag } from '../lib/extractTag.ts'
-import { buildClassSummarySystemPrompt } from '../routes/audioSessions.ts'
+import { buildClassSummarySystemPrompt, normalizeParagraphs } from '../routes/audioSessions.ts'
 import { prisma } from '../lib/prisma.ts'
 
 // Re-runs the analysis over a session's stored transcript.
@@ -29,7 +29,9 @@ const write = args.includes('--write')
 const latest = args.includes('--latest')
 const list = args.includes('--list')
 /// Opt-in: the narrative costs its own model call, and most recomputes are
-/// about the counts rather than the prose.
+/// about the counts rather than the prose. Without --write it is generated
+/// and printed but not saved, so the new wording can be read before it
+/// replaces what the teacher already has.
 const withSummary = args.includes('--summary')
 const userFlag = args.indexOf('--user')
 const userEmail = userFlag === -1 ? null : args[userFlag + 1]
@@ -110,10 +112,11 @@ async function main() {
   console.log(`summary   ${lessonContent.summary ?? '—'}`)
   console.log(`connect.  ${lessonContent.connections.length} | vocab ${lessonContent.vocabulary.length}`)
 
-  if (withSummary && write) {
+  if (withSummary) {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 3000,
+      // Matches the route: the summary and its four notes are longer now.
+      max_tokens: 5000,
       thinking: { type: 'disabled' },
       system: buildClassSummarySystemPrompt(buildContentExhibits(segments), session.durationSec ?? 0, {
         teacherTalkPct: analysis.teacherTalkPct,
@@ -145,21 +148,39 @@ async function main() {
     const talkNarrative = extractTag(text, 'talk_note')
     const questionsNarrative = extractTag(text, 'questions_note')
     if (classSummary) {
-      await prisma.audioSession.update({
-        where: { id: session.id },
-        data: {
-          classSummary,
-          ...(checksNarrative ? { checksNarrative } : {}),
-          ...(climateNarrative ? { climateNarrative } : {}),
-          ...(talkNarrative ? { talkNarrative } : {}),
-          ...(questionsNarrative ? { questionsNarrative } : {}),
-        },
-      })
-      console.log(`summary   rewritten (${classSummary.split(/\n\s*\n/).length} paragraphs)`)
-      console.log(`checks    ${checksNarrative ? `${checksNarrative.split(/\s+/).length} words` : 'FAILED'}`)
-      console.log(`climate   ${climateNarrative ? `${climateNarrative.split(/\s+/).length} words` : 'FAILED'}`)
-      console.log(`talk      ${talkNarrative ? `${talkNarrative.split(/\s+/).length} words` : 'FAILED'}`)
-      console.log(`questions ${questionsNarrative ? `${questionsNarrative.split(/\s+/).length} words` : 'FAILED'}`)
+      if (write) {
+        await prisma.audioSession.update({
+          where: { id: session.id },
+          data: {
+            classSummary: normalizeParagraphs(classSummary),
+            ...(checksNarrative ? { checksNarrative: normalizeParagraphs(checksNarrative) } : {}),
+            ...(climateNarrative ? { climateNarrative: normalizeParagraphs(climateNarrative) } : {}),
+            ...(talkNarrative ? { talkNarrative: normalizeParagraphs(talkNarrative) } : {}),
+            ...(questionsNarrative ? { questionsNarrative: normalizeParagraphs(questionsNarrative) } : {}),
+          },
+        })
+      }
+      // Printed in full, written or not. The whole reason to recompute a
+      // narrative is to read it, and a dry run that only reported a word
+      // count meant the first time anyone saw the new prose was after it had
+      // already replaced the old.
+      const paragraphs = normalizeParagraphs(classSummary).split('\n\n')
+      const words = (text: string) => text.split(/\s+/).filter(Boolean).length
+      console.log(`\nsummary   ${write ? 'rewritten' : 'would be rewritten'} — ${paragraphs.length} paragraphs, ${words(classSummary)} words`)
+      for (const [i, para] of paragraphs.entries()) console.log(`\n  [${i + 1}] ${para}`)
+      for (const [label, note] of [
+        ['checks', checksNarrative],
+        ['climate', climateNarrative],
+        ['talk', talkNarrative],
+        ['questions', questionsNarrative],
+      ] as const) {
+        if (!note) {
+          console.log(`\n${label.padEnd(9)} FAILED`)
+          continue
+        }
+        console.log(`\n${label.padEnd(9)} ${normalizeParagraphs(note).split('\n\n').length} paragraphs, ${words(note)} words`)
+        console.log(`  ${normalizeParagraphs(note).split('\n\n').join('\n  ')}`)
+      }
     } else {
       console.log('summary   FAILED — left as it was')
     }

@@ -161,9 +161,11 @@ export default function AudioCoachingExport() {
           <div className="mt-5 break-inside-avoid rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-6">
             <p className="text-[11px] font-bold uppercase tracking-wide text-terracotta-600">Lesson at a glance</p>
             <div className="mt-2 flex flex-col gap-2">
-              {session.classSummary.split(/\n\s*\n/).filter(Boolean).map((para, i) => (
+              {/* Any newline starts a paragraph, not only a blank line — see
+                  splitParagraphs in AudioCoaching.tsx. */}
+              {session.classSummary.split(/\n+/).map((p) => p.trim()).filter(Boolean).map((para, i) => (
                 <p key={i} className="text-base leading-relaxed text-ink">
-                  {para.trim()}
+                  {para}
                 </p>
               ))}
             </div>

@@ -166,6 +166,10 @@ struct ReportView: View {
     @State private var focusMetric: FocusMetric?
     /// Set by a Discuss footer and consumed by Reflect on arrival.
     @State private var reflectFocus: ReflectFocus?
+    @State private var summarizing = false
+    /// One attempt per visit, so a server hiccup doesn't retry in a loop every
+    /// time the teacher comes back to this tab.
+    @State private var attemptedSummary = false
 
     private var locked: Bool { session.status == "locked" }
     private var m: OverviewMetrics { OverviewMetrics(session) }
@@ -184,6 +188,7 @@ struct ReportView: View {
                 case .summary:
                     OverviewTab(
                         session: session,
+                        summarizing: summarizing,
                         onSetFocus: { metric in focusMetric = metric; tab = .myGrowth },
                         onNavigateInsights: { target in section = target; tab = .insights },
                         onDiscuss: discuss
@@ -198,6 +203,22 @@ struct ReportView: View {
             }
 
             disclaimer
+        }
+        .task(id: tab) { await fillMissingSummary() }
+    }
+
+    /// Asks for the written summary when a report doesn't carry one. Reports
+    /// made now have it already — it is written with the rest of the report —
+    /// so this is for the older ones, which otherwise fell back to a line
+    /// assembled from the raw numbers and read nothing like the same lesson
+    /// on the website.
+    private func fillMissingSummary() async {
+        guard tab == .summary, !locked, session.classSummary == nil, !attemptedSummary else { return }
+        attemptedSummary = true
+        summarizing = true
+        defer { summarizing = false }
+        if let updated = try? await AudioCoachingService.generateClassSummary(sessionId: session.id) {
+            onUpdate(updated)
         }
     }
 

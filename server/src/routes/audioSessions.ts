@@ -642,7 +642,17 @@ audioSessionsRouter.post('/:id/tag-speaker', async (req, res) => {
     include: { segments: { orderBy: { startSec: 'asc' } } },
   })
 
-  res.json(updated)
+  // The written summary is part of the report, not something a client has to
+  // ask for. Best-effort: if it fails the teacher still gets every number and
+  // the Summary tab asks again on its own.
+  let withSummary = updated
+  try {
+    withSummary = (await writeClassSummary(req.user!.userId, updated, segments)) ?? updated
+  } catch (error) {
+    console.error('[audio-sessions] class summary during analysis failed:', error)
+  }
+
+  res.json(withSummary)
 })
 
 audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
@@ -1028,7 +1038,7 @@ export function buildClassSummarySystemPrompt(
       ? 'This is a very short clip. Write one plain, honest sentence about what little was captured and stop — there is not enough here to say anything about the teaching.'
       : recordedSec < 600
         ? 'This is a short excerpt, not a full lesson. Keep to two or three sentences, clearly scoped to what is shown below, and avoid sweeping claims.'
-        : 'This is a substantial recording. Write three short paragraphs, as described below.'
+        : 'This is a substantial recording. Write three full paragraphs, as described below — aim for 80 to 120 words each. A teacher sat through the whole lesson; two thin lines back is not worth their time. Length must come from evidence, never from padding: if a paragraph genuinely has less to stand on, write it shorter and say why.'
 
   const measured = metrics
     ? `What the recording measured. You may cite these numbers and no others:
@@ -1046,13 +1056,13 @@ ${durationGuidance}
 
 Structure, when the recording is long enough for three paragraphs:
 
-1. WHAT THE LESSON WAS ABOUT. Plain description of the content and how it was taught. No praise, no criticism.
+1. WHAT THE LESSON WAS ABOUT. Plain description of the content and how it was taught: the subject matter, what students were asked to do with it, and how the period moved from one part to the next. Walk through the lesson in order rather than listing topics. No praise, no criticism.
 
-2. WHAT WENT WELL. Name specific things this teacher actually did — a connection they drew, a question they asked, a routine that worked, a moment they gave students room. Be concrete and generous. Vague praise is worse than none.
+2. WHAT WENT WELL. Name specific things this teacher actually did — a connection they drew, a question they asked, a routine that worked, a moment they gave students room. Several of them, each tied to the moment it came from, not one line of praise. Be concrete and generous. Vague praise is worse than none.
 
 3. WHAT MIGHT BE WORTH A LOOK. Offered as questions for the teacher to weigh, not verdicts. And every one of them must be tied to the single most important caveat: THIS IS A MICROPHONE IN A ROOM. It hears the teacher clearly and students poorly. A student who spoke quietly, from the back, or in a group did not reach it. A low student-talk number may mean the room was quiet, or may mean the recording could not hear it, and you must say so rather than letting the teacher read it as a verdict on their teaching. Never tell a teacher what happened in their room that you could not hear. Where you are unsure, say what the recording could and could not show and let them judge.
 
-If a number is missing or the transcript is too thin to support a paragraph, say so plainly and write less. Writing less is always allowed.
+If a number is missing or the transcript is too thin to support a paragraph, say so plainly and write less. Writing less is always allowed — but only for want of evidence. Where the transcript does support it, write the full paragraph.
 
 ${measured}
 
@@ -1062,7 +1072,7 @@ ${exhibits.map((e, i) => `[${i + 1}] ${e.text}`).join('\n')}
 
 Write in plain text, no markdown, no headings. Separate paragraphs with a blank line. Address the teacher as "you".
 
-Then, separately, write THE CHECKS NOTE: one short paragraph for a section of
+Then, separately, write THE CHECKS NOTE: two paragraphs for a section of
 the report that shows two numbers — how many spoken checks for understanding
 were heard, and how often feedback named something specific. The numbers are
 already on that screen, so do not restate them. Say what they cannot: WHEN the
@@ -1072,7 +1082,9 @@ there is a long stretch with no check, name it as a question rather than a
 fault. Same microphone caveat applies — a check made by looking at faces or
 reading over shoulders leaves no trace here, and you must not imply its
 absence means it did not happen. If there is too little to say, say one honest
-sentence and stop.
+sentence and stop. Otherwise give it the two paragraphs: the first on what
+the checks actually were and when they fell, the second on what the feedback
+did with what students said.
 
 ${
     metrics?.cfuMoments?.length
@@ -1086,8 +1098,9 @@ ${
       : 'No feedback moments were detected.'
   }
 
-Then THE CLIMATE NOTE: one short paragraph for a section about routines,
-directions and classroom language. That section counts fixed phrases, so on a
+Then THE CLIMATE NOTE: two paragraphs for a section about routines,
+directions and classroom language. Take the first for how the class was moved
+between activities and the second for how the teacher spoke to students. That section counts fixed phrases, so on a
 perfectly well-run lesson most of its numbers are zero — a teacher who said
 "turn and talk to your partner for thirty seconds" gave a clear direction that
 the counter simply does not recognise. Never let a zero read as an absence.
@@ -1114,7 +1127,9 @@ ${
   }
 Student names: ${metrics?.nameMentions ?? 'not measured'} mentions across ${metrics?.uniqueNames ?? 'not measured'} names.
 
-Then THE TALK NOTE: one short paragraph about who was heard and for how long.
+Then THE TALK NOTE: two paragraphs about who was heard and for how long —
+the first on the shape of the teacher's talk, the second on where students got
+the floor and what that does and does not tell us.
 The numbers — teacher talk, student talk, silence — are on that screen, so do
 not restate them. Say what they cannot: where the long teacher stretches fell
 and what they were doing (explaining, setting up, recapping), where students
@@ -1123,7 +1138,8 @@ governs this section more than any other: a room microphone hears the teacher
 clearly and students poorly, so a low student number may be a quiet room or a
 mic that could not reach it, and a teacher must not read it as a verdict.
 
-Then THE QUESTIONS NOTE: one short paragraph about the questioning. Again the
+Then THE QUESTIONS NOTE: two paragraphs about the questioning — the first on
+what was asked, the second on what happened after it was asked. Again the
 counts are already on screen. Say what kinds of questions these were, whether
 they built on each other or moved on, what happened after one was asked, and
 whether answers were followed up or accepted. Be honest that the higher-order
@@ -1132,21 +1148,27 @@ might" — so a question phrased another way is counted as recall even when it
 asked for real thinking. Never let that number stand as a judgement of the
 teacher's questioning.
 
-Respond with exactly these five blocks and nothing else:
+Respond with exactly these five blocks and nothing else. The summary block
+holds all three paragraphs described above, separated by blank lines — one
+paragraph back is a failure, not a concise answer:
 <class_summary>
-Your summary.
+First paragraph: what the lesson was about.
+
+Second paragraph: what went well, specifically.
+
+Third paragraph: what might be worth a look, with the microphone caveat.
 </class_summary>
 <checks_note>
-Your one-paragraph checks note.
+Your checks note.
 </checks_note>
 <climate_note>
-Your one-paragraph climate note.
+Your climate note.
 </climate_note>
 <talk_note>
-Your one-paragraph talk note.
+Your talk note.
 </talk_note>
 <questions_note>
-Your one-paragraph questions note.
+Your questions note.
 </questions_note>
 ${CORE_COACHING_RULES}
 ${TRANSCRIPT_RELIABILITY_NOTICE}`
@@ -1175,6 +1197,130 @@ function mmss(sec: number): string {
   return `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 }
 
+/// Every client splits these narratives into paragraphs on a blank line, so a
+/// model that separated its paragraphs with a single newline instead was
+/// read as one unbroken wall of text — three paragraphs written, one
+/// paragraph shown. Any run of newlines becomes exactly one blank line.
+export function normalizeParagraphs(text: string): string {
+  return text
+    .split(/\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+/// Thrown by `writeClassSummary` when the teacher is over their monthly
+/// limit, so the route can answer 429 rather than a generic failure.
+class UsageLimitError extends Error {}
+
+/// Writes the lesson summary and the four Insights narratives for one
+/// session, and hands back the updated row.
+///
+/// Shared, because for a long time only the website asked for this: the
+/// summary was generated the first time someone opened the Summary tab on
+/// web, and the iOS app never asked at all. The same lesson therefore read
+/// differently in the two places — whoever opened the website got the
+/// written summary, and the phone fell back to a line assembled from the raw
+/// numbers. It is written once, with the rest of the report, and both clients
+/// now read the same words.
+///
+/// Returns null when there is nothing to write (over the usage limit, or the
+/// model gave back no summary), so a caller that already has a report can
+/// keep it rather than lose it to this.
+async function writeClassSummary(
+  userId: string,
+  session: {
+    id: string
+    durationSec: number | null
+    teacherTalkPct: number | null
+    studentTalkPct: number | null
+    questionCount: number | null
+    higherOrderPct: number | null
+    avgWaitTimeSec: number | null
+    cfuCount: number | null
+    cfuLog: unknown
+    feedbackLog: unknown
+    directiveLog: unknown
+    toneLog: unknown
+    redirectionLog: unknown
+    metricsDetail: unknown
+    lessonContent: unknown
+  },
+  segments: Segment[],
+) {
+  const exhibits = buildContentExhibits(segments)
+
+  // Genuinely nothing to summarize — say so plainly, no Claude call, and
+  // cache that answer so this session never re-attempts. This is the
+  // literal "don't sugarcoat" case: a recording too brief or too unclear
+  // to summarize gets told that, not a manufactured paragraph.
+  if (exhibits.length === 0) {
+    return prisma.audioSession.update({
+      where: { id: session.id },
+      data: { classSummary: "This recording didn't capture enough clear speech to summarize what the class covered." },
+      include: { segments: { orderBy: { startSec: 'asc' } } },
+    })
+  }
+
+  const denied = await checkAndLogUsage(userId, 'class_summary')
+  if (denied) throw new UsageLimitError(denied)
+
+  const response = await anthropic.messages.create({
+    model: CLAUDE_MODEL,
+    // Three paragraphs plus four section notes, each of them longer than the
+    // "one short paragraph" they used to be. Measured rather than guessed: at
+    // 900 the last block was cut off entirely and the one before it came back
+    // at a third of its length, and 3000 was sized for the shorter notes.
+    max_tokens: 5000,
+    system: buildClassSummarySystemPrompt(exhibits, session.durationSec ?? 0, {
+      teacherTalkPct: session.teacherTalkPct,
+      studentTalkPct: session.studentTalkPct,
+      questionCount: session.questionCount,
+      higherOrderPct: session.higherOrderPct,
+      avgWaitTimeSec: session.avgWaitTimeSec,
+      cfuCount: session.cfuCount,
+      studentVoiceDetected: segments.some((s) => s.speakerLabel === 'Student'),
+      cfuMoments: ((session.cfuLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 12),
+      feedbackMoments: ((session.feedbackLog ?? []) as { kind: string; timestampSec: number; text: string }[]).slice(0, 12),
+      directionMoments: ((session.directiveLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 10),
+      toneMoments: ((session.toneLog ?? []) as { kind: string; timestampSec: number; text: string }[]).slice(0, 10),
+      redirectionMoments: ((session.redirectionLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 10),
+      nameMentions: metricNumber(session.metricsDetail, 'nameMentionCount'),
+      uniqueNames: metricNumber(session.metricsDetail, 'uniqueNameCount'),
+      statedObjective: lessonContentField(session.lessonContent, 'statedObjective', 'quote'),
+      lessonSummary: lessonContentField(session.lessonContent, 'summary'),
+      connections: lessonContentQuotes(session.lessonContent, 'connections'),
+      vocabulary: lessonContentQuotes(session.lessonContent, 'vocabulary'),
+      subject: lessonContentField(session.lessonContent, 'subject'),
+    }),
+    messages: [{ role: 'user', content: 'Write the summary now.' }],
+  })
+  const text = response.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n')
+  flagIfUnsafe(text, 'audioSessions.classSummary')
+
+  const checksNarrative = extractTag(text, 'checks_note')
+  const climateNarrative = extractTag(text, 'climate_note')
+  const talkNarrative = extractTag(text, 'talk_note')
+  const questionsNarrative = extractTag(text, 'questions_note')
+  const classSummary = extractTag(text, 'class_summary')
+  if (!classSummary) return null
+
+  return prisma.audioSession.update({
+    where: { id: session.id },
+    data: {
+      classSummary: normalizeParagraphs(classSummary),
+      ...(checksNarrative ? { checksNarrative: normalizeParagraphs(checksNarrative) } : {}),
+      ...(climateNarrative ? { climateNarrative: normalizeParagraphs(climateNarrative) } : {}),
+      ...(talkNarrative ? { talkNarrative: normalizeParagraphs(talkNarrative) } : {}),
+      ...(questionsNarrative ? { questionsNarrative: normalizeParagraphs(questionsNarrative) } : {}),
+    },
+    include: { segments: { orderBy: { startSec: 'asc' } } },
+  })
+}
+
 audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
   const session = await prisma.audioSession.findFirst({
     where: { id: req.params.id, userId: req.user!.userId },
@@ -1188,6 +1334,12 @@ audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
     res.status(403).json({ error: 'This report is locked and can no longer be edited.' })
     return
   }
+  // Already written with the report, which is the normal case now — nothing
+  // to pay for a second time.
+  if (session.classSummary) {
+    res.json(session)
+    return
+  }
 
   const segments: Segment[] = session.segments.map((s) => ({
     speakerLabel: s.speakerLabel,
@@ -1195,87 +1347,19 @@ audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
     endSec: s.endSec,
     text: s.text,
   }))
-  const exhibits = buildContentExhibits(segments)
-
-  // Genuinely nothing to summarize — say so plainly, no Claude call, and
-  // cache that answer so this session never re-attempts. This is the
-  // literal "don't sugarcoat" case: a recording too brief or too unclear
-  // to summarize gets told that, not a manufactured paragraph.
-  if (exhibits.length === 0) {
-    const updated = await prisma.audioSession.update({
-      where: { id: session.id },
-      data: { classSummary: "This recording didn't capture enough clear speech to summarize what the class covered." },
-      include: { segments: { orderBy: { startSec: 'asc' } } },
-    })
-    res.json(updated)
-    return
-  }
-
-  const denied = await checkAndLogUsage(req.user!.userId, 'class_summary')
-  if (denied) {
-    res.status(429).json({ error: denied })
-    return
-  }
 
   try {
-    const response = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
-      // Three short paragraphs plus two section notes. Measured rather than
-      // guessed: at 900 the last block was cut off entirely and the one before
-      // it came back at a third of its length.
-      max_tokens: 3000,
-      system: buildClassSummarySystemPrompt(exhibits, session.durationSec ?? 0, {
-        teacherTalkPct: session.teacherTalkPct,
-        studentTalkPct: session.studentTalkPct,
-        questionCount: session.questionCount,
-        higherOrderPct: session.higherOrderPct,
-        avgWaitTimeSec: session.avgWaitTimeSec,
-        cfuCount: session.cfuCount,
-        studentVoiceDetected: segments.some((s) => s.speakerLabel === 'Student'),
-        cfuMoments: ((session.cfuLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 12),
-        feedbackMoments: ((session.feedbackLog ?? []) as { kind: string; timestampSec: number; text: string }[]).slice(0, 12),
-        directionMoments: ((session.directiveLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 10),
-        toneMoments: ((session.toneLog ?? []) as { kind: string; timestampSec: number; text: string }[]).slice(0, 10),
-        redirectionMoments: ((session.redirectionLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 10),
-        nameMentions: metricNumber(session.metricsDetail, 'nameMentionCount'),
-        uniqueNames: metricNumber(session.metricsDetail, 'uniqueNameCount'),
-        statedObjective: lessonContentField(session.lessonContent, 'statedObjective', 'quote'),
-        lessonSummary: lessonContentField(session.lessonContent, 'summary'),
-        connections: lessonContentQuotes(session.lessonContent, 'connections'),
-        vocabulary: lessonContentQuotes(session.lessonContent, 'vocabulary'),
-        subject: lessonContentField(session.lessonContent, 'subject'),
-      }),
-      messages: [{ role: 'user', content: 'Write the summary now.' }],
-    })
-    const text = response.content
-      .filter((block) => block.type === 'text')
-      .map((block) => block.text)
-      .join('\n')
-    flagIfUnsafe(text, 'audioSessions.classSummary')
-
-    const checksNarrative = extractTag(text, 'checks_note')
-    const climateNarrative = extractTag(text, 'climate_note')
-    const talkNarrative = extractTag(text, 'talk_note')
-    const questionsNarrative = extractTag(text, 'questions_note')
-    const classSummary = extractTag(text, 'class_summary')
-    if (!classSummary) {
+    const updated = await writeClassSummary(req.user!.userId, session, segments)
+    if (!updated) {
       res.status(502).json({ error: 'Could not generate a class summary. Please try again.' })
       return
     }
-
-    const updated = await prisma.audioSession.update({
-      where: { id: session.id },
-      data: {
-        classSummary,
-        ...(checksNarrative ? { checksNarrative } : {}),
-        ...(climateNarrative ? { climateNarrative } : {}),
-        ...(talkNarrative ? { talkNarrative } : {}),
-        ...(questionsNarrative ? { questionsNarrative } : {}),
-      },
-      include: { segments: { orderBy: { startSec: 'asc' } } },
-    })
     res.json(updated)
   } catch (error) {
+    if (error instanceof UsageLimitError) {
+      res.status(429).json({ error: error.message })
+      return
+    }
     console.error('[audio-sessions] class summary failed:', error)
     res.status(502).json({ error: 'Could not generate a class summary. Please try again.' })
   }

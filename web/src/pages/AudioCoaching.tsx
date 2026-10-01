@@ -1510,12 +1510,30 @@ function buildClimateInsight(
 // when lessonContent itself is null (session predates this field, or the
 // start of the lesson wasn't captured) — never speaks from nothing, same
 // discipline as every other builder in this file.
+// A written narrative, split for display. Any newline starts a new paragraph,
+// not only a blank line: a summary whose paragraphs were separated by single
+// newlines used to render as one unbroken block of text, because that is what
+// a <p> does with a bare newline.
+function splitParagraphs(text: string): string[] {
+  return text
+    .split(/\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+}
+
 function CoachNote({ text }: { text: string | null }) {
   if (!text) return null
+  const paragraphs = splitParagraphs(text)
   return (
     <div className="flex items-start gap-3 rounded-xl border border-mint-tint bg-mint-tint/60 p-4">
       <ChatBubbleIcon className="mt-0.5 h-4 w-4 shrink-0 text-forest" />
-      <p className="text-sm text-ink">{text}</p>
+      <div className="flex flex-col gap-2">
+        {paragraphs.map((para, i) => (
+          <p key={i} className="text-sm text-ink">
+            {para}
+          </p>
+        ))}
+      </div>
     </div>
   )
 }
@@ -2770,7 +2788,7 @@ function SummaryTab({
           // Three paragraphs now — content, strengths, then what to weigh —
           // so blank lines have to survive rather than collapsing into a wall.
           <div className="flex flex-col gap-3">
-            {classSummary.split(/\n\s*\n/).filter(Boolean).map((para, i) => (
+            {splitParagraphs(classSummary).map((para, i) => (
               <p key={i} className="text-base leading-relaxed text-ink">
                 {para.trim()}
               </p>

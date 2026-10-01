@@ -145,4 +145,12 @@ enum AudioCoachingService {
     static func generateRubricLens(sessionId: String) async throws -> AudioSessionWithSegments {
         try await APIClient.shared.request("/api/audio-sessions/\(sessionId)/rubric-lens", method: "POST")
     }
+
+    /// The written summary and the four Insights narratives. The server now
+    /// writes these at the end of analysis, so this only fires for a report
+    /// made before it did — without it, those older sessions read differently
+    /// here than on the website, which is exactly the bug it fixes.
+    static func generateClassSummary(sessionId: String) async throws -> AudioSessionWithSegments {
+        try await APIClient.shared.request("/api/audio-sessions/\(sessionId)/class-summary", method: "POST")
+    }
 }

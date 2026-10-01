@@ -56,6 +56,10 @@ struct OverviewMetrics {
 /// heard. Everything else lives in Insights; talking it through is Reflect.
 struct OverviewTab: View {
     let session: AudioSessionWithSegments
+    /// The written summary is on its way from the server — show the wait
+    /// rather than the numbers-only fallback, which would be replaced under
+    /// the teacher's eyes a few seconds later.
+    var summarizing = false
     let onSetFocus: (FocusMetric) -> Void
     let onNavigateInsights: (InsightsSection) -> Void
     let onDiscuss: (ReflectFocus) -> Void
@@ -80,16 +84,25 @@ struct OverviewTab: View {
             // before the reading starts rather than after it is finished.
             ListenInsteadButton(session: session)
 
-            if let glance = session.classSummary ?? noticedSummary {
+            if summarizing && session.classSummary == nil {
+                ProgressRing(
+                    active: true,
+                    estimatedSeconds: 18,
+                    label: "Putting together a summary of this lesson",
+                    hint: "Reading the whole transcript, not just the start."
+                )
+                .frame(maxWidth: .infinity)
+            } else if let glance = session.classSummary ?? noticedSummary {
                 VStack(alignment: .leading, spacing: 6) {
                     eyebrow("Lesson at a glance", AppTheme.terracotta600)
                     // Three paragraphs now — content, strengths, then what to
-                    // weigh — so the blank lines have to survive rather than
-                    // collapsing into a wall of text.
+                    // weigh. Any newline starts a new one, not only a blank
+                    // line: a summary whose paragraphs came back separated by
+                    // single newlines used to run together into a wall.
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(
-                            glance.components(separatedBy: "\n\n")
-                                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                            glance.components(separatedBy: .newlines)
+                                .map { $0.trimmingCharacters(in: .whitespaces) }
                                 .filter { !$0.isEmpty },
                             id: \.self
                         ) { para in
