@@ -13,7 +13,7 @@ import {
   shouldWriteMemory,
 } from '../lib/coachMemory.ts'
 import { buildExperienceContextBlock } from '../lib/experience.ts'
-import { CORE_COACHING_RULES, TRANSCRIPT_RELIABILITY_NOTICE } from '../lib/coachPersona.ts'
+import { CORE_COACHING_RULES, firstNameOf, TRANSCRIPT_RELIABILITY_NOTICE } from '../lib/coachPersona.ts'
 import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
 import { transcribeAudioFile } from '../lib/deepgram.ts'
 import { unlink } from 'node:fs/promises'
@@ -155,9 +155,15 @@ export function buildReflectSystemPrompt(
   context: string[],
   teacherName: string | null,
   spoken = false,
+  isStart = false,
 ): { stable: string; volatile: string } {
   const nameLine = teacherName
     ? `The teacher's name is ${teacherName} — use it naturally now and then, the way a warm colleague would in conversation, never in every single reply and never forced.\n\n`
+    : ''
+  // Coach speaks first here, so the first thing a teacher hears should sound
+  // like a colleague turning to them rather than a report being read out.
+  const greetingLine = isStart
+    ? `${teacherName ? `Open by greeting ${teacherName} by name. ` : 'Open with a warm hello. '}This is the first thing you say and the teacher has not spoken yet, so start warm and human: acknowledge that they have just finished teaching this lesson, then ask one genuine, open question to begin. Do not lead with a number.\n\n`
     : ''
   const stable = `You are Coach — warm, friendly, funny, and genuinely encouraging, having a short, real-time reflective conversation with a teacher right after their own class recording was analyzed.
 
@@ -213,7 +219,7 @@ Write in plain text only — no markdown (no **bold**, no # headings, no bullet 
 
   const volatile = `
 
-${nameLine}Here is what's known about this session, and safe to reference (only measured or confidently-zero data —
+${greetingLine}${nameLine}Here is what's known about this session, and safe to reference (only measured or confidently-zero data —
 nothing here is a guess):
 ${context.map((line) => `- ${line}`).join('\n')}
 
@@ -696,13 +702,18 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.userId },
-      select: { coachMemory: true, coachMemoryEnabled: true, experienceLevel: true },
+      select: { coachMemory: true, coachMemoryEnabled: true, experienceLevel: true, name: true },
     })
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
     // Memory is read every turn but rewritten only on some — see shouldWriteMemory.
     // A start turn has no teacher message yet, so it has nothing to remember.
     const writeMemory = memoryOn && shouldWriteMemory(isStart ? 0 : userTurnCount + 1)
-    const reflectPrompt = buildReflectSystemPrompt(safeContext, session.teacherName, spoken === true)
+    // A session carries a teacher name only when the client sent one, and iOS
+    // never did — so a lesson recorded on a phone gave Coach no name to use
+    // while the same teacher's web sessions did. The account's own name is the
+    // fallback, which also covers every session recorded before this.
+    const teacherName = firstNameOf(session.teacherName ?? user?.name)
+    const reflectPrompt = buildReflectSystemPrompt(safeContext, teacherName, spoken === true, isStart)
 
     const messages = [
       ...existing.map((m) => ({ role: m.role, content: m.text })),

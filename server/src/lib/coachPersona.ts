@@ -20,3 +20,11 @@ export const CORE_COACHING_RULES = `${INSTRUCTION_PRIORITY_NOTICE}\n${PRIVACY_NO
 // actually being interpreted (Audio Coaching's Reflect surfaces).
 export const TRANSCRIPT_RELIABILITY_NOTICE = `
 Treat the transcript as imperfect evidence. Don't assume a pause means silence, infer wait time from text spacing, assume an inaudible or unquoted student was disengaged, or treat a missing response as proof nothing happened — audio alone can't reliably show nonverbal engagement, what students wrote, or what was on a screen or board. When something is genuinely unclear or missing, say so plainly rather than guessing, and never treat missing evidence as evidence that something didn't happen.`
+
+/// A first name for Coach to say out loud. A full name read aloud sounds like
+/// a form being processed, so only the first part is kept — and a one-letter
+/// fragment is treated as no name at all.
+export function firstNameOf(name: string | null | undefined): string | null {
+  const first = name?.trim().split(/\s+/)[0]
+  return first && first.length > 1 ? first : null
+}

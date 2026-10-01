@@ -31,7 +31,9 @@ enum TalkToMeService {
     /// `followUpId` rides along only on a conversation's first turn, when it
     /// was opened from Coach's check-in; nil is left out of the JSON.
     private struct MessageBody: Encodable {
-        let message: String
+        /// Omitted entirely when Coach is opening the conversation — the
+        /// server reads a missing message as "greet them first".
+        var message: String?
         var followUpId: String?
     }
 
@@ -49,7 +51,7 @@ enum TalkToMeService {
     /// exactly the text that ends up saved.
     static func streamReply(
         debriefId: String?,
-        message: String,
+        message: String?,
         followUpId: String? = nil,
         onSentence: @MainActor @escaping (String) -> Void
     ) async throws -> Debrief {

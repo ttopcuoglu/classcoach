@@ -78,6 +78,19 @@ final class AudioRecorder: NSObject, ObservableObject {
         ) { [weak self] note in
             MainActor.assumeIsolated { self?.handleInterruption(note) }
         }
+
+        // An interruption does not always announce its end — a call taken
+        // from the lock screen, or one long enough that the system hands the
+        // microphone to someone else, can leave the recorder paused with no
+        // .ended ever arriving. Coming back to the app is the other reliable
+        // moment to try again.
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.resumeIfInterrupted() }
+        }
     }
 
     private func handleInterruption(_ note: Notification) {
@@ -94,8 +107,10 @@ final class AudioRecorder: NSObject, ObservableObject {
             pause()
 
         case .ended:
+            // The flag stays set until a resume actually succeeds, so that
+            // coming back to the app can still pick up a recording every
+            // retry below failed to restart.
             guard pausedByInterruption else { return }
-            pausedByInterruption = false
             let options = (note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt)
                 .map(AVAudioSession.InterruptionOptions.init(rawValue:)) ?? []
             // Deliberately NOT gated on .shouldResume. iOS sets that for an
@@ -106,14 +121,7 @@ final class AudioRecorder: NSObject, ObservableObject {
             // system really will not give the microphone back, record() fails
             // and we stay paused, which is where we already were.
             _ = options
-            if !resumeAfterInterruption() {
-                // The session can lag a moment behind the call ending.
-                Task { @MainActor [weak self] in
-                    try? await Task.sleep(nanoseconds: 700_000_000)
-                    guard let self, self.phase == .paused else { return }
-                    if !self.resumeAfterInterruption() { self.warnCouldNotResume() }
-                }
-            }
+            retryResume()
 
         @unknown default:
             return
@@ -196,6 +204,9 @@ final class AudioRecorder: NSObject, ObservableObject {
     }
 
     func resume() {
+        // A teacher pressing Resume themselves settles it — nothing should
+        // resume this recording again on their behalf afterwards.
+        pausedByInterruption = false
         recorder?.record()
         runStart = Date()
         phase = .recording
@@ -305,14 +316,42 @@ final class AudioRecorder: NSObject, ObservableObject {
         }
     }
 
+    /// Keeps trying to pick the recording back up, because one attempt is not
+    /// enough in practice. The microphone can still be held for a second or
+    /// two after a call ends, and a long call can end with the system never
+    /// sending the .ended notification at all. Backs off over about twelve
+    /// seconds and only tells the teacher once it has genuinely given up.
+    private func retryResume() {
+        if resumeAfterInterruption() { return }
+        Task { @MainActor [weak self] in
+            for delay in [0.7, 1.5, 3.0, 7.0] {
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                guard let self, self.pausedByInterruption, self.phase == .paused else { return }
+                if self.resumeAfterInterruption() { return }
+            }
+            self?.warnCouldNotResume()
+        }
+    }
+
+    /// The safety net for an interruption that never announces its end: coming
+    /// back to the app. A teacher who takes a call and then looks at their
+    /// phone should find the lesson still recording, not a Resume button they
+    /// have to know to press.
+    private func resumeIfInterrupted() {
+        guard pausedByInterruption, phase == .paused else { return }
+        _ = resumeAfterInterruption()
+    }
+
     /// Puts the recording back after the system took the microphone. Returns
     /// false when it could not, which leaves the recorder paused rather than
     /// claiming to record something it is not.
     @discardableResult
     private func resumeAfterInterruption() -> Bool {
         guard phase == .paused, let recorder else { return false }
+        try? AVAudioSession.sharedInstance().setCategory(.record, mode: .default)
         try? AVAudioSession.sharedInstance().setActive(true)
         guard recorder.record() else { return false }
+        pausedByInterruption = false
         runStart = Date()
         phase = .recording
         startTimer()

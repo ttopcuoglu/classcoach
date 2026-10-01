@@ -375,7 +375,7 @@ struct TalkToMeView: View {
                             phase == .error ? "Try Again" : (debrief == nil ? "Start Talking" : "Resume"),
                             systemImage: "mic.fill",
                             filled: AppTheme.accent
-                        ) { beginListening() }
+                        ) { startTalking() }
                     } else {
                         pillButton("Pause mic", filled: AppTheme.primary) { handleStop() }
                     }
@@ -678,7 +678,24 @@ struct TalkToMeView: View {
         Task { await reply(to: trimmed) }
     }
 
-    private func reply(to text: String) async {
+    /// Coach opens the conversation rather than waiting to be spoken to:
+    /// a greeting by name, then the mic. A teacher who has just pressed Start
+    /// Talking should hear a colleague say hello, not silence they have to
+    /// fill. Resuming an existing conversation still goes straight to the mic.
+    private func startTalking() {
+        guard debrief == nil, phase == .idle, !atCap else {
+            beginListening()
+            return
+        }
+        sessionActive = true
+        errorMessage = nil
+        showTypeInput = false
+        Task { await reply(to: nil) }
+    }
+
+    /// `text` is nil only for Coach's opening greeting, where there is no
+    /// teacher turn to show or send.
+    private func reply(to text: String?) async {
         userTranscript = text
         streamingReply = nil
         errorMessage = nil

@@ -1121,9 +1121,12 @@ export function sendDebriefChat(id: string, message: string): Promise<Debrief> {
 // saved Debrief once the whole reply has been generated and persisted.
 //
 // Pass no `id` to start a new Talk It Through; pass one to continue it.
+// `message` is null only when Coach opens the conversation: the server reads
+// a missing message as "greet them first", which is why it has to be left out
+// of the body rather than sent as an empty string.
 export async function streamCoachReply(
   id: string | null,
-  message: string,
+  message: string | null,
   onSentence: (sentence: string) => void,
   followUpId?: string | null,
 ): Promise<Debrief> {
@@ -1132,7 +1135,9 @@ export async function streamCoachReply(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify(id ? { message } : { message, followUpId: followUpId ?? undefined }),
+    body: JSON.stringify(
+      id ? { message } : { ...(message == null ? {} : { message }), followUpId: followUpId ?? undefined },
+    ),
   })
   // Everything the caller can act on (turn cap, daily limit) is rejected
   // before the stream starts, so it still arrives as a normal status code.

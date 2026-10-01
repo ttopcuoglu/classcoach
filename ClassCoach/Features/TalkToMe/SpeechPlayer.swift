@@ -31,6 +31,7 @@ final class SpeechPlayer: NSObject, ObservableObject {
     }
 
     private func playOne(data: Data) async {
+        PlaybackSession.activate()
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             self.continuation = continuation
             do {

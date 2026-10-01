@@ -3508,7 +3508,10 @@ function ReflectTab({
     else {
       const { focus, timestampSec } = resolveSelectedPath()
       setCurrentTimestampSec(timestampSec)
-      onStart(focus)
+      // spoken: this opener is played aloud, so Coach has to be told the
+      // teacher is listening rather than reading. Without it the one reply
+      // a teacher hears first was written to be read on a screen.
+      onStart(focus, true)
     }
   }
 

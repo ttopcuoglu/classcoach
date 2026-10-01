@@ -314,6 +314,45 @@ export default function TalkToMe() {
     start()
   }
 
+  // Coach opens the conversation rather than waiting to be spoken to: a
+  // greeting by name, then the mic. A teacher who has just pressed Start
+  // Talking should hear a colleague say hello, not silence they have to fill.
+  // Resuming an existing conversation, or a muted one with nothing to hear,
+  // still goes straight to the mic.
+  async function handleStartTalking() {
+    const audio = audioRef.current
+    if (debrief || mutedRef.current || !audio) {
+      beginListening()
+      return
+    }
+    sessionActiveRef.current = true
+    setError(null)
+    setPhase('thinking')
+    const queue = createPlaybackQueue(audio, talkVoiceRef.current, () => setPhase('speaking'))
+    queueRef.current = queue
+    try {
+      const result = await streamCoachReply(
+        null,
+        null,
+        (sentence) => {
+          if (!sessionActiveRef.current) return
+          queue.push(sentence)
+        },
+        followUpRef.current?.id,
+      )
+      setDebrief(result)
+      queue.end()
+      await queue.finished
+      queueRef.current = null
+      resumeListeningIfActive()
+    } catch (err) {
+      queue.cancel()
+      queueRef.current = null
+      if (!sessionActiveRef.current) return
+      handleTurnFailed(err as ApiError)
+    }
+  }
+
   // Only resumes if Stop/Close wasn't triggered while this turn's
   // record -> transcribe -> reply -> speak chain was already in flight.
   function resumeListeningIfActive() {
@@ -1016,7 +1055,7 @@ export default function TalkToMe() {
                 {atCap ? null : phase === 'idle' || phase === 'error' ? (
                   <button
                     type="button"
-                    onClick={beginListening}
+                    onClick={handleStartTalking}
                     className="flex items-center gap-2 rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
                   >
                     <MicIcon className="h-4 w-4" />

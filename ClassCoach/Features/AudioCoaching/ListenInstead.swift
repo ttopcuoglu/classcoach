@@ -43,15 +43,12 @@ final class LessonSpeaker: NSObject, ObservableObject {
         }
         guard !paragraphs.isEmpty else { return }
 
-        do {
-            // .spokenAudio ducks music rather than stopping it, and .playback
-            // keeps speaking with the screen locked — which is the whole point,
-            // since the phone will be in a pocket or a cradle.
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            // Speech still works without an explicit session on most devices.
-        }
+        // .spokenAudio ducks music rather than stopping it, and .playback
+        // keeps speaking with the screen locked — which is the whole point,
+        // since the phone will be in a pocket or a cradle. Shared with Coach's
+        // own voice so neither one can leave the session unplayable for the
+        // other, or take it from a lesson being recorded.
+        PlaybackSession.activate()
 
         for paragraph in paragraphs {
             let utterance = AVSpeechUtterance(string: paragraph)
@@ -68,7 +65,7 @@ final class LessonSpeaker: NSObject, ObservableObject {
     func stop() {
         synthesizer.stopSpeaking(at: .immediate)
         isSpeaking = false
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        PlaybackSession.release()
     }
 }
 

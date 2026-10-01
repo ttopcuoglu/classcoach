@@ -20,7 +20,7 @@ import {
   toClaudeMessages,
   type ChatMessage,
 } from '../lib/coachingChat.ts'
-import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
+import { CORE_COACHING_RULES, firstNameOf } from '../lib/coachPersona.ts'
 import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
 import { transcribeAudio } from '../lib/deepgram.ts'
 import { extractTag, stripStructuralTags, stripTag } from '../lib/extractTag.ts'
@@ -167,6 +167,20 @@ Since this is read aloud, sound like a warm, engaged person talking — not a sc
 - A reaction responds only to what they actually said — never fill in a detail to sound relatable (like guessing when a class meets or why students acted a certain way).
 All of this is about sounding human, not adding length — the one-idea, one-question, short-reply rules above still apply.
 ${CORE_COACHING_RULES}`
+
+/// Talk It Through used to open with the teacher talking into silence: the
+/// endpoint required a message, so Coach could not say anything until it had
+/// been spoken to. This is the synthetic first turn that lets Coach greet
+/// them instead, the same shape Reflect already used.
+export const TALK_START_MESSAGE = 'Start our conversation.'
+
+/// The greeting instruction. Kept out of TALK_SYSTEM_PROMPT on purpose —
+/// that prompt is byte-identical for every teacher so it caches once, and
+/// anything per-teacher (a name, this instruction) has to follow it.
+export function buildGreetingBlock(firstName: string | null | undefined): string {
+  const named = firstName ? ` Greet them by name — they are called ${firstName}.` : ''
+  return `\n\nThis is the first thing you say, before the teacher has said anything at all. Open the conversation yourself: a warm, short hello and one genuine, open question inviting them to say what is on their mind.${named} Two sentences at most, no advice yet, nothing about a lesson or a problem you have not been told about.\n`
+}
 
 // Manually triggered once, when the teacher taps "Finish session" — not a
 // turn in the live conversation, so no memory plumbing and no spoken-
@@ -499,20 +513,23 @@ async function markFollowUpAnswered(followUpId: string, debriefId: string) {
 
 debriefRouter.post('/talk/stream', async (req, res) => {
   const { message, followUpId } = req.body ?? {}
-  if (typeof message !== 'string' || !message.trim()) {
+  // No message at all means Coach opens the conversation — an empty string
+  // still does not, because that is a client bug rather than a greeting.
+  const isGreeting = message == null
+  if (!isGreeting && (typeof message !== 'string' || !message.trim())) {
     res.status(400).json({ error: 'message is required' })
     return
   }
 
   const gateStart = Date.now()
-  const trimmed = message.trim()
+  const trimmed = isGreeting ? TALK_START_MESSAGE : (message as string).trim()
   const userId = req.user!.userId
   // One row covers the usage exemption, the plan check and coach memory —
   // these used to be three separate lookups of the same user, run one after
   // another while the teacher waited.
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { ...PLAN_USER_SELECT, coachMemory: true, coachMemoryEnabled: true, experienceLevel: true },
+    select: { ...PLAN_USER_SELECT, coachMemory: true, coachMemoryEnabled: true, experienceLevel: true, name: true },
   })
   const talkDenied = await checkUsage(userId, 'talk_to_me', user)
   if (talkDenied) {
@@ -528,7 +545,7 @@ debriefRouter.post('/talk/stream', async (req, res) => {
   const followUp = await findPendingFollowUp(userId, followUpId)
   // TALK_SYSTEM_PROMPT is byte-identical for every teacher, so it caches once
   // and is reused across all of them; everything per-teacher follows it.
-  const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}`
+  const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${isGreeting ? buildGreetingBlock(firstNameOf(user?.name)) : ''}`
 
   await streamCoachReply(res, 'talk_start', {
     gateMs: Date.now() - gateStart,
@@ -536,16 +553,21 @@ debriefRouter.post('/talk/stream', async (req, res) => {
       TALK_SYSTEM_PROMPT,
       memoryOn ? `${talkTail}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}` : talkTail,
     ),
-    maxTokens: memoryOn ? 110 + MEMORY_UPDATE_TOKEN_BUFFER : 110,
+    maxTokens: (isGreeting ? 150 : 110) + (memoryOn ? MEMORY_UPDATE_TOKEN_BUFFER : 0),
     messages: [{ role: 'user', content: trimmed }],
     safetyLabel: 'debrief.talk',
     persist: async (reply) => {
       const created = await prisma.debrief.create({
         data: {
           userId,
-          incidentText: trimmed,
+          // A greeting is not something the teacher brought, so it is neither
+          // stored as their words nor shown as a turn they took. The first
+          // thing they actually say becomes the title (see the chat routes).
+          incidentText: isGreeting ? '' : trimmed,
           source: 'talk_to_me',
-          conversation: appendTurn([], trimmed, reply),
+          conversation: isGreeting
+            ? [{ role: 'assistant' as const, text: reply, createdAt: new Date().toISOString() }]
+            : appendTurn([], trimmed, reply),
         },
       })
       if (followUp) await markFollowUpAnswered(followUp.id, created.id)
@@ -639,7 +661,12 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
     persist: (reply) =>
       prisma.debrief.update({
         where: { id: debrief.id },
-        data: { conversation: appendTurn(existing, trimmed, reply) },
+        data: {
+          conversation: appendTurn(existing, trimmed, reply),
+          // Coach opened this one, so it has no title yet — the first thing
+          // the teacher says is what it was about.
+          ...(debrief.incidentText ? {} : { incidentText: trimmed }),
+        },
       }),
     afterPersist: writeMemory
       ? async (rawText) => {
@@ -791,7 +818,10 @@ debriefRouter.post('/:id/chat', async (req, res) => {
 
     const updated = await prisma.debrief.update({
       where: { id: debrief.id },
-      data: { conversation: appendTurn(existing, trimmed, reply) },
+      data: {
+        conversation: appendTurn(existing, trimmed, reply),
+        ...(debrief.incidentText ? {} : { incidentText: trimmed }),
+      },
     })
 
     if (writeMemory) {
