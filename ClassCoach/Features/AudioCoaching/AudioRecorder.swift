@@ -16,6 +16,16 @@ import UserNotifications
 final class AudioRecorder: NSObject, ObservableObject {
     enum Phase { case idle, recording, paused, uploading }
 
+    /// One recorder, owned by the app rather than by a view.
+    ///
+    /// It used to be a @StateObject inside RecordingPanelView, which tied a
+    /// live AVAudioRecorder to that view's lifetime: anything that took the
+    /// panel out of the view tree — opening another session, the back button
+    /// out of Lesson Debrief — destroyed the recording mid-class. Every
+    /// mitigation for that was a rule about where the teacher may not go.
+    /// Outliving the view is the fix; the rest are belt and braces.
+    static let shared = AudioRecorder()
+
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var elapsedSec: Double = 0
     @Published var permissionDenied = false
@@ -154,6 +164,26 @@ final class AudioRecorder: NSObject, ObservableObject {
         return true
     }
 
+    /// Last resort, for a teardown that should never happen.
+    ///
+    /// The panel is built never to unmount mid-capture and the list now refuses
+    /// to open anything while the mic is live, but if this object is ever
+    /// destroyed while recording, stopping here writes the WAV index so the
+    /// lesson is recoverable rather than a half-written file, and clearing the
+    /// active marker lets reconcileLocalAudio see it and offer it back. Doing
+    /// neither is what stranded a recording with no way to reach it.
+    /// Only ever clears ITS OWN marker: SwiftUI may build a replacement
+    /// @StateObject before destroying the one it replaces, and an unconditional
+    /// endActive() here would wipe the marker belonging to a recording that had
+    /// just started.
+    deinit {
+        guard let sessionId = manifest?.sessionId else { return }
+        recorder?.stop()
+        if RecordingStore.activeSessionId == sessionId {
+            RecordingStore.endActive()
+        }
+    }
+
     func pause() {
         recorder?.pause()
         if let runStart {
@@ -176,7 +206,10 @@ final class AudioRecorder: NSObject, ObservableObject {
     /// writes the index and closes the file, which is the whole of the work —
     /// there is no merge to wait on any more, and so nothing between Stop and
     /// the teacher getting their screen back.
-    func stop() -> (elapsedSec: Double, fileURL: URL)? {
+    /// Returns the session id as well: the recorder outlives the view now, so
+    /// the view's own copy can be nil when a teacher comes back to a recording
+    /// already in progress. The manifest is the one source that is never wrong.
+    func stop() -> (elapsedSec: Double, fileURL: URL, sessionId: String)? {
         RecordingStore.endActive()
         pausedByInterruption = false
         stopTimer()
@@ -194,7 +227,7 @@ final class AudioRecorder: NSObject, ObservableObject {
         self.manifest = manifest
 
         phase = .uploading
-        return (accumulatedSec, RecordingStore.audioURL(for: manifest.sessionId))
+        return (accumulatedSec, RecordingStore.audioURL(for: manifest.sessionId), manifest.sessionId)
     }
 
     /// The upload has been QUEUED — not accepted, not transcribed. A

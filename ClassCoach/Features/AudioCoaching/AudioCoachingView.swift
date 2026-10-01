@@ -1,6 +1,11 @@
 import SwiftUI
 
 struct AudioCoachingView: View {
+    /// Watched so the screen can refuse to be left mid-recording. The recorder
+    /// outlives this view now, so leaving no longer destroys the lesson — but
+    /// a teacher who walks out of Lesson Debrief still means to keep recording,
+    /// and coming back to a panel reading 0:00 would say otherwise.
+    @ObservedObject private var recorder = AudioRecorder.shared
     @State private var sessions: [AudioSession] = []
     @State private var active: AudioSessionWithSegments?
     @State private var speakers: [SpeakerSample] = []
@@ -83,6 +88,10 @@ struct AudioCoachingView: View {
             }
             .background(AppTheme.background)
             .navigationTitle("Lesson Debrief")
+            // Pushed from Home, this screen has a system back button. Leaving
+            // mid-recording is survivable now but never intended, so while the
+            // mic is live the way out is Stop.
+            .navigationBarBackButtonHidden(recorder.phase == .recording || recorder.phase == .paused)
             .task { await loadHistory() }
             // A row that says "Processing" has to stop saying it without being
             // asked. Only while something is actually running, so an idle list
@@ -320,9 +329,6 @@ struct AudioCoachingView: View {
         if BackgroundUploader.shared.uploadingSessionIds.contains(session.id) {
             return "That lesson is still being sent. It will open once the server has it."
         }
-        if RecordingStore.activeSessionId == session.id {
-            return "That lesson is recording right now."
-        }
         if RecordingStore.hasRecording(sessionId: session.id) {
             return "That lesson has not been sent yet. Reopen Lesson Debrief to finish sending it."
         }
@@ -330,6 +336,23 @@ struct AudioCoachingView: View {
     }
 
     private func open(_ session: AudioSession) async {
+        // Nothing may be opened while a recording is running.
+        //
+        // Opening a session that is past the recording phases makes
+        // isRecordingPhase false, which swaps RecordingPanelView out of the
+        // view tree — and takes its @StateObject AudioRecorder, and the
+        // AVAudioRecorder writing the lesson, with it. The panel is rendered
+        // inline precisely so it never unmounts mid-capture; this was the one
+        // path around that. The lesson died mid-sentence, the panel came back
+        // reading 0:00 READY TO RECORD, and activeSessionId stayed set, so
+        // reconcileLocalAudio skipped the file forever and never offered it
+        // back either.
+        if let recordingId = RecordingStore.activeSessionId {
+            error = recordingId == session.id
+                ? "That lesson is recording right now."
+                : "You're recording right now. Stop that recording before opening another lesson."
+            return
+        }
         if let reason = inFlightReason(for: session) {
             error = reason
             return

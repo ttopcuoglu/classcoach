@@ -12,7 +12,9 @@ struct RecordingPanelView: View {
     let onUploadStarted: () -> Void
     let onExit: () -> Void
 
-    @StateObject private var recorder = AudioRecorder()
+    /// Observed, not owned — see AudioRecorder.shared. A @StateObject here
+    /// died with the view, and took the lesson with it.
+    @ObservedObject private var recorder = AudioRecorder.shared
     @State private var localSession: AudioSession?
     @State private var error: String?
     @State private var batteryWarning: String?
@@ -74,7 +76,12 @@ struct RecordingPanelView: View {
         }
         .padding(20)
         .background(AppTheme.forest, in: RoundedRectangle(cornerRadius: 24))
-        .onAppear { localSession = session?.session }
+        // Never clobber a recording already in flight: the recorder outlives
+        // this view, so a teacher returning to Lesson Debrief mid-class finds
+        // the panel still counting rather than reset to 0:00.
+        .onAppear {
+            if recorder.phase == .idle { localSession = session?.session }
+        }
         // The recording ran itself out. Finish it exactly as a Stop would, so
         // the teacher still gets the lesson rather than being told off for
         // forgetting.
@@ -211,7 +218,7 @@ struct RecordingPanelView: View {
     }
 
     private func handleStop() async {
-        guard let result = recorder.stop(), let localSession else {
+        guard let result = recorder.stop() else {
             // The recording is not gone: the file stays on disk and Lesson
             // Debrief offers it back the next time it opens.
             error = "Could not finish the recording. It is saved — reopen Lesson Debrief to try again."
@@ -223,7 +230,7 @@ struct RecordingPanelView: View {
             // without us. The teacher goes back to the list, where the row
             // reports progress.
             try await AudioCoachingService.startTranscription(
-                sessionId: localSession.id,
+                sessionId: result.sessionId,
                 audioFileURL: result.fileURL,
                 durationSec: result.elapsedSec
             )
