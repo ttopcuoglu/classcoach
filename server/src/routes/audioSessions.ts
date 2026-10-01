@@ -394,6 +394,16 @@ async function runTranscription(sessionId: string, audioPath: string, mimetype: 
 /// A job that ended badly has to leave the row in a state the teacher can act
 /// on. Silence would leave "Processing" spinning forever, which is worse than
 /// the eight-minute wait this replaced.
+/// Removes a session that turned out to hold nothing. Never throws: this runs
+/// inside a detached `.catch`, where an error has nowhere left to go.
+async function deleteSessionQuietly(sessionId: string) {
+  try {
+    await prisma.audioSession.delete({ where: { id: sessionId } })
+  } catch (error) {
+    console.error('[audio-sessions] could not remove an empty session:', error)
+  }
+}
+
 async function markTranscriptionFailed(sessionId: string, message: string) {
   try {
     await prisma.audioSession.update({
@@ -496,10 +506,17 @@ audioSessionsRouter.post('/:id/transcribe', upload.single('audio'), async (req, 
       .catch(async (error) => {
         console.error('[audio-sessions] background transcription failed:', error)
         const noSpeech = (error as Error & { code?: string }).code === 'NO_SPEECH'
-        await markTranscriptionFailed(
-          sessionId,
-          noSpeech ? 'No speech was detected in this recording.' : 'Transcription failed. Please try again.',
-        )
+        if (noSpeech) {
+          // Nothing was captured, so there is nothing to keep: no transcript,
+          // and the audio is discarded either way. Leaving the row behind only
+          // put a "Couldn't process" entry in Past sessions that the teacher
+          // has to tidy up by hand. The client watching the transcription is
+          // the one that tells them what happened — it sees this session stop
+          // existing and says so.
+          await deleteSessionQuietly(sessionId)
+          return
+        }
+        await markTranscriptionFailed(sessionId, 'Transcription failed. Please try again.')
       })
       // Whether it worked or not, the scratch copy goes.
       .finally(() => discardUpload(audioPath))

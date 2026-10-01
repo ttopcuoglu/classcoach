@@ -41,6 +41,7 @@ import {
   type AudioSession,
   type AudioSessionWithSegments,
   type AudioToneLogEntry,
+  type ApiError,
   type FocusMetric,
   type ReflectChatErrorKind,
   type SpeakerSample,
@@ -163,10 +164,13 @@ export default function AudioCoaching() {
     }
   }
 
-  function handleExit() {
+  /// `message` is for the one case where leaving IS the news: a session that
+  /// stopped existing while it was being watched. Everything else exits
+  /// silently and clears whatever was on screen.
+  function handleExit(message?: string) {
     setActive(null)
     setSpeakers([])
-    setError(null)
+    setError(message ?? null)
     refreshHistory()
   }
 
@@ -318,7 +322,7 @@ function SessionFlow({
   speakers: SpeakerSample[]
   onUpdate: (s: AudioSessionWithSegments) => void
   onSpeakers: (s: SpeakerSample[]) => void
-  onExit: () => void
+  onExit: (message?: string) => void
   sessions: AudioSession[]
   focusMetric: FocusMetric | null
   onFocusMetricChange: (metric: FocusMetric | null) => void
@@ -335,7 +339,7 @@ function SessionFlow({
         </p>
         <button
           type="button"
-          onClick={onExit}
+          onClick={() => onExit()}
           className="mt-4 rounded-full bg-cream px-6 py-2.5 text-sm font-semibold text-forest"
         >
           Back to sessions
@@ -627,7 +631,7 @@ function RecordingPanel({
               <p className="text-xs text-cream/70">{formatSessionDateTime(session.sessionDate)}</p>
             </div>
             {phase === 'idle' && (
-              <button type="button" onClick={onExit} className="text-sm font-medium text-cream/70 hover:text-cream">
+              <button type="button" onClick={() => onExit()} className="text-sm font-medium text-cream/70 hover:text-cream">
                 Cancel
               </button>
             )}
@@ -743,7 +747,7 @@ function TranscribingPanel({
   session: AudioSessionWithSegments
   onUpdate: (s: AudioSessionWithSegments) => void
   onSpeakers: (s: SpeakerSample[]) => void
-  onExit: () => void
+  onExit: (message?: string) => void
 }) {
   const progress = useTranscriptionProgress(session)
 
@@ -759,9 +763,18 @@ function TranscribingPanel({
           onSpeakers(speakers)
         }
         onUpdate(latest)
-      } catch {
-        // A poll that fails changes nothing — the job is server-side, and the
-        // next tick will pick the answer up.
+      } catch (e) {
+        // A session that stops existing mid-transcription is the server
+        // throwing away a recording it found no speech in. That is the only
+        // thing a 404 can mean here, and it is the teacher's one chance to be
+        // told — there will be no row left to explain it afterwards.
+        if (!cancelled && (e as ApiError).status === 404) {
+          window.clearInterval(poll)
+          onExit('No speech was detected in that recording, so nothing was saved. If you expected speech, check which microphone your browser is using.')
+          return
+        }
+        // Any other failed poll changes nothing — the job is server-side, and
+        // the next tick will pick the answer up.
       }
     }, 5000)
     return () => {
@@ -785,7 +798,7 @@ function TranscribingPanel({
       </p>
       <button
         type="button"
-        onClick={onExit}
+        onClick={() => onExit()}
         className="mt-4 rounded-full bg-cream px-6 py-2.5 text-sm font-semibold text-forest transition-opacity hover:opacity-90"
       >
         Back to sessions
@@ -2450,7 +2463,7 @@ function ReportPanel({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <button type="button" onClick={onExit} className="text-sm font-medium text-ink-soft hover:text-ink">
+        <button type="button" onClick={() => onExit()} className="text-sm font-medium text-ink-soft hover:text-ink">
           ← Back to sessions
         </button>
         {locked && (
