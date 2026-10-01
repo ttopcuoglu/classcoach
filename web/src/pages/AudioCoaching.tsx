@@ -171,6 +171,21 @@ export default function AudioCoaching() {
   }
 
   async function handleOpenSession(id: string) {
+    // isRecordingPhase sends "setup" to the record panel, and a session whose
+    // upload has not landed yet is still "setup" — so opening one armed Record
+    // with a session that already had a lesson in it. On iOS that truncated the
+    // audio outright; here the second upload lands on the same session and
+    // replaces the first lesson's transcript. Either way a lesson is lost.
+    const row = sessions.find((s) => s.id === id)
+    if (row?.status === 'transcribing') {
+      setError('That lesson is still being transcribed. It will open as soon as it is ready.')
+      return
+    }
+    if (row && sessionHasRecording(row) && ['setup', 'recording', 'paused'].includes(row.status)) {
+      setError('That lesson is still being sent. It will open once the server has it.')
+      return
+    }
+    setError(null)
     try {
       const full = await getAudioSession(id)
       setActive(full)
@@ -344,6 +359,16 @@ function SessionFlow({
   )
 }
 
+/// Whether this session already holds a recording.
+///
+/// A "setup" row that does is one whose upload has not landed yet — the server
+/// only learns a recording exists when it arrives — not an empty session
+/// waiting to be recorded into. The two are indistinguishable by status alone,
+/// which is what made opening one destructive.
+function sessionHasRecording(session: { durationSec: number | null; transcribeStartedAt?: string | null }): boolean {
+  return session.transcribeStartedAt != null || session.durationSec != null
+}
+
 function RecordingPanel({
   session,
   teacherName = null,
@@ -457,7 +482,11 @@ function RecordingPanel({
   async function handleRecord() {
     setError(null)
     justCreatedSessionIdRef.current = null
-    if (!session) {
+    // Only a session with no recording of its own is safe to reuse. The panel
+    // can be handed one by the list, so "a session is set" was never the same
+    // as "this session is empty" — recording into one that already held a
+    // lesson sent a second upload to it and overwrote the first.
+    if (!session || sessionHasRecording(session)) {
       try {
         const created = await createAudioSession({
           teacherName: teacherName || undefined,
@@ -5349,7 +5378,9 @@ function SessionCard({
             }
           : session.status === 'failed'
             ? { label: "Couldn't process", className: 'bg-peach-tint text-terracotta-600' }
-            : { label: 'In progress', className: 'bg-gold-tint text-forest' }
+            : session.status === 'tagging'
+              ? { label: 'Identify your voice', className: 'bg-gold-tint text-forest' }
+              : { label: 'In progress', className: 'bg-gold-tint text-forest' }
   return (
     <div className="group flex items-center justify-between gap-4 rounded-2xl border border-hairline bg-cream-card p-4 transition-colors hover:border-terracotta/40 sm:p-5">
       <button type="button" onClick={onOpen} className="flex flex-1 items-center gap-4 text-left">
