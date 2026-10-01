@@ -426,6 +426,26 @@ function RecordingPanel({
     wakeLockRef.current = null
   }
 
+  // The only window where leaving actually destroys a lesson.
+  //
+  // The transcribing screen is deliberately safe to close — that work outlives
+  // the request that started it. Until the upload has landed, though, the
+  // recording exists only as a MediaRecorder blob in this tab's memory. Web has
+  // no RecordingStore to offer it back the way iOS does, so a reload at minute
+  // 40 of a lesson loses all of it, silently and unrecoverably. Paused counts:
+  // a paused recording is just as unsaved as a running one.
+  useEffect(() => {
+    if (phase !== 'recording' && phase !== 'paused' && phase !== 'uploading') return
+    function warnBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault()
+      // Browsers show their own wording and ignore any custom string, but
+      // returnValue still has to be set for the prompt to appear at all.
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warnBeforeUnload)
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload)
+  }, [phase])
+
   useEffect(() => {
     // A wake lock is released automatically whenever the document goes
     // hidden (switching tabs, minimizing) — re-acquire it once the teacher
