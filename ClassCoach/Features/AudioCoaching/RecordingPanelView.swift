@@ -188,7 +188,14 @@ struct RecordingPanelView: View {
             batteryWarning = warning
             return
         }
-        if localSession == nil {
+        // A session is only reusable while it has no audio of its own yet.
+        // `recorder.start` goes through `RecordingStore.begin`, which resets the
+        // manifest and truncates the file at that session's path — so recording
+        // into an id that already holds a lesson destroys it outright. The panel
+        // keeps `localSession` across a Cancel and can be handed one by the
+        // list, so "already set" was never the same as "safe to record into".
+        let reusable = localSession.map { !RecordingStore.hasRecording(sessionId: $0.id) } ?? false
+        if !reusable {
             do {
                 localSession = try await AudioCoachingService.createSession(teacherName: nil)
             } catch {

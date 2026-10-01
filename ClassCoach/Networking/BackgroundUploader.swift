@@ -86,6 +86,15 @@ final class BackgroundUploader: NSObject {
         return uploading.contains(sessionId)
     }
 
+    /// Every session with an upload still in flight. The list needs the set
+    /// rather than a single answer: it has to know that SOMETHING is on its
+    /// way before it will let a row be opened into the record panel.
+    var uploadingSessionIds: Set<String> {
+        lock.lock()
+        defer { lock.unlock() }
+        return uploading
+    }
+
     struct UploadResult {
         let sessionId: String
         let success: Bool

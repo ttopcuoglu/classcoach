@@ -295,7 +295,41 @@ struct AudioCoachingView: View {
         }
     }
 
+    /// Why this row cannot be opened yet, or nil when it can.
+    ///
+    /// A session whose upload is still climbing out sits at "setup", which is
+    /// the same status a session being recorded right now has — and
+    /// `isRecordingPhase` sends that to the record panel. Opening one
+    /// therefore armed the panel with a session id that already had a lesson
+    /// in it, and the next Record truncated the recording still on its way to
+    /// the server. "Back" then looked like it had lost the lesson, because the
+    /// next tap was about to.
+    private func inFlightReason(for session: AudioSession) -> String? {
+        if session.status == "transcribing" {
+            return "That lesson is still being transcribed. It will open as soon as it is ready."
+        }
+        guard ["setup", "recording", "paused"].contains(session.status) else { return nil }
+        if BackgroundUploader.shared.uploadingSessionIds.contains(session.id) {
+            return "That lesson is still being sent. It will open once the server has it."
+        }
+        if RecordingStore.activeSessionId == session.id {
+            return "That lesson is recording right now."
+        }
+        if RecordingStore.hasRecording(sessionId: session.id) {
+            return "That lesson has not been sent yet. Reopen Lesson Debrief to finish sending it."
+        }
+        return nil
+    }
+
     private func open(_ session: AudioSession) async {
+        if let reason = inFlightReason(for: session) {
+            error = reason
+            return
+        }
+        // Clears the note above when the teacher goes on to open a row that
+        // does work, rather than leaving "still being sent" sitting under a
+        // session that opened fine.
+        error = nil
         loadingSessionId = session.id
         do {
             let full = try await AudioCoachingService.getSession(id: session.id)
@@ -335,6 +369,11 @@ private struct SessionCardView: View {
         case "analyzed": return "Ready to review"
         case "transcribing": return "Processing · \(Int(transcriptionProgress.rounded()))%"
         case "failed": return "Couldn't process"
+        // Split out of the catch-all below: "In progress" was shown both for a
+        // session still being sent and for one waiting to be tagged, so a
+        // teacher tapping it to pick their voice could land on either, and the
+        // one they wanted was the only one that worked.
+        case "tagging": return "Identify your voice"
         default: return "In progress"
         }
     }

@@ -151,6 +151,16 @@ enum RecordingStore {
         }
     }
 
+    /// Whether this session already has audio on disk.
+    ///
+    /// A session that does must never be recorded into again: `begin` writes a
+    /// fresh manifest with `accumulatedSec: 0` and `AVAudioRecorder` truncates
+    /// the file at the same path, so the lesson already sitting there is gone
+    /// with no warning and nothing to recover.
+    static func hasRecording(sessionId: String) -> Bool {
+        FileManager.default.fileExists(atPath: audioURL(for: sessionId).path)
+    }
+
     static func discard(sessionId: String) {
         try? FileManager.default.removeItem(at: directory(for: sessionId))
     }
