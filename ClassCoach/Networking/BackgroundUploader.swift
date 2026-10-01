@@ -212,6 +212,10 @@ extension BackgroundUploader: URLSessionDataDelegate {
             message = error.localizedDescription
         } else if (200..<300).contains(status) {
             success = true
+            // The server has it now. From here on, this recording vanishing
+            // from the session list means the server disposed of it, not that
+            // it never arrived — so it must stop being offered back.
+            RecordingStore.markDelivered(sessionId: sessionId)
         } else {
             message = data
                 .flatMap { try? JSONDecoder().decode(ErrorBody.self, from: $0) }?

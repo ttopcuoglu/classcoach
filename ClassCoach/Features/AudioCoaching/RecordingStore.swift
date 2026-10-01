@@ -59,6 +59,17 @@ enum RecordingStore {
         let sessionId: String
         let startedAt: Date
         var accumulatedSec: Double
+        /// When the server accepted this upload, if it ever did.
+        ///
+        /// The difference between "the server never got this" and "the server
+        /// got it and no longer has it". Only the first is worth offering back:
+        /// a recording the server already consumed is gone from the list
+        /// because it held no speech, or because the teacher deleted it, and
+        /// sending the same bytes again only repeats that.
+        ///
+        /// Optional so manifests written before this existed still decode; they
+        /// come back nil, which is the old behaviour.
+        var deliveredAt: Date?
     }
 
     private static var root: URL {
@@ -115,6 +126,14 @@ enum RecordingStore {
         return manifest
     }
 
+    /// Records that the server accepted this recording. Called from the upload
+    /// delegate, which is not on the main actor — this only touches the file.
+    static func markDelivered(sessionId: String) {
+        guard var manifest = load(sessionId: sessionId), manifest.deliveredAt == nil else { return }
+        manifest.deliveredAt = Date()
+        try? save(manifest)
+    }
+
     static func save(_ manifest: Manifest) throws {
         try JSONEncoder().encode(manifest).write(to: manifestURL(for: manifest.sessionId), options: .atomic)
     }
@@ -146,7 +165,12 @@ enum RecordingStore {
         try? FileManager.default.removeItem(at: to)
         try FileManager.default.moveItem(at: from, to: to)
         if var manifest = load(sessionId: newId) {
-            manifest = Manifest(sessionId: newId, startedAt: manifest.startedAt, accumulatedSec: manifest.accumulatedSec)
+            manifest = Manifest(
+                sessionId: newId,
+                startedAt: manifest.startedAt,
+                accumulatedSec: manifest.accumulatedSec,
+                deliveredAt: manifest.deliveredAt,
+            )
             try save(manifest)
         }
     }

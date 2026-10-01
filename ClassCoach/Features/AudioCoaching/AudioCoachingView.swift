@@ -273,8 +273,16 @@ struct AudioCoachingView: View {
             case "transcribing":
                 // In flight on the server. Hold the copy, say nothing.
                 continue
+            case nil where manifest.deliveredAt != nil:
+                // The server had this recording and no longer does: it threw it
+                // away after finding no speech in it, or the teacher deleted the
+                // session. Offering it back would upload the same bytes to a
+                // fresh session, reach the same end, and offer it again — a
+                // loop the teacher cannot get out of except by discarding.
+                RecordingStore.discard(sessionId: manifest.sessionId)
             default:
-                // Never arrived, failed, or the session is gone.
+                // Never arrived, failed, or the session is gone without this
+                // phone ever having got it there.
                 if recoverable == nil { recoverable = manifest }
             }
         }
