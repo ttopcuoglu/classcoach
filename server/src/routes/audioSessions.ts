@@ -1083,7 +1083,7 @@ ${exhibits.map((e, i) => `[${i + 1}] ${e.text}`).join('\n')}
 
 Write in plain text, no markdown, no headings. Separate paragraphs with a blank line. Address the teacher as "you".
 
-Then, separately, write THE CHECKS NOTE: two paragraphs for a section of
+Then, separately, write THE CHECKS NOTE: one paragraph for a section of
 the report that shows two numbers — how many spoken checks for understanding
 were heard, and how often feedback named something specific. The numbers are
 already on that screen, so do not restate them. Say what they cannot: WHEN the
@@ -1093,8 +1093,8 @@ there is a long stretch with no check, name it as a question rather than a
 fault. Same microphone caveat applies — a check made by looking at faces or
 reading over shoulders leaves no trace here, and you must not imply its
 absence means it did not happen. If there is too little to say, say one honest
-sentence and stop. Otherwise give it the two paragraphs: the first on what
-the checks actually were and when they fell, the second on what the feedback
+sentence and stop. Otherwise write one paragraph that covers both: what
+the checks actually were and when they fell, and what the feedback
 did with what students said.
 
 ${
@@ -1109,9 +1109,9 @@ ${
       : 'No feedback moments were detected.'
   }
 
-Then THE CLIMATE NOTE: two paragraphs for a section about routines,
-directions and classroom language. Take the first for how the class was moved
-between activities and the second for how the teacher spoke to students. That section counts fixed phrases, so on a
+Then THE CLIMATE NOTE: one paragraph for a section about routines,
+directions and classroom language, covering both how the class was moved
+between activities and how the teacher spoke to students. That section counts fixed phrases, so on a
 perfectly well-run lesson most of its numbers are zero — a teacher who said
 "turn and talk to your partner for thirty seconds" gave a clear direction that
 the counter simply does not recognise. Never let a zero read as an absence.
@@ -1138,9 +1138,9 @@ ${
   }
 Student names: ${metrics?.nameMentions ?? 'not measured'} mentions across ${metrics?.uniqueNames ?? 'not measured'} names.
 
-Then THE TALK NOTE: two paragraphs about who was heard and for how long —
-the first on the shape of the teacher's talk, the second on where students got
-the floor and what that does and does not tell us.
+Then THE TALK NOTE: one paragraph about who was heard and for how long,
+covering both the shape of the teacher's talk and where students got
+the floor, and what that does and does not tell us.
 The numbers — teacher talk, student talk, silence — are on that screen, so do
 not restate them. Say what they cannot: where the long teacher stretches fell
 and what they were doing (explaining, setting up, recapping), where students
@@ -1149,8 +1149,8 @@ governs this section more than any other: a room microphone hears the teacher
 clearly and students poorly, so a low student number may be a quiet room or a
 mic that could not reach it, and a teacher must not read it as a verdict.
 
-Then THE QUESTIONS NOTE: two paragraphs about the questioning — the first on
-what was asked, the second on what happened after it was asked. Again the
+Then THE QUESTIONS NOTE: one paragraph about the questioning, covering both
+what was asked and what happened after it was asked. Again the
 counts are already on screen. Say what kinds of questions these were, whether
 they built on each other or moved on, what happened after one was asked, and
 whether answers were followed up or accepted. Be honest that the higher-order
