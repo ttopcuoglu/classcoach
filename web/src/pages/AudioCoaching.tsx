@@ -1,17 +1,17 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
-import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, LockIcon, MicIcon, PlayIcon } from '../components/icons'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { ArrowUpIcon, ChatBubbleIcon, LockIcon, MicIcon } from '../components/icons'
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
-import { ProgressRing, ThinkingIndicator, WorkingRing } from '../components/ProgressRing'
+import { ProgressRing, WorkingRing } from '../components/ProgressRing'
 import { NumberedCard } from '../components/AnswerSection'
 import { ACCENT_CYCLE, ACCENTS, StatTile, type Accent } from '../components/report'
-import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { UPLOAD_STAGE, transcribeEstimateSec, transcribeHint, transcribeStage } from '../lib/transcribeStages'
 import { HATCH_STYLE } from '../lib/chartPatterns'
+import { setHandoff } from '../lib/handoff'
+import LinkReviewedPlan from '../components/LinkReviewedPlan'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
-import { createPlaybackQueue, primeAudioElement, splitIntoSentences, type PlaybackQueue } from '../lib/voicePlayback'
 import {
   createAudioSession,
   deleteAudioSession,
@@ -20,8 +20,6 @@ import {
   getAudioSession,
   getAudioSessions,
   getProfile,
-  sendReflectMessage,
-  summarizeReflectConversation,
   tagSpeakers,
   startTranscription,
   getSpeakerSamples,
@@ -35,7 +33,6 @@ import {
   type AudioHighlight,
   type AudioLessonContent,
   type AudioQuestionLogEntry,
-  type AudioReflectMessage,
   type AudioRedirectionLogEntry,
   type AudioRubricLens,
   type AudioSession,
@@ -43,13 +40,13 @@ import {
   type AudioToneLogEntry,
   type ApiError,
   type FocusMetric,
-  type ReflectChatErrorKind,
   type SpeakerSample,
   type TalkVoice,
   type TranscriptSegment,
 } from '../lib/api'
 import {
   buildEvidenceQualityLine,
+  buildLowConfidenceLine,
   categoryCoverage,
   evidenceTier,
   EVIDENCE_TIER_LABELS,
@@ -978,83 +975,46 @@ function sessionTitle(session: { lessonContent?: AudioLessonContent | null; clas
 }
 
 type ReportTab = 'summary' | 'insights' | 'reflect' | 'growth'
-type InsightsSection = 'talk' | 'questions' | 'understanding' | 'content' | 'routines' | 'rubric'
-type ReflectPath = 'full_report' | 'specific_moment' | 'how_it_felt' | 'ask_question'
+// Three bins, down from six. `questions` now covers what used to be two
+// separate sections (Questions & Thinking, Checks & Feedback) — a teacher
+// reading about what they asked and a teacher reading about how they checked
+// are the same teacher asking the same question. Clarity & Content folded
+// into Summary, where the lesson's own words already live. Rubric Lens left
+// the list entirely and became a view over the whole report.
+type InsightsSection = 'talk' | 'questions' | 'routines'
 
-const REFLECT_PATH_CARDS: {
-  key: ReflectPath
-  icon: React.ReactNode
-  iconBg: string
-  title: string
-  description: string
-  recommended?: boolean
-}[] = [
-  {
-    key: 'full_report',
-    icon: <ChecklistIcon className="h-5 w-5 text-forest" />,
-    iconBg: 'bg-mint-tint/60',
-    title: "Talk through today's highlights",
-    description: 'A strength to keep, and a moment worth revisiting',
-    recommended: true,
-  },
-  {
-    key: 'specific_moment',
-    icon: <PlayIcon className="h-5 w-5 text-terracotta" />,
-    iconBg: 'bg-peach-tint',
-    title: 'Explore a specific moment',
-    description: 'Discuss a timestamp or classroom interaction',
-  },
-  {
-    key: 'how_it_felt',
-    icon: <HeartIcon className="h-5 w-5 text-gold" />,
-    iconBg: 'bg-gold-tint',
-    title: 'Reflect on how the lesson felt',
-    description: 'Begin with your own experience',
-  },
-  {
-    key: 'ask_question',
-    icon: <ChatBubbleIcon className="h-5 w-5 text-forest" />,
-    iconBg: 'bg-mint-tint',
-    title: 'Ask the coach a question',
-    description: "Start with what's on your mind",
-  },
-]
 
 const REPORT_TABS: { key: ReportTab; label: string }[] = [
   { key: 'summary', label: 'Summary' },
   { key: 'insights', label: 'Insights' },
-  { key: 'reflect', label: 'Reflect' },
+  { key: 'reflect', label: 'My notes' },
   { key: 'growth', label: 'My Growth' },
 ]
 
 const INSIGHTS_SECTIONS: { key: InsightsSection; label: string }[] = [
   { key: 'talk', label: 'Talk & Participation' },
-  { key: 'questions', label: 'Questions & Thinking' },
-  { key: 'understanding', label: 'Checks & Feedback' },
-  { key: 'content', label: 'Clarity & Content' },
+  { key: 'questions', label: 'Questions & Checks' },
   { key: 'routines', label: 'Climate & Routines' },
-  { key: 'rubric', label: 'Rubric Lens' },
 ]
 
 // The printed report's numbers, one-line descriptions and colours for these
-// five sections (see AudioCoachingExport), so the screen and the paper look
-// like one report and a teacher holding the printout can find "section 3" here.
-//
-// One honest gap: the printout skips Clarity & Content when a lesson produced
-// no content quotes, so on those lessons its Climate & Routines is numbered 4
-// while this screen, which always lists all five, still says 5.
+// three sections (see AudioCoachingExport), so the screen and the paper look
+// like one report and a teacher holding the printout can find "section 2"
+// here. Collapsing six to three also closed the old numbering drift: the
+// printout used to skip Clarity & Content on lessons with no content quotes,
+// which left the paper saying 4 where the screen said 5.
 const INSIGHTS_SECTION_META: Record<InsightsSection, { n: number; blurb: string; accent: Accent }> = {
   talk: { n: 1, blurb: 'Who was heard, and for how long.', accent: ACCENTS.terracotta },
-  questions: { n: 2, blurb: 'What you asked, and how long you left for an answer.', accent: ACCENTS.gold },
-  understanding: {
-    n: 3,
-    blurb: 'How you checked they were with you, and how specific your feedback was.',
-    accent: ACCENTS.mint,
+  questions: {
+    n: 2,
+    blurb: 'What you asked, how long you left for an answer, and how you checked they were with you.',
+    accent: ACCENTS.gold,
   },
-  content: { n: 4, blurb: 'What the lesson said it was about, in its own words.', accent: ACCENTS.forest },
-  routines: { n: 5, blurb: 'Counts, not scores. There is no such thing as a correct number here.', accent: ACCENTS.terracotta },
-  // Screen only — the printed report stops at section 5.
-  rubric: { n: 6, blurb: 'This lesson seen through your evaluation framework. Evidence, not a rating.', accent: ACCENTS.gold },
+  routines: {
+    n: 3,
+    blurb: 'Counts, not scores. There is no such thing as a correct number here.',
+    accent: ACCENTS.terracotta,
+  },
 }
 
 // Lets the stat groups inside a section tint themselves with that section's
@@ -1196,58 +1156,6 @@ function buildReflectContext(
 // as every other builder in this file: only ever built from real signal,
 // capped at 3, empty when there's nothing to ground a question in (the
 // always-present generic starting point covers that case).
-function buildReflectStarterPrompts(
-  highlights: AudioHighlight[] | null,
-  cfuMetric: { state: string },
-  redirectionMetric: { state: string },
-): { label: string; focus: string; timestampSec: number | null }[] {
-  const prompts: { label: string; focus: string; timestampSec: number | null }[] = []
-  const byLabel = (label: string) => (highlights ?? []).find((h) => h.label === label)
-
-  const followUp = byLabel('Follow-up / probing question')
-  if (followUp) {
-    prompts.push({
-      label: 'Talk about a question you followed up on',
-      focus: `the moment at ${formatTime(followUp.timestampSec)} where you asked a follow-up question: "${followUp.excerpt}"`,
-      timestampSec: followUp.timestampSec,
-    })
-  }
-
-  const cluster = byLabel('Redirection cluster')
-  if (cluster) {
-    prompts.push({
-      label: 'Talk about that stretch of redirections',
-      focus: `the cluster of redirections around ${formatTime(cluster.timestampSec)}`,
-      timestampSec: cluster.timestampSec,
-    })
-  }
-
-  const monologue = byLabel('Longest uninterrupted teacher monologue')
-  if (monologue) {
-    prompts.push({
-      label: 'Talk about that longer stretch of talking',
-      focus: `the longest stretch of you talking, around ${formatTime(monologue.timestampSec)}`,
-      timestampSec: monologue.timestampSec,
-    })
-  }
-
-  if (prompts.length < 3 && cfuMetric.state === 'confirmed_none') {
-    prompts.push({
-      label: 'Talk about checking for understanding',
-      focus: 'how they checked for understanding today, since none of the common spoken check phrases came through in the recording',
-      timestampSec: null,
-    })
-  }
-  if (prompts.length < 3 && redirectionMetric.state === 'confirmed_none') {
-    prompts.push({
-      label: 'Talk about how the room felt today',
-      focus: 'how the classroom climate felt today, since none of the common redirection phrases came through',
-      timestampSec: null,
-    })
-  }
-
-  return prompts.slice(0, 3)
-}
 
 // Real transcript text around a moment's timestamp — the "show me the
 // evidence" reveal. A plain data lookup, no chat turn/network call: the
@@ -2138,7 +2046,6 @@ function ReportPanel({
   sessions,
   focusMetric,
   onFocusMetricChange,
-  talkVoice,
 }: {
   session: AudioSessionWithSegments
   onUpdate: (s: AudioSessionWithSegments) => void
@@ -2152,6 +2059,18 @@ function ReportPanel({
   const [tab, setTab] = useState<ReportTab>('summary')
   const [insightsSection, setInsightsSection] = useState<InsightsSection>('talk')
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null)
+  const navigate = useNavigate()
+
+  /// Re-reads the session so linking a reviewed plan brings its comparison in
+  /// without a page reload. Silent on failure: the link itself succeeded, and
+  /// the comparison appears next time the report opens.
+  async function refreshSession() {
+    try {
+      onUpdate(await getAudioSession(session.id))
+    } catch {
+      // See above.
+    }
+  }
   const locked = session.status === 'locked'
   const [strengths, setStrengths] = useState(session.strengths ?? '')
   const [growthAreas, setGrowthAreas] = useState(session.growthAreas ?? '')
@@ -2160,23 +2079,16 @@ function ReportPanel({
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [reflectSending, setReflectSending] = useState(false)
-  const [reflectError, setReflectError] = useState<{ kind: ReflectChatErrorKind; message: string } | null>(null)
-  const [reflectDraft, setReflectDraft] = useState('')
-  const [summarizing, setSummarizing] = useState(false)
-  const [summarizeError, setSummarizeError] = useState<string | null>(null)
   const [contentNotesSending, setContentNotesSending] = useState(false)
   const [contentNotesError, setContentNotesError] = useState<string | null>(null)
   const [rubricLensSending, setRubricLensSending] = useState(false)
   const [rubricLensError, setRubricLensError] = useState<string | null>(null)
+  /// Rubric Lens as a view over the whole report rather than a section
+  /// inside it. Off by default and never generated automatically — the
+  /// framework view is something a teacher asks for.
+  const [rubricView, setRubricView] = useState(false)
   const [classSummarySending, setClassSummarySending] = useState(false)
   const hasAttemptedClassSummaryRef = useRef(false)
-  const [externalFocus, setExternalFocus] = useState<{
-    label: string
-    focus: string
-    detail: string | null
-    timestampSec: number | null
-  } | null>(null)
 
   async function handleSaveNotes() {
     setSaving(true)
@@ -2199,83 +2111,9 @@ function ReportPanel({
   }
 
 
-  // focus, when passed, is a specific highlight/metric to open with (from
-  // one of Reflect's grounded starting-point chips) — prepended as one
-  // more plain-fact line ahead of the same context array, so Claude's own
-  // generated opening question naturally leads with it. No backend change
-  // needed: the route already accepts an arbitrary context: string[].
-  async function handleStartReflect(focus?: string, spoken = false) {
-    setReflectSending(true)
-    setReflectError(null)
-    try {
-      const context = focus ? [`Start the conversation by asking about ${focus}.`, ...reflectContext] : reflectContext
-      const updated = await sendReflectMessage(session.id, { context, spoken })
-      onUpdate({ ...session, ...updated })
-    } catch (err) {
-      const kind = (err as { kind?: ReflectChatErrorKind })?.kind ?? 'other'
-      setReflectError({ kind, message: (err as Error).message })
-    } finally {
-      setReflectSending(false)
-    }
-  }
-
-  // overrideText lets voice mode submit a transcribed turn directly,
-  // bypassing reflectDraft entirely — same convention as Ask.tsx's and
-  // TalkToMe.tsx's own optional-override submit functions.
-  async function handleSendReflect(overrideText?: string, extraContext: string[] = [], spoken = false) {
-    const usingOverride = overrideText != null
-    const trimmed = (overrideText ?? reflectDraft).trim()
-    if (!trimmed || reflectSending) return
-    setReflectSending(true)
-    setReflectError(null)
-    if (!usingOverride) setReflectDraft('')
-    try {
-      const updated = await sendReflectMessage(session.id, {
-        message: trimmed,
-        context: [...extraContext, ...reflectContext],
-        spoken,
-      })
-      onUpdate({ ...session, ...updated })
-    } catch (err) {
-      const kind = (err as { kind?: ReflectChatErrorKind })?.kind ?? 'other'
-      setReflectError({ kind, message: (err as Error).message })
-      if (!usingOverride) setReflectDraft(trimmed)
-    } finally {
-      setReflectSending(false)
-    }
-  }
-
-  // Finishing a conversation writes the debrief. It used to only fill the
-  // boxes and wait for a "Save notes" press, so a teacher who talked to Coach
-  // and then closed the tab lost the thing they had the conversation for.
-  //
-  // It is re-runnable on purpose: come back a week later, say one more thing,
-  // finish again, and the debrief is rewritten from the whole conversation.
-  async function handleSummarizeReflect() {
-    setSummarizing(true)
-    setSummarizeError(null)
-    try {
-      const summary = await summarizeReflectConversation(session.id)
-      const next = {
-        strengths: summary.strengths ?? strengths,
-        growthAreas: summary.growthAreas ?? growthAreas,
-        nextStep: summary.nextStep ?? nextStep,
-      }
-      setStrengths(next.strengths)
-      setGrowthAreas(next.growthAreas)
-      setNextStep(next.nextStep)
-      const updated = await updateAudioSession(session.id, {
-        ...next,
-        followUpDate: followUpDate ? new Date(followUpDate).toISOString() : null,
-      })
-      onUpdate({ ...session, ...updated })
-      setSaved(true)
-    } catch {
-      setSummarizeError('Could not write your debrief. Please try again.')
-    } finally {
-      setSummarizing(false)
-    }
-  }
+  // handleStartReflect, handleSendReflect and handleSummarizeReflect stood
+  // here — the three calls that drove the in-report coaching conversation.
+  // They went to Talk It Through with it.
 
   async function handleGenerateContentNotes() {
     setContentNotesSending(true)
@@ -2447,13 +2285,22 @@ function ReportPanel({
     setPendingScrollId(sourceId)
   }
 
+  // Hands off into Talk It Through rather than opening a Reflect tab inside
+  // this recording.
+  //
+  // Reflect was a coaching conversation that lived inside one AudioSession,
+  // which meant a teacher could never find it again: it was not in their
+  // conversations, it had no takeaway, and it could not become a check-in.
+  // Talk It Through already is all of those things, so the report travels to
+  // it instead of a second conversation surface existing here.
   function handleDiscussWithCoach(candidate: NoticeCandidate) {
-    setTab('reflect')
     // "this moment" is right for one timestamped excerpt and wrong for a whole
-    // page — a teacher pressing Discuss at the foot of Checks & Feedback is
+    // page — a teacher pressing Discuss at the foot of Questions & Checks is
     // not asking about a moment, they are asking about what they just read.
     const aboutAMoment = candidate.timestampSec != null || candidate.excerpt != null
-    setExternalFocus({
+    setHandoff({
+      kind: 'debrief_report',
+      sessionId: session.id,
       label: candidate.observation,
       focus: aboutAMoment
         ? [
@@ -2464,9 +2311,12 @@ function ReportPanel({
             .filter(Boolean)
             .join(' ')
         : `what the report says about ${candidate.observation}`,
-      detail: candidate.detail ?? null,
+      // Falls back to the report's own plain-language facts, so a Discuss
+      // from anywhere still arrives with something the coach can use.
+      detail: candidate.detail ?? (reflectContext.length > 0 ? reflectContext.join(' ') : null),
       timestampSec: candidate.timestampSec,
     })
+    navigate('/talk')
   }
 
   useEffect(() => {
@@ -2525,8 +2375,38 @@ function ReportPanel({
         </div>
       </header>
 
-      <TabBar tab={tab} onSelect={setTab} />
+      {/* Rubric Lens is a view over the whole report rather than a sixth bin
+          beside the others. It was the last item in a list of six, which made
+          a framework view of the entire lesson look like one more category of
+          finding — and buried it. As a toggle it sits beside the tabs and
+          takes over the report, which is what it actually is. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <TabBar tab={tab} onSelect={setTab} />
+        <button
+          type="button"
+          onClick={() => setRubricView((on) => !on)}
+          aria-pressed={rubricView}
+          className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+            rubricView
+              ? 'bg-gold text-forest'
+              : 'border border-hairline bg-cream-card text-ink-soft hover:text-terracotta-600'
+          }`}
+        >
+          {rubricView ? 'Back to the report' : 'Rubric Lens'}
+        </button>
+      </div>
 
+      {rubricView ? (
+        <RubricLensTab
+          rubricLens={session.rubricLens}
+          locked={locked}
+          isShort={coverage.isShort}
+          sending={rubricLensSending}
+          error={rubricLensError}
+          onGenerate={handleGenerateRubricLens}
+        />
+      ) : (
+        <>
       {tab === 'summary' && (
         <SummaryTab
           session={session}
@@ -2547,6 +2427,13 @@ function ReportPanel({
           onDiscussWithCoach={handleDiscussWithCoach}
           focusMetric={focusMetric}
           focusSnapshot={focusSnapshot}
+          contentNotesSending={contentNotesSending}
+          contentNotesError={contentNotesError}
+          onGenerateContentNotes={handleGenerateContentNotes}
+          teacherTalkMetric={teacherTalkMetric}
+          studentTalkMetric={studentTalkMetric}
+          waitTimeMetric={waitTimeMetric}
+          onRefresh={() => void refreshSession()}
         />
       )}
 
@@ -2556,18 +2443,7 @@ function ReportPanel({
 
       {tab === 'reflect' && (
         <ReflectTab
-          highlights={session.highlights}
-          cfuMetric={cfuMetric}
-          redirectionMetric={redirectionMetric}
-          conversation={session.reflectConversation}
-          sending={reflectSending}
-          reflectError={reflectError}
-          draft={reflectDraft}
-          onDraftChange={setReflectDraft}
-          onStart={handleStartReflect}
-          onSend={handleSendReflect}
           locked={locked}
-          talkVoice={talkVoice}
           strengths={strengths}
           growthAreas={growthAreas}
           nextStep={nextStep}
@@ -2592,14 +2468,20 @@ function ReportPanel({
           saved={saved}
           error={error}
           onSave={handleSaveNotes}
-          onSummarize={handleSummarizeReflect}
-          summarizing={summarizing}
-          summarizeError={summarizeError}
+          onTalkItThrough={() =>
+            handleDiscussWithCoach({
+              id: 'my-notes',
+              observation: 'this lesson',
+              whyItMatters: "Let's talk through how it went.",
+              timestampSec: null,
+              excerpt: null,
+              durationSec: null,
+              weight: 0,
+              focusMetric: null,
+            })
+          }
           focusMetric={focusMetric}
           onFocusMetricChange={onFocusMetricChange}
-          segments={session.segments}
-          externalFocus={externalFocus}
-          onExternalFocusHandled={() => setExternalFocus(null)}
         />
       )}
 
@@ -2623,6 +2505,10 @@ function ReportPanel({
               />
             )}
 
+            {/* Both halves of what used to be two sections. A teacher
+                reading about what they asked and a teacher reading about how
+                they checked are the same teacher asking the same question, so
+                the answer is one page rather than two tabs apart. */}
             {insightsSection === 'questions' && (
               <QuestionsThinkingTab
                 questionCount={session.questionCount}
@@ -2640,7 +2526,7 @@ function ReportPanel({
               />
             )}
 
-            {insightsSection === 'understanding' && (
+            {insightsSection === 'questions' && (
               <UnderstandingFeedbackTab
                 checksNarrative={session.checksNarrative ?? null}
                 cfuLog={session.cfuLog}
@@ -2648,17 +2534,6 @@ function ReportPanel({
                 segments={session.segments}
                 specificFeedbackCount={specificCount}
                 feedbackTotal={feedbackTotal}
-              />
-            )}
-
-            {insightsSection === 'content' && (
-              <LessonContentTab
-                lessonContent={session.lessonContent}
-                contentNotes={session.contentNotes}
-                isShort={coverage.isShort}
-                sending={contentNotesSending}
-                error={contentNotesError}
-                onGenerate={handleGenerateContentNotes}
               />
             )}
 
@@ -2674,16 +2549,6 @@ function ReportPanel({
               />
             )}
 
-            {insightsSection === 'rubric' && (
-              <RubricLensTab
-                rubricLens={session.rubricLens}
-                locked={locked}
-                isShort={coverage.isShort}
-                sending={rubricLensSending}
-                error={rubricLensError}
-                onGenerate={handleGenerateRubricLens}
-              />
-            )}
             <DiscussFooter
               label="Discuss this with Wivoza Coach"
               onClick={() =>
@@ -2707,6 +2572,8 @@ function ReportPanel({
           </div>
         </div>
       )}
+        </>
+      )}
 
       <div className="rounded-xl border border-dashed border-hairline p-4 text-xs text-ink-soft">
         This report reflects what could be heard in your recording — talk patterns, questioning, and classroom
@@ -2714,12 +2581,10 @@ function ReportPanel({
         outside class time. Automated counts above are suggestions to confirm or edit, not final judgments.
       </div>
 
-      <Link
-        to={`/audio-coaching/${session.id}/export`}
-        className="self-start text-sm font-medium text-forest hover:text-terracotta-600"
-      >
-        Open printable report →
-      </Link>
+      {/* "Open printable report" stood here, going to exactly the same place
+          as "Print / Save as PDF" in the header above. Two buttons for one
+          action, with different names, invited a teacher to work out whether
+          they did different things. */}
     </div>
   )
 }
@@ -2747,6 +2612,13 @@ function SummaryTab({
   onDiscussWithCoach,
   focusMetric,
   focusSnapshot,
+  contentNotesSending,
+  contentNotesError,
+  onGenerateContentNotes,
+  teacherTalkMetric,
+  studentTalkMetric,
+  waitTimeMetric,
+  onRefresh,
 }: {
   session: AudioSessionWithSegments
   coverage: ReturnType<typeof getCoverage>
@@ -2766,6 +2638,14 @@ function SummaryTab({
   onDiscussWithCoach: (candidate: NoticeCandidate) => void
   focusMetric: FocusMetric | null
   focusSnapshot: FocusSnapshot | null
+  contentNotesSending: boolean
+  contentNotesError: string | null
+  onGenerateContentNotes: () => void
+  teacherTalkMetric: ConfidentMetric
+  studentTalkMetric: ConfidentMetric
+  waitTimeMetric: ConfidentMetric
+  /// Re-reads the session, so linking a plan brings the comparison in.
+  onRefresh: () => void
 }) {
   const classSummaryProgress = useSimulatedProgress(classSummarySending, 14000)
   const strengthCandidates = buildStrengthCandidates(session, cfuMetric, feedbackRatio, higherOrderRatio)
@@ -2776,12 +2656,54 @@ function SummaryTab({
   const momentToRevisit = pickTop(priorityCandidates, focusMetric)
   const spotlight = buildSpotlight(talkInsight, questioningInsight, cfuInsight)
 
-  // Four sections, in the order a teacher actually wants to read them:
-  // what happened, what went well, what to focus on, and the evidence
-  // behind it — rather than a stack of similarly-weighted cards with no
-  // throughline. Talking it through lives in the Reflect tab.
+  // Everything the recording could not judge, as one line rather than a
+  // panel per absence. On a short clip the old shape produced a report mostly
+  // made of apologies, which buried the two or three things it did measure.
+  const lowConfidence = buildLowConfidenceLine([
+    { label: 'talk balance', state: teacherTalkMetric.state },
+    { label: 'student voice', state: studentTalkMetric.state },
+    { label: 'questions', state: questionsMetric.state },
+    { label: 'wait time', state: waitTimeMetric.state },
+    { label: 'checks for understanding', state: cfuMetric.state },
+    { label: 'feedback', state: feedbackRatio.state },
+  ])
+
+  // Leads with the one next step, the same shape Look It Over uses — a
+  // teacher who reads nothing else should still leave with one thing to do.
+  // Then: what happened, what went well, the evidence, and the lesson's own
+  // words.
   return (
     <div className="flex flex-col gap-5">
+      {/* One next step, before anything else. */}
+      {momentToRevisit && (
+        <div className="rounded-3xl border-l-8 border-gold bg-gold-tint/50 p-6">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">One next step</p>
+          <p className="mt-2 text-base text-ink">{momentToRevisit.observation}</p>
+          <p className="mt-1 text-sm text-ink-soft">{momentToRevisit.whyItMatters}</p>
+        </div>
+      )}
+
+      {/* What the plan said against what the lesson did. The one sentence
+          neither surface could produce alone, which is why the handoff
+          exists — and it reports the gap without grading it, because a
+          lesson that diverges from its plan is frequently a teacher reading
+          the room correctly. */}
+      {session.planComparison && (
+        <div className="rounded-2xl bg-mint-tint/50 p-5">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">
+            Against the plan you had me read
+          </p>
+          <p className="mt-1.5 text-sm text-ink">{session.planComparison.line}</p>
+          <p className="mt-1 text-xs text-ink-soft">{session.planComparison.caveat}</p>
+        </div>
+      )}
+
+      {/* The single honesty line. Named dimensions, one sentence — the
+          epistemic care is unchanged, the room it takes is not. */}
+      {lowConfidence && (
+        <p className="rounded-2xl bg-cream px-4 py-3 text-xs text-ink-soft">{lowConfidence}</p>
+      )}
+
       {/* 1. Lesson at a glance */}
       <NumberedCard n={1} title="Lesson at a glance" subtitle="What happened in this lesson, and the four numbers behind it">
         {classSummary ? (
@@ -2901,6 +2823,29 @@ function SummaryTab({
             <EvidenceMomentCard moment={momentToRevisit} onSetFocus={onFocusMetricChange} />
           )}
         </div>
+      </NumberedCard>
+
+      {/* Linking a plan is setup rather than a finding, so it sits below the
+          evidence rather than competing with it at the top. */}
+      <LinkReviewedPlan sessionId={session.id} reviewId={session.reviewId} onLinked={onRefresh} />
+
+      {/* Clarity & Content, folded in from what used to be its own bin.
+          It is the lesson's own words about what the lesson was about, which
+          is the same question "Lesson at a glance" answers at the top of this
+          page — a separate tab two clicks away made them look unrelated. */}
+      <NumberedCard
+        n={focusSnapshot ? 5 : 4}
+        title="In the lesson's own words"
+        subtitle="What the lesson said it was about, quoted rather than judged"
+      >
+        <LessonContentTab
+          lessonContent={session.lessonContent}
+          contentNotes={session.contentNotes}
+          isShort={coverage.isShort}
+          sending={contentNotesSending}
+          error={contentNotesError}
+          onGenerate={onGenerateContentNotes}
+        />
       </NumberedCard>
 
       <DiscussFooter
@@ -3246,21 +3191,11 @@ function MyGrowthTab({
   )
 }
 
-const REFLECT_TURN_CAP = 12
 
-function ReflectTab({
-  highlights,
-  cfuMetric,
-  redirectionMetric,
-  conversation,
-  sending,
-  reflectError,
-  draft,
-  onDraftChange,
-  onStart,
-  onSend,
+/// Exported for the test that verifies what survived the removal of the
+/// in-report coaching conversation. Not rendered anywhere but this page.
+export function ReflectTab({
   locked,
-  talkVoice,
   strengths,
   growthAreas,
   nextStep,
@@ -3273,27 +3208,11 @@ function ReflectTab({
   saved,
   error,
   onSave,
-  onSummarize,
-  summarizing,
-  summarizeError,
+  onTalkItThrough,
   focusMetric,
   onFocusMetricChange,
-  segments,
-  externalFocus,
-  onExternalFocusHandled,
 }: {
-  highlights: AudioHighlight[] | null
-  cfuMetric: { state: string }
-  redirectionMetric: { state: string }
-  conversation: AudioReflectMessage[] | null
-  sending: boolean
-  reflectError: { kind: ReflectChatErrorKind; message: string } | null
-  draft: string
-  onDraftChange: (v: string) => void
-  onStart: (focus?: string, spoken?: boolean) => void
-  onSend: (overrideText?: string, extraContext?: string[], spoken?: boolean) => void
   locked: boolean
-  talkVoice: TalkVoice | null
   strengths: string
   growthAreas: string
   nextStep: string
@@ -3306,875 +3225,110 @@ function ReflectTab({
   saved: boolean
   error: string | null
   onSave: () => void
-  onSummarize: () => void
-  summarizing: boolean
-  summarizeError: string | null
+  /// Hands this lesson's report to Talk It Through. The only way from here
+  /// into a conversation.
+  onTalkItThrough: () => void
   focusMetric: FocusMetric | null
   onFocusMetricChange: (metric: FocusMetric | null) => void
-  segments: TranscriptSegment[]
-  externalFocus: { label: string; focus: string; detail: string | null; timestampSec: number | null } | null
-  onExternalFocusHandled: () => void
 }) {
-  const started = conversation != null && conversation.length > 0
-  const userTurnCount = conversation?.filter((m) => m.role === 'user').length ?? 0
-  const turnCapHit = userTurnCount >= REFLECT_TURN_CAP
-  const lastAssistant = conversation ? [...conversation].reverse().find((m) => m.role === 'assistant') : null
-
-  // A session that was already finished before (has saved notes) opens
-  // straight into the review screen. A conversation already in progress
-  // picks up where it left off — leaving for the report and coming back
-  // must not drop the teacher onto the starting screen again. Only a
-  // session with no conversation yet opens on the starting screen.
-  const [reviewingNotes, setReviewingNotes] = useState(() => Boolean(strengths || growthAreas || nextStep))
-  const [showStartScreen, setShowStartScreen] = useState(() => !started)
-  const [userTranscript, setUserTranscript] = useState<string | null>(
-    () => [...(conversation ?? [])].reverse().find((m) => m.role === 'user')?.text ?? null,
-  )
-  // "Let's discuss another moment" opens this picker inside the conversation instead of
-  // sending the teacher back to the starting screen.
-  const [pickingTopic, setPickingTopic] = useState(false)
-
-  // Starting-screen path selection — picking a card only selects it
-  // (per spec, never immediately starts anything); "Start Talking"/"Type
-  // instead" below read the current selection to decide how the
-  // conversation opens.
-  const [selectedPath, setSelectedPath] = useState<ReflectPath>('full_report')
-  const [selectedMomentIndex, setSelectedMomentIndex] = useState(0)
-  const [menuOpen, setMenuOpen] = useState(false)
-
-  // Which moment (if any) the current stretch of conversation is anchored
-  // to — drives "Show me the evidence" (only offered once a real
-  // timestamp is known) and the transcript-window reveal below it.
-  const [currentTimestampSec, setCurrentTimestampSec] = useState<number | null>(null)
-  const [showTranscriptWindow, setShowTranscriptWindow] = useState(false)
-
-  // Active-session chrome: a lightweight elapsed timer and an explicit
-  // Pause (distinct from voice mode's own mic-level Pause/Resume, since
-  // typed conversations have no mic to pause) plus a confirmation step
-  // before Finish, matching the reference design's own dialog copy —
-  // a plain window.confirm can't carry custom button labels, so this is
-  // a small purpose-built dialog instead of this app's usual
-  // window.confirm pattern.
-  const [elapsedSec, setElapsedSec] = useState(0)
-  const [sessionPaused, setSessionPaused] = useState(false)
-  const [showFinishConfirm, setShowFinishConfirm] = useState(false)
-
-  useEffect(() => {
-    if (showStartScreen || reviewingNotes || sessionPaused) return
-    const interval = window.setInterval(() => setElapsedSec((s) => s + 1), 1000)
-    return () => window.clearInterval(interval)
-  }, [showStartScreen, reviewingNotes, sessionPaused])
-
-  // Voice mode — talk to Coach live instead of typing, replies auto-play.
-  // Same useVoiceTurn hook and voicePlayback helpers Talk It Through uses,
-  // just recolored to this report's own brand/warm/ink tokens instead of
-  // Talk It Through's distinct cream/forest theme.
-  const [voiceMode, setVoiceMode] = useState(false)
-  const [muted, setMuted] = useState(false)
-  const [isSpeaking, setIsSpeaking] = useState(false)
-  const audioRef = useRef<HTMLAudioElement>(null)
-  // Replies already in the conversation when this tab opens are never read
-  // aloud again — only new ones are.
-  const spokenCountRef = useRef(conversation?.length ?? 0)
-  // The reply currently being read aloud, so Finish, switching topic and
-  // leaving the tab can cut Coach off mid-sentence rather than letting the
-  // rest of the queue play out.
-  const playbackRef = useRef<PlaybackQueue | null>(null)
-  const voiceModeRef = useRef(false)
-  voiceModeRef.current = voiceMode
-  const mutedRef = useRef(false)
-  mutedRef.current = muted
-
-  function handleVoiceTurnComplete(text: string) {
-    if (!text) {
-      if (voiceModeRef.current && !locked && !turnCapHit) start()
-      return
-    }
-    setUserTranscript(text)
-    onSend(text, [], voiceModeRef.current)
-  }
-
-  const {
-    supported: voiceSupported,
-    listening,
-    level,
-    fatalError: voiceFatalError,
-    transcribing,
-    start,
-    close,
-  } = useVoiceTurn(handleVoiceTurnComplete)
-
-  useEffect(() => {
-    if (voiceFatalError) setVoiceMode(false)
-  }, [voiceFatalError])
-
-  // Auto-play: the moment a new, not-yet-spoken assistant reply shows up
-  // while in voice mode, speak it (unless muted), then resume listening —
-  // same "record -> reply -> speak -> resume" loop Talk It Through uses.
-  useEffect(() => {
-    if (!voiceMode || !conversation) return
-    if (conversation.length <= spokenCountRef.current) return
-    const last = conversation[conversation.length - 1]
-    if (last.role !== 'assistant') return
-    spokenCountRef.current = conversation.length
-    if (mutedRef.current || !audioRef.current) {
-      if (!locked && !turnCapHit) start()
-      return
-    }
-    const sentences = splitIntoSentences(last.text)
-    if (sentences.length === 0) return
-    setIsSpeaking(true)
-    const queue = createPlaybackQueue(audioRef.current, talkVoice)
-    playbackRef.current = queue
-    for (const sentence of sentences) queue.push(sentence)
-    queue.end()
-    queue.finished.then(() => {
-      // A cancelled queue was stopped on purpose (Finish, switching topic,
-      // leaving) — don't reopen the mic behind the teacher's back.
-      if (playbackRef.current !== queue) return
-      playbackRef.current = null
-      setIsSpeaking(false)
-      if (voiceModeRef.current && !locked && !turnCapHit) start()
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversation, voiceMode])
-
-  // Stops Coach mid-sentence and releases the mic.
-  function stopCoach() {
-    playbackRef.current?.cancel()
-    playbackRef.current = null
-    audioRef.current?.pause()
-    setIsSpeaking(false)
-    close()
-  }
-
-  // Leaving this tab or the report silences Coach and releases the mic.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => stopCoach, [])
-
-  // Fire-and-forget, same as TalkToMe.tsx's own priming — never awaited, so
-  // it can't block the actual state transition (starting the conversation,
-  // or entering voice mode) behind however long the unlock takes to settle.
-  function primeAudio() {
-    const audio = audioRef.current
-    if (audio) primeAudioElement(audio)
-  }
-
-  const starterPrompts = buildReflectStarterPrompts(highlights, cfuMetric, redirectionMetric)
-
-  // What the selected path tells Coach to open with — only meaningful the
-  // first time a conversation starts; resuming an existing one (below)
-  // never re-invokes this. Also yields the moment's timestamp, when the
-  // path is anchored to one, so "Show me the evidence" is available from
-  // the very first reply of that conversation.
-  function resolveSelectedPath(): { focus: string | undefined; timestampSec: number | null } {
-    switch (selectedPath) {
-      case 'full_report':
-        return {
-          focus:
-            'the session as a whole — open by naming one genuine strength from the facts below and one moment worth revisiting, each grounded in specific evidence, before landing on a question',
-          timestampSec: null,
-        }
-      case 'specific_moment': {
-        const prompt = starterPrompts[selectedMomentIndex]
-        return {
-          focus: prompt?.focus ?? "a specific moment from today's lesson that stood out",
-          timestampSec: prompt?.timestampSec ?? null,
-        }
-      }
-      case 'how_it_felt':
-        return {
-          focus:
-            "how the lesson felt to the teacher, from their own perspective — invite them to share their own take on it before referencing any of the measured data",
-          timestampSec: null,
-        }
-      case 'ask_question':
-        return {
-          focus:
-            "whatever's on the teacher's mind about this lesson — invite them to ask you anything, rather than leading with an observation yourself",
-          timestampSec: null,
-        }
-    }
-  }
-
-  // A conversation already exists (the teacher picked a path here before,
-  // or resumed via the menu) — these buttons just resume it. The backend
-  // would otherwise reject a second "start" call on a non-empty
-  // conversation (it expects a real message once one exists).
-  function handleStartVoice() {
-    primeAudio()
-    setVoiceMode(true)
-    if (started) setShowStartScreen(false)
-    else {
-      const { focus, timestampSec } = resolveSelectedPath()
-      setCurrentTimestampSec(timestampSec)
-      // spoken: this opener is played aloud, so Coach has to be told the
-      // teacher is listening rather than reading. Without it the one reply
-      // a teacher hears first was written to be read on a screen.
-      onStart(focus, true)
-    }
-  }
-
-  function handleStartTyped() {
-    setVoiceMode(false)
-    if (started) setShowStartScreen(false)
-    else {
-      const { focus, timestampSec } = resolveSelectedPath()
-      setCurrentTimestampSec(timestampSec)
-      onStart(focus)
-    }
-  }
-
-  // A change-topic / "Let's discuss another moment" action returns to the
-  // path-selection screen without touching the conversation itself —
-  // exactly the existing "Continue previous debrief" menu item's own
-  // resume mechanism, run in reverse.
-  function handleChangeTopic() {
-    stopCoach()
-    setShowTranscriptWindow(false)
-    setPickingTopic(true)
-  }
-
-  // Switching topic is just the next turn of the same conversation.
-  function handlePickTopic(message: string, timestampSec: number | null) {
-    setPickingTopic(false)
-    setCurrentTimestampSec(timestampSec)
-    setUserTranscript(message)
-    onSend(message, [], voiceModeRef.current)
-  }
-
-  function handleCancelTopicPicker() {
-    setPickingTopic(false)
-    if (voiceMode && !sessionPaused && !locked && !turnCapHit) start()
-  }
-
-  // Consumes a "Discuss this" click from Summary's Moments card. If a
-  // conversation is already running, this becomes a real, visible turn;
-  // otherwise it seeds the opening question exactly like a starting-screen
-  // path does.
-  useEffect(() => {
-    if (!externalFocus) return
-    setShowStartScreen(false)
-    setShowTranscriptWindow(false)
-    // Reflect opens on the debrief once one exists, which is right when the
-    // teacher navigates there themselves and wrong when they arrive by
-    // pressing Discuss: they asked to talk about a section and were shown
-    // their saved notes instead, on every section, not just the one where it
-    // was noticed.
-    setReviewingNotes(false)
-    // "Discuss this with Wivoza Coach" should feel like talking to someone
-    // about the class, not filling in a box. The start screen's own voice
-    // button set this and the external entry never did, so every arrival from
-    // the report landed in typing. If the browser refuses to play audio
-    // without a direct gesture, the existing voiceFatalError path drops back
-    // to typing — no worse than before.
-    primeAudio()
-    setVoiceMode(true)
-    setCurrentTimestampSec(externalFocus.timestampSec)
-    // The label alone ("Follow-up questions — your current focus") carries
-    // no data, and mid-conversation the coach once answered with its earlier
-    // talk-balance reply instead — so the switch is spelled out, along with
-    // whatever the report actually measured for the new topic.
-    // Same framing the first-conversation branch uses. Without it, a teacher
-    // who already has a conversation — which is everyone with a debrief — got
-    // the page's text with none of the instruction about how to treat it, and
-    // the coach was free to re-derive a reading that contradicts the page.
-    const measured = externalFocus.detail
-      ? ` This is the report's own reading of that section, which the teacher has just finished reading: "${externalFocus.detail}" Open about this specifically. Treat it as accurate and build on it — do not re-derive your own reading from the raw numbers and do not contradict it.`
-      : ''
-    if (started) {
-      onSend(
-        `Let's discuss this: ${externalFocus.label}`,
-        [`The teacher just switched to a new topic: ${externalFocus.label}.${measured}`],
-        true,
-      )
-    } else {
-      onStart(
-        externalFocus.detail
-          ? `${externalFocus.focus}. This is the report's own reading, which the teacher has just finished reading, quoted here: "${externalFocus.detail}". Open about this specifically rather than about the lesson in general. Treat it as accurate and build on it — do not re-derive your own reading from the raw numbers and do not contradict it, or the teacher hears one thing on the page and the opposite from you.`
-          : externalFocus.focus,
-        true,
-      )
-    }
-    onExternalFocusHandled()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [externalFocus])
-
-  function handleSwitchToVoice() {
-    primeAudio()
-    setVoiceMode(true)
-    if (!locked && !turnCapHit) start()
-  }
-
-  function handleSwitchToTyping() {
-    close()
-    setVoiceMode(false)
-  }
-
-  function handleTogglePause() {
-    if (sessionPaused) {
-      setSessionPaused(false)
-      if (voiceMode && !locked && !turnCapHit) start()
-    } else {
-      setSessionPaused(true)
-      if (voiceMode) stopCoach()
-    }
-  }
-
-  /// Coming back to a finished debrief and picking the conversation up again:
-  /// the report closes, voice comes back on, and the mic opens, so the teacher
-  /// can simply start talking.
-  function handleResumeConversation() {
-    setReviewingNotes(false)
-    primeAudio()
-    setVoiceMode(true)
-    if (!locked && !turnCapHit) start()
-  }
-
-  function handleFinish() {
-    stopCoach()
-    setVoiceMode(false)
-    setPickingTopic(false)
-    setShowFinishConfirm(false)
-    setReviewingNotes(true)
-    onSummarize()
-  }
-
-  const voiceStatus = transcribing
-    ? 'Transcribing…'
-    : sending
-      ? 'Thinking…'
-      : isSpeaking
-        ? 'Coach is speaking'
-        : listening
-          ? level > 8
-            ? 'Listening…'
-            : "I'm listening — go ahead"
-          : 'Paused'
-
+  // The teacher's own written reflection, and nothing else.
+  //
+  // A coaching conversation used to share this tab. It moved to Talk It
+  // Through, because a conversation living inside one AudioSession could
+  // never be found again: it was not among the teacher's conversations, it
+  // had no takeaway, and it could not become a check-in. Its engine — voice
+  // turns, audio playback, a start screen, a topic picker, an elapsed timer,
+  // a parallel chat transcript — went with it, about 800 lines.
+  //
+  // What stays is what the teacher wrote themselves. That is their words, it
+  // feeds My Growth through the focus metric, and it exists on recordings
+  // they made months ago — so deleting this tab outright would have made all
+  // of it unreachable.
   return (
     <div className="flex flex-col gap-6">
-      {/* Persistent element — playQueue always plays a locally created
-          blob: URL through it, never /api/tts directly. Must render as a
-          genuinely laid-out element, not display:none — Chromium's own UA
-          stylesheet has `audio:not([controls]) { display: none !important
-          }`, which no inline/author style can override (confirmed: setting
-          display:block inline still computed to none until `controls` was
-          added). Without a real layout box, Chrome's background-media
-          power-saving policy also suspends the element, rejecting play()
-          with "video-only background media was paused to save power" the
-          moment it's called — the exact, confirmed cause of this playing
-          fine on Safari (no such policy) and silently failing on Chrome.
-          The `controls` attribute escapes that UA rule; opacity/size/
-          position then hide the native player UI without display:none
-          ever coming back into play. */}
-      <audio
-        ref={audioRef}
-        crossOrigin="use-credentials"
-        controls
-        style={{ position: 'fixed', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
-      />
-
-      {reviewingNotes ? (
-        <div className="flex flex-col gap-6">
-          {/* Finishing turns voice off. This used to only hide the report, so
-              a teacher who came back landed in the transcript with nobody
-              speaking and nobody listening, and no way to tell what to press.
-              It resumes the conversation properly — and it is a primary
-              action now, not a back link, because carrying on is the point of
-              coming back. */}
-          {!locked && (
-            <button
-              type="button"
-              onClick={handleResumeConversation}
-              className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90"
-            >
-              Carry on the conversation →
-            </button>
-          )}
-          {locked && (
-            <button
-              type="button"
-              onClick={() => setReviewingNotes(false)}
-              className="self-start text-sm font-medium text-ink-soft hover:text-ink"
-            >
-              ← Back to conversation
-            </button>
-          )}
-
-          {summarizing ? (
-            <div className="rounded-2xl border border-hairline bg-cream-card p-8">
-              <WorkingRing
-                active
-                estimatedMs={12000}
-                label="Wrapping up your reflection"
-                hint="Pulling your notes from the conversation."
-                className="text-forest"
-              />
-            </div>
-          ) : (
-            <>
-              {summarizeError && <p className="text-sm text-terracotta-600">{summarizeError}</p>}
-
-              {/* The teacher's own notes, in the same numbered sections as every
-                  other takeaway. They stay editable until the report is locked. */}
-              <NumberedCard n={1} title="What I noticed" subtitle="What stood out to you in this lesson">
-                <textarea
-                  aria-label="What I noticed"
-                  onBlur={onSave}
-                  value={strengths}
-                  onChange={(e) => onStrengthsChange(e.target.value)}
-                  disabled={locked}
-                  rows={3}
-                  className="w-full rounded-lg border border-hairline bg-cream-card px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
-                />
-              </NumberedCard>
-
-              <NumberedCard n={2} title="What I want to explore" subtitle="A question or pattern you'd like to understand better">
-                <textarea
-                  aria-label="What I want to explore"
-                  onBlur={onSave}
-                  value={growthAreas}
-                  onChange={(e) => onGrowthAreasChange(e.target.value)}
-                  disabled={locked}
-                  rows={3}
-                  className="w-full rounded-lg border border-hairline bg-cream-card px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
-                />
-              </NumberedCard>
-
-              <NumberedCard n={3} title="My next step" subtitle="One thing to try, and when to look back at how it went">
-                <div className="flex flex-col gap-3">
-                  <textarea
-                    aria-label="My next step"
-                    onBlur={onSave}
-                    value={nextStep}
-                    onChange={(e) => onNextStepChange(e.target.value)}
-                    disabled={locked}
-                    rows={2}
-                    className="w-full rounded-lg border border-hairline bg-cream-card px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
-                  />
-                  <label className="flex flex-wrap items-center gap-2.5">
-                    <span className="text-sm font-medium text-ink">Follow-up date</span>
-                    <input
-                      type="date"
-                      onBlur={onSave}
-                      value={followUpDate}
-                      onChange={(e) => onFollowUpDateChange(e.target.value)}
-                      disabled={locked}
-                      className="w-fit rounded-lg border border-hairline bg-cream-card px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
-                    />
-                  </label>
-                </div>
-              </NumberedCard>
-
-              <NumberedCard n={4} title="Focus for my next recording" subtitle="Choose one area — My Growth will track it across lessons">
-                <FocusSelector focusMetric={focusMetric} onChange={onFocusMetricChange} />
-              </NumberedCard>
-
-              {/* No "Save notes" and no "Lock report". The debrief is written
-                  when the conversation finishes and saved with it; an edit
-                  saves itself when the field loses focus. A teacher wanted to
-                  talk, finish, and have a debrief — not to file it. And
-                  locking made a living document final, when the point is that
-                  coming back and saying one more thing rewrites it. */}
-              {!locked && (
-                <p className="text-sm text-ink-soft">
-                  {saving ? 'Saving…' : saved ? 'Saved. Come back any time — carry on the conversation and this rewrites itself.' : ''}
-                </p>
-              )}
-              {error && <p className="text-sm text-terracotta-600">{error}</p>}
-            </>
-          )}
-        </div>
-      ) : showStartScreen ? (
-        <div className="relative mx-auto w-full max-w-2xl rounded-2xl border border-hairline bg-cream-card p-6 sm:p-8">
-          {started && (
-            <div className="absolute right-5 top-5 sm:right-6 sm:top-6">
-              <button
-                type="button"
-                onClick={() => setMenuOpen((o) => !o)}
-                aria-label="Debrief options"
-                className="rounded-full p-1.5 text-ink-soft transition-colors hover:bg-cream hover:text-ink"
-              >
-                <KebabIcon className="h-5 w-5" />
-              </button>
-              {menuOpen && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-                  <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-xl border border-hairline bg-cream-card p-1.5 shadow-lg">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMenuOpen(false)
-                        setShowStartScreen(false)
-                      }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-ink transition-colors hover:bg-cream"
-                    >
-                      <ChatBubbleIcon className="h-4 w-4 text-ink-soft" />
-                      Continue previous debrief
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          <span className="inline-block rounded-full bg-peach-tint px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-terracotta-600">
-            Interactive Debrief
-          </span>
-          <h2 className="mt-3 font-heading text-2xl font-extrabold text-forest sm:text-3xl">Let's debrief your lesson</h2>
-          <p className="mt-1.5 max-w-lg text-sm text-ink-soft">
-            Your coach will use your report, ask one question at a time, and help you choose a practical next
-            step.
-          </p>
-
-          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {REFLECT_PATH_CARDS.map((path) => (
-              <button
-                key={path.key}
-                type="button"
-                onClick={() => setSelectedPath(path.key)}
-                className={`relative flex flex-col items-start gap-3 rounded-2xl border p-4 text-left transition-colors ${
-                  selectedPath === path.key
-                    ? 'border-terracotta bg-peach-tint/50'
-                    : 'border-hairline bg-cream hover:border-terracotta/40'
-                }`}
-              >
-                {path.recommended && (
-                  <span className="absolute right-4 top-4 rounded-full bg-forest px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                    Recommended
-                  </span>
-                )}
-                <span className={`flex h-10 w-10 items-center justify-center rounded-full ${path.iconBg}`}>
-                  {path.icon}
-                </span>
-                <div>
-                  <p className="text-sm font-semibold text-ink">{path.title}</p>
-                  <p className="mt-0.5 text-xs text-ink-soft">{path.description}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {selectedPath === 'specific_moment' && starterPrompts.length > 0 && (
-            <div className="mt-3 flex flex-col gap-2">
-              {starterPrompts.map((p, i) => (
-                <button
-                  key={p.label}
-                  type="button"
-                  onClick={() => setSelectedMomentIndex(i)}
-                  className={`rounded-xl border px-4 py-2.5 text-left text-sm transition-colors ${
-                    selectedMomentIndex === i
-                      ? 'border-terracotta bg-peach-tint/50 text-forest'
-                      : 'border-hairline bg-cream text-ink hover:border-terracotta/40'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {!locked && (
-            <div className="mt-6 flex flex-col items-center gap-3">
-              <button
-                type="button"
-                onClick={handleStartVoice}
-                disabled={sending}
-                className="flex w-full items-center justify-center gap-2 rounded-full bg-terracotta px-5 py-3.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
-              >
-                <MicIcon className="h-4 w-4" />
-                {sending ? 'Starting...' : 'Start Talking'}
-              </button>
-              <button
-                type="button"
-                onClick={handleStartTyped}
-                disabled={sending}
-                className="text-sm font-medium text-ink-soft hover:text-ink"
-              >
-                Type instead
-              </button>
-              <WorkingRing active={sending} estimatedMs={8000} label="Starting your debrief" className="text-forest" />
-              <p className="mt-1 text-xs text-ink-soft">Your debrief is private and saved automatically.</p>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4">
-          <div className="rounded-2xl border border-hairline bg-cream-card p-6">
-            <div className="mb-4 flex items-center justify-between border-b border-hairline pb-3">
-              <div className="flex items-center gap-2">
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    locked || sessionPaused ? 'bg-ink-soft' : 'animate-pulse bg-terracotta'
-                  }`}
-                />
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                  {locked ? 'Read-only' : sessionPaused ? 'Paused' : 'In progress'}
-                </p>
-                <span className="text-xs text-ink-soft">· {formatTime(elapsedSec)}</span>
-              </div>
-              {!locked && (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleTogglePause}
-                    className="rounded-full border border-hairline px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
-                  >
-                    {sessionPaused ? 'Resume' : 'Pause'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowFinishConfirm(true)}
-                    className="rounded-full bg-terracotta px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-terracotta/90"
-                  >
-                    Finish Debrief
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-3">
-              {userTranscript && (
-                <div className="rounded-xl bg-mint-tint/60 px-4 py-2.5 text-sm text-ink">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-forest">You</p>
-                  <p className="mt-1">{userTranscript}</p>
-                </div>
-              )}
-              {lastAssistant && (
-                <div className="rounded-xl border border-hairline bg-cream px-4 py-2.5 text-sm whitespace-pre-wrap text-ink">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Coach</p>
-                  <p className="mt-1">{lastAssistant.text}</p>
-                </div>
-              )}
-              <ThinkingIndicator active={sending} />
-
-              {lastAssistant && !sending && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onSend('Tell me more about that.')}
-                    disabled={locked || turnCapHit}
-                    className="rounded-full border border-hairline px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-50"
-                  >
-                    Tell me more
-                  </button>
-                  {currentTimestampSec != null && (
-                    <button
-                      type="button"
-                      onClick={() => setShowTranscriptWindow((v) => !v)}
-                      className="rounded-full border border-hairline px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
-                    >
-                      {showTranscriptWindow ? 'Hide the evidence' : 'Show me the evidence'}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => onSend('How could I improve this?')}
-                    disabled={locked || turnCapHit}
-                    className="rounded-full border border-hairline px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-50"
-                  >
-                    Help me improve this
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleChangeTopic}
-                    disabled={locked}
-                    className="rounded-full border border-hairline px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-50"
-                  >
-                    Let's discuss another moment
-                  </button>
-                </div>
-              )}
-
-              {pickingTopic && (
-                <div className="rounded-xl border border-terracotta/30 bg-peach-tint/40 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">
-                      What would you like to talk about next?
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleCancelTopicPicker}
-                      className="text-xs font-medium text-ink-soft hover:text-ink"
-                    >
-                      Keep going
-                    </button>
-                  </div>
-                  <div className="mt-3 flex flex-col gap-2">
-                    {starterPrompts.map((p) => (
-                      <button
-                        key={p.label}
-                        type="button"
-                        onClick={() => handlePickTopic(`Let's switch to another moment: ${p.label}.`, p.timestampSec ?? null)}
-                        className="rounded-xl border border-hairline bg-cream-card px-4 py-2.5 text-left text-sm text-ink transition-colors hover:border-terracotta/40"
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => handlePickTopic('Can we talk about how the lesson felt to me overall?', null)}
-                      className="rounded-xl border border-hairline bg-cream-card px-4 py-2.5 text-left text-sm text-ink transition-colors hover:border-terracotta/40"
-                    >
-                      How the lesson felt overall
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handlePickTopic("I'd like to talk about something else from this lesson.", null)}
-                      className="rounded-xl border border-hairline bg-cream-card px-4 py-2.5 text-left text-sm text-ink transition-colors hover:border-terracotta/40"
-                    >
-                      Something else on my mind
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {showTranscriptWindow && currentTimestampSec != null && (
-                <div className="rounded-xl border border-hairline bg-cream p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                    Transcript around {formatTime(currentTimestampSec)}
-                  </p>
-                  <div className="mt-2 flex flex-col gap-1.5">
-                    {buildTranscriptWindow(segments, currentTimestampSec).map((s) => (
-                      <p key={s.id} className="text-sm text-ink-soft">
-                        <span className="font-semibold text-ink">{s.speakerLabel}:</span> {s.text}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {(reflectError || voiceFatalError) && (
-              <p className="mt-3 text-sm text-terracotta-600">{reflectError?.message ?? voiceFatalError}</p>
-            )}
-
-            {voiceMode ? (
-              <div className="mt-4 flex flex-col gap-3 border-t border-hairline pt-4">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`h-2 w-2 shrink-0 rounded-full ${
-                      isSpeaking || sending || transcribing ? 'animate-pulse bg-terracotta' : 'bg-ink-soft'
-                    }`}
-                  />
-                  <p className="text-sm text-ink-soft">{sessionPaused ? 'Paused' : voiceStatus}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setMuted((m) => !m)}
-                    className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-                      muted
-                        ? 'border-terracotta bg-peach-tint text-terracotta-600'
-                        : 'border-hairline text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
-                    }`}
-                  >
-                    {muted ? 'Unmute coach' : 'Mute coach'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSwitchToTyping}
-                    className="rounded-full border border-hairline px-3.5 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
-                  >
-                    Type instead
-                  </button>
-                </div>
-                {locked ? (
-                  <p className="text-xs text-ink-soft">This report is locked — the conversation is read-only.</p>
-                ) : turnCapHit ? (
-                  <p className="text-xs text-ink-soft">You've reached today's reflection limit for this session.</p>
-                ) : null}
-              </div>
-            ) : (
-              <div className="mt-4 border-t border-hairline pt-4">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault()
-                    setUserTranscript(draft.trim())
-                    onSend()
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={draft}
-                      onChange={(e) => onDraftChange(e.target.value)}
-                      placeholder="Say what's on your mind..."
-                      disabled={sending || locked || turnCapHit || sessionPaused}
-                      className="flex-1 rounded-lg border border-hairline bg-cream px-4 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
-                    />
-                    <button
-                      type="submit"
-                      disabled={sending || locked || turnCapHit || sessionPaused || !draft.trim()}
-                      className="rounded-full bg-terracotta px-4 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
-                    >
-                      Send
-                    </button>
-                  </div>
-                </form>
-                <div className="mt-2 flex flex-wrap items-center gap-3">
-                  {voiceSupported && !locked && !turnCapHit && (
-                    <button
-                      type="button"
-                      onClick={handleSwitchToVoice}
-                      className="flex items-center gap-1.5 text-xs font-semibold text-forest hover:text-terracotta-600"
-                    >
-                      <MicIcon className="h-3.5 w-3.5" />
-                      Talk instead
-                    </button>
-                  )}
-                </div>
-                {locked ? (
-                  <p className="mt-2 text-xs text-ink-soft">This report is locked — the conversation is read-only.</p>
-                ) : turnCapHit ? (
-                  <p className="mt-2 text-xs text-ink-soft">
-                    You've reached today's reflection limit for this session.
-                  </p>
-                ) : null}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {showFinishConfirm && (
-        // A custom dialog rather than this app's usual window.confirm — the
-        // design calls for specific, non-default button labels
-        // ("Continue Debrief" / "Finish and Create Summary"), which a
-        // native confirm() can't provide.
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-4"
-          onClick={() => setShowFinishConfirm(false)}
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl bg-cream-card p-6 shadow-lg"
-            onClick={(e) => e.stopPropagation()}
+      <div className="flex flex-col gap-6">
+        {/* Talking it through happens in Talk It Through now, where the
+            conversation joins the rest of the teacher's and can become a
+            takeaway and a check-in. This is the only way out of this tab
+            into a conversation, and it carries the report with it. */}
+        {!locked && (
+          <button
+            type="button"
+            onClick={() => onTalkItThrough()}
+            className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90"
           >
-            <h3 className="font-heading text-lg font-bold text-forest">Finish this debrief?</h3>
-            <p className="mt-1.5 text-sm text-ink-soft">
-              Your coach will write your debrief and save it. You can come back any time, carry on the
-              conversation, and it will be rewritten.
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowFinishConfirm(false)}
-                className="rounded-lg border border-hairline px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
-              >
-                Continue Debrief
-              </button>
-              <button
-                type="button"
-                onClick={handleFinish}
-                className="rounded-lg bg-terracotta px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-terracotta/90"
-              >
-                Finish and write my debrief
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            Talk this lesson through with Coach →
+          </button>
+        )}
+
+            {/* The teacher's own notes, in the same numbered sections as every
+                other takeaway. They stay editable until the report is locked. */}
+            <NumberedCard n={1} title="What I noticed" subtitle="What stood out to you in this lesson">
+              <textarea
+                aria-label="What I noticed"
+                onBlur={onSave}
+                value={strengths}
+                onChange={(e) => onStrengthsChange(e.target.value)}
+                disabled={locked}
+                rows={3}
+                className="w-full rounded-lg border border-hairline bg-cream-card px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
+              />
+            </NumberedCard>
+
+            <NumberedCard n={2} title="What I want to explore" subtitle="A question or pattern you'd like to understand better">
+              <textarea
+                aria-label="What I want to explore"
+                onBlur={onSave}
+                value={growthAreas}
+                onChange={(e) => onGrowthAreasChange(e.target.value)}
+                disabled={locked}
+                rows={3}
+                className="w-full rounded-lg border border-hairline bg-cream-card px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
+              />
+            </NumberedCard>
+
+            <NumberedCard n={3} title="My next step" subtitle="One thing to try, and when to look back at how it went">
+              <div className="flex flex-col gap-3">
+                <textarea
+                  aria-label="My next step"
+                  onBlur={onSave}
+                  value={nextStep}
+                  onChange={(e) => onNextStepChange(e.target.value)}
+                  disabled={locked}
+                  rows={2}
+                  className="w-full rounded-lg border border-hairline bg-cream-card px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
+                />
+                <label className="flex flex-wrap items-center gap-2.5">
+                  <span className="text-sm font-medium text-ink">Follow-up date</span>
+                  <input
+                    type="date"
+                    onBlur={onSave}
+                    value={followUpDate}
+                    onChange={(e) => onFollowUpDateChange(e.target.value)}
+                    disabled={locked}
+                    className="w-fit rounded-lg border border-hairline bg-cream-card px-3.5 py-2.5 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-70"
+                  />
+                </label>
+              </div>
+            </NumberedCard>
+
+            <NumberedCard n={4} title="Focus for my next recording" subtitle="Choose one area — My Growth will track it across lessons">
+              <FocusSelector focusMetric={focusMetric} onChange={onFocusMetricChange} />
+            </NumberedCard>
+
+            {/* No "Save notes" and no "Lock report". The debrief is written
+                when the conversation finishes and saved with it; an edit
+                saves itself when the field loses focus. A teacher wanted to
+                talk, finish, and have a debrief — not to file it. And
+                locking made a living document final, when the point is that
+                coming back and saying one more thing rewrites it. */}
+            {!locked && (
+              <p className="text-sm text-ink-soft">
+                {saving ? 'Saving…' : saved ? 'Saved.' : ''}
+              </p>
+            )}
+            {error && <p className="text-sm text-terracotta-600">{error}</p>}
+      </div>
     </div>
   )
 }
@@ -5312,22 +4466,19 @@ function UnderstandingFeedbackTab({
 /// Repeating an invitation does not make it more inviting.
 /// The narrative a teacher is looking at on an Insights sub-page, handed to
 /// Coach so "Discuss this" opens about that page rather than about the lesson
-/// in the abstract. Clarity & Content has notes rather than a narrative, so
-/// its own text is joined instead.
+/// in the abstract.
+///
+/// Questions & Checks joins both of its narratives, because the page now
+/// shows both — handing Coach only the questions half would have it answer
+/// about a page the teacher is only half looking at.
 function narrativeForSection(session: AudioSession, section: InsightsSection): string | null {
   switch (section) {
     case 'talk':
       return session.talkNarrative ?? null
     case 'questions':
-      return session.questionsNarrative ?? null
-    case 'understanding':
-      return session.checksNarrative ?? null
+      return [session.questionsNarrative, session.checksNarrative].filter(Boolean).join(' ') || null
     case 'routines':
       return session.climateNarrative ?? null
-    case 'content': {
-      const notes = session.contentNotes?.notes ?? []
-      return notes.length > 0 ? notes.map((n) => `${n.label}: ${n.text}`).join(' ') : null
-    }
     default:
       return null
   }

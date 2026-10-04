@@ -296,3 +296,31 @@ export function judgeTalkBalance(
   }
   return { kind: 'balanced', teacherPct, studentPct }
 }
+
+/// Everything this recording could not judge, as ONE line.
+///
+/// The report used to spend a panel on each absence: a card per dimension
+/// explaining, at length, that there was not enough audio to say anything
+/// about it. On a short clip that produced a report mostly made of apologies,
+/// which buried the two or three things the recording did measure.
+///
+/// The epistemic honesty is the point and does not change — a dimension with
+/// too thin a sample is still never shown as a zero. What changes is how much
+/// room saying so takes: one line naming them all, instead of six panels
+/// saying the same thing six times.
+///
+/// Returns null when everything asked about was measured, so the caller
+/// renders nothing rather than an empty reassurance.
+export function buildLowConfidenceLine(
+  entries: { label: string; state: MetricState }[],
+): string | null {
+  const missing = entries.filter((e) => isMissingState(e.state)).map((e) => e.label)
+  if (missing.length === 0) return null
+  return `Too little audio to judge: ${missing.join(', ')}.`
+}
+
+/// The same thing split out, for a caller that wants to render the names
+/// itself rather than take the sentence.
+export function lowConfidenceLabels(entries: { label: string; state: MetricState }[]): string[] {
+  return entries.filter((e) => isMissingState(e.state)).map((e) => e.label)
+}

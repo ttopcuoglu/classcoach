@@ -729,6 +729,13 @@ export type AudioSession = {
   lessonContent: AudioLessonContent | null
   contentNotes: AudioContentNotes | null
   rubricLens: AudioRubricLens | null
+  /// The reviewed plan this lesson was taught from, when the teacher linked
+  /// them. Null for the vast majority of recordings.
+  reviewId?: string | null
+  /// What the plan said against what the recording heard. Null when there is
+  /// nothing honest to say: no linked plan, no timing estimate, a recording
+  /// too short to compare, or a lesson that matched its plan.
+  planComparison?: PlanComparison | null
   classSummary: string | null
   strengths: string | null
   growthAreas: string | null
@@ -2135,5 +2142,43 @@ export function redesignReviewForAi(id: string): Promise<{ assignmentCoachSessio
 
 export function deleteReview(id: string): Promise<{ ok: true }> {
   return request(`/api/reviews/${id}`, { method: 'DELETE' })
+}
+
+// --- Look It Over (plan) <-> Lesson Debrief (recording) ---
+
+/// What the plan said and what the recording heard, when a teacher linked
+/// them. Computed server-side so the report, the printed export and any
+/// later client agree.
+export type PlanComparison = {
+  planned: string
+  actual: string
+  line: string
+  /// Why the gap might be the right call. Always present — a plan is a
+  /// prediction, and a lesson that diverges from it is frequently a teacher
+  /// reading the room correctly.
+  caveat: string
+}
+
+export type LinkableReview = {
+  id: string
+  docType: string
+  fileName: string | null
+  createdAt: string
+  /// False when the review produced no timing estimate, so it cannot ground
+  /// a comparison. Shown as unavailable rather than offered as if it would.
+  comparable: boolean
+}
+
+/// Reviewed plans this recording could be linked to.
+export function getLinkableReviews(sessionId: string): Promise<LinkableReview[]> {
+  return request(`/api/audio-sessions/${sessionId}/linkable-reviews`)
+}
+
+/// Links a recording to the plan it was taught from, or unlinks it with null.
+export function linkRecordingToReview(sessionId: string, reviewId: string | null): Promise<{ ok: true }> {
+  return request(`/api/audio-sessions/${sessionId}/review-link`, {
+    method: 'PATCH',
+    body: JSON.stringify({ reviewId }),
+  })
 }
 

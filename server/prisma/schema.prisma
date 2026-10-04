@@ -663,6 +663,9 @@ model Review {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  /// Recordings of the lesson this plan was for, when a teacher linked them.
+  audioSessions AudioSession[]
+
   @@index([userId])
 }
 
@@ -771,6 +774,16 @@ model AudioSession {
   // multi-turn coaching chat. Always read/written as one ordered array —
   // same convention as highlights/phases, not a child table.
   reflectConversation Json?
+
+  // The plan a teacher reviewed in Look It Over before teaching this lesson.
+  // Set when they link the two, which lets the report compare what the plan
+  // allocated against what the recording heard — "you planned 12 minutes for
+  // the discussion; the recording suggests about 4".
+  //
+  // SetNull rather than Cascade: deleting a review must never delete the
+  // recording of the lesson it was a plan for.
+  reviewId         String?
+  review           Review?   @relation(fields: [reviewId], references: [id], onDelete: SetNull)
 
   deleteAfter      DateTime? // computed from User.audioRetentionDays at creation
 
