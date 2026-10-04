@@ -2182,3 +2182,41 @@ export function linkRecordingToReview(sessionId: string, reviewId: string | null
   })
 }
 
+// --- My Work ---
+
+export type WorkItem = {
+  id: string
+  surface: string
+  /// What kind of thing this is, in a teacher's words.
+  kind: string
+  title: string
+  topic: string | null
+  topicLabel: string | null
+  saved: boolean
+  createdAt: string
+  /// Where tapping it goes. A legacy item opens its original result page,
+  /// which still exists for exactly this reason.
+  href: string
+}
+
+export type WorkFeed = {
+  items: WorkItem[]
+  total: number
+  /// Counts over everything, not the filtered set — a chip reading 0 is how a
+  /// teacher learns the filter is why the list looks empty.
+  bySurface: Record<string, number>
+  byTopic: { value: string; label: string; count: number }[]
+}
+
+export function getWork(params?: {
+  surface?: string | null
+  topic?: string | null
+  saved?: boolean
+}): Promise<WorkFeed> {
+  const query = new URLSearchParams()
+  if (params?.surface) query.set('surface', params.surface)
+  if (params?.topic) query.set('topic', params.topic)
+  if (params?.saved) query.set('saved', 'true')
+  const suffix = query.toString()
+  return request(`/api/work${suffix ? `?${suffix}` : ''}`)
+}

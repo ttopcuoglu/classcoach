@@ -1,9 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { PanelHeader } from '../components/PanelHeader'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import AnswerSection from '../components/AnswerSection'
 import CoachingChat from '../components/CoachingChat'
-import PastList from '../components/PastList'
 import { usePastItems } from '../hooks/usePastItems'
 import { StarIcon } from '../components/icons'
 import { Spinner } from '../components/Spinner'
@@ -178,6 +177,27 @@ export default function PrepareConversation() {
     setChatError(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+
+  // My Work links straight to one item (`?open=<id>`). These pages used to be
+  // reached only through their own history list, which has been replaced by
+  // the one list — so without this, every link to a teacher's existing
+  // message, plan or review would land on a blank form.
+  //
+  // Waits for the list: the item has to be loaded before it can be opened,
+  // and `past.items` arrives asynchronously.
+  const [searchParams] = useSearchParams()
+  const openId = searchParams.get('open')
+  const openedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!openId || openedRef.current === openId) return
+    if (!past.items.some((i) => i.id === openId)) return
+    openedRef.current = openId
+    handleOpenPast(openId)
+    // handleOpenPast is redeclared every render and only reads state that is
+    // already in these deps; including it would re-run this on every render.
+    // openedRef is what actually guarantees it opens once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, past.items])
 
   function handleNewPlan() {
     setPlan(null)
@@ -459,20 +479,12 @@ export default function PrepareConversation() {
       </div>
 
       <div className="print:hidden">
-        <PastList
-          title="Your meeting plans"
-          items={past.items.map((p) => ({
-            id: p.id,
-            createdAt: p.createdAt,
-            label: meetingTypeLabel(p.meetingType) || null,
-            text: p.title || p.situationText,
-            saved: p.saved,
-          }))}
-          activeId={plan?.id ?? null}
-          loading={past.loading}
-          emptyText="Meetings you prepare for will show up here."
-          onOpen={handleOpenPast}
-        />
+        <Link
+                  to="/work?surface=talk_it_through"
+                  className="inline-block text-sm font-semibold text-terracotta-600 hover:text-terracotta"
+                >
+                  All your work →
+                </Link>
       </div>
     </div>
   )

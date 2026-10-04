@@ -229,7 +229,7 @@ export default function AssignmentCoach() {
         </h1>
         <p className="text-ink-soft">Design, review, and refine meaningful student work—with a coach beside you.</p>
         <Link
-          to="/guide/assignment-coach"
+          to="/guide/look-it-over"
           className="w-fit text-xs font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta"
         >
           New to this? Read the teacher's guide

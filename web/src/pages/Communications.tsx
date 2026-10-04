@@ -60,7 +60,7 @@ export default function Communications() {
         </h1>
         <p className="text-ink-soft">Prepare, write, practice, and improve important communication.</p>
         <Link
-          to="/guide/communication-coach"
+          to="/guide/look-it-over"
           className="mt-1 w-fit text-xs font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta"
         >
           New to this? Read the teacher's guide

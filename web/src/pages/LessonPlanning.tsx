@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import AnswerSection, { NumberedCard } from '../components/AnswerSection'
-import PastList, { type PastItem } from '../components/PastList'
 import { ShareIcon, StarIcon, UploadIcon, ClipboardIcon, CloseIcon } from '../components/icons'
 import CoachingChat from '../components/CoachingChat'
 import ExportModal from '../components/ExportModal'
@@ -59,8 +58,20 @@ function toApiContext(context: ContextForm): LessonPlanContext {
   }
 }
 
+type PlanningTab = 'generate' | 'feedback' | 'presentation'
+
+/// Which panel a stored plan belongs to. My Work links here with the plan's
+/// mode, because this page's tab was internal state with no URL of its own —
+/// so a link to one plan had no way to say which of three panels it lived in.
+function tabForMode(mode: string | null): PlanningTab {
+  if (mode === 'presentation') return 'presentation'
+  if (mode === 'feedback') return 'feedback'
+  return 'generate'
+}
+
 export default function LessonPlanning() {
-  const [tab, setTab] = useState<'generate' | 'feedback' | 'presentation'>('generate')
+  const [searchParams] = useSearchParams()
+  const [tab, setTab] = useState<PlanningTab>(() => tabForMode(searchParams.get('mode')))
 
   return (
     <div className="flex flex-col gap-6">
@@ -73,7 +84,7 @@ export default function LessonPlanning() {
           Get feedback on a plan you wrote, generate a sample plan for ideas, or get feedback on a presentation.
         </p>
         <Link
-          to="/guide/lesson-planning"
+          to="/guide/look-it-over"
           className="mt-1 w-fit text-xs font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta"
         >
           New to this? Read the teacher's guide
@@ -397,15 +408,6 @@ function ShareButton({ onShare }: { onShare: () => Promise<{ shareToken: string 
   )
 }
 
-function toPastItem(plan: LessonPlan): PastItem {
-  return {
-    id: plan.id,
-    createdAt: plan.createdAt,
-    label: [plan.subject, plan.gradeLevel].filter(Boolean).join(' · ') || null,
-    text: plan.objective || plan.fileName || plan.planText?.slice(0, 200) || 'Lesson plan',
-    saved: plan.saved,
-  }
-}
 
 function GeneratePanel() {
   const [context, setContext] = useState<ContextForm>(EMPTY_CONTEXT)
@@ -415,7 +417,6 @@ function GeneratePanel() {
   const [error, setError] = useState<string | null>(null)
 
   const [allPlans, setAllPlans] = useState<LessonPlan[]>([])
-  const [historyLoading, setHistoryLoading] = useState(true)
 
   const [deliveryLoading, setDeliveryLoading] = useState(false)
   const [deliveryError, setDeliveryError] = useState<string | null>(null)
@@ -424,7 +425,6 @@ function GeneratePanel() {
     getLessonPlans({ mode: 'generated' })
       .then(setAllPlans)
       .catch(() => {})
-      .finally(() => setHistoryLoading(false))
   }, [])
 
   async function handlePresentationFeedback() {
@@ -472,6 +472,22 @@ function GeneratePanel() {
     setDeliveryError(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+
+  // My Work links straight to one plan (`?open=<id>`), which is now the only
+  // way to reach an existing one — this page's own history list was replaced
+  // by the single list. Waits for `allPlans`, which loads asynchronously.
+  const [searchParams] = useSearchParams()
+  const openId = searchParams.get('open')
+  const openedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!openId || openedRef.current === openId) return
+    if (!allPlans.some((p) => p.id === openId)) return
+    openedRef.current = openId
+    handleOpenPast(openId)
+    // See the note in WriteMessage: openedRef, not the dep list, is what
+    // makes this open exactly once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, allPlans])
 
   async function handleToggleSaved(target: LessonPlan) {
     const nextSaved = !target.saved
@@ -579,14 +595,12 @@ function GeneratePanel() {
         )}
       </div>
 
-      <PastList
-        title="Your sample plans"
-        items={allPlans.map(toPastItem)}
-        activeId={plan?.id ?? null}
-        loading={historyLoading}
-        emptyText="Sample plans you generate will show up here."
-        onOpen={handleOpenPast}
-      />
+      <Link
+                  to="/work?surface=look_it_over"
+                  className="inline-block text-sm font-semibold text-terracotta-600 hover:text-terracotta"
+                >
+                  All your work →
+                </Link>
     </div>
   )
 }
@@ -607,7 +621,6 @@ function FeedbackPanel() {
   const [uploadError, setUploadError] = useState<string | null>(null)
 
   const [allPlans, setAllPlans] = useState<LessonPlan[]>([])
-  const [historyLoading, setHistoryLoading] = useState(true)
 
   const [chatDraft, setChatDraft] = useState('')
   const [chatSending, setChatSending] = useState(false)
@@ -623,7 +636,6 @@ function FeedbackPanel() {
     getLessonPlans({ mode: 'feedback' })
       .then(setAllPlans)
       .catch(() => {})
-      .finally(() => setHistoryLoading(false))
   }, [])
 
   const canSubmit = planText.trim().length > 0
@@ -739,6 +751,22 @@ function FeedbackPanel() {
     setDeliveryError(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+
+  // My Work links straight to one plan (`?open=<id>`), which is now the only
+  // way to reach an existing one — this page's own history list was replaced
+  // by the single list. Waits for `allPlans`, which loads asynchronously.
+  const [searchParams] = useSearchParams()
+  const openId = searchParams.get('open')
+  const openedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!openId || openedRef.current === openId) return
+    if (!allPlans.some((p) => p.id === openId)) return
+    openedRef.current = openId
+    handleOpenPast(openId)
+    // See the note in WriteMessage: openedRef, not the dep list, is what
+    // makes this open exactly once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, allPlans])
 
   async function handleToggleSaved(target: LessonPlan) {
     const nextSaved = !target.saved
@@ -951,14 +979,12 @@ function FeedbackPanel() {
         )}
       </div>
 
-      <PastList
-        title="Your plan feedback"
-        items={allPlans.map(toPastItem)}
-        activeId={plan?.id ?? null}
-        loading={historyLoading}
-        emptyText="Plans you get feedback on will show up here."
-        onOpen={handleOpenPast}
-      />
+      <Link
+                  to="/work?surface=look_it_over"
+                  className="inline-block text-sm font-semibold text-terracotta-600 hover:text-terracotta"
+                >
+                  All your work →
+                </Link>
     </div>
   )
 }
@@ -982,7 +1008,6 @@ function PresentationPanel() {
   const [error, setError] = useState<string | null>(null)
 
   const [allPlans, setAllPlans] = useState<LessonPlan[]>([])
-  const [historyLoading, setHistoryLoading] = useState(true)
 
   const [chatDraft, setChatDraft] = useState('')
   const [chatSending, setChatSending] = useState(false)
@@ -999,7 +1024,6 @@ function PresentationPanel() {
     getLessonPlans({ mode: 'presentation' })
       .then(setAllPlans)
       .catch(() => {})
-      .finally(() => setHistoryLoading(false))
   }, [])
 
   async function handleFile(selected: File) {
@@ -1114,6 +1138,22 @@ function PresentationPanel() {
     setRevisionDismissed(false)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+
+  // My Work links straight to one plan (`?open=<id>`), which is now the only
+  // way to reach an existing one — this page's own history list was replaced
+  // by the single list. Waits for `allPlans`, which loads asynchronously.
+  const [searchParams] = useSearchParams()
+  const openId = searchParams.get('open')
+  const openedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!openId || openedRef.current === openId) return
+    if (!allPlans.some((p) => p.id === openId)) return
+    openedRef.current = openId
+    handleOpenPast(openId)
+    // See the note in WriteMessage: openedRef, not the dep list, is what
+    // makes this open exactly once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, allPlans])
 
   async function handleToggleSaved(target: LessonPlan) {
     const nextSaved = !target.saved
@@ -1368,14 +1408,12 @@ function PresentationPanel() {
         />
       )}
 
-      <PastList
-        title="Your presentation reviews"
-        items={allPlans.map(toPastItem)}
-        activeId={plan?.id ?? null}
-        loading={historyLoading}
-        emptyText="Presentations you review will show up here."
-        onOpen={handleOpenPast}
-      />
+      <Link
+                  to="/work?surface=look_it_over"
+                  className="inline-block text-sm font-semibold text-terracotta-600 hover:text-terracotta"
+                >
+                  All your work →
+                </Link>
     </div>
   )
 }
