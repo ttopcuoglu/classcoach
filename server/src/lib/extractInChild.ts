@@ -7,7 +7,7 @@
 
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { NoTextFoundError, UnsupportedFileError } from './documentText.ts'
+import { NoTextFoundError, UnsupportedFileError } from './extractErrors.ts'
 
 export class ExtractionTooHeavyError extends Error {}
 export class ExtractionTimeoutError extends Error {}

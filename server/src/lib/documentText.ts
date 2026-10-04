@@ -7,6 +7,7 @@
 // of this dispatch is exactly how that knowledge gets lost.
 
 import { tmpdir } from 'node:os'
+import { NoTextFoundError, UnsupportedFileError } from './extractErrors.ts'
 import mammoth from 'mammoth'
 import { PDFParse } from 'pdf-parse'
 import * as XLSX from 'xlsx'
@@ -107,8 +108,6 @@ const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png']
 /// accept attribute.
 export const ACCEPTED_EXTENSIONS = ['.docx', '.pdf', '.pptx', '.xlsx', '.xls', '.txt', ...IMAGE_EXTENSIONS]
 
-export class UnsupportedFileError extends Error {}
-export class NoTextFoundError extends Error {}
 
 /// Text from an uploaded buffer, dispatched on the file name's extension.
 ///
@@ -161,3 +160,7 @@ export async function countPages(buffer: Buffer, originalName: string): Promise<
   }
   return null
 }
+
+// Re-exported so the child keeps one import, and so every caller sees the
+// same classes regardless of which module it reached them through.
+export { NoTextFoundError, UnsupportedFileError }

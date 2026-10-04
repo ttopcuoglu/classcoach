@@ -1,4 +1,7 @@
-import PDFDocument from 'pdfkit'
+// pdfkit costs 21MB at import and is only needed when a PDF is being built.
+async function loadPdfKit() {
+  return (await import('pdfkit')).default
+}
 import { fitInside, loadImageBytes } from './imageSearch.ts'
 import type { DocModel } from './exportModels.ts'
 
@@ -36,6 +39,7 @@ export async function buildPdf(model: DocModel): Promise<Buffer> {
   const pictures = new Map<unknown, Awaited<ReturnType<typeof loadImageBytes>>>()
   for (const block of model.blocks) if (block.type === 'image') pictures.set(block, await loadImageBytes(block.image.url))
 
+  const PDFDocument = await loadPdfKit()
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'LETTER', margin: M, bufferPages: true, info: { Title: pdfText(model.title), Creator: 'Wivoza' } })
     const chunks: Buffer[] = []

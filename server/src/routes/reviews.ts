@@ -5,10 +5,7 @@ import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
 import { describeClassContext } from '../lib/classProfile.ts'
-import {
-  NoTextFoundError,
-  UnsupportedFileError,
-} from '../lib/documentText.ts'
+import { NoTextFoundError, UnsupportedFileError } from '../lib/extractErrors.ts'
 import { detectSections, estimateMinutes, isLongDocument, sliceSection } from '../lib/documentSections.ts'
 import {
   combineFiles,

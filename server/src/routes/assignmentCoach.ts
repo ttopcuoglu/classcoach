@@ -10,7 +10,8 @@ import { buildDocx } from '../lib/docxBuilder.ts'
 import { carryOriginalPictures, parseDocOutput, parseSlidesOutput, sanitizeDeck, sanitizeDocModel, themeFromContext } from '../lib/exportModels.ts'
 import { readOriginalPictures, type OriginalImage, type OriginalPicture } from '../lib/originalImages.ts'
 import { buildPdf } from '../lib/pdfBuilder.ts'
-import { extractDocumentText, NoTextFoundError, UnsupportedFileError } from '../lib/documentText.ts'
+import { NoTextFoundError, UnsupportedFileError } from '../lib/extractErrors.ts'
+import { ExtractionTimeoutError, ExtractionTooHeavyError, extractInChild } from '../lib/extractInChild.ts'
 import { buildPptx, THEME_GUIDE } from '../lib/slidesPptx.ts'
 import { prisma } from '../lib/prisma.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
@@ -469,7 +470,11 @@ assignmentCoachRouter.post('/extract-text', upload.single('file'), async (req, r
     return
   }
   try {
-    res.json({ text: await extractDocumentText(req.file.buffer, req.file.originalname) })
+    // In a child, for the same reason Look It Over is: the parsers cost the
+    // server 215MB at import and a heavy document used to take the whole
+    // instance with it.
+    const { text } = await extractInChild(req.file.buffer, req.file.originalname)
+    res.json({ text })
   } catch (error) {
     if (error instanceof UnsupportedFileError) {
       res.status(400).json({ error: error.message })
@@ -477,6 +482,13 @@ assignmentCoachRouter.post('/extract-text', upload.single('file'), async (req, r
     }
     if (error instanceof NoTextFoundError) {
       res.status(422).json({ error: error.message })
+      return
+    }
+    if (error instanceof ExtractionTimeoutError || error instanceof ExtractionTooHeavyError) {
+      res.status(422).json({
+        error:
+          'That file was too heavy to read — a long scan usually is. Try a smaller PDF, or paste the text instead.',
+      })
       return
     }
     console.error('[assignment-coach] extract-text failed:', error)
