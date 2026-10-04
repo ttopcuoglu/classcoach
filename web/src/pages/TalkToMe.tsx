@@ -1,12 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import AnswerSection from '../components/AnswerSection'
 import { BrainIcon, MicIcon, StarIcon, WarningIcon } from '../components/icons'
+import ClassContextLine from '../components/ClassContextLine'
+import { TOPICS, topicLabel } from '../lib/topics'
+import { pickTopicStarters } from '../lib/starters'
+import { handoffArrival, handoffContext, handoffOpeningMessage, setHandoff } from '../lib/handoff'
+import { useHandoff } from '../hooks/useHandoff'
+import { OFFER_COPY, isOfferKind } from '../lib/talkOffers'
+import { DEFAULT_TEACHING_CONTEXT, type TeachingContext } from '../components/TeachingContextFields'
+import { SUBJECTS } from '../lib/teachingContext'
 import VoiceBars from '../components/VoiceBars'
-import PastList from '../components/PastList'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import {
-  deleteDebrief,
   generateTalkTakeaway,
   getDebriefs,
   dismissFollowUpForDebrief,
@@ -32,22 +38,6 @@ import { createPlaybackQueue, primeAudioElement, type PlaybackQueue } from '../l
 // First-person, concrete — things a teacher could plausibly say out loud,
 // not generic placeholders. Tapping one starts a real conversation
 // immediately via the exact same path a spoken or typed turn uses.
-const EXAMPLE_PROMPTS = [
-  'My class talks over directions.',
-  'I want to reflect on today’s lesson.',
-  'A parent email is stressing me out.',
-  'I’m feeling overwhelmed this week.',
-]
-
-// Same idea for teachers six or more years in — refining what already
-// works rather than getting through the week.
-const EXPERIENCED_PROMPTS = [
-  'I want to think through why a strong lesson fell flat.',
-  'My discussions could go deeper.',
-  'I’m mentoring a newer teacher and want to help well.',
-  'I want to try something new this unit.',
-]
-
 // Flipped to false: auto-starting the mic on open meant a teacher could
 // go through an entire hands-free conversation without ever tapping the
 // screen, so the audio-unlock `pointerdown` listener below never fired —
@@ -144,7 +134,7 @@ function statusLabel(state: VisualState, hasConversation: boolean): string {
 
 export default function TalkToMe() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const isDebrief = searchParams.get('mode') === 'debrief'
   const followUpId = searchParams.get('followUp')
   // A past conversation opened from Home's Recent work.
@@ -164,6 +154,26 @@ export default function TalkToMe() {
   // meant your own words appeared at the same moment as the coach's
   // reply, not right after you actually finished talking.
   const [userTranscript, setUserTranscript] = useState<string | null>(null)
+  // The topic chip, held in the URL so a reload or a back-button return keeps
+  // the teacher where they were rather than silently dropping their choice.
+  // Null means they skipped the chips, which is a first-class answer.
+  const topic = searchParams.get('topic')
+  // The teacher's default class, used only to pick which starter prompts to
+  // show. Null until it loads, and null forever for a teacher who has none —
+  // the starters still fill from the general list either way.
+  const [room, setRoom] = useState<TeachingContext>(DEFAULT_TEACHING_CONTEXT)
+  // A handoff from another surface — today only Lesson Debrief, which hands
+  // over a lesson's report instead of opening a conversation of its own.
+  //
+  // Read once on mount and cleared in the same breath, so coming back here
+  // next week does not re-open a lesson the teacher finished talking about.
+  // Two kinds land here: a lesson report from Lesson Debrief, and a document
+  // review from Look It Over.
+  const fromDebrief = useHandoff('debrief_report')
+  const fromReview = useHandoff('review_context')
+  const arrivedWith = fromDebrief ?? fromReview
+  const handoffRef = useRef(arrivedWith)
+  const arrival = arrivedWith ? handoffArrival(arrivedWith) : null
   const [showTypeInput, setShowTypeInput] = useState(false)
   const [typedDraft, setTypedDraft] = useState('')
   const [takeaway, setTakeaway] = useState<TalkTakeaway | null>(null)
@@ -181,7 +191,7 @@ export default function TalkToMe() {
   const [nextStepOpen, setNextStepOpen] = useState(false)
   const [nextStepDraft, setNextStepDraft] = useState('')
   const [talkVoice, setTalkVoice] = useState<TalkVoice | null>(null)
-  const [examplePrompts, setExamplePrompts] = useState<string[] | null>(null)
+  const [experienced, setExperienced] = useState(false)
   const [isSuperadmin, setIsSuperadmin] = useState(false)
   const [testCheckInError, setTestCheckInError] = useState<string | null>(null)
   // Per takeaway: the teacher opted out of the check-in on this one.
@@ -290,7 +300,7 @@ export default function TalkToMe() {
         handleOpenPast(opened)
         // Once open, the link has done its job — Start over shouldn't land
         // back in the same conversation on the next render or a refresh.
-        navigate('/talk-to-me', { replace: true })
+        navigate('/talk', { replace: true })
       })
       .catch(() => {})
       .finally(() => setPastLoading(false))
@@ -302,10 +312,47 @@ export default function TalkToMe() {
       .then((profile) => {
         setTalkVoice(profile.talkVoice)
         setIsSuperadmin(profile.role === 'superadmin')
-        setExamplePrompts(isExperienced(profile.experienceLevel) ? EXPERIENCED_PROMPTS : EXAMPLE_PROMPTS)
+        setExperienced(isExperienced(profile.experienceLevel))
       })
-      .catch(() => setExamplePrompts(EXAMPLE_PROMPTS))
+      .catch(() => {})
   }, [])
+
+  // Starter prompts, recomputed on every chip tap. No API call by design —
+  // a teacher tapping through topics should not wait on anything, and these
+  // are the thing that tells a brand-new account where to start, which is the
+  // job First 30 Days used to do.
+  //
+  // With no topic chosen the list spans every topic, so the page is never
+  // empty and never pre-supposes a subject the teacher has not picked.
+  const examplePrompts = useMemo(() => {
+    const picked = pickTopicStarters(topic, room, experienced)
+    if (!arrivedWith) return picked
+    // Arriving from a report, the first thing offered is the thing they
+    // pressed Discuss on. The rest still follow, so a teacher who changed
+    // their mind on the way over is not stuck with it.
+    return [handoffOpeningMessage(arrivedWith), ...picked].slice(0, picked.length)
+  }, [topic, room, experienced, arrivedWith])
+
+  // Read inside the async record -> transcribe -> reply chain, which outlives
+  // the render that started it — a ref so the in-flight turn sees the topic
+  // that was selected when the teacher began, not a stale closure copy.
+  const topicRef = useRef(topic)
+  topicRef.current = topic
+
+
+  // The fresh start screen: no conversation yet, mic idle, not typing. The
+  // hero owns the two primary actions in this state, so the lower button row
+  // must not repeat them.
+  const onStartScreen = !debrief && phase === 'idle' && !showTypeInput
+
+  /// Sets or clears the topic chip. Clearing removes the param rather than
+  /// writing an empty one, so a shared or bookmarked URL reads cleanly.
+  function setTopic(next: string | null) {
+    const params = new URLSearchParams(searchParams)
+    if (next) params.set('topic', next)
+    else params.delete('topic')
+    setSearchParams(params, { replace: true })
+  }
 
   function beginListening() {
     sessionActiveRef.current = true
@@ -339,6 +386,8 @@ export default function TalkToMe() {
           queue.push(sentence)
         },
         followUpRef.current?.id,
+        topicRef.current,
+        handoffRef.current ? handoffContext(handoffRef.current) : null,
       )
       setDebrief(result)
       queue.end()
@@ -378,7 +427,7 @@ export default function TalkToMe() {
         const current = debriefRef.current
         const result = current
           ? await sendDebriefChat(current.id, text)
-          : await startTalkToMe(text, followUpRef.current?.id)
+          : await startTalkToMe(text, followUpRef.current?.id, topicRef.current)
         setDebrief(result)
         resumeListeningIfActive()
       } catch (err) {
@@ -412,6 +461,11 @@ export default function TalkToMe() {
           queue.push(sentence)
         },
         followUpRef.current?.id,
+        // Only read on the opening turn; once a conversation exists the server
+        // reads the topic back off the stored row.
+        topicRef.current,
+        // Same: context is background for the first reply, not every turn.
+        current ? null : handoffRef.current ? handoffContext(handoffRef.current) : null,
       )
       setDebrief(result)
       queue.end()
@@ -471,6 +525,31 @@ export default function TalkToMe() {
     setShowTypeInput(false)
     setTypedDraft('')
     handleTurnComplete(trimmed)
+  }
+
+  /// Taking an inline offer. Releases the mic first — the teacher is leaving
+  /// this page, and a recording left open would keep listening into the next
+  /// surface.
+  function handleTakeOffer(kind: 'rehearse' | 'document') {
+    const situation = [...messages].find((m) => m.role === 'user')?.text ?? ''
+    sessionActiveRef.current = false
+    close()
+    audioRef.current?.pause()
+    if (kind === 'rehearse') {
+      setHandoff({
+        kind: 'rehearse',
+        debriefId: debrief?.id ?? '',
+        // The teacher's own words, not a summary of them. Rehearsing an
+        // approximation of what they just said would be worse than
+        // rehearsing their own description of it.
+        situation,
+        topic: debrief?.focusArea ?? topic,
+      })
+      navigate('/practice')
+      return
+    }
+    setHandoff({ kind: 'review_document', debriefId: debrief?.id ?? '', about: situation })
+    navigate('/look-it-over')
   }
 
   function handleOpenTypeInput() {
@@ -561,15 +640,6 @@ export default function TalkToMe() {
   // on — reading an old takeaway shouldn't start a conversation.
   // Deleting takes the conversation and its check-in with it, so it asks
   // first; the row disappears as soon as the server confirms.
-  async function handleDeletePast(id: string) {
-    if (!confirm('Delete this conversation? Its takeaway and any check-in Coach scheduled from it go too. This cannot be undone.')) return
-    try {
-      await deleteDebrief(id)
-      setPastTalks((talks) => talks.filter((t) => t.id !== id))
-    } catch {
-      alert('Could not delete that conversation. Please try again.')
-    }
-  }
 
   function handleOpenPast(past: Debrief) {
     const lastUser = [...(past.conversation ?? [])].reverse().find((m) => m.role === 'user')
@@ -607,7 +677,7 @@ export default function TalkToMe() {
       .catch(() => {})
     // Also clears ?mode=debrief: starting over from a debrief means an
     // ordinary new conversation, not another debrief of the same plan.
-    navigate('/talk-to-me', { replace: true })
+    navigate('/talk', { replace: true })
   }
 
   async function handleSaveNextStep() {
@@ -624,6 +694,10 @@ export default function TalkToMe() {
 
   const messages: ChatMessage[] = debrief?.conversation ?? []
   const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
+  // Only the latest turn's offer. One from two turns back has been talked
+  // past, and re-showing it would be the app pressing a suggestion the
+  // teacher already moved on from.
+  const offer = isOfferKind(lastAssistant?.offer) ? lastAssistant.offer : null
   // Full either because the server just said so, or because the count says
   // so already — a conversation can be resumed from its takeaway screen
   // without ever having hit the refusal in this session.
@@ -945,15 +1019,47 @@ export default function TalkToMe() {
                     {followUp ? 'Coach is checking in' : isDebrief ? 'Debrief' : 'A moment for your teaching'}
                   </p>
                   <h1 className="mt-2 font-heading text-2xl font-bold text-cream sm:text-3xl">
-                    {followUp ? followUp.checkInQuestion : isDebrief ? 'How did it go?' : "What's on your mind today?"}
+                    {followUp
+                      ? followUp.checkInQuestion
+                      : isDebrief
+                        ? 'How did it go?'
+                        : 'Hi. What would you like to talk about?'}
                   </h1>
                   <p className="mt-1.5 text-sm text-cream/70">
                     {followUp
                       ? 'Say how it went — good, bad, or not yet. Coach will take it from there.'
                       : isDebrief
                         ? "Start wherever you like — Coach will walk through the rest with you."
-                        : 'Talk through a challenge, find the right words, or reflect on your day.'}
+                        : experienced
+                          ? 'Think something through out loud, or ask. No wrong place to start.'
+                          : 'Talk it through out loud, or ask a question. No wrong place to start.'}
                   </p>
+                </div>
+              )}
+
+              {/* Start talking and Type instead sit INSIDE the hero, directly
+                  under the mic — they are the two ways into the one thing this
+                  page does, so they come before the optional topic chips
+                  rather than after a scroll past them. Type instead is a real
+                  button beside the primary, not a small link: typing is a
+                  first-class way to use this, not a fallback. */}
+              {onStartScreen && !atCap && (
+                <div className="mt-1 flex flex-wrap items-center justify-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={handleStartTalking}
+                    className="flex items-center gap-2 rounded-full bg-gold px-6 py-3 text-sm font-semibold text-forest transition-opacity hover:opacity-90"
+                  >
+                    <MicIcon className="h-4 w-4" />
+                    Start talking
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOpenTypeInput}
+                    className="rounded-full border-2 border-cream/25 px-5 py-3 text-sm font-semibold text-cream/90 transition-colors hover:border-cream/50 hover:text-cream"
+                  >
+                    Type instead
+                  </button>
                 </div>
               )}
             </div>
@@ -975,8 +1081,78 @@ export default function TalkToMe() {
                     ))}
                   </ul>
                 )}
+                {/* Says where they arrived from, so the coach already knowing
+                    about their lesson is explained rather than uncanny. */}
+                {arrival && (
+                  <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-4 text-left">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
+                      {arrival.from}
+                    </p>
+                    {arrival.label && <p className="mt-1 text-sm text-ink">{arrival.label}</p>}
+                    <p className="mt-1 text-xs text-ink-soft">
+                      I already have what it found — you do not need to explain it.
+                    </p>
+                  </div>
+                )}
+
+                {/* The topic chips. Below the hero, and labelled as optional
+                    in so many words, because the mic is the point and this is
+                    a nudge — a teacher who skips it loses nothing. A check-in
+                    or a lesson debrief already has its subject, so the chips
+                    would be asking a question that is already answered. */}
+                {!isDebrief && !followUp && (
+                  <div className="flex flex-col gap-2 text-left">
+                    <div>
+                      <p className="text-sm font-medium text-ink">Want me focused on something?</p>
+                      <p className="text-xs text-ink-soft">Optional — skip it and I'll just listen.</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {TOPICS.map(({ value, label, ghost }) => {
+                        const selected = topic === value
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setTopic(selected ? null : value)}
+                            aria-pressed={selected}
+                            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                              selected
+                                ? 'bg-forest text-cream'
+                                : ghost
+                                  ? 'border border-dashed border-ink-soft/40 text-ink-soft hover:border-terracotta/50 hover:text-terracotta-600'
+                                  : 'bg-cream-card text-ink-soft hover:text-ink'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {/* Says what the chip will and will not do. "Say anything
+                        and it will follow you from there" is the promise the
+                        prompt actually keeps — the chip decides sentence one
+                        and nothing after it. */}
+                    {topic && (
+                      <div className="flex flex-wrap items-center gap-2 rounded-xl bg-gold-tint/60 px-3 py-2 text-xs">
+                        <span className="text-ink">
+                          Coach will start from {topicLabel(topic)} — say anything and it will follow you from
+                          there.
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setTopic(null)}
+                          className="font-semibold text-terracotta-600 hover:text-terracotta"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex flex-col gap-2">
-                  {(followUp ? CHECK_IN_PROMPTS : isDebrief ? DEBRIEF_PROMPTS : (examplePrompts ?? [])).map((prompt, i) => (
+                  {(followUp ? CHECK_IN_PROMPTS : isDebrief ? DEBRIEF_PROMPTS : examplePrompts).map((prompt, i) => (
                     <button
                       key={prompt}
                       type="button"
@@ -990,6 +1166,33 @@ export default function TalkToMe() {
                     </button>
                   ))}
                 </div>
+
+                {/* Last, and quiet. It is context the coach uses, not a
+                    question the teacher has to answer before starting — and
+                    it reports null for a teacher who has no class saved, which
+                    only changes which starter prompts are picked. */}
+                {!isDebrief && !followUp && (
+                  <div className="text-left">
+                    <ClassContextLine
+                      onChange={(prep) =>
+                        setRoom((prev) =>
+                          prep == null
+                            ? prev
+                            : {
+                                ...prev,
+                                gradeBand: prep.gradeBand,
+                                subject: prep.subject ?? undefined,
+                                course: prep.course ?? undefined,
+                                courseLevel: prep.courseLevel ?? undefined,
+                                classMakeup: prep.classMakeup,
+                                otherSubject:
+                                  !!prep.subject && !(SUBJECTS as readonly string[]).includes(prep.subject),
+                              },
+                        )
+                      }
+                    />
+                  </div>
+                )}
 
                 {!isDebrief && !followUp && (
                   <Link
@@ -1014,6 +1217,23 @@ export default function TalkToMe() {
                     <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Coach</p>
                     <p className="mt-1.5 text-sm text-ink">{lastAssistant.text}</p>
                   </div>
+                )}
+
+                {/* Offered inline, beside the reply, once. Taking it is a
+                    choice; ignoring it costs nothing and the conversation
+                    carries on — the coach is told to behave as though it had
+                    not offered. */}
+                {offer && (
+                  <button
+                    type="button"
+                    onClick={() => handleTakeOffer(offer)}
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-hairline bg-cream-card px-4 py-3 text-left text-sm font-semibold text-forest transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
+                  >
+                    {OFFER_COPY[offer].label}
+                    <span aria-hidden="true" className="text-terracotta">
+                      {OFFER_COPY[offer].action} →
+                    </span>
+                  </button>
                 )}
                 {error && <p className="text-sm text-terracotta-600">{error}</p>}
               </div>
@@ -1052,15 +1272,22 @@ export default function TalkToMe() {
               </form>
             ) : (
               <div className="flex flex-wrap items-center justify-center gap-3">
+                {/* On a fresh start screen, Start talking and Type instead
+                    live in the hero beside the mic, so this row would be
+                    showing them a second time. Here it covers the states the
+                    hero does not: resuming a conversation, and retrying after
+                    an error. */}
                 {atCap ? null : phase === 'idle' || phase === 'error' ? (
-                  <button
-                    type="button"
-                    onClick={handleStartTalking}
-                    className="flex items-center gap-2 rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
-                  >
-                    <MicIcon className="h-4 w-4" />
-                    {phase === 'error' ? 'Try Again' : debrief ? 'Resume' : 'Start Talking'}
-                  </button>
+                  onStartScreen ? null : (
+                    <button
+                      type="button"
+                      onClick={handleStartTalking}
+                      className="flex items-center gap-2 rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
+                    >
+                      <MicIcon className="h-4 w-4" />
+                      {phase === 'error' ? 'Try Again' : debrief ? 'Resume' : 'Start talking'}
+                    </button>
+                  )
                 ) : (
                   <button
                     type="button"
@@ -1083,7 +1310,7 @@ export default function TalkToMe() {
                 </button>
                 <button
                   type="button"
-                  hidden={atCap}
+                  hidden={atCap || onStartScreen}
                   onClick={handleOpenTypeInput}
                   className="rounded-full border-2 border-hairline bg-cream-card px-5 py-3 text-sm font-semibold text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
                 >
@@ -1103,24 +1330,12 @@ export default function TalkToMe() {
 
             {!debrief && phase === 'idle' && !showTypeInput && !isDebrief && !followUp && (pastLoading || pastTalks.length > 0) && (
               <div className="w-full max-w-md text-left">
-                <PastList
-                  title="Your conversations"
-                  items={pastTalks.map((d) => ({
-                    id: d.id,
-                    createdAt: d.createdAt,
-                    label: d.talkTakeaway ? 'Takeaway' : 'Not wrapped up',
-                    text: d.incidentText,
-                    saved: d.saved,
-                  }))}
-                  activeId={null}
-                  loading={pastLoading}
-                  emptyText="Your conversations will show up here."
-                  onOpen={(id) => {
-                    const past = pastTalks.find((d) => d.id === id)
-                    if (past) handleOpenPast(past)
-                  }}
-                  onDelete={handleDeletePast}
-                />
+                <Link
+                  to="/work?surface=talk_it_through"
+                  className="inline-block text-sm font-semibold text-terracotta-600 hover:text-terracotta"
+                >
+                  All your work →
+                </Link>
               </div>
             )}
           </>

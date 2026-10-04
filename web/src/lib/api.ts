@@ -1,7 +1,16 @@
 // A follow-up coaching chat thread, appended below a one-shot result.
 // Seeded with the original submission + first reply, grown by follow-up
 // turns. Same shape as Audio Coaching's AudioReflectMessage.
-export type ChatMessage = { role: 'user' | 'assistant'; text: string; createdAt: string }
+export type ChatMessage = {
+  role: 'user' | 'assistant'
+  text: string
+  createdAt: string
+  /// Set on an assistant turn where the coach signalled that another surface
+  /// is the next useful move — 'rehearse' or 'document'. Absent on every turn
+  /// written before offers existed, and on most turns since: the coach is
+  /// told to default to silence.
+  offer?: string
+}
 
 export type Scenario = {
   id: string
@@ -1129,6 +1138,13 @@ export async function streamCoachReply(
   message: string | null,
   onSentence: (sentence: string) => void,
   followUpId?: string | null,
+  /// The topic chip the teacher tapped before saying anything, if any. Only
+  /// meaningful on the opening turn — later turns read it back off the stored
+  /// conversation, so it is not sent again.
+  topic?: string | null,
+  /// Facts the teacher arrived with from another surface (a lesson report, a
+  /// document review). Opening turn only.
+  context?: string | null,
 ): Promise<Debrief> {
   const path = id ? `/api/debriefs/${id}/chat/stream` : '/api/debriefs/talk/stream'
   const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -1136,7 +1152,14 @@ export async function streamCoachReply(
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify(
-      id ? { message } : { ...(message == null ? {} : { message }), followUpId: followUpId ?? undefined },
+      id
+        ? { message }
+        : {
+            ...(message == null ? {} : { message }),
+            followUpId: followUpId ?? undefined,
+            topic: topic ?? undefined,
+            context: context ?? undefined,
+          },
     ),
   })
   // Everything the caller can act on (turn cap, daily limit) is rejected
@@ -1177,10 +1200,14 @@ export async function streamCoachReply(
   return debrief
 }
 
-export function startTalkToMe(message: string, followUpId?: string | null): Promise<Debrief> {
+export function startTalkToMe(
+  message: string,
+  followUpId?: string | null,
+  topic?: string | null,
+): Promise<Debrief> {
   return request('/api/debriefs/talk', {
     method: 'POST',
-    body: JSON.stringify({ message, followUpId: followUpId ?? undefined }),
+    body: JSON.stringify({ message, followUpId: followUpId ?? undefined, topic: topic ?? undefined }),
   })
 }
 

@@ -169,6 +169,65 @@ export const ASK_STARTERS: Record<string, readonly Starter[]> = {
     { text: 'Our team meetings never get to the work we planned.' },
     { text: "I'm behind on paperwork and it's starting to show." },
   ],
+  // Written as observations rather than theories, on purpose. A starter like
+  // "I think a student is being neglected at home" would invite exactly the
+  // speculation this topic's coaching is built to refuse — so every line here
+  // is something the teacher actually saw or heard.
+  student_concern: [
+    { text: 'One of mine has started crying most mornings.', bands: ['K-2'] },
+    { text: 'A student has stopped playing with anyone at recess.', bands: ['K-2', '3-5'] },
+    { text: 'A student who used to talk to me has gone quiet.', bands: ['3-5', '6-8'] },
+    { text: 'A student who was doing fine has dropped off a cliff.', bands: ['9-12'] },
+    { text: 'A student is falling asleep in my class most days.', bands: ['6-8', '9-12'] },
+    { text: "One of mine has stopped turning anything in." },
+    { text: 'A student said something in passing that has stayed with me.' },
+    { text: "I'm worried about a student and I'm not sure who to tell." },
+    { text: "I need to write down what I've been noticing about a student." },
+  ],
+  self_and_job: [
+    { text: "I'm taking work home every single night." },
+    { text: "I said yes to something I shouldn't have." },
+    { text: 'I need to ask for help and I do not know how to start.' },
+    { text: 'I have been asked to take on one more thing.' },
+    { text: "I'm not sure I can keep this up." },
+    { text: 'My weekends have stopped being weekends.', bands: ['6-8', '9-12'] },
+    { text: 'I am doing a job nobody actually assigned me.' },
+  ],
+}
+
+/// How many starter prompts Talk It Through shows. Four, per the brief —
+/// enough that a brand-new teacher has somewhere obvious to start, few enough
+/// that the mic stays the main thing on the page.
+export const TALK_STARTER_COUNT = 4
+
+/// Shown to a teacher six or more years in when they have picked no topic —
+/// refining what already works rather than getting through the week. A
+/// chosen topic overrides this: once they have said what it is about, the
+/// topic's own list is more specific than their experience level is.
+export const GENERAL_EXPERIENCED_STARTERS: readonly Starter[] = [
+  { text: 'I want to think through why a strong lesson fell flat.' },
+  { text: 'My discussions could go deeper.' },
+  { text: "I'm mentoring a newer teacher and want to help well." },
+  { text: 'I want to try something new this unit.' },
+  { text: 'I have a colleague I need to say something difficult to.' },
+  { text: 'I am carrying more than I should be and nobody asked me to.' },
+]
+
+/// Starters for Talk It Through: the chosen topic's own, or a cross-topic
+/// list when the teacher skipped the chips.
+///
+/// "Something else" deliberately falls through to the general list rather than
+/// getting one of its own. It means "I do not want to classify this", so the
+/// right prompts are the ones that span everything.
+export function pickTopicStarters(
+  topic: string | null | undefined,
+  room: TeachingContext,
+  experienced = false,
+  count: number = TALK_STARTER_COUNT,
+): string[] {
+  const chosen = topic && topic !== 'something_else' ? ASK_STARTERS[topic] : undefined
+  const fallback = experienced ? GENERAL_EXPERIENCED_STARTERS : GENERAL_ASK_STARTERS
+  return pickStarters(chosen ?? fallback, room, topic ?? undefined, count).map((s) => s.text)
 }
 
 /// Shown when no section is picked — the coach infers the area from the text,
