@@ -43,6 +43,12 @@ export type ScenarioAttempt = {
   responseText: string
   feedback: string | null
   modelResponse: string | null
+  /// Practice's three-part feedback: what the move did, what it left on the
+  /// table, and one line worth keeping. Null on attempts made before the
+  /// three-part shape existed — those render from feedback/modelResponse,
+  /// which are still written alongside this for the iOS app, the printable
+  /// export and the Cheat Sheet.
+  coachingParts: { did: string; left: string; keep: string | null } | null
   // Claude's private 1-5 self-assessment, for growth trends only — never
   // shown to the user as a literal score.
   rating: number | null
@@ -958,7 +964,11 @@ export function deleteOrganization(id: string): Promise<{ status: string }> {
   return request(`/api/admin/organizations/${id}`, { method: 'DELETE' })
 }
 
-export function generateScenario(opts: {
+/// `focusArea` carries the TOPIC value and `category` the KIND — the request
+/// field names predate the rename and are kept because the iOS app sends them.
+/// `topic` here is the unrelated, older field: what the teacher is teaching
+/// right now, which is why the taxonomy could not reuse that name.
+export type ScenarioRequest = {
   focusArea?: string
   category?: string
   gradeBand?: string
@@ -968,8 +978,17 @@ export function generateScenario(opts: {
   topic?: string
   courseLevel?: string
   classMakeup?: string[]
-}): Promise<Scenario> {
+}
+
+export function generateScenario(opts: ScenarioRequest): Promise<Scenario> {
   return request('/api/scenarios/generate', { method: 'POST', body: JSON.stringify(opts) })
+}
+
+/// "Describe my own" — the teacher's own situation, stored as a scenario so
+/// feedback, history and the one-notch-harder re-run all work unchanged. No
+/// model call: these are their words about their own room.
+export function createOwnScenario(opts: ScenarioRequest & { text: string }): Promise<Scenario> {
+  return request('/api/scenarios/custom', { method: 'POST', body: JSON.stringify(opts) })
 }
 
 export function getAttempts(params?: { saved?: boolean }): Promise<ScenarioAttempt[]> {

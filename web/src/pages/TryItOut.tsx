@@ -2,18 +2,33 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import AnswerSection from '../components/AnswerSection'
 import CoachingChat from '../components/CoachingChat'
-import PastList from '../components/PastList'
 import ReflectionTimeline from '../components/ReflectionTimeline'
 import ShareButton from '../components/ShareButton'
 import { ArrowUpIcon, MicIcon, StarIcon } from '../components/icons'
 import { ProgressRing, WorkingRing } from '../components/ProgressRing'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { useSpeechToText } from '../hooks/useSpeechToText'
-import { categoryLabel } from '../lib/categories'
-import { TEACHING_AND_LEARNING, findFocusArea, focusAreaForCategory, subCategoriesFor } from '../lib/focusAreas'
-import { hintsFor } from '../lib/practiceHints'
-import TeachingContextFields, { type TeachingContext } from '../components/TeachingContextFields'
 import {
+  DESCRIBE_MY_OWN,
+  TEACHING_AND_LEARNING,
+  TOPICS,
+  findTopic,
+  harderDifficulty,
+  hasHarderDifficulty,
+  kindLabel,
+  kindsFor,
+  topicForKind,
+} from '../lib/topics'
+import { hintsFor } from '../lib/practiceHints'
+import { useHandoff } from '../hooks/useHandoff'
+import ClassContextLine from '../components/ClassContextLine'
+import {
+  DEFAULT_TEACHING_CONTEXT,
+  type TeachingContext,
+} from '../components/TeachingContextFields'
+import { SUBJECTS, coursesFor } from '../lib/teachingContext'
+import {
+  createOwnScenario,
   generateScenario,
   getAttempts,
   markAttemptTried,
@@ -38,33 +53,73 @@ function difficultyLabel(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
-// `focusArea` comes from the Ask & Practice shell (CoachChat), so switching
-// between Ask and Practice keeps the area the teacher chose. Unlike Ask — where
-// the coach infers the area from the teacher's own words — here it's the
-// primary control, because it decides what scenario they get handed.
+// Practice is four rows, each driven by the one above it: topic, then the kind
+// of moment within that topic, then the class it is set in, then how hard it
+// should be. Unlike Talk It Through — where the coach infers the topic from
+// the teacher's own words — here the topic is the primary control, because it
+// decides what scenario they get handed.
+//
+// The rows replaced a collapsed "Scenarios: any situation · any difficulty"
+// line with a Change link, plus a separate always-visible room panel. That
+// shape hid the two choices that matter behind a fold while showing five room
+// fields that mostly did not apply.
 export default function TryItOut({
-  focusArea,
-  room,
-  onRoomChange,
+  topic: topicProp,
+  onTopicChange,
 }: {
-  focusArea?: string
-  /// Owned by the shell so switching to Ask keeps the room a teacher set.
-  room: TeachingContext
-  onRoomChange: (next: TeachingContext) => void
-}) {
-  const [category, setCategory] = useState<string | undefined>(undefined)
-  const [difficulty, setDifficulty] = useState<string | undefined>(undefined)
-  // Collapsed by default: most teachers want any situation at any difficulty.
-  const [narrowing, setNarrowing] = useState(false)
-  const area = findFocusArea(focusArea)
+  /// Set by the surrounding route so the chosen topic survives a reload. Left
+  /// undefined when Practice is rendered somewhere that does not track it.
+  topic?: string
+  onTopicChange?: (next: string | undefined) => void
+} = {}) {
+  // Arriving from Talk It Through's "want to rehearse it?". The situation
+  // the teacher described out loud becomes the scenario, which is why it
+  // lands in "Describe my own" rather than being handed to generation:
+  // rehearsing an approximation of what they just said would be worse than
+  // rehearsing their own words for it.
+  //
+  // Read once on mount, so coming back to Practice next week does not
+  // re-open a situation they already rehearsed.
+  const arrivedWith = useHandoff('rehearse')
 
-  // A sub-category from a different area would silently contradict the area on
-  // the next generate, so changing area clears a mismatched one. Only when an
-  // area is actually selected: with none, a bare sub-category is still valid —
-  // the server derives the area from it (see scenarios.ts), which is how the
-  // onboarding track's suggested category keeps working.
+  const [localTopic, setLocalTopic] = useState<string | undefined>(arrivedWith?.topic ?? undefined)
+  const focusArea = topicProp ?? localTopic
+  function setTopic(next: string | undefined) {
+    setLocalTopic(next)
+    onTopicChange?.(next)
+    // A kind belongs to one topic, so it cannot survive a topic change — and
+    // "describe my own" is the one selection that can, because it belongs to
+    // no topic at all.
+    setCategory((prev) => (prev === DESCRIBE_MY_OWN ? prev : undefined))
+  }
+
+  const [category, setCategory] = useState<string | undefined>(
+    arrivedWith ? DESCRIBE_MY_OWN : undefined,
+  )
+  const [difficulty, setDifficulty] = useState<string | undefined>(undefined)
+  /// "Describe my own" — the teacher's own situation, in their words.
+  const [ownSituation, setOwnSituation] = useState(arrivedWith?.situation ?? '')
+  /// The teacher's default class, and the content fields that only Teaching
+  /// and Learning asks about.
+  const [room, setRoom] = useState<TeachingContext>(DEFAULT_TEACHING_CONTEXT)
+  const area = findTopic(focusArea)
+
+  // A kind from a different topic would silently contradict the topic on the
+  // next generate, so changing topic clears a mismatched one. Only when a
+  // topic is actually selected: with none, a bare kind is still valid — the
+  // server derives the topic from it (see scenarios.ts).
+  //
+  // "Describe my own" is exempt, and has to be. It belongs to no topic, so
+  // `topicForKind` returns nothing for it and this would clear it on every
+  // topic change — including the one `setTopic` deliberately preserves it
+  // through, and the one a rehearse handoff arrives with.
   useEffect(() => {
-    if (focusArea && category && focusAreaForCategory(category)?.value !== focusArea) {
+    if (
+      focusArea &&
+      category &&
+      category !== DESCRIBE_MY_OWN &&
+      topicForKind(category)?.value !== focusArea
+    ) {
       setCategory(undefined)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -92,7 +147,6 @@ export default function TryItOut({
   } | null>(null)
 
   const [allAttempts, setAllAttempts] = useState<ScenarioAttempt[]>([])
-  const [historyLoading, setHistoryLoading] = useState(true)
 
   const [chatDraft, setChatDraft] = useState('')
   const [chatSending, setChatSending] = useState(false)
@@ -115,14 +169,13 @@ export default function TryItOut({
         }
       })
       .catch(() => {})
-      .finally(() => setHistoryLoading(false))
 
     const suggested = sessionStorage.getItem('classcoach.suggestedCategory')
     if (suggested) setCategory(suggested)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const categoryTally = useMemo(() => {
+  const kindTally = useMemo(() => {
     const counts = new Map<string, number>()
     for (const a of allAttempts) {
       counts.set(a.scenario.category, (counts.get(a.scenario.category) ?? 0) + 1)
@@ -156,7 +209,7 @@ export default function TryItOut({
     return best
   }, [allAttempts])
 
-  async function handleNewScenario(categoryOverride?: string) {
+  async function handleNewScenario(categoryOverride?: string, difficultyOverride?: string) {
     setGenerating(true)
     setError(null)
     setAttempt(null)
@@ -165,10 +218,11 @@ export default function TryItOut({
     setChatDraft('')
     setChatError(null)
     try {
-      const scenario = await generateScenario({
+      const chosenKind = categoryOverride ?? category
+      const request = {
         focusArea,
-        category: categoryOverride ?? category,
-        difficulty,
+        category: chosenKind,
+        difficulty: difficultyOverride ?? difficulty,
         gradeBand: room.gradeBand,
         // Subject, course and level are only asked for under Teaching and
         // Learning, so they're only sent from there.
@@ -181,13 +235,21 @@ export default function TryItOut({
               classMakeup: room.classMakeup,
             }
           : {}),
-      })
+      }
+      // "Describe my own" skips generation entirely — the teacher already
+      // wrote the situation, and asking a model to rewrite their own
+      // classroom back at them would be both wasteful and presumptuous.
+      const scenario =
+        chosenKind === DESCRIBE_MY_OWN
+          ? await createOwnScenario({ ...request, text: ownSituation })
+          : await generateScenario(request)
       setAttempt({
         id: `draft-${scenario.id}`,
         scenarioId: scenario.id,
         responseText: '',
         feedback: null,
         modelResponse: null,
+        coachingParts: null,
         rating: null,
         saved: false,
         createdAt: scenario.createdAt,
@@ -201,6 +263,16 @@ export default function TryItOut({
     } finally {
       setGenerating(false)
     }
+  }
+
+  /// The same situation again, one notch harder. A new scenario rather than a
+  /// re-score of the old one: the teacher has already seen this exact wording
+  /// and their second answer to it would be rehearsing the words, not the
+  /// judgment. Keeps the topic, kind and class so only the difficulty moves.
+  async function handleHarderRerun(from: ScenarioAttempt) {
+    const next = harderDifficulty(from.scenario.difficulty)
+    setDifficulty(next)
+    await handleNewScenario(from.scenario.category, next)
   }
 
   async function handleStartSession() {
@@ -326,16 +398,42 @@ export default function TryItOut({
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const hasFeedback = attempt && (attempt.feedback || attempt.modelResponse)
-  // Re-picked whenever the section or the room changes — a K-2 rehearsal and a
-  // 9-12 rehearsal should not open with the same three scenarios.
-  const subCategories = subCategoriesFor(focusArea)
-  // Sharpest first: the level knows most about the room, then the section.
+  /// One chip style for all four rows. `ghost` marks the two opt-outs —
+  /// "Something else" as a topic and "Describe my own" as a kind — which are
+  /// dashed rather than solid because neither narrows anything.
+  function chip(selected: boolean, ghost?: boolean) {
+    const base = 'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-60'
+    if (selected) return `${base} bg-gold text-forest`
+    if (ghost) return `${base} border border-dashed border-cream/40 text-cream/70 hover:border-gold hover:text-cream`
+    return `${base} bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream`
+  }
+
+  const describingOwn = category === DESCRIBE_MY_OWN
+  /// Only Teaching and Learning asks what is being taught — a parent email
+  /// does not get better for knowing it came from an honors section.
+  const asksAboutContent = focusArea === TEACHING_AND_LEARNING
+  const kinds = kindsFor(focusArea)
+  const courses = coursesFor(room.gradeBand, room.subject)
+
+  /// Pulls the teacher's default class into the room used for generation.
+  /// Null (no class saved) deliberately changes nothing: the band keeps its
+  /// default and generation proceeds, because missing context never blocks.
+  function applyPrep(prep: { gradeBand: string; subject: string | null; course: string | null; courseLevel: string | null; classMakeup: string[] } | null) {
+    if (!prep) return
+    setRoom((prev) => ({
+      ...prev,
+      gradeBand: prep.gradeBand,
+      subject: prep.subject ?? undefined,
+      course: prep.course ?? undefined,
+      courseLevel: prep.courseLevel ?? undefined,
+      classMakeup: prep.classMakeup,
+      otherSubject: !!prep.subject && !(SUBJECTS as readonly string[]).includes(prep.subject),
+    }))
+  }
+
+  const hasFeedback = attempt && (attempt.coachingParts || attempt.feedback || attempt.modelResponse)
+  // Sharpest first: the level knows most about the room, then the topic.
   const hints = hintsFor(focusArea, room.courseLevel, room.classMakeup)
-  const situationText = category ? categoryLabel(category).toLowerCase() : 'any situation'
-  const difficultyText = (
-    DIFFICULTIES.find((d) => d.value === difficulty)?.label ?? 'Any difficulty'
-  ).toLowerCase()
   const sessionAttempts = sessionState?.done
     ? sessionState.attemptIds.map((id) => allAttempts.find((a) => a.id === id)).filter((a): a is ScenarioAttempt => !!a)
     : []
@@ -371,7 +469,7 @@ export default function TryItOut({
                     {i + 1}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-xs font-semibold text-forest">{categoryLabel(a.scenario.category)}</span>
+                    <span className="block text-xs font-semibold text-forest">{kindLabel(a.scenario.category)}</span>
                     <span className="mt-0.5 block line-clamp-2 text-sm text-ink">{a.scenario.text}</span>
                     <span className="mt-1 block line-clamp-1 text-xs text-ink-soft">You said: {a.responseText}</span>
                   </span>
@@ -426,108 +524,222 @@ export default function TryItOut({
                 />
               </div>
             )}
-            {/* Situation and difficulty are refinements, not the room: most
-                teachers want any situation at any difficulty, so they rest as
-                one line and open when someone wants to narrow. The room below
-                stays visible, because the coaching depends on it. */}
-            <div className="mt-5 flex flex-col gap-3.5 rounded-2xl bg-cream/10 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm text-cream/80">
-                  <span className="font-semibold text-cream">Scenarios:</span> {situationText} · {difficultyText}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setNarrowing((v) => !v)}
-                  aria-expanded={narrowing}
-                  className="text-sm font-semibold text-gold hover:text-cream"
-                >
-                  {narrowing ? 'Hide' : 'Change'}
-                </button>
+            {/* Four rows, each driven by the one above it. The collapsed
+                "Scenarios: any situation · any difficulty" line this replaces
+                hid the two choices that actually decide what a teacher gets,
+                while a separate panel showed five room fields that mostly did
+                not apply to the topic they were in. */}
+            <div className="mt-5 flex flex-col gap-4 rounded-2xl bg-cream/10 p-4">
+              {/* 1 — Topic. The same shared list Talk It Through uses. */}
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">1 · Topic</p>
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {TOPICS.map(({ value, label, ghost }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      disabled={generating}
+                      onClick={() => setTopic(focusArea === value ? undefined : value)}
+                      aria-pressed={focusArea === value}
+                      className={chip(focusArea === value, ghost)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {area && <p className="mt-1.5 text-xs text-cream/60">{area.blurb}</p>}
               </div>
 
-              {narrowing && (
-              <>
+              {/* 2 — Kind, which changes with the topic above. "Describe my
+                  own" is always offered: a teacher with a specific situation
+                  in mind should not have to find the nearest category for it. */}
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Situation</p>
-                {area ? (
-                  <div className="mt-1.5 flex flex-wrap gap-2">
-                    {[{ label: 'Any situation', value: undefined }, ...subCategories].map(({ label, value }) => {
-                      const count = value ? categoryTally.get(value) : undefined
-                      return (
-                        <button
-                          key={label}
-                          type="button"
-                          onClick={() => setCategory(value)}
-                          aria-pressed={category === value}
-                          title={count ? `You've practiced this ${count === 1 ? 'once' : `${count} times`}` : undefined}
-                          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                            category === value ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
-                          }`}
-                        >
-                          {label}
-                          {count ? ` · ${count} practiced` : ''}
-                        </button>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  // Showing all twenty-four sub-categories at once would be a
-                  // wall of chips, so this narrows only once a section is chosen.
-                  <p className="mt-1.5 text-sm text-cream/60">
-                    Pick a section to narrow this — otherwise your coach chooses, weighted toward what
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">2 · Kind</p>
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {kinds.map(({ value, label }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      disabled={generating}
+                      onClick={() => setCategory(category === value ? undefined : value)}
+                      aria-pressed={category === value}
+                      title={
+                        kindTally.get(value)
+                          ? `You've practiced this ${kindTally.get(value) === 1 ? 'once' : `${kindTally.get(value)} times`}`
+                          : undefined
+                      }
+                      className={chip(category === value)}
+                    >
+                      {label}
+                      {kindTally.get(value) ? ` · ${kindTally.get(value)} practiced` : ''}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    disabled={generating}
+                    onClick={() => setCategory(describingOwn ? undefined : DESCRIBE_MY_OWN)}
+                    aria-pressed={describingOwn}
+                    className={chip(describingOwn, true)}
+                  >
+                    Describe my own
+                  </button>
+                </div>
+                {!area && !describingOwn && (
+                  <p className="mt-1.5 text-xs text-cream/60">
+                    Pick a topic to narrow this — otherwise your coach chooses, weighted toward what
                     you&rsquo;ve practiced least.
                   </p>
                 )}
+                {describingOwn && arrivedWith && (
+                  <p className="mt-2 rounded-xl bg-gold-tint/60 px-3 py-2 text-xs text-ink">
+                    From what you were just talking through. Edit it if it is not quite right.
+                  </p>
+                )}
+                {describingOwn && (
+                  <textarea
+                    value={ownSituation}
+                    onChange={(e) => setOwnSituation(e.target.value)}
+                    disabled={generating}
+                    rows={3}
+                    placeholder="What happened, or what are you about to walk into?"
+                    className="mt-2 w-full rounded-2xl border border-cream/20 bg-cream/5 px-4 py-3 text-sm text-cream placeholder:text-cream/50 focus:border-gold focus:outline-none disabled:opacity-60"
+                  />
+                )}
               </div>
 
+              {/* 3 — The class. One line for every topic; Teaching and
+                  Learning additionally asks what is being taught, because its
+                  scenarios have to be about the teacher's actual content
+                  rather than about delivery technique in the abstract. */}
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Difficulty</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">3 · Your class</p>
+                <div className="mt-1.5 rounded-xl bg-cream px-3 py-2.5">
+                  <ClassContextLine compact onChange={applyPrep} />
+                </div>
+
+                {asksAboutContent && (
+                  <div className="mt-2.5 flex flex-col gap-2.5">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cream/60">
+                        Subject
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap gap-2">
+                        {SUBJECTS.map((subject) => (
+                          <button
+                            key={subject}
+                            type="button"
+                            disabled={generating}
+                            onClick={() =>
+                              setRoom((prev) => ({
+                                ...prev,
+                                subject: prev.subject === subject ? undefined : subject,
+                                otherSubject: false,
+                                course: undefined,
+                              }))
+                            }
+                            aria-pressed={room.subject === subject}
+                            className={chip(room.subject === subject)}
+                          >
+                            {subject}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {courses.length > 0 && (
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cream/60">
+                          Course
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap gap-2">
+                          {courses.map((course) => (
+                            <button
+                              key={course}
+                              type="button"
+                              disabled={generating}
+                              onClick={() =>
+                                setRoom((prev) => ({
+                                  ...prev,
+                                  course: prev.course === course ? undefined : course,
+                                }))
+                              }
+                              aria-pressed={room.course === course}
+                              className={chip(room.course === course)}
+                            >
+                              {course}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* The only room field that changes weekly, and the one
+                        that decides what the scenario is actually about — so
+                        it is asked every time and never remembered. */}
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cream/60">
+                        What are you teaching right now?
+                      </span>
+                      <input
+                        type="text"
+                        value={room.topic ?? ''}
+                        onChange={(e) => setRoom((prev) => ({ ...prev, topic: e.target.value }))}
+                        disabled={generating}
+                        placeholder="Photosynthesis, the Federalist papers, factoring quadratics..."
+                        className="rounded-xl border border-cream/20 bg-cream/5 px-3.5 py-2.5 text-sm text-cream placeholder:text-cream/50 focus:border-gold focus:outline-none disabled:opacity-60"
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* 4 — Difficulty, labelled so nobody reads it as a judgment
+                  about the teacher. */}
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">4 · Difficulty</p>
+                <p className="mt-1 text-sm text-cream/80">
+                  How tough should it be?{' '}
+                  <span className="text-cream/60">This is the scenario&rsquo;s difficulty, not yours.</span>
+                </p>
                 <div className="mt-1.5 flex flex-wrap gap-2">
                   {DIFFICULTIES.map(({ label, value }) => (
                     <button
                       key={label}
                       type="button"
+                      disabled={generating}
                       onClick={() => setDifficulty(value)}
                       aria-pressed={difficulty === value}
-                      className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                        difficulty === value ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
-                      }`}
+                      className={chip(difficulty === value)}
                     >
                       {label}
                     </button>
                   ))}
                 </div>
               </div>
-              </>
-              )}
-            </div>
-
-            <div className="mt-3">
-              <TeachingContextFields
-                focusArea={focusArea}
-                value={room}
-                onChange={onRoomChange}
-                disabled={generating}
-              />
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => handleNewScenario()}
-                disabled={generating}
+                disabled={generating || (describingOwn && !ownSituation.trim())}
                 className="rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90 disabled:opacity-60"
               >
-                {generating ? 'Generating...' : 'New Scenario'}
+                {generating ? 'Generating...' : describingOwn ? 'Use my situation' : 'New Scenario'}
               </button>
-              <button
-                type="button"
-                onClick={handleStartSession}
-                disabled={generating}
-                className="rounded-full border border-cream/30 px-6 py-3 text-sm font-semibold text-cream transition-colors hover:border-cream hover:bg-cream/10 disabled:opacity-60"
-              >
-                Quick Session ({SESSION_LENGTH} scenarios)
-              </button>
+              {/* Hidden while describing your own: a three-scenario session
+                  built from one situation the teacher wrote would just be the
+                  same situation three times. */}
+              {!describingOwn && (
+                <button
+                  type="button"
+                  onClick={handleStartSession}
+                  disabled={generating}
+                  className="rounded-full border border-cream/30 px-6 py-3 text-sm font-semibold text-cream transition-colors hover:border-cream hover:bg-cream/10 disabled:opacity-60"
+                >
+                  Quick Session ({SESSION_LENGTH} scenarios)
+                </button>
+              )}
             </div>
           </div>
         ) : (
@@ -540,7 +752,7 @@ export default function TryItOut({
               )}
               <span className="rounded-full bg-cream/10 px-3 py-1 text-xs font-semibold text-cream">
                 {[
-                  categoryLabel(attempt.scenario.category),
+                  kindLabel(attempt.scenario.category),
                   `Grades ${attempt.scenario.gradeBand}`,
                   attempt.scenario.course ?? attempt.scenario.subject,
                   attempt.scenario.courseLevel,
@@ -639,18 +851,46 @@ export default function TryItOut({
               </div>
             ) : (
               <div className="flex flex-col gap-4">
+                {/* Three named parts rather than a block of coaching plus a
+                    model answer. Attempts made before this shape existed have
+                    no coachingParts and fall back to what they stored, so a
+                    teacher's own history keeps rendering. */}
                 {[
                   { title: 'Your response', subtitle: 'What you said you would do.', body: attempt.responseText },
-                  attempt.feedback && {
-                    title: 'Coaching',
-                    subtitle: 'What worked, and what to strengthen.',
-                    body: attempt.feedback,
-                  },
-                  attempt.modelResponse && {
-                    title: 'A model response',
-                    subtitle: 'One way to handle it, to compare with yours.',
-                    body: attempt.modelResponse,
-                  },
+                  ...(attempt.coachingParts
+                    ? [
+                        {
+                          title: 'What your move did',
+                          subtitle: 'The effect it would actually have.',
+                          body: attempt.coachingParts.did,
+                        },
+                        {
+                          title: 'What it left on the table',
+                          subtitle: 'One thing, not a list.',
+                          body: attempt.coachingParts.left,
+                        },
+                        ...(attempt.coachingParts.keep
+                          ? [
+                              {
+                                title: 'One line worth keeping',
+                                subtitle: 'Something you could carry into the real version.',
+                                body: attempt.coachingParts.keep,
+                              },
+                            ]
+                          : []),
+                      ]
+                    : [
+                        attempt.feedback && {
+                          title: 'Coaching',
+                          subtitle: 'What worked, and what to strengthen.',
+                          body: attempt.feedback,
+                        },
+                        attempt.modelResponse && {
+                          title: 'A model response',
+                          subtitle: 'One way to handle it, to compare with yours.',
+                          body: attempt.modelResponse,
+                        },
+                      ]),
                 ]
                   .filter((part): part is { title: string; subtitle: string; body: string } => !!part)
                   .map((part, i) => (
@@ -658,6 +898,26 @@ export default function TryItOut({
                       {part.body}
                     </AnswerSection>
                   ))}
+
+                {/* The same scenario, one notch harder. Offered rather than
+                    imposed, and only while there is a notch left — advanced is
+                    the ceiling, and wrapping back to beginner would read as the
+                    app losing track of where the teacher is. */}
+                {hasHarderDifficulty(attempt.scenario.difficulty) && !sessionState && (
+                  <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-gold-tint/60 px-4 py-3">
+                    <p className="text-sm text-ink">
+                      Want the same situation, one notch harder?
+                    </p>
+                    <button
+                      type="button"
+                      disabled={generating}
+                      onClick={() => handleHarderRerun(attempt)}
+                      className="rounded-full bg-terracotta px-4 py-2 text-xs font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:opacity-60"
+                    >
+                      Run it {difficultyLabel(harderDifficulty(attempt.scenario.difficulty)).toLowerCase()}
+                    </button>
+                  </div>
+                )}
 
                 <CoachingChat
                   messages={attempt.conversation.slice(2)}
@@ -739,7 +999,7 @@ export default function TryItOut({
           <ArrowUpIcon className="mt-0.5 h-5 w-5 shrink-0 text-forest" />
           <div className="text-sm text-ink">
             <p>
-              <span className="font-semibold text-forest">You're growing in {categoryLabel(growthInsight.category).toLowerCase()} scenarios.</span>{' '}
+              <span className="font-semibold text-forest">You're growing in {(kindLabel(growthInsight.category) ?? growthInsight.category).toLowerCase()} scenarios.</span>{' '}
               Across your {growthInsight.attempts} tries, your more recent responses were stronger than your first ones.
             </p>
             <p className="mt-1 text-xs text-ink-soft">
@@ -762,20 +1022,12 @@ export default function TryItOut({
         </div>
       )}
 
-      <PastList
-        title="Your practice"
-        items={allAttempts.map((a) => ({
-          id: a.id,
-          createdAt: a.createdAt,
-          label: categoryLabel(a.scenario.category),
-          text: a.scenario.text,
-          saved: a.saved,
-        }))}
-        activeId={attempt && !attempt.id.startsWith('draft-') ? attempt.id : null}
-        loading={historyLoading}
-        emptyText="Nothing yet. Every scenario you respond to will be kept here, with its feedback."
-        onOpen={handleOpenPast}
-      />
+      <Link
+                  to="/work?surface=practice"
+                  className="inline-block text-sm font-semibold text-terracotta-600 hover:text-terracotta"
+                >
+                  All your work →
+                </Link>
     </div>
   )
 }

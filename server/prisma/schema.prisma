@@ -259,6 +259,15 @@ model ScenarioAttempt {
   shareToken     String?  @unique
   createdAt      DateTime @default(now())
 
+  // { did, left, keep } — the consolidated Practice's three-part feedback:
+  // what the move did, what it left on the table, and one line worth keeping.
+  // feedback/modelResponse above are still written alongside it, because the
+  // iOS app, the printable export and the Cheat Sheet all read them and a
+  // structured field they do not know about must not blank them out.
+  // Null on rows created before the three-part shape existed, which render
+  // from feedback/modelResponse as they always did.
+  coachingParts  Json?
+
   // [{ role: 'user' | 'assistant', text, createdAt }], seeded with the
   // original submission + first feedback, grown by follow-up chat turns.
   // Same convention as AudioSession.reflectConversation.

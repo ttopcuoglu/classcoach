@@ -12,7 +12,8 @@ import { applyPageMeta } from './lib/pageMeta'
 // lazy so a new visitor's first load only ever downloads the code for the
 // page they're actually looking at, not the entire authenticated app.
 const Home = lazy(() => import('./pages/Home'))
-const CoachChat = lazy(() => import('./pages/CoachChat'))
+// Practice stopped being a tab inside Ask & Practice and became a page.
+const Practice = lazy(() => import('./pages/TryItOut'))
 const Communications = lazy(() => import('./pages/Communications'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Export = lazy(() => import('./pages/Export'))
@@ -242,7 +243,12 @@ export default function App() {
               }
             >
               <Route index element={<Home />} />
-              <Route path="coach-chat" element={<CoachChat />} />
+              <Route path="practice" element={<Practice />} />
+              {/* The toggle's own URL. Ask's half of it is Talk It Through
+                  now, so the default lands there and ?tab=practice comes
+                  here; the full redirect, with ?open= and ?area= carried
+                  across, arrives with the rest of the route table. */}
+              <Route path="coach-chat" element={<Navigate to="/talk-to-me" replace />} />
               <Route path="communications" element={<Communications />} />
               <Route path="audio-coaching" element={<AudioCoaching />} />
               <Route path="lesson-planning" element={<LessonPlanning />} />
