@@ -302,6 +302,12 @@ export default function App() {
               {/* The four surfaces, plus one history and the profile. */}
               <Route path="practice" element={<Practice />} />
               <Route path="look-it-over" element={<LookItOver />} />
+              {/* A result has a URL of its own, so it can be bookmarked,
+                  linked from My Work, and returned to after a reload. The
+                  input state keeps ?draft= for the same reason: a review that
+                  exists but has not been run is still somewhere a teacher can
+                  come back to. */}
+              <Route path="look-it-over/:reviewId" element={<LookItOver />} />
               <Route path="debrief" element={<AudioCoaching />} />
               <Route path="work" element={<MyWork />} />
               <Route path="profile" element={<Profile />} />

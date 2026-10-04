@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { Review } from '../lib/api'
 
@@ -21,6 +21,7 @@ import type { Review } from '../lib/api'
 const extractReviewDocument = vi.fn()
 const detectReviewType = vi.fn()
 const createReview = vi.fn()
+const getReview = vi.fn()
 const deleteReview = vi.fn()
 const updateReview = vi.fn()
 const runReview = vi.fn()
@@ -33,6 +34,7 @@ vi.mock('../lib/api', () => ({
   extractReviewDocument: (...a: unknown[]) => extractReviewDocument(...a),
   detectReviewType: (...a: unknown[]) => detectReviewType(...a),
   createReview: (...a: unknown[]) => createReview(...a),
+  getReview: (...a: unknown[]) => getReview(...a),
   updateReview: (...a: unknown[]) => updateReview(...a),
   runReview: (...a: unknown[]) => runReview(...a),
   setReviewEditStatus: (...a: unknown[]) => setReviewEditStatus(...a),
@@ -89,6 +91,19 @@ function renderPage() {
   return render(
     <MemoryRouter>
       <LookItOver />
+    </MemoryRouter>,
+  )
+}
+
+/// Renders the page at a URL, through the real route table shape, so
+/// `useParams` sees what it would in the app.
+function renderAt(path: string) {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="look-it-over" element={<LookItOver />} />
+        <Route path="look-it-over/:reviewId" element={<LookItOver />} />
+      </Routes>
     </MemoryRouter>,
   )
 }
@@ -810,4 +825,43 @@ test('the choice sticks for later runs of the same review', async () => {
   await waitFor(() =>
     expect(runReview).toHaveBeenLastCalledWith('r1', expect.objectContaining({ scope: 'Unit 3 (p. 12–20)' })),
   )
+})
+
+// --- a result has a URL ---
+
+// Bookmarkable, linkable from My Work, and survives a reload. Before this the
+// result existed only in the page's own state, so a refresh lost it.
+test('a result URL loads that review', async () => {
+  getReview.mockResolvedValue(REVIEWED)
+  renderAt('/look-it-over/r1')
+
+  await waitFor(() => expect(screen.getByText('If you change one thing')).toBeTruthy())
+  expect(getReview).toHaveBeenCalledWith('r1')
+})
+
+// A review that exists but has not been run is still somewhere to come back to.
+test('a draft URL loads the setup, not the result', async () => {
+  getReview.mockResolvedValue(review())
+  renderAt('/look-it-over?draft=r1')
+
+  await waitFor(() => expect(screen.getByText("What I'll look at")).toBeTruthy())
+  expect(screen.queryByText('If you change one thing')).toBeNull()
+})
+
+// A link to a review that is gone has somewhere useful to land.
+test('a URL for a review that no longer exists lands on the drop zone', async () => {
+  getReview.mockRejectedValue(Object.assign(new Error('Not found'), { status: 404 }))
+  renderAt('/look-it-over/gone')
+
+  await waitFor(() => expect(screen.getByText('Drop it here')).toBeTruthy())
+})
+
+// My Work linked with ?open= before results had URLs, and those links are in
+// teachers' histories.
+test('the old ?open= link still opens the review', async () => {
+  getReview.mockResolvedValue(REVIEWED)
+  renderAt('/look-it-over?open=r1')
+
+  await waitFor(() => expect(screen.getByText('If you change one thing')).toBeTruthy())
+  expect(getReview).toHaveBeenCalledWith('r1')
 })

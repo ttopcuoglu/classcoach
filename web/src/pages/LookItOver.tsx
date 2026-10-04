@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import ClassContextLine from '../components/ClassContextLine'
 import SectionLabel from '../components/SectionLabel'
 import { WorkingRing } from '../components/ProgressRing'
@@ -8,6 +8,7 @@ import { useHandoff } from '../hooks/useHandoff'
 import { BookIcon, ClipboardIcon } from '../components/icons'
 import {
   createReview,
+  getReview,
   extractReviewDocument,
   getReviewDocument,
   redesignReviewForAi,
@@ -54,6 +55,12 @@ function docTypeOf(value: string): DocType {
 
 export default function LookItOver() {
   const navigate = useNavigate()
+  const { reviewId } = useParams()
+  const { pathname } = useLocation()
+  const [searchParams] = useSearchParams()
+  // `?open=` is what My Work used to link with, and may still be in a
+  // teacher's history. Treated as naming the same review.
+  const draftId = searchParams.get('draft') ?? searchParams.get('open')
   const fileInput = useRef<HTMLInputElement | null>(null)
   const cameraInput = useRef<HTMLInputElement | null>(null)
 
@@ -86,6 +93,9 @@ export default function LookItOver() {
         classProfileId: prep?.id ?? null,
       })
       setReview(created)
+      // A review that exists but has not been run is still somewhere a
+      // teacher can come back to.
+      navigate(`/look-it-over?draft=${created.id}`, { replace: true })
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -108,6 +118,9 @@ export default function LookItOver() {
         classProfileId: prep?.id ?? null,
       })
       setReview(created)
+      // A review that exists but has not been run is still somewhere a
+      // teacher can come back to.
+      navigate(`/look-it-over?draft=${created.id}`, { replace: true })
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -122,6 +135,8 @@ export default function LookItOver() {
   function discard() {
     setReview(null)
     setError(null)
+    setScope(null)
+    navigate('/look-it-over', { replace: true })
   }
 
   /// "added just now", then minutes, then hours — a document being reviewed
@@ -200,13 +215,43 @@ export default function LookItOver() {
   /// question is asked once rather than on each attempt.
   const [scope, setScope] = useState<string | null>(null)
 
+  // A review named in the URL is loaded on arrival — a bookmarked result, a
+  // link from My Work, or a reload of a draft that was never run. The id is
+  // the only dependency: this runs once per review, not once per render.
+  useEffect(() => {
+    // Only while this is the page being shown. `?open=` is a param several
+    // surfaces use, so handing off to one of them — Redesign goes to
+    // /assignment-coach?open= — would otherwise read that id back as a review
+    // of ours on the way out.
+    if (!pathname.startsWith('/look-it-over')) return
+    const wanted = reviewId ?? draftId
+    if (!wanted || review?.id === wanted) return
+    let cancelled = false
+    getReview(wanted)
+      .then((loaded) => {
+        if (!cancelled) setReview(loaded)
+      })
+      // A link to a review that is gone lands on the drop zone rather than an
+      // error: there is something useful to do here either way.
+      .catch(() => {
+        if (!cancelled) setError(null)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewId, draftId])
+
   async function handleRun(opts?: { namesHandled?: 'strip' | 'keep'; scope?: string }) {
     if (!review) return
     setBusy('reviewing')
     setError(null)
     try {
       const chosenScope = opts?.scope ?? scope ?? undefined
-      setReview(await runReview(review.id, { namesHandled: opts?.namesHandled, scope: chosenScope }))
+      const ran = await runReview(review.id, { namesHandled: opts?.namesHandled, scope: chosenScope })
+      setReview(ran)
+      // The result has its own URL from the moment it exists.
+      if (ran.status === 'reviewed') navigate(`/look-it-over/${ran.id}`, { replace: true })
       if (opts?.scope) setScope(opts.scope)
       setNamesFound(null)
       setScopeChoice(null)
@@ -818,6 +863,8 @@ export default function LookItOver() {
                     setReview(null)
                     setPasted('')
                     setError(null)
+                    setScope(null)
+                    navigate('/look-it-over', { replace: true })
                   }}
                   className="px-2 py-2.5 text-sm font-semibold text-ink-soft hover:text-ink"
                 >

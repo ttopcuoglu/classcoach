@@ -206,7 +206,9 @@ workRouter.get('/', async (req, res) => {
       ...withTopic(r.focusArea),
       saved: r.saved,
       createdAt: r.createdAt,
-      href: `/look-it-over?open=${r.id}`,
+      // The result's own URL. `?open=` was never handled by the page, so
+      // every review in My Work landed on an empty drop zone.
+      href: `/look-it-over/${r.id}`,
     })),
   ]
 

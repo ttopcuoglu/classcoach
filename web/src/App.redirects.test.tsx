@@ -192,3 +192,12 @@ test('every path tested here is declared in the real route table', async () => {
     expect(appSource.includes(`path="${path}"`), `${path} is not in App.tsx`).toBe(true)
   }
 })
+
+// A review result has a URL of its own now, so it has to be in the route
+// table — a link from My Work that 404s is the same failure as a retired
+// tool's URL 404ing.
+test('a review result and a draft both have routes', async () => {
+  const appSource = (await import('./App.tsx?raw')).default
+  expect(appSource.includes('path="look-it-over/:reviewId"')).toBe(true)
+  expect(appSource.includes('path="look-it-over"')).toBe(true)
+})
