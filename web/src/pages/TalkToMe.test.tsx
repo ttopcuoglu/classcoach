@@ -73,6 +73,16 @@ function renderAt(path = '/talk') {
   )
 }
 
+/// The starter prompt buttons, read from the section they live in rather
+/// than by their punctuation — they used to be wrapped in quotation marks and
+/// the tests matched on the quote, which made a styling change look like a
+/// missing feature.
+function starterPrompts(): string[] {
+  const heading = screen.getByText('Or start with one of these')
+  const buttons = Array.from(heading.parentElement?.querySelectorAll('button') ?? [])
+  return buttons.map((b) => b.textContent?.replace(/→$/, '').trim() ?? '')
+}
+
 /// Where a piece of text sits in the rendered document, for order assertions.
 /// Takes the FIRST match, which is what matters for order — the starter
 /// prompts are four separate nodes and the first one is where that block
@@ -117,7 +127,7 @@ test('the page runs mic hero, then topic chips, then starter prompts, then the c
 
   const hero = positionOf('Hi. What would you like to talk about?')
   const chips = positionOf('Want me focused on something?')
-  const starters = positionOf(/^"/)
+  const starters = positionOf('Or start with one of these')
   const classLine = positionOf('Your class')
 
   expect(hero).toBeLessThan(chips)
@@ -207,18 +217,18 @@ test('a topic in the URL is already selected on arrival', async () => {
 test('four starter prompts are offered before any topic is chosen', async () => {
   renderAt()
   await waitFor(() => expect(screen.getByText('Want me focused on something?')).toBeTruthy())
-  expect(screen.getAllByText(/^".*"$/)).toHaveLength(4)
+  expect(starterPrompts()).toHaveLength(4)
 })
 
 test('choosing a topic changes the starter prompts', async () => {
   renderAt()
   await waitFor(() => expect(screen.getByRole('button', { name: 'Parent Communication' })).toBeTruthy())
-  const before = screen.getAllByText(/^".*"$/).map((n) => n.textContent)
+  const before = starterPrompts()
 
   fireEvent.click(screen.getByRole('button', { name: 'Parent Communication' }))
 
   await waitFor(() => {
-    const after = screen.getAllByText(/^".*"$/).map((n) => n.textContent)
+    const after = starterPrompts()
     expect(after).not.toEqual(before)
     expect(after).toHaveLength(4)
   })
@@ -279,4 +289,74 @@ test('the voice guarantee is on the start screen itself', async () => {
   await waitFor(() =>
     expect(screen.getByText('Your voice is never saved — only the conversation text.')).toBeTruthy(),
   )
+})
+
+// --- the second step, within a topic ---
+
+// The placement is the requirement: the sub-options narrow what Coach opens
+// on, so they belong between the chip they narrow and the prompts they change
+// the meaning of — not below the starters, where they read as an afterthought
+// to a decision already made.
+test('choosing a topic reveals its sub-options, above the starter prompts', async () => {
+  renderAt()
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Classroom Management' })).toBeTruthy())
+  // Nothing is offered until a topic is chosen.
+  expect(screen.queryByRole('button', { name: 'Phones and devices' })).toBeNull()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Classroom Management' }))
+
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Phones and devices' })).toBeTruthy())
+  expect(positionOf('Classroom Management')).toBeLessThan(positionOf('Phones and devices'))
+  expect(positionOf('Phones and devices')).toBeLessThan(positionOf('Or start with one of these'))
+})
+
+test('the sub-options are the chosen topic’s own', async () => {
+  renderAt('/talk?topic=parent_communication')
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Grade dispute' })).toBeTruthy())
+  for (const label of ['Delivering hard news', 'Angry or accusatory', 'Attendance', 'Setting a boundary']) {
+    expect(screen.getByRole('button', { name: label }), label).toBeTruthy()
+  }
+  // Another topic's kinds are not on the page.
+  expect(screen.queryByRole('button', { name: 'Phones and devices' })).toBeNull()
+})
+
+test('a sub-option toggles off, and switching topic drops it', async () => {
+  renderAt('/talk?topic=classroom_management&kind=technology_misuse')
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Phones and devices' })).toBeTruthy())
+  expect(screen.getByRole('button', { name: 'Phones and devices' }).getAttribute('aria-pressed')).toBe('true')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Phones and devices' }))
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Phones and devices' }).getAttribute('aria-pressed')).toBe('false'),
+  )
+
+  // A kind belongs to the topic above it, so changing topic cannot leave a
+  // narrowing behind that has nothing left to narrow.
+  fireEvent.click(screen.getByRole('button', { name: 'Phones and devices' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Parent Communication' }))
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Phones and devices' })).toBeNull())
+})
+
+// "Something else" is the chip that means "do not assume anything", so
+// offering it a list of assumptions to pick from would invert it.
+test('the ghost chip offers no sub-options', async () => {
+  renderAt('/talk?topic=something_else')
+  await waitFor(() => expect(screen.getByText('Or start with one of these')).toBeTruthy())
+  const chips = screen.getByText('Want me focused on something?').parentElement?.parentElement
+  const labels = Array.from(chips?.querySelectorAll('button') ?? []).map((b) => b.textContent)
+  // Only the seven topics, and the Clear in the confirmation strip.
+  expect(labels.filter((l) => l !== 'Clear')).toHaveLength(7)
+})
+
+test('the narrowing is sent with the opening turn', async () => {
+  streamCoachReply.mockResolvedValue({ id: 'd1', messages: [] })
+  renderAt('/talk?topic=classroom_management&kind=technology_misuse')
+  await waitFor(() => expect(screen.getByRole('button', { name: /start talking/i })).toBeTruthy())
+
+  fireEvent.click(screen.getByRole('button', { name: /start talking/i }))
+
+  await waitFor(() => expect(streamCoachReply).toHaveBeenCalled())
+  const args = streamCoachReply.mock.calls[0]
+  expect(args).toContain('classroom_management')
+  expect(args).toContain('technology_misuse')
 })

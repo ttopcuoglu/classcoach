@@ -5,9 +5,10 @@ import {
   buildHandoffContextBlock,
   buildTopicBlock,
   buildTopicGreetingBlock,
+  kindFromRequest,
   topicFromRequest,
 } from './talkTopicPrompt.ts'
-import { SOMETHING_ELSE, TOPICS, findTopic } from './topics.ts'
+import { SOMETHING_ELSE, TOPICS, TOPIC_FOLLOWS_THE_WORDS, findTopic } from './topics.ts'
 
 // The topic chip has one rule that matters more than the rest of the feature:
 // it decides where the coach OPENS and nothing after that. A teacher who taps
@@ -175,4 +176,52 @@ test('no context adds nothing to the prompt', () => {
 test('arriving context is capped rather than trusted to be short', () => {
   const huge = 'x'.repeat(10_000)
   assert.ok(buildHandoffContextBlock(huge).length < 3_000)
+})
+
+// --- the kind of moment, within the topic ---
+
+test('a kind narrows the topic block without becoming a second subject', () => {
+  const topic = findTopic('classroom_management')!
+  const kind = kindFromRequest(topic, 'technology_misuse')!
+  const block = buildTopicBlock(topic, kind)
+  assert.match(block, /Phones and devices/)
+  // The topic is still the subject and the chip still gives its authority
+  // back — a teacher who narrows and then talks about something else is
+  // answered about the something else.
+  assert.match(block, /Classroom Management/)
+  assert.ok(block.includes(TOPIC_FOLLOWS_THE_WORDS))
+})
+
+test('no kind leaves the topic block exactly as it was', () => {
+  const topic = findTopic('classroom_management')!
+  assert.equal(buildTopicBlock(topic), buildTopicBlock(topic, null))
+})
+
+test('the greeting asks the topic question about the narrower thing', () => {
+  const topic = findTopic('parent_communication')!
+  const kind = kindFromRequest(topic, 'grade_dispute')!
+  const block = buildTopicGreetingBlock(topic, 'Dana', kind)
+  assert.match(block, /grade dispute/i)
+  // Still the topic's own opener, not a per-kind one.
+  assert.ok(block.includes(topic.opener))
+})
+
+// A stale client, or a crafted request, must not pair a kind with a topic it
+// does not belong to — that would describe a teacher's choice back to them
+// wrongly.
+test('a kind from another topic is dropped, not honoured', () => {
+  const topic = findTopic('parent_communication')!
+  assert.equal(kindFromRequest(topic, 'technology_misuse'), null)
+  assert.equal(kindFromRequest(topic, 'nonsense'), null)
+  assert.equal(kindFromRequest(null, 'grade_dispute'), null)
+  assert.equal(kindFromRequest(topic, 42), null)
+})
+
+// "Something else" means "do not assume anything", so it has no kinds and
+// cannot be narrowed.
+test('something else cannot be narrowed', () => {
+  const topic = findTopic('something_else')!
+  assert.equal(topic.kinds.length, 0)
+  assert.equal(kindFromRequest(topic, 'anything'), null)
+  assert.equal(buildTopicBlock(topic, null), '')
 })

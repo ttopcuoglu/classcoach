@@ -54,6 +54,7 @@ import {
   buildHandoffContextBlock,
   buildTopicBlock,
   buildTopicGreetingBlock,
+  kindFromRequest,
   topicFromRequest,
 } from '../lib/talkTopicPrompt.ts'
 // Re-exported because the Telegram coach and the demo seed script import
@@ -528,11 +529,16 @@ async function markFollowUpAnswered(followUpId: string, debriefId: string) {
 }
 
 debriefRouter.post('/talk/stream', async (req, res) => {
-  const { message, followUpId, topic: topicValue, context } = req.body ?? {}
+  const { message, followUpId, topic: topicValue, context, kind: kindValue } = req.body ?? {}
   // An unrecognized topic is treated exactly like no topic: the coach opens
   // with no assumption. Rejecting the request instead would block a
   // conversation over a chip, which is never worth it.
   const topic = topicFromRequest(topicValue)
+  // The narrowing within that topic, when the teacher tapped one. Opening
+  // turn only, like the topic itself: later turns read the topic back off the
+  // stored conversation, and by then the teacher's own words are doing this
+  // job better than a chip could.
+  const kind = kindFromRequest(topic, kindValue)
   // No message at all means Coach opens the conversation — an empty string
   // still does not, because that is a client bug rather than a greeting.
   const isGreeting = message == null
@@ -565,7 +571,7 @@ debriefRouter.post('/talk/stream', async (req, res) => {
   const followUp = await findPendingFollowUp(userId, followUpId)
   // TALK_SYSTEM_PROMPT is byte-identical for every teacher, so it caches once
   // and is reused across all of them; everything per-teacher follows it.
-  const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${buildTopicBlock(topic)}${buildHandoffContextBlock(context)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${isGreeting ? buildTopicGreetingBlock(topic, firstNameOf(user?.name)) : ''}`
+  const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${buildTopicBlock(topic, kind)}${buildHandoffContextBlock(context)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${isGreeting ? buildTopicGreetingBlock(topic, firstNameOf(user?.name), kind) : ''}`
 
   await streamCoachReply(res, 'talk_start', {
     gateMs: Date.now() - gateStart,
@@ -710,8 +716,9 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
 })
 
 debriefRouter.post('/talk', async (req, res) => {
-  const { message, followUpId, topic: topicValue } = req.body ?? {}
+  const { message, followUpId, topic: topicValue, kind: kindValue } = req.body ?? {}
   const topic = topicFromRequest(topicValue)
+  const kind = kindFromRequest(topic, kindValue)
   if (typeof message !== 'string' || !message.trim()) {
     res.status(400).json({ error: 'message is required' })
     return
@@ -731,7 +738,7 @@ debriefRouter.post('/talk', async (req, res) => {
     })
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
     const followUp = await findPendingFollowUp(req.user!.userId, followUpId)
-    const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${buildTopicBlock(topic)}${followUp ? buildFollowUpContextBlock(followUp) : ''}`
+    const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${buildTopicBlock(topic, kind)}${followUp ? buildFollowUpContextBlock(followUp) : ''}`
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,

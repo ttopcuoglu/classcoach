@@ -9,6 +9,9 @@
 
 import { SOMETHING_ELSE, TOPIC_FOLLOWS_THE_WORDS, findTopic, type Topic } from './topics.ts'
 
+/// A kind of moment within a topic, as the chip row offers them.
+export type TopicKind = Topic['kinds'][number]
+
 /// Talk It Through used to open with the teacher talking into silence: the
 /// endpoint required a message, so Coach could not say anything until it had
 /// been spoken to. This is the synthetic first turn that lets Coach greet
@@ -36,17 +39,30 @@ export function buildGreetingBlock(firstName: string | null | undefined): string
 /// "Something else" deliberately produces no block at all. It is the chip a
 /// teacher taps to say "do not assume anything", so adding a paragraph of
 /// assumptions would invert its meaning.
-export function buildTopicBlock(topic: Topic | null): string {
+export function buildTopicBlock(topic: Topic | null, kind?: TopicKind | null): string {
   if (!topic || topic.value === SOMETHING_ELSE) return ''
-  return `\n\nThe teacher chose a topic before saying anything: "${topic.label}". For this conversation you are a ${topic.coachRole}.\n\n${topic.safety}\n\n${TOPIC_FOLLOWS_THE_WORDS}\n`
+  // The narrower choice is stated as a narrowing of the same chip, not as a
+  // second subject. TOPIC_FOLLOWS_THE_WORDS still follows it and still takes
+  // the authority back: a teacher who taps "Phones and devices" and then
+  // talks about a parent email is answered about the parent email.
+  const narrowed = kind ? ` Within it they narrowed to "${kind.label}".` : ''
+  return `\n\nThe teacher chose a topic before saying anything: "${topic.label}".${narrowed} For this conversation you are a ${topic.coachRole}.\n\n${topic.safety}\n\n${TOPIC_FOLLOWS_THE_WORDS}\n`
 }
 
 /// The opening line for a chosen topic — the teacher has said nothing yet, so
 /// the question has to come from the chip.
-export function buildTopicGreetingBlock(topic: Topic | null, firstName: string | null | undefined): string {
+export function buildTopicGreetingBlock(
+  topic: Topic | null,
+  firstName: string | null | undefined,
+  kind?: TopicKind | null,
+): string {
   if (!topic || topic.value === SOMETHING_ELSE) return buildGreetingBlock(firstName)
   const named = firstName ? ` Greet them by name — they are called ${firstName}.` : ''
-  return `\n\nThis is the first thing you say, before the teacher has said anything at all. Open with a warm, short hello and then ask this, or a close paraphrase of it: "${topic.opener}"${named} Two sentences at most, no advice yet, and nothing about a situation you have not been told about — you know the subject they picked, not what happened.\n`
+  // The opener stays the topic's. The kind only says which corner of it to
+  // ask about: an opener written per kind would be thirty more strings to
+  // keep true, and the topic's own question already fits all of them.
+  const about = kind ? ` Ask it about ${kind.label.toLowerCase()} specifically.` : ''
+  return `\n\nThis is the first thing you say, before the teacher has said anything at all. Open with a warm, short hello and then ask this, or a close paraphrase of it: "${topic.opener}"${about}${named} Two sentences at most, no advice yet, and nothing about a situation you have not been told about — you know the subject they picked, not what happened.\n`
 }
 
 /// The chosen topic off a request body, or null. Null covers both "the
@@ -54,6 +70,15 @@ export function buildTopicGreetingBlock(topic: Topic | null, firstName: string |
 /// thing as far as coaching goes: open with no assumption.
 export function topicFromRequest(value: unknown): Topic | null {
   return findTopic(value)
+}
+
+/// The chosen kind off a request body, validated against the topic it claims
+/// to belong to. A kind from another topic is dropped rather than honoured:
+/// the pair is what the teacher saw on screen, and the two disagreeing means
+/// one of them is stale.
+export function kindFromRequest(topic: Topic | null, value: unknown): TopicKind | null {
+  if (!topic || typeof value !== 'string') return null
+  return topic.kinds.find((k) => k.value === value) ?? null
 }
 
 /// Facts a teacher arrives with from another surface — a lesson report, a

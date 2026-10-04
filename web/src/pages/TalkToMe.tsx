@@ -158,6 +158,8 @@ export default function TalkToMe() {
   // the teacher where they were rather than silently dropping their choice.
   // Null means they skipped the chips, which is a first-class answer.
   const topic = searchParams.get('topic')
+  // The optional second step, within the chosen topic.
+  const kind = searchParams.get('kind')
   // The teacher's default class, used only to pick which starter prompts to
   // show. Null until it loads, and null forever for a teacher who has none —
   // the starters still fill from the general list either way.
@@ -336,8 +338,16 @@ export default function TalkToMe() {
   // Read inside the async record -> transcribe -> reply chain, which outlives
   // the render that started it — a ref so the in-flight turn sees the topic
   // that was selected when the teacher began, not a stale closure copy.
+  // The chosen topic's own kinds. "Something else" has none by design — it is
+  // the chip a teacher taps to say "do not assume anything", so offering it a
+  // list of assumptions to pick from would invert its meaning.
+  const topicKinds = useMemo(() => TOPICS.find((t) => t.value === topic)?.kinds ?? [], [topic])
+  const kindLabel = topicKinds.find((k) => k.value === kind)?.label ?? null
+
   const topicRef = useRef(topic)
   topicRef.current = topic
+  const kindRef = useRef(kind)
+  kindRef.current = kind
 
 
   // The fresh start screen: no conversation yet, mic idle, not typing. The
@@ -351,6 +361,18 @@ export default function TalkToMe() {
     const params = new URLSearchParams(searchParams)
     if (next) params.set('topic', next)
     else params.delete('topic')
+    // The sub-options belong to the topic above them, so changing topic drops
+    // a narrowing that no longer has anything left to narrow.
+    params.delete('kind')
+    setSearchParams(params, { replace: true })
+  }
+
+  /// Which kind of moment, within the chosen topic. Optional in the same way
+  /// the topic is: it moves where Coach opens and nothing else.
+  function setKind(next: string | null) {
+    const params = new URLSearchParams(searchParams)
+    if (next) params.set('kind', next)
+    else params.delete('kind')
     setSearchParams(params, { replace: true })
   }
 
@@ -388,6 +410,7 @@ export default function TalkToMe() {
         followUpRef.current?.id,
         topicRef.current,
         handoffRef.current ? handoffContext(handoffRef.current) : null,
+        kindRef.current,
       )
       setDebrief(result)
       queue.end()
@@ -427,7 +450,7 @@ export default function TalkToMe() {
         const current = debriefRef.current
         const result = current
           ? await sendDebriefChat(current.id, text)
-          : await startTalkToMe(text, followUpRef.current?.id, topicRef.current)
+          : await startTalkToMe(text, followUpRef.current?.id, topicRef.current, kindRef.current)
         setDebrief(result)
         resumeListeningIfActive()
       } catch (err) {
@@ -466,6 +489,7 @@ export default function TalkToMe() {
         topicRef.current,
         // Same: context is background for the first reply, not every turn.
         current ? null : handoffRef.current ? handoffContext(handoffRef.current) : null,
+        kindRef.current,
       )
       setDebrief(result)
       queue.end()
@@ -963,7 +987,7 @@ export default function TalkToMe() {
           </div>
         ) : (
           <>
-            <div className="flex w-full max-w-md flex-col items-center gap-4 rounded-3xl bg-forest px-6 py-8 text-cream shadow-sm">
+            <div className="flex w-full max-w-3xl flex-col items-center gap-5 rounded-3xl bg-forest px-6 py-12 text-cream shadow-sm sm:px-10">
               <div className="relative flex h-36 w-36 items-center justify-center">
                 <span
                   aria-hidden="true"
@@ -1018,14 +1042,14 @@ export default function TalkToMe() {
                   <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">
                     {followUp ? 'Coach is checking in' : isDebrief ? 'Debrief' : 'A moment for your teaching'}
                   </p>
-                  <h1 className="mt-2 font-heading text-2xl font-bold text-cream sm:text-3xl">
+                  <h1 className="mt-2 font-heading text-3xl font-bold text-cream sm:text-4xl">
                     {followUp
                       ? followUp.checkInQuestion
                       : isDebrief
                         ? 'How did it go?'
                         : 'Hi. What would you like to talk about?'}
                   </h1>
-                  <p className="mt-1.5 text-sm text-cream/70">
+                  <p className="mx-auto mt-2 max-w-xl text-base text-cream/70">
                     {followUp
                       ? 'Say how it went — good, bad, or not yet. Coach will take it from there.'
                       : isDebrief
@@ -1044,19 +1068,19 @@ export default function TalkToMe() {
                   button beside the primary, not a small link: typing is a
                   first-class way to use this, not a fallback. */}
               {onStartScreen && !atCap && (
-                <div className="mt-1 flex flex-wrap items-center justify-center gap-2.5">
+                <div className="mt-2 flex flex-wrap items-center justify-center gap-3">
                   <button
                     type="button"
                     onClick={handleStartTalking}
-                    className="flex items-center gap-2 rounded-full bg-gold px-6 py-3 text-sm font-semibold text-forest transition-opacity hover:opacity-90"
+                    className="flex items-center gap-2.5 rounded-full bg-terracotta px-8 py-4 text-base font-semibold text-cream transition-opacity hover:opacity-90"
                   >
-                    <MicIcon className="h-4 w-4" />
+                    <MicIcon className="h-5 w-5" />
                     Start talking
                   </button>
                   <button
                     type="button"
                     onClick={handleOpenTypeInput}
-                    className="rounded-full border-2 border-cream/25 px-5 py-3 text-sm font-semibold text-cream/90 transition-colors hover:border-cream/50 hover:text-cream"
+                    className="rounded-full border-2 border-cream/25 px-7 py-3.5 text-base font-semibold text-cream/90 transition-colors hover:border-cream/50 hover:text-cream"
                   >
                     Type instead
                   </button>
@@ -1065,7 +1089,7 @@ export default function TalkToMe() {
             </div>
 
             {!debrief && phase === 'idle' && !showTypeInput ? (
-              <div className="flex w-full max-w-md flex-col gap-4">
+              <div className="flex w-full max-w-3xl flex-col gap-5">
                 {followUp && (
                   <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5 text-left">
                     <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">What you planned to try</p>
@@ -1103,10 +1127,12 @@ export default function TalkToMe() {
                 {!isDebrief && !followUp && (
                   <div className="flex flex-col gap-2 text-left">
                     <div>
-                      <p className="text-sm font-medium text-ink">Want me focused on something?</p>
-                      <p className="text-xs text-ink-soft">Optional — skip it and I'll just listen.</p>
+                      <p className="text-sm font-medium text-ink">
+                        Want me focused on something?{' '}
+                        <span className="font-normal text-ink-soft">Optional — skip it and I'll just listen.</span>
+                      </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2.5">
                       {TOPICS.map(({ value, label, ghost }) => {
                         const selected = topic === value
                         return (
@@ -1115,12 +1141,12 @@ export default function TalkToMe() {
                             type="button"
                             onClick={() => setTopic(selected ? null : value)}
                             aria-pressed={selected}
-                            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                            className={`rounded-full border px-5 py-2.5 text-sm font-semibold transition-colors ${
                               selected
-                                ? 'bg-forest text-cream'
+                                ? 'border-forest bg-forest text-cream'
                                 : ghost
-                                  ? 'border border-dashed border-ink-soft/40 text-ink-soft hover:border-terracotta/50 hover:text-terracotta-600'
-                                  : 'bg-cream-card text-ink-soft hover:text-ink'
+                                  ? 'border-dashed border-ink-soft/40 text-ink-soft hover:border-terracotta/50 hover:text-terracotta-600'
+                                  : 'border-hairline bg-cream-card text-ink hover:border-terracotta/50 hover:text-terracotta-600'
                             }`}
                           >
                             {label}
@@ -1129,6 +1155,34 @@ export default function TalkToMe() {
                       })}
                     </div>
 
+                    {/* The second step, and the reason it sits here rather
+                        than below the starters: it narrows what Coach opens
+                        on, so it belongs beside the chip it narrows and above
+                        the prompts it changes the meaning of. Still optional,
+                        and tapping a selected one clears it. */}
+                    {topicKinds.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {topicKinds.map(({ value, label }) => {
+                          const picked = kind === value
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => setKind(picked ? null : value)}
+                              aria-pressed={picked}
+                              className={`rounded-full border px-4 py-2 text-xs font-semibold transition-colors ${
+                                picked
+                                  ? 'border-terracotta bg-terracotta text-cream'
+                                  : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/50 hover:text-terracotta-600'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+
                     {/* Says what the chip will and will not do. "Say anything
                         and it will follow you from there" is the promise the
                         prompt actually keeps — the chip decides sentence one
@@ -1136,8 +1190,8 @@ export default function TalkToMe() {
                     {topic && (
                       <div className="flex flex-wrap items-center gap-2 rounded-xl bg-gold-tint/60 px-3 py-2 text-xs">
                         <span className="text-ink">
-                          Coach will start from {topicLabel(topic)} — say anything and it will follow you from
-                          there.
+                          Coach will start from {topicLabel(topic)}
+                          {kindLabel ? ` · ${kindLabel}` : ''} — say anything and it will follow you from there.
                         </span>
                         <button
                           type="button"
@@ -1151,20 +1205,27 @@ export default function TalkToMe() {
                   </div>
                 )}
 
-                <div className="flex flex-col gap-2">
-                  {(followUp ? CHECK_IN_PROMPTS : isDebrief ? DEBRIEF_PROMPTS : examplePrompts).map((prompt, i) => (
-                    <button
-                      key={prompt}
-                      type="button"
-                      onClick={() => submitText(prompt)}
-                      className={`group flex items-center justify-between gap-3 rounded-2xl px-4 py-3.5 text-left text-sm font-medium text-forest transition-shadow hover:shadow-md ${
-                        ['bg-peach-tint/60', 'bg-gold-tint/60', 'bg-mint-tint/60', 'bg-peach-tint/30'][i % 4]
-                      }`}
-                    >
-                      "{prompt}"
-                      <span aria-hidden="true" className="text-terracotta transition-transform group-hover:translate-x-0.5">→</span>
-                    </button>
-                  ))}
+                <div className="flex flex-col gap-2.5">
+                  {!isDebrief && !followUp && (
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
+                      Or start with one of these
+                    </p>
+                  )}
+                  <div className="grid gap-2.5 sm:grid-cols-2">
+                    {(followUp ? CHECK_IN_PROMPTS : isDebrief ? DEBRIEF_PROMPTS : examplePrompts).map((prompt, i) => (
+                      <button
+                        key={prompt}
+                        type="button"
+                        onClick={() => submitText(prompt)}
+                        className={`group flex items-center justify-between gap-3 rounded-2xl px-5 py-4 text-left text-sm font-medium text-forest transition-shadow hover:shadow-md ${
+                          ['bg-peach-tint/60', 'bg-gold-tint/60', 'bg-mint-tint/60', 'bg-peach-tint/30'][i % 4]
+                        }`}
+                      >
+                        {prompt}
+                        <span aria-hidden="true" className="shrink-0 text-terracotta transition-transform group-hover:translate-x-0.5">→</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Last, and quiet. It is context the coach uses, not a

@@ -1171,6 +1171,9 @@ export async function streamCoachReply(
   /// Facts the teacher arrived with from another surface (a lesson report, a
   /// document review). Opening turn only.
   context?: string | null,
+  /// The kind of moment within the topic, when the teacher narrowed it.
+  /// Opening turn only, for the same reason the topic is.
+  kind?: string | null,
 ): Promise<Debrief> {
   const path = id ? `/api/debriefs/${id}/chat/stream` : '/api/debriefs/talk/stream'
   const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -1185,6 +1188,7 @@ export async function streamCoachReply(
             followUpId: followUpId ?? undefined,
             topic: topic ?? undefined,
             context: context ?? undefined,
+            kind: kind ?? undefined,
           },
     ),
   })
@@ -1230,10 +1234,16 @@ export function startTalkToMe(
   message: string,
   followUpId?: string | null,
   topic?: string | null,
+  kind?: string | null,
 ): Promise<Debrief> {
   return request('/api/debriefs/talk', {
     method: 'POST',
-    body: JSON.stringify({ message, followUpId: followUpId ?? undefined, topic: topic ?? undefined }),
+    body: JSON.stringify({
+      message,
+      followUpId: followUpId ?? undefined,
+      topic: topic ?? undefined,
+      kind: kind ?? undefined,
+    }),
   })
 }
 
