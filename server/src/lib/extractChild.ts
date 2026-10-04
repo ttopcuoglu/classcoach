@@ -14,7 +14,8 @@
 /// Reads {fileName, base64} as JSON on stdin, writes {text, pageCount} or
 /// {error, kind} as JSON on stdout.
 
-import { countPages, extractDocumentText, NoTextFoundError, UnsupportedFileError } from './documentText.ts'
+import { extractDocument } from './documentText.ts'
+import { NoTextFoundError, UnsupportedFileError } from './extractErrors.ts'
 
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = []
@@ -26,8 +27,8 @@ async function main() {
   try {
     const { fileName, base64 } = JSON.parse(await readStdin()) as { fileName: string; base64: string }
     const buffer = Buffer.from(base64, 'base64')
-    const text = await extractDocumentText(buffer, fileName)
-    const pageCount = await countPages(buffer, fileName)
+    // One read, both answers — asking separately opened the PDF engine twice.
+    const { text, pageCount } = await extractDocument(buffer, fileName)
     process.stdout.write(JSON.stringify({ text, pageCount }))
     process.exit(0)
   } catch (error) {

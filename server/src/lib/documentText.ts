@@ -92,12 +92,25 @@ async function extractXlsxText(buffer: Buffer): Promise<string> {
     .join('\n\n')
 }
 
-async function extractPdfText(buffer: Buffer): Promise<string> {
+/// Text and page count from ONE parse.
+///
+/// They used to be two calls, which meant two PDFParse instances over the
+/// same bytes — the whole engine, twice, for a number the first pass already
+/// had. On a 512MB container that second parse is the one that does not fit,
+/// and it is the difference between this surface working and not.
+async function extractPdfTextAndPages(buffer: Buffer): Promise<{ text: string; pageCount: number | null }> {
   const PDFParse = await loadPdfParse()
   const parser = new PDFParse({ data: buffer })
+  let pageCount: number | null = null
   try {
+    try {
+      // `total` is pdf-parse's page count on InfoResult.
+      pageCount = (await parser.getInfo()).total ?? null
+    } catch {
+      pageCount = null
+    }
     const direct = stripPdfPageMarkers((await parser.getText()).text)
-    if (direct.length >= 15) return direct
+    if (direct.length >= 15) return { text: direct, pageCount }
 
     const screenshot = await parser.getScreenshot({ scale: 2, first: MAX_OCR_PAGES, imageDataUrl: false })
     const texts: string[] = []
@@ -106,7 +119,7 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
     for (const page of screenshot.pages) {
       texts.push(await ocrImageBuffer(Buffer.from(page.data)))
     }
-    return texts.join('\n\n').trim()
+    return { text: texts.join('\n\n').trim(), pageCount }
   } finally {
     await parser.destroy()
   }
@@ -126,12 +139,27 @@ export const ACCEPTED_EXTENSIONS = ['.docx', '.pdf', '.pptx', '.xlsx', '.xls', '
 /// different messages to a teacher (change the file vs. retake the photo),
 /// so they are different errors rather than one empty string.
 export async function extractDocumentText(buffer: Buffer, originalName: string): Promise<string> {
+  return (await extractDocument(buffer, originalName)).text
+}
+
+/// Text AND page count, from one read of the file.
+///
+/// The pair exists because asking for them separately meant opening the PDF
+/// engine twice over the same bytes — and the second open is the one that
+/// does not fit in a 512MB container.
+export async function extractDocument(
+  buffer: Buffer,
+  originalName: string,
+): Promise<{ text: string; pageCount: number | null }> {
   const name = originalName.toLowerCase()
   let text = ''
+  let pageCount: number | null = null
   if (name.endsWith('.docx')) {
     text = (await (await loadMammoth()).extractRawText({ buffer })).value
   } else if (name.endsWith('.pdf')) {
-    text = await extractPdfText(buffer)
+    const read = await extractPdfTextAndPages(buffer)
+    text = read.text
+    pageCount = read.pageCount
   } else if (name.endsWith('.pptx')) {
     text = await extractPptxText(buffer)
   } else if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
@@ -150,27 +178,9 @@ export async function extractDocumentText(buffer: Buffer, originalName: string):
       "Couldn't find any text in that file — if it's a scan or photo, make sure the writing is clear and well-lit.",
     )
   }
-  return text.trim()
+  return { text: text.trim(), pageCount }
 }
 
-/// How many slides or pages the upload had, purely for display ("12 slides").
-/// Best-effort: a format with no page concept returns null rather than 1.
-export async function countPages(buffer: Buffer, originalName: string): Promise<number | null> {
-  const name = originalName.toLowerCase()
-  if (name.endsWith('.pdf')) {
-    const PDFParse = await loadPdfParse()
-  const parser = new PDFParse({ data: buffer })
-    try {
-      // `total` is pdf-parse's page count on InfoResult.
-      return (await parser.getInfo()).total ?? null
-    } catch {
-      return null
-    } finally {
-      await parser.destroy()
-    }
-  }
-  return null
-}
 
 // Re-exported so the child keeps one import, and so every caller sees the
 // same classes regardless of which module it reached them through.
