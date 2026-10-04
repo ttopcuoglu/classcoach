@@ -1,4 +1,10 @@
-import { TOPICS, findTopic, kindValues, topicForKind, type Topic } from './topics.ts'
+import {
+  FOCUS_AREAS,
+  findFocusArea,
+  focusAreaForSubCategory,
+  subCategoryValues,
+  type FocusArea,
+} from './focusAreas.ts'
 import { prisma } from './prisma.ts'
 import { DIFFICULTY_LEVELS } from './scenarioCategories.ts'
 
@@ -37,30 +43,25 @@ async function ratingsByCategory(userId: string): Promise<Map<string, number[]>>
   return byCategory
 }
 
-/// Which topic to practice, when the teacher didn't say. Weighted toward the
-/// ones they score lower in, same soft heuristic as the kind pick.
-///
-/// `something_else` is excluded from the weighted pick: it offers no kinds, so
-/// landing on it would leave generation with nothing to write about. A teacher
-/// who taps it explicitly describes their own situation instead.
+/// Which of the six areas to practice, when the teacher didn't say. Weighted
+/// toward areas they score lower in, same soft heuristic as the category pick.
 export async function pickWeightedFocusArea(
   userId: string,
   explicitFocusArea?: unknown,
-): Promise<Topic> {
-  const explicit = findTopic(explicitFocusArea)
+): Promise<FocusArea> {
+  const explicit = findFocusArea(explicitFocusArea)
   if (explicit) return explicit
 
   const byCategory = await ratingsByCategory(userId)
   const byArea = new Map<string, number[]>()
   for (const [category, ratings] of byCategory) {
-    const area = topicForKind(category)
+    const area = focusAreaForSubCategory(category)
     if (!area) continue
     byArea.set(area.value, [...(byArea.get(area.value) ?? []), ...ratings])
   }
 
-  const pickable = TOPICS.filter((t) => t.kinds.length > 0)
-  const weights = pickable.map((t) => needWeight(byArea.get(t.value)))
-  return weightedRandomPick(pickable, weights)
+  const weights = FOCUS_AREAS.map((a) => needWeight(byArea.get(a.value)))
+  return weightedRandomPick(FOCUS_AREAS, weights)
 }
 
 // A soft heuristic over the rating data already collected for the growth
@@ -78,7 +79,7 @@ export async function pickWeightedCategory(
   focusArea: unknown,
   explicitCategory?: unknown,
 ): Promise<string> {
-  const allowed = kindValues(focusArea)
+  const allowed = subCategoryValues(focusArea)
   if (typeof explicitCategory === 'string' && allowed.includes(explicitCategory)) {
     return explicitCategory
   }

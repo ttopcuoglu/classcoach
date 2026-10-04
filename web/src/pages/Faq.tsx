@@ -158,7 +158,7 @@ export default function Faq() {
           Frequently asked questions
         </span>
         <h1 className="mt-6 font-heading text-4xl font-extrabold leading-[1.1] tracking-tight text-cream sm:text-5xl">
-          Good questions<span className="text-terracotta">.</span>
+          Good questions<span className="text-gold">.</span>
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-cream/70">
           The things teachers and school leaders actually ask before trying Wivoza — on privacy, evaluation,

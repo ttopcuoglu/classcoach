@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import 'dotenv/config'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
@@ -10,7 +9,6 @@ import { audioSessionsRouter, failOrphanedTranscriptions } from './routes/audioS
 import { authRouter } from './routes/auth.ts'
 import { billingRouter } from './routes/billing.ts'
 import { billingWebhookRouter } from './routes/billingWebhook.ts'
-import { classProfilesRouter } from './routes/classProfiles.ts'
 import { conversationPlanRouter } from './routes/conversationPlan.ts'
 import { conversationPrepRouter } from './routes/conversationPrep.ts'
 import { debriefRouter } from './routes/debrief.ts'
@@ -19,8 +17,6 @@ import { lessonPlansRouter } from './routes/lessonPlans.ts'
 import { onboardingRouter } from './routes/onboarding.ts'
 import { parentMessageRouter } from './routes/parentMessage.ts'
 import { profileRouter } from './routes/profile.ts'
-import { reviewsRouter } from './routes/reviews.ts'
-import { workRouter } from './routes/work.ts'
 import { scenariosRouter } from './routes/scenarios.ts'
 import { shareRouter } from './routes/share.ts'
 import { ttsRouter } from './routes/tts.ts'
@@ -59,43 +55,8 @@ app.use(cookieParser())
 // form, to compare directly against `git log --oneline`.
 const COMMIT = process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? 'dev'
 
-/// The container's memory ceiling, read from the cgroup the platform sets.
-///
-/// Worth the twenty lines: uploads were failing with a body-less 502, which
-/// is what a process being killed for memory looks like from outside, and
-/// there was no way to tell from here whether the instance had 512MB or 2GB.
-/// Diagnosing that by deploying guesses is slow and mostly wrong.
-function memoryLimitMb(): number | null {
-  for (const path of ['/sys/fs/cgroup/memory.max', '/sys/fs/cgroup/memory/memory.limit_in_bytes']) {
-    try {
-      const raw = readFileSync(path, 'utf8').trim()
-      if (raw === 'max') continue
-      const bytes = Number(raw)
-      // Unset limits are reported as something absurd rather than as absent.
-      if (Number.isFinite(bytes) && bytes > 0 && bytes < 64 * 1024 * 1024 * 1024) {
-        return Math.round(bytes / 1024 / 1024)
-      }
-    } catch {
-      // Not this kernel's layout, or not readable. Try the next.
-    }
-  }
-  return null
-}
-
 app.get('/api/health', (_req, res) => {
-  const { rss, heapUsed } = process.memoryUsage()
-  res.json({
-    status: 'ok',
-    commit: COMMIT,
-    // Operational, not sensitive: how much room this process has and how much
-    // of it is gone. Nothing here identifies anyone.
-    memory: {
-      rssMb: Math.round(rss / 1024 / 1024),
-      heapUsedMb: Math.round(heapUsed / 1024 / 1024),
-      limitMb: memoryLimitMb(),
-      uptimeS: Math.round(process.uptime()),
-    },
-  })
+  res.json({ status: 'ok', commit: COMMIT })
 })
 
 // Public: sign-in itself, and shared read-only links (no session needed).
@@ -113,9 +74,6 @@ app.use('/api/telegram/webhook', telegramWebhookRouter)
 app.use('/api/scenarios', requireAuth, scenariosRouter)
 app.use('/api/attempts', requireAuth, attemptsRouter)
 app.use('/api/profile', requireAuth, profileRouter)
-app.use('/api/class-profiles', requireAuth, classProfilesRouter)
-app.use('/api/reviews', requireAuth, reviewsRouter)
-app.use('/api/work', requireAuth, workRouter)
 app.use('/api/debriefs', requireAuth, debriefRouter)
 app.use('/api/follow-ups', requireAuth, followUpsRouter)
 app.use('/api/parent-messages', requireAuth, parentMessageRouter)

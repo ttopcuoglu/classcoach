@@ -96,8 +96,6 @@ model User {
   assignmentCoachSessions AssignmentCoachSession[]
   pdFocusAreas      PdFocusArea[]
   coachFollowUps    CoachFollowUp[]
-  classProfiles     ClassProfile[]
-  reviews           Review[]
 
   @@index([passwordResetTokenHash])
 }
@@ -150,55 +148,6 @@ model PdFocusArea {
   status          String    @default("active") // "active" | "archived"
   createdAt       DateTime  @default(now())
   archivedAt      DateTime?
-}
-
-// A class the teacher actually teaches — their "prep". Class context used to
-// be asked for on every screen that needed it (Ask, Practice, Lesson
-// Planning, Assignment Coach, Lesson Debrief each had their own fields and
-// their own columns), which meant a teacher answered the same five questions
-// in five places and no screen could learn from another.
-//
-// It is a LIST rather than a single value because most teachers have two or
-// three preps, and a single stored room made the app wrong for all but one of
-// them. One row is marked isDefault and is what a surface starts from.
-//
-// `topic` — what they are teaching this week — is deliberately NOT here. It is
-// the only room field that changes weekly, so it is asked per-use and never
-// remembered (see Scenario.topic).
-//
-// source is "teacher" (they entered or confirmed it) or "inferred" (seeded by
-// the migration from data they had already given elsewhere). confirmedAt is
-// null until the teacher has actually agreed to it, which is what makes the
-// reversible "Saved to your class — not quite?" confirmation honest: an
-// inferred row is a guess until they say otherwise. schoolYear records which
-// year the row was last confirmed for, so a new August can ask again rather
-// than silently carrying last year's sections forward.
-model ClassProfile {
-  id          String    @id @default(cuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  // Optional teacher-set name, e.g. "3rd period Bio". Falls back to a line
-  // derived from the fields below when null.
-  label       String?
-  // "K-2" | "3-5" | "6-8" | "9-12" — the same bands as Scenario/Debrief,
-  // validated at the application layer like every other enum in this schema.
-  gradeBand   String
-  subject     String?
-  course      String?
-  courseLevel String?
-  // Who is in the room — "inclusion" | "english_learners". Multi-select, and
-  // separate from courseLevel: a section is routinely more than one at once.
-  classMakeup String[]  @default([])
-  isDefault   Boolean   @default(false)
-  source      String    @default("teacher")
-  confirmedAt DateTime?
-  schoolYear  String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  reviews     Review[]
-
-  @@index([userId])
 }
 
 // One row per Claude-costing call, used to enforce a per-user daily limit
@@ -261,15 +210,6 @@ model ScenarioAttempt {
   saved          Boolean  @default(false)
   shareToken     String?  @unique
   createdAt      DateTime @default(now())
-
-  // { did, left, keep } — the consolidated Practice's three-part feedback:
-  // what the move did, what it left on the table, and one line worth keeping.
-  // feedback/modelResponse above are still written alongside it, because the
-  // iOS app, the printable export and the Cheat Sheet all read them and a
-  // structured field they do not know about must not blank them out.
-  // Null on rows created before the three-part shape existed, which render
-  // from feedback/modelResponse as they always did.
-  coachingParts  Json?
 
   // [{ role: 'user' | 'assistant', text, createdAt }], seeded with the
   // original submission + first feedback, grown by follow-up chat turns.
@@ -593,107 +533,6 @@ model LessonPlan {
   deliveryCoaching Json?
 }
 
-// Look It Over: one document, read through several lenses.
-//
-// A new model rather than an extension of the four it supersedes
-// (LessonPlan's feedback and presentation modes, AssignmentCoachSession's
-// review mode, ConversationPrep's review rows). Those four stay exactly as
-// they are and remain readable in My Work — nothing is migrated, so no
-// teacher loses a review they already have. What they cannot do is the result
-// page this surface needs: per-edit accept/reject over a marked-up diff, a
-// toggleable lens set with its own findings, and three document types
-// (quiz, homework, project) that had no home at all.
-model Review {
-  id          String  @id @default(cuid())
-  userId      String
-  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // One of reviewLenses.ts's DOC_TYPES. Validated at the application layer,
-  // same convention as every other enum in this schema.
-  docType     String
-  // What detection guessed, kept even after the teacher corrects it. Keeping
-  // it is what makes "Looks like a quiz — right?" auditable: without it there
-  // is no way to know how often the guess is wrong.
-  detectedType String?
-  // False until the teacher has either confirmed the guess or corrected it.
-  docTypeConfirmed Boolean @default(false)
-
-  // "file" | "paste" | "photo" — how it arrived, which is worth knowing
-  // because a photo has been through OCR and may be missing content.
-  sourceKind  String
-  fileName    String?
-  pageCount   Int?
-  // The document as text. The teacher's original, never rewritten — every
-  // suggestion is an entry in `edits` against this.
-  originalText String
-
-  // The topic tag, from the shared taxonomy. Inferred from the document.
-  focusArea   String?
-  // The class this was reviewed for, so timing and grade-level judgments have
-  // somewhere to stand. SetNull rather than Cascade: deleting a prep must not
-  // delete the reviews that referenced it.
-  classProfileId String?
-  classProfile   ClassProfile? @relation(fields: [classProfileId], references: [id], onDelete: SetNull)
-
-  // [{ key, on, finding }] — the lens set for this review, in order, each
-  // with its own result once run. A lens the teacher turned off keeps any
-  // finding it already produced, so toggling it back on costs nothing.
-  lenses      Json
-
-  // "If you change one thing: ..." — the single card the result page leads
-  // with. Null until the review has been run.
-  oneThing    String?
-  // The sentence under that headline.
-  oneThingDetail String?
-
-  // [{ label, value, calibratable }] — the basis for every number the result
-  // shows. Stored rather than re-derived: a figure whose basis is gone is a
-  // figure nobody can check, and the rule is that each one traces to an entry
-  // here.
-  assumptions Json?
-
-  // What this read could not see — "what you'll say out loud", "what students
-  // covered last week". Depends on the document and the lenses that ran, so
-  // it belongs on the review rather than on the type.
-  notVisible  Json?
-
-  // "whole" | "section" and the teacher-facing label for the part reviewed
-  // ("p. 12-20"). Null is the whole document, which is the common case.
-  scopeMode   String?
-  scopeLabel  String?
-
-  // [{ id, anchor, original, revision, why, lens, status }] where status is
-  // "pending" | "accepted" | "kept_mine". This is the diff: every suggestion
-  // is a replacement of `original` with `revision` at `anchor`, never a
-  // rewritten document. The export button reads "Export my original" until
-  // one is accepted and "Export with N changes" after, which is this array's
-  // accepted count and nothing else.
-  edits       Json
-
-  // { minutes: [low, high], assumption } for any timing claim, so an estimate
-  // can never be shown as a bare number. Null when no lens produced one.
-  timingBasis Json?
-
-  status      String  @default("draft") // "draft" | "reviewed"
-  saved       Boolean @default(false)
-  shareToken  String? @unique
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  /// Recordings of the lesson this plan was for, when a teacher linked them.
-  audioSessions AudioSession[]
-
-  /// The documents this review is of. An assignment plus its rubric is one
-  /// review, not two. `originalText` above is their concatenation and stays
-  /// authoritative — edit anchors, the student-name guard and section
-  /// detection all run against it, and splitting that would mean an anchor
-  /// that matches in one file and not in the review.
-  files       ReviewFile[]
-
-  @@index([userId])
-}
-
 // A recorded class period, transcribed once (never stored as audio) and
 // analyzed for a self-coaching report. No sharing, no admin visibility —
 // this is strictly the owning teacher's own data, unlike Scenario/Debrief.
@@ -800,16 +639,6 @@ model AudioSession {
   // same convention as highlights/phases, not a child table.
   reflectConversation Json?
 
-  // The plan a teacher reviewed in Look It Over before teaching this lesson.
-  // Set when they link the two, which lets the report compare what the plan
-  // allocated against what the recording heard — "you planned 12 minutes for
-  // the discussion; the recording suggests about 4".
-  //
-  // SetNull rather than Cascade: deleting a review must never delete the
-  // recording of the lesson it was a plan for.
-  reviewId         String?
-  review           Review?   @relation(fields: [reviewId], references: [id], onDelete: SetNull)
-
   deleteAfter      DateTime? // computed from User.audioRetentionDays at creation
 
   createdAt        DateTime  @default(now())
@@ -854,37 +683,4 @@ model SchoolInquiry {
   updatedAt        DateTime  @updatedAt
 
   @@index([createdAt])
-}
-
-/// One document inside a review.
-///
-/// Text only for now: `text` is what was extracted, and `originalFileKey` is
-/// where the uploaded original will live once there is somewhere to put it.
-model ReviewFile {
-  id          String   @id @default(cuid())
-  reviewId    String
-  review      Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
-
-  /// Position in the review, so the combined text reads in the order the
-  /// teacher dropped them.
-  position    Int      @default(0)
-  fileName    String?
-  /// Per file: a teacher can drop a .docx and photograph the rubric in the
-  /// same review.
-  sourceKind  String   @default("file")
-  mime        String?
-  bytes       Int?
-  pageCount   Int?
-  /// What detection made of this file on its own, which is what lets the page
-  /// say "an assignment and a rubric" rather than naming only the winner.
-  docType     String?
-  /// Pages that came from OCR, where accuracy is lower.
-  ocrPages    Int[]    @default([])
-  text        String
-  /// Filled in Phase 2, when originals are stored.
-  originalFileKey String?
-
-  createdAt   DateTime @default(now())
-
-  @@index([reviewId])
 }

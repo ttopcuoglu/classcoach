@@ -18,8 +18,6 @@ import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
 import { transcribeAudioFile } from '../lib/deepgram.ts'
 import { unlink } from 'node:fs/promises'
 import { extractTag, stripTag } from '../lib/extractTag.ts'
-import { comparePlanToRecording } from '../lib/planVsRecording.ts'
-import { parseTimingBasis } from '../lib/reviewEdits.ts'
 import { prisma } from '../lib/prisma.ts'
 import {
   buildRubricEvidence,
@@ -256,87 +254,13 @@ audioSessionsRouter.get('/', async (req, res) => {
 audioSessionsRouter.get('/:id', async (req, res) => {
   const session = await prisma.audioSession.findFirst({
     where: { id: req.params.id, userId: req.user!.userId },
-    include: {
-      segments: { orderBy: { startSec: 'asc' } },
-      // The reviewed plan this lesson was taught from, if the teacher linked
-      // them. Only what the comparison needs — the whole document would put
-      // a reviewed plan's full text on every report fetch.
-      review: { select: { id: true, docType: true, fileName: true, timingBasis: true } },
-    },
+    include: { segments: { orderBy: { startSec: 'asc' } } },
   })
   if (!session) {
     res.status(404).json({ error: 'Session not found' })
     return
   }
-  // Computed server-side so the report, the printed export and any later
-  // client agree about what the plan said and what the recording heard.
-  const planComparison = session.review
-    ? comparePlanToRecording({
-        timingBasis: session.review.timingBasis,
-        durationSec: session.durationSec,
-        planLabel: 'this lesson',
-      })
-    : null
-  res.json({ ...session, planComparison })
-})
-
-/// Links a recording to a plan the teacher had reviewed, or unlinks it.
-///
-/// Opt-in rather than inferred: guessing which of a teacher's reviewed plans
-/// a recording belongs to would be wrong often enough to be worse than
-/// asking, and a wrong pairing produces a confidently false comparison.
-audioSessionsRouter.patch('/:id/review-link', async (req, res) => {
-  const { reviewId } = req.body ?? {}
-  const userId = req.user!.userId
-  const session = await prisma.audioSession.findFirst({
-    where: { id: req.params.id, userId },
-    select: { id: true },
-  })
-  if (!session) {
-    res.status(404).json({ error: 'Session not found' })
-    return
-  }
-  if (reviewId !== null && typeof reviewId !== 'string') {
-    res.status(400).json({ error: 'reviewId must be a string or null' })
-    return
-  }
-  // Someone else's review is not linkable, and a plan this teacher does not
-  // own has no business grounding their report.
-  if (reviewId) {
-    const review = await prisma.review.findFirst({ where: { id: reviewId, userId }, select: { id: true } })
-    if (!review) {
-      res.status(404).json({ error: 'Review not found' })
-      return
-    }
-  }
-  await prisma.audioSession.update({ where: { id: session.id }, data: { reviewId } })
-  res.json({ ok: true })
-})
-
-/// The teacher's reviewed plans, for the picker that links one to a
-/// recording. Plans only — a quiz or a parent message was never a lesson.
-audioSessionsRouter.get('/:id/linkable-reviews', async (req, res) => {
-  const reviews = await prisma.review.findMany({
-    where: {
-      userId: req.user!.userId,
-      docType: { in: ['lesson_plan', 'presentation'] },
-      status: 'reviewed',
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 20,
-    select: { id: true, docType: true, fileName: true, oneThing: true, createdAt: true, timingBasis: true },
-  })
-  // Only plans whose review actually produced a timing estimate can ground a
-  // comparison, so the rest are marked rather than offered as if they would.
-  res.json(
-    reviews.map((r) => ({
-      id: r.id,
-      docType: r.docType,
-      fileName: r.fileName,
-      createdAt: r.createdAt,
-      comparable: parseTimingBasis(r.timingBasis) != null,
-    })),
-  )
+  res.json(session)
 })
 
 audioSessionsRouter.post('/', async (req, res) => {

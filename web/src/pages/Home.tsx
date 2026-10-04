@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  BookIcon,
   BrainIcon,
   ChatBubbleIcon,
   ChecklistIcon,
   HeadsetIcon,
   LessonPlanIcon,
+  MailIcon,
   MicIcon,
   PlayIcon,
+  StarIcon,
 } from '../components/icons'
 import {
   getAssignmentCoachSessions,
@@ -57,9 +60,8 @@ function isTalkItThrough(item: Activity): boolean {
 
 // Straight to the conversation itself, not just the feature's start screen.
 function activityLink(item: Activity): string {
-  if (item.type === 'scenario') return `/practice?open=${item.id}`
-  // Ask's conversations are Talk It Through's now — same rows, one surface.
-  return `/talk?open=${item.id}`
+  if (item.type === 'scenario') return `/coach-chat?tab=practice&open=${item.id}`
+  return isTalkItThrough(item) ? `/talk-to-me?open=${item.id}` : `/coach-chat?tab=ask&open=${item.id}`
 }
 
 const MOODS: { label: string; value: Mood }[] = [
@@ -87,7 +89,7 @@ const MOOD_SUGGESTED_CATEGORY: Partial<Record<Mood, string>> = {
 
 const ACTION_CARDS = [
   {
-    to: '/debrief',
+    to: '/audio-coaching',
     icon: MicIcon,
     accent: ACCENTS.terracotta,
     tag: 'Lesson reflection',
@@ -96,7 +98,7 @@ const ACTION_CARDS = [
     linkLabel: 'Record a lesson',
   },
   {
-    to: '/talk',
+    to: '/talk-to-me',
     icon: HeadsetIcon,
     accent: ACCENTS.forest,
     tag: 'Live coach',
@@ -105,13 +107,14 @@ const ACTION_CARDS = [
     linkLabel: 'Start voice coaching',
   },
   {
-    to: '/practice',
+    to: '/coach-chat',
     icon: ChatBubbleIcon,
     accent: ACCENTS.gold,
     tag: 'Safe practice',
-    title: 'Practice',
-    description: 'Rehearse the hard moment — a parent, a redirect, a question you know is coming — before it is real.',
-    linkLabel: 'Rehearse a moment',
+    title: 'Ask & Practice',
+    description:
+      'Teaching, behavior, parents, the professional side — ask a straight question, or rehearse it first.',
+    linkLabel: 'Ask or rehearse',
   },
 ]
 
@@ -310,7 +313,7 @@ export default function Home() {
         title: 'See what’s really happening in your room',
         description: 'Record a class and get an honest picture — talk time, questions, wait time, who was heard.',
         linkLabel: 'Record a lesson',
-        to: '/debrief',
+        to: '/audio-coaching',
       }
     }
     if (!hasAnyActivity) {
@@ -319,7 +322,7 @@ export default function Home() {
         title: 'Practice a scenario',
         description: 'Run a realistic classroom moment and get coaching on your response.',
         linkLabel: 'Practice now',
-        to: '/practice',
+        to: '/coach-chat',
       }
     }
     if (!latestCompletedSession) {
@@ -328,7 +331,7 @@ export default function Home() {
         title: 'Try recording a real lesson',
         description: 'See how it plays out for real — record a class and turn it into feedback.',
         linkLabel: 'Record a lesson',
-        to: '/debrief',
+        to: '/audio-coaching',
       }
     }
     if (latestSessionUnreflected) {
@@ -337,21 +340,34 @@ export default function Home() {
         title: 'Reflect on your last lesson',
         description: 'You recorded a class — talk through what stood out and what to try next.',
         linkLabel: 'Open Lesson Debrief',
-        to: '/debrief',
+        to: '/audio-coaching',
       }
     }
-    // Lesson Planning, Assignment Coach and Communication Coach each had a
-    // branch here. They are one surface now, so this is one branch: a teacher
-    // who has reviewed a plan has used Look It Over, whatever they dropped in
-    // it. The three flags are still read separately because the work itself
-    // still lives in three legacy models.
-    if (!hasLessonPlans && !hasAssignmentSessions && !hasConversationPlans) {
+    if (!hasLessonPlans) {
       return {
         icon: LessonPlanIcon,
-        title: 'Try Look It Over',
-        description: "A surface you haven't opened yet — read a plan, quiz or message before students see it.",
-        linkLabel: 'Open Look It Over',
-        to: '/look-it-over',
+        title: 'Try Lesson Planning',
+        description: "A tool you haven't opened yet — strengthen a lesson or get ideas from an objective.",
+        linkLabel: 'Open Lesson Planning',
+        to: '/lesson-planning',
+      }
+    }
+    if (!hasAssignmentSessions) {
+      return {
+        icon: BookIcon,
+        title: 'Try Assignment Coach',
+        description: "A tool you haven't opened yet — review or redesign an assignment.",
+        linkLabel: 'Open Assignment Coach',
+        to: '/assignment-coach',
+      }
+    }
+    if (!hasConversationPlans) {
+      return {
+        icon: MailIcon,
+        title: 'Try Communication Coach',
+        description: "A tool you haven't opened yet — prepare for a meeting or draft a message.",
+        linkLabel: 'Open Communication Coach',
+        to: '/communications',
       }
     }
     // Already touched every tool — a safe, encouraging fallback rather than
@@ -361,7 +377,7 @@ export default function Home() {
       title: 'Keep the momentum going',
       description: 'Practice another scenario to stay sharp.',
       linkLabel: 'Practice now',
-      to: '/practice',
+      to: '/coach-chat',
     }
   }
 
@@ -384,7 +400,7 @@ export default function Home() {
           <h1 className="mt-2 font-heading text-3xl font-extrabold text-cream sm:text-4xl">
             {greeting}
             {firstName ? `, ${firstName}` : ''}
-            <span className="text-terracotta">.</span>
+            <span className="text-gold">.</span>
           </h1>
           <p className="mt-1.5 text-cream/70">What would help you feel more prepared today?</p>
         </div>
@@ -427,7 +443,7 @@ export default function Home() {
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-3 sm:flex-col sm:items-end">
             <Link
-              to={`/talk?followUp=${checkIn.id}`}
+              to={`/talk-to-me?followUp=${checkIn.id}`}
               className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream shadow-sm transition-colors hover:bg-terracotta/90"
             >
               Tell Coach how it went →
@@ -573,7 +589,7 @@ export default function Home() {
             <p className="text-sm text-ink">{MOOD_RESPONSES[mood].text}</p>
             {MOOD_RESPONSES[mood].talk && (
               <Link
-                to="/talk"
+                to="/talk-to-me"
                 className="flex items-center gap-1.5 rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
               >
                 <MicIcon className="h-3.5 w-3.5" />
@@ -589,36 +605,46 @@ export default function Home() {
         <p className="mt-2 text-base text-ink">{tip}</p>
       </div>
 
-      {/* Two tiles, both real. These replaced the Cheat Sheet and First 30
-          Days tiles: the Cheat Sheet is gone, and the job First 30 Days did
-          — giving a brand-new account somewhere obvious to start — is done
-          by Talk It Through's starter prompts and topic chips now, which is
-          where a new teacher already is rather than a programme to enrol in. */}
       <div className="grid gap-3 sm:grid-cols-2">
         <Link
-          to="/debrief#my-growth"
-          className="group flex items-center gap-4 rounded-2xl bg-mint-tint/50 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
-        >
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-forest text-gold">
-            <MicIcon className="h-5 w-5" />
-          </span>
-          <div>
-            <p className="font-heading text-base font-bold text-forest">Your growth</p>
-            <p className="text-xs text-ink-soft">Pick one thing to sharpen and track it across your lessons.</p>
-          </div>
-        </Link>
-        <Link
-          to="/work"
-          className="group flex items-center gap-4 rounded-2xl bg-gold-tint/60 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
+          to="/cheat-sheet"
+          className="group flex items-center gap-4 rounded-2xl bg-peach-tint/50 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
         >
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-terracotta text-cream">
-            <ChecklistIcon className="h-5 w-5" />
+            <StarIcon className="h-5 w-5" />
           </span>
           <div>
-            <p className="font-heading text-base font-bold text-forest">My Work</p>
-            <p className="text-xs text-ink-soft">Everything you have made, in one list.</p>
+            <p className="font-heading text-base font-bold text-forest">Your Cheat Sheet</p>
+            <p className="text-xs text-ink-soft">Go-to phrases, auto-built from your saved content.</p>
           </div>
         </Link>
+        {experienced ? (
+          <Link
+            to="/audio-coaching#my-growth"
+            className="group flex items-center gap-4 rounded-2xl bg-mint-tint/50 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-forest text-gold">
+              <MicIcon className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="font-heading text-base font-bold text-forest">Your growth</p>
+              <p className="text-xs text-ink-soft">Pick one thing to sharpen and track it across your lessons.</p>
+            </div>
+          </Link>
+        ) : (
+          <Link
+            to="/first-30-days"
+            className="group flex items-center gap-4 rounded-2xl bg-mint-tint/50 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-forest text-gold">
+              <ChecklistIcon className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="font-heading text-base font-bold text-forest">First 30 Days</p>
+              <p className="text-xs text-ink-soft">New teacher? Start your guided track.</p>
+            </div>
+          </Link>
+        )}
       </div>
 
       <div>

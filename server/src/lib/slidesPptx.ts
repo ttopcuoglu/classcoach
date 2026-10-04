@@ -1,11 +1,5 @@
 import JSZip from 'jszip'
-import type PptxGenJS from 'pptxgenjs'
-
-// pptxgenjs costs 63MB at import and is only needed when a deck is actually
-// being built, which is rare. Loaded at the point of use.
-async function loadPptxGenJS() {
-  return (await import('pptxgenjs')).default
-}
+import PptxGenJS from 'pptxgenjs'
 import { fetchImageData, type SlideImage } from './imageSearch.ts'
 
 export const SLIDE_LAYOUTS = ['title', 'cards', 'split', 'keyterm', 'prompt', 'steps', 'compare', 'visual'] as const
@@ -383,7 +377,7 @@ export async function buildPptx(deckTitle: string, deck: SlideDeck): Promise<Buf
   const base: Theme = THEMES[deck.theme] ?? THEMES.wivoza
   const shift = ((deck.variant % 4) + 4) % 4
   const t: Theme = { ...base, accents: [0, 1, 2, 3].map((i) => base.accents[(i + shift) % 4]) as Theme['accents'] }
-  const pptx = new (await loadPptxGenJS())()
+  const pptx = new PptxGenJS()
   pptx.layout = 'LAYOUT_WIDE'
   pptx.title = deckTitle
 

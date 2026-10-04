@@ -4,7 +4,7 @@ import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { buildExperienceContextBlock } from '../lib/experience.ts'
 import { extractTag, stripStructuralTags } from '../lib/extractTag.ts'
-import { findTopic, topicForKind, type Topic } from '../lib/topics.ts'
+import { findFocusArea, focusAreaForSubCategory, type FocusArea } from '../lib/focusAreas.ts'
 import { coachIdentity, ratingStandard, teachingContextBlock } from '../lib/focusAreaPrompt.ts'
 import { prisma } from '../lib/prisma.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
@@ -17,49 +17,34 @@ export const attemptsRouter = Router()
 // an explanation, and answering an angry parent email, and the model response
 // has to come out in the right channel — words said out loud in a classroom, or
 // a sentence that can go in an email.
-function feedbackSystemPrompt(area: Topic | null): string {
-  // The topic's hard limits belong here, not only in the scenario writer's
-  // prompt. Generation already refuses to write a scenario that speculates
-  // about a student's diagnosis or home; feedback has to refuse to answer one
-  // that way too, or the limit holds for half the exchange. Same for the
-  // me-and-this-job threshold: a teacher who rehearses asking for help and
-  // describes something heavier than a workload problem must be told so.
-  const limits = area ? `\n\nHard limits for this topic:\n${area.safety}\n` : ''
-  return `${coachIdentity(area)} You are reviewing how a teacher says they'd handle a practice scenario. Coach, don't grade.${limits}
+function feedbackSystemPrompt(area: FocusArea | null): string {
+  return `${coachIdentity(area)} You are reviewing how a teacher says they'd handle a practice scenario. Coach, don't grade.
 
 Write in plain text only — no markdown (no **bold**, no # headings). Use a blank line between paragraphs and a leading "-" for list items.
 
-Respond with exactly these four sections and nothing outside them:
+Respond with exactly these three sections and nothing outside them:
 
-<did>
-What their move actually did — the effect it would have in the room, on the page, or on the person receiving it. Start from what is genuinely working; be specific about why it works rather than praising it. 2-4 sentences, no list.
-</did>
-<left>
-What it left on the table: the one thing this response does not yet do, judged against ${ratingStandard(area)}. One thing, not three — name it plainly and say what to do instead. Never scold, and never imply the teacher should have known.
-</left>
-<keep>
-One line worth keeping — a single sentence the teacher could actually say or write, in their own voice, that they could carry into the real version of this. Match the channel the scenario has: spoken words for a moment in front of students, a sentence for an email, an opening line for a conference or a conversation with a colleague, a question for a teaching problem, a decision and its reason for a grading call. Just the line itself, no framing around it.
-</keep>
+<feedback>
+Constructive feedback on their approach, what worked well, and 1-3 alternative or additional strategies grounded in ${ratingStandard(area)}. Keep it skimmable, encouraging, and practical — never academic or jargon-heavy.
+</feedback>
+<model_response>
+A model example of what the teacher could say, write, or do, in their own words. Match the channel the scenario actually has: spoken words for a moment in front of students, a written reply for an email, an opening line for a conference or a conversation with a colleague, an explanation or question sequence for a teaching problem, a decision with its reasoning for a grading call.
+</model_response>
 <rating>
 A single integer 1-5 rating your honest private assessment of how well this response follows ${ratingStandard(area)}. This is never shown to the teacher — it's used only to track their growth over time — so rate honestly rather than generously. Output only the digit, nothing else.
 </rating>
 ${CORE_COACHING_RULES}`
 }
 
-function attemptChatSystemPrompt(area: Topic | null): string {
+function attemptChatSystemPrompt(area: FocusArea | null): string {
   return `${coachIdentity(area)} You are continuing a conversation about a practice scenario you already gave feedback on. Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says: if they push back, ask a follow-up, or want to try a different angle, engage with that directly rather than repeating your first assessment. Stay grounded in the scenario and their response; never invent details that weren't given to you.
 ${CORE_COACHING_RULES}`
 }
 
-/// A scenario's topic: the stored value, or derived from its kind for rows
-/// written before the topic axis existed.
-///
-/// Resolved against the seven topics rather than the four old focus areas,
-/// because the two new ones carry the limits that matter most — feedback on a
-/// `student_concern` rehearsal has to be held to its no-speculation rule, and
-/// falling through to the generic coach identity would drop it silently.
-function areaForScenario(scenario: { focusArea: string | null; category: string }): Topic | null {
-  return findTopic(scenario.focusArea) ?? topicForKind(scenario.category)
+/// A scenario's area: the stored value, or derived from its sub-category for
+/// rows written before the area axis existed.
+function areaForScenario(scenario: { focusArea: string | null; category: string }): FocusArea | null {
+  return findFocusArea(scenario.focusArea) ?? focusAreaForSubCategory(scenario.category)
 }
 
 attemptsRouter.get('/', async (req, res) => {
@@ -127,44 +112,17 @@ attemptsRouter.post('/', async (req, res) => {
       return
     }
 
-    const did = extractTag(text, 'did')
-    const left = extractTag(text, 'left')
-    const keep = extractTag(text, 'keep')
+    const feedback = extractTag(text, 'feedback') ?? stripStructuralTags(text)
+    const modelResponse = extractTag(text, 'model_response')
     const ratingText = extractTag(text, 'rating')
     const parsedRating = ratingText ? Number.parseInt(ratingText, 10) : NaN
     const rating = parsedRating >= 1 && parsedRating <= 5 ? parsedRating : null
 
-    // The structured three-part shape, only when the model actually produced
-    // the two coaching halves. A partial set is worse than none: the result
-    // page would render a card with a heading and no body.
-    const coachingParts = did && left ? { did, left, keep: keep ?? null } : null
-
-    // feedback and modelResponse are still written, because the iOS app, the
-    // printable export and the Cheat Sheet all read them. `feedback` is the
-    // two coaching halves joined, which is what those surfaces showed anyway;
-    // `keep` is the nearest thing to the model response they used to display.
-    // A reply that produced no recognizable sections at all falls back to its
-    // whole text rather than storing nothing.
-    const feedback =
-      did && left ? `${did}\n\n${left}` : (did ?? left ?? stripStructuralTags(text))
-    const modelResponse = keep
-
-    const seedReply = [feedback, keep ? `One line worth keeping: ${keep}` : null]
-      .filter(Boolean)
-      .join('\n\n')
+    const seedReply = [feedback, modelResponse ? `Model response: ${modelResponse}` : null].filter(Boolean).join('\n\n')
     const conversation = appendTurn([], context, seedReply)
 
     const attempt = await prisma.scenarioAttempt.create({
-      data: {
-        userId: req.user!.userId,
-        scenarioId,
-        responseText,
-        feedback,
-        modelResponse,
-        coachingParts: coachingParts ?? undefined,
-        rating,
-        conversation,
-      },
+      data: { userId: req.user!.userId, scenarioId, responseText, feedback, modelResponse, rating, conversation },
       include: { scenario: true },
     })
     res.status(201).json(attempt)

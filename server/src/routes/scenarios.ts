@@ -2,10 +2,10 @@ import { Router } from 'express'
 import { pickWeightedCategory, pickWeightedDifficulty, pickWeightedFocusArea } from '../lib/adaptivePractice.ts'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { getCuratedFallback } from '../lib/curatedFallback.ts'
-import { TEACHING_AND_LEARNING, findTopic, kindLabel, topicForKind } from '../lib/topics.ts'
+import { TEACHING_AND_LEARNING, findFocusArea, focusAreaForSubCategory } from '../lib/focusAreas.ts'
 import { scenarioAreaBlock, teachingContextBlock } from '../lib/focusAreaPrompt.ts'
 import { prisma } from '../lib/prisma.ts'
-import { isKnownCategory, pickDifficulty } from '../lib/scenarioCategories.ts'
+import { pickDifficulty } from '../lib/scenarioCategories.ts'
 import {
   gradeBandLabel,
   isCourseLevelFor,
@@ -46,63 +46,13 @@ scenariosRouter.get('/', async (req, res) => {
   res.json(scenarios)
 })
 
-// "Describe my own" — the teacher writes the situation themselves instead of
-// asking for one. No model call: these are their words, about their own room,
-// and rewriting them would be both wasteful and presumptuous.
-//
-// Stored as a real Scenario so everything downstream is unchanged: it gets
-// feedback through the same attempts route, appears in the same history, and
-// can be re-run one notch harder like any other. `source` marks it as the
-// teacher's own so it is never served to anyone else as practice material —
-// unlike generated and curated rows, which are shared content.
-scenariosRouter.post('/custom', async (req, res) => {
-  const { text, focusArea, category, gradeBand, difficulty, subject, course, topic, courseLevel, classMakeup } =
-    req.body ?? {}
-  if (typeof text !== 'string' || !text.trim()) {
-    res.status(400).json({ error: 'text is required' })
-    return
-  }
-
-  const chosenTopicValue = findTopic(focusArea)?.value ?? topicForKind(category)?.value ?? null
-  const chosenGradeBand = pickGradeBand(gradeBand)
-  const asksAboutContent = chosenTopicValue === TEACHING_AND_LEARNING
-  const chosenSubject =
-    asksAboutContent && typeof subject === 'string' && subject.trim() ? subject.trim() : null
-
-  const scenario = await prisma.scenario.create({
-    data: {
-      // Capped rather than rejected: a teacher who pastes a long email into
-      // this box should get a scenario, not a validation error.
-      text: text.trim().slice(0, 4000),
-      focusArea: chosenTopicValue,
-      // A kind is optional here — the teacher described the situation, so
-      // there is nothing left for a kind to narrow. Only stored when they
-      // happened to pick one before switching to their own words.
-      category: isKnownCategory(category) ? category : 'describe_my_own',
-      gradeBand: chosenGradeBand,
-      subject: chosenSubject,
-      course:
-        asksAboutContent && offersCourses(chosenGradeBand, chosenSubject) &&
-        typeof course === 'string' && course.trim()
-          ? course.trim().slice(0, 80)
-          : null,
-      topic: asksAboutContent && typeof topic === 'string' && topic.trim() ? topic.trim().slice(0, 120) : null,
-      courseLevel: asksAboutContent && isCourseLevelFor(courseLevel, chosenGradeBand) ? courseLevel : null,
-      classMakeup: asksAboutContent ? pickClassMakeup(classMakeup) : [],
-      difficulty: pickDifficulty(difficulty),
-      source: 'own',
-    },
-  })
-  res.status(201).json(scenario)
-})
-
 scenariosRouter.post('/generate', async (req, res) => {
   const { focusArea, category, gradeBand, difficulty, subject, course, topic, courseLevel, classMakeup } =
     req.body ?? {}
   // An explicit sub-category names its own area, so honour it rather than
   // letting the weighted area pick overrule it — otherwise asking for
   // `defiance` with no area set could come back as a grading scenario.
-  const impliedArea = focusArea ?? topicForKind(category)?.value
+  const impliedArea = focusArea ?? focusAreaForSubCategory(category)?.value
   const chosenArea = await pickWeightedFocusArea(req.user!.userId, impliedArea)
   const chosenCategory = await pickWeightedCategory(req.user!.userId, chosenArea.value, category)
   const chosenGradeBand = pickGradeBand(gradeBand)
@@ -137,8 +87,10 @@ scenariosRouter.post('/generate', async (req, res) => {
   }
 
   try {
+    const subCategoryLabel =
+      chosenArea.subCategories.find((c) => c.value === chosenCategory)?.label ?? chosenCategory
     const context = [
-      `Kind: ${chosenCategory} (${kindLabel(chosenCategory)})`,
+      `Sub-category: ${chosenCategory} (${subCategoryLabel})`,
       `Grade band: ${gradeBandLabel(chosenGradeBand)}`,
       `Difficulty: ${chosenDifficulty}`,
       chosenSubject ? `Subject: ${chosenSubject}` : null,
@@ -227,8 +179,8 @@ scenariosRouter.post('/', async (req, res) => {
     res.status(400).json({ error: 'text, category, gradeBand, and source are required strings' })
     return
   }
-  // The topic is derivable from the kind, so callers don't have to send it.
-  const area = findTopic(focusArea) ?? topicForKind(category)
+  // The area is derivable from the category, so callers don't have to send it.
+  const area = findFocusArea(focusArea) ?? focusAreaForSubCategory(category)
   const scenario = await prisma.scenario.create({
     data: {
       text,

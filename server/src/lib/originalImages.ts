@@ -1,12 +1,5 @@
 import JSZip from 'jszip'
-
-// pdf-parse costs 176MB at import, measured — more than every other
-// dependency in this server put together. Loaded where it is used, so a
-// process that never opens a PDF never pays for one.
-async function loadPdfParse() {
-  return (await import('pdf-parse')).PDFParse
-}
-
+import { PDFParse } from 'pdf-parse'
 
 // Reading a teacher's own pictures out of the deck they uploaded, so the
 // improved deck can keep them. Everything happens in memory during one request:
@@ -127,7 +120,6 @@ export async function extractPptxImages(buffer: Buffer): Promise<Map<number, Ori
 // picture on each page. pdf-parse hands pictures back re-encoded as PNG.
 export async function extractPdfImages(buffer: Buffer): Promise<Map<number, OriginalImage>> {
   const found = new Map<number, OriginalImage>()
-  const PDFParse = await loadPdfParse()
   const parser = new PDFParse({ data: buffer })
   try {
     const result = await parser.getImage({ imageDataUrl: true, imageBuffer: false })
@@ -181,7 +173,6 @@ export async function extractPptxSlideTexts(buffer: Buffer): Promise<string[]> {
 }
 
 async function extractPdfPageTexts(buffer: Buffer): Promise<string[]> {
-  const PDFParse = await loadPdfParse()
   const parser = new PDFParse({ data: buffer })
   try {
     return (await parser.getText()).pages.map((page) => page.text.trim())

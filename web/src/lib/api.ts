@@ -1,16 +1,7 @@
 // A follow-up coaching chat thread, appended below a one-shot result.
 // Seeded with the original submission + first reply, grown by follow-up
 // turns. Same shape as Audio Coaching's AudioReflectMessage.
-export type ChatMessage = {
-  role: 'user' | 'assistant'
-  text: string
-  createdAt: string
-  /// Set on an assistant turn where the coach signalled that another surface
-  /// is the next useful move — 'rehearse' or 'document'. Absent on every turn
-  /// written before offers existed, and on most turns since: the coach is
-  /// told to default to silence.
-  offer?: string
-}
+export type ChatMessage = { role: 'user' | 'assistant'; text: string; createdAt: string }
 
 export type Scenario = {
   id: string
@@ -43,12 +34,6 @@ export type ScenarioAttempt = {
   responseText: string
   feedback: string | null
   modelResponse: string | null
-  /// Practice's three-part feedback: what the move did, what it left on the
-  /// table, and one line worth keeping. Null on attempts made before the
-  /// three-part shape existed — those render from feedback/modelResponse,
-  /// which are still written alongside this for the iOS app, the printable
-  /// export and the Cheat Sheet.
-  coachingParts: { did: string; left: string; keep: string | null } | null
   // Claude's private 1-5 self-assessment, for growth trends only — never
   // shown to the user as a literal score.
   rating: number | null
@@ -729,13 +714,6 @@ export type AudioSession = {
   lessonContent: AudioLessonContent | null
   contentNotes: AudioContentNotes | null
   rubricLens: AudioRubricLens | null
-  /// The reviewed plan this lesson was taught from, when the teacher linked
-  /// them. Null for the vast majority of recordings.
-  reviewId?: string | null
-  /// What the plan said against what the recording heard. Null when there is
-  /// nothing honest to say: no linked plan, no timing estimate, a recording
-  /// too short to compare, or a lesson that matched its plan.
-  planComparison?: PlanComparison | null
   classSummary: string | null
   strengths: string | null
   growthAreas: string | null
@@ -770,53 +748,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     const body = await res.json().catch(() => null)
-    throw apiError(body?.error ?? messageForStatus(res.status), res.status, body)
+    throw apiError(body?.error ?? `Request failed with status ${res.status}`, res.status)
   }
   return res.json()
-}
-
-/// What to tell a teacher when a failure arrives with no message of its own.
-///
-/// Every route in this app answers a failure it chose with JSON — "Could not
-/// read that file", "Could not reach your coach" — so a body-less response is
-/// not the server talking at all. It is the platform in front of it, and on
-/// this deployment that nearly always means the instance was restarting or
-/// still waking up, which is worth saying plainly because the fix is simply
-/// to try again. "Request failed with status 502" told a teacher none of
-/// that, and reads as though their document broke something.
-export function messageForStatus(status: number): string {
-  // Split deliberately. "Try again in a moment" is good advice for a waking
-  // instance and useless for a request that died the same way twice, so these
-  // should not share a sentence — a teacher seeing the same words every time
-  // learns the app does not know what went wrong.
-  if (status === 503) return 'The server is waking up. Give it a few seconds and try again.'
-  if (status === 504) {
-    return 'That took too long to come back. A photo or a long document can do it — try a smaller file, or paste the text instead.'
-  }
-  if (status === 502) {
-    return 'The server dropped that request. If it happens again, try pasting the text instead of the file.'
-  }
-  if (status === 408) return 'That took too long to answer. Please try again.'
-  if (status === 413) return 'That file is too large — the limit is 25MB.'
-  if (status === 429) return 'Too many requests just now. Give it a minute and try again.'
-  if (status >= 500) return 'Something went wrong at our end. Please try again.'
-  return `Request failed with status ${status}`
 }
 
 // An Error that remembers the HTTP status it came from. Most callers only
 // ever show the message, and they keep working unchanged; the few that need
 // to tell an expected refusal from a real failure — a full conversation
 // (409) is not "something went wrong" — can read `status`.
-export type ApiError = Error & {
-  status?: number
-  /// The whole parsed body, for the few refusals that carry something the UI
-  /// has to act on rather than just show — a 409 naming what it found in the
-  /// document, for instance. Undefined when the response had no JSON.
-  details?: unknown
-}
+export type ApiError = Error & { status?: number }
 
-function apiError(message: string, status: number, details?: unknown): ApiError {
-  return Object.assign(new Error(message), { status, details })
+function apiError(message: string, status: number): ApiError {
+  return Object.assign(new Error(message), { status })
 }
 
 // "Forgot password" — always resolves, whether or not the address has an
@@ -1005,11 +949,7 @@ export function deleteOrganization(id: string): Promise<{ status: string }> {
   return request(`/api/admin/organizations/${id}`, { method: 'DELETE' })
 }
 
-/// `focusArea` carries the TOPIC value and `category` the KIND — the request
-/// field names predate the rename and are kept because the iOS app sends them.
-/// `topic` here is the unrelated, older field: what the teacher is teaching
-/// right now, which is why the taxonomy could not reuse that name.
-export type ScenarioRequest = {
+export function generateScenario(opts: {
   focusArea?: string
   category?: string
   gradeBand?: string
@@ -1019,17 +959,8 @@ export type ScenarioRequest = {
   topic?: string
   courseLevel?: string
   classMakeup?: string[]
-}
-
-export function generateScenario(opts: ScenarioRequest): Promise<Scenario> {
+}): Promise<Scenario> {
   return request('/api/scenarios/generate', { method: 'POST', body: JSON.stringify(opts) })
-}
-
-/// "Describe my own" — the teacher's own situation, stored as a scenario so
-/// feedback, history and the one-notch-harder re-run all work unchanged. No
-/// model call: these are their words about their own room.
-export function createOwnScenario(opts: ScenarioRequest & { text: string }): Promise<Scenario> {
-  return request('/api/scenarios/custom', { method: 'POST', body: JSON.stringify(opts) })
 }
 
 export function getAttempts(params?: { saved?: boolean }): Promise<ScenarioAttempt[]> {
@@ -1198,16 +1129,6 @@ export async function streamCoachReply(
   message: string | null,
   onSentence: (sentence: string) => void,
   followUpId?: string | null,
-  /// The topic chip the teacher tapped before saying anything, if any. Only
-  /// meaningful on the opening turn — later turns read it back off the stored
-  /// conversation, so it is not sent again.
-  topic?: string | null,
-  /// Facts the teacher arrived with from another surface (a lesson report, a
-  /// document review). Opening turn only.
-  context?: string | null,
-  /// The kind of moment within the topic, when the teacher narrowed it.
-  /// Opening turn only, for the same reason the topic is.
-  kind?: string | null,
 ): Promise<Debrief> {
   const path = id ? `/api/debriefs/${id}/chat/stream` : '/api/debriefs/talk/stream'
   const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -1215,15 +1136,7 @@ export async function streamCoachReply(
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify(
-      id
-        ? { message }
-        : {
-            ...(message == null ? {} : { message }),
-            followUpId: followUpId ?? undefined,
-            topic: topic ?? undefined,
-            context: context ?? undefined,
-            kind: kind ?? undefined,
-          },
+      id ? { message } : { ...(message == null ? {} : { message }), followUpId: followUpId ?? undefined },
     ),
   })
   // Everything the caller can act on (turn cap, daily limit) is rejected
@@ -1264,20 +1177,10 @@ export async function streamCoachReply(
   return debrief
 }
 
-export function startTalkToMe(
-  message: string,
-  followUpId?: string | null,
-  topic?: string | null,
-  kind?: string | null,
-): Promise<Debrief> {
+export function startTalkToMe(message: string, followUpId?: string | null): Promise<Debrief> {
   return request('/api/debriefs/talk', {
     method: 'POST',
-    body: JSON.stringify({
-      message,
-      followUpId: followUpId ?? undefined,
-      topic: topic ?? undefined,
-      kind: kind ?? undefined,
-    }),
+    body: JSON.stringify({ message, followUpId: followUpId ?? undefined }),
   })
 }
 
@@ -1971,378 +1874,4 @@ export function getSchoolInquiries(): Promise<SchoolInquiry[]> {
 
 export function updateSchoolInquiryStatus(id: string, status: SchoolInquiry['status']): Promise<SchoolInquiry> {
   return request(`/api/school-inquiries/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
-}
-
-// --- class context ---
-
-/// One of the teacher's preps. Most teachers have two or three; one is the
-/// default that every surface starts from.
-///
-/// `line` is built on the server so the web app, the iOS app and any export
-/// can never disagree about how a room reads. `confirmed` is false while the
-/// row is still a guess nobody has agreed to, and `needsConfirmation` folds in
-/// the new-school-year rule on top of that.
-export type ClassContext = {
-  id: string
-  label: string | null
-  gradeBand: string
-  subject: string | null
-  course: string | null
-  courseLevel: string | null
-  classMakeup: string[]
-  isDefault: boolean
-  confirmed: boolean
-  inferred: boolean
-  schoolYear: string | null
-  /// "Grades 9–12 · Biology · Honors · ELs in the room"
-  line: string
-  needsConfirmation: boolean
-}
-
-export type ClassContextInput = {
-  label?: string | null
-  gradeBand: string
-  subject?: string | null
-  course?: string | null
-  courseLevel?: string | null
-  classMakeup?: string[]
-  isDefault?: boolean
-}
-
-/// The teacher's preps, default first. Seeds one by inference on the server's
-/// first read, so an existing teacher never retypes what the app already
-/// knows. An empty list is a normal answer — nothing may block on it.
-export function getClassProfiles(): Promise<ClassContext[]> {
-  return request('/api/class-profiles')
-}
-
-export function createClassProfile(data: ClassContextInput): Promise<ClassContext> {
-  return request('/api/class-profiles', { method: 'POST', body: JSON.stringify(data) })
-}
-
-/// Edit one prep, or confirm it with `confirm: true`.
-///
-/// The response carries `previous` — the row as it was before this call — so
-/// an inline save can offer a real undo ("Saved to your class — not quite?")
-/// without the server holding any undo state.
-export function updateClassProfile(
-  id: string,
-  data: Partial<ClassContextInput> & { confirm?: boolean },
-): Promise<ClassContext & { previous: ClassContext }> {
-  return request(`/api/class-profiles/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
-}
-
-/// Deletes a prep and returns the list that remains — the default moves to the
-/// oldest survivor, so a teacher is never left with preps and no default.
-export function deleteClassProfile(id: string): Promise<ClassContext[]> {
-  return request(`/api/class-profiles/${id}`, { method: 'DELETE' })
-}
-
-// --- Look It Over ---
-
-export type ReviewEdit = {
-  /// Where in the document, as a teacher would point at it: "ITEM 7 ·
-  /// MULTIPLE CHOICE". Absent on edits made before the result page had
-  /// location labels, where the card falls back to the lens name.
-  where?: string
-  /// The kind of problem, in three or four words.
-  tag?: string
-  severity?: 'high' | 'medium' | 'low'
-  section?: string
-  id: string
-  anchor: string
-  original: string
-  revision: string
-  why: string
-  lens: string
-  status: 'pending' | 'accepted' | 'kept_mine'
-}
-
-/// The basis for a number the result shows. Every figure on the page traces
-/// to one of these — a number whose basis is not shown is a number nobody can
-/// check.
-export type Assumption = { label: string; value: string; calibratable?: boolean }
-
-export type ReviewScope = { mode: string; label: string | null }
-
-export type ReviewLens = {
-  key: string
-  label: string
-  blurb: string
-  on: boolean
-  /// The old single-blob finding. Still populated, and still what the card
-  /// falls back to for a review run before the contract had parts.
-  finding?: string | null
-  /// Three to six words naming what was found — not the lens's own name.
-  title?: string | null
-  body?: string | null
-  /// "low" when the document did not give this lens enough to judge. The card
-  /// says so rather than presenting a guess at full strength.
-  confidence?: 'high' | 'low' | null
-  evidence?: string[]
-  section?: string | null
-}
-
-export type TimingBasis = { minutes: [number, number]; assumption: string }
-
-export type Review = {
-  id: string
-  docType: string
-  docTypeLabel: string
-  /// What in the document points at this type, strongest first, at most two.
-  detectionEvidence: string[]
-  /// What detection guessed, kept even after the teacher corrects it.
-  detectedType: string | null
-  docTypeConfirmed: boolean
-  sourceKind: string
-  fileName: string | null
-  pageCount: number | null
-  originalText: string
-  focusArea: string | null
-  classProfileId: string | null
-  /// The room this was judged against, as stored on the review — not
-  /// whichever class is selected now.
-  classLine?: string | null
-  /// Every document in the review, in the order they were added. Empty on a
-  /// review made before one review could hold several.
-  files?: ReviewFile[]
-  /// "An assignment and a rubric — I'll check them against each other."
-  /// Only on the create response, and only when there was more than one.
-  fileSetSummary?: string | null
-  lenses: ReviewLens[]
-  oneThing: string | null
-  oneThingDetail?: string | null
-  assumptions?: Assumption[]
-  notVisible?: string[]
-  scope?: ReviewScope | null
-  edits: ReviewEdit[]
-  /// Edits quoting text that is not in the document. Surfaced rather than
-  /// hidden — the one failure that could attribute an invented sentence to
-  /// the teacher.
-  unanchoredEditIds: string[]
-  acceptedCount: number
-  /// "Export my original" until something is accepted, then
-  /// "Export with N changes". Computed server-side so no client can
-  /// overstate what was accepted.
-  exportLabel: string
-  timingBasis: TimingBasis | null
-  status: string
-  saved: boolean
-  createdAt: string
-  /// The plainly-stated limits, shown in the result footer.
-  limits: string
-}
-
-export type Detection = { docType: string; confident: boolean; evidence: string[] }
-
-export type ExtractedDocument = Detection & {
-  text: string
-  truncated: boolean
-  fileName: string
-  pageCount: number | null
-}
-
-/// Text and a type guess out of an uploaded file. Nothing is stored yet, so a
-/// file that turns out to be unreadable leaves no empty review behind.
-export async function extractReviewDocument(file: File): Promise<ExtractedDocument> {
-  const body = new FormData()
-  body.append('file', file)
-  const res = await fetch(`${API_BASE_URL}/api/reviews/extract`, {
-    method: 'POST',
-    credentials: 'include',
-    body,
-  })
-  if (!res.ok) {
-    const payload = await res.json().catch(() => null)
-    throw apiError(payload?.error ?? messageForStatus(res.status), res.status)
-  }
-  return res.json()
-}
-
-/// The same type guess for pasted text, so the confirmation strip reads
-/// identically however the document arrived.
-export function detectReviewType(text: string): Promise<Detection> {
-  return request('/api/reviews/detect', { method: 'POST', body: JSON.stringify({ text }) })
-}
-
-/// One document inside a review.
-export type ReviewFile = {
-  id: string
-  fileName: string | null
-  sourceKind: string
-  pageCount: number | null
-  docType: string | null
-}
-
-/// A file on its way in, before the review exists.
-export type PendingFile = {
-  text: string
-  fileName: string | null
-  sourceKind: 'file' | 'paste' | 'photo'
-  pageCount: number | null
-  docType?: string | null
-}
-
-export function createReview(opts: {
-  /// A single document, which is what a paste is. Ignored when `files` is
-  /// given.
-  text?: string
-  /// Several, read as one review. An assignment plus its rubric is one
-  /// review, not two.
-  files?: PendingFile[]
-  docType?: string
-  sourceKind?: 'file' | 'paste' | 'photo'
-  fileName?: string | null
-  pageCount?: number | null
-  classProfileId?: string | null
-}): Promise<Review & { detectionConfident: boolean; fileSetSummary?: string | null }> {
-  return request('/api/reviews', { method: 'POST', body: JSON.stringify(opts) })
-}
-
-export function getReviews(params?: { saved?: boolean }): Promise<Review[]> {
-  return request(`/api/reviews${params?.saved ? '?saved=true' : ''}`)
-}
-
-export function getReview(id: string): Promise<Review> {
-  return request(`/api/reviews/${id}`)
-}
-
-/// Confirming or correcting the type, toggling lenses, saving. Correcting the
-/// type swaps in that type's own lenses and clears the previous result.
-export function updateReview(
-  id: string,
-  data: { docType?: string; lenses?: { key: string; on: boolean }[]; saved?: boolean },
-): Promise<Review> {
-  return request(`/api/reviews/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
-}
-
-/// What the server answers with when the document looks like it has student
-/// names in it and the teacher has not said what to do about that.
-export type StudentNamesFound = { reason: string; lineCount: number }
-
-/// What the server answers with when the document is long enough that one
-/// pass would be a summary rather than a review. Minutes are a range, said
-/// before it starts rather than after.
-export type ScopeChoice = {
-  pages: number
-  whole: { label: string; minutes: [number, number] }
-  sections: { label: string; minutes: [number, number] }[]
-}
-
-export function runReview(
-  id: string,
-  opts?: { namesHandled?: 'strip' | 'keep'; scope?: string },
-): Promise<Review> {
-  return request(`/api/reviews/${id}/run`, {
-    method: 'POST',
-    body: JSON.stringify({ namesHandled: opts?.namesHandled, scope: opts?.scope }),
-  })
-}
-
-/// "Keep mine" / "Use this" on one edit.
-export function setReviewEditStatus(
-  id: string,
-  editId: string,
-  status: ReviewEdit['status'],
-): Promise<Review> {
-  return request(`/api/reviews/${id}/edits/${editId}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ status }),
-  })
-}
-
-/// The document as it stands — the original with accepted edits applied.
-export function getReviewDocument(id: string): Promise<{
-  text: string
-  acceptedCount: number
-  label: string
-}> {
-  return request(`/api/reviews/${id}/document`)
-}
-
-/// Hands off to the existing Assignment Coach redesign workspace, pre-seeded
-/// with this document.
-export function redesignReviewForAi(id: string): Promise<{ assignmentCoachSessionId: string }> {
-  return request(`/api/reviews/${id}/redesign-ai`, { method: 'POST' })
-}
-
-export function deleteReview(id: string): Promise<{ ok: true }> {
-  return request(`/api/reviews/${id}`, { method: 'DELETE' })
-}
-
-// --- Look It Over (plan) <-> Lesson Debrief (recording) ---
-
-/// What the plan said and what the recording heard, when a teacher linked
-/// them. Computed server-side so the report, the printed export and any
-/// later client agree.
-export type PlanComparison = {
-  planned: string
-  actual: string
-  line: string
-  /// Why the gap might be the right call. Always present — a plan is a
-  /// prediction, and a lesson that diverges from it is frequently a teacher
-  /// reading the room correctly.
-  caveat: string
-}
-
-export type LinkableReview = {
-  id: string
-  docType: string
-  fileName: string | null
-  createdAt: string
-  /// False when the review produced no timing estimate, so it cannot ground
-  /// a comparison. Shown as unavailable rather than offered as if it would.
-  comparable: boolean
-}
-
-/// Reviewed plans this recording could be linked to.
-export function getLinkableReviews(sessionId: string): Promise<LinkableReview[]> {
-  return request(`/api/audio-sessions/${sessionId}/linkable-reviews`)
-}
-
-/// Links a recording to the plan it was taught from, or unlinks it with null.
-export function linkRecordingToReview(sessionId: string, reviewId: string | null): Promise<{ ok: true }> {
-  return request(`/api/audio-sessions/${sessionId}/review-link`, {
-    method: 'PATCH',
-    body: JSON.stringify({ reviewId }),
-  })
-}
-
-// --- My Work ---
-
-export type WorkItem = {
-  id: string
-  surface: string
-  /// What kind of thing this is, in a teacher's words.
-  kind: string
-  title: string
-  topic: string | null
-  topicLabel: string | null
-  saved: boolean
-  createdAt: string
-  /// Where tapping it goes. A legacy item opens its original result page,
-  /// which still exists for exactly this reason.
-  href: string
-}
-
-export type WorkFeed = {
-  items: WorkItem[]
-  total: number
-  /// Counts over everything, not the filtered set — a chip reading 0 is how a
-  /// teacher learns the filter is why the list looks empty.
-  bySurface: Record<string, number>
-  byTopic: { value: string; label: string; count: number }[]
-}
-
-export function getWork(params?: {
-  surface?: string | null
-  topic?: string | null
-  saved?: boolean
-}): Promise<WorkFeed> {
-  const query = new URLSearchParams()
-  if (params?.surface) query.set('surface', params.surface)
-  if (params?.topic) query.set('topic', params.topic)
-  if (params?.saved) query.set('saved', 'true')
-  const suffix = query.toString()
-  return request(`/api/work${suffix ? `?${suffix}` : ''}`)
 }

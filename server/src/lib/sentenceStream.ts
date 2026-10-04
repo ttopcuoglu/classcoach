@@ -26,29 +26,19 @@ export function takeCompleteSentences(buffer: string): { sentences: string[]; re
   return { sentences, rest: buffer.slice(cut) }
 }
 
-// Tags the model is told to end its response with, which are bookkeeping and
-// must never be spoken: <memory_update> is Coach's own note about the
-// teacher, and <offer> is the signal that another surface is the next useful
-// move. Streaming means reacting to a partial tag too: the moment text that
-// could be the start of one appears, everything from there on is withheld
-// until we know what it is.
-const HIDDEN_TAGS = ['<memory_update>', '<offer>'] as const
+// The model is told to end its response with a <memory_update> block, which
+// is bookkeeping and must never be spoken. Streaming means reacting to a
+// partial tag too: the moment text that could be the start of that tag
+// appears, everything from there on is withheld until we know what it is.
+const HIDDEN_TAG = '<memory_update>'
 
 export function visibleSoFar(text: string): string {
-  // The earliest complete hidden tag wins — everything from there is
-  // bookkeeping, whichever tag it was.
-  let cut = text.length
-  for (const tag of HIDDEN_TAGS) {
-    const at = text.indexOf(tag)
-    if (at !== -1 && at < cut) cut = at
-  }
-  if (cut < text.length) return text.slice(0, cut)
+  const full = text.indexOf(HIDDEN_TAG)
+  if (full !== -1) return text.slice(0, full)
   // No complete tag yet — hold back a trailing fragment that could still
-  // grow into one ("<", "<mem", "<memory_up", "<off"...).
+  // grow into one ("<", "<mem", "<memory_up"...).
   const open = text.lastIndexOf('<')
-  if (open !== -1 && HIDDEN_TAGS.some((tag) => tag.startsWith(text.slice(open)))) {
-    return text.slice(0, open)
-  }
+  if (open !== -1 && HIDDEN_TAG.startsWith(text.slice(open))) return text.slice(0, open)
   return text
 }
 

@@ -46,7 +46,7 @@ export default function AskPracticeExport() {
     if (!attempt) return <ReportState text="Practice attempt not found." />
     const chat = (attempt.conversation ?? []).slice(2).filter((m) => m.text?.trim())
     return (
-      <ReportShell backTo="/practice">
+      <ReportShell backTo="/coach-chat?tab=practice">
         <ReportCover
           eyebrow="Wivoza · Practice"
           title="A rehearsal"
@@ -123,7 +123,7 @@ export default function AskPracticeExport() {
   const chat = (ask.conversation ?? []).slice(2).filter((m) => m.text?.trim())
 
   return (
-    <ReportShell backTo="/talk">
+    <ReportShell backTo="/coach-chat">
       <ReportCover
         eyebrow="Wivoza · Ask"
         title="Coaching on a real moment"

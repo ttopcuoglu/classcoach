@@ -94,7 +94,7 @@ export function GuideHero({
         </span>
         <h1 className="mt-6 font-heading text-4xl font-extrabold leading-[1.1] tracking-tight text-cream sm:text-5xl">
           {title}
-          {!/[.?!]$/.test(title) && <span className="text-terracotta">.</span>}
+          {!/[.?!]$/.test(title) && <span className="text-gold">.</span>}
         </h1>
         {paragraphs.map((text) => (
           <p key={text.slice(0, 24)} className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-cream/75">

@@ -672,7 +672,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
           <div>
             <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Lesson Debrief · Sample report</span>
             <h3 className="mt-2 font-heading text-2xl font-bold leading-snug sm:text-3xl">
-              Eleven minutes of class, seen clearly<span className="text-terracotta">.</span>
+              Eleven minutes of class, seen clearly<span className="text-gold">.</span>
             </h3>
             <p className="mt-3 text-sm leading-relaxed text-cream/75">
               Who was heard and for how long, what was asked and how long students had to think, how
