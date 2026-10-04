@@ -785,8 +785,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 /// to try again. "Request failed with status 502" told a teacher none of
 /// that, and reads as though their document broke something.
 export function messageForStatus(status: number): string {
-  if (status === 502 || status === 503 || status === 504) {
-    return 'The server was restarting or waking up. Give it a moment and try again.'
+  // Split deliberately. "Try again in a moment" is good advice for a waking
+  // instance and useless for a request that died the same way twice, so these
+  // should not share a sentence — a teacher seeing the same words every time
+  // learns the app does not know what went wrong.
+  if (status === 503) return 'The server is waking up. Give it a few seconds and try again.'
+  if (status === 504) {
+    return 'That took too long to come back. A photo or a long document can do it — try a smaller file, or paste the text instead.'
+  }
+  if (status === 502) {
+    return 'The server dropped that request. If it happens again, try pasting the text instead of the file.'
   }
   if (status === 408) return 'That took too long to answer. Please try again.'
   if (status === 413) return 'That file is too large — the limit is 25MB.'

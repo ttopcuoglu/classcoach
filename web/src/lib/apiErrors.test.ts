@@ -6,12 +6,18 @@ import { messageForStatus } from './api'
 // their file, not whether trying again would help. It was none of those — the
 // instance was restarting — and the message should say so.
 
-test('a body-less gateway failure says the server was waking up, and to retry', () => {
-  for (const status of [502, 503, 504]) {
-    expect(messageForStatus(status), String(status)).toBe(
-      'The server was restarting or waking up. Give it a moment and try again.',
-    )
-  }
+// Each of these means something different, and a teacher who sees the same
+// sentence whatever happened learns that the app does not know either.
+test('the three gateway failures say three different things', () => {
+  const waking = messageForStatus(503)
+  const timeout = messageForStatus(504)
+  const dropped = messageForStatus(502)
+  expect(new Set([waking, timeout, dropped]).size).toBe(3)
+  expect(waking).toContain('waking up')
+  expect(timeout).toContain('too long')
+  // Both offer the way round it, since pasting skips file reading entirely.
+  expect(timeout).toContain('paste the text')
+  expect(dropped).toContain('pasting the text')
 })
 
 test('the failures a teacher can act on say what to do', () => {

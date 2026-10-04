@@ -153,13 +153,45 @@ const SELECT = {
 // creating the review so the teacher sees the detected type and can correct
 // it before anything is stored — and so a file that turns out to be
 // unreadable never leaves an empty review behind.
+/// How long reading one document may take before the teacher is told it did
+/// not work.
+///
+/// Extraction has no natural ceiling: OCR on a photographed page downloads a
+/// language model on first use and then runs a WASM recognizer, and a scanned
+/// PDF does that per page. Without a limit a slow one simply never answers,
+/// the platform in front of this eventually gives up, and the teacher gets a
+/// gateway error with no message in it — which says nothing about their file
+/// and does not tell them that pasting the text would work.
+const EXTRACT_TIMEOUT_MS = 45_000
+
+class ExtractTimeoutError extends Error {}
+
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new ExtractTimeoutError()), ms)
+    work.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
+}
+
 reviewsRouter.post('/extract', upload.single('file'), async (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: 'No file received' })
     return
   }
   try {
-    const text = await extractDocumentText(req.file.buffer, req.file.originalname)
+    const text = await withTimeout(
+      extractDocumentText(req.file.buffer, req.file.originalname),
+      EXTRACT_TIMEOUT_MS,
+    )
     const detection = detectDocType(text, req.file.originalname)
     res.json({
       text: text.slice(0, MAX_DOCUMENT_CHARS),
@@ -177,7 +209,14 @@ reviewsRouter.post('/extract', upload.single('file'), async (req, res) => {
       res.status(422).json({ error: error.message })
       return
     }
-    console.error('[reviews] extract failed:', error)
+    if (error instanceof ExtractTimeoutError) {
+      console.error('[reviews] extract timed out:', req.file.originalname, req.file.size)
+      res.status(422).json({
+        error: 'That took too long to read — a photo or a long scan can. Try a smaller file, or paste the text instead.',
+      })
+      return
+    }
+    console.error('[reviews] extract failed:', req.file.originalname, req.file.size, error)
     res.status(502).json({ error: 'Could not read that file. Please try pasting the text instead.' })
   }
 })
