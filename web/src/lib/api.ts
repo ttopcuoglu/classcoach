@@ -770,7 +770,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     const body = await res.json().catch(() => null)
-    throw apiError(body?.error ?? messageForStatus(res.status), res.status)
+    throw apiError(body?.error ?? messageForStatus(res.status), res.status, body)
   }
   return res.json()
 }
@@ -807,10 +807,16 @@ export function messageForStatus(status: number): string {
 // ever show the message, and they keep working unchanged; the few that need
 // to tell an expected refusal from a real failure — a full conversation
 // (409) is not "something went wrong" — can read `status`.
-export type ApiError = Error & { status?: number }
+export type ApiError = Error & {
+  status?: number
+  /// The whole parsed body, for the few refusals that carry something the UI
+  /// has to act on rather than just show — a 409 naming what it found in the
+  /// document, for instance. Undefined when the response had no JSON.
+  details?: unknown
+}
 
-function apiError(message: string, status: number): ApiError {
-  return Object.assign(new Error(message), { status })
+function apiError(message: string, status: number, details?: unknown): ApiError {
+  return Object.assign(new Error(message), { status, details })
 }
 
 // "Forgot password" — always resolves, whether or not the address has an
@@ -2149,8 +2155,15 @@ export function updateReview(
   return request(`/api/reviews/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
 }
 
-export function runReview(id: string): Promise<Review> {
-  return request(`/api/reviews/${id}/run`, { method: 'POST' })
+/// What the server answers with when the document looks like it has student
+/// names in it and the teacher has not said what to do about that.
+export type StudentNamesFound = { reason: string; lineCount: number }
+
+export function runReview(id: string, namesHandled?: 'strip' | 'keep'): Promise<Review> {
+  return request(`/api/reviews/${id}/run`, {
+    method: 'POST',
+    body: JSON.stringify({ namesHandled }),
+  })
 }
 
 /// "Keep mine" / "Use this" on one edit.

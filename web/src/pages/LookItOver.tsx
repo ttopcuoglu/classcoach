@@ -15,6 +15,8 @@ import {
   setReviewEditStatus,
   updateReview,
   type ClassContext,
+  type ApiError,
+  type StudentNamesFound,
   type Review,
   type ReviewEdit,
 } from '../lib/api'
@@ -22,7 +24,9 @@ import {
   DOC_TYPES,
   DOC_TYPE_LABELS,
   canRedesignForAi,
+  CORRECTED_HINT,
   confirmQuestion,
+  correctedHeading,
   detectionHint,
   isDocType,
   type DocType,
@@ -179,14 +183,29 @@ export default function LookItOver() {
     }
   }
 
-  async function handleRun() {
+  /// Set when the server refused to run because the document looks like it
+  /// has student names in it. Holding it here, rather than running anyway and
+  /// apologising, is what makes the promise real.
+  const [namesFound, setNamesFound] = useState<StudentNamesFound | null>(null)
+
+  async function handleRun(namesHandled?: 'strip' | 'keep') {
     if (!review) return
     setBusy('reviewing')
     setError(null)
     try {
-      setReview(await runReview(review.id))
+      setReview(await runReview(review.id, namesHandled))
+      setNamesFound(null)
     } catch (err) {
-      setError((err as Error).message)
+      // 409 is not a failure — it is the server declining to send a roster to
+      // the model until the teacher has answered. Shown as the question it
+      // is, not as an error.
+      const apiErr = err as ApiError
+      const found = (apiErr.details as { studentNames?: StudentNamesFound } | null)?.studentNames
+      if (apiErr.status === 409 && found) {
+        setNamesFound(found)
+      } else {
+        setError(apiErr.message)
+      }
     } finally {
       setBusy(null)
     }
@@ -416,10 +435,17 @@ export default function LookItOver() {
                 something else" first. Tapping the one already chosen confirms
                 it, which is what the question is asking. */}
             <div>
-              <SectionLabel
-                title={confirmQuestion(docTypeOf(review.docType))}
-                hint={detectionHint(review.detectionEvidence ?? [])}
-              />
+              {/* Asks until the teacher answers, then reports. A corrected
+                  type swaps the whole lens set, so the strip says so rather
+                  than letting the result quietly change underneath them. */}
+              {review.docTypeConfirmed ? (
+                <SectionLabel title={correctedHeading(docTypeOf(review.docType))} hint={CORRECTED_HINT} />
+              ) : (
+                <SectionLabel
+                  title={confirmQuestion(docTypeOf(review.docType))}
+                  hint={detectionHint(review.detectionEvidence ?? [])}
+                />
+              )}
               <div className="mt-2.5 flex flex-wrap gap-2.5">
                 {DOC_TYPES.map((type) => (
                   <button
@@ -474,6 +500,47 @@ export default function LookItOver() {
               <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Your class</span>
               <ClassContextLine compact onChange={setPrep} />
             </div>
+
+            {/* The guard, as a question rather than a failure. The server
+                refused to run; this is what it refused over, and the teacher
+                decides. Strip is first and is what the quiet default would be
+                — nothing here needs their students' names. */}
+            {namesFound && (
+              <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-4">
+                <p className="font-heading text-base font-bold text-forest">
+                  This looks like it has student names in it.
+                </p>
+                <p className="mt-1 text-sm text-ink">
+                  I found {namesFound.reason}. I don&rsquo;t need them to read this — want me to take them out
+                  first?
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={busy != null}
+                    onClick={() => void handleRun('strip')}
+                    className="rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-60"
+                  >
+                    Strip names
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy != null}
+                    onClick={() => void handleRun('keep')}
+                    className="rounded-full border border-hairline bg-cream-card px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-terracotta/50 hover:text-terracotta-600 disabled:opacity-60"
+                  >
+                    Use it as is
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNamesFound(null)}
+                    className="px-3 py-2.5 text-sm font-semibold text-ink-soft hover:text-ink"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center justify-between gap-4">
               <p className="max-w-sm text-sm text-ink-soft">

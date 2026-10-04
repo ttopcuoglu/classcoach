@@ -10,6 +10,7 @@ import {
   NoTextFoundError,
   UnsupportedFileError,
 } from '../lib/documentText.ts'
+import { findStudentNames, stripStudentNames } from '../lib/studentNames.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
 import {
@@ -413,6 +414,27 @@ reviewsRouter.post('/:id/run', async (req, res) => {
     res.status(404).json({ error: 'Not found' })
     return
   }
+  // Before anything is sent anywhere. A roster reaching the model is not a
+  // thing to apologise for afterwards, and this surface's whole promise is
+  // that it reads the work rather than the class.
+  //
+  // `namesHandled` is the teacher's answer to the prompt: 'strip' removes the
+  // names, 'keep' is them saying they are fine. Absent, and names present,
+  // means they have not been asked yet — so the run refuses and the client
+  // asks. Refusing with the finding rather than an error is what lets the
+  // page show the question instead of a failure.
+  const namesHandled = typeof req.body?.namesHandled === 'string' ? req.body.namesHandled : null
+  const names = findStudentNames(existing.originalText)
+  if (names && namesHandled == null) {
+    res.status(409).json({
+      error: 'This looks like it has student names in it.',
+      studentNames: { reason: names.reason, lineCount: names.lines.length },
+    })
+    return
+  }
+  const textForModel =
+    names && namesHandled === 'strip' ? stripStudentNames(existing.originalText) : existing.originalText
+
   const docType = isDocType(existing.docType) ? existing.docType : 'assignment'
   const lenses = parseLenses(existing.lenses, docType)
   const onKeys = lenses.filter((l) => l.on).map((l) => l.key)
@@ -440,7 +462,9 @@ reviewsRouter.post('/:id/run', async (req, res) => {
       // all of it thinking and returned no text at all.
       thinking: { type: 'disabled' },
       system: buildRunPrompt(docType, onKeys, prep ? describeClassContext(prep) : null),
-      messages: [{ role: 'user', content: existing.originalText }],
+      // The stripped text when the teacher asked for that — the whole point
+      // of the gate above is that this is what leaves the building.
+      messages: [{ role: 'user', content: textForModel }],
     })
     const text = response.content
       .filter((block) => block.type === 'text')
@@ -476,7 +500,11 @@ reviewsRouter.post('/:id/run', async (req, res) => {
     // An anchor the model could not copy exactly is unusable as a diff, and
     // showing it would mean rendering a strikethrough over text the teacher
     // never wrote. Dropped here rather than at display time.
-    edits = edits.filter((e) => existing.originalText.includes(e.anchor))
+    // Anchored against what the model was actually shown. Checking the
+    // original instead would accept an anchor quoting a name that was
+    // stripped, and the diff would then strike through text the model never
+    // saw.
+    edits = edits.filter((e) => textForModel.includes(e.anchor))
 
     const rawTiming = extractTag(text, 'timing')
     let timingBasis = null

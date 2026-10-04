@@ -18,6 +18,7 @@ export const DOC_TYPES = [
   'project',
   'lesson_plan',
   'presentation',
+  'rubric',
   'message',
 ] as const
 
@@ -30,6 +31,7 @@ export const DOC_TYPE_LABELS: Record<DocType, string> = {
   project: 'Project',
   lesson_plan: 'Lesson plan',
   presentation: 'Presentation',
+  rubric: 'Rubric',
   message: 'Message',
 }
 
@@ -131,7 +133,7 @@ export const LENSES: Record<string, Lens> = {
   },
   slide_load: {
     key: 'slide_load',
-    label: 'Slide load',
+    label: 'Slide load and text density',
     blurb: 'How much is on each slide.',
     instruction:
       'Judge how much is on each slide. Name the slides carrying more than a student can take in while also listening, and the ones that are doing nothing. Say which could be split and which could go.',
@@ -199,6 +201,173 @@ export const LENSES: Record<string, Lens> = {
     instruction:
       'Separate observable fact from characterization and inference. Flag any sentence that states a motive, a diagnosis, or a judgment as though it were observed. Flag anything that discloses another student. Say what a reader forwarding this to an administrator would see.',
   },
+  // --- Homework ---
+  time_really_takes: {
+    key: 'time_really_takes',
+    label: "How long it'll really take",
+    blurb: 'The honest estimate, not the optimistic one.',
+    instruction:
+      'Estimate how long this actually takes a typical student in this class, not a fast one. Count reading, thinking, writing and setup separately, state the per-part basis for your figure, and compare it to any time the document itself claims. If the gap is large, say so plainly.',
+  },
+  practice_or_new: {
+    key: 'practice_or_new',
+    label: 'Practice or new learning',
+    blurb: 'Rehearsing what they know, or meeting it for the first time.',
+    instruction:
+      'Decide whether this asks students to practise something already taught or to learn something new on their own. Quote the parts that assume prior instruction. Homework that teaches is homework that sorts students by who has help at home — if that is what this does, say it.',
+  },
+  doable_at_home: {
+    key: 'doable_at_home',
+    label: 'Doable without help at home',
+    blurb: 'What it quietly assumes a student has.',
+    instruction:
+      'Name everything this assumes a student can reach at home — an adult who knows the content, a printer, reliable internet, a quiet hour, a specific app or text. Say which parts stall completely without each one. Do not speculate about any particular family.',
+  },
+  directions_alone: {
+    key: 'directions_alone',
+    label: 'Are the directions clear alone',
+    blurb: 'Read cold, with nobody to ask.',
+    instruction:
+      'Read the directions as a student would at 9pm with nobody to ask. Flag every step that depends on something said in class, every ambiguous verb, and anything that does not say what finished looks like. Quote the line and give the clearer wording.',
+  },
+  what_you_do_tomorrow: {
+    key: 'what_you_do_tomorrow',
+    label: 'What you do with it tomorrow',
+    blurb: 'Whether it feeds the next lesson or just gets collected.',
+    instruction:
+      'Say what this work makes possible in the next lesson. If it produces nothing you could sort, discuss or teach from, say so — and name the smallest change that would make it worth collecting.',
+  },
+
+  // --- Assignment ---
+  thinking_and_rigor: {
+    key: 'thinking_and_rigor',
+    label: 'Thinking and rigor',
+    blurb: 'What cognitive work this actually asks for.',
+    instruction:
+      'Name the cognitive work this asks for — recall, procedure, application, analysis, judgment — and quote where. Distinguish work that looks demanding because it is long from work that is demanding because it is hard. If the hardest thinking has already been done for the student in the directions, point at it.',
+  },
+  learning_value: {
+    key: 'learning_value',
+    label: 'Learning value',
+    blurb: 'What a student is better at afterwards.',
+    instruction:
+      'Say what a student can do afterwards that they could not do before. If the honest answer is "produced an artefact", say so. Separate the parts that build understanding from the parts that are production work — formatting, decorating, assembling — and say how much of the total each is.',
+  },
+  directions_and_examples: {
+    key: 'directions_and_examples',
+    label: 'Directions and examples',
+    blurb: 'Whether a student can tell what good looks like.',
+    instruction:
+      'Judge whether a student could tell what a strong response looks like from this document alone. Flag missing models, exemplars or success criteria, and directions that describe the task without describing the standard. Quote what is there and say what it leaves open.',
+  },
+
+  // --- Project ---
+  workload_timeline: {
+    key: 'workload_timeline',
+    label: 'Workload across the timeline',
+    blurb: 'Where the work actually piles up.',
+    instruction:
+      'Map the work against the dates the document gives. Say where it bunches, which checkpoints are too far apart to catch a group that has stalled, and whether the final stretch is doable in the time left. State your per-phase estimate and its basis.',
+  },
+  group_accountability: {
+    key: 'group_accountability',
+    label: "Group work and who's accountable",
+    blurb: 'Whether one student can carry it, or hide in it.',
+    instruction:
+      'Say whether this can be completed by one student doing most of it, and whether any student could pass without contributing. Name which deliverables are individually attributable and which are not. Suggest the smallest structural change that makes each member visible.',
+  },
+  success_criteria: {
+    key: 'success_criteria',
+    label: 'Rubric and success criteria',
+    blurb: 'Whether the target is stated or implied.',
+    instruction:
+      'Check whether the document states how the work will be judged, in terms a student could act on before starting. Flag criteria that describe effort or compliance rather than quality. If a rubric is included, check it matches what the directions actually ask for.',
+  },
+
+  // --- Lesson plan ---
+  materials_prep: {
+    key: 'materials_prep',
+    label: 'Materials and prep',
+    blurb: 'What has to exist before the bell.',
+    instruction:
+      'List everything that must be made, copied, booked or set up before this runs, including anything implied but not named. Flag whatever has to be ready and is not mentioned. Keep it to what the plan itself implies — do not invent a resource list.',
+  },
+
+  // --- Presentation ---
+  pacing_period: {
+    key: 'pacing_period',
+    label: 'Pacing against the period',
+    blurb: 'Whether the deck fits the time it has.',
+    instruction:
+      'Estimate how long this deck takes to deliver at a realistic pace for this class, state the per-slide basis, and compare it to the period length. Say which slides are the ones to cut if it runs long, and which cannot be cut without losing the point.',
+  },
+
+  // --- Rubric ---
+  criteria_distinct: {
+    key: 'criteria_distinct',
+    label: 'Are the criteria distinct',
+    blurb: 'Whether each row judges something different.',
+    instruction:
+      'Check each criterion against the others. Name any two that would rise and fall together, and any that bundle several judgments into one row. Say which rows a student could score well on for reasons unrelated to what the row is named after.',
+  },
+  levels_differ: {
+    key: 'levels_differ',
+    label: 'Do the levels describe different work',
+    blurb: 'Different work, or just more of it.',
+    instruction:
+      'Read across each row. Say whether the levels describe qualitatively different work or the same work in different amounts — "three examples" versus "two" is quantity, not quality. Quote the rows where only the adjectives change, and give better wording for one of them.',
+  },
+  weighting_matches: {
+    key: 'weighting_matches',
+    label: 'Does the weighting match what matters',
+    blurb: 'Where the points are, versus where the learning is.',
+    instruction:
+      'Compare how the points are distributed against what the task says it is for. Flag where presentation, length or compliance carries more weight than the thinking. If no weighting is stated, say what the layout implies.',
+  },
+  student_readable: {
+    key: 'student_readable',
+    label: 'Can a student read it and know what to do',
+    blurb: 'Whether it works as instructions, not just as grading.',
+    instruction:
+      'Read it as a student deciding what to do first. Flag teacher-facing language, vocabulary that assumes the rubric was explained aloud, and levels that only make sense once the work is finished. Quote one row and rewrite it so it would guide the work.',
+  },
+  matches_assignment: {
+    key: 'matches_assignment',
+    label: 'Does it match the assignment',
+    blurb: 'Whether it judges what was actually asked for.',
+    instruction:
+      'If the assignment is here too, check the rubric against it: anything the directions require that no criterion judges, and any criterion judging something the directions never asked for. If only the rubric was given, say what it implies the task must require, and mark this low confidence.',
+  },
+
+  // --- Message ---
+  clarity: {
+    key: 'clarity',
+    label: 'Clarity',
+    blurb: 'Whether the point survives one read.',
+    instruction:
+      'Say what this message asks for and whether that survives a single quick read on a phone. Flag the point arriving late, more than one ask buried in a paragraph, and sentences carrying two ideas. Quote the line and give the shorter one.',
+  },
+  tone_for_reader: {
+    key: 'tone_for_reader',
+    label: 'Tone for this reader',
+    blurb: 'How it lands on the person receiving it.',
+    instruction:
+      'Judge the tone as the named reader would receive it, not as the writer intends it. Flag anything that reads as blame, as a formal record, or as warmer than the situation warrants. Quote the phrase and offer one alternative. Never speculate about the reader or their home.',
+  },
+  invites_response: {
+    key: 'invites_response',
+    label: 'What it invites in response',
+    blurb: 'The conversation this opens.',
+    instruction:
+      'Say what reply this is likely to produce, and whether that is the one the teacher wants. Flag anything inviting a defence rather than a conversation, open questions that will generate work, and closings that leave the next step with nobody.',
+  },
+  whats_missing: {
+    key: 'whats_missing',
+    label: "What's missing",
+    blurb: 'What the reader will have to ask for.',
+    instruction:
+      'Name what a reader needs that is not here — the specific, the date, the next step, what is being asked of them. Keep to what the message itself implies is missing; do not invent circumstances.',
+  },
 }
 
 /// The lenses a type is read through, in the order they appear, with whether
@@ -210,6 +379,9 @@ export const LENSES: Record<string, Lens> = {
 /// turning it on there would answer a question nobody asked and imply a
 /// suspicion the teacher does not have.
 export const LENSES_BY_TYPE: Record<DocType, { key: string; on: boolean }[]> = {
+  // Each row is the spec's lens table. Order is the order they are shown; a
+  // lens marked off is a default, not a restriction — every one is
+  // individually toggleable.
   quiz: [
     { key: 'item_purpose', on: true },
     { key: 'reading_load', on: true },
@@ -220,27 +392,28 @@ export const LENSES_BY_TYPE: Record<DocType, { key: string; on: boolean }[]> = {
     { key: 'ai_risk', on: false },
   ],
   homework: [
+    { key: 'time_really_takes', on: true },
+    { key: 'practice_or_new', on: true },
+    { key: 'doable_at_home', on: true },
+    { key: 'directions_alone', on: true },
+    { key: 'what_you_do_tomorrow', on: true },
     { key: 'ai_risk', on: true },
-    { key: 'what_it_asks_for', on: true },
-    { key: 'workload', on: true },
-    { key: 'scaffolding', on: true },
-    { key: 'reading_load', on: false },
   ],
   assignment: [
-    { key: 'ai_risk', on: true },
-    { key: 'what_it_asks_for', on: true },
-    { key: 'where_thinking', on: true },
+    { key: 'grade_level_fit', on: true },
+    { key: 'thinking_and_rigor', on: true },
+    { key: 'learning_value', on: true },
     { key: 'workload', on: true },
-    { key: 'scaffolding', on: true },
-    { key: 'reading_load', on: false },
+    { key: 'directions_and_examples', on: true },
+    { key: 'ai_risk', on: true },
   ],
   project: [
-    { key: 'ai_risk', on: true },
-    { key: 'what_it_asks_for', on: true },
+    { key: 'grade_level_fit', on: true },
     { key: 'where_thinking', on: true },
-    { key: 'workload', on: true },
-    { key: 'scaffolding', on: true },
-    { key: 'standards_coverage', on: false },
+    { key: 'workload_timeline', on: true },
+    { key: 'group_accountability', on: true },
+    { key: 'success_criteria', on: true },
+    { key: 'ai_risk', on: true },
   ],
   lesson_plan: [
     { key: 'timing_realism', on: true },
@@ -248,7 +421,7 @@ export const LENSES_BY_TYPE: Record<DocType, { key: string; on: boolean }[]> = {
     { key: 'where_thinking', on: true },
     { key: 'checks_for_understanding', on: true },
     { key: 'short_or_long', on: true },
-    { key: 'ai_risk', on: false },
+    { key: 'materials_prep', on: false },
   ],
   presentation: [
     { key: 'slide_load', on: true },
@@ -256,11 +429,20 @@ export const LENSES_BY_TYPE: Record<DocType, { key: string; on: boolean }[]> = {
     { key: 'grade_level_fit', on: true },
     { key: 'legible_from_the_back', on: true },
     { key: 'how_to_run_it', on: true },
+    { key: 'pacing_period', on: false },
+  ],
+  rubric: [
+    { key: 'criteria_distinct', on: true },
+    { key: 'levels_differ', on: true },
+    { key: 'weighting_matches', on: true },
+    { key: 'student_readable', on: true },
+    { key: 'matches_assignment', on: true },
   ],
   message: [
-    { key: 'tone_and_clarity', on: true },
-    { key: 'what_it_asks_of_reader', on: true },
-    { key: 'facts_and_record', on: true },
+    { key: 'clarity', on: true },
+    { key: 'tone_for_reader', on: true },
+    { key: 'invites_response', on: true },
+    { key: 'whats_missing', on: true },
   ],
 }
 
@@ -340,6 +522,12 @@ const SIGNALS: Signal[] = [
   { type: 'assignment', pattern: /\b(assignment|task|worksheet|activity)\b/i, weight: 3 , says: 'the word assignment' },
   { type: 'assignment', pattern: /\b(instructions|directions)\b\s*:/i, weight: 2 , says: 'an instructions heading' },
 
+  // Rubric — a criteria x performance-levels grid. Named levels are the
+  // giveaway, because nothing else a teacher makes has four of them in a row.
+  { type: 'rubric', pattern: /\b(rubric|scoring guide|criteria)\b/i, weight: 4, says: 'the word rubric' },
+  { type: 'rubric', pattern: /\b(exceeds|meets|approaching|beginning|emerging|proficient|developing)\b/gi, weight: 3, says: 'named performance levels' },
+  { type: 'rubric', pattern: /\b(4\s*[-–]\s*3\s*[-–]\s*2\s*[-–]\s*1|excellent.*good.*fair.*poor)\b/i, weight: 3, says: 'a four-point scale' },
+
   // Presentation.
   { type: 'presentation', pattern: /\b(slide|slides)\b/i, weight: 3 , says: 'slides' },
   { type: 'presentation', pattern: /^\s*slide\s*\d+/im, weight: 5 , says: 'numbered slides' },
@@ -353,7 +541,22 @@ const TIE_BREAK: readonly DocType[] = [
   'quiz',
   'project',
   'homework',
+  'rubric',
   'assignment',
+]
+
+/// Lenses no type offers any more.
+///
+/// Kept defined, not deleted: a review run before the sets were rewritten
+/// stored these keys, and dropping them would make an old result render bare
+/// keys where its findings used to have names. Nothing may offer them again —
+/// a type wanting one of these should say so in its own words instead.
+export const RETIRED_LENS_KEYS: readonly string[] = [
+  'what_it_asks_for',
+  'scaffolding',
+  'tone_and_clarity',
+  'what_it_asks_of_reader',
+  'facts_and_record',
 ]
 
 export type Detection = {

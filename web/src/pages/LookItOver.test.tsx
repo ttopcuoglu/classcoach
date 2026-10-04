@@ -578,3 +578,91 @@ test('the no-names line is there before anything is uploaded', async () => {
   renderPage()
   await waitFor(() => expect(screen.getByText(/No student names, please\./)).toBeTruthy())
 })
+
+// --- correcting the type ---
+
+// Changing the type swaps the whole lens set, so the strip has to say that
+// rather than letting the result change underneath the teacher.
+test('once the type is corrected the strip reports instead of asking', async () => {
+  createReview.mockResolvedValue(review())
+  updateReview.mockResolvedValue(review({ docType: 'homework', docTypeConfirmed: true }))
+  renderPage()
+  await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
+  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Homework' })).toBeTruthy())
+
+  fireEvent.click(screen.getByRole('button', { name: 'Homework' }))
+
+  await waitFor(() => expect(screen.getByText('Got it — reviewing as homework.')).toBeTruthy())
+  expect(screen.getByText("Different type, different checks. Here's what changes.")).toBeTruthy()
+  // The question is answered, so it stops being asked.
+  expect(screen.queryByText(/Looks like a .* — right\?/)).toBeNull()
+})
+
+// --- the student-name guard ---
+
+/// The server's refusal: it declined to run until the teacher answers.
+function namesRefusal() {
+  return Object.assign(new Error('This looks like it has student names in it.'), {
+    status: 409,
+    details: { studentNames: { reason: 'a column headed with a student name', lineCount: 1 } },
+  })
+}
+
+// Criterion 6: the prompt happens before any model call. The server enforces
+// that; what this checks is that the refusal reads as a question rather than
+// as something going wrong, because a teacher who reads it as an error will
+// not understand that they have a choice.
+test('a document with student names asks before it runs', async () => {
+  createReview.mockResolvedValue(review())
+  runReview.mockRejectedValueOnce(namesRefusal())
+  renderPage()
+  await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
+  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText("What I'll look at")).toBeTruthy())
+
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+
+  await waitFor(() => expect(screen.getByText('This looks like it has student names in it.')).toBeTruthy())
+  expect(screen.getByText(/a column headed with a student name/)).toBeTruthy()
+  for (const choice of ['Strip names', 'Use it as is', 'Cancel']) {
+    expect(screen.getByRole('button', { name: choice }), choice).toBeTruthy()
+  }
+})
+
+test('stripping re-runs with the answer, and the question goes away', async () => {
+  createReview.mockResolvedValue(review())
+  runReview.mockRejectedValueOnce(namesRefusal()).mockResolvedValueOnce(review({ status: 'reviewed' }))
+  renderPage()
+  await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
+  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText("What I'll look at")).toBeTruthy())
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Strip names' })).toBeTruthy())
+
+  fireEvent.click(screen.getByRole('button', { name: 'Strip names' }))
+
+  await waitFor(() => expect(runReview).toHaveBeenCalledWith('r1', 'strip'))
+  await waitFor(() => expect(screen.queryByText('This looks like it has student names in it.')).toBeNull())
+})
+
+// Their document, their call — but it has to be said out loud rather than
+// assumed.
+test('using it as is is offered, and says so to the server', async () => {
+  createReview.mockResolvedValue(review())
+  runReview.mockRejectedValueOnce(namesRefusal()).mockResolvedValueOnce(review({ status: 'reviewed' }))
+  renderPage()
+  await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
+  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText("What I'll look at")).toBeTruthy())
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Use it as is' })).toBeTruthy())
+
+  fireEvent.click(screen.getByRole('button', { name: 'Use it as is' }))
+
+  await waitFor(() => expect(runReview).toHaveBeenCalledWith('r1', 'keep'))
+})

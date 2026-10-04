@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { DOC_TYPES, DOC_TYPE_LABELS, LENSES, LENSES_BY_TYPE, REVIEW_LIMITS, allowedLensKeys, defaultLensesFor, detectDocType, evidenceFor, isDocType } from './reviewLenses.ts'
+import { DOC_TYPES, DOC_TYPE_LABELS, LENSES, LENSES_BY_TYPE, RETIRED_LENS_KEYS, REVIEW_LIMITS, allowedLensKeys, defaultLensesFor, detectDocType, evidenceFor, isDocType } from './reviewLenses.ts'
 
 // Look It Over replaced four separate tools, and the only reason that is a
 // simplification rather than a four-way menu with extra steps is that the
@@ -16,10 +16,10 @@ import { DOC_TYPES, DOC_TYPE_LABELS, LENSES, LENSES_BY_TYPE, REVIEW_LIMITS, allo
 // Turning it on for a quiz would answer a question nobody asked and imply a
 // suspicion the teacher does not have.
 
-test('the seven document types are exactly these', () => {
+test('the eight document types are exactly these', () => {
   assert.deepEqual(
     [...DOC_TYPES],
-    ['quiz', 'homework', 'assignment', 'project', 'lesson_plan', 'presentation', 'message'],
+    ['quiz', 'homework', 'assignment', 'project', 'lesson_plan', 'presentation', 'rubric', 'message'],
   )
 })
 
@@ -54,10 +54,27 @@ test('no lens is listed twice for one type', () => {
   }
 })
 
-test('every lens in the table is used by at least one type', () => {
+test('every lens in the table is used by a type, or is deliberately retired', () => {
   const used = new Set(DOC_TYPES.flatMap((t) => LENSES_BY_TYPE[t].map((l) => l.key)))
   for (const key of Object.keys(LENSES)) {
-    assert.ok(used.has(key), `${key} is defined but no type uses it`)
+    assert.ok(used.has(key) || RETIRED_LENS_KEYS.includes(key), `${key} is defined but no type uses it`)
+  }
+})
+
+// A retired lens is only worth keeping if it still resolves: the point is that
+// a review stored under it renders its own words rather than a bare key.
+test('every retired lens still has its label and blurb', () => {
+  for (const key of RETIRED_LENS_KEYS) {
+    assert.ok(LENSES[key], `${key} is listed as retired but no longer defined`)
+    assert.ok(LENSES[key].label.length > 0, key)
+  }
+})
+
+// And nothing may quietly offer one again.
+test('no type offers a retired lens', () => {
+  const used = new Set(DOC_TYPES.flatMap((t) => LENSES_BY_TYPE[t].map((l) => l.key)))
+  for (const key of RETIRED_LENS_KEYS) {
+    assert.ok(!used.has(key), `${key} is retired but a type still offers it`)
   }
 })
 
@@ -131,7 +148,7 @@ test('the defaults are a fresh copy each time', () => {
 })
 
 test('a lens that does not belong to a type is not allowed for it', () => {
-  assert.ok(allowedLensKeys('message').includes('tone_and_clarity'))
+  assert.ok(allowedLensKeys('message').includes('clarity'))
   assert.ok(!allowedLensKeys('message').includes('slide_load'))
   assert.ok(!allowedLensKeys('quiz').includes('how_to_run_it'))
 })

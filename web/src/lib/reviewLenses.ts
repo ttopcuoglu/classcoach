@@ -15,6 +15,7 @@ export const DOC_TYPES = [
   'project',
   'lesson_plan',
   'presentation',
+  'rubric',
   'message',
 ] as const
 
@@ -27,6 +28,7 @@ export const DOC_TYPE_LABELS: Record<DocType, string> = {
   project: 'Project',
   lesson_plan: 'Lesson plan',
   presentation: 'Presentation',
+  rubric: 'Rubric',
   message: 'Message',
 }
 
@@ -43,6 +45,7 @@ const DOC_TYPE_IN_A_SENTENCE: Record<DocType, string> = {
   project: 'project',
   lesson_plan: 'lesson plan',
   presentation: 'presentation',
+  rubric: 'rubric',
   message: 'message',
 }
 
@@ -59,6 +62,30 @@ export function detectionHint(evidence: readonly string[]): string {
   const joined = evidence.length === 1 ? evidence[0] : `${evidence[0]} and ${evidence[1]}`
   return `${joined.charAt(0).toUpperCase()}${joined.slice(1)}. Tap any to correct me.`
 }
+
+/// What the strip says once the teacher has corrected the guess.
+///
+/// It stops asking, because the question has been answered — and says what
+/// the answer cost, since changing the type swaps the whole lens set and a
+/// teacher who does not notice that will wonder why the result changed.
+export function correctedHeading(docType: DocType): string {
+  return `Got it — reviewing as ${DOC_TYPE_AS[docType]}.`
+}
+
+/// The bare noun, for a sentence that takes no article: "reviewing as
+/// homework", where the question needs "a homework assignment".
+const DOC_TYPE_AS: Record<DocType, string> = {
+  quiz: 'a quiz',
+  homework: 'homework',
+  assignment: 'an assignment',
+  project: 'a project',
+  lesson_plan: 'a lesson plan',
+  presentation: 'a presentation',
+  rubric: 'a rubric',
+  message: 'a message',
+}
+
+export const CORRECTED_HINT = "Different type, different checks. Here's what changes."
 
 export function confirmQuestion(docType: DocType): string {
   return `Looks like ${article(DOC_TYPE_IN_A_SENTENCE[docType])} — right?`
