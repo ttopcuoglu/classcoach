@@ -89,7 +89,7 @@ export const LENSES: Record<string, Lens> = {
   },
   ai_risk: {
     key: 'ai_risk',
-    label: 'AI-completion risk',
+    label: 'AI completion risk',
     blurb: 'How much of this a chatbot could just do.',
     instruction:
       'Say how much of this a student could complete with a general-purpose chatbot in a few minutes, and which parts specifically. Be concrete and calm about it — not alarmed, and never implying the teacher was naive. Then name the smallest change that would make the thinking visible without making more work to grade.',
@@ -282,7 +282,15 @@ const EXTENSION_HINTS: Record<string, DocType> = {
   '.pptx': 'presentation',
 }
 
-type Signal = { type: DocType; pattern: RegExp; weight: number }
+type Signal = {
+  type: DocType
+  pattern: RegExp
+  weight: number
+  /// What this signal saw, in a teacher's words, for "Numbered items and an
+  /// answer key. Tap any to correct me." A noun phrase, lowercase, so it can
+  /// be joined with another and capitalised as a sentence.
+  says: string
+}
 
 /// Deliberately a keyword heuristic rather than a model call.
 ///
@@ -294,47 +302,47 @@ type Signal = { type: DocType; pattern: RegExp; weight: number }
 const SIGNALS: Signal[] = [
   // Message — strongest signals in the app, because an email looks nothing
   // like a classroom document.
-  { type: 'message', pattern: /^\s*(dear|hi|hello|good (morning|afternoon|evening))\b/i, weight: 5 },
-  { type: 'message', pattern: /\b(subject|re|fw|fwd)\s*:/i, weight: 3 },
-  { type: 'message', pattern: /\b(best regards|kind regards|sincerely|thanks so much|warmly)\b/i, weight: 3 },
-  { type: 'message', pattern: /\b(your (son|daughter|child)|mr\.|mrs\.|ms\.)\b/i, weight: 2 },
+  { type: 'message', pattern: /^\s*(dear|hi|hello|good (morning|afternoon|evening))\b/i, weight: 5 , says: 'a greeting' },
+  { type: 'message', pattern: /\b(subject|re|fw|fwd)\s*:/i, weight: 3 , says: 'a subject line' },
+  { type: 'message', pattern: /\b(best regards|kind regards|sincerely|thanks so much|warmly)\b/i, weight: 3 , says: 'a sign-off' },
+  { type: 'message', pattern: /\b(your (son|daughter|child)|mr\.|mrs\.|ms\.)\b/i, weight: 2 , says: 'a parent addressed directly' },
 
   // Lesson plan.
-  { type: 'lesson_plan', pattern: /\b(lesson plan|do now|warm.?up|bell.?ringer)\b/i, weight: 4 },
-  { type: 'lesson_plan', pattern: /\b(swbat|students will be able to|learning (objective|target))\b/i, weight: 4 },
-  { type: 'lesson_plan', pattern: /\b(i do|we do|you do|gradual release|exit ticket|closure)\b/i, weight: 3 },
-  { type: 'lesson_plan', pattern: /\b(\d+\s*min(ute)?s?\b.*){3,}/is, weight: 2 },
-  { type: 'lesson_plan', pattern: /\b(materials|agenda|essential question)\b\s*:/i, weight: 2 },
+  { type: 'lesson_plan', pattern: /\b(lesson plan|do now|warm.?up|bell.?ringer)\b/i, weight: 4 , says: 'lesson-plan headings' },
+  { type: 'lesson_plan', pattern: /\b(swbat|students will be able to|learning (objective|target))\b/i, weight: 4 , says: 'a learning objective' },
+  { type: 'lesson_plan', pattern: /\b(i do|we do|you do|gradual release|exit ticket|closure)\b/i, weight: 3 , says: 'a gradual-release structure' },
+  { type: 'lesson_plan', pattern: /\b(\d+\s*min(ute)?s?\b.*){3,}/is, weight: 2 , says: 'timings running through it' },
+  { type: 'lesson_plan', pattern: /\b(materials|agenda|essential question)\b\s*:/i, weight: 2 , says: 'a materials or agenda list' },
 
   // Quiz or exam.
-  { type: 'quiz', pattern: /\b(quiz|exam|test|midterm|final)\b/i, weight: 3 },
-  { type: 'quiz', pattern: /\b(multiple choice|circle the (correct|best)|select the best answer)\b/i, weight: 4 },
+  { type: 'quiz', pattern: /\b(quiz|exam|test|midterm|final)\b/i, weight: 3 , says: 'the words quiz or exam' },
+  { type: 'quiz', pattern: /\b(multiple choice|circle the (correct|best)|select the best answer)\b/i, weight: 4 , says: 'multiple-choice wording' },
   // Numbered lines are the weakest discriminator in the app — homework,
   // assignments, projects and quizzes all have them — so this leans toward a
   // quiz without ever outvoting a document that says what it is. At weight 2
   // it beat "Homework — Problem Set 3" on the strength of three numbered
   // questions, which is exactly backwards.
-  { type: 'quiz', pattern: /(^|\n)\s*\d+[.)]\s/g, weight: 1 },
-  { type: 'quiz', pattern: /(^|\n)\s*[a-dA-D][.)]\s/g, weight: 3 },
-  { type: 'quiz', pattern: /\b(points?|pts|marks?)\b\s*[:)]/i, weight: 2 },
-  { type: 'quiz', pattern: /\b(name|date|period)\s*:?\s*_{3,}/i, weight: 3 },
+  { type: 'quiz', pattern: /(^|\n)\s*\d+[.)]\s/g, weight: 1 , says: 'numbered items' },
+  { type: 'quiz', pattern: /(^|\n)\s*[a-dA-D][.)]\s/g, weight: 3 , says: 'lettered options' },
+  { type: 'quiz', pattern: /\b(points?|pts|marks?)\b\s*[:)]/i, weight: 2 , says: 'point values' },
+  { type: 'quiz', pattern: /\b(name|date|period)\s*:?\s*_{3,}/i, weight: 3 , says: 'a name and date line' },
 
   // Homework.
-  { type: 'homework', pattern: /\b(homework|hw|practice set|problem set)\b/i, weight: 4 },
-  { type: 'homework', pattern: /\b(due (tomorrow|monday|tuesday|wednesday|thursday|friday|next))\b/i, weight: 2 },
+  { type: 'homework', pattern: /\b(homework|hw|practice set|problem set)\b/i, weight: 4 , says: 'the word homework' },
+  { type: 'homework', pattern: /\b(due (tomorrow|monday|tuesday|wednesday|thursday|friday|next))\b/i, weight: 2 , says: 'a due date' },
 
   // Project.
-  { type: 'project', pattern: /\b(project|capstone|presentation project|group project)\b/i, weight: 4 },
-  { type: 'project', pattern: /\b(rubric|milestones?|checkpoints?|deliverables?|group roles?)\b/i, weight: 2 },
-  { type: 'project', pattern: /\b(weeks?|phases?)\s*\d/i, weight: 2 },
+  { type: 'project', pattern: /\b(project|capstone|presentation project|group project)\b/i, weight: 4 , says: 'the word project' },
+  { type: 'project', pattern: /\b(rubric|milestones?|checkpoints?|deliverables?|group roles?)\b/i, weight: 2 , says: 'a rubric or milestones' },
+  { type: 'project', pattern: /\b(weeks?|phases?)\s*\d/i, weight: 2 , says: 'phases over weeks' },
 
   // Assignment — the catch-all, so its signals are weaker on purpose.
-  { type: 'assignment', pattern: /\b(assignment|task|worksheet|activity)\b/i, weight: 3 },
-  { type: 'assignment', pattern: /\b(instructions|directions)\b\s*:/i, weight: 2 },
+  { type: 'assignment', pattern: /\b(assignment|task|worksheet|activity)\b/i, weight: 3 , says: 'the word assignment' },
+  { type: 'assignment', pattern: /\b(instructions|directions)\b\s*:/i, weight: 2 , says: 'an instructions heading' },
 
   // Presentation.
-  { type: 'presentation', pattern: /\b(slide|slides)\b/i, weight: 3 },
-  { type: 'presentation', pattern: /^\s*slide\s*\d+/im, weight: 5 },
+  { type: 'presentation', pattern: /\b(slide|slides)\b/i, weight: 3 , says: 'slides' },
+  { type: 'presentation', pattern: /^\s*slide\s*\d+/im, weight: 5 , says: 'numbered slides' },
 ]
 
 /// Tie-break order, most specific first.
@@ -350,6 +358,11 @@ const TIE_BREAK: readonly DocType[] = [
 
 export type Detection = {
   docType: DocType
+  /// What in the document pointed at this type, strongest first, at most two.
+  /// The question "Looks like a quiz — right?" is easier to answer when it
+  /// says what it saw — and showing the reasons is also what makes a wrong
+  /// guess obviously wrong rather than mysteriously wrong.
+  evidence: string[]
   /// True when the signals were strong and clearly ahead of the runner-up.
   /// A low-confidence detection is still shown as a question, just with the
   /// chips already open.
@@ -387,11 +400,32 @@ export function detectDocType(text: string, fileName?: string | null): Detection
   const ranked = [...scores.entries()].sort(
     (a, b) => b[1] - a[1] || TIE_BREAK.indexOf(a[0]) - TIE_BREAK.indexOf(b[0]),
   )
-  if (ranked.length === 0) return { docType: 'assignment', confident: false }
+  if (ranked.length === 0) return { docType: 'assignment', evidence: [], confident: false }
 
   const [topType, topScore] = ranked[0]
   const runnerUp = ranked[1]?.[1] ?? 0
-  return { docType: topType, confident: topScore >= 6 && topScore >= runnerUp * 1.6 }
+  return {
+    docType: topType,
+    evidence: evidenceFor(text, topType),
+    confident: topScore >= 6 && topScore >= runnerUp * 1.6,
+  }
+}
+
+/// What in the document points at one particular type, strongest signal
+/// first, at most two.
+///
+/// Takes the type as an argument rather than always explaining the winner,
+/// because a teacher who corrects the guess should see why their answer fits,
+/// not why the machine's did.
+export function evidenceFor(text: string, type: DocType): string[] {
+  const head = text.slice(0, 4000)
+  return SIGNALS.filter((signal) => signal.type === type)
+    .filter((signal) =>
+      signal.pattern.flags.includes('g') ? (head.match(signal.pattern)?.length ?? 0) > 0 : signal.pattern.test(head),
+    )
+    .sort((a, b) => b.weight - a.weight)
+    .map((signal) => signal.says)
+    .slice(0, 2)
 }
 
 function extensionOf(fileName: string): string {

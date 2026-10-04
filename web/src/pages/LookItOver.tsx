@@ -23,6 +23,7 @@ import {
   DOC_TYPE_LABELS,
   canRedesignForAi,
   confirmQuestion,
+  detectionHint,
   isDocType,
   type DocType,
 } from '../lib/reviewLenses'
@@ -137,7 +138,6 @@ export default function LookItOver() {
   /// How the document arrived. Worth saying for a photo in particular: it has
   /// been through OCR and may be missing content the paper copy has.
   const SOURCE_KIND_LABELS: Record<string, string> = {
-    file: 'uploaded',
     paste: 'pasted in',
     photo: 'photographed',
   }
@@ -148,7 +148,10 @@ export default function LookItOver() {
   function documentMeta(r: Review): string {
     const parts: string[] = []
     if (r.pageCount) parts.push(`${r.pageCount} ${r.pageCount === 1 ? 'page' : 'pages'}`)
-    parts.push(SOURCE_KIND_LABELS[r.sourceKind] ?? 'added')
+    // Only when it is worth knowing: a photo has been through OCR and may be
+    // missing what the paper copy has. An ordinary upload is just a document.
+    const how = SOURCE_KIND_LABELS[r.sourceKind]
+    if (how) parts.push(how)
     parts.push(addedAgo(r.createdAt))
     return parts.join(' · ')
   }
@@ -415,7 +418,7 @@ export default function LookItOver() {
             <div>
               <SectionLabel
                 title={confirmQuestion(docTypeOf(review.docType))}
-                hint="Tap any of these to correct me."
+                hint={detectionHint(review.detectionEvidence ?? [])}
               />
               <div className="mt-2.5 flex flex-wrap gap-2.5">
                 {DOC_TYPES.map((type) => (

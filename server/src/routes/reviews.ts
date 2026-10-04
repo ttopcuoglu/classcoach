@@ -30,6 +30,7 @@ import {
   allowedLensKeys,
   defaultLensesFor,
   detectDocType,
+  evidenceFor,
   isDocType,
   type DocType,
 } from '../lib/reviewLenses.ts'
@@ -95,6 +96,10 @@ function toReview(row: {
     id: row.id,
     docType,
     docTypeLabel: DOC_TYPE_LABELS[docType],
+    /// Recomputed on read rather than stored: it is derived entirely from the
+    /// text and the type, both of which are right here, and storing it would
+    /// mean a row whose reasons no longer match its type after a correction.
+    detectionEvidence: evidenceFor(row.originalText, docType),
     detectedType: row.detectedType,
     docTypeConfirmed: row.docTypeConfirmed,
     sourceKind: row.sourceKind,

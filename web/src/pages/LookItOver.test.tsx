@@ -56,6 +56,7 @@ function review(over: Partial<Review> & { detectionConfident?: boolean } = {}): 
     id: 'r1',
     docType: 'quiz',
     docTypeLabel: 'Quiz or exam',
+    detectionEvidence: ['numbered items', 'lettered options'],
     detectedType: 'quiz',
     docTypeConfirmed: false,
     sourceKind: 'file',
@@ -67,7 +68,7 @@ function review(over: Partial<Review> & { detectionConfident?: boolean } = {}): 
     lenses: [
       { key: 'item_purpose', label: 'What each item measures', blurb: 'Item by item.', on: true, finding: null },
       { key: 'reading_load', label: 'Reading load', blurb: 'How much reading.', on: true, finding: null },
-      { key: 'ai_risk', label: 'AI-completion risk', blurb: 'What a chatbot could do.', on: false, finding: null },
+      { key: 'ai_risk', label: 'AI completion risk', blurb: 'What a chatbot could do.', on: false, finding: null },
     ],
     oneThing: null,
     edits: [],
@@ -225,8 +226,8 @@ test('lenses are individually toggleable with a visible count', async () => {
 
   await waitFor(() => expect(screen.getByText(/2 of 3 on/)).toBeTruthy())
   expect(screen.getByRole('button', { name: /What each item measures/ }).getAttribute('aria-pressed')).toBe('true')
-  // A quiz opens with AI-completion risk off — it is sat in the room.
-  expect(screen.getByRole('button', { name: /AI-completion risk/ }).getAttribute('aria-pressed')).toBe('false')
+  // A quiz opens with AI completion risk off — it is sat in the room.
+  expect(screen.getByRole('button', { name: /AI completion risk/ }).getAttribute('aria-pressed')).toBe('false')
 })
 
 test('toggling a lens updates the count immediately', async () => {
@@ -241,7 +242,7 @@ test('toggling a lens updates the count immediately', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
   await waitFor(() => expect(screen.getByText(/2 of 3 on/)).toBeTruthy())
 
-  fireEvent.click(screen.getByRole('button', { name: /AI-completion risk/ }))
+  fireEvent.click(screen.getByRole('button', { name: /AI completion risk/ }))
   await waitFor(() => expect(screen.getByText(/3 of 3 on/)).toBeTruthy())
 })
 
@@ -259,7 +260,7 @@ const REVIEWED = review({
       on: true,
       finding: 'Items 1-3 are recall. Item 4 is really a reading test.',
     },
-    { key: 'ai_risk', label: 'AI-completion risk', blurb: 'What a chatbot could do.', on: false, finding: null },
+    { key: 'ai_risk', label: 'AI completion risk', blurb: 'What a chatbot could do.', on: false, finding: null },
   ],
   edits: [
     {
@@ -307,7 +308,7 @@ test('only lenses that are on and produced something get a finding section', asy
   // Exactly one lens heading is rendered as a result section.
   const headings = Array.from(document.querySelectorAll('p.font-heading')).map((n) => n.textContent)
   expect(headings.filter((h) => h === 'What each item measures')).toHaveLength(1)
-  expect(headings.filter((h) => h === 'AI-completion risk')).toHaveLength(0)
+  expect(headings.filter((h) => h === 'AI completion risk')).toHaveLength(0)
 })
 
 // "Any timing estimate must show its assumption or a range."
@@ -546,7 +547,7 @@ test('the no-names line is on the setup card', async () => {
 // off lens stays on screen rather than disappearing.
 test('a lens that is off is still shown, and still says it is off', async () => {
   await reachSetup()
-  const off = screen.getByRole('button', { name: /AI-completion risk/ })
+  const off = screen.getByRole('button', { name: /AI completion risk/ })
   expect(off.getAttribute('aria-pressed')).toBe('false')
   expect(off.className).toContain('border-dashed')
 })

@@ -1,16 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import {
-  DOC_TYPES,
-  DOC_TYPE_LABELS,
-  LENSES,
-  LENSES_BY_TYPE,
-  REVIEW_LIMITS,
-  allowedLensKeys,
-  defaultLensesFor,
-  detectDocType,
-  isDocType,
-} from './reviewLenses.ts'
+import { DOC_TYPES, DOC_TYPE_LABELS, LENSES, LENSES_BY_TYPE, REVIEW_LIMITS, allowedLensKeys, defaultLensesFor, detectDocType, evidenceFor, isDocType } from './reviewLenses.ts'
 
 // Look It Over replaced four separate tools, and the only reason that is a
 // simplification rather than a four-way menu with extra steps is that the
@@ -307,4 +297,46 @@ test('isDocType accepts the seven and rejects everything else', () => {
   for (const value of ['', 'essay', 'Quiz', null, undefined, 3]) {
     assert.equal(isDocType(value), false, String(value))
   }
+})
+
+// --- why it guessed that ---
+
+// "Looks like a quiz — right?" is easier to answer when it says what it saw.
+// Reasons are also what make a wrong guess obviously wrong rather than
+// mysteriously wrong, which is the difference between a teacher correcting it
+// and a teacher wondering what the app thinks it is reading.
+test('detection says what in the document pointed at the type', () => {
+  const quiz = detectDocType('1. What is osmosis?\n2. Define diffusion.\na) water b) salt', 'quiz.docx')
+  assert.equal(quiz.docType, 'quiz')
+  assert.ok(quiz.evidence.length > 0, 'a confident guess should say why')
+  // Real signals, not invented ones.
+  for (const reason of quiz.evidence) {
+    assert.equal(typeof reason, 'string')
+    assert.ok(reason.length > 0)
+  }
+})
+
+// Two at most: the strip is one line under a heading, not a report.
+test('at most two reasons are given, strongest first', () => {
+  const text = 'Dear Mrs. Alvarez,\n\nSubject: your son\n\nBest regards,\nMr. Patel'
+  const detected = detectDocType(text)
+  assert.equal(detected.docType, 'message')
+  assert.ok(detected.evidence.length <= 2)
+  // The greeting is the strongest message signal in the table, so it leads.
+  assert.equal(detected.evidence[0], 'a greeting')
+})
+
+// The reasons explain the type asked about, not whichever one scored highest —
+// a teacher who corrects the guess should see why THEIR answer fits.
+test('evidence can be asked for a type that did not win', () => {
+  const text = '1. What is osmosis?\n2. Define diffusion.'
+  assert.ok(evidenceFor(text, 'quiz').includes('numbered items'))
+  assert.deepEqual(evidenceFor(text, 'presentation'), [])
+})
+
+// A document that matched nothing is exactly the one whose guess was weak, so
+// there is nothing honest to say about it.
+test('a document with no signals offers no reasons', () => {
+  const detected = detectDocType('aaaa bbbb cccc')
+  assert.deepEqual(detected.evidence, [])
 })

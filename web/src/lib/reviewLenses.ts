@@ -46,6 +46,20 @@ const DOC_TYPE_IN_A_SENTENCE: Record<DocType, string> = {
   message: 'message',
 }
 
+/// The line under "Looks like a quiz — right?" — what in the document pointed
+/// that way, then how to correct it.
+///
+/// Reasons make a wrong guess obviously wrong instead of mysteriously wrong,
+/// which is the difference between a teacher correcting it and a teacher
+/// wondering what the app thinks it is reading. With nothing to show — a
+/// document that matched no signal at all, which is why the guess was weak —
+/// it just says how to correct it rather than inventing a reason.
+export function detectionHint(evidence: readonly string[]): string {
+  if (evidence.length === 0) return 'Tap any of these to correct me.'
+  const joined = evidence.length === 1 ? evidence[0] : `${evidence[0]} and ${evidence[1]}`
+  return `${joined.charAt(0).toUpperCase()}${joined.slice(1)}. Tap any to correct me.`
+}
+
 export function confirmQuestion(docType: DocType): string {
   return `Looks like ${article(DOC_TYPE_IN_A_SENTENCE[docType])} — right?`
 }

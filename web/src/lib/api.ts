@@ -2050,6 +2050,8 @@ export type Review = {
   id: string
   docType: string
   docTypeLabel: string
+  /// What in the document points at this type, strongest first, at most two.
+  detectionEvidence: string[]
   /// What detection guessed, kept even after the teacher corrects it.
   detectedType: string | null
   docTypeConfirmed: boolean
@@ -2079,7 +2081,7 @@ export type Review = {
   limits: string
 }
 
-export type Detection = { docType: string; confident: boolean }
+export type Detection = { docType: string; confident: boolean; evidence: string[] }
 
 export type ExtractedDocument = Detection & {
   text: string
