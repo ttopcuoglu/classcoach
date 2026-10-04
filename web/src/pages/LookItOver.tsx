@@ -5,7 +5,7 @@ import SectionLabel from '../components/SectionLabel'
 import { WorkingRing } from '../components/ProgressRing'
 import { setHandoff } from '../lib/handoff'
 import { useHandoff } from '../hooks/useHandoff'
-import { BookIcon } from '../components/icons'
+import { BookIcon, ClipboardIcon } from '../components/icons'
 import {
   createReview,
   extractReviewDocument,
@@ -115,6 +115,19 @@ export default function LookItOver() {
     setError(null)
   }
 
+  /// "added just now", then minutes, then hours — a document being reviewed
+  /// was almost always uploaded in this sitting, so the useful precision is
+  /// all at the near end.
+  function addedAgo(createdAt: string): string {
+    const ms = Date.now() - new Date(createdAt).getTime()
+    const minutes = Math.floor(ms / 60000)
+    if (!Number.isFinite(minutes) || minutes < 2) return 'added just now'
+    if (minutes < 60) return `added ${minutes} minutes ago`
+    const hours = Math.round(minutes / 60)
+    if (hours < 24) return `added ${hours} ${hours === 1 ? 'hour' : 'hours'} ago`
+    return `added ${new Date(createdAt).toLocaleDateString()}`
+  }
+
   /// How the document arrived. Worth saying for a photo in particular: it has
   /// been through OCR and may be missing content the paper copy has.
   const SOURCE_KIND_LABELS: Record<string, string> = {
@@ -123,11 +136,14 @@ export default function LookItOver() {
     photo: 'photographed',
   }
 
-  /// The one line under the file name: what came in, and how.
+  /// The one line under the file name: how big it is, how it arrived, and
+  /// when. No item count — nothing counts the questions in a document, and a
+  /// number nobody computed is worse than one nobody shows.
   function documentMeta(r: Review): string {
     const parts: string[] = []
     if (r.pageCount) parts.push(`${r.pageCount} ${r.pageCount === 1 ? 'page' : 'pages'}`)
     parts.push(SOURCE_KIND_LABELS[r.sourceKind] ?? 'added')
+    parts.push(addedAgo(r.createdAt))
     return parts.join(' · ')
   }
 
@@ -209,7 +225,7 @@ export default function LookItOver() {
       <div className="flex flex-col gap-1">
         <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Review</p>
         <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
-          Look It Over<span className="text-gold">.</span>
+          Look It Over<span className="text-terracotta">.</span>
         </h1>
         <p className="max-w-2xl text-ink-soft">
           A second pair of eyes on anything before students see it — a plan, a quiz, an assignment, a deck, a
@@ -345,9 +361,17 @@ export default function LookItOver() {
                 file — a teacher who dropped the wrong thing should not have to
                 guess that starting over is possible. */}
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-hairline bg-cream px-4 py-3.5">
-              <div className="min-w-0">
-                <p className="truncate font-semibold text-ink">{review.fileName ?? 'Pasted text'}</p>
-                <p className="text-xs text-ink-soft">{documentMeta(review)}</p>
+              <div className="flex min-w-0 items-center gap-3.5">
+                <span
+                  aria-hidden="true"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-mint-tint/60 text-forest"
+                >
+                  <ClipboardIcon className="h-5 w-5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate font-semibold text-ink">{review.fileName ?? 'Pasted text'}</span>
+                  <span className="block text-xs text-ink-soft">{documentMeta(review)}</span>
+                </span>
               </div>
               <button
                 type="button"
@@ -417,7 +441,7 @@ export default function LookItOver() {
 
             {/* The room it is for, which is what timing and grade-level
                 judgments stand on. */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-peach-tint/40 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-hairline/50 px-4 py-3.5">
               <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Your class</span>
               <ClassContextLine compact onChange={setPrep} />
             </div>

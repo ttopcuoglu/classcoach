@@ -21,7 +21,7 @@ export const DOC_TYPES = [
 export type DocType = (typeof DOC_TYPES)[number]
 
 export const DOC_TYPE_LABELS: Record<DocType, string> = {
-  quiz: 'Quiz or exam',
+  quiz: 'Quiz / exam',
   homework: 'Homework',
   assignment: 'Assignment',
   project: 'Project',
@@ -33,8 +33,21 @@ export const DOC_TYPE_LABELS: Record<DocType, string> = {
 /// What the confirmation strip says. A question, with the chips beside it to
 /// correct the answer — never "What is this?", which is the interrogation the
 /// surface exists to avoid.
+/// What the question calls each type. Shorter than the chip's own label,
+/// because "Looks like a quiz / exam — right?" reads as a form field and
+/// "Looks like a quiz — right?" reads as someone asking.
+const DOC_TYPE_IN_A_SENTENCE: Record<DocType, string> = {
+  quiz: 'quiz',
+  homework: 'homework assignment',
+  assignment: 'assignment',
+  project: 'project',
+  lesson_plan: 'lesson plan',
+  presentation: 'presentation',
+  message: 'message',
+}
+
 export function confirmQuestion(docType: DocType): string {
-  return `Looks like ${article(DOC_TYPE_LABELS[docType])} — right?`
+  return `Looks like ${article(DOC_TYPE_IN_A_SENTENCE[docType])} — right?`
 }
 
 function article(label: string): string {

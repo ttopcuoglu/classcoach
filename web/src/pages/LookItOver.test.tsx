@@ -161,11 +161,11 @@ test('the type is confirmed as a question, not asked as one', async () => {
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
 
-  await waitFor(() => expect(screen.getByText('Looks like a quiz or exam — right?')).toBeTruthy())
+  await waitFor(() => expect(screen.getByText('Looks like a quiz — right?')).toBeTruthy())
   // The guess is shown as already chosen. Correcting it is one tap on any
   // other chip, so there is no Yes / "no, it's something else" step standing
   // in front of them.
-  expect(screen.getByRole('button', { name: 'Quiz or exam' }).getAttribute('aria-pressed')).toBe('true')
+  expect(screen.getByRole('button', { name: 'Quiz / exam' }).getAttribute('aria-pressed')).toBe('true')
   expect(screen.queryByRole('button', { name: 'Yes' })).toBeNull()
   expect(screen.queryByRole('button', { name: "No — it's something else" })).toBeNull()
 })
@@ -182,7 +182,7 @@ test('correcting the type is one tap away, and offers all seven', async () => {
   await waitFor(() => expect(screen.getByRole('button', { name: 'Lesson plan' })).toBeTruthy())
 
   for (const label of [
-    'Quiz or exam',
+    'Quiz / exam',
     'Homework',
     'Assignment',
     'Project',
@@ -508,7 +508,7 @@ async function reachSetup() {
 // halves of the same setup. Each block says what it is.
 test('every block of the setup says what it is', async () => {
   await reachSetup()
-  for (const heading of ['Looks like a quiz or exam — right?', "What I'll look at", 'Your class']) {
+  for (const heading of ['Looks like a quiz — right?', "What I'll look at", 'Your class']) {
     expect(screen.getByText(heading), heading).toBeTruthy()
   }
 })
@@ -520,6 +520,10 @@ test('the document is named, with how it arrived', async () => {
   // A photo says so: it has been through OCR and may be missing content the
   // paper copy has.
   expect(screen.getByText(/photographed/)).toBeTruthy()
+  expect(screen.getByText(/added just now/)).toBeTruthy()
+  // No item count: nothing counts the questions in a document, and a number
+  // nobody computed is worse than one nobody shows.
+  expect(screen.queryByText(/\d+ items/)).toBeNull()
 })
 
 // A teacher who dropped the wrong file should not have to guess that starting

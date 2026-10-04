@@ -144,11 +144,14 @@ export default function ClassContextLine({
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
         {!compact && <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Your class</span>}
-        <span className="font-medium text-ink">{current.line}</span>
+        <span className="flex-1 font-medium text-ink">{current.line}</span>
+        {/* A button rather than an underlined link: this sits inside a tinted
+            strip on three surfaces now, and a text link in a filled box reads
+            as part of the sentence rather than as the way to change it. */}
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="text-xs font-semibold text-terracotta-600 underline decoration-hairline underline-offset-4 hover:text-terracotta"
+          className="shrink-0 rounded-full border border-hairline bg-cream-card px-4 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-terracotta/50 hover:text-terracotta-600"
         >
           Change
         </button>
