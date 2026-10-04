@@ -11,6 +11,7 @@ import {
   NoTextFoundError,
   UnsupportedFileError,
 } from '../lib/documentText.ts'
+import { detectSections, estimateMinutes, isLongDocument, sliceSection } from '../lib/documentSections.ts'
 import { findStudentNames, stripStudentNames } from '../lib/studentNames.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
@@ -454,7 +455,12 @@ function parseJsonArray(text: string, tag: string): unknown[] {
   }
 }
 
-function buildRunPrompt(docType: DocType, lensKeys: string[], classLine: string | null): string {
+function buildRunPrompt(
+  docType: DocType,
+  lensKeys: string[],
+  classLine: string | null,
+  sectionLabel: string | null,
+): string {
   const lensBlocks = lensKeys
     .map(
       (key, i) =>
@@ -466,6 +472,7 @@ function buildRunPrompt(docType: DocType, lensKeys: string[], classLine: string 
 
 This document is a ${DOC_TYPE_LABELS[docType].toLowerCase()}.${classLine ? `\nIt is for this class: ${classLine}. Judge grade-level fit and timing against that room.` : '\nThe teacher has not said which class this is for, so do not assume a grade level — say what you cannot tell.'}
 
+${sectionLabel ? `\nYou are reading one part of a longer document: ${sectionLabel}. Judge only what is in front of you, and do not infer what the rest contains. Where something looks missing, say it may be elsewhere in the document rather than that it is absent.\n` : ''}
 Respond with exactly these sections and nothing outside them.
 
 <one_thing>
@@ -545,10 +552,43 @@ reviewsRouter.post('/:id/run', async (req, res) => {
     })
     return
   }
-  const textForModel =
+  const guardedText =
     names && namesHandled === 'strip' ? stripStudentNames(existing.originalText) : existing.originalText
 
   const docType = isDocType(existing.docType) ? existing.docType : 'assignment'
+
+  // Scope, asked once. A single pass over fifty pages produces mush, so a
+  // long document is not refused and not silently truncated — the teacher is
+  // asked which part, and told how long it will take either way.
+  //
+  // Only asked when there is something to choose: a long document with no
+  // headings has no parts, and offering arbitrary slices of someone's own
+  // document is worse than reviewing the whole thing.
+  const scopeChoice = typeof req.body?.scope === 'string' ? req.body.scope : null
+  const sections = isLongDocument(existing.originalText, existing.pageCount, docType)
+    ? detectSections(existing.originalText, docType)
+    : []
+  if (sections.length > 0 && scopeChoice == null) {
+    const pageish = existing.pageCount ?? Math.ceil(existing.originalText.length / 1800)
+    res.status(409).json({
+      error: `This is ${pageish} pages. Want the whole thing, or a part?`,
+      scope: {
+        pages: pageish,
+        whole: { label: 'Whole document', minutes: estimateMinutes(existing.originalText.length) },
+        sections: sections.map((section) => ({
+          label: section.label,
+          minutes: estimateMinutes(section.end - section.start),
+        })),
+      },
+    })
+    return
+  }
+  const chosenSection = sections.find((section) => section.label === scopeChoice) ?? null
+
+  // What the model actually reads: the guarded text, narrowed to the chosen
+  // part. Both narrowings happen before the call, never after.
+  const textForModel = chosenSection ? sliceSection(guardedText, chosenSection) : guardedText
+
   const lenses = parseLenses(existing.lenses, docType)
   const onKeys = lenses.filter((l) => l.on).map((l) => l.key)
   if (onKeys.length === 0) {
@@ -574,7 +614,7 @@ reviewsRouter.post('/:id/run', async (req, res) => {
       // extended thinking out of the same budget, and a dense document spent
       // all of it thinking and returned no text at all.
       thinking: { type: 'disabled' },
-      system: buildRunPrompt(docType, onKeys, prep ? describeClassContext(prep) : null),
+      system: buildRunPrompt(docType, onKeys, prep ? describeClassContext(prep) : null, chosenSection?.label ?? null),
       // The stripped text when the teacher asked for that — the whole point
       // of the gate above is that this is what leaves the building.
       messages: [{ role: 'user', content: textForModel }],
@@ -657,6 +697,8 @@ reviewsRouter.post('/:id/run', async (req, res) => {
       where: { id: existing.id },
       data: {
         lenses: withFindings,
+        scopeMode: chosenSection ? 'section' : sections.length > 0 ? 'whole' : null,
+        scopeLabel: chosenSection?.label ?? null,
         oneThing,
         oneThingDetail,
         assumptions: parseJsonArray(text, 'assumptions') as Prisma.InputJsonValue,

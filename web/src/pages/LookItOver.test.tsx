@@ -663,7 +663,7 @@ test('stripping re-runs with the answer, and the question goes away', async () =
 
   fireEvent.click(screen.getByRole('button', { name: 'Strip names' }))
 
-  await waitFor(() => expect(runReview).toHaveBeenCalledWith('r1', 'strip'))
+  await waitFor(() => expect(runReview).toHaveBeenCalledWith('r1', expect.objectContaining({ namesHandled: 'strip' })))
   await waitFor(() => expect(screen.queryByText('This looks like it has student names in it.')).toBeNull())
 })
 
@@ -682,7 +682,7 @@ test('using it as is is offered, and says so to the server', async () => {
 
   fireEvent.click(screen.getByRole('button', { name: 'Use it as is' }))
 
-  await waitFor(() => expect(runReview).toHaveBeenCalledWith('r1', 'keep'))
+  await waitFor(() => expect(runReview).toHaveBeenCalledWith('r1', expect.objectContaining({ namesHandled: 'keep' })))
 })
 
 // --- the result contract ---
@@ -736,4 +736,78 @@ test('every control on the result is a named button', async () => {
     (b) => !(b.textContent?.trim() || b.getAttribute('aria-label')),
   )
   expect(unnamed).toEqual([])
+})
+
+// --- scoping a long document ---
+
+function scopeRefusal() {
+  return Object.assign(new Error('This is 48 pages. Want the whole thing, or a part?'), {
+    status: 409,
+    details: {
+      scope: {
+        pages: 48,
+        whole: { label: 'Whole document', minutes: [3, 6] },
+        sections: [
+          { label: 'Unit 3 (p. 12–20)', minutes: [1, 2] },
+          { label: 'Assessment (p. 41–48)', minutes: [1, 2] },
+        ],
+      },
+    },
+  })
+}
+
+async function reachScopeQuestion() {
+  createReview.mockResolvedValue(review())
+  runReview.mockRejectedValueOnce(scopeRefusal())
+  renderPage()
+  await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
+  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText("What I'll look at")).toBeTruthy())
+  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
+  await waitFor(() => expect(screen.getByText(/This is 48 pages/)).toBeTruthy())
+}
+
+// Long documents are accepted. What changes is how much gets reviewed at once
+// — so this is a question, never a refusal and never a silent truncation.
+test('a long document asks which part, rather than refusing it', async () => {
+  await reachScopeQuestion()
+  expect(screen.getByRole('button', { name: /Whole document/ })).toBeTruthy()
+  expect(screen.getByRole('button', { name: /Unit 3/ })).toBeTruthy()
+  expect(screen.getByRole('button', { name: /Assessment/ })).toBeTruthy()
+})
+
+// Said before it starts, because that is what a teacher needs in order to
+// decide whether to wait.
+test('each choice says how long it will take, as a range', async () => {
+  await reachScopeQuestion()
+  expect(screen.getByRole('button', { name: /Whole document · 3–6 min/ })).toBeTruthy()
+  expect(screen.getByRole('button', { name: /Unit 3 \(p\. 12–20\) · 1–2 min/ })).toBeTruthy()
+})
+
+test('choosing a part runs that part', async () => {
+  await reachScopeQuestion()
+  runReview.mockResolvedValueOnce(review({ status: 'reviewed' }))
+
+  fireEvent.click(screen.getByRole('button', { name: /Unit 3/ }))
+
+  await waitFor(() =>
+    expect(runReview).toHaveBeenLastCalledWith('r1', expect.objectContaining({ scope: 'Unit 3 (p. 12–20)' })),
+  )
+  await waitFor(() => expect(screen.queryByText(/This is 48 pages/)).toBeNull())
+})
+
+// Asked once. A teacher re-running after toggling a lens should not be asked
+// to re-pick the part they already chose.
+test('the choice sticks for later runs of the same review', async () => {
+  await reachScopeQuestion()
+  runReview.mockResolvedValue(review({ status: 'reviewed' }))
+  fireEvent.click(screen.getByRole('button', { name: /Unit 3/ }))
+  await waitFor(() => expect(screen.queryByText(/This is 48 pages/)).toBeNull())
+
+  fireEvent.click(screen.getAllByRole('button', { name: /Look again|Look it over/ })[0])
+
+  await waitFor(() =>
+    expect(runReview).toHaveBeenLastCalledWith('r1', expect.objectContaining({ scope: 'Unit 3 (p. 12–20)' })),
+  )
 })

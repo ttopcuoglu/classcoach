@@ -17,6 +17,7 @@ import {
   type ClassContext,
   type ApiError,
   type Assumption,
+  type ScopeChoice,
   type StudentNamesFound,
   type Review,
   type ReviewEdit,
@@ -192,21 +193,35 @@ export default function LookItOver() {
   /// a teacher arrives with is "what do I change", not "what did you think".
   const [activeTab, setActiveTab] = useState<string>('edits')
 
-  async function handleRun(namesHandled?: 'strip' | 'keep') {
+  /// Set when the document is long enough that the teacher has to say how
+  /// much of it to read.
+  const [scopeChoice, setScopeChoice] = useState<ScopeChoice | null>(null)
+  /// What they chose, carried into every later run of this review so the
+  /// question is asked once rather than on each attempt.
+  const [scope, setScope] = useState<string | null>(null)
+
+  async function handleRun(opts?: { namesHandled?: 'strip' | 'keep'; scope?: string }) {
     if (!review) return
     setBusy('reviewing')
     setError(null)
     try {
-      setReview(await runReview(review.id, namesHandled))
+      const chosenScope = opts?.scope ?? scope ?? undefined
+      setReview(await runReview(review.id, { namesHandled: opts?.namesHandled, scope: chosenScope }))
+      if (opts?.scope) setScope(opts.scope)
       setNamesFound(null)
+      setScopeChoice(null)
     } catch (err) {
       // 409 is not a failure — it is the server declining to send a roster to
       // the model until the teacher has answered. Shown as the question it
       // is, not as an error.
       const apiErr = err as ApiError
-      const found = (apiErr.details as { studentNames?: StudentNamesFound } | null)?.studentNames
-      if (apiErr.status === 409 && found) {
-        setNamesFound(found)
+      const details = apiErr.details as
+        | { studentNames?: StudentNamesFound; scope?: ScopeChoice }
+        | null
+      if (apiErr.status === 409 && details?.studentNames) {
+        setNamesFound(details.studentNames)
+      } else if (apiErr.status === 409 && details?.scope) {
+        setScopeChoice(details.scope)
       } else {
         setError(apiErr.message)
       }
@@ -528,6 +543,42 @@ export default function LookItOver() {
               <ClassContextLine compact onChange={setPrep} />
             </div>
 
+            {/* Asked once, and only when there is something to choose. The
+                minutes are said before it starts rather than after, because
+                "this will take a few minutes" is the thing a teacher needs in
+                order to decide whether to wait. */}
+            {scopeChoice && (
+              <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-4">
+                <p className="font-heading text-base font-bold text-forest">
+                  This is {scopeChoice.pages} pages. Want the whole thing, or a part?
+                </p>
+                <p className="mt-1 text-sm text-ink">
+                  One pass over all of it reads everything and says less about each part.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={busy != null}
+                    onClick={() => void handleRun({ scope: scopeChoice.whole.label })}
+                    className="rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-60"
+                  >
+                    {scopeChoice.whole.label} · {minutesLabel(scopeChoice.whole.minutes)}
+                  </button>
+                  {scopeChoice.sections.map((section) => (
+                    <button
+                      key={section.label}
+                      type="button"
+                      disabled={busy != null}
+                      onClick={() => void handleRun({ scope: section.label })}
+                      className="rounded-full border border-hairline bg-cream-card px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-terracotta/50 hover:text-terracotta-600 disabled:opacity-60"
+                    >
+                      {section.label} · {minutesLabel(section.minutes)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* The guard, as a question rather than a failure. The server
                 refused to run; this is what it refused over, and the teacher
                 decides. Strip is first and is what the quiet default would be
@@ -545,7 +596,7 @@ export default function LookItOver() {
                   <button
                     type="button"
                     disabled={busy != null}
-                    onClick={() => void handleRun('strip')}
+                    onClick={() => void handleRun({ namesHandled: 'strip' })}
                     className="rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-60"
                   >
                     Strip names
@@ -553,7 +604,7 @@ export default function LookItOver() {
                   <button
                     type="button"
                     disabled={busy != null}
-                    onClick={() => void handleRun('keep')}
+                    onClick={() => void handleRun({ namesHandled: 'keep' })}
                     className="rounded-full border border-hairline bg-cream-card px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-terracotta/50 hover:text-terracotta-600 disabled:opacity-60"
                   >
                     Use it as is
@@ -887,4 +938,10 @@ function EditCard({
       </div>
     </div>
   )
+}
+
+/// "about 2 min" / "2–4 min". Always a range or an explicit "about", never a
+/// bare number — a figure on its own reads as a measurement.
+function minutesLabel([low, high]: [number, number]): string {
+  return low === high ? `about ${low} min` : `${low}–${high} min`
 }

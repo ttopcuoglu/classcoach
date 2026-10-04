@@ -2191,10 +2191,22 @@ export function updateReview(
 /// names in it and the teacher has not said what to do about that.
 export type StudentNamesFound = { reason: string; lineCount: number }
 
-export function runReview(id: string, namesHandled?: 'strip' | 'keep'): Promise<Review> {
+/// What the server answers with when the document is long enough that one
+/// pass would be a summary rather than a review. Minutes are a range, said
+/// before it starts rather than after.
+export type ScopeChoice = {
+  pages: number
+  whole: { label: string; minutes: [number, number] }
+  sections: { label: string; minutes: [number, number] }[]
+}
+
+export function runReview(
+  id: string,
+  opts?: { namesHandled?: 'strip' | 'keep'; scope?: string },
+): Promise<Review> {
   return request(`/api/reviews/${id}/run`, {
     method: 'POST',
-    body: JSON.stringify({ namesHandled }),
+    body: JSON.stringify({ namesHandled: opts?.namesHandled, scope: opts?.scope }),
   })
 }
 
