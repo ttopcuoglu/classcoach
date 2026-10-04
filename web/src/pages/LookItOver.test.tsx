@@ -1,0 +1,490 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import type { Review } from '../lib/api'
+
+// Look It Over's whole argument is that a teacher does not pick a tool. So
+// the tests that matter are about what happens around the document rather
+// than about the review itself:
+//
+//   * one drop zone takes a file, a paste or a photo;
+//   * the type is CONFIRMED, never asked — and correcting it costs one tap;
+//   * suggested edits are a diff the teacher accepts one at a time, and the
+//     export button can never claim more changes than were accepted;
+//   * the limits are stated on the result, not buried.
+//
+// The last one is the reason the export label is computed server-side and
+// only rendered here: a client that counted edits itself could tell a teacher
+// they were downloading three changes when they had accepted one.
+
+const extractReviewDocument = vi.fn()
+const detectReviewType = vi.fn()
+const createReview = vi.fn()
+const updateReview = vi.fn()
+const runReview = vi.fn()
+const setReviewEditStatus = vi.fn()
+const getReviewDocument = vi.fn()
+const redesignReviewForAi = vi.fn()
+const getClassProfiles = vi.fn()
+
+vi.mock('../lib/api', () => ({
+  extractReviewDocument: (...a: unknown[]) => extractReviewDocument(...a),
+  detectReviewType: (...a: unknown[]) => detectReviewType(...a),
+  createReview: (...a: unknown[]) => createReview(...a),
+  updateReview: (...a: unknown[]) => updateReview(...a),
+  runReview: (...a: unknown[]) => runReview(...a),
+  setReviewEditStatus: (...a: unknown[]) => setReviewEditStatus(...a),
+  getReviewDocument: (...a: unknown[]) => getReviewDocument(...a),
+  redesignReviewForAi: (...a: unknown[]) => redesignReviewForAi(...a),
+  getClassProfiles: () => getClassProfiles(),
+  createClassProfile: vi.fn(),
+  updateClassProfile: vi.fn(),
+}))
+
+const { default: LookItOver } = await import('./LookItOver')
+
+const LIMITS =
+  'This read the document only. It has not met your students, it does not know how last week went, and it cannot hear what you will say out loud while you run it.'
+
+function review(over: Partial<Review> & { detectionConfident?: boolean } = {}): Review & {
+  detectionConfident: boolean
+} {
+  return {
+    id: 'r1',
+    docType: 'quiz',
+    docTypeLabel: 'Quiz or exam',
+    detectedType: 'quiz',
+    docTypeConfirmed: false,
+    sourceKind: 'file',
+    fileName: 'unit-4-quiz.docx',
+    pageCount: null,
+    originalText: 'Students will discuss the reading.',
+    focusArea: null,
+    classProfileId: null,
+    lenses: [
+      { key: 'item_purpose', label: 'What each item measures', blurb: 'Item by item.', on: true, finding: null },
+      { key: 'reading_load', label: 'Reading load', blurb: 'How much reading.', on: true, finding: null },
+      { key: 'ai_risk', label: 'AI-completion risk', blurb: 'What a chatbot could do.', on: false, finding: null },
+    ],
+    oneThing: null,
+    edits: [],
+    unanchoredEditIds: [],
+    acceptedCount: 0,
+    exportLabel: 'Export my original',
+    timingBasis: null,
+    status: 'draft',
+    saved: false,
+    createdAt: new Date().toISOString(),
+    limits: LIMITS,
+    detectionConfident: true,
+    ...over,
+  }
+}
+
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <LookItOver />
+    </MemoryRouter>,
+  )
+}
+
+beforeEach(() => {
+  extractReviewDocument.mockReset()
+  detectReviewType.mockReset()
+  createReview.mockReset()
+  updateReview.mockReset()
+  runReview.mockReset()
+  setReviewEditStatus.mockReset()
+  getReviewDocument.mockReset()
+  redesignReviewForAi.mockReset()
+  getClassProfiles.mockResolvedValue([])
+})
+
+afterEach(() => {
+  cleanup()
+  sessionStorage.clear()
+})
+
+// --- one way in ---
+
+test('one drop zone offers a file, a photo and a paste', async () => {
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Drop it here')).toBeTruthy())
+  expect(screen.getByRole('button', { name: 'Choose a file' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Take a photo' })).toBeTruthy()
+  expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy()
+})
+
+// A paper quiz photographed on a phone is a first-class way in, not a
+// workaround, so the camera is its own button with a rear-camera hint.
+test('the photo input asks for the rear camera', async () => {
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Drop it here')).toBeTruthy())
+  const camera = document.querySelector('input[capture]')
+  expect(camera).toBeTruthy()
+  expect(camera?.getAttribute('capture')).toBe('environment')
+  expect(camera?.getAttribute('accept')).toBe('image/*')
+})
+
+test('pasting text starts a review without a file', async () => {
+  detectReviewType.mockResolvedValue({ docType: 'message', confident: true })
+  createReview.mockResolvedValue(review({ docType: 'message', docTypeLabel: 'Message' }))
+  renderPage()
+  await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
+
+  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), {
+    target: { value: 'Dear Mrs Alvarez, thank you for reaching out.' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+
+  await waitFor(() => expect(createReview).toHaveBeenCalled())
+  expect(createReview.mock.calls[0][0].sourceKind).toBe('paste')
+})
+
+test('an empty paste cannot be submitted', async () => {
+  renderPage()
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Look it over' })).toBeTruthy())
+  expect(screen.getByRole('button', { name: 'Look it over' })).toHaveProperty('disabled', true)
+})
+
+// --- confirm, never interrogate ---
+
+test('the type is confirmed as a question, not asked as one', async () => {
+  detectReviewType.mockResolvedValue({ docType: 'quiz', confident: true })
+  createReview.mockResolvedValue(review())
+  renderPage()
+  await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
+  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+
+  await waitFor(() => expect(screen.getByText('Looks like a quiz or exam — right?')).toBeTruthy())
+  expect(screen.getByRole('button', { name: 'Yes' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: "No — it's something else" })).toBeTruthy()
+  // A confident guess does not unfold every chip.
+  expect(screen.queryByRole('button', { name: 'Lesson plan' })).toBeNull()
+})
+
+// Being wrong has to cost one tap.
+test('correcting the type is one tap away, and offers all seven', async () => {
+  detectReviewType.mockResolvedValue({ docType: 'quiz', confident: true })
+  createReview.mockResolvedValue(review())
+  updateReview.mockResolvedValue(review({ docType: 'lesson_plan', docTypeLabel: 'Lesson plan' }))
+  renderPage()
+  await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
+  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: "No — it's something else" })).toBeTruthy())
+
+  fireEvent.click(screen.getByRole('button', { name: "No — it's something else" }))
+
+  for (const label of [
+    'Quiz or exam',
+    'Homework',
+    'Assignment',
+    'Project',
+    'Lesson plan',
+    'Presentation',
+    'Message',
+  ]) {
+    expect(screen.getByRole('button', { name: label }), label).toBeTruthy()
+  }
+
+  fireEvent.click(screen.getByRole('button', { name: 'Lesson plan' }))
+  await waitFor(() => expect(updateReview).toHaveBeenCalledWith('r1', { docType: 'lesson_plan' }))
+})
+
+// A weak guess still asks the same question — it just arrives with the
+// alternatives already visible.
+test('an unconfident guess opens with the chips already showing', async () => {
+  detectReviewType.mockResolvedValue({ docType: 'assignment', confident: false })
+  createReview.mockResolvedValue(
+    review({ docType: 'assignment', docTypeLabel: 'Assignment', detectionConfident: false }),
+  )
+  renderPage()
+  await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
+  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+
+  await waitFor(() => expect(screen.getByText('Looks like an assignment — right?')).toBeTruthy())
+  expect(screen.getByRole('button', { name: 'Lesson plan' })).toBeTruthy()
+})
+
+// --- lenses ---
+
+test('lenses are individually toggleable with a visible count', async () => {
+  detectReviewType.mockResolvedValue({ docType: 'quiz', confident: true })
+  createReview.mockResolvedValue(review())
+  renderPage()
+  await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
+  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+
+  await waitFor(() => expect(screen.getByText('2 of 3 on')).toBeTruthy())
+  expect(screen.getByRole('button', { name: /What each item measures/ }).getAttribute('aria-pressed')).toBe('true')
+  // A quiz opens with AI-completion risk off — it is sat in the room.
+  expect(screen.getByRole('button', { name: /AI-completion risk/ }).getAttribute('aria-pressed')).toBe('false')
+})
+
+test('toggling a lens updates the count immediately', async () => {
+  detectReviewType.mockResolvedValue({ docType: 'quiz', confident: true })
+  createReview.mockResolvedValue(review())
+  updateReview.mockImplementation((_id, data) =>
+    Promise.resolve(review({ lenses: review().lenses.map((l) => ({ ...l, on: data.lenses.find((d: { key: string; on: boolean }) => d.key === l.key)?.on ?? l.on })) })),
+  )
+  renderPage()
+  await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
+  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText('2 of 3 on')).toBeTruthy())
+
+  fireEvent.click(screen.getByRole('button', { name: /AI-completion risk/ }))
+  await waitFor(() => expect(screen.getByText('3 of 3 on')).toBeTruthy())
+})
+
+// --- the result page ---
+
+const REVIEWED = review({
+  status: 'reviewed',
+  docTypeConfirmed: true,
+  oneThing: 'Split question 4 — it is measuring reading, not the content.',
+  lenses: [
+    {
+      key: 'item_purpose',
+      label: 'What each item measures',
+      blurb: 'Item by item.',
+      on: true,
+      finding: 'Items 1-3 are recall. Item 4 is really a reading test.',
+    },
+    { key: 'ai_risk', label: 'AI-completion risk', blurb: 'What a chatbot could do.', on: false, finding: null },
+  ],
+  edits: [
+    {
+      id: 'e1',
+      anchor: 'Students will discuss the reading.',
+      original: 'Students will discuss the reading.',
+      revision: 'In pairs, each student names one claim the author makes.',
+      why: 'Names what students produce, so you can tell who is thinking.',
+      lens: 'item_purpose',
+      status: 'pending',
+    },
+  ],
+  timingBasis: { minutes: [20, 30], assumption: 'Two minutes per short-answer item.' },
+})
+
+async function openReviewed() {
+  detectReviewType.mockResolvedValue({ docType: 'quiz', confident: true })
+  createReview.mockResolvedValue(review())
+  runReview.mockResolvedValue(REVIEWED)
+  renderPage()
+  await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
+  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText('2 of 3 on')).toBeTruthy())
+  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
+  await waitFor(() => expect(screen.getByText('If you change one thing')).toBeTruthy())
+}
+
+test('the result leads with the one-thing card, above the lens findings', async () => {
+  await openReviewed()
+  const all = Array.from(document.querySelectorAll('*'))
+  const oneThing = all.indexOf(screen.getByText('If you change one thing'))
+  // The lens label appears twice — on its toggle and as the finding's heading
+  // — so the finding's own body is the unambiguous anchor for the order.
+  const finding = all.indexOf(screen.getByText('Items 1-3 are recall. Item 4 is really a reading test.'))
+  expect(oneThing).toBeLessThan(finding)
+  expect(screen.getByText('Split question 4 — it is measuring reading, not the content.')).toBeTruthy()
+})
+
+test('only lenses that are on and produced something get a finding section', async () => {
+  await openReviewed()
+  expect(screen.getByText('Items 1-3 are recall. Item 4 is really a reading test.')).toBeTruthy()
+  // AI risk stays in the toggle list — a teacher has to be able to turn it on
+  // — but it was off when this ran, so it contributes no finding section.
+  // Exactly one lens heading is rendered as a result section.
+  const headings = Array.from(document.querySelectorAll('p.font-heading')).map((n) => n.textContent)
+  expect(headings.filter((h) => h === 'What each item measures')).toHaveLength(1)
+  expect(headings.filter((h) => h === 'AI-completion risk')).toHaveLength(0)
+})
+
+// "Any timing estimate must show its assumption or a range."
+test('a timing estimate shows a range and its assumption', async () => {
+  await openReviewed()
+  expect(screen.getByText(/20–30 minutes/)).toBeTruthy()
+  expect(screen.getByText('Assuming: Two minutes per short-answer item.')).toBeTruthy()
+})
+
+// The limits are part of the result, not a footnote somewhere else.
+test('the stated limits are on the result page', async () => {
+  await openReviewed()
+  expect(screen.getByText(LIMITS)).toBeTruthy()
+})
+
+// --- the diff ---
+
+test('an edit shows the original struck through, the revision, and why', async () => {
+  await openReviewed()
+  const original = screen.getByText('Students will discuss the reading.')
+  expect(original.className).toContain('line-through')
+  expect(screen.getByText('In pairs, each student names one claim the author makes.')).toBeTruthy()
+  expect(screen.getByText('Names what students produce, so you can tell who is thinking.')).toBeTruthy()
+})
+
+test('each edit has its own Keep mine and Use this', async () => {
+  await openReviewed()
+  expect(screen.getByRole('button', { name: 'Use this' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Keep mine' })).toBeTruthy()
+})
+
+// The export label is the one place a teacher learns whether they are about
+// to download their own document or an edited one.
+test('the export button reads "my original" until an edit is accepted', async () => {
+  await openReviewed()
+  expect(screen.getByRole('button', { name: 'Export my original' })).toBeTruthy()
+})
+
+test('accepting an edit changes the export label to count it', async () => {
+  await openReviewed()
+  setReviewEditStatus.mockResolvedValue({
+    ...REVIEWED,
+    edits: [{ ...REVIEWED.edits[0], status: 'accepted' }],
+    acceptedCount: 1,
+    exportLabel: 'Export with 1 change',
+  })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Use this' }))
+
+  await waitFor(() => expect(setReviewEditStatus).toHaveBeenCalledWith('r1', 'e1', 'accepted'))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Export with 1 change' })).toBeTruthy())
+})
+
+test('keeping yours leaves the label as the original', async () => {
+  await openReviewed()
+  setReviewEditStatus.mockResolvedValue({
+    ...REVIEWED,
+    edits: [{ ...REVIEWED.edits[0], status: 'kept_mine' }],
+    acceptedCount: 0,
+    exportLabel: 'Export my original',
+  })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Keep mine' }))
+
+  await waitFor(() => expect(setReviewEditStatus).toHaveBeenCalledWith('r1', 'e1', 'kept_mine'))
+  expect(screen.getByRole('button', { name: 'Export my original' })).toBeTruthy()
+})
+
+// A teacher must be able to take an acceptance back.
+test('an accepted edit can be un-accepted', async () => {
+  await openReviewed()
+  setReviewEditStatus.mockResolvedValue({
+    ...REVIEWED,
+    edits: [{ ...REVIEWED.edits[0], status: 'accepted' }],
+    acceptedCount: 1,
+    exportLabel: 'Export with 1 change',
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Use this' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Export with 1 change' })).toBeTruthy())
+
+  setReviewEditStatus.mockResolvedValue(REVIEWED)
+  fireEvent.click(screen.getByRole('button', { name: 'Use this' }))
+  await waitFor(() => expect(setReviewEditStatus).toHaveBeenLastCalledWith('r1', 'e1', 'pending'))
+})
+
+// --- redesign for AI use ---
+
+// An action from the result, not a tool of its own.
+test('a quiz result offers redesigning for AI use', async () => {
+  await openReviewed()
+  expect(screen.getByRole('button', { name: 'Redesign for meaningful AI use' })).toBeTruthy()
+})
+
+test('redesigning hands off pre-seeded, rather than starting from nothing', async () => {
+  await openReviewed()
+  redesignReviewForAi.mockResolvedValue({ assignmentCoachSessionId: 'acs1' })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Redesign for meaningful AI use' }))
+
+  await waitFor(() => expect(redesignReviewForAi).toHaveBeenCalledWith('r1'))
+})
+
+// A lesson plan or a parent message has no student work for a chatbot to do.
+test('a message result does not offer redesigning for AI use', async () => {
+  detectReviewType.mockResolvedValue({ docType: 'message', confident: true })
+  createReview.mockResolvedValue(review({ docType: 'message', docTypeLabel: 'Message' }))
+  runReview.mockResolvedValue(
+    review({
+      docType: 'message',
+      docTypeLabel: 'Message',
+      status: 'reviewed',
+      oneThing: 'Lead with what you have seen rather than what you concluded.',
+    }),
+  )
+  renderPage()
+  await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
+  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText('2 of 3 on')).toBeTruthy())
+  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
+
+  await waitFor(() => expect(screen.getByText('If you change one thing')).toBeTruthy())
+  expect(screen.queryByRole('button', { name: 'Redesign for meaningful AI use' })).toBeNull()
+})
+
+// --- failures ---
+
+test('an unreadable file reports why and leaves the drop zone usable', async () => {
+  extractReviewDocument.mockRejectedValue(new Error("Couldn't find any text in that file"))
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Drop it here')).toBeTruthy())
+
+  const input = document.querySelector(`input[accept=".docx,.pdf,.pptx,.xlsx,.xls,.txt,.jpg,.jpeg,.png"]`)
+  fireEvent.change(input!, { target: { files: [new File(['x'], 'scan.pdf')] } })
+
+  await waitFor(() => expect(screen.getByText(/Couldn't find any text/)).toBeTruthy())
+  expect(screen.getByText('Drop it here')).toBeTruthy()
+})
+
+// --- the handoffs ---
+
+// Talk It Through -> Look It Over. Only the intent travels: the document is
+// still on the teacher's machine, so this opens the drop zone knowing why
+// rather than with anything in it.
+test('arriving from a conversation says what it was about', async () => {
+  sessionStorage.setItem(
+    'wivoza.handoff',
+    JSON.stringify({ kind: 'review_document', debriefId: 'd1', about: 'the quiz I wrote for Friday' }),
+  )
+  renderPage()
+
+  await waitFor(() => expect(screen.getByText('From your conversation')).toBeTruthy())
+  expect(screen.getByText('the quiz I wrote for Friday')).toBeTruthy()
+  // Still the drop zone — nothing was carried over to review.
+  expect(screen.getByText('Drop it here')).toBeTruthy()
+})
+
+test('a handoff for another surface is left alone', async () => {
+  sessionStorage.setItem(
+    'wivoza.handoff',
+    JSON.stringify({ kind: 'rehearse', debriefId: 'd1', situation: 'x', topic: null }),
+  )
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Drop it here')).toBeTruthy())
+  expect(screen.queryByText('From your conversation')).toBeNull()
+  // And it is still there for the surface it was meant for.
+  expect(sessionStorage.getItem('wivoza.handoff')).not.toBeNull()
+})
+
+// Look It Over -> Talk It Through. The review is the context; the
+// conversation is about what to do with it.
+test('the result offers talking it through, carrying the one-thing card', async () => {
+  await openReviewed()
+  expect(screen.getByRole('button', { name: 'Talk this through' })).toBeTruthy()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Talk this through' }))
+
+  const stored = JSON.parse(sessionStorage.getItem('wivoza.handoff')!)
+  expect(stored.kind).toBe('review_context')
+  expect(stored.reviewId).toBe('r1')
+  expect(stored.oneThing).toBe('Split question 4 — it is measuring reading, not the content.')
+})

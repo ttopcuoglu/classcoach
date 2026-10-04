@@ -1987,3 +1987,153 @@ export function deleteClassProfile(id: string): Promise<ClassContext[]> {
   return request(`/api/class-profiles/${id}`, { method: 'DELETE' })
 }
 
+// --- Look It Over ---
+
+export type ReviewEdit = {
+  id: string
+  anchor: string
+  original: string
+  revision: string
+  why: string
+  lens: string
+  status: 'pending' | 'accepted' | 'kept_mine'
+}
+
+export type ReviewLens = {
+  key: string
+  label: string
+  blurb: string
+  on: boolean
+  finding?: string | null
+}
+
+export type TimingBasis = { minutes: [number, number]; assumption: string }
+
+export type Review = {
+  id: string
+  docType: string
+  docTypeLabel: string
+  /// What detection guessed, kept even after the teacher corrects it.
+  detectedType: string | null
+  docTypeConfirmed: boolean
+  sourceKind: string
+  fileName: string | null
+  pageCount: number | null
+  originalText: string
+  focusArea: string | null
+  classProfileId: string | null
+  lenses: ReviewLens[]
+  oneThing: string | null
+  edits: ReviewEdit[]
+  /// Edits quoting text that is not in the document. Surfaced rather than
+  /// hidden — the one failure that could attribute an invented sentence to
+  /// the teacher.
+  unanchoredEditIds: string[]
+  acceptedCount: number
+  /// "Export my original" until something is accepted, then
+  /// "Export with N changes". Computed server-side so no client can
+  /// overstate what was accepted.
+  exportLabel: string
+  timingBasis: TimingBasis | null
+  status: string
+  saved: boolean
+  createdAt: string
+  /// The plainly-stated limits, shown in the result footer.
+  limits: string
+}
+
+export type Detection = { docType: string; confident: boolean }
+
+export type ExtractedDocument = Detection & {
+  text: string
+  truncated: boolean
+  fileName: string
+  pageCount: number | null
+}
+
+/// Text and a type guess out of an uploaded file. Nothing is stored yet, so a
+/// file that turns out to be unreadable leaves no empty review behind.
+export async function extractReviewDocument(file: File): Promise<ExtractedDocument> {
+  const body = new FormData()
+  body.append('file', file)
+  const res = await fetch(`${API_BASE_URL}/api/reviews/extract`, {
+    method: 'POST',
+    credentials: 'include',
+    body,
+  })
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null)
+    throw apiError(payload?.error ?? `Request failed with status ${res.status}`, res.status)
+  }
+  return res.json()
+}
+
+/// The same type guess for pasted text, so the confirmation strip reads
+/// identically however the document arrived.
+export function detectReviewType(text: string): Promise<Detection> {
+  return request('/api/reviews/detect', { method: 'POST', body: JSON.stringify({ text }) })
+}
+
+export function createReview(opts: {
+  text: string
+  docType?: string
+  sourceKind?: 'file' | 'paste' | 'photo'
+  fileName?: string | null
+  pageCount?: number | null
+  classProfileId?: string | null
+}): Promise<Review & { detectionConfident: boolean }> {
+  return request('/api/reviews', { method: 'POST', body: JSON.stringify(opts) })
+}
+
+export function getReviews(params?: { saved?: boolean }): Promise<Review[]> {
+  return request(`/api/reviews${params?.saved ? '?saved=true' : ''}`)
+}
+
+export function getReview(id: string): Promise<Review> {
+  return request(`/api/reviews/${id}`)
+}
+
+/// Confirming or correcting the type, toggling lenses, saving. Correcting the
+/// type swaps in that type's own lenses and clears the previous result.
+export function updateReview(
+  id: string,
+  data: { docType?: string; lenses?: { key: string; on: boolean }[]; saved?: boolean },
+): Promise<Review> {
+  return request(`/api/reviews/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+}
+
+export function runReview(id: string): Promise<Review> {
+  return request(`/api/reviews/${id}/run`, { method: 'POST' })
+}
+
+/// "Keep mine" / "Use this" on one edit.
+export function setReviewEditStatus(
+  id: string,
+  editId: string,
+  status: ReviewEdit['status'],
+): Promise<Review> {
+  return request(`/api/reviews/${id}/edits/${editId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  })
+}
+
+/// The document as it stands — the original with accepted edits applied.
+export function getReviewDocument(id: string): Promise<{
+  text: string
+  acceptedCount: number
+  label: string
+}> {
+  return request(`/api/reviews/${id}/document`)
+}
+
+/// Hands off to the existing Assignment Coach redesign workspace, pre-seeded
+/// with this document.
+export function redesignReviewForAi(id: string): Promise<{ assignmentCoachSessionId: string }> {
+  return request(`/api/reviews/${id}/redesign-ai`, { method: 'POST' })
+}
+
+export function deleteReview(id: string): Promise<{ ok: true }> {
+  return request(`/api/reviews/${id}`, { method: 'DELETE' })
+}
+

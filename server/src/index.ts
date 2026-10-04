@@ -18,6 +18,7 @@ import { lessonPlansRouter } from './routes/lessonPlans.ts'
 import { onboardingRouter } from './routes/onboarding.ts'
 import { parentMessageRouter } from './routes/parentMessage.ts'
 import { profileRouter } from './routes/profile.ts'
+import { reviewsRouter } from './routes/reviews.ts'
 import { scenariosRouter } from './routes/scenarios.ts'
 import { shareRouter } from './routes/share.ts'
 import { ttsRouter } from './routes/tts.ts'
@@ -76,6 +77,7 @@ app.use('/api/scenarios', requireAuth, scenariosRouter)
 app.use('/api/attempts', requireAuth, attemptsRouter)
 app.use('/api/profile', requireAuth, profileRouter)
 app.use('/api/class-profiles', requireAuth, classProfilesRouter)
+app.use('/api/reviews', requireAuth, reviewsRouter)
 app.use('/api/debriefs', requireAuth, debriefRouter)
 app.use('/api/follow-ups', requireAuth, followUpsRouter)
 app.use('/api/parent-messages', requireAuth, parentMessageRouter)
