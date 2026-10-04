@@ -56,6 +56,8 @@ export default function LookItOver() {
   const [busy, setBusy] = useState<null | 'reading' | 'reviewing'>(null)
   const [error, setError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
+  // One clock read for the life of the page (see addedAgo).
+  const [openedAt] = useState(() => Date.now())
   /// Open when detection was unsure. A confident guess still shows the
   /// question, just without the chips already unfolded.
   /// Arriving from Talk It Through, where a document came up in conversation.
@@ -118,8 +120,12 @@ export default function LookItOver() {
   /// "added just now", then minutes, then hours — a document being reviewed
   /// was almost always uploaded in this sitting, so the useful precision is
   /// all at the near end.
+  ///
+  /// Measured from one timestamp taken when the page mounted rather than from
+  /// Date.now() at render: a clock read during render makes the label change
+  /// on re-renders that have nothing to do with time passing.
   function addedAgo(createdAt: string): string {
-    const ms = Date.now() - new Date(createdAt).getTime()
+    const ms = openedAt - new Date(createdAt).getTime()
     const minutes = Math.floor(ms / 60000)
     if (!Number.isFinite(minutes) || minutes < 2) return 'added just now'
     if (minutes < 60) return `added ${minutes} minutes ago`
@@ -245,10 +251,16 @@ export default function LookItOver() {
             </div>
           )}
 
-          {/* One drop zone for a file, a paste or a photo. A paper quiz
+          {/* One card, like the state that follows it. The drop zone, the
+              paste box and the class line used to sit loose on the page
+              background, so arriving here looked like a different surface
+              from the one you are on two seconds later.
+
+              One drop zone for a file, a paste or a photo. A paper quiz
               photographed on a phone is a first-class way in, not a
               workaround — which is why the camera has its own button rather
               than hiding behind the file picker. */}
+          <div className="flex flex-col gap-6 rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm sm:p-8">
           <div
             onDragOver={(e) => {
               e.preventDefault()
@@ -261,8 +273,8 @@ export default function LookItOver() {
               const file = e.dataTransfer.files?.[0]
               if (file) void startFromFile(file, 'file')
             }}
-            className={`flex flex-col items-center gap-3 rounded-3xl border-2 border-dashed p-8 text-center transition-colors ${
-              dragging ? 'border-terracotta bg-peach-tint/40' : 'border-hairline bg-cream-card'
+            className={`flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed p-8 text-center transition-colors ${
+              dragging ? 'border-terracotta bg-peach-tint/40' : 'border-hairline bg-cream'
             }`}
           >
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gold-tint text-terracotta-600">
@@ -317,28 +329,42 @@ export default function LookItOver() {
             />
           </div>
 
-          <div className="flex flex-col gap-2">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-ink">Or paste it</span>
+          <div>
+            <SectionLabel title="Or paste it" hint="Straight out of a doc, an email, a slide — whatever you have." />
+            <label>
+              <span className="sr-only">Or paste it</span>
               <textarea
                 value={pasted}
                 onChange={(e) => setPasted(e.target.value)}
-                rows={6}
+                rows={5}
                 placeholder="Paste the text here..."
-                className="rounded-2xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none"
+                className="mt-2.5 w-full rounded-2xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none"
               />
             </label>
+          </div>
+
+          {/* The room it is for, in the same strip it gets after upload. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-hairline/50 px-4 py-3.5">
+            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Your class</span>
+            <ClassContextLine compact onChange={setPrep} />
+          </div>
+
+          {/* The same footer the next step has: the promise on the left, the
+              one action on the right. */}
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <p className="max-w-sm text-sm text-ink-soft">
+              No student names, please. Paste text, drop a file, or photograph a paper copy.
+            </p>
             <button
               type="button"
               disabled={busy != null || !pasted.trim()}
               onClick={() => void startFromPaste()}
-              className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+              className="rounded-full bg-terracotta px-8 py-4 text-base font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
             >
               Look it over
             </button>
           </div>
-
-          <ClassContextLine onChange={setPrep} />
+          </div>
 
           <WorkingRing
             active={busy === 'reading'}

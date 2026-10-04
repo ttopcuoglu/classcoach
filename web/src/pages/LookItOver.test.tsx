@@ -550,3 +550,30 @@ test('a lens that is off is still shown, and still says it is off', async () => 
   expect(off.getAttribute('aria-pressed')).toBe('false')
   expect(off.className).toContain('border-dashed')
 })
+
+// --- the state every teacher lands on ---
+
+// The drop zone, the paste box and the class line used to sit loose on the
+// page background while the state two seconds later was a single card, so
+// arriving here looked like a different surface from the one you were about
+// to be on. Everything needed to start a review is in one card.
+test('the empty state is one card, like the step that follows it', async () => {
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Drop it here')).toBeTruthy())
+
+  const card = screen.getByText('Drop it here').closest('.rounded-3xl')?.parentElement
+  expect(card, 'the drop zone should sit inside a card').toBeTruthy()
+  const text = card?.textContent ?? ''
+  for (const piece of ['Drop it here', 'Or paste it', 'Your class', 'No student names, please.']) {
+    expect(text.includes(piece), piece).toBe(true)
+  }
+  expect(card?.querySelector('textarea')).toBeTruthy()
+  expect(card?.querySelector('button')).toBeTruthy()
+})
+
+// The same promise appears on both steps, because a teacher can upload from
+// either one.
+test('the no-names line is there before anything is uploaded', async () => {
+  renderPage()
+  await waitFor(() => expect(screen.getByText(/No student names, please\./)).toBeTruthy())
+})
