@@ -8,6 +8,14 @@
 // answers both the upload path and the paste path. The client only renders
 // the answer.
 
+/// How many documents one review may hold. An assignment plus its rubric, or
+/// a packet photographed page by page, is one review — not five of them.
+///
+/// Lives here rather than beside the API calls because the page needs it to
+/// decide what to send, and a constant that disappears when the API module is
+/// mocked is a constant that silently becomes NaN in a test.
+export const MAX_FILES_PER_REVIEW = 5
+
 export const DOC_TYPES = [
   'quiz',
   'homework',

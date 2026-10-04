@@ -2103,6 +2103,12 @@ export type Review = {
   /// The room this was judged against, as stored on the review — not
   /// whichever class is selected now.
   classLine?: string | null
+  /// Every document in the review, in the order they were added. Empty on a
+  /// review made before one review could hold several.
+  files?: ReviewFile[]
+  /// "An assignment and a rubric — I'll check them against each other."
+  /// Only on the create response, and only when there was more than one.
+  fileSetSummary?: string | null
   lenses: ReviewLens[]
   oneThing: string | null
   oneThingDetail?: string | null
@@ -2159,14 +2165,37 @@ export function detectReviewType(text: string): Promise<Detection> {
   return request('/api/reviews/detect', { method: 'POST', body: JSON.stringify({ text }) })
 }
 
-export function createReview(opts: {
+/// One document inside a review.
+export type ReviewFile = {
+  id: string
+  fileName: string | null
+  sourceKind: string
+  pageCount: number | null
+  docType: string | null
+}
+
+/// A file on its way in, before the review exists.
+export type PendingFile = {
   text: string
+  fileName: string | null
+  sourceKind: 'file' | 'paste' | 'photo'
+  pageCount: number | null
+  docType?: string | null
+}
+
+export function createReview(opts: {
+  /// A single document, which is what a paste is. Ignored when `files` is
+  /// given.
+  text?: string
+  /// Several, read as one review. An assignment plus its rubric is one
+  /// review, not two.
+  files?: PendingFile[]
   docType?: string
   sourceKind?: 'file' | 'paste' | 'photo'
   fileName?: string | null
   pageCount?: number | null
   classProfileId?: string | null
-}): Promise<Review & { detectionConfident: boolean }> {
+}): Promise<Review & { detectionConfident: boolean; fileSetSummary?: string | null }> {
   return request('/api/reviews', { method: 'POST', body: JSON.stringify(opts) })
 }
 

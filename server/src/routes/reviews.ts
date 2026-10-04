@@ -12,6 +12,13 @@ import {
   UnsupportedFileError,
 } from '../lib/documentText.ts'
 import { detectSections, estimateMinutes, isLongDocument, sliceSection } from '../lib/documentSections.ts'
+import {
+  combineFiles,
+  describeFileSet,
+  MAX_FILES_PER_REVIEW,
+  primaryType,
+  type IncomingFile,
+} from '../lib/reviewFileSet.ts'
 import { findStudentNames, stripStudentNames } from '../lib/studentNames.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
@@ -111,6 +118,7 @@ function toReview(row: {
   focusArea: string | null
   classProfileId: string | null
   classProfile: { gradeBand: string; subject: string | null; course: string | null; courseLevel: string | null; classMakeup: string[] } | null
+  files?: { id: string; position: number; fileName: string | null; sourceKind: string; pageCount: number | null; docType: string | null }[]
   lenses: unknown
   oneThing: string | null
   oneThingDetail: string | null
@@ -147,6 +155,18 @@ function toReview(row: {
     /// silently re-labels itself when the default prep changes is a result
     /// that cannot be trusted a week later.
     classLine: row.classProfile ? describeClassContext(row.classProfile) : null,
+    /// Every document in the review, in the order they were added. A review
+    /// made before this has none, and the header falls back to `fileName`.
+    files: (row.files ?? [])
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .map((f) => ({
+        id: f.id,
+        fileName: f.fileName,
+        sourceKind: f.sourceKind,
+        pageCount: f.pageCount,
+        docType: f.docType,
+      })),
     lenses: parseLenses(row.lenses, docType).map((l) => ({
       ...l,
       label: LENSES[l.key]?.label ?? l.key,
@@ -185,6 +205,9 @@ const SELECT = {
   classProfileId: true,
   classProfile: {
     select: { gradeBand: true, subject: true, course: true, courseLevel: true, classMakeup: true },
+  },
+  files: {
+    select: { id: true, position: true, fileName: true, sourceKind: true, pageCount: true, docType: true },
   },
   lenses: true,
   oneThing: true,
@@ -307,16 +330,58 @@ reviewsRouter.get('/:id', async (req, res) => {
 })
 
 reviewsRouter.post('/', async (req, res) => {
-  const { text, docType, sourceKind, fileName, pageCount, classProfileId } = req.body ?? {}
-  if (typeof text !== 'string' || !text.trim()) {
+  const { text, docType, sourceKind, fileName, pageCount, classProfileId, files } = req.body ?? {}
+
+  // One review, one or several documents. `text` is still accepted on its own
+  // — that is a paste, and the commonest way in — so a single-file client
+  // keeps working unchanged.
+  const incoming: IncomingFile[] = Array.isArray(files) && files.length > 0
+    ? files
+        .slice(0, MAX_FILES_PER_REVIEW)
+        .filter((f: unknown): f is Record<string, unknown> => !!f && typeof f === 'object')
+        .filter((f) => typeof f.text === 'string' && f.text.trim())
+        .map((f) => ({
+          text: (f.text as string).trim(),
+          fileName: typeof f.fileName === 'string' ? f.fileName.trim().slice(0, 200) : null,
+          sourceKind: f.sourceKind === 'paste' || f.sourceKind === 'photo' ? (f.sourceKind as string) : 'file',
+          pageCount: Number.isInteger(f.pageCount) ? (f.pageCount as number) : null,
+          mime: typeof f.mime === 'string' ? f.mime.slice(0, 120) : null,
+          bytes: Number.isInteger(f.bytes) ? (f.bytes as number) : null,
+        }))
+    : typeof text === 'string' && text.trim()
+      ? [
+          {
+            text: text.trim(),
+            fileName: typeof fileName === 'string' && fileName.trim() ? fileName.trim().slice(0, 200) : null,
+            sourceKind: sourceKind === 'paste' || sourceKind === 'photo' ? sourceKind : 'file',
+            pageCount: Number.isInteger(pageCount) ? (pageCount as number) : null,
+          },
+        ]
+      : []
+
+  if (incoming.length === 0) {
     res.status(400).json({ error: 'text is required' })
     return
   }
-  const originalText = text.trim().slice(0, MAX_DOCUMENT_CHARS)
-  const detection = detectDocType(originalText, typeof fileName === 'string' ? fileName : null)
+
+  // Each file is detected on its own, which is what lets the page say "an
+  // assignment and a rubric" rather than naming only the set's winner.
+  const withTypes = incoming.map((file) => ({
+    ...file,
+    docType: detectDocType(file.text, file.fileName ?? null).docType,
+  }))
+
+  const originalText = combineFiles(withTypes).slice(0, MAX_DOCUMENT_CHARS)
+  const detection = detectDocType(originalText, withTypes[0].fileName ?? null)
   // A type the teacher already corrected wins over detection — they looked at
-  // their own document.
-  const chosen = isDocType(docType) ? docType : detection.docType
+  // their own document. Otherwise the set decides, which is not the same as
+  // the combined text deciding: a rubric beside an assignment is there to be
+  // checked against it, so the review is of the assignment.
+  const chosen = isDocType(docType)
+    ? docType
+    : withTypes.length > 1
+      ? primaryType(withTypes, detection.docType)
+      : detection.docType
 
   // A prep that is not this teacher's is ignored rather than refused: the
   // class only grounds the timing and grade-level judgments, so a bad id is
@@ -335,17 +400,33 @@ reviewsRouter.post('/', async (req, res) => {
       docType: chosen,
       detectedType: detection.docType,
       docTypeConfirmed: isDocType(docType),
-      sourceKind: sourceKind === 'paste' || sourceKind === 'photo' ? sourceKind : 'file',
-      fileName: typeof fileName === 'string' && fileName.trim() ? fileName.trim().slice(0, 200) : null,
-      pageCount: Number.isInteger(pageCount) ? (pageCount as number) : null,
+      sourceKind: withTypes[0].sourceKind ?? 'file',
+      fileName: withTypes[0].fileName ?? null,
+      pageCount: withTypes.reduce((sum, f) => sum + (f.pageCount ?? 0), 0) || null,
       originalText,
       classProfileId: prep?.id ?? null,
       lenses: defaultLensesFor(chosen),
       edits: [],
+      files: {
+        create: withTypes.map((file, position) => ({
+          position,
+          fileName: file.fileName ?? null,
+          sourceKind: file.sourceKind ?? 'file',
+          mime: file.mime ?? null,
+          bytes: file.bytes ?? null,
+          pageCount: file.pageCount ?? null,
+          docType: file.docType ?? null,
+          text: file.text,
+        })),
+      },
     },
     select: SELECT,
   })
-  res.status(201).json({ ...toReview(created), detectionConfident: detection.confident })
+  res.status(201).json({
+    ...toReview(created),
+    detectionConfident: detection.confident,
+    fileSetSummary: describeFileSet(withTypes),
+  })
 })
 
 // Confirming or correcting the type, toggling lenses, saving.

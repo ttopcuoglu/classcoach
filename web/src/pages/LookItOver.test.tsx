@@ -865,3 +865,94 @@ test('the old ?open= link still opens the review', async () => {
   await waitFor(() => expect(screen.getByText('If you change one thing')).toBeTruthy())
   expect(getReview).toHaveBeenCalledWith('r1')
 })
+
+// --- one review, several documents ---
+
+const FILE_INPUT = `input[accept=".docx,.pdf,.pptx,.xlsx,.xls,.txt,.jpg,.jpeg,.png"]`
+
+function dropFiles(names: string[]) {
+  const input = document.querySelector(FILE_INPUT)
+  fireEvent.change(input!, { target: { files: names.map((n) => new File(['x'], n)) } })
+}
+
+// Criterion 4: an assignment and its rubric are one review, not two. What a
+// teacher wants from the pair is the comparison, which is exactly what they
+// cannot get by reviewing each separately.
+test('several files are gathered into one review', async () => {
+  extractReviewDocument.mockImplementation((file: File) =>
+    Promise.resolve({ text: `text of ${file.name}`, fileName: file.name, pageCount: 1, docType: 'assignment', confident: true }),
+  )
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Drop it here')).toBeTruthy())
+
+  dropFiles(['Essay task.docx', 'Rubric.docx'])
+
+  await waitFor(() => expect(screen.getByText('2 documents')).toBeTruthy())
+  expect(screen.getByText('Essay task.docx')).toBeTruthy()
+  expect(screen.getByText('Rubric.docx')).toBeTruthy()
+  // Nothing is created until the teacher says they are done adding.
+  expect(createReview).not.toHaveBeenCalled()
+})
+
+test('reading them creates one review carrying both', async () => {
+  extractReviewDocument.mockImplementation((file: File) =>
+    Promise.resolve({ text: `text of ${file.name}`, fileName: file.name, pageCount: 1, docType: 'assignment', confident: true }),
+  )
+  createReview.mockResolvedValue(review())
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Drop it here')).toBeTruthy())
+  dropFiles(['Essay task.docx', 'Rubric.docx'])
+  await waitFor(() => expect(screen.getByText('2 documents')).toBeTruthy())
+
+  fireEvent.click(screen.getByRole('button', { name: 'Read them' }))
+
+  await waitFor(() => expect(createReview).toHaveBeenCalled())
+  const sent = createReview.mock.calls[0][0]
+  expect(sent.files).toHaveLength(2)
+  expect(sent.files[0].fileName).toBe('Essay task.docx')
+})
+
+// One unreadable file in a drop of three must not lose the other two.
+test('a file that cannot be read is named, and the rest are kept', async () => {
+  extractReviewDocument.mockImplementation((file: File) =>
+    file.name === 'broken.pdf'
+      ? Promise.reject(new Error("Couldn't find any text in that file"))
+      : Promise.resolve({ text: 'fine', fileName: file.name, pageCount: 1, docType: 'quiz', confident: true }),
+  )
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Drop it here')).toBeTruthy())
+
+  dropFiles(['good.docx', 'broken.pdf'])
+
+  await waitFor(() => expect(screen.getByText(/broken\.pdf/)).toBeTruthy())
+  expect(screen.getByText('One document')).toBeTruthy()
+  expect(screen.getByText('good.docx')).toBeTruthy()
+})
+
+test('a document can be removed before the review is made', async () => {
+  extractReviewDocument.mockImplementation((file: File) =>
+    Promise.resolve({ text: 'x', fileName: file.name, pageCount: 1, docType: 'quiz', confident: true }),
+  )
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Drop it here')).toBeTruthy())
+  dropFiles(['a.docx', 'b.docx'])
+  await waitFor(() => expect(screen.getByText('2 documents')).toBeTruthy())
+
+  fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0])
+
+  await waitFor(() => expect(screen.getByText('One document')).toBeTruthy())
+  expect(screen.queryByText('a.docx')).toBeNull()
+})
+
+test('the sixth document is refused, by number', async () => {
+  extractReviewDocument.mockImplementation((file: File) =>
+    Promise.resolve({ text: 'x', fileName: file.name, pageCount: 1, docType: 'quiz', confident: true }),
+  )
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Drop it here')).toBeTruthy())
+
+  dropFiles(['a.docx', 'b.docx', 'c.docx', 'd.docx', 'e.docx', 'f.docx'])
+
+  await waitFor(() => expect(screen.getByText('5 documents')).toBeTruthy())
+  expect(screen.queryByText('f.docx')).toBeNull()
+})

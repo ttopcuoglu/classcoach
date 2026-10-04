@@ -19,6 +19,7 @@ import {
   type ApiError,
   type Assumption,
   type ScopeChoice,
+  type PendingFile,
   type StudentNamesFound,
   type Review,
   type ReviewEdit,
@@ -28,6 +29,7 @@ import {
   DOC_TYPE_LABELS,
   canRedesignForAi,
   CORRECTED_HINT,
+  MAX_FILES_PER_REVIEW,
   confirmQuestion,
   correctedHeading,
   detectionHint,
@@ -65,6 +67,8 @@ export default function LookItOver() {
   const cameraInput = useRef<HTMLInputElement | null>(null)
 
   const [pasted, setPasted] = useState('')
+  /// "An assignment and a rubric — I'll check them against each other."
+  const [fileSetSummary, setFileSetSummary] = useState<string | null>(null)
   const [prep, setPrep] = useState<ClassContext | null>(null)
   const [review, setReview] = useState<Review | null>(null)
   const [busy, setBusy] = useState<null | 'reading' | 'reviewing'>(null)
@@ -80,19 +84,56 @@ export default function LookItOver() {
   /// anything in it.
   const arrivedWith = useHandoff('review_document')
 
-  async function startFromFile(file: File, sourceKind: 'file' | 'photo') {
+  /// Files read but not yet turned into a review. A teacher dropping an
+  /// assignment and then its rubric is building one review, so nothing is
+  /// created until they say they are done adding.
+  const [pending, setPending] = useState<PendingFile[]>([])
+
+  /// Reads files and adds them to the set. Each is extracted on its own, so
+  /// one unreadable file in a drop of three does not lose the other two.
+  async function addFiles(files: File[], sourceKind: 'file' | 'photo') {
+    const room = MAX_FILES_PER_REVIEW - pending.length
+    if (room <= 0) {
+      setError(`That's the limit — ${MAX_FILES_PER_REVIEW} documents in one review.`)
+      return
+    }
+    setBusy('reading')
+    setError(null)
+    const added: PendingFile[] = []
+    const failed: string[] = []
+    for (const file of files.slice(0, room)) {
+      try {
+        const extracted = await extractReviewDocument(file)
+        added.push({
+          text: extracted.text,
+          fileName: extracted.fileName,
+          sourceKind,
+          pageCount: extracted.pageCount,
+        })
+      } catch (err) {
+        failed.push(`${file.name}: ${(err as Error).message}`)
+      }
+    }
+    setPending((prev) => [...prev, ...added])
+    // Named one by one: "one of your files could not be read" leaves a
+    // teacher checking all three.
+    if (failed.length > 0) setError(failed.join(' · '))
+    setBusy(null)
+  }
+
+  /// Turns the pending set into a review.
+  async function startFromPending() {
+    if (pending.length === 0) return
     setBusy('reading')
     setError(null)
     try {
-      const extracted = await extractReviewDocument(file)
       const created = await createReview({
-        text: extracted.text,
-        sourceKind,
-        fileName: extracted.fileName,
-        pageCount: extracted.pageCount,
+        files: pending,
         classProfileId: prep?.id ?? null,
       })
       setReview(created)
+      setFileSetSummary(created.fileSetSummary ?? null)
+      setPending([])
       // A review that exists but has not been run is still somewhere a
       // teacher can come back to.
       navigate(`/look-it-over?draft=${created.id}`, { replace: true })
@@ -379,8 +420,8 @@ export default function LookItOver() {
             onDrop={(e) => {
               e.preventDefault()
               setDragging(false)
-              const file = e.dataTransfer.files?.[0]
-              if (file) void startFromFile(file, 'file')
+              const files = Array.from(e.dataTransfer.files ?? [])
+              if (files.length > 0) void addFiles(files, 'file')
             }}
             className={`flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed p-8 text-center transition-colors ${
               dragging ? 'border-terracotta bg-peach-tint/40' : 'border-hairline bg-cream'
@@ -417,10 +458,11 @@ export default function LookItOver() {
               ref={fileInput}
               type="file"
               accept={ACCEPT}
+              multiple
               hidden
               onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) void startFromFile(file, 'file')
+                const files = Array.from(e.target.files ?? [])
+                if (files.length > 0) void addFiles(files, 'file')
                 e.target.value = ''
               }}
             />
@@ -431,12 +473,61 @@ export default function LookItOver() {
               capture="environment"
               hidden
               onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) void startFromFile(file, 'photo')
+                const files = Array.from(e.target.files ?? [])
+                if (files.length > 0) void addFiles(files, 'photo')
                 e.target.value = ''
               }}
             />
           </div>
+
+          {/* What is going into this review. A teacher dropping an assignment
+              and then its rubric is building ONE review, so nothing is
+              created until they say they are done adding. */}
+          {pending.length > 0 && (
+            <div>
+              <SectionLabel
+                title={pending.length === 1 ? 'One document' : `${pending.length} documents`}
+                hint={`Read as one review. Up to ${MAX_FILES_PER_REVIEW}.`}
+              />
+              <ul className="mt-2.5 flex flex-col gap-2">
+                {pending.map((file, i) => (
+                  <li
+                    key={`${file.fileName}-${i}`}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-hairline bg-cream px-4 py-2.5"
+                  >
+                    <span className="min-w-0 truncate text-sm font-medium text-ink">
+                      {file.fileName ?? `Document ${i + 1}`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPending((prev) => prev.filter((_, at) => at !== i))}
+                      className="shrink-0 text-xs font-semibold text-terracotta-600 hover:text-terracotta"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={busy != null}
+                  onClick={() => void startFromPending()}
+                  className="rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:opacity-60"
+                >
+                  Read {pending.length === 1 ? 'it' : 'them'}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy != null || pending.length >= MAX_FILES_PER_REVIEW}
+                  onClick={() => fileInput.current?.click()}
+                  className="rounded-full border border-hairline bg-cream-card px-5 py-3 text-sm font-semibold text-ink transition-colors hover:border-terracotta/50 hover:text-terracotta-600 disabled:opacity-60"
+                >
+                  Add another
+                </button>
+              </div>
+            </div>
+          )}
 
           <div>
             <SectionLabel title="Or paste it" hint="Straight out of a doc, an email, a slide — whatever you have." />
@@ -525,6 +616,14 @@ export default function LookItOver() {
               {/* Asks until the teacher answers, then reports. A corrected
                   type swaps the whole lens set, so the strip says so rather
                   than letting the result quietly change underneath them. */}
+              {/* What it made of the set, in the teacher's words, before the
+                  type question. */}
+              {fileSetSummary && review.files && review.files.length > 1 && (
+                <p className="rounded-xl bg-mint-tint/50 px-4 py-2.5 text-sm font-medium text-forest">
+                  {fileSetSummary}
+                </p>
+              )}
+
               {review.docTypeConfirmed ? (
                 <SectionLabel title={correctedHeading(docTypeOf(review.docType))} hint={CORRECTED_HINT} />
               ) : (
@@ -695,7 +794,11 @@ export default function LookItOver() {
                   page rather than as another panel, and so the file name and
                   the room are settled before any judgment appears. */}
               <div className="rounded-3xl bg-forest p-6 text-cream">
-                <p className="font-heading text-lg font-bold">{review.fileName ?? 'Pasted text'}</p>
+                <p className="font-heading text-lg font-bold">
+                  {review.files && review.files.length > 1
+                    ? review.files.map((f, i) => f.fileName ?? `Document ${i + 1}`).join(' · ')
+                    : (review.fileName ?? 'Pasted text')}
+                </p>
                 <p className="mt-1 text-sm text-cream/70">{resultMeta(review)}</p>
                 {/* Only when it is not the whole thing — a scope label on a
                     whole-document review would imply a limit that is not

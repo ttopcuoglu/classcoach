@@ -684,6 +684,13 @@ model Review {
   /// Recordings of the lesson this plan was for, when a teacher linked them.
   audioSessions AudioSession[]
 
+  /// The documents this review is of. An assignment plus its rubric is one
+  /// review, not two. `originalText` above is their concatenation and stays
+  /// authoritative — edit anchors, the student-name guard and section
+  /// detection all run against it, and splitting that would mean an anchor
+  /// that matches in one file and not in the review.
+  files       ReviewFile[]
+
   @@index([userId])
 }
 
@@ -847,4 +854,37 @@ model SchoolInquiry {
   updatedAt        DateTime  @updatedAt
 
   @@index([createdAt])
+}
+
+/// One document inside a review.
+///
+/// Text only for now: `text` is what was extracted, and `originalFileKey` is
+/// where the uploaded original will live once there is somewhere to put it.
+model ReviewFile {
+  id          String   @id @default(cuid())
+  reviewId    String
+  review      Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  /// Position in the review, so the combined text reads in the order the
+  /// teacher dropped them.
+  position    Int      @default(0)
+  fileName    String?
+  /// Per file: a teacher can drop a .docx and photograph the rubric in the
+  /// same review.
+  sourceKind  String   @default("file")
+  mime        String?
+  bytes       Int?
+  pageCount   Int?
+  /// What detection made of this file on its own, which is what lets the page
+  /// say "an assignment and a rubric" rather than naming only the winner.
+  docType     String?
+  /// Pages that came from OCR, where accuracy is lower.
+  ocrPages    Int[]    @default([])
+  text        String
+  /// Filled in Phase 2, when originals are stored.
+  originalFileKey String?
+
+  createdAt   DateTime @default(now())
+
+  @@index([reviewId])
 }
