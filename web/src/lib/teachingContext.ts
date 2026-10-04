@@ -104,9 +104,18 @@ export const CLASS_MAKEUP_BLURB: Record<string, string> = {
 }
 
 /// Best guess at a band from the free-text `gradeLevels` on a teacher's profile.
+///
+/// Order matters: 9-12 is tested first because "9-12" contains a 1 and a 2 and
+/// "K-5" contains a 5, so the narrower bands would otherwise claim them.
+///
+/// Each branch has to accept ordinals, not just bare numbers — `gradeLevels`
+/// is written as "7th,8th" (see User.gradeLevels), so ordinals are the
+/// canonical form rather than an edge case. The 9-12 branch was missing its
+/// `(th)?`, which made every high-school teacher who wrote "9th,10th" fall
+/// through all three branches to the 6-8 default.
 export function bandFromProfile(gradeLevels: string | null | undefined): GradeBand {
   const text = (gradeLevels ?? '').toLowerCase()
-  if (/\b(9|10|11|12)\b|9-12|high ?school/.test(text)) return '9-12'
+  if (/\b(9|10|11|12)(th)?\b|9-12|high ?school/.test(text)) return '9-12'
   if (/\bk\b|kindergarten|\b[12](st|nd)?\b|k-2|primary/.test(text)) return 'K-2'
   if (/\b[3-5](rd|th)?\b|3-5|elementary|k-5/.test(text)) return '3-5'
   return '6-8'
