@@ -48,6 +48,20 @@ import {
   ratingStandard,
   teachingContextBlock,
 } from '../lib/focusAreaPrompt.ts'
+import { findTopic } from '../lib/topics.ts'
+import {
+  TALK_START_MESSAGE,
+  buildHandoffContextBlock,
+  buildTopicBlock,
+  buildTopicGreetingBlock,
+  kindFromRequest,
+  topicFromRequest,
+} from '../lib/talkTopicPrompt.ts'
+// Re-exported because the Telegram coach and the demo seed script import
+// them from here, and the move into lib/ is a refactor rather than a
+// change to what they can reach.
+export { TALK_START_MESSAGE, buildGreetingBlock } from '../lib/talkTopicPrompt.ts'
+import { isOfferKind, OFFER_INSTRUCTION } from '../lib/talkOffers.ts'
 import { reconcileTail, takeCompleteSentences, visibleSoFar } from '../lib/sentenceStream.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
 import { startTiming } from '../lib/turnTiming.ts'
@@ -166,21 +180,8 @@ Since this is read aloud, sound like a warm, engaged person talking — not a sc
 - Match their emotional tone: slower and gentler when they sound stressed, discouraged, or tired; a little brighter when something went well. Never sound falsely cheerful about something hard.
 - A reaction responds only to what they actually said — never fill in a detail to sound relatable (like guessing when a class meets or why students acted a certain way).
 All of this is about sounding human, not adding length — the one-idea, one-question, short-reply rules above still apply.
-${CORE_COACHING_RULES}`
-
-/// Talk It Through used to open with the teacher talking into silence: the
-/// endpoint required a message, so Coach could not say anything until it had
-/// been spoken to. This is the synthetic first turn that lets Coach greet
-/// them instead, the same shape Reflect already used.
-export const TALK_START_MESSAGE = 'Start our conversation.'
-
-/// The greeting instruction. Kept out of TALK_SYSTEM_PROMPT on purpose —
-/// that prompt is byte-identical for every teacher so it caches once, and
-/// anything per-teacher (a name, this instruction) has to follow it.
-export function buildGreetingBlock(firstName: string | null | undefined): string {
-  const named = firstName ? ` Greet them by name — they are called ${firstName}.` : ''
-  return `\n\nThis is the first thing you say, before the teacher has said anything at all. Open the conversation yourself: a warm, short hello and one genuine, open question inviting them to say what is on their mind.${named} Two sentences at most, no advice yet, nothing about a lesson or a problem you have not been told about.\n`
-}
+${CORE_COACHING_RULES}
+${OFFER_INSTRUCTION}`
 
 // Manually triggered once, when the teacher taps "Finish session" — not a
 // turn in the live conversation, so no memory plumbing and no spoken-
@@ -202,6 +203,15 @@ One specific thing worth paying attention to next time, tied to what was discuss
 <check_in>
 The short, warm question you'll ask the teacher a few days from now to see how the next step went. Second person, name the specific step and its setting if one was mentioned, and end with a question — e.g. "You were going to greet students at the door before 3rd period. How did that go?" Under 25 words. Never include a student's, parent's, or colleague's name.
 </check_in>
+<topic>
+Which ONE of these this conversation was actually about, judged by what the teacher talked about rather than what they may have picked at the start. Output the value on the left exactly, or the word none if the conversation genuinely does not fit one.
+teaching_and_learning — explaining, questioning, checking for understanding, pacing, grading
+classroom_management — behavior, routines, engagement, devices
+student_concern — one student the teacher is worried about
+parent_communication — an exchange with a parent or caregiver
+professionalism — colleagues, co-teachers, administrators, meetings, paperwork
+self_and_job — their own workload, boundaries, or whether this is sustainable
+</topic>
 ${CORE_COACHING_RULES}`
 
 // A category is only accepted when it belongs to the area in play, so a
@@ -399,7 +409,9 @@ type StreamOptions = {
   // Saves the finished reply and returns the record the client should get —
   // the same shape the non-streaming endpoint returns, so the client's state
   // handling is unchanged.
-  persist: (reply: string) => Promise<unknown>
+  // `offer` is the parsed <offer> tag when the coach signalled that another
+  // surface is the next useful move, already validated — see lib/talkOffers.
+  persist: (reply: string, offer: string | null) => Promise<unknown>
   // The raw text including the hidden <memory_update> block, for callers
   // that maintain coach memory. Runs after persist, off the spoken path.
   afterPersist?: (rawText: string) => Promise<void>
@@ -456,7 +468,7 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
       .map((block) => block.text)
       .join('\n')
     flagIfUnsafe(text, opts.safetyLabel)
-    const reply = trimIfTruncated(stripTag(text, 'memory_update'), message.stop_reason)
+    const reply = trimIfTruncated(stripTag(stripTag(text, 'memory_update'), 'offer'), message.stop_reason)
 
     if (!reply) {
       send({ type: 'error', error: 'Could not reach Coach. Please try again.' })
@@ -474,7 +486,12 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
       send({ type: 'sentence', text: tail })
     }
 
-    const record = await opts.persist(reply)
+    // The offer tag, if any. Validated here rather than trusted: a model
+    // inventing a third kind must not reach a client as a dead button.
+    const rawOffer = extractTag(text, 'offer')
+    const offer = isOfferKind(rawOffer) ? rawOffer : null
+
+    const record = await opts.persist(reply, offer)
     timing.mark('persist')
     send({ type: 'done', debrief: record })
     res.end()
@@ -512,7 +529,16 @@ async function markFollowUpAnswered(followUpId: string, debriefId: string) {
 }
 
 debriefRouter.post('/talk/stream', async (req, res) => {
-  const { message, followUpId } = req.body ?? {}
+  const { message, followUpId, topic: topicValue, context, kind: kindValue } = req.body ?? {}
+  // An unrecognized topic is treated exactly like no topic: the coach opens
+  // with no assumption. Rejecting the request instead would block a
+  // conversation over a chip, which is never worth it.
+  const topic = topicFromRequest(topicValue)
+  // The narrowing within that topic, when the teacher tapped one. Opening
+  // turn only, like the topic itself: later turns read the topic back off the
+  // stored conversation, and by then the teacher's own words are doing this
+  // job better than a chip could.
+  const kind = kindFromRequest(topic, kindValue)
   // No message at all means Coach opens the conversation — an empty string
   // still does not, because that is a client bug rather than a greeting.
   const isGreeting = message == null
@@ -545,7 +571,7 @@ debriefRouter.post('/talk/stream', async (req, res) => {
   const followUp = await findPendingFollowUp(userId, followUpId)
   // TALK_SYSTEM_PROMPT is byte-identical for every teacher, so it caches once
   // and is reused across all of them; everything per-teacher follows it.
-  const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${isGreeting ? buildGreetingBlock(firstNameOf(user?.name)) : ''}`
+  const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${buildTopicBlock(topic, kind)}${buildHandoffContextBlock(context)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${isGreeting ? buildTopicGreetingBlock(topic, firstNameOf(user?.name), kind) : ''}`
 
   await streamCoachReply(res, 'talk_start', {
     gateMs: Date.now() - gateStart,
@@ -556,7 +582,7 @@ debriefRouter.post('/talk/stream', async (req, res) => {
     maxTokens: (isGreeting ? 150 : 110) + (memoryOn ? MEMORY_UPDATE_TOKEN_BUFFER : 0),
     messages: [{ role: 'user', content: trimmed }],
     safetyLabel: 'debrief.talk',
-    persist: async (reply) => {
+    persist: async (reply, offer) => {
       const created = await prisma.debrief.create({
         data: {
           userId,
@@ -565,9 +591,14 @@ debriefRouter.post('/talk/stream', async (req, res) => {
           // thing they actually say becomes the title (see the chat routes).
           incidentText: isGreeting ? '' : trimmed,
           source: 'talk_to_me',
+          // The auto-tag. A chosen topic is recorded straight away; a
+          // conversation started with no chip is tagged by inference when the
+          // teacher wraps it up (see the takeaway route), so no turn of a
+          // spoken conversation pays for a classification it does not need.
+          focusArea: topic?.value ?? null,
           conversation: isGreeting
             ? [{ role: 'assistant' as const, text: reply, createdAt: new Date().toISOString() }]
-            : appendTurn([], trimmed, reply),
+            : appendTurn([], trimmed, reply, offer),
         },
       })
       if (followUp) await markFollowUpAnswered(followUp.id, created.id)
@@ -643,6 +674,14 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
   // Talk carries no room context; Ask's belongs to this conversation, not to
   // every teacher, so either way it goes after the cache breakpoint.
   const roomBlock = isTalk ? '' : teachingContextBlock(debrief)
+  // The topic the teacher picked at the start, re-applied on every later turn
+  // of a spoken conversation. It has to persist rather than only shape the
+  // opener: the topic-specific limits are the point — a `student_concern`
+  // conversation must not start speculating about a diagnosis on turn four
+  // because the stance was only applied to turn one. The block carries
+  // TOPIC_FOLLOWS_THE_WORDS with it, so the coach is told in the same breath
+  // to drop the subject if the teacher has moved on.
+  const topicBlock = isTalk ? buildTopicBlock(findTopic(debrief.focusArea)) : ''
   const baseMaxTokens = isTalk ? 110 : 300
   // Memory is read every turn but rewritten only on some — see shouldWriteMemory.
   const writeMemory = memoryOn && shouldWriteMemory(countUserTurns(existing) + 1)
@@ -652,17 +691,17 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
     system: cachedSystem(
       stablePrompt,
       memoryOn
-        ? `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
-        : `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}`,
+        ? `${roomBlock}${topicBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
+        : `${roomBlock}${topicBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}`,
     ),
     maxTokens: writeMemory ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
     messages: toClaudeMessages(existing, trimmed),
     safetyLabel: isTalk ? 'debrief.talk.chat' : 'debrief.ask.chat',
-    persist: (reply) =>
+    persist: (reply, offer) =>
       prisma.debrief.update({
         where: { id: debrief.id },
         data: {
-          conversation: appendTurn(existing, trimmed, reply),
+          conversation: appendTurn(existing, trimmed, reply, offer),
           // Coach opened this one, so it has no title yet — the first thing
           // the teacher says is what it was about.
           ...(debrief.incidentText ? {} : { incidentText: trimmed }),
@@ -677,7 +716,9 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
 })
 
 debriefRouter.post('/talk', async (req, res) => {
-  const { message, followUpId } = req.body ?? {}
+  const { message, followUpId, topic: topicValue, kind: kindValue } = req.body ?? {}
+  const topic = topicFromRequest(topicValue)
+  const kind = kindFromRequest(topic, kindValue)
   if (typeof message !== 'string' || !message.trim()) {
     res.status(400).json({ error: 'message is required' })
     return
@@ -697,7 +738,7 @@ debriefRouter.post('/talk', async (req, res) => {
     })
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
     const followUp = await findPendingFollowUp(req.user!.userId, followUpId)
-    const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}`
+    const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${buildTopicBlock(topic, kind)}${followUp ? buildFollowUpContextBlock(followUp) : ''}`
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -723,7 +764,13 @@ debriefRouter.post('/talk', async (req, res) => {
 
     const conversation = appendTurn([], trimmed, reply)
     const debrief = await prisma.debrief.create({
-      data: { userId: req.user!.userId, incidentText: trimmed, source: 'talk_to_me', conversation },
+      data: {
+        userId: req.user!.userId,
+        incidentText: trimmed,
+        source: 'talk_to_me',
+        focusArea: topic?.value ?? null,
+        conversation,
+      },
     })
     if (followUp) await markFollowUpAnswered(followUp.id, debrief.id)
 
@@ -841,7 +888,9 @@ debriefRouter.post('/:id/chat', async (req, res) => {
 // section even after a retry; throws when the Claude call itself fails.
 export async function generateTalkTakeaway(
   userId: string,
-  debrief: { id: string; conversation: unknown },
+  // focusArea is read, not written, when the teacher chose a topic — see the
+  // inferredTopic note below.
+  debrief: { id: string; conversation: unknown; focusArea?: string | null },
 ): Promise<{ debrief: Debrief; followUp: CoachFollowUp | null } | null> {
   const existing = (debrief.conversation as ChatMessage[] | null) ?? []
   // A conversation opened from a check-in starts with the teacher's answer
@@ -880,9 +929,19 @@ export async function generateTalkTakeaway(
   }
   if (!explored || !tryNext || !notice) return null
 
+  // The auto-tag for a conversation the teacher started without tapping a
+  // chip. Inferred here rather than on a live turn because this call already
+  // exists and is not on the spoken critical path — adding a classification
+  // to every turn would cost time to first word on all of them to tag one.
+  //
+  // A topic the teacher DID choose is never overwritten: they said what this
+  // was about, and a model disagreeing with them is not grounds to relabel
+  // their own conversation.
+  const inferredTopic = debrief.focusArea ?? findTopic(extractTag(text, 'topic'))?.value ?? null
+
   const updated = await prisma.debrief.update({
     where: { id: debrief.id },
-    data: { talkTakeaway: { explored, tryNext, notice } },
+    data: { talkTakeaway: { explored, tryNext, notice }, focusArea: inferredTopic },
   })
 
   // Schedule Coach's check-in on the step. A takeaway regenerated after the

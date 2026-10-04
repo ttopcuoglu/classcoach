@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import ClassProfileList from '../components/ClassProfileList'
 import { Link } from 'react-router-dom'
 import {
   createBillingPortalSession,
@@ -275,7 +276,7 @@ export default function Profile() {
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Wivoza · Grow</p>
           <h1 className="mt-2 font-heading text-3xl font-extrabold text-cream md:text-4xl">
-            Profile & Settings<span className="text-gold">.</span>
+            Profile & Settings<span className="text-terracotta">.</span>
           </h1>
           <p className="mt-1.5 text-cream/70">Tell us about your classroom so coaching can be more relevant.</p>
         </div>
@@ -402,9 +403,23 @@ export default function Profile() {
         </div>
       </form>
 
+      {/* Class context used to be asked for on every screen that needed it.
+          It lives here now, as a list — most teachers have two or three preps,
+          and one stored room made the app wrong for all but one of them. */}
       <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
         <SectionHeading
           n={2}
+          title="Your classes"
+          description="Add a line for each class you teach. Coaching starts from your default one, and you can switch any time — nothing here is required."
+        />
+        <div className="mt-5">
+          <ClassProfileList />
+        </div>
+      </div>
+
+      <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+        <SectionHeading
+          n={3}
           title="What Coach knows"
           description="Everything Coach can draw on about you, in the words it's given them in. Nothing here is shown to anyone else — not your school, not an administrator."
         />
@@ -516,7 +531,7 @@ export default function Profile() {
       </div>
 
       <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-        <SectionHeading n={3} title="Coach's voice" description="Choose which voice Coach speaks with in Talk It Through." />
+        <SectionHeading n={4} title="Coach's voice" description="Choose which voice Coach speaks with in Talk It Through." />
         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
           {TALK_VOICES.map((v) => (
             <button
@@ -548,7 +563,7 @@ export default function Profile() {
           onStatusChange={setTelegram}
           heading={
             <SectionHeading
-              n={4}
+              n={5}
               title="Coach on Telegram"
               description="Text Coach from Telegram, just like Talk It Through, and get Coach's check-ins there. Conversations are saved here too."
             />
@@ -588,29 +603,25 @@ export default function Profile() {
         )}
       </div>
 
+      {/* The Cheat Sheet and First 30 Days tiles stood here. Both are gone:
+          the Cheat Sheet with its page, and First 30 Days because the job it
+          did — giving a new teacher somewhere obvious to start — is done by
+          Talk It Through's starter prompts now. One link to the teacher's own
+          work replaces them, which is the thing they were both standing in
+          for. */}
       <div className="grid gap-3 sm:grid-cols-2">
         <Link
-          to="/cheat-sheet"
+          to="/work"
           className="group flex items-center gap-4 rounded-2xl bg-peach-tint/50 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
         >
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-terracotta font-heading text-lg font-bold text-cream">
-            ★
+            ☰
           </span>
           <div>
-            <p className="font-heading text-base font-bold text-forest">Your Cheat Sheet</p>
-            <p className="text-xs text-ink-soft">Go-to phrases, auto-built from your saved content.</p>
-          </div>
-        </Link>
-        <Link
-          to="/first-30-days"
-          className="group flex items-center gap-4 rounded-2xl bg-mint-tint/50 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
-        >
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-forest font-heading text-sm font-bold text-gold">
-            30
-          </span>
-          <div>
-            <p className="font-heading text-base font-bold text-forest">First 30 Days</p>
-            <p className="text-xs text-ink-soft">A short guided track to get grounded early.</p>
+            <p className="font-heading text-base font-bold text-forest">My Work</p>
+            <p className="text-xs text-ink-soft">
+              Every conversation, rehearsal, review and recording, in one list.
+            </p>
           </div>
         </Link>
       </div>

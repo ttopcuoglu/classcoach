@@ -1,4 +1,4 @@
-import { TEACHING_AND_LEARNING } from './focusAreas'
+import { TEACHING_AND_LEARNING } from './topics'
 
 // A nudge for a teacher facing a blank box under a dense scenario.
 //
@@ -59,6 +59,22 @@ const BY_AREA: Record<string, readonly string[]> = {
     'What do you and this person both want for the student?',
     'What might you be missing about why they did it that way?',
     'What is the specific request you would make, rather than the complaint?',
+  ],
+  // Every hint here points back at what the teacher actually observed. A hint
+  // like "what might be going on at home?" would invite precisely the
+  // speculation this topic's coaching refuses — and a hint is read as
+  // permission, so it has to hold the same line the prompt does.
+  student_concern: [
+    'What have you actually seen or heard, as opposed to what you suspect?',
+    'When did you first notice, and what has changed since?',
+    'Who else in the building has seen this student today?',
+    'What would you want written down if someone picked this up next week?',
+  ],
+  self_and_job: [
+    'What exactly are you being asked for, in one sentence?',
+    'What could you offer instead of a flat no?',
+    'Who is the one person who could actually change this?',
+    'Is this a hard week, or has it stopped letting up?',
   ],
 }
 

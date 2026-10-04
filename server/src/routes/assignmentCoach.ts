@@ -1,10 +1,5 @@
-import { tmpdir } from 'node:os'
 import { Router } from 'express'
-import mammoth from 'mammoth'
 import multer from 'multer'
-import { PDFParse } from 'pdf-parse'
-import * as XLSX from 'xlsx'
-import { createWorker, type Worker } from 'tesseract.js'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { checkFeatureAccess, countUsageLogActionsThisMonth, LESSON_PLANNING_ACTIONS } from '../lib/billing.ts'
@@ -15,7 +10,8 @@ import { buildDocx } from '../lib/docxBuilder.ts'
 import { carryOriginalPictures, parseDocOutput, parseSlidesOutput, sanitizeDeck, sanitizeDocModel, themeFromContext } from '../lib/exportModels.ts'
 import { readOriginalPictures, type OriginalImage, type OriginalPicture } from '../lib/originalImages.ts'
 import { buildPdf } from '../lib/pdfBuilder.ts'
-import { extractPptxText } from '../lib/pptxText.ts'
+import { NoTextFoundError, UnsupportedFileError } from '../lib/extractErrors.ts'
+import { ExtractionTimeoutError, ExtractionTooHeavyError, extractInChild } from '../lib/extractInChild.ts'
 import { buildPptx, THEME_GUIDE } from '../lib/slidesPptx.ts'
 import { prisma } from '../lib/prisma.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
@@ -467,126 +463,34 @@ function contextFromSession(session: {
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } })
 
 // Lazily created once per server process and reused across requests — the
-// English trained-data download only happens on the very first OCR call,
-// not on every upload. Never terminated: this route may be hit again at
-// any time for the life of the process.
-let ocrWorkerPromise: Promise<Worker> | null = null
-function getOcrWorker(): Promise<Worker> {
-  if (!ocrWorkerPromise) {
-    // Cache the downloaded English trained-data in the OS temp dir, not the
-    // working directory — keeps this out of the repo regardless of where
-    // the process runs.
-    ocrWorkerPromise = createWorker('eng', undefined, { cachePath: tmpdir() })
-  }
-  return ocrWorkerPromise
-}
-
-// Plain OCR has no concept of math notation, fractions, or a blank
-// coordinate-grid graph — it just pattern-matches pixel shapes into
-// letters, so dense equations and graph grids come out as unreadable
-// noise no confidence threshold can turn into real math. Rather than
-// showing that noise, this drops any line OCR itself isn't confident
-// about — real prose (titles, instructions, word problems) reliably
-// scores well above this line; garbled equations and grid noise don't.
-// The tradeoff is explicit: some real content is lost along with the
-// noise, but nothing gibberish reaches the teacher or Coach.
-const OCR_MIN_LINE_CONFIDENCE = 60
-
-async function ocrImageBuffer(buffer: Buffer): Promise<string> {
-  const worker = await getOcrWorker()
-  const { data } = await worker.recognize(buffer, {}, { blocks: true, text: true })
-  const lines = (data.blocks ?? []).flatMap((block) => block.paragraphs.flatMap((para) => para.lines))
-  const confident = lines.filter((line) => line.confidence >= OCR_MIN_LINE_CONFIDENCE)
-  return confident.map((line) => line.text).join('')
-}
-
-// pdf-parse's own text output for a page with no real text layer is just
-// this separator artifact, not an empty string — strip it before judging
-// whether OCR is actually needed.
-function stripPdfPageMarkers(text: string): string {
-  return text.replace(/--\s*\d+\s*of\s*\d+\s*--/g, '').trim()
-}
-
-// Scanned/photographed pages are just an embedded image with no text
-// layer at all — pdf-parse (or any text-layer extractor) correctly finds
-// nothing. Falls back to OCR by rendering each page to an image via
-// pdf-parse's own built-in (pure-JS, no native/poppler dependency)
-// screenshot renderer. Capped at a handful of pages to bound memory/latency
-// on an unexpectedly long scanned packet — critically, `first` must be
-// passed to getScreenshot itself, not applied by slicing its result
-// afterward: without it, pdf-parse rasterizes every page in the document
-// up front (at full resolution, each also serialized to a base64 data URL
-// by default) regardless of how many pages are actually used afterward,
-// which was enough to exhaust memory and crash the process on a multi-page
-// scan (surfacing as an opaque 502 rather than a real error response).
-const MAX_OCR_PAGES = 3
-
-// Every sheet becomes a small labeled CSV block — plain enough for Claude to
-// read as a document, and honest about which sheet a row came from when a
-// workbook has more than one.
-function extractXlsxText(buffer: Buffer): string {
-  const workbook = XLSX.read(buffer, { type: 'buffer' })
-  return workbook.SheetNames.map((name) => {
-    const sheet = workbook.Sheets[name]
-    const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false }).trim()
-    if (!csv) return ''
-    return workbook.SheetNames.length > 1 ? `Sheet: ${name}\n${csv}` : csv
-  })
-    .filter(Boolean)
-    .join('\n\n')
-}
-
-async function extractPdfText(buffer: Buffer): Promise<string> {
-  const parser = new PDFParse({ data: buffer })
-  try {
-    const direct = stripPdfPageMarkers((await parser.getText()).text)
-    if (direct.length >= 15) return direct
-
-    const screenshot = await parser.getScreenshot({ scale: 2, first: MAX_OCR_PAGES, imageDataUrl: false })
-    const texts: string[] = []
-    // Sequential, not Promise.all — keeps at most one rendered page buffer
-    // in memory during OCR at a time, rather than holding all of them.
-    for (const page of screenshot.pages) {
-      texts.push(await ocrImageBuffer(Buffer.from(page.data)))
-    }
-    return texts.join('\n\n').trim()
-  } finally {
-    await parser.destroy()
-  }
-}
-
-const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png']
 
 assignmentCoachRouter.post('/extract-text', upload.single('file'), async (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: 'No file received' })
     return
   }
-  const name = req.file.originalname.toLowerCase()
   try {
-    let text = ''
-    if (name.endsWith('.docx')) {
-      text = (await mammoth.extractRawText({ buffer: req.file.buffer })).value
-    } else if (name.endsWith('.pdf')) {
-      text = await extractPdfText(req.file.buffer)
-    } else if (name.endsWith('.pptx')) {
-      text = await extractPptxText(req.file.buffer)
-    } else if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
-      text = extractXlsxText(req.file.buffer)
-    } else if (name.endsWith('.txt')) {
-      text = req.file.buffer.toString('utf-8')
-    } else if (IMAGE_EXTENSIONS.some((ext) => name.endsWith(ext))) {
-      text = await ocrImageBuffer(req.file.buffer)
-    } else {
-      res.status(400).json({ error: 'Please upload a .docx, .pdf, .pptx, .xlsx, .xls, .txt, .jpg, or .png file.' })
-      return
-    }
-    if (!text.trim()) {
-      res.status(422).json({ error: "Couldn't find any text in that file — if it's a scan or photo, make sure the writing is clear and well-lit." })
-      return
-    }
-    res.json({ text: text.trim() })
+    // In a child, for the same reason Look It Over is: the parsers cost the
+    // server 215MB at import and a heavy document used to take the whole
+    // instance with it.
+    const { text } = await extractInChild(req.file.buffer, req.file.originalname)
+    res.json({ text })
   } catch (error) {
+    if (error instanceof UnsupportedFileError) {
+      res.status(400).json({ error: error.message })
+      return
+    }
+    if (error instanceof NoTextFoundError) {
+      res.status(422).json({ error: error.message })
+      return
+    }
+    if (error instanceof ExtractionTimeoutError || error instanceof ExtractionTooHeavyError) {
+      res.status(422).json({
+        error:
+          'That file was too heavy to read — a long scan usually is. Try a smaller PDF, or paste the text instead.',
+      })
+      return
+    }
     console.error('[assignment-coach] extract-text failed:', error)
     res.status(502).json({ error: 'Could not read that file. Please try pasting the text instead.' })
   }

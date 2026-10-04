@@ -71,6 +71,10 @@ export type UsageAction =
   | 'lesson_plan_presentation_review'
   | 'lesson_plan_presentation_generate'
   | 'lesson_plan_delivery_deck'
+  // Look It Over. One action covers the whole surface: a review is one model
+  // call however many lenses are on, so counting lenses would charge a
+  // teacher for being thorough.
+  | 'review_document'
 
 // Every turn-based call in the two free-forever features. Kept as one list so
 // a future action in either area doesn't silently fall back into the flat cap.

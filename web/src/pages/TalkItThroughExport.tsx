@@ -38,7 +38,7 @@ export default function TalkItThroughExport() {
   let n = 0
 
   return (
-    <ReportShell backTo="/talk-to-me">
+    <ReportShell backTo="/talk">
       <ReportCover
         eyebrow="Wivoza · Talk It Through"
         title="What you talked through"

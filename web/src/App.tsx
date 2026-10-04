@@ -1,6 +1,6 @@
 import { GoogleOAuthProvider } from '@react-oauth/google'
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom'
 import Layout from './components/Layout'
 import Landing from './pages/Landing'
 import { getMe, type UserProfile } from './lib/api'
@@ -12,14 +12,16 @@ import { applyPageMeta } from './lib/pageMeta'
 // lazy so a new visitor's first load only ever downloads the code for the
 // page they're actually looking at, not the entire authenticated app.
 const Home = lazy(() => import('./pages/Home'))
-const CoachChat = lazy(() => import('./pages/CoachChat'))
 const Communications = lazy(() => import('./pages/Communications'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Export = lazy(() => import('./pages/Export'))
 const Shared = lazy(() => import('./pages/Shared'))
-const CheatSheet = lazy(() => import('./pages/CheatSheet'))
-const FirstThirtyDays = lazy(() => import('./pages/FirstThirtyDays'))
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
+// The four surfaces. Practice is TryItOut, which stopped being a tab inside
+// Ask & Practice and became a page of its own.
+const LookItOver = lazy(() => import('./pages/LookItOver'))
+const Practice = lazy(() => import('./pages/TryItOut'))
+const MyWork = lazy(() => import('./pages/MyWork'))
 const AudioCoaching = lazy(() => import('./pages/AudioCoaching'))
 const AudioCoachingExport = lazy(() => import('./pages/AudioCoachingExport'))
 const LessonPlanning = lazy(() => import('./pages/LessonPlanning'))
@@ -36,12 +38,9 @@ const Terms = lazy(() => import('./pages/Terms'))
 const Guide = lazy(() => import('./pages/Guide'))
 const ForSchools = lazy(() => import('./pages/ForSchools'))
 const GuideTalkItThrough = lazy(() => import('./pages/GuideTalkItThrough'))
+const GuidePractice = lazy(() => import('./pages/GuidePractice'))
+const GuideLookItOver = lazy(() => import('./pages/GuideLookItOver'))
 const GuideLessonDebrief = lazy(() => import('./pages/GuideLessonDebrief'))
-const GuideAskPractice = lazy(() => import('./pages/GuideAskPractice'))
-const GuideLessonPlanning = lazy(() => import('./pages/GuideLessonPlanning'))
-const GuideAssignmentCoach = lazy(() => import('./pages/GuideAssignmentCoach'))
-const GuideCommunicationCoach = lazy(() => import('./pages/GuideCommunicationCoach'))
-const GuideCheatSheet = lazy(() => import('./pages/GuideCheatSheet'))
 const Faq = lazy(() => import('./pages/Faq'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
@@ -88,6 +87,48 @@ function RequireAuth({
     return <Navigate to="/onboarding" replace />
   }
   return <>{children}</>
+}
+
+/// A redirect that carries the query string with it.
+///
+/// Every old route that moved had meaningful params — `?open=` for a past
+/// item, `?topic=`, `?followUp=` for a check-in link Telegram already sent.
+/// Dropping them would turn a deep link into a landing page, which is a
+/// subtler failure than a 404 and harder to notice.
+export function KeepQuery({ to }: { to: string }) {
+  const { search } = useLocation()
+  return <Navigate to={`${to}${search}`} replace />
+}
+
+/// A retired tool's route: its original page when opening a specific past
+/// item, and a redirect to the surface that replaced it otherwise.
+///
+/// The alternative was redirecting unconditionally, which would have made
+/// every lesson plan, assignment review and message a teacher already has
+/// unopenable — the consolidation reorganising the navigation is not a reason
+/// for their own work to stop working.
+export function LegacyOrRedirect({ to, page }: { to: string; page: React.ReactNode }) {
+  const [params] = useSearchParams()
+  if (params.get('open')) return <>{page}</>
+  return <Navigate to={to} replace />
+}
+
+/// Ask & Practice split in two, so where this lands depends on which half the
+/// teacher was in. Ask's own history lives in Talk It Through, which can open
+/// those rows by id, so nothing needs the old page.
+export function RedirectCoachChat() {
+  const [params] = useSearchParams()
+  const open = params.get('open')
+  if (params.get('tab') === 'practice') {
+    return <Navigate to={open ? `/practice?open=${open}` : '/practice'} replace />
+  }
+  const area = params.get('area')
+  const query = new URLSearchParams()
+  if (open) query.set('open', open)
+  // The old `area` param is the same taxonomy, under its new name.
+  if (area) query.set('topic', area)
+  const suffix = query.toString()
+  return <Navigate to={`/talk${suffix ? `?${suffix}` : ''}`} replace />
 }
 
 // Keeps the document title, description and canonical link in step with the
@@ -147,11 +188,20 @@ export default function App() {
             <Route path="guide" element={<Guide />} />
             <Route path="guide/talk-it-through" element={<GuideTalkItThrough />} />
             <Route path="guide/lesson-debrief" element={<GuideLessonDebrief />} />
-            <Route path="guide/ask-practice" element={<GuideAskPractice />} />
-            <Route path="guide/lesson-planning" element={<GuideLessonPlanning />} />
-            <Route path="guide/assignment-coach" element={<GuideAssignmentCoach />} />
-            <Route path="guide/communication-coach" element={<GuideCommunicationCoach />} />
-            <Route path="guide/cheat-sheet" element={<GuideCheatSheet />} />
+            {/* One guide per surface. */}
+            <Route path="guide/practice" element={<GuidePractice />} />
+            <Route path="guide/look-it-over" element={<GuideLookItOver />} />
+
+            {/* The retired tools' guides. Ask & Practice split in two;
+                Lesson Planning, Assignment Coach and Communication Coach were
+                one act on four file types and are now one guide. These URLs
+                are indexed and linked from inside the app, so they redirect
+                rather than 404. */}
+            <Route path="guide/ask-practice" element={<Navigate to="/guide/talk-it-through" replace />} />
+            <Route path="guide/cheat-sheet" element={<Navigate to="/guide" replace />} />
+            <Route path="guide/lesson-planning" element={<Navigate to="/guide/look-it-over" replace />} />
+            <Route path="guide/assignment-coach" element={<Navigate to="/guide/look-it-over" replace />} />
+            <Route path="guide/communication-coach" element={<Navigate to="/guide/look-it-over" replace />} />
             <Route path="faq" element={<Faq />} />
             <Route path="for-schools" element={<ForSchools />} />
             <Route
@@ -226,14 +276,20 @@ export default function App() {
                 </RequireAuth>
               }
             />
+            {/* Outside the Layout: a voice conversation takes the whole
+                screen, which is why this was never a Layout child. */}
             <Route
-              path="talk-to-me"
+              path="talk"
               element={
                 <RequireAuth user={user} loading={loading} onSignedIn={refreshUser}>
                   <TalkToMe />
                 </RequireAuth>
               }
             />
+            {/* The live URL until now, and the one Telegram's check-in links
+                point at. Query preserved so ?open=, ?topic= and ?followUp=
+                all survive the move. */}
+            <Route path="talk-to-me" element={<KeepQuery to="/talk" />} />
             <Route
               element={
                 <RequireAuth user={user} loading={loading} onSignedIn={refreshUser}>
@@ -242,14 +298,46 @@ export default function App() {
               }
             >
               <Route index element={<Home />} />
-              <Route path="coach-chat" element={<CoachChat />} />
-              <Route path="communications" element={<Communications />} />
-              <Route path="audio-coaching" element={<AudioCoaching />} />
-              <Route path="lesson-planning" element={<LessonPlanning />} />
-              <Route path="assignment-coach" element={<AssignmentCoach />} />
+
+              {/* The four surfaces, plus one history and the profile. */}
+              <Route path="practice" element={<Practice />} />
+              <Route path="look-it-over" element={<LookItOver />} />
+              {/* A result has a URL of its own, so it can be bookmarked,
+                  linked from My Work, and returned to after a reload. The
+                  input state keeps ?draft= for the same reason: a review that
+                  exists but has not been run is still somewhere a teacher can
+                  come back to. */}
+              <Route path="look-it-over/:reviewId" element={<LookItOver />} />
+              <Route path="debrief" element={<AudioCoaching />} />
+              <Route path="work" element={<MyWork />} />
               <Route path="profile" element={<Profile />} />
-              <Route path="cheat-sheet" element={<CheatSheet />} />
-              <Route path="first-30-days" element={<FirstThirtyDays />} />
+
+              {/* The nine tools' routes, kept as redirects.
+                  These are in teachers' browser history and bookmarks, and in
+                  links inside exports and emails already sent. A 404 on any
+                  of them is the consolidation losing a teacher rather than
+                  reorganising the app for them.
+                  Three keep rendering their original page when an `?open=`
+                  id is present: a teacher's own past work has to stay
+                  openable, and those pages are where it was written. */}
+              <Route path="coach-chat" element={<RedirectCoachChat />} />
+              <Route path="communications" element={<LegacyOrRedirect to="/talk" page={<Communications />} />} />
+              <Route
+                path="lesson-planning"
+                element={<LegacyOrRedirect to="/look-it-over" page={<LessonPlanning />} />}
+              />
+              <Route
+                path="assignment-coach"
+                element={<LegacyOrRedirect to="/look-it-over" page={<AssignmentCoach />} />}
+              />
+              <Route path="audio-coaching" element={<KeepQuery to="/debrief" />} />
+
+              {/* Deleted outright. A teacher part-way through First 30 Days
+                  lands on Talk It Through with no error and nothing referring
+                  to a programme that no longer exists — which is the whole
+                  requirement for them. */}
+              <Route path="cheat-sheet" element={<Navigate to="/talk" replace />} />
+              <Route path="first-30-days" element={<Navigate to="/talk" replace />} />
               {/* Always registered, so /admin never falls through to a blank page
                   (e.g. right after logging out on it) — a teacher is sent home. */}
               <Route

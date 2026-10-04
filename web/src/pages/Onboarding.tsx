@@ -58,7 +58,7 @@ function StepHeader({ step, title, children }: { step: WizardStep; title: string
       </p>
       <h1 className="mt-1.5 font-heading text-2xl font-bold text-cream sm:text-3xl">
         {title}
-        <span className="text-gold">.</span>
+        <span className="text-terracotta">.</span>
       </h1>
       {children && <p className="mt-1.5 text-sm text-cream/70">{children}</p>}
     </div>
@@ -396,7 +396,7 @@ export default function Onboarding({ onDone }: { onDone: () => Promise<unknown> 
                 ✓
               </span>
               <h1 className="font-heading text-3xl font-extrabold text-cream">
-                You're all set<span className="text-gold">.</span>
+                You're all set<span className="text-terracotta">.</span>
               </h1>
               <p className="text-sm text-cream/70">
                 Your first recording is a click away whenever you're ready.

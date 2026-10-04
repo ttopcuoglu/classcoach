@@ -5,7 +5,15 @@
 // those genuinely differ per resource. Mirrors the shape already proven by
 // AudioSession.reflectConversation, generalized for reuse.
 
-export type ChatMessage = { role: 'user' | 'assistant'; text: string; createdAt: string }
+export type ChatMessage = {
+  role: 'user' | 'assistant'
+  text: string
+  createdAt: string
+  /// Set on an assistant turn where the coach signalled that another surface
+  /// is the next useful move — see lib/talkOffers.ts. Additive on a Json
+  /// column, so every turn written before offers existed simply has none.
+  offer?: string
+}
 
 export const CHAT_TURN_CAP = 8
 
@@ -43,11 +51,30 @@ export function toClaudeMessages(
   ]
 }
 
-export function appendTurn(conversation: ChatMessage[], userText: string, assistantText: string): ChatMessage[] {
+export function appendTurn(
+  conversation: ChatMessage[],
+  userText: string,
+  assistantText: string,
+  offer?: string | null,
+): ChatMessage[] {
   const now = new Date().toISOString()
   return [
     ...conversation,
     { role: 'user' as const, text: userText, createdAt: now },
-    { role: 'assistant' as const, text: assistantText, createdAt: now },
+    { role: 'assistant' as const, text: assistantText, createdAt: now, ...(offer ? { offer } : {}) },
   ]
+}
+
+/// The offer on the latest assistant turn, if it still stands.
+///
+/// Only the latest: an offer two turns back has been passed over, and
+/// re-showing it would be the app pressing a suggestion the teacher already
+/// moved on from.
+export function latestOffer(conversation: ChatMessage[]): string | null {
+  for (let i = conversation.length - 1; i >= 0; i--) {
+    const turn = conversation[i]
+    if (turn.role !== 'assistant') continue
+    return turn.offer ?? null
+  }
+  return null
 }

@@ -38,15 +38,29 @@ const MOMENTS = [
   'Students were disengaged, or clearly confused',
   'A management moment got away from you',
   'You’re not sure how to respond to a student',
+  'You’re worried about one student in particular',
   'A parent or colleague conversation is coming',
   'You’re still sitting with feedback you received',
+  'You just want to ask something — how to run a better discussion, whether a grade is fair',
   'Something’s bothering you and you can’t name it yet',
+  'The job itself is the problem this week',
+]
+
+/// The seven topic chips, which sit below the mic and are optional by design.
+const TOPICS = [
+  'Teaching and Learning',
+  'Classroom Management',
+  'A student I’m worried about',
+  'Parent Communication',
+  'Professionalism',
+  'Me and this job',
+  'Something else',
 ]
 
 const STEPS = [
   {
     title: 'Describe the situation',
-    body: 'Tap Start Talking and say what happened, the way you’d say it to a colleague you trust. No format, no template. (Prefer to type? “Type instead” is right there.)',
+    body: 'Tap Start talking and say what happened, the way you’d say it to a colleague you trust. No format, no template. Prefer to type? “Type instead” sits right beside it and swaps the mic for a box — it is not a fallback, it is the other way in.',
   },
   {
     title: 'Explore it with your coach',
@@ -58,7 +72,21 @@ const STEPS = [
   },
   {
     title: 'Choose what you’ll try',
-    body: 'Tap Finish session and Coach hands back a short takeaway under three headings — What we explored, What I’ll try, What I’ll notice. Tap Save and it’s waiting for you next time you open Talk It Through.',
+    body: 'Tap Finish session and Coach hands back a short takeaway under three headings — What we explored, What I’ll try, What I’ll notice. It is saved with the rest of your conversations, and a few days later Coach may come back to ask how it went.',
+  },
+]
+
+/// Two things a conversation can offer part-way through. Deliberately rare:
+/// Talk It Through produces nothing up front, and a coach that kept
+/// suggesting you go and do an exercise elsewhere would have broken that.
+const OFFERS = [
+  {
+    title: '“Want to rehearse it?”',
+    body: 'Offered when you have described a conversation you are about to have with a real person. It takes you to Practice with your own words already in the box — not a summary of them.',
+  },
+  {
+    title: '“Want me to look it over?”',
+    body: 'Offered when you have mentioned something you made and are unsure about — a quiz, a plan, a message you have drafted. It opens Look It Over knowing why you are there.',
   },
 ]
 
@@ -87,7 +115,7 @@ const DEBRIEF_RETURNS = [
 const DEBRIEF_ACTIONS = [
   { label: 'Continue This Conversation', body: 'Keep talking if the debrief opened something up.' },
   { label: 'Set a Next Step', body: 'Write down the one thing you’re committing to.' },
-  { label: 'Save My Reflection', body: 'Keep it in Past conversations to come back to.' },
+  { label: 'Save My Reflection', body: 'It joins the rest of your work in My Work, filterable by topic.' },
   { label: 'Start a New Talk It Through', body: 'Begin fresh on something else.' },
 ]
 
@@ -130,7 +158,7 @@ function SampleTakeaway() {
 
 export default function GuideTalkItThrough() {
   return (
-    <GuideShell appTo="/talk-to-me">
+    <GuideShell appTo="/talk">
       <GuideHero
         icon={WaveformIcon}
         title="Talk It Through"
@@ -209,12 +237,60 @@ export default function GuideTalkItThrough() {
             ))}
           </ol>
 
+          <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-6">
+            <p className="font-heading text-lg font-bold text-forest">
+              The topic chips are optional, and they only decide where Coach opens
+            </p>
+            <p className="mt-1.5 text-sm text-ink-soft">
+              Under the mic there is a row of seven. Picking one changes Coach&rsquo;s opening line and the four
+              starter prompts &mdash; and nothing else. If you tap Classroom Management and then talk about a
+              parent email, Coach follows the parent email. Skip them entirely and it just listens.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {TOPICS.map((topic) => (
+                <span
+                  key={topic}
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-semibold ${
+                    topic === 'Something else'
+                      ? 'border border-dashed border-ink-soft/40 text-ink-soft'
+                      : 'bg-cream text-ink-soft'
+                  }`}
+                >
+                  {topic}
+                </span>
+              ))}
+            </div>
+            <p className="mt-4 text-xs text-ink-soft">
+              Two of them change how Coach behaves, not just where it starts. &ldquo;A student I&rsquo;m worried
+              about&rdquo; stays on what you have actually observed and who to tell &mdash; it will not speculate
+              about a diagnosis or a home. &ldquo;Me and this job&rdquo; is supportive and practical, and if what
+              you describe is bigger than a hard week it says so plainly instead of coaching you through it.
+            </p>
+          </div>
+
+          <div className="mt-6">
+            <p className="font-heading text-lg font-bold text-forest">Nothing is produced up front</p>
+            <p className="mt-1.5 text-sm text-ink-soft">
+              You came with a situation, not a request for a document. But when something worth keeping turns up
+              part-way through, Coach offers it inline &mdash; once, and only when it plainly fits. Ignoring the
+              offer costs nothing and the conversation carries on.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {OFFERS.map(({ title, body }) => (
+                <div key={title} className="rounded-2xl bg-cream-card p-5">
+                  <p className="font-heading text-base font-bold text-forest">{title}</p>
+                  <p className="mt-1.5 text-sm text-ink-soft">{body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="mt-6">
             <SampleTakeaway />
           </div>
 
           <div className="mt-8 flex flex-col items-start gap-3">
-            <GuidePrimaryButton to="/talk-to-me">Talk It Through Now</GuidePrimaryButton>
+            <GuidePrimaryButton to="/talk">Talk It Through Now</GuidePrimaryButton>
             <p className="text-xs text-ink-soft">
               Your voice is never saved — only the conversation text. Free, and unlimited.
             </p>
@@ -280,7 +356,7 @@ export default function GuideTalkItThrough() {
               instead</strong> is there from the first screen.
             </p>
             <div className="mt-7 border-t border-hairline pt-6">
-              <GuidePrimaryButton to="/talk-to-me">Talk It Through Now</GuidePrimaryButton>
+              <GuidePrimaryButton to="/talk">Talk It Through Now</GuidePrimaryButton>
             </div>
           </div>
         </GuideSection>
@@ -334,7 +410,7 @@ export default function GuideTalkItThrough() {
             </div>
 
             <div className="mt-7 border-t border-hairline pt-6">
-              <GuidePrimaryButton to="/talk-to-me?mode=debrief">Debrief This Experience</GuidePrimaryButton>
+              <GuidePrimaryButton to="/talk?mode=debrief">Debrief This Experience</GuidePrimaryButton>
             </div>
           </div>
         </GuideSection>
@@ -344,7 +420,7 @@ export default function GuideTalkItThrough() {
         icon={SparkleIcon}
         title="You don\u2019t have to figure it out alone."
         body="Five minutes of thinking out loud usually beats an evening of second-guessing."
-        ctaTo="/talk-to-me"
+        ctaTo="/talk"
         ctaLabel="Talk It Through Now"
       />
     </GuideShell>

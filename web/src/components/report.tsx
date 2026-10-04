@@ -107,7 +107,11 @@ export function ReportSection({
   accent,
   children,
 }: {
-  n: number
+  /// Omitted for a section that has no number on the screen either — the
+  /// lesson's own words, which folded into the summary when the report went
+  /// from six insight bins to three. A numbered badge here would put a
+  /// section on the paper that the screen does not have.
+  n?: number
   title: string
   blurb?: string
   accent: Accent
@@ -121,11 +125,13 @@ export function ReportSection({
           nothing gets sliced, and forbidding the split just pushed a tall
           section wholesale to the next sheet and left half a page blank. */}
       <div className="flex items-center gap-4 break-after-avoid">
-        <span
-          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${accent.band} font-heading text-xl font-bold text-cream`}
-        >
-          {n}
-        </span>
+        {n != null && (
+          <span
+            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${accent.band} font-heading text-xl font-bold text-cream`}
+          >
+            {n}
+          </span>
+        )}
         <div>
           <h2 className="font-heading text-2xl font-extrabold leading-tight text-forest">{title}</h2>
           {blurb && <p className="mt-0.5 text-sm text-ink-soft">{blurb}</p>}

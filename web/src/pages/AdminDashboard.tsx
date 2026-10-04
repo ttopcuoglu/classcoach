@@ -364,7 +364,7 @@ function FilterBar({
         )}
         <h1 className="mt-0.5 font-heading text-2xl font-extrabold text-forest md:text-[34px]">
           {meta.title}
-          <span className="text-gold">.</span>
+          <span className="text-terracotta">.</span>
         </h1>
         <p className="mt-1 text-sm text-ink-soft">{meta.subtitle}</p>
       </div>
@@ -2687,7 +2687,7 @@ function PeoplePanel({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-heading text-2xl font-extrabold text-forest md:text-[34px]">People<span className="text-gold">.</span></h1>
+          <h1 className="font-heading text-2xl font-extrabold text-forest md:text-[34px]">People<span className="text-terracotta">.</span></h1>
           <p className="mt-1 text-sm text-ink-soft">
             Who has an account, who&rsquo;s using Wivoza, and who might need a nudge. You see names and dates only,
             never anyone&rsquo;s recordings or coaching.
@@ -2745,7 +2745,7 @@ function PdFocusAreaPanel({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-heading text-2xl font-extrabold text-forest md:text-[34px]">Professional Learning<span className="text-gold">.</span></h1>
+          <h1 className="font-heading text-2xl font-extrabold text-forest md:text-[34px]">Professional Learning<span className="text-terracotta">.</span></h1>
           <p className="mt-1 text-sm text-ink-soft">
             Turn a shared coaching theme into something you can track over time.
           </p>
@@ -3621,7 +3621,7 @@ function SchoolInquiriesPanel() {
       <div>
         <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza internal</p>
         <h1 className="font-heading text-2xl font-extrabold text-forest md:text-[34px]">
-          School inquiries<span className="text-gold">.</span>
+          School inquiries<span className="text-terracotta">.</span>
         </h1>
         <p className="mt-1 text-sm text-ink-soft">
           Requests from the For Schools page{inquiries ? ` — ${newCount} new` : ''}.

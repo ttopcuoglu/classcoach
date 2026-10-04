@@ -4,22 +4,16 @@ import SupportChat from '../components/SupportChat'
 import { TrainingLibrary } from '../components/TrainingVideos'
 import {
   ArrowRightIcon,
-  ArrowUpIcon,
   BookIcon,
   BrainIcon,
-  ChatBubbleIcon,
   CheckIcon,
   ChecklistIcon,
   HeadsetIcon,
   HomeIcon,
-  LessonPlanIcon,
   LockIcon,
-  MailIcon,
   MicIcon,
   ScenarioIcon,
   SparkleIcon,
-  StarIcon,
-  TargetIcon,
   UserIcon,
   WaveformIcon,
 } from '../components/icons'
@@ -65,6 +59,18 @@ type Feature = {
   guideTo?: string
 }
 type Chapter = { id: string; label: string; tint: string; intro: string; features: Feature[] }
+
+/// The jump nav at the top. Each entry's `to` must match a section's own id.
+const JUMP_NAV: { label: string; to: string }[] = [
+  { label: 'Videos', to: 'videos' },
+  { label: 'Getting started', to: 'getting-started' },
+  { label: 'Talking and rehearsing', to: 'talking-and-rehearsing' },
+  { label: 'Before and after', to: 'before-and-after' },
+  { label: 'Grow', to: 'grow' },
+  { label: 'Across the app', to: 'across-the-app' },
+  { label: 'Privacy', to: 'privacy' },
+  { label: 'For schools', to: 'for-schools' },
+]
 
 function SpecList({ items }: { items: SpecItem[] }) {
   return (
@@ -155,11 +161,11 @@ const GETTING_STARTED: Chapter = {
       intro: 'Your dashboard — built entirely from your own activity, never a generic template.',
       specs: [
         { label: 'Your next step', body: 'the greeting at the top suggests one concrete thing to do next — reflect on your last lesson, record your first one, or try a tool you haven\'t opened yet — with a button that takes you straight there.' },
-        { label: 'Quick actions', body: 'three large one-tap cards for Lesson Debrief, Talk It Through, and Ask & Practice.' },
+        { label: 'Quick actions', body: 'three large one-tap cards for Lesson Debrief, Talk It Through, and Practice.' },
         { label: 'Your coaching path', body: 'a static Notice → Practice → Try → Reflect explainer.' },
         { label: 'Classroom pulse', body: 'a donut chart of your latest lesson\'s student-talk %, plus a sparkline once you have a few sessions.' },
         { label: 'Mood check-in', body: 'tap Good / Okay / Stressed / Overwhelmed and Wivoza quietly suggests a relevant practice category.' },
-        { label: 'Daily tip, quick links, and recent work', body: 'a tip box, shortcuts to Cheat Sheet and First 30 Days, and a feed of your last few sessions.' },
+        { label: 'Daily tip, quick links, and recent work', body: 'a tip box, a link to your growth and to My Work, and a feed of your last few sessions.' },
       ],
     },
   ],
@@ -169,7 +175,7 @@ const TALK_IT_THROUGH: Feature = {
   id: 'talk-it-through',
   icon: WaveformIcon,
   tint: 'bg-mint-tint text-forest',
-  nav: 'Coaching → Talk It Through',
+  nav: 'Talk It Through',
   title: 'Talk It Through',
   guideTo: '/guide/talk-it-through',
   intro: 'A live, spoken back-and-forth with Coach — tap Start Talking (or one of the example prompts) and just talk. Prefer to type? Type instead is always one tap away.',
@@ -185,17 +191,19 @@ const TALK_IT_THROUGH: Feature = {
 }
 
 const REPORT_TABS: SpecItem[] = [
-  { label: 'Summary', body: 'the 60-second read, in the order you\'d want it: a plain-language "Lesson at a glance," one named Strength to keep, your focus metric with its current value and a "try next time" tip, an "Evidence from the lesson" row (who was heard, questions opened, and a moment worth revisiting), and one suggested next step. Every card links through to the fuller detail in Insights.' },
-  { label: 'Insights', body: 'the detail, in five sections — see below.' },
-  { label: 'Reflect', body: 'a spoken debrief with Coach about what the report found. Pick a starting point (talk through today\'s highlights, explore a specific moment, reflect on how the lesson felt, or ask your own question), then talk it through — pause, resume, or type instead at any point. Finish with your own Strengths / Growth areas / My next step / Follow-up date notes, optionally drafted for you from the conversation, and a Lock button that makes the whole report permanently read-only.' },
+  { label: 'Summary', body: 'the 60-second read, led by one next step. Then a plain-language "Lesson at a glance," one named Strength to keep, your focus metric with a "try next time" tip, an "Evidence from the lesson" row (who was heard, questions opened, a moment worth revisiting), and the lesson in its own words. Anything the recording could not judge is collected into one line rather than a panel per absence. Every card links through to Insights.' },
+  { label: 'Insights', body: 'the detail, in three sections — see below.' },
+  { label: 'My notes', body: 'your own written reflection: what you noticed, what you want to explore, your next step and a follow-up date, plus the focus for your next recording. A Lock button makes the whole report permanently read-only. Talking it through happens in Talk It Through now — pressing Discuss anywhere in the report hands the lesson over, carrying what was measured with it, so the conversation joins the rest of yours and can become a check-in.' },
+  { label: 'Rubric Lens', body: 'not a tab but a toggle beside them: it re-reads the whole report through your evaluation framework\'s components. Evidence, never a rating and never a level, and only ever generated when you ask.' },
   { label: 'My Growth', body: 'ten metrics trended across every session you\'ve recorded — talk ratio, higher-order-question %, average wait time, checks for understanding, follow-up questions, redirection language, positive-vs-corrective tone, clear directions given, student names used, and feedback specificity. Pick one as your active focus and it\'s highlighted here and on Summary.' },
 ]
 
+// Three, down from six. Questions & Thinking and Checks & Feedback were one
+// question asked twice, and Clarity & Content folded into Summary, where the
+// lesson's own words already sit beside what the lesson was about.
 const INSIGHTS_SECTIONS: SpecItem[] = [
   { label: 'Talk & Participation', body: 'the teacher / student / silence split for the period, how many separate times students spoke, and a coach-voice read of what the balance suggests.' },
-  { label: 'Questions & Thinking', body: 'every question you asked, logged and tagged recall or higher-order, with the wait time after each one and any follow-ups that built on it — plus your average wait time and higher-order share.' },
-  { label: 'Checks & Feedback', body: 'the checks for understanding you used, and how much of your feedback was specific rather than general — each with the actual moments behind the count.' },
-  { label: 'Clarity & Content', body: 'a detected stated objective (with the exact quote it came from), real-world connections, key vocabulary moments, teacher and student word clouds sized by frequency, and on-demand "content specialist" notes from a subject-area lens.' },
+  { label: 'Questions & Checks', body: 'every question you asked, logged and tagged recall or higher-order, with the wait time after each one and any follow-ups that built on it — and, on the same page, the checks for understanding you used and how much of your feedback was specific rather than general. What you asked and whether it landed is one question, so it is one page.' },
   { label: 'Climate & Routines', body: 'transitions between activities, clear task directions given, student names used, positive-vs-corrective tone balance, and redirection language — each a plain count with a coach-voice note, never a behavior score.' },
 ]
 
@@ -203,7 +211,7 @@ const LESSON_DEBRIEF: Feature = {
   id: 'lesson-debrief',
   icon: MicIcon,
   tint: 'bg-mint-tint text-forest',
-  nav: 'Coaching → Lesson Debrief',
+  nav: 'Lesson Debrief',
   title: 'Lesson Debrief',
   guideTo: '/guide/lesson-debrief',
   intro: 'Record a real class period; Wivoza transcribes it, asks you which voice is the teacher, and turns it into a four-tab report — no audio is ever kept, only the text and what it shows.',
@@ -215,129 +223,45 @@ const LESSON_DEBRIEF: Feature = {
   ],
 }
 
-const ASK_PRACTICE: Feature = {
-  id: 'ask-practice',
-  icon: ChatBubbleIcon,
+const PRACTICE: Feature = {
+  id: 'practice',
+  icon: ScenarioIcon,
   tint: 'bg-mint-tint text-forest',
-  nav: 'Coaching → Ask & Practice',
-  title: 'Ask & Practice',
-  guideTo: '/guide/ask-practice',
-  intro: 'Two tools, one nav item — one for something real, one for rehearsal.',
+  nav: 'Practice',
+  title: 'Practice',
+  guideTo: '/guide/practice',
+  intro: 'One realistic moment at a time, rehearsed before it happens for real.',
   specs: [
-    { label: 'Ask — starters', body: 'four suggested prompts for when you\'re not sure where to begin.' },
-    { label: 'Ask — input', body: 'describe something that already happened, or ask a general question, by typing or speaking; Wivoza figures out which kind of request it is and answers accordingly, inferring a category automatically (or leaving it uncategorized for general questions).' },
-    { label: 'Ask — after your answer', body: 'a "following up" section, plus an open-ended coaching chat to push back or go deeper.' },
-    { label: 'Practice — filters', body: 'category, grade band, and difficulty — any or all of them optional.' },
-    { label: 'Practice — getting a scenario', body: '"New Scenario" one at a time, or a "Quick Session" of three back to back; respond by typing or speaking.' },
-    { label: 'Practice — feedback', body: 'written coaching plus a model response, and a private growth rating that powers a "you\'re improving in this category" callout over time.' },
-    { label: 'Both tools', body: 'save anything worth keeping, share a saved item as a link, and revisit your full saved history.' },
+    { label: 'Four rows', body: 'topic, then the kind of moment within it, then your class, then difficulty — each row narrows the one below, so a choice that cannot apply is never shown.' },
+    { label: 'Topic', body: 'the same seven as Talk It Through. The kinds offered change with it: Classroom Management gives engagement, behaviour in the moment, routines, phones, group work; Parent Communication gives hard news, angry or accusatory, a grade dispute, attendance, a boundary.' },
+    { label: 'Your class', body: 'one line from your profile. Teaching and Learning also asks what you are teaching right now, because its scenarios are about your actual content rather than delivery technique in the abstract.' },
+    { label: 'Difficulty', body: 'Beginner, Intermediate or Advanced, labelled as the scenario\'s difficulty rather than yours.' },
+    { label: 'Describe my own', body: 'always offered. Type the situation you already have in mind and rehearse that instead — and it is where a "want to rehearse it?" handoff from Talk It Through lands, with your own words in the box.' },
+    { label: 'Getting a scenario', body: '"New Scenario" one at a time, or a "Quick Session" of three back to back; respond by typing or speaking.' },
+    { label: 'Feedback', body: 'three named parts — what your move did, what it left on the table, and one line worth keeping — then the offer to run the same situation one notch harder.' },
+    { label: 'Never scored', body: 'a private 1-5 rating steers which scenarios you are offered next. You never see it as a number and neither does anyone else.' },
   ],
 }
 
-const LESSON_PLANNING: Feature = {
-  id: 'lesson-planning',
-  icon: LessonPlanIcon,
-  tint: 'bg-peach-tint text-terracotta',
-  nav: 'Plan → Lesson Planning',
-  title: 'Lesson Planning',
-  guideTo: '/guide/lesson-planning',
-  intro: 'Three modes, depending on how much you\'ve already written — a blank page, a draft you want read, or a deck you\'ve already built.',
-  specs: [
-    { label: 'Generate Ideas — input', body: 'an objective is the only required field; subject, grade level, standard, unit name, and essential question are all optional extras.' },
-    { label: 'Generate Ideas — output', body: 'a sample single day modeled on a gradual-release template: Do Now, an I Do / We Do / You Do agenda with each part labeled and timed, Closure, a higher-order-thinking component, and Homework — explicitly framed as a starting point to adapt, not a script.' },
-    { label: 'Get Feedback — input', body: 'paste or write your own plan. Coach first works out whether it\'s a single lesson or a multi-day/weekly plan and changes its lens accordingly — internal structure for one day, pacing and coherence across the week for several. An objective is optional here: if the plan states or implies one, it coaches around that instead of just noting none was given.' },
-    { label: 'Get Feedback — output', body: 'coaching through a chat thread and a private growth rating; Coach can propose a full "Suggested Revision," shown separately with "Use this version" or "Dismiss" — never applied automatically.' },
-    { label: 'Review a Presentation — input', body: 'upload a .pptx or .pdf — export Google Slides or Keynote as PDF first. The file name and slide count show alongside the review.' },
-    { label: 'Review a Presentation — output', body: 'a read on grade-level fit, visuals, ideas, length, and implementation, plus the same follow-up chat and "Suggested Revision" as Get Feedback.' },
-    { label: 'Review a Presentation — create an improved deck', body: 'one tap builds a new, modern PowerPoint that applies every recommendation. Preview it first, then download. Attach the same file and your own pictures are copied onto the matching slides exactly as they were — nothing is swapped for a stock photo. Where a slide needs a picture you didn\'t have, Wivoza looks for a real, openly licensed one with a credit line, or leaves a clearly marked spot for you.' },
-    { label: 'Generate Ideas and Get Feedback also include', body: 'a "Presentation & Delivery" coaching pass on actually teaching it — opening hook, pacing & timing, engagement checkpoints, explaining the hard part, and closing. Delivery advice, never an edit to the plan itself. You can also turn that coaching into a classroom-ready PowerPoint, previewed before you download it.' },
-    { label: 'Any mode', body: 'save it, share it as a read-only link, or download it.' },
-  ],
-}
-
-const ASSIGNMENT_COACH: Feature = {
-  id: 'assignment-coach',
+const LOOK_IT_OVER: Feature = {
+  id: 'look-it-over',
   icon: BookIcon,
   tint: 'bg-peach-tint text-terracotta',
-  nav: 'Plan → Assignment Coach',
-  title: 'Assignment Coach',
-  guideTo: '/guide/assignment-coach',
-  intro: 'Two paths for the work you hand students — an honest read on an assignment you already wrote, or a rebuild so it still means something now that students have AI.',
+  nav: 'Look It Over',
+  title: 'Look It Over',
+  guideTo: '/guide/look-it-over',
+  intro: 'One drop zone for anything you made, read before students or parents see it. It replaced four separate review tools.',
   specs: [
-    { label: 'Adding the assignment', body: 'paste the text or upload a file — .docx, .pdf, .pptx, .xlsx, .xls, .txt, .jpg, .jpeg, or .png, so a slide deck, a spreadsheet, or a photo of a paper worksheet is a valid way in. A progress ring shows while the file is read. There\'s no intake form: grade level, subject, assignment type, and estimated time are all detected from the assignment itself.' },
-    { label: 'Review — setup', body: 'nothing beyond the assignment. Review asks no questions before it runs.' },
-    { label: 'Review — output', body: 'a snapshot covering the assignment\'s purpose, grade-level fit, thinking and rigor, learning value, workload and clarity, and AI completion risk — each a plain phrase with an explanation behind it, never a number or a grade — topped by one "most important opportunity" card.' },
-    { label: 'Redesign — the one setup question', body: 'how students may use AI: as a thinking partner (question, brainstorm, get feedback, revise — but show their own reasoning), limited to specific teacher-approved steps, or not at all. A "let Wivoza recommend" checkbox picks one for you and says why.' },
-    { label: 'Redesign — output', body: 'which steps are vulnerable to being outsourced wholesale, thinking safeguards that put student reasoning back into the task, copy-ready student AI guidelines, and a full revised assignment.' },
-    { label: 'Revise the whole assignment', body: 'one tap rewrites the assignment with the review\'s recommendations applied, keeping your structure and changing as little as it can. A short "What changed" list shows exactly what moved.' },
-    { label: 'Preview and save as Word, PDF, or PowerPoint', body: 'each revised assignment (from Review or Redesign) has three buttons. Pick one, watch it come together, and preview the finished layout before anything is downloaded — a modern, colorful design that keeps your original sections and wording, with a slide theme chosen to fit the subject. Attach your original file and the pictures in it come along.' },
-    { label: 'The workspace', body: 'the assignment sits there as editable text that saves as you type. Seven one-tap quick actions — address the biggest issue, make it AI-resilient, strengthen the rigor, remove low-value work, clarify student directions, adjust the workload, or review everything together — push the coach at one thing, and an open chat handles anything else.' },
-    { label: 'Clarifying questions', body: 'when one genuinely material detail is uncertain, you get a single question with options rather than a guess presented as fact — and it never gates the analysis, which is generated either way.' },
-    { label: 'Managing assignments', body: 'a finished review hands its text straight into Redesign in one tap, no retyping. Sessions live under My Assignments as Draft or Completed, and each can be starred, exported, or deleted. Unlike most Wivoza tools, there\'s no share link here.' },
+    { label: 'Getting it in', body: 'drag a file, choose one (.docx, .pdf, .pptx, .xlsx, .txt), paste the text, or photograph it — a paper quiz snapped on a phone has its own button and goes through OCR.' },
+    { label: 'What is this?', body: 'the type is detected and you confirm it — "Looks like a quiz — right?" — with seven chips to correct it in one tap. A weak guess arrives with the chips already open.' },
+    { label: 'The seven types', body: 'quiz or exam, homework, assignment, project, lesson plan, presentation, message.' },
+    { label: 'Lenses', body: 'each type opens with the questions worth asking about it, individually toggleable, with the count visible. AI-completion risk starts on for homework, assignments and projects, and off for a quiz — which is sat in the room.' },
+    { label: 'The result', body: 'leads with "If you change one thing", then any timing estimate as a range with its assumption, then the lenses you left on.' },
+    { label: 'Suggested edits', body: 'a marked-up diff, never a replacement document: each edit shows your original struck through, the revision, and why, with "Keep mine" and "Use this" per edit. The export button reads "Export my original" until you accept something, then "Export with N changes".' },
+    { label: 'Redesign for meaningful AI use', body: 'an action from a student-work result, pre-seeded with the document you just uploaded.' },
+    { label: 'Stated limits', body: 'the footer says plainly that it read the document only — not your students, not last week, not what you will say out loud.' },
   ],
 }
-
-const MESSAGE_TOOLS: Feature[] = [
-  {
-    id: 'write-a-message',
-    icon: MailIcon,
-    tint: 'bg-peach-tint text-terracotta',
-    nav: 'Plan → Communication Coach → Write a Message',
-    title: 'Write a Message',
-    intro: 'Draft a ready-to-send message from scratch, a reply, or a rough draft you already have.',
-    specs: [
-      { label: 'Starting point', body: 'Start new, Respond to a message you received, or Improve my draft.' },
-      { label: 'Recipient', body: 'parent/caregiver, student, colleague, or administrator.' },
-      { label: 'Purpose', body: 'academic concern, behavior concern, attendance concern, positive update, meeting request, follow-up, general information, or other.' },
-      { label: 'Tone', body: 'warm and supportive, professional and neutral, firm and direct, or urgent.' },
-      { label: 'Format', body: 'email, text message, class announcement, or a written phone-call follow-up.' },
-      { label: 'Quick actions on the draft', body: 'Make warmer, Make firmer, Shorten, Simplify language, Translate (pick from common languages or type your own), Create another version.' },
-      { label: 'Finishing up', body: 'copy to clipboard, or save it for later.' },
-    ],
-  },
-  {
-    id: 'prepare-conversation',
-    icon: TargetIcon,
-    tint: 'bg-peach-tint text-terracotta',
-    nav: 'Plan → Communication Coach → Prepare for a Meeting',
-    title: 'Prepare for a Meeting',
-    intro: 'A full written plan for a real meeting that\'s already on the calendar.',
-    specs: [
-      { label: 'Input', body: 'the meeting type — parent or family conference, student conference, IEP or 504, team or department, with an administrator, post-observation, difficult colleague conversation, or other — and what the meeting is about, which is the only required field. How it will happen (in person, phone, video call, or formal meeting), who\'s attending, the outcome you\'re hoping for, and anything sensitive or difficult are all optional.' },
-      { label: 'Supporting material', body: 'paste or upload an agenda, email, report, notes, or a spreadsheet you already have — .docx, .pdf, .xlsx, .xls, .txt, .jpg, .jpeg, or .png — so the plan is built around what\'s actually been said rather than a blank slate.' },
-      { label: 'Output — twelve sections', body: 'a suggested meeting agenda, a suggested opening, key talking points, important facts to present, questions to ask, possible reactions, how to respond, language to avoid, boundaries to maintain, a suggested closing, next steps, and honest guidance on when to involve an administrator — with a complete model response sitting in the middle, there to read aloud if the moment gets away from you.' },
-      { label: 'After the plan', body: 'a follow-up chat that revises the plan in place rather than just discussing it alongside, plus two handoffs — "Practice This Meeting" and "Create a Follow-Up Message" — that carry the situation into the relevant tool pre-filled. Save it, or print it to take into the room.' },
-    ],
-  },
-  {
-    id: 'practice-conversation',
-    icon: ScenarioIcon,
-    tint: 'bg-peach-tint text-terracotta',
-    nav: 'Plan → Communication Coach → Practice a Conversation',
-    title: 'Practice a Conversation',
-    intro: 'Rehearse a hard conversation before you have it.',
-    specs: [
-      { label: 'Setup', body: 'who you\'re talking to, the challenge type, grade band (when the other person is a student), and difficulty.' },
-      { label: 'Your turn', body: 'generate a scenario or write your own, then respond by typing or speaking.' },
-      { label: 'Feedback — six rated dimensions', body: 'clarity, empathy, use of evidence, professional boundaries, collaboration, and resolution — each rated strong / developing / needs work with specific feedback.' },
-      { label: 'Also included', body: 'what you did well, your single top priority, a stronger phrase to try, and a full model response.' },
-      { label: 'Next', body: '"Practice Again" resets with a fresh scenario.' },
-    ],
-  },
-  {
-    id: 'review-communication',
-    icon: CheckIcon,
-    tint: 'bg-peach-tint text-terracotta',
-    nav: 'Plan → Communication Coach → Review My Communication',
-    title: 'Review My Communication',
-    intro: 'An honest second read on a message and your planned response before you send it.',
-    specs: [
-      { label: 'Input', body: 'the message you received, your planned response, and a review mode — feedback only, rewrite only, or both.' },
-      { label: 'Output', body: 'an overall assessment, what\'s working, what might land badly, specific recommended changes, a revised response (when requested), and — only when it genuinely applies — honest guidance on looping in an administrator.' },
-      { label: 'After the review', body: 'quick actions (Make warmer / Make firmer / Shorten), a full follow-up chat, save, and share.' },
-    ],
-  },
-]
 
 const GROW: Chapter = {
   id: 'grow',
@@ -346,46 +270,36 @@ const GROW: Chapter = {
   intro: 'The tools that build on everything else you\'ve done in Wivoza.',
   features: [
     {
+      id: 'my-work',
+      icon: ChecklistIcon,
+      tint: 'bg-gold-tint text-terracotta-600',
+      nav: 'My Work',
+      title: 'My Work',
+      intro: 'One history for everything you have made, newest first — it replaced a separate past-list inside each tool.',
+      specs: [
+        { label: 'By surface', body: 'chips for all four, each with its own count. The count shows even at zero, so an empty list reads as a filter rather than as nothing to show.' },
+        { label: 'By topic', body: 'the same seven topics, but only the ones you actually have work under — offering all seven when five are empty would be a row of dead ends.' },
+        { label: 'Saved only', body: 'narrows to the ones you starred.' },
+        { label: 'Filters live in the URL', body: 'so a filtered view can be bookmarked and returned to, and the back button undoes a filter instead of leaving the page.' },
+        { label: 'Older work is here too', body: 'anything you made before the app had four surfaces is listed under the surface it belongs to, and opening it opens the page you wrote it on. Nothing was moved or rewritten to make this list.' },
+      ],
+    },
+    {
       id: 'profile',
       icon: UserIcon,
       tint: 'bg-lavender-tint text-[#6B5FA0]',
-      nav: 'Grow → Profile & Settings',
+      nav: 'Profile & Settings',
       title: 'Profile & Settings',
       intro: 'Everything about your account and your data, in one place.',
       specs: [
         { label: 'Basic info', body: 'your name, grade levels, and subjects taught.' },
+        { label: 'Your classes', body: 'a line per class you teach — most teachers have two or three preps, and one stored room made the app wrong for all but one of them. Coaching starts from your default one and you can switch any time. Add, remove, or Make default; nothing here is required.' },
+        { label: 'Filled in as you go', body: "Wivoza infers a first guess from what you have already told it, and the odd time a surface needs something it does not have it asks one question inline — never a form, and never before letting you do the thing you came to do. Whatever it saves says so, with a \"not quite?\" link that undoes it. At the start of a school year it asks you to confirm the list is still right." },
         { label: 'What Coach remembers', body: 'read the running profile Coach keeps about you, turn it off, or clear it entirely.' },
         { label: 'School', body: 'join with a code, or see the school/district you\'re already part of.' },
         { label: 'Lesson Debrief retention', body: 'keep transcripts and reports indefinitely, or auto-delete after 7, 30, or 90 days.' },
         { label: 'Export playbook', body: 'a printable page of everything you\'ve saved.' },
         { label: 'Reset & clear data', body: 'a permanent, confirmation-gated wipe of your saved scenarios, answers, messages, and Lesson Debrief sessions.' },
-      ],
-    },
-    {
-      id: 'cheat-sheet',
-      icon: StarIcon,
-      tint: 'bg-lavender-tint text-[#6B5FA0]',
-      nav: 'Grow → Cheat Sheet',
-      title: 'Cheat Sheet',
-      guideTo: '/guide/cheat-sheet',
-      intro: 'A personal reference built automatically — nothing shows up until you\'ve saved something, on purpose.',
-      specs: [
-        { label: 'What feeds it', body: 'two things, both a single star tap elsewhere — a saved Practice attempt contributes its model response, and a saved Ask answer contributes its follow-up guidance.' },
-        { label: 'How it\'s grouped', body: 'by situation, not by source: both kinds land together under the same six headings used across the app (responding to resistance, engagement & participation, conflict & repair, interruptions & redirection, routines & transitions, devices & digital routines). A heading only appears once you\'ve saved something into it.' },
-        { label: 'General tips', body: 'saved Ask answers with no specific category — a broader question rather than a situation — collect here instead.' },
-        { label: 'Every entry', body: 'shows the phrase, then a "For:" line naming the original scenario or incident it came from, so an old note still makes sense months later.' },
-      ],
-    },
-    {
-      id: 'first-30-days',
-      icon: ArrowUpIcon,
-      tint: 'bg-lavender-tint text-[#6B5FA0]',
-      nav: 'Grow → First 30 Days',
-      title: 'First 30 Days',
-      intro: 'A fixed checklist for getting the most out of Wivoza early on.',
-      specs: [
-        { label: 'Progress', body: 'a running complete/incomplete count across every item.' },
-        { label: 'Shortcuts', body: 'several items link straight into the relevant tool, sometimes pre-filled, so checking one off is one click.' },
       ],
     },
   ],
@@ -431,7 +345,7 @@ export default function Guide() {
           The complete Wivoza guide
         </span>
         <h1 className="mt-6 font-heading text-4xl font-extrabold leading-[1.1] tracking-tight text-cream sm:text-5xl">
-          Every feature, in full<span className="text-gold">.</span>
+          Every feature, in full<span className="text-terracotta">.</span>
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-lg text-cream/70">
           Not a highlight reel — every field, tab, and button in every Wivoza tool, organized the same way
@@ -443,10 +357,14 @@ export default function Guide() {
       {/* Quick nav */}
       <nav className="border-y border-hairline bg-cream-card">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap justify-center gap-2 px-6 py-4">
-          {['Videos', 'Getting started', 'Coaching', 'Plan', 'Grow', 'Across the app', 'Privacy', 'For schools'].map((label) => (
+          {/* Label and anchor given explicitly rather than derived from the
+              label. Deriving it is how "Plan" kept pointing at #plan after
+              that section became "Before and after" — a broken jump link
+              nothing would have caught. */}
+          {JUMP_NAV.map(({ label, to }) => (
             <a
-              key={label}
-              href={`#${label.toLowerCase().replace(/\s+/g, '-')}`}
+              key={to}
+              href={`#${to}`}
               className="rounded-full border border-hairline bg-cream px-3.5 py-1.5 text-sm font-medium text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
             >
               {label}
@@ -478,67 +396,85 @@ export default function Guide() {
           </div>
         </section>
 
-        {/* Coaching */}
-        <section id="coaching" className="scroll-mt-20 border-b border-hairline py-16">
-          <SectionLabel n={3} label="Coaching" />
+        {/* Talk It Through and Practice — the two surfaces for a situation
+            you are in the middle of. */}
+        <section id="talking-and-rehearsing" className="scroll-mt-20 border-b border-hairline py-16">
+          <SectionLabel n={3} label="Talking and rehearsing" />
           <p className="mt-4 max-w-xl text-lg text-ink-soft">
-            Three ways to get real coaching, from a full recorded lesson to a thirty-second check-in.
+            Two surfaces for a situation you are in the middle of: one to think it through out loud, one to
+            rehearse the moment before it happens.
           </p>
           <div className="mt-8 flex flex-col gap-5">
+            <FeatureBlock feature={TALK_IT_THROUGH} />
+            <FeatureBlock feature={PRACTICE} />
+
+            <div className="rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
+              <h4 className="font-heading text-lg font-bold text-forest">
+                The seven topics, shared by both
+              </h4>
+              <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+                Teaching and Learning · Classroom Management · A student I&rsquo;m worried about · Parent
+                Communication · Professionalism · Me and this job · Something else.
+              </p>
+              <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+                In Talk It Through they are optional and decide only where Coach opens &mdash; pick Classroom
+                Management, talk about a parent email, and it follows the parent email. In Practice the topic
+                decides which kinds of moment you are offered. Either way, whatever you save is tagged with it,
+                so My Work can filter by it.
+              </p>
+              <div className="mt-5 flex items-start gap-3 rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
+                <BrainIcon className="mt-0.5 h-5 w-5 shrink-0 text-forest" />
+                <p className="text-sm text-forest">
+                  Two topics change how coaching behaves rather than just where it starts. &ldquo;A student
+                  I&rsquo;m worried about&rdquo; stays observational &mdash; it helps you notice, write it down
+                  and decide who to escalate to, and never speculates about a diagnosis or a home. &ldquo;Me and
+                  this job&rdquo; is supportive and practical, and when something is bigger than a hard week it
+                  says so plainly instead of coaching through it.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Before and after — the same lesson, at both ends of it. */}
+        <section id="before-and-after" className="scroll-mt-20 border-b border-hairline py-16">
+          <SectionLabel n={4} label="Before and after" />
+          <p className="mt-4 max-w-xl text-lg text-ink-soft">
+            The same lesson at both ends: a read on what you made before anyone sees it, and a report on what
+            actually happened in the room.
+          </p>
+          <div className="mt-8 flex flex-col gap-5">
+            <FeatureBlock feature={LOOK_IT_OVER} />
             <FeatureBlock feature={LESSON_DEBRIEF} />
 
             <div className="rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
-              <h4 className="font-heading text-lg font-bold text-forest">Inside a Lesson Debrief report — all four tabs</h4>
+              <h4 className="font-heading text-lg font-bold text-forest">Inside a Lesson Debrief report</h4>
               <SpecList items={REPORT_TABS} />
-              <h4 className="mt-7 font-heading text-lg font-bold text-forest">The five Insights sections</h4>
+              <h4 className="mt-7 font-heading text-lg font-bold text-forest">The three Insights sections</h4>
               <SpecList items={INSIGHTS_SECTIONS} />
               <div className="mt-5 flex items-start gap-3 rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
                 <BrainIcon className="mt-0.5 h-5 w-5 shrink-0 text-forest" />
                 <p className="text-sm text-forest">
-                  Every number is honest about its own confidence — something Wivoza couldn't reliably
-                  measure shows as unavailable, never as a hidden zero, and a real confirmed zero always
-                  shows as a plain, full-strength zero. The two never look the same, on purpose.
+                  Every number is honest about its own confidence &mdash; something Wivoza couldn&rsquo;t reliably
+                  measure shows as unavailable, never as a hidden zero, and a real confirmed zero always shows as a
+                  plain, full-strength zero. The two never look the same, on purpose. Everything a recording
+                  couldn&rsquo;t judge is collected into one line rather than a panel per absence.
                 </p>
               </div>
             </div>
 
-            <FeatureBlock feature={TALK_IT_THROUGH} />
-            <FeatureBlock feature={ASK_PRACTICE} />
-          </div>
-        </section>
-
-        {/* Plan */}
-        <section id="plan" className="scroll-mt-20 border-b border-hairline py-16">
-          <SectionLabel n={4} label="Plan" />
-          <p className="mt-4 max-w-xl text-lg text-ink-soft">Get ready for what's ahead — a lesson to teach, work to hand out, or a conversation to have.</p>
-          <div className="mt-8 flex flex-col gap-5">
-            <FeatureBlock feature={LESSON_PLANNING} />
-            <FeatureBlock feature={ASSIGNMENT_COACH} />
-            {/* The four message tools are one nav item, so the deep guide
-                covers all four together rather than each block linking to it. */}
             <div className="rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
-              <div className="flex items-center gap-3.5">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-terracotta text-cream">
-                  <MailIcon className="h-5 w-5" />
-                </span>
-                <h4 className="font-heading text-xl font-bold text-forest">Communication Coach</h4>
-              </div>
-              <p className="mt-4 text-sm leading-relaxed text-ink-soft">
-                One nav item, four separate tools — picked by where you are relative to the conversation: it
-                needs writing, it's on the calendar, you're dreading it, or you've drafted a reply and
-                something feels off. Each one is detailed below.
+              <h4 className="font-heading text-lg font-bold text-forest">
+                A plan you had read over, and the recording of you teaching it
+              </h4>
+              <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+                Link a recording to a lesson plan you reviewed in Look It Over, and the report compares them:
+                &ldquo;you planned 10&ndash;14 minutes for this lesson; the recording suggests about 4.&rdquo;
+                It reports the gap and declines to grade it &mdash; a lesson that diverges from its plan is
+                frequently a teacher reading the room correctly. Linking is something you do, not something
+                guessed: a wrong pairing would produce a confident false comparison.
               </p>
-              <Link
-                to="/guide/communication-coach"
-                className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-terracotta-600 hover:text-terracotta"
-              >
-                Read the teacher's guide to Communication Coach
-                <ArrowRightIcon className="h-3.5 w-3.5" />
-              </Link>
             </div>
-            {MESSAGE_TOOLS.map((f) => (
-              <FeatureBlock key={f.id} feature={f} />
-            ))}
           </div>
         </section>
 
@@ -560,7 +496,7 @@ export default function Guide() {
           <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
             <SpecList
               items={[
-                { label: 'Save', body: 'a star toggle on practice attempts, answers, messages, and plans — keeps the good ones out of the noise and feeds your Cheat Sheet.' },
+                { label: 'Save', body: 'a star toggle on practice attempts, answers, messages, and plans — keeps the good ones out of the noise, and My Work can filter to just those.' },
                 { label: 'Share', body: 'a private, read-only link. No account is needed to view it, and the recipient sees only that one item — nothing else in your account.' },
                 { label: 'Export', body: 'one printable "Wivoza — Your Playbook" page of everything you\'ve saved, ready to print or save as a PDF.' },
               ]}
