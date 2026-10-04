@@ -753,7 +753,7 @@ export default function TalkToMe() {
       <header className="flex items-center justify-between bg-forest px-4 py-3 text-cream sm:px-6">
         <p className="font-heading text-base font-bold text-cream">
           {isDebrief ? 'Debrief with Coach' : 'Talk to Coach'}
-          <span className="text-gold">.</span>
+          <span className="text-terracotta">.</span>
         </p>
         {/* A fast, no-questions-asked way out — deliberately distinct from
             "Finish session" below: this skips the takeaway entirely. */}
@@ -791,7 +791,7 @@ export default function TalkToMe() {
                     </p>
                     <h1 className="mt-2 font-heading text-2xl font-bold text-cream">
                       {isDebrief ? "Here's your debrief" : "Here's your takeaway"}
-                      <span className="text-gold">.</span>
+                      <span className="text-terracotta">.</span>
                     </h1>
                   </div>
                   <button

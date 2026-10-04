@@ -141,7 +141,7 @@ function InquiryForm() {
           <CheckIcon className="h-7 w-7" />
         </span>
         <h3 className="font-heading text-3xl font-extrabold">
-          Thank you<span className="text-gold">.</span>
+          Thank you<span className="text-terracotta">.</span>
         </h3>
         <p className="max-w-md text-cream/75">
           We’ve got your request and will reply to <span className="font-semibold text-cream">{sentTo}</span>.
@@ -162,7 +162,7 @@ function InquiryForm() {
       <div className="bg-forest px-6 py-6 text-cream sm:px-8">
         <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Get in touch</p>
         <h3 className="mt-2 font-heading text-2xl font-bold sm:text-3xl">
-          Tell us about your school<span className="text-gold">.</span>
+          Tell us about your school<span className="text-terracotta">.</span>
         </h3>
         <p className="mt-1.5 text-sm text-cream/70">We’ll use this only to reply to you.</p>
       </div>
@@ -313,7 +313,7 @@ export default function ForSchools() {
             For schools & districts
           </span>
           <h1 className="mx-auto mt-6 max-w-3xl font-heading text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-5xl">
-            Private coaching for every teacher in your building<span className="text-gold">.</span>
+            Private coaching for every teacher in your building<span className="text-terracotta">.</span>
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-lg text-cream/75">
             Give your whole staff Wivoza Plus, see how coaching is taking hold across your school, and keep every
@@ -352,7 +352,7 @@ export default function ForSchools() {
         <div className="mb-8 max-w-2xl">
           <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">What a school license includes</p>
           <h2 className="mt-2 font-heading text-3xl font-extrabold text-forest">
-            One license, three wins<span className="text-gold">.</span>
+            One license, three wins<span className="text-terracotta">.</span>
           </h2>
         </div>
         <div className="grid gap-5 md:grid-cols-3">
@@ -381,7 +381,7 @@ export default function ForSchools() {
               <ShieldIcon className="h-6 w-6" />
             </span>
             <h2 className="mt-4 font-heading text-2xl font-extrabold text-forest">
-              Coaching, not evaluation<span className="text-gold">.</span>
+              Coaching, not evaluation<span className="text-terracotta">.</span>
             </h2>
             <p className="mt-2 text-sm text-ink-soft">
               Teachers only open up to a coach they trust. So the privacy line is built into the product, not left
@@ -405,7 +405,7 @@ export default function ForSchools() {
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">What school leaders see</p>
             <h2 className="mt-2 font-heading text-3xl font-extrabold text-forest">
-              The big picture, without watching anyone<span className="text-gold">.</span>
+              The big picture, without watching anyone<span className="text-terracotta">.</span>
             </h2>
             <p className="mt-3 text-ink-soft">
               Your admin panel — and a short pilot report you can share with your district — shows how coaching is
@@ -465,7 +465,7 @@ export default function ForSchools() {
         <div className="mb-6 max-w-2xl">
           <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Inside the admin panel</p>
           <h2 className="mt-2 font-heading text-3xl font-extrabold text-forest">
-            Every number explains itself<span className="text-gold">.</span>
+            Every number explains itself<span className="text-terracotta">.</span>
           </h2>
           <p className="mt-3 text-ink-soft">
             Your dashboard opens with the answer, points to what needs your attention, and shows whether the work you
@@ -512,7 +512,7 @@ export default function ForSchools() {
         <div className="mb-8 max-w-2xl">
           <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">How it works</p>
           <h2 className="mt-2 font-heading text-3xl font-extrabold text-forest">
-            From first note to first login<span className="text-gold">.</span>
+            From first note to first login<span className="text-terracotta">.</span>
           </h2>
         </div>
         <div className="grid gap-4 md:grid-cols-3">

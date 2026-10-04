@@ -452,7 +452,7 @@ export default function TryItOut({
         <div className="flex flex-col gap-1">
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Coach</p>
           <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
-            Practice<span className="text-gold">.</span>
+            Practice<span className="text-terracotta">.</span>
           </h1>
           <p className="max-w-2xl text-ink-soft">
             Rehearse it before it happens for real. Same topics as Talk It Through — pick one, get a scenario,

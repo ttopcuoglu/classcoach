@@ -345,7 +345,7 @@ export default function Guide() {
           The complete Wivoza guide
         </span>
         <h1 className="mt-6 font-heading text-4xl font-extrabold leading-[1.1] tracking-tight text-cream sm:text-5xl">
-          Every feature, in full<span className="text-gold">.</span>
+          Every feature, in full<span className="text-terracotta">.</span>
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-lg text-cream/70">
           Not a highlight reel — every field, tab, and button in every Wivoza tool, organized the same way

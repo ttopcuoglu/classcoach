@@ -21,7 +21,7 @@ export function PanelHeader({
       <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">{eyebrow}</p>
       <Heading className="mt-2 font-heading text-2xl font-bold text-cream sm:text-3xl">
         {title}
-        <span className="text-gold">.</span>
+        <span className="text-terracotta">.</span>
       </Heading>
       {children && <div className="mt-1.5 max-w-2xl text-sm text-cream/70">{children}</div>}
     </div>

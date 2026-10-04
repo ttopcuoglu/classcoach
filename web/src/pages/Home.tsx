@@ -384,7 +384,7 @@ export default function Home() {
           <h1 className="mt-2 font-heading text-3xl font-extrabold text-cream sm:text-4xl">
             {greeting}
             {firstName ? `, ${firstName}` : ''}
-            <span className="text-gold">.</span>
+            <span className="text-terracotta">.</span>
           </h1>
           <p className="mt-1.5 text-cream/70">What would help you feel more prepared today?</p>
         </div>

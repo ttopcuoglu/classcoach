@@ -276,7 +276,7 @@ export default function Profile() {
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Wivoza · Grow</p>
           <h1 className="mt-2 font-heading text-3xl font-extrabold text-cream md:text-4xl">
-            Profile & Settings<span className="text-gold">.</span>
+            Profile & Settings<span className="text-terracotta">.</span>
           </h1>
           <p className="mt-1.5 text-cream/70">Tell us about your classroom so coaching can be more relevant.</p>
         </div>

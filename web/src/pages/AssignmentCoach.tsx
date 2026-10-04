@@ -225,7 +225,7 @@ export default function AssignmentCoach() {
       <div className="flex flex-col gap-1.5">
         <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Plan</p>
         <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
-          Assignment Coach<span className="text-gold">.</span>
+          Assignment Coach<span className="text-terracotta">.</span>
         </h1>
         <p className="text-ink-soft">Design, review, and refine meaningful student work—with a coach beside you.</p>
         <Link

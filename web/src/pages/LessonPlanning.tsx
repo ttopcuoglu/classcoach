@@ -78,7 +78,7 @@ export default function LessonPlanning() {
       <div className="flex flex-col gap-1">
         <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Plan</p>
         <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
-          Lesson Planning<span className="text-gold">.</span>
+          Lesson Planning<span className="text-terracotta">.</span>
         </h1>
         <p className="text-ink-soft">
           Get feedback on a plan you wrote, generate a sample plan for ideas, or get feedback on a presentation.
