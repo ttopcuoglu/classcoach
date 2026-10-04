@@ -132,6 +132,20 @@ function statusLabel(state: VisualState, hasConversation: boolean): string {
   }
 }
 
+/// A block's own heading. Every section of the start screen gets one, in the
+/// same voice and at the same weight: the topic chips used to carry their
+/// question in body text, and the sub-options and the class line carried no
+/// heading at all, which left the page reading as one undifferentiated column
+/// of controls with no way to tell where one choice ended and the next began.
+function SectionLabel({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div>
+      <p className="font-heading text-base font-bold text-forest">{title}</p>
+      {hint && <p className="mt-0.5 text-sm text-ink-soft">{hint}</p>}
+    </div>
+  )
+}
+
 export default function TalkToMe() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -1126,12 +1140,10 @@ export default function TalkToMe() {
                     would be asking a question that is already answered. */}
                 {!isDebrief && !followUp && (
                   <div className="flex flex-col gap-2 text-left">
-                    <div>
-                      <p className="text-sm font-medium text-ink">
-                        Want me focused on something?{' '}
-                        <span className="font-normal text-ink-soft">Optional — skip it and I'll just listen.</span>
-                      </p>
-                    </div>
+                    <SectionLabel
+                      title="Want me focused on something?"
+                      hint="Optional — skip it and I'll just listen."
+                    />
                     <div className="flex flex-wrap gap-2.5">
                       {TOPICS.map(({ value, label, ghost }) => {
                         const selected = topic === value
@@ -1161,7 +1173,12 @@ export default function TalkToMe() {
                         the prompts it changes the meaning of. Still optional,
                         and tapping a selected one clears it. */}
                     {topicKinds.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
+                      <div className="mt-1 flex flex-col gap-2">
+                        <SectionLabel
+                          title="Anything more specific?"
+                          hint="Still optional — it only moves where Coach opens."
+                        />
+                        <div className="flex flex-wrap gap-2">
                         {topicKinds.map(({ value, label }) => {
                           const picked = kind === value
                           return (
@@ -1178,8 +1195,9 @@ export default function TalkToMe() {
                             >
                               {label}
                             </button>
-                          )
-                        })}
+                            )
+                          })}
+                        </div>
                       </div>
                     )}
 
@@ -1205,36 +1223,16 @@ export default function TalkToMe() {
                   </div>
                 )}
 
-                <div className="flex flex-col gap-2.5">
-                  {!isDebrief && !followUp && (
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
-                      Or start with one of these
-                    </p>
-                  )}
-                  <div className="grid gap-2.5 sm:grid-cols-2">
-                    {(followUp ? CHECK_IN_PROMPTS : isDebrief ? DEBRIEF_PROMPTS : examplePrompts).map((prompt, i) => (
-                      <button
-                        key={prompt}
-                        type="button"
-                        onClick={() => submitText(prompt)}
-                        className={`group flex items-center justify-between gap-3 rounded-2xl px-5 py-4 text-left text-sm font-medium text-forest transition-shadow hover:shadow-md ${
-                          ['bg-peach-tint/60', 'bg-gold-tint/60', 'bg-mint-tint/60', 'bg-peach-tint/30'][i % 4]
-                        }`}
-                      >
-                        {prompt}
-                        <span aria-hidden="true" className="shrink-0 text-terracotta transition-transform group-hover:translate-x-0.5">→</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Last, and quiet. It is context the coach uses, not a
-                    question the teacher has to answer before starting — and
-                    it reports null for a teacher who has no class saved, which
-                    only changes which starter prompts are picked. */}
+                {/* Above the starter prompts, because it is the room those
+                    prompts are written for — read it before choosing one, not
+                    after. Still never a question that has to be answered
+                    first: it reports null for a teacher with no class saved,
+                    which only changes which prompts get picked. */}
                 {!isDebrief && !followUp && (
-                  <div className="text-left">
+                  <div className="flex flex-col gap-2 text-left">
+                    <SectionLabel title="Your class" hint="What Coach assumes about your room. Change it any time." />
                     <ClassContextLine
+                      compact
                       onChange={(prep) =>
                         setRoom((prev) =>
                           prep == null
@@ -1254,6 +1252,30 @@ export default function TalkToMe() {
                     />
                   </div>
                 )}
+
+                <div className="flex flex-col gap-2.5">
+                  {!isDebrief && !followUp && (
+                    <SectionLabel
+                      title="Or start with one of these"
+                      hint="Tap one to begin — you can say anything else instead."
+                    />
+                  )}
+                  <div className="grid gap-2.5 sm:grid-cols-2">
+                    {(followUp ? CHECK_IN_PROMPTS : isDebrief ? DEBRIEF_PROMPTS : examplePrompts).map((prompt, i) => (
+                      <button
+                        key={prompt}
+                        type="button"
+                        onClick={() => submitText(prompt)}
+                        className={`group flex items-center justify-between gap-3 rounded-2xl px-5 py-4 text-left text-sm font-medium text-forest transition-shadow hover:shadow-md ${
+                          ['bg-peach-tint/60', 'bg-gold-tint/60', 'bg-mint-tint/60', 'bg-peach-tint/30'][i % 4]
+                        }`}
+                      >
+                        {prompt}
+                        <span aria-hidden="true" className="shrink-0 text-terracotta transition-transform group-hover:translate-x-0.5">→</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 {!isDebrief && !followUp && (
                   <Link

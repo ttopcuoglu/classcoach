@@ -79,7 +79,11 @@ function renderAt(path = '/talk') {
 /// missing feature.
 function starterPrompts(): string[] {
   const heading = screen.getByText('Or start with one of these')
-  const buttons = Array.from(heading.parentElement?.querySelectorAll('button') ?? [])
+  // The heading sits in its own block and the grid of prompts is that block's
+  // next sibling, so this reads the prompts without depending on how either
+  // is styled.
+  const grid = heading.parentElement?.nextElementSibling
+  const buttons = Array.from(grid?.querySelectorAll('button') ?? [])
   return buttons.map((b) => b.textContent?.replace(/→$/, '').trim() ?? '')
 }
 
@@ -121,18 +125,39 @@ test('both ways in are buttons in the hero, with talking as the primary', async 
 })
 
 // The specified page order.
-test('the page runs mic hero, then topic chips, then starter prompts, then the class line', async () => {
+test('the page runs mic hero, then topic chips, then the class line, then the starters', async () => {
   renderAt()
   await waitFor(() => expect(screen.getByText('Hi. What would you like to talk about?')).toBeTruthy())
 
   const hero = positionOf('Hi. What would you like to talk about?')
   const chips = positionOf('Want me focused on something?')
-  const starters = positionOf('Or start with one of these')
   const classLine = positionOf('Your class')
+  const starters = positionOf('Or start with one of these')
 
   expect(hero).toBeLessThan(chips)
-  expect(chips).toBeLessThan(starters)
-  expect(starters).toBeLessThan(classLine)
+  expect(chips).toBeLessThan(classLine)
+  // The class line is the room every starter prompt below is written for, so
+  // it is read before one is chosen rather than after.
+  expect(classLine).toBeLessThan(starters)
+})
+
+// Every block says what it is. Without headings the page read as one
+// undifferentiated column of controls, with no way to tell where one choice
+// ended and the next began.
+test('every section of the start screen carries a visible heading', async () => {
+  renderAt('/talk?topic=classroom_management')
+  await waitFor(() => expect(screen.getByText('Or start with one of these')).toBeTruthy())
+  for (const heading of [
+    'Want me focused on something?',
+    'Anything more specific?',
+    'Your class',
+    'Or start with one of these',
+  ]) {
+    const node = screen.getByText(heading)
+    expect(node, heading).toBeTruthy()
+    // A heading, not body text buried in a paragraph of something else.
+    expect(node.className, heading).toContain('font-bold')
+  }
 })
 
 test('the chips are labelled as optional, in so many words', async () => {
