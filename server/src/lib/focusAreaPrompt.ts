@@ -27,7 +27,9 @@ const SUB_CATEGORY_MENU = FOCUS_AREAS.map(
 
 /// Who the coach is and what they measure against, for the Ask and Practice
 /// prompts alike.
-export function coachIdentity(area: FocusArea | null): string {
+/// Takes only the two fields it reads, so a Topic (the consolidated taxonomy)
+/// and a FocusArea (what Ask still passes) both satisfy it.
+export function coachIdentity(area: { coachRole: string; bestPractice: string } | null): string {
   if (area) {
     return `You are a warm, practical ${area.coachRole}, working with K-12 teachers. Everything you say is judged against ${area.bestPractice}.`
   }
@@ -67,13 +69,21 @@ If none of that area's sub-categories clearly fits (for example a general questi
 }
 
 /// The standard the private 1-5 rating is scored against.
-export function ratingStandard(area: FocusArea | null): string {
+export function ratingStandard(area: { bestPractice: string } | null): string {
   return area ? area.bestPractice : "the best practice for whichever area you assigned above"
 }
 
 /// The per-area instructions for the scenario writer — the artifact shape, the
 /// difficulty ladder, and the hard limits.
-export function scenarioAreaBlock(area: FocusArea): string {
+/// Takes only the four fields it actually reads, so both a Topic (the
+/// consolidated taxonomy) and a FocusArea (what Ask still passes) satisfy it
+/// without either having to know about the other.
+export function scenarioAreaBlock(area: {
+  label: string
+  practiceArtifact: string
+  difficultyTiers: string
+  safety: string
+}): string {
   return `Focus area: ${area.label}.
 
 What a scenario in this area is:
