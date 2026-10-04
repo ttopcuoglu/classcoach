@@ -38,12 +38,9 @@ const Terms = lazy(() => import('./pages/Terms'))
 const Guide = lazy(() => import('./pages/Guide'))
 const ForSchools = lazy(() => import('./pages/ForSchools'))
 const GuideTalkItThrough = lazy(() => import('./pages/GuideTalkItThrough'))
+const GuidePractice = lazy(() => import('./pages/GuidePractice'))
+const GuideLookItOver = lazy(() => import('./pages/GuideLookItOver'))
 const GuideLessonDebrief = lazy(() => import('./pages/GuideLessonDebrief'))
-const GuideAskPractice = lazy(() => import('./pages/GuideAskPractice'))
-const GuideLessonPlanning = lazy(() => import('./pages/GuideLessonPlanning'))
-const GuideAssignmentCoach = lazy(() => import('./pages/GuideAssignmentCoach'))
-const GuideCommunicationCoach = lazy(() => import('./pages/GuideCommunicationCoach'))
-const GuideCheatSheet = lazy(() => import('./pages/GuideCheatSheet'))
 const Faq = lazy(() => import('./pages/Faq'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
@@ -191,11 +188,20 @@ export default function App() {
             <Route path="guide" element={<Guide />} />
             <Route path="guide/talk-it-through" element={<GuideTalkItThrough />} />
             <Route path="guide/lesson-debrief" element={<GuideLessonDebrief />} />
-            <Route path="guide/ask-practice" element={<GuideAskPractice />} />
-            <Route path="guide/lesson-planning" element={<GuideLessonPlanning />} />
-            <Route path="guide/assignment-coach" element={<GuideAssignmentCoach />} />
-            <Route path="guide/communication-coach" element={<GuideCommunicationCoach />} />
-            <Route path="guide/cheat-sheet" element={<GuideCheatSheet />} />
+            {/* One guide per surface. */}
+            <Route path="guide/practice" element={<GuidePractice />} />
+            <Route path="guide/look-it-over" element={<GuideLookItOver />} />
+
+            {/* The retired tools' guides. Ask & Practice split in two;
+                Lesson Planning, Assignment Coach and Communication Coach were
+                one act on four file types and are now one guide. These URLs
+                are indexed and linked from inside the app, so they redirect
+                rather than 404. */}
+            <Route path="guide/ask-practice" element={<Navigate to="/guide/talk-it-through" replace />} />
+            <Route path="guide/cheat-sheet" element={<Navigate to="/guide" replace />} />
+            <Route path="guide/lesson-planning" element={<Navigate to="/guide/look-it-over" replace />} />
+            <Route path="guide/assignment-coach" element={<Navigate to="/guide/look-it-over" replace />} />
+            <Route path="guide/communication-coach" element={<Navigate to="/guide/look-it-over" replace />} />
             <Route path="faq" element={<Faq />} />
             <Route path="for-schools" element={<ForSchools />} />
             <Route
