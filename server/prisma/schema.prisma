@@ -96,6 +96,7 @@ model User {
   assignmentCoachSessions AssignmentCoachSession[]
   pdFocusAreas      PdFocusArea[]
   coachFollowUps    CoachFollowUp[]
+  classProfiles     ClassProfile[]
 
   @@index([passwordResetTokenHash])
 }
@@ -148,6 +149,53 @@ model PdFocusArea {
   status          String    @default("active") // "active" | "archived"
   createdAt       DateTime  @default(now())
   archivedAt      DateTime?
+}
+
+// A class the teacher actually teaches — their "prep". Class context used to
+// be asked for on every screen that needed it (Ask, Practice, Lesson
+// Planning, Assignment Coach, Lesson Debrief each had their own fields and
+// their own columns), which meant a teacher answered the same five questions
+// in five places and no screen could learn from another.
+//
+// It is a LIST rather than a single value because most teachers have two or
+// three preps, and a single stored room made the app wrong for all but one of
+// them. One row is marked isDefault and is what a surface starts from.
+//
+// `topic` — what they are teaching this week — is deliberately NOT here. It is
+// the only room field that changes weekly, so it is asked per-use and never
+// remembered (see Scenario.topic).
+//
+// source is "teacher" (they entered or confirmed it) or "inferred" (seeded by
+// the migration from data they had already given elsewhere). confirmedAt is
+// null until the teacher has actually agreed to it, which is what makes the
+// reversible "Saved to your class — not quite?" confirmation honest: an
+// inferred row is a guess until they say otherwise. schoolYear records which
+// year the row was last confirmed for, so a new August can ask again rather
+// than silently carrying last year's sections forward.
+model ClassProfile {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Optional teacher-set name, e.g. "3rd period Bio". Falls back to a line
+  // derived from the fields below when null.
+  label       String?
+  // "K-2" | "3-5" | "6-8" | "9-12" — the same bands as Scenario/Debrief,
+  // validated at the application layer like every other enum in this schema.
+  gradeBand   String
+  subject     String?
+  course      String?
+  courseLevel String?
+  // Who is in the room — "inclusion" | "english_learners". Multi-select, and
+  // separate from courseLevel: a section is routinely more than one at once.
+  classMakeup String[]  @default([])
+  isDefault   Boolean   @default(false)
+  source      String    @default("teacher")
+  confirmedAt DateTime?
+  schoolYear  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
 }
 
 // One row per Claude-costing call, used to enforce a per-user daily limit

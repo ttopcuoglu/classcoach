@@ -9,6 +9,7 @@ import { audioSessionsRouter, failOrphanedTranscriptions } from './routes/audioS
 import { authRouter } from './routes/auth.ts'
 import { billingRouter } from './routes/billing.ts'
 import { billingWebhookRouter } from './routes/billingWebhook.ts'
+import { classProfilesRouter } from './routes/classProfiles.ts'
 import { conversationPlanRouter } from './routes/conversationPlan.ts'
 import { conversationPrepRouter } from './routes/conversationPrep.ts'
 import { debriefRouter } from './routes/debrief.ts'
@@ -74,6 +75,7 @@ app.use('/api/telegram/webhook', telegramWebhookRouter)
 app.use('/api/scenarios', requireAuth, scenariosRouter)
 app.use('/api/attempts', requireAuth, attemptsRouter)
 app.use('/api/profile', requireAuth, profileRouter)
+app.use('/api/class-profiles', requireAuth, classProfilesRouter)
 app.use('/api/debriefs', requireAuth, debriefRouter)
 app.use('/api/follow-ups', requireAuth, followUpsRouter)
 app.use('/api/parent-messages', requireAuth, parentMessageRouter)

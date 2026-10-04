@@ -1875,3 +1875,69 @@ export function getSchoolInquiries(): Promise<SchoolInquiry[]> {
 export function updateSchoolInquiryStatus(id: string, status: SchoolInquiry['status']): Promise<SchoolInquiry> {
   return request(`/api/school-inquiries/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
 }
+
+// --- class context ---
+
+/// One of the teacher's preps. Most teachers have two or three; one is the
+/// default that every surface starts from.
+///
+/// `line` is built on the server so the web app, the iOS app and any export
+/// can never disagree about how a room reads. `confirmed` is false while the
+/// row is still a guess nobody has agreed to, and `needsConfirmation` folds in
+/// the new-school-year rule on top of that.
+export type ClassContext = {
+  id: string
+  label: string | null
+  gradeBand: string
+  subject: string | null
+  course: string | null
+  courseLevel: string | null
+  classMakeup: string[]
+  isDefault: boolean
+  confirmed: boolean
+  inferred: boolean
+  schoolYear: string | null
+  /// "Grades 9–12 · Biology · Honors · ELs in the room"
+  line: string
+  needsConfirmation: boolean
+}
+
+export type ClassContextInput = {
+  label?: string | null
+  gradeBand: string
+  subject?: string | null
+  course?: string | null
+  courseLevel?: string | null
+  classMakeup?: string[]
+  isDefault?: boolean
+}
+
+/// The teacher's preps, default first. Seeds one by inference on the server's
+/// first read, so an existing teacher never retypes what the app already
+/// knows. An empty list is a normal answer — nothing may block on it.
+export function getClassProfiles(): Promise<ClassContext[]> {
+  return request('/api/class-profiles')
+}
+
+export function createClassProfile(data: ClassContextInput): Promise<ClassContext> {
+  return request('/api/class-profiles', { method: 'POST', body: JSON.stringify(data) })
+}
+
+/// Edit one prep, or confirm it with `confirm: true`.
+///
+/// The response carries `previous` — the row as it was before this call — so
+/// an inline save can offer a real undo ("Saved to your class — not quite?")
+/// without the server holding any undo state.
+export function updateClassProfile(
+  id: string,
+  data: Partial<ClassContextInput> & { confirm?: boolean },
+): Promise<ClassContext & { previous: ClassContext }> {
+  return request(`/api/class-profiles/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+}
+
+/// Deletes a prep and returns the list that remains — the default moves to the
+/// oldest survivor, so a teacher is never left with preps and no default.
+export function deleteClassProfile(id: string): Promise<ClassContext[]> {
+  return request(`/api/class-profiles/${id}`, { method: 'DELETE' })
+}
+
