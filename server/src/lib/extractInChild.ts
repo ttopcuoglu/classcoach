@@ -6,6 +6,7 @@
 /// result here, not a dead server.
 
 import { spawn } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { NoTextFoundError, UnsupportedFileError } from './extractErrors.ts'
 
@@ -19,11 +20,40 @@ const CHILD = fileURLToPath(new URL('./extractChild.ts', import.meta.url))
 /// to hurry a reader.
 const TIMEOUT_MS = 90_000
 
-/// The child's own heap ceiling. Below the instance's limit on purpose: a
-/// child that hits this exits with a V8 OOM we can report, instead of the
-/// kernel killing whichever process it likes — which, in a server, is
-/// usually the server.
-const CHILD_HEAP_MB = 700
+/// The child's heap ceiling, sized against the room the container actually
+/// has rather than guessed.
+///
+/// This was a flat 700MB, which is worse than useless inside a 512MB
+/// container: V8 would never self-limit, so the kernel got there first and
+/// killed whichever process it liked — which in a server is usually the
+/// server. The point of a cap is to lose the child predictably.
+///
+/// What is left is the container's limit, less what the parent is already
+/// holding, less a margin for the request in flight and the platform's own
+/// overhead.
+function childHeapMb(): number {
+  const limit = containerLimitMb()
+  if (limit == null) return 700
+  const parentMb = Math.round(process.memoryUsage().rss / 1024 / 1024)
+  const MARGIN_MB = 64
+  return Math.max(128, limit - parentMb - MARGIN_MB)
+}
+
+function containerLimitMb(): number | null {
+  for (const path of ['/sys/fs/cgroup/memory.max', '/sys/fs/cgroup/memory/memory.limit_in_bytes']) {
+    try {
+      const raw = readFileSync(path, 'utf8').trim()
+      if (raw === 'max') continue
+      const bytes = Number(raw)
+      if (Number.isFinite(bytes) && bytes > 0 && bytes < 64 * 1024 * 1024 * 1024) {
+        return Math.round(bytes / 1024 / 1024)
+      }
+    } catch {
+      // Not this kernel's layout, or not readable. Try the next.
+    }
+  }
+  return null
+}
 
 export type Extracted = { text: string; pageCount: number | null }
 
@@ -31,7 +61,7 @@ export function extractInChild(buffer: Buffer, fileName: string): Promise<Extrac
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      ['--import', 'tsx', `--max-old-space-size=${CHILD_HEAP_MB}`, CHILD],
+      ['--import', 'tsx', `--max-old-space-size=${childHeapMb()}`, CHILD],
       { stdio: ['pipe', 'pipe', 'pipe'] },
     )
 

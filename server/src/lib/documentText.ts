@@ -8,10 +8,16 @@
 
 import { tmpdir } from 'node:os'
 import { NoTextFoundError, UnsupportedFileError } from './extractErrors.ts'
-import mammoth from 'mammoth'
-import { PDFParse } from 'pdf-parse'
-import * as XLSX from 'xlsx'
-import { createWorker, type Worker } from 'tesseract.js'
+import type { Worker } from 'tesseract.js'
+
+// Loaded per format, not per process. The container has 512MB for everything,
+// and these cost pdf-parse 176MB, xlsx 34MB, mammoth 6MB at import — so
+// reading one .docx used to pay for the PDF engine as well. Even in a child
+// that exists for one document, the document only has one type.
+const loadMammoth = async () => (await import('mammoth')).default
+const loadPdfParse = async () => (await import('pdf-parse')).PDFParse
+const loadXlsx = async () => await import('xlsx')
+const loadTesseract = async () => (await import('tesseract.js')).createWorker
 import { extractPptxText } from './pptxText.ts'
 
 // English trained-data download only happens on the very first OCR call,
@@ -23,7 +29,9 @@ function getOcrWorker(): Promise<Worker> {
     // Cache the downloaded English trained-data in the OS temp dir, not the
     // working directory — keeps this out of the repo regardless of where
     // the process runs.
-    ocrWorkerPromise = createWorker('eng', undefined, { cachePath: tmpdir() })
+    ocrWorkerPromise = loadTesseract().then((createWorker) =>
+      createWorker('eng', undefined, { cachePath: tmpdir() }),
+    )
   }
   return ocrWorkerPromise
 }
@@ -71,7 +79,8 @@ const MAX_OCR_PAGES = 3
 // Every sheet becomes a small labeled CSV block — plain enough for Claude to
 // read as a document, and honest about which sheet a row came from when a
 // workbook has more than one.
-function extractXlsxText(buffer: Buffer): string {
+async function extractXlsxText(buffer: Buffer): Promise<string> {
+  const XLSX = await loadXlsx()
   const workbook = XLSX.read(buffer, { type: 'buffer' })
   return workbook.SheetNames.map((name) => {
     const sheet = workbook.Sheets[name]
@@ -84,6 +93,7 @@ function extractXlsxText(buffer: Buffer): string {
 }
 
 async function extractPdfText(buffer: Buffer): Promise<string> {
+  const PDFParse = await loadPdfParse()
   const parser = new PDFParse({ data: buffer })
   try {
     const direct = stripPdfPageMarkers((await parser.getText()).text)
@@ -119,13 +129,13 @@ export async function extractDocumentText(buffer: Buffer, originalName: string):
   const name = originalName.toLowerCase()
   let text = ''
   if (name.endsWith('.docx')) {
-    text = (await mammoth.extractRawText({ buffer })).value
+    text = (await (await loadMammoth()).extractRawText({ buffer })).value
   } else if (name.endsWith('.pdf')) {
     text = await extractPdfText(buffer)
   } else if (name.endsWith('.pptx')) {
     text = await extractPptxText(buffer)
   } else if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
-    text = extractXlsxText(buffer)
+    text = await extractXlsxText(buffer)
   } else if (name.endsWith('.txt')) {
     text = buffer.toString('utf-8')
   } else if (IMAGE_EXTENSIONS.some((ext) => name.endsWith(ext))) {
@@ -148,7 +158,8 @@ export async function extractDocumentText(buffer: Buffer, originalName: string):
 export async function countPages(buffer: Buffer, originalName: string): Promise<number | null> {
   const name = originalName.toLowerCase()
   if (name.endsWith('.pdf')) {
-    const parser = new PDFParse({ data: buffer })
+    const PDFParse = await loadPdfParse()
+  const parser = new PDFParse({ data: buffer })
     try {
       // `total` is pdf-parse's page count on InfoResult.
       return (await parser.getInfo()).total ?? null
