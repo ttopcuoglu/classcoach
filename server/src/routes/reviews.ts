@@ -6,8 +6,6 @@ import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
 import { describeClassContext } from '../lib/classProfile.ts'
 import {
-  extractDocumentText,
-  countPages,
   NoTextFoundError,
   UnsupportedFileError,
 } from '../lib/documentText.ts'
@@ -19,6 +17,11 @@ import {
   primaryType,
   type IncomingFile,
 } from '../lib/reviewFileSet.ts'
+import {
+  ExtractionTimeoutError,
+  ExtractionTooHeavyError,
+  extractInChild,
+} from '../lib/extractInChild.ts'
 import { findStudentNames, stripStudentNames } from '../lib/studentNames.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { prisma } from '../lib/prisma.ts'
@@ -227,51 +230,22 @@ const SELECT = {
 // creating the review so the teacher sees the detected type and can correct
 // it before anything is stored — and so a file that turns out to be
 // unreadable never leaves an empty review behind.
-/// How long reading one document may take before the teacher is told it did
-/// not work.
-///
-/// Extraction has no natural ceiling: OCR on a photographed page downloads a
-/// language model on first use and then runs a WASM recognizer, and a scanned
-/// PDF does that per page. Without a limit a slow one simply never answers,
-/// the platform in front of this eventually gives up, and the teacher gets a
-/// gateway error with no message in it — which says nothing about their file
-/// and does not tell them that pasting the text would work.
-const EXTRACT_TIMEOUT_MS = 45_000
-
-class ExtractTimeoutError extends Error {}
-
-function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new ExtractTimeoutError()), ms)
-    work.then(
-      (value) => {
-        clearTimeout(timer)
-        resolve(value)
-      },
-      (error) => {
-        clearTimeout(timer)
-        reject(error)
-      },
-    )
-  })
-}
-
 reviewsRouter.post('/extract', upload.single('file'), async (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: 'No file received' })
     return
   }
   try {
-    const text = await withTimeout(
-      extractDocumentText(req.file.buffer, req.file.originalname),
-      EXTRACT_TIMEOUT_MS,
-    )
+    // In a child process, which is the whole point: reading a PDF costs this
+    // process about 300MB it never gives back, and a document heavy enough to
+    // exhaust the instance was killing the server rather than failing.
+    const { text, pageCount } = await extractInChild(req.file.buffer, req.file.originalname)
     const detection = detectDocType(text, req.file.originalname)
     res.json({
       text: text.slice(0, MAX_DOCUMENT_CHARS),
       truncated: text.length > MAX_DOCUMENT_CHARS,
       fileName: req.file.originalname,
-      pageCount: await countPages(req.file.buffer, req.file.originalname),
+      pageCount,
       ...detection,
     })
   } catch (error) {
@@ -283,10 +257,21 @@ reviewsRouter.post('/extract', upload.single('file'), async (req, res) => {
       res.status(422).json({ error: error.message })
       return
     }
-    if (error instanceof ExtractTimeoutError) {
+    if (error instanceof ExtractionTimeoutError) {
       console.error('[reviews] extract timed out:', req.file.originalname, req.file.size)
       res.status(422).json({
         error: 'That took too long to read — a photo or a long scan can. Try a smaller file, or paste the text instead.',
+      })
+      return
+    }
+    // The document was too big to read in the memory one document gets. Said
+    // as the fact it is, with the way round it, rather than as a server
+    // error — because from the teacher's side it is a fact about their file.
+    if (error instanceof ExtractionTooHeavyError) {
+      console.error('[reviews] extract ran out of room:', req.file.originalname, req.file.size)
+      res.status(422).json({
+        error:
+          'That file was too heavy to read — a long scan usually is. Try exporting it as a smaller PDF, sending it in two halves, or pasting the text.',
       })
       return
     }
