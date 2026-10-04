@@ -289,33 +289,51 @@ async function openReviewed() {
   await waitFor(() => expect(screen.getByText('If you change one thing')).toBeTruthy())
 }
 
-test('the result leads with the one-thing card, above the lens findings', async () => {
+// The one change leads, above everything a teacher could choose to read next.
+test('the result leads with the one-thing card, above the lens nav', async () => {
   await openReviewed()
   const all = Array.from(document.querySelectorAll('*'))
   const oneThing = all.indexOf(screen.getByText('If you change one thing'))
-  // The lens label appears twice — on its toggle and as the finding's heading
-  // — so the finding's own body is the unambiguous anchor for the order.
-  const finding = all.indexOf(screen.getByText('Items 1-3 are recall. Item 4 is really a reading test.'))
-  expect(oneThing).toBeLessThan(finding)
+  const lensNav = all.indexOf(screen.getByRole('navigation', { name: 'Review sections' }))
+  expect(oneThing).toBeLessThan(lensNav)
   expect(screen.getByText('Split question 4 — it is measuring reading, not the content.')).toBeTruthy()
 })
 
-test('only lenses that are on and produced something get a finding section', async () => {
+// Edits are what a teacher arrived for, so that is what is open.
+test('the edits section is selected first', async () => {
   await openReviewed()
-  expect(screen.getByText('Items 1-3 are recall. Item 4 is really a reading test.')).toBeTruthy()
-  // AI risk stays in the toggle list — a teacher has to be able to turn it on
-  // — but it was off when this ran, so it contributes no finding section.
-  // Exactly one lens heading is rendered as a result section.
-  const headings = Array.from(document.querySelectorAll('p.font-heading')).map((n) => n.textContent)
-  expect(headings.filter((h) => h === 'What each item measures')).toHaveLength(1)
-  expect(headings.filter((h) => h === 'AI completion risk')).toHaveLength(0)
+  const edits = screen.getByRole('button', { name: /Suggested edits ·/ })
+  expect(edits.getAttribute('aria-pressed')).toBe('true')
+})
+
+test('only lenses that produced something get a pill, and its finding opens', async () => {
+  await openReviewed()
+  // Scoped to the nav: the lens TOGGLES are still on the page above, and a
+  // teacher has to be able to turn AI risk on. What it must not have is a
+  // result pill, because an empty section promises a finding that is not
+  // there.
+  const nav = screen.getByRole('navigation', { name: 'Review sections' })
+  const pills = Array.from(nav.querySelectorAll('button')).map((b) => b.textContent)
+  expect(pills.some((p) => p?.includes('AI completion risk'))).toBe(false)
+  expect(pills.some((p) => p?.includes('What each item measures'))).toBe(true)
+
+  fireEvent.click(
+    Array.from(nav.querySelectorAll('button')).find((b) => b.textContent === 'What each item measures')!,
+  )
+
+  await waitFor(() =>
+    expect(screen.getByText('Items 1-3 are recall. Item 4 is really a reading test.')).toBeTruthy(),
+  )
 })
 
 // "Any timing estimate must show its assumption or a range."
 test('a timing estimate shows a range and its assumption', async () => {
   await openReviewed()
+  // Shown among the assumptions rather than in a card of its own, so every
+  // number on the page is accounted for in one place.
   expect(screen.getByText(/20–30 minutes/)).toBeTruthy()
-  expect(screen.getByText('Assuming: Two minutes per short-answer item.')).toBeTruthy()
+  expect(screen.getByText(/Two minutes per short-answer item\./)).toBeTruthy()
+  expect(screen.getByText('What the numbers assume')).toBeTruthy()
 })
 
 // The limits are part of the result, not a footnote somewhere else.
@@ -665,4 +683,57 @@ test('using it as is is offered, and says so to the server', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Use it as is' }))
 
   await waitFor(() => expect(runReview).toHaveBeenCalledWith('r1', 'keep'))
+})
+
+// --- the result contract ---
+
+// Criterion 11: it renders on every result, not as a preference.
+test('the limits footnote is on the result whatever else is', async () => {
+  await openReviewed()
+  expect(screen.getByText(LIMITS)).toBeTruthy()
+})
+
+// Criterion 7, as the UI can state it: the teacher's words stay on screen
+// beside what they would become, and neither button acts until pressed.
+test('an edit is a diff — the original stays, struck through', async () => {
+  await openReviewed()
+  const original = screen.getByText('Students will discuss the reading.')
+  expect(original.className).toContain('line-through')
+  expect(screen.getByRole('button', { name: 'Use this' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Keep mine' })).toBeTruthy()
+})
+
+// The finish bar says what has been decided before it offers to hand anything
+// over, and the export button says what it will actually produce.
+test('the finish bar counts what was accepted', async () => {
+  await openReviewed()
+  expect(screen.getByText('Nothing changed yet')).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Export my original' })).toBeTruthy()
+})
+
+// A review with no suggested edits is a result, not a failure — and the
+// lenses that ran are still worth reading.
+test('zero edits reads as an answer, not an error', async () => {
+  createReview.mockResolvedValue(review())
+  runReview.mockResolvedValue(review({ ...REVIEWED, edits: [], acceptedCount: 0, exportLabel: 'Export my original' }))
+  renderPage()
+  await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
+  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText(/2 of 3 on/)).toBeTruthy())
+  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
+
+  await waitFor(() => expect(screen.getByText('Nothing I’d change before tomorrow')).toBeTruthy())
+  // The lenses still have their pills.
+  const nav = screen.getByRole('navigation', { name: 'Review sections' })
+  expect(nav.querySelectorAll('button').length).toBeGreaterThan(1)
+})
+
+// Criterion 12: every control is a real button with a name.
+test('every control on the result is a named button', async () => {
+  await openReviewed()
+  const unnamed = Array.from(document.querySelectorAll('button')).filter(
+    (b) => !(b.textContent?.trim() || b.getAttribute('aria-label')),
+  )
+  expect(unnamed).toEqual([])
 })

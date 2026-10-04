@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import type { Prisma } from '../generated/prisma/client.ts'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
@@ -47,7 +48,25 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 
 /// review that was never going to be useful.
 const MAX_DOCUMENT_CHARS = 60_000
 
-type StoredLens = { key: string; on: boolean; finding?: string | null }
+/// A lens as stored on the review.
+///
+/// `finding` is the old single-blob shape and is kept for reviews run before
+/// the contract had parts. New runs fill `title`/`body`, and the result page
+/// falls back to `finding` — a review from last week has to keep rendering.
+type StoredLens = {
+  key: string
+  on: boolean
+  finding?: string | null
+  title?: string | null
+  body?: string | null
+  /// "low" when the document did not give the lens enough to go on. The lens
+  /// then says what it cannot see rather than guessing, and the card says so.
+  confidence?: 'high' | 'low' | null
+  /// What in the document it is pointing at.
+  evidence?: string[]
+  /// Which section of a long document, when the review was scoped.
+  section?: string | null
+}
 
 function parseLenses(value: unknown, docType: DocType): StoredLens[] {
   const allowed = allowedLensKeys(docType)
@@ -59,12 +78,19 @@ function parseLenses(value: unknown, docType: DocType): StoredLens[] {
       key: l.key as string,
       on: l.on === true,
       finding: typeof l.finding === 'string' ? l.finding : null,
+      title: typeof l.title === 'string' ? l.title : null,
+      body: typeof l.body === 'string' ? l.body : null,
+      confidence: (l.confidence === 'low' || l.confidence === 'high' ? l.confidence : null) as StoredLens['confidence'],
+      evidence: Array.isArray(l.evidence) ? l.evidence.filter((e): e is string => typeof e === 'string') : [],
+      section: typeof l.section === 'string' ? l.section : null,
     }))
   // A stored list that has drifted from the type's lens set (the teacher
   // corrected the type after the review ran) is topped up rather than
   // replaced, so findings already produced survive the correction.
   for (const fallback of defaultLensesFor(docType)) {
-    if (!parsed.some((l) => l.key === fallback.key)) parsed.push({ ...fallback, finding: null })
+    if (!parsed.some((l) => l.key === fallback.key)) {
+      parsed.push({ ...fallback, finding: null, title: null, body: null, confidence: null, evidence: [], section: null })
+    }
   }
   return allowed.map((key) => parsed.find((l) => l.key === key)!).filter(Boolean)
 }
@@ -83,8 +109,14 @@ function toReview(row: {
   originalText: string
   focusArea: string | null
   classProfileId: string | null
+  classProfile: { gradeBand: string; subject: string | null; course: string | null; courseLevel: string | null; classMakeup: string[] } | null
   lenses: unknown
   oneThing: string | null
+  oneThingDetail: string | null
+  assumptions: unknown
+  notVisible: unknown
+  scopeMode: string | null
+  scopeLabel: string | null
   edits: unknown
   timingBasis: unknown
   status: string
@@ -109,12 +141,21 @@ function toReview(row: {
     originalText: row.originalText,
     focusArea: row.focusArea,
     classProfileId: row.classProfileId,
+    /// The room this was judged against, as it was stored on the review —
+    /// not whichever class the teacher has selected now. A result that
+    /// silently re-labels itself when the default prep changes is a result
+    /// that cannot be trusted a week later.
+    classLine: row.classProfile ? describeClassContext(row.classProfile) : null,
     lenses: parseLenses(row.lenses, docType).map((l) => ({
       ...l,
       label: LENSES[l.key]?.label ?? l.key,
       blurb: LENSES[l.key]?.blurb ?? '',
     })),
     oneThing: row.oneThing,
+    oneThingDetail: row.oneThingDetail ?? null,
+    assumptions: Array.isArray(row.assumptions) ? row.assumptions : [],
+    notVisible: Array.isArray(row.notVisible) ? row.notVisible.filter((n) => typeof n === 'string') : [],
+    scope: row.scopeMode ? { mode: row.scopeMode, label: row.scopeLabel ?? null } : null,
     edits,
     /// Surfaced rather than hidden: an edit quoting text that is not in the
     /// document is the one failure that could attribute an invented sentence
@@ -141,8 +182,16 @@ const SELECT = {
   originalText: true,
   focusArea: true,
   classProfileId: true,
+  classProfile: {
+    select: { gradeBand: true, subject: true, course: true, courseLevel: true, classMakeup: true },
+  },
   lenses: true,
   oneThing: true,
+  oneThingDetail: true,
+  assumptions: true,
+  notVisible: true,
+  scopeMode: true,
+  scopeLabel: true,
   edits: true,
   timingBasis: true,
   status: true,
@@ -363,9 +412,54 @@ How to be useful here:
 ${CORE_COACHING_RULES}`
 
 /// The one-thing card, the per-lens findings, and the edits.
+/// One lens's answer, as the contract asks for it.
+///
+/// Returns null when the block is not the JSON it was asked for, so the caller
+/// can keep the raw text instead — a finding in the wrong shape is still a
+/// finding, and dropping it would lose the only thing the lens produced.
+function parseLensFinding(raw: string): Partial<StoredLens> | null {
+  let value: unknown
+  try {
+    value = JSON.parse(raw.trim())
+  } catch {
+    return null
+  }
+  if (!value || typeof value !== 'object') return null
+  const r = value as Record<string, unknown>
+  const body = typeof r.body === 'string' ? r.body.trim() : ''
+  if (!body) return null
+  return {
+    title: typeof r.title === 'string' && r.title.trim() ? r.title.trim() : null,
+    body,
+    // Anything that is not an explicit "low" is treated as high: a model that
+    // forgot the field is not thereby expressing doubt.
+    confidence: r.confidence === 'low' ? 'low' : 'high',
+    evidence: Array.isArray(r.evidence) ? r.evidence.filter((e): e is string => typeof e === 'string') : [],
+    // Kept so an old result and a new one render through the same path.
+    finding: body,
+  }
+}
+
+/// The JSON array blocks — assumptions, not_visible. An unparseable block is
+/// dropped rather than failing the review.
+function parseJsonArray(text: string, tag: string): unknown[] {
+  const raw = extractTag(text, tag)
+  if (!raw || raw.trim().toLowerCase() === 'none') return []
+  try {
+    const parsed = JSON.parse(raw.trim())
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    console.warn(`[reviews] ${tag} block was not valid JSON; continuing without it`)
+    return []
+  }
+}
+
 function buildRunPrompt(docType: DocType, lensKeys: string[], classLine: string | null): string {
   const lensBlocks = lensKeys
-    .map((key, i) => `<lens_${i + 1} key="${key}">\n${LENSES[key].label}: ${LENSES[key].instruction}\n</lens_${i + 1}>`)
+    .map(
+      (key, i) =>
+        `<lens_${i + 1} key="${key}">\n${LENSES[key].label}: ${LENSES[key].instruction}\n\nAnswer as a JSON object and nothing else: {"title": "...", "body": "...", "confidence": "high|low", "evidence": ["..."]}\n- "title" is three to six words naming what you found, not the lens's own name.\n- "body" is the finding itself, two to four sentences.\n- "confidence" is "low" when the document did not give you enough to judge this. Say what you cannot see in the body rather than guessing — a confident answer built on nothing is worse than no answer.\n- "evidence" quotes or names the parts of the document you are pointing at. Empty if you are reasoning about an absence.\n</lens_${i + 1}>`,
+    )
     .join('\n')
 
   return `${RULES}
@@ -375,7 +469,10 @@ This document is a ${DOC_TYPE_LABELS[docType].toLowerCase()}.${classLine ? `\nIt
 Respond with exactly these sections and nothing outside them.
 
 <one_thing>
-If the teacher changes one thing, what should it be? One or two sentences, naming the specific part of the document. This is the first thing they will read, so it has to be the single highest-value change — not the easiest one, and not a summary of everything below.
+A JSON object and nothing else: {"headline": "...", "detail": "..."}
+- "headline" is the single change, in under twelve words. It is set at 25px on the result page, so it is a sentence a teacher reads at a glance.
+- "detail" is one or two sentences saying where in the document and why it matters most.
+- Exactly one, for the whole review. The highest-leverage change, not the easiest and not a summary of everything below.
 </one_thing>
 
 Then one block per lens, using the exact tag names given:
@@ -383,7 +480,7 @@ ${lensBlocks}
 
 <edits>
 Specific text replacements, as a JSON array and nothing else. Each entry:
-{"anchor": "...", "revision": "...", "why": "...", "lens": "<the lens key this came from>"}
+{"anchor": "...", "revision": "...", "why": "...", "lens": "<the lens key this came from>", "where": "...", "tag": "...", "severity": "high|medium|low"}
 
 Rules that matter more than the content:
 - "anchor" MUST be a verbatim substring of the document, copied exactly, character for character. If you cannot copy it exactly, leave the edit out.
@@ -392,8 +489,24 @@ Rules that matter more than the content:
 - "why" is one sentence. An edit without a reason is not offered to the teacher.
 - Never anchor two edits to overlapping text.
 - Offer at most 6. Fewer, better-chosen edits are more useful than a marked-up page.
+- "where" points at the place as a teacher would: "ITEM 7 · MULTIPLE CHOICE", "SLIDE 4", "STEP 2 OF THE DIRECTIONS". Upper case, short.
+- "tag" names the kind of problem in three or four words: "Measures the wrong thing", "Assumes help at home". A label, not a sentence.
+- "severity" is how much it matters: "high" if it changes what the work assesses or who can do it, "medium" if it costs clarity or time, "low" if it is worth doing but nothing breaks without it.
+- "why" ties the change to what the teacher is trying to achieve, never to style preference.
 - These are suggestions the teacher accepts or declines one at a time. Do not rewrite the document.
 </edits>
+
+<assumptions>
+Every number anywhere in your answer, as a JSON array and nothing else. Each entry: {"label": "...", "value": "...", "calibratable": true|false}
+- "label" is what the number is about — "Timing", "Reading level".
+- "value" states the number AND its basis in the same breath: "90s per multiple-choice item, 4 min per open response".
+- "calibratable" is true when the teacher could correct the basis from knowing their own class.
+- If you stated a figure in any lens body, it has an entry here. A number whose basis is not shown is a number nobody can check, and this surface does not show those. Output [] only if you stated no numbers at all.
+</assumptions>
+
+<not_visible>
+A JSON array of short phrases naming what this read could not see — "what you'll say out loud", "what students covered last week", "how long your class actually takes to settle". Three at most, and only ones that genuinely bear on what you were asked to judge. Not a disclaimer: the specific blind spots of THIS review.
+</not_visible>
 
 <timing>
 Only if a lens above estimated time. A JSON object: {"minutes": [low, high], "assumption": "..."}. Never a single number — a bare figure reads as a measurement. If no lens estimated time, output the word none.
@@ -478,10 +591,16 @@ reviewsRouter.post('/:id/run', async (req, res) => {
       return
     }
 
+    // A lens block that will not parse keeps its raw text as `finding`, which
+    // is what the result page falls back to. Losing the shape is a worse
+    // result than losing the structure, so the words survive either way.
     const withFindings = lenses.map((lens) => {
       if (!lens.on) return lens
       const index = onKeys.indexOf(lens.key)
-      return { ...lens, finding: extractTag(text, `lens_${index + 1}`) ?? lens.finding ?? null }
+      const raw = extractTag(text, `lens_${index + 1}`)
+      if (!raw) return lens
+      const parsed = parseLensFinding(raw)
+      return parsed ? { ...lens, ...parsed } : { ...lens, finding: raw }
     })
 
     // An edit list that will not parse is dropped rather than failing the
@@ -516,11 +635,34 @@ reviewsRouter.post('/:id/run', async (req, res) => {
       }
     }
 
+    // The headline and its detail. A block in the old single-sentence shape
+    // becomes the headline with no detail, which is what a review run before
+    // the contract looks like — so this renders either.
+    const oneThingRaw = extractTag(text, 'one_thing')
+    let oneThing = oneThingRaw?.trim() ?? null
+    let oneThingDetail: string | null = null
+    if (oneThingRaw) {
+      try {
+        const parsed = JSON.parse(oneThingRaw.trim()) as Record<string, unknown>
+        if (parsed && typeof parsed.headline === 'string' && parsed.headline.trim()) {
+          oneThing = parsed.headline.trim()
+          oneThingDetail = typeof parsed.detail === 'string' && parsed.detail.trim() ? parsed.detail.trim() : null
+        }
+      } catch {
+        // Left as the raw sentence, which is still the single change.
+      }
+    }
+
     const updated = await prisma.review.update({
       where: { id: existing.id },
       data: {
         lenses: withFindings,
-        oneThing: extractTag(text, 'one_thing'),
+        oneThing,
+        oneThingDetail,
+        assumptions: parseJsonArray(text, 'assumptions') as Prisma.InputJsonValue,
+        notVisible: parseJsonArray(text, 'not_visible').filter(
+          (n): n is string => typeof n === 'string',
+        ) as Prisma.InputJsonValue,
         edits,
         timingBasis: timingBasis ?? undefined,
         focusArea: existing.focusArea ?? findTopic(extractTag(text, 'topic'))?.value ?? null,

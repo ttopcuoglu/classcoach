@@ -29,6 +29,19 @@ export type ReviewEdit = {
   why: string
   /// Which lens produced it, so the result page can group them.
   lens: string
+  /// Where in the document, as the teacher would point at it — "ITEM 7 ·
+  /// MULTIPLE CHOICE". Absent on edits made before the result page had
+  /// location labels; the card falls back to the lens name.
+  where?: string
+  /// What kind of problem this is, in three or four words: "Measures the
+  /// wrong thing". A label, not a sentence — the sentence is `why`.
+  tag?: string
+  /// How much it matters. Drives the card's chip, and nothing else: an edit
+  /// is still accepted or declined one at a time whatever its severity.
+  severity?: 'high' | 'medium' | 'low'
+  /// Which section of a long document it came from, so a teacher can tell
+  /// where each suggestion is pointing. Absent on whole-document reviews.
+  section?: string
   status: EditStatus
 }
 
@@ -65,6 +78,14 @@ function parseEdit(raw: unknown): ReviewEdit | null {
   if (!anchor || !why) return null
   // A revision identical to the original is not a suggestion.
   if (revision === anchor) return null
+  const severity: ReviewEdit['severity'] =
+    r.severity === 'high' || r.severity === 'medium' || r.severity === 'low' ? r.severity : undefined
+  const optional = {
+    ...(typeof r.where === 'string' && r.where.trim() ? { where: r.where.trim() } : {}),
+    ...(typeof r.tag === 'string' && r.tag.trim() ? { tag: r.tag.trim() } : {}),
+    ...(severity ? { severity } : {}),
+    ...(typeof r.section === 'string' && r.section.trim() ? { section: r.section.trim() } : {}),
+  }
   return {
     id: typeof r.id === 'string' && r.id ? r.id : anchor.slice(0, 32),
     anchor,
@@ -72,6 +93,7 @@ function parseEdit(raw: unknown): ReviewEdit | null {
     revision,
     why,
     lens: typeof r.lens === 'string' ? r.lens : '',
+    ...optional,
     status: isEditStatus(r.status) ? r.status : 'pending',
   }
 }

@@ -16,6 +16,7 @@ import {
   updateReview,
   type ClassContext,
   type ApiError,
+  type Assumption,
   type StudentNamesFound,
   type Review,
   type ReviewEdit,
@@ -187,6 +188,9 @@ export default function LookItOver() {
   /// has student names in it. Holding it here, rather than running anyway and
   /// apologising, is what makes the promise real.
   const [namesFound, setNamesFound] = useState<StudentNamesFound | null>(null)
+  /// Which section of the result is showing. Edits first, because the question
+  /// a teacher arrives with is "what do I change", not "what did you think".
+  const [activeTab, setActiveTab] = useState<string>('edits')
 
   async function handleRun(namesHandled?: 'strip' | 'keep') {
     if (!review) return
@@ -247,6 +251,29 @@ export default function LookItOver() {
   }
 
   const lensesOn = review?.lenses.filter((l) => l.on).length ?? 0
+  /// Only lenses that actually produced something get a pill — an empty one is
+  /// a promise of a finding that is not there.
+  const findingLenses = (review?.lenses ?? []).filter((l) => l.on && (l.body || l.finding))
+  /// Every number the result shows, with its basis — including the timing
+  /// estimate, which predates the contract and is stored in its own column.
+  /// Folding it in here rather than giving it a card of its own is what makes
+  /// "every number traces to an assumption" true for old reviews as well as
+  /// new ones.
+  const assumptions: Assumption[] = [
+    ...(review?.timingBasis
+      ? [
+          {
+            label: 'Timing',
+            value: `${
+              review.timingBasis.minutes[0] === review.timingBasis.minutes[1]
+                ? `about ${review.timingBasis.minutes[0]} minutes`
+                : `${review.timingBasis.minutes[0]}–${review.timingBasis.minutes[1]} minutes`
+            } — assuming ${review.timingBasis.assumption}`,
+          },
+        ]
+      : []),
+    ...(review?.assumptions ?? []),
+  ]
 
   return (
     <div className="flex flex-col gap-6">
@@ -568,96 +595,139 @@ export default function LookItOver() {
 
           {review.status === 'reviewed' && (
             <>
-              {/* The one card the page leads with. */}
+              {/* 1 — what was read. Dark, so the result below it reads as the
+                  page rather than as another panel, and so the file name and
+                  the room are settled before any judgment appears. */}
+              <div className="rounded-3xl bg-forest p-6 text-cream">
+                <p className="font-heading text-lg font-bold">{review.fileName ?? 'Pasted text'}</p>
+                <p className="mt-1 text-sm text-cream/70">{resultMeta(review)}</p>
+                {/* Only when it is not the whole thing — a scope label on a
+                    whole-document review would imply a limit that is not
+                    there. */}
+                {review.scope?.label && (
+                  <p className="mt-2 inline-block rounded-full bg-cream/10 px-3 py-1 text-xs font-semibold">
+                    {review.scope.label}
+                  </p>
+                )}
+              </div>
+
+              {/* 2 — the hero. One change, for the whole review. */}
               {review.oneThing && (
-                <div className="rounded-3xl border-l-8 border-gold bg-gold-tint/50 p-6">
+                <div className="rounded-3xl bg-peach-tint/60 p-6">
                   <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
                     If you change one thing
                   </p>
-                  <p className="mt-2 text-base text-ink">{review.oneThing}</p>
-                </div>
-              )}
-
-              {review.timingBasis && (
-                <div className="rounded-2xl bg-cream-card p-4">
-                  <p className="text-sm font-semibold text-ink">
-                    Timing: {review.timingBasis.minutes[0] === review.timingBasis.minutes[1]
-                      ? `about ${review.timingBasis.minutes[0]} minutes`
-                      : `${review.timingBasis.minutes[0]}–${review.timingBasis.minutes[1]} minutes`}
+                  <p className="mt-2 font-heading text-2xl font-extrabold leading-tight text-forest">
+                    {review.oneThing}
                   </p>
-                  {/* The assumption, always — an estimate shown without one
-                      reads as a measurement. */}
-                  <p className="mt-1 text-xs text-ink-soft">Assuming: {review.timingBasis.assumption}</p>
+                  {review.oneThingDetail && <p className="mt-2 text-base text-ink">{review.oneThingDetail}</p>}
                 </div>
               )}
 
-              {review.lenses
-                .filter((lens) => lens.on && lens.finding)
-                .map((lens) => (
-                  <div key={lens.key} className="rounded-2xl border border-hairline bg-cream-card p-5">
-                    <p className="font-heading text-lg font-bold text-forest">{lens.label}</p>
-                    <p className="mt-2 whitespace-pre-wrap text-sm text-ink">{lens.finding}</p>
-                  </div>
+              {/* 3 — the lens nav. Edits first and selected, because the
+                  question a teacher arrives with is "what do I change", not
+                  "what did you think". */}
+              <nav aria-label="Review sections" className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('edits')}
+                  aria-pressed={activeTab === 'edits'}
+                  className={tabChip(activeTab === 'edits')}
+                >
+                  Suggested edits · {review.edits.length}
+                </button>
+                {findingLenses.map((lens) => (
+                  <button
+                    key={lens.key}
+                    type="button"
+                    onClick={() => setActiveTab(lens.key)}
+                    aria-pressed={activeTab === lens.key}
+                    className={tabChip(activeTab === lens.key)}
+                  >
+                    {lens.label}
+                  </button>
                 ))}
+              </nav>
 
-              {review.edits.length > 0 && (
-                <div className="flex flex-col gap-3">
-                  <div>
-                    <h2 className="font-heading text-xl font-bold text-forest">Suggested edits</h2>
-                    <p className="mt-0.5 text-sm text-ink-soft">
-                      Your document, with changes marked. Take the ones you want.
+              {/* 4 — whichever was chosen. */}
+              {activeTab === 'edits' ? (
+                review.edits.length === 0 ? (
+                  // A result, not an error. The lenses above still ran and are
+                  // still worth reading.
+                  <div className="rounded-2xl border border-hairline bg-cream-card p-6 text-center">
+                    <p className="font-heading text-lg font-bold text-forest">Nothing I&rsquo;d change before tomorrow</p>
+                    <p className="mt-1 text-sm text-ink-soft">
+                      No suggested edits. The lenses above still have what they found.
                     </p>
                   </div>
-                  {review.edits.map((edit) => (
-                    <div
-                      key={edit.id}
-                      className={`rounded-2xl border p-4 ${
-                        edit.status === 'accepted'
-                          ? 'border-forest/30 bg-mint-tint/40'
-                          : edit.status === 'kept_mine'
-                            ? 'border-hairline bg-cream'
-                            : 'border-hairline bg-cream-card'
-                      }`}
-                    >
-                      {/* Struck-through original above the revision — the
-                          teacher sees exactly what would change, never a
-                          rewritten document they have to diff themselves. */}
-                      <p className="text-sm text-ink-soft line-through decoration-terracotta/50">{edit.original}</p>
-                      <p className="mt-1.5 text-sm font-medium text-ink">{edit.revision}</p>
-                      <p className="mt-2 text-xs text-ink-soft">{edit.why}</p>
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void handleEdit(edit, edit.status === 'accepted' ? 'pending' : 'accepted')}
-                          aria-pressed={edit.status === 'accepted'}
-                          className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-                            edit.status === 'accepted'
-                              ? 'bg-forest text-cream'
-                              : 'bg-cream text-ink-soft hover:text-ink'
-                          }`}
-                        >
-                          Use this
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleEdit(edit, edit.status === 'kept_mine' ? 'pending' : 'kept_mine')}
-                          aria-pressed={edit.status === 'kept_mine'}
-                          className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-                            edit.status === 'kept_mine'
-                              ? 'bg-forest text-cream'
-                              : 'bg-cream text-ink-soft hover:text-ink'
-                          }`}
-                        >
-                          Keep mine
-                        </button>
-                      </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {review.edits.map((edit) => (
+                      <EditCard
+                        key={edit.id}
+                        edit={edit}
+                        unanchored={review.unanchoredEditIds?.includes(edit.id) ?? false}
+                        onDecide={(status) => void handleEdit(edit, status)}
+                      />
+                    ))}
+                  </div>
+                )
+              ) : (
+                findingLenses
+                  .filter((lens) => lens.key === activeTab)
+                  .map((lens) => (
+                    <div key={lens.key} className="rounded-2xl border border-hairline bg-cream-card p-6">
+                      <p className="font-heading text-lg font-bold text-forest">{lens.title || lens.label}</p>
+                      {/* A thin-evidence finding says so rather than being
+                          shown at the same weight as a well-grounded one. */}
+                      {lens.confidence === 'low' && (
+                        <p className="mt-1 text-xs font-semibold text-terracotta-600">
+                          Low confidence — the document didn&rsquo;t give this much to go on.
+                        </p>
+                      )}
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-ink">{lens.body || lens.finding}</p>
+                      {lens.evidence && lens.evidence.length > 0 && (
+                        <p className="mt-3 text-xs text-ink-soft">
+                          <span className="font-semibold">From:</span> {lens.evidence.join(' · ')}
+                        </p>
+                      )}
                     </div>
-                  ))}
+                  ))
+              )}
+
+              {/* Every number on the page, with its basis. Shown rather than
+                  held, because a figure nobody can check is a figure that gets
+                  believed or dismissed for the wrong reasons. */}
+              {assumptions.length > 0 && (
+                <div className="rounded-2xl bg-cream px-5 py-4">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
+                    What the numbers assume
+                  </p>
+                  <ul className="mt-2 flex flex-col gap-1.5">
+                    {assumptions.map((a) => (
+                      <li key={a.label} className="text-sm text-ink">
+                        <span className="font-semibold">{a.label}:</span> {a.value}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Says what it will actually hand over. */}
+              {review.notVisible && review.notVisible.length > 0 && (
+                <p className="text-sm text-ink-soft">
+                  <span className="font-semibold text-ink">Not visible from the document:</span>{' '}
+                  {review.notVisible.join(' · ')}.
+                </p>
+              )}
+
+              {/* 5 — the finish bar. Says what has been decided before it
+                  offers to hand anything over. */}
+              <div className="flex flex-wrap items-center gap-2 border-t border-hairline pt-4">
+                <p className="mr-auto text-sm font-semibold text-ink">
+                  {review.acceptedCount === 0
+                    ? 'Nothing changed yet'
+                    : `${review.acceptedCount} ${review.acceptedCount === 1 ? 'change' : 'changes'} accepted`}
+                </p>
                 <button
                   type="button"
                   onClick={() => void handleExport()}
@@ -666,9 +736,7 @@ export default function LookItOver() {
                   {review.exportLabel}
                 </button>
                 {/* The review is the context; the conversation is about what
-                    to do with it. A teacher who disagrees with a finding, or
-                    is not sure how to act on one, wants a colleague rather
-                    than another pass over the same page. */}
+                    to do with it. */}
                 <button
                   type="button"
                   onClick={() => {
@@ -684,7 +752,6 @@ export default function LookItOver() {
                 >
                   Talk this through
                 </button>
-                {/* An action from the result, not a tool of its own. */}
                 {canRedesignForAi(review.docType) && (
                   <button
                     type="button"
@@ -707,7 +774,7 @@ export default function LookItOver() {
                 </button>
               </div>
 
-              {/* The limits, plainly. */}
+              {/* 6 — always. */}
               <p className="rounded-2xl bg-cream px-4 py-3 text-xs text-ink-soft">{review.limits}</p>
             </>
           )}
@@ -717,6 +784,107 @@ export default function LookItOver() {
       <Link to="/" className="text-sm font-medium text-ink-soft hover:text-ink">
         ← Back home
       </Link>
+    </div>
+  )
+}
+
+/// A result-section pill.
+function tabChip(selected: boolean): string {
+  const base = 'rounded-full border px-4 py-2.5 text-sm font-semibold transition-colors'
+  return selected
+    ? `${base} border-forest bg-forest text-cream`
+    : `${base} border-hairline bg-cream-card text-ink hover:border-terracotta/50 hover:text-terracotta-600`
+}
+
+/// The line under the file name: what it is, how big, and whose room it was
+/// judged against. Built only from what the review actually has — a field it
+/// does not have is left out rather than guessed at.
+function resultMeta(review: Review): string {
+  const parts: string[] = [review.docTypeLabel]
+  if (review.pageCount) parts.push(`${review.pageCount} ${review.pageCount === 1 ? 'page' : 'pages'}`)
+  if (review.classLine) parts.push(review.classLine)
+  return parts.join(' · ')
+}
+
+/// One suggested change, as a diff.
+///
+/// The whole surface turns on this card being a diff and never a replacement:
+/// the teacher's words stay on screen, struck through, beside what they would
+/// become, and neither button does anything until they press it.
+function EditCard({
+  edit,
+  unanchored,
+  onDecide,
+}: {
+  edit: ReviewEdit
+  unanchored: boolean
+  onDecide: (status: ReviewEdit['status']) => void
+}) {
+  const border =
+    edit.status === 'accepted'
+      ? 'border-forest/40 bg-mint-tint/40'
+      : edit.status === 'kept_mine'
+        ? 'border-hairline bg-cream'
+        : 'border-hairline bg-cream-card'
+  return (
+    <div className={`rounded-2xl border p-5 ${border}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        {edit.where && (
+          <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">{edit.where}</span>
+        )}
+        {edit.tag && (
+          <span
+            className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
+              edit.severity === 'high'
+                ? 'bg-peach-tint text-terracotta-600'
+                : edit.severity === 'low'
+                  ? 'bg-cream text-ink-soft'
+                  : 'bg-gold-tint text-forest'
+            }`}
+          >
+            {edit.tag}
+          </span>
+        )}
+      </div>
+
+      {/* Their words, still here. */}
+      <p className="mt-3 text-sm text-ink-soft line-through decoration-terracotta/50">{edit.original}</p>
+      <p className="mt-2 rounded-xl bg-mint-tint/50 px-4 py-3 text-sm text-ink">{edit.revision}</p>
+      <p className="mt-2 text-sm text-ink-soft">
+        <span className="font-semibold text-ink">Why:</span> {edit.why}
+      </p>
+
+      {/* An edit quoting text that is not in the document would strike through
+          a sentence the teacher never wrote, so it is named rather than
+          quietly rendered. */}
+      {unanchored && (
+        <p className="mt-2 text-xs font-semibold text-terracotta-600">
+          I couldn&rsquo;t find this exact wording in your document — check it against the original before taking it.
+        </p>
+      )}
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => onDecide(edit.status === 'accepted' ? 'pending' : 'accepted')}
+          aria-pressed={edit.status === 'accepted'}
+          className={`rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
+            edit.status === 'accepted' ? 'bg-forest text-cream' : 'bg-cream text-ink hover:text-terracotta-600'
+          }`}
+        >
+          Use this
+        </button>
+        <button
+          type="button"
+          onClick={() => onDecide(edit.status === 'kept_mine' ? 'pending' : 'kept_mine')}
+          aria-pressed={edit.status === 'kept_mine'}
+          className={`rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
+            edit.status === 'kept_mine' ? 'bg-forest text-cream' : 'bg-cream text-ink hover:text-terracotta-600'
+          }`}
+        >
+          Keep mine
+        </button>
+      </div>
     </div>
   )
 }

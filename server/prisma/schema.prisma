@@ -643,6 +643,24 @@ model Review {
   // "If you change one thing: ..." — the single card the result page leads
   // with. Null until the review has been run.
   oneThing    String?
+  // The sentence under that headline.
+  oneThingDetail String?
+
+  // [{ label, value, calibratable }] — the basis for every number the result
+  // shows. Stored rather than re-derived: a figure whose basis is gone is a
+  // figure nobody can check, and the rule is that each one traces to an entry
+  // here.
+  assumptions Json?
+
+  // What this read could not see — "what you'll say out loud", "what students
+  // covered last week". Depends on the document and the lenses that ran, so
+  // it belongs on the review rather than on the type.
+  notVisible  Json?
+
+  // "whole" | "section" and the teacher-facing label for the part reviewed
+  // ("p. 12-20"). Null is the whole document, which is the common case.
+  scopeMode   String?
+  scopeLabel  String?
 
   // [{ id, anchor, original, revision, why, lens, status }] where status is
   // "pending" | "accepted" | "kept_mine". This is the diff: every suggestion

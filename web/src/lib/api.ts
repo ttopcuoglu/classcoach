@@ -2041,6 +2041,14 @@ export function deleteClassProfile(id: string): Promise<ClassContext[]> {
 // --- Look It Over ---
 
 export type ReviewEdit = {
+  /// Where in the document, as a teacher would point at it: "ITEM 7 ·
+  /// MULTIPLE CHOICE". Absent on edits made before the result page had
+  /// location labels, where the card falls back to the lens name.
+  where?: string
+  /// The kind of problem, in three or four words.
+  tag?: string
+  severity?: 'high' | 'medium' | 'low'
+  section?: string
   id: string
   anchor: string
   original: string
@@ -2050,12 +2058,29 @@ export type ReviewEdit = {
   status: 'pending' | 'accepted' | 'kept_mine'
 }
 
+/// The basis for a number the result shows. Every figure on the page traces
+/// to one of these — a number whose basis is not shown is a number nobody can
+/// check.
+export type Assumption = { label: string; value: string; calibratable?: boolean }
+
+export type ReviewScope = { mode: string; label: string | null }
+
 export type ReviewLens = {
   key: string
   label: string
   blurb: string
   on: boolean
+  /// The old single-blob finding. Still populated, and still what the card
+  /// falls back to for a review run before the contract had parts.
   finding?: string | null
+  /// Three to six words naming what was found — not the lens's own name.
+  title?: string | null
+  body?: string | null
+  /// "low" when the document did not give this lens enough to judge. The card
+  /// says so rather than presenting a guess at full strength.
+  confidence?: 'high' | 'low' | null
+  evidence?: string[]
+  section?: string | null
 }
 
 export type TimingBasis = { minutes: [number, number]; assumption: string }
@@ -2075,8 +2100,15 @@ export type Review = {
   originalText: string
   focusArea: string | null
   classProfileId: string | null
+  /// The room this was judged against, as stored on the review — not
+  /// whichever class is selected now.
+  classLine?: string | null
   lenses: ReviewLens[]
   oneThing: string | null
+  oneThingDetail?: string | null
+  assumptions?: Assumption[]
+  notVisible?: string[]
+  scope?: ReviewScope | null
   edits: ReviewEdit[]
   /// Edits quoting text that is not in the document. Surfaced rather than
   /// hidden — the one failure that could attribute an invented sentence to
