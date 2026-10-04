@@ -22,6 +22,7 @@ import {
 import { hintsFor } from '../lib/practiceHints'
 import { useHandoff } from '../hooks/useHandoff'
 import ClassContextLine from '../components/ClassContextLine'
+import SectionLabel from '../components/SectionLabel'
 import {
   DEFAULT_TEACHING_CONTEXT,
   type TeachingContext,
@@ -401,11 +402,15 @@ export default function TryItOut({
   /// One chip style for all four rows. `ghost` marks the two opt-outs —
   /// "Something else" as a topic and "Describe my own" as a kind — which are
   /// dashed rather than solid because neither narrows anything.
+  /// The selection panel sits on a light card now, so a chip is an outlined
+  /// pill rather than a translucent one. Gold still means chosen, and a ghost
+  /// chip stays dashed — it is the one that opts out of the row it is in.
   function chip(selected: boolean, ghost?: boolean) {
-    const base = 'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-60'
-    if (selected) return `${base} bg-gold text-forest`
-    if (ghost) return `${base} border border-dashed border-cream/40 text-cream/70 hover:border-gold hover:text-cream`
-    return `${base} bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream`
+    const base =
+      'rounded-full border px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-60'
+    if (selected) return `${base} border-gold bg-gold text-forest`
+    if (ghost) return `${base} border-dashed border-ink-soft/40 text-ink-soft hover:border-terracotta/50 hover:text-terracotta-600`
+    return `${base} border-hairline bg-cream text-ink hover:border-terracotta/50 hover:text-terracotta-600`
   }
 
   const describingOwn = category === DESCRIBE_MY_OWN
@@ -441,10 +446,25 @@ export default function TryItOut({
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Practice had no title of its own — it was a tab inside Ask & Practice
+          and inherited that page's. As a surface it says what it is. */}
+      {!attempt && !sessionState?.done && (
+        <div className="flex flex-col gap-1">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Coach</p>
+          <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
+            Practice<span className="text-gold">.</span>
+          </h1>
+          <p className="max-w-2xl text-ink-soft">
+            Rehearse it before it happens for real. Same topics as Talk It Through — pick one, get a scenario,
+            make your move.
+          </p>
+        </div>
+      )}
+
       <div
         className={
           !attempt && !sessionState?.done
-            ? 'rounded-3xl bg-forest p-6 text-cream sm:p-8'
+            ? 'rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm sm:p-8'
             : 'rounded-2xl border border-hairline bg-cream-card p-6'
         }
       >
@@ -508,15 +528,8 @@ export default function TryItOut({
           </div>
         ) : !attempt ? (
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Practice a scenario</p>
-            <p className="mt-2 font-heading text-2xl font-bold text-cream">Ready when you are.</p>
-            <p className="mt-1 text-sm text-cream/70">
-              {area
-                ? area.blurb
-                : 'Set the situation and your room, then let Wivoza build a scenario for you.'}
-            </p>
             {(generating || submitting) && (
-              <div className={`mt-4 flex justify-center ${attempt ? 'text-forest' : 'text-gold'}`}>
+              <div className="mb-4 flex justify-center text-forest">
                 <ProgressRing
                   progress={workingProgress}
                   label={generating ? 'Building a scenario' : 'Reading your response'}
@@ -529,11 +542,11 @@ export default function TryItOut({
                 hid the two choices that actually decide what a teacher gets,
                 while a separate panel showed five room fields that mostly did
                 not apply to the topic they were in. */}
-            <div className="mt-5 flex flex-col gap-4 rounded-2xl bg-cream/10 p-4">
+            <div className="flex flex-col gap-5">
               {/* 1 — Topic. The same shared list Talk It Through uses. */}
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">1 · Topic</p>
-                <div className="mt-1.5 flex flex-wrap gap-2">
+                <SectionLabel kicker title="What's this about?" />
+                <div className="mt-2 flex flex-wrap gap-2.5">
                   {TOPICS.map(({ value, label, ghost }) => (
                     <button
                       key={value}
@@ -547,15 +560,15 @@ export default function TryItOut({
                     </button>
                   ))}
                 </div>
-                {area && <p className="mt-1.5 text-xs text-cream/60">{area.blurb}</p>}
+                {area && <p className="mt-2 max-w-3xl text-sm text-ink-soft">{area.blurb}</p>}
               </div>
 
               {/* 2 — Kind, which changes with the topic above. "Describe my
                   own" is always offered: a teacher with a specific situation
                   in mind should not have to find the nearest category for it. */}
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">2 · Kind</p>
-                <div className="mt-1.5 flex flex-wrap gap-2">
+                <SectionLabel title="What kind of moment?" />
+                <div className="mt-2 flex flex-wrap gap-2.5">
                   {kinds.map(({ value, label }) => (
                     <button
                       key={value}
@@ -585,7 +598,7 @@ export default function TryItOut({
                   </button>
                 </div>
                 {!area && !describingOwn && (
-                  <p className="mt-1.5 text-xs text-cream/60">
+                  <p className="mt-2 text-sm text-ink-soft">
                     Pick a topic to narrow this — otherwise your coach chooses, weighted toward what
                     you&rsquo;ve practiced least.
                   </p>
@@ -602,7 +615,7 @@ export default function TryItOut({
                     disabled={generating}
                     rows={3}
                     placeholder="What happened, or what are you about to walk into?"
-                    className="mt-2 w-full rounded-2xl border border-cream/20 bg-cream/5 px-4 py-3 text-sm text-cream placeholder:text-cream/50 focus:border-gold focus:outline-none disabled:opacity-60"
+                    className="mt-2 w-full rounded-2xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
                   />
                 )}
               </div>
@@ -612,18 +625,18 @@ export default function TryItOut({
                   scenarios have to be about the teacher's actual content
                   rather than about delivery technique in the abstract. */}
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">3 · Your class</p>
-                <div className="mt-1.5 rounded-xl bg-cream px-3 py-2.5">
+                <SectionLabel title="Your class" hint="A content scenario only works if the content is yours." />
+                <div className="mt-2 rounded-xl border border-hairline bg-cream px-4 py-3">
                   <ClassContextLine compact onChange={applyPrep} />
                 </div>
 
                 {asksAboutContent && (
                   <div className="mt-2.5 flex flex-col gap-2.5">
                     <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cream/60">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
                         Subject
                       </p>
-                      <div className="mt-1.5 flex flex-wrap gap-2">
+                      <div className="mt-2 flex flex-wrap gap-2.5">
                         {SUBJECTS.map((subject) => (
                           <button
                             key={subject}
@@ -648,10 +661,10 @@ export default function TryItOut({
 
                     {courses.length > 0 && (
                       <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cream/60">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
                           Course
                         </p>
-                        <div className="mt-1.5 flex flex-wrap gap-2">
+                        <div className="mt-2 flex flex-wrap gap-2.5">
                           {courses.map((course) => (
                             <button
                               key={course}
@@ -676,9 +689,14 @@ export default function TryItOut({
                     {/* The only room field that changes weekly, and the one
                         that decides what the scenario is actually about — so
                         it is asked every time and never remembered. */}
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cream/60">
-                        What are you teaching right now?
+                    <label className="flex flex-col gap-2">
+                      <span>
+                        <span className="font-heading text-base font-bold text-forest">
+                          What are you teaching right now?
+                        </span>
+                        <span className="mt-0.5 block text-sm text-ink-soft">
+                          This is what makes the scenario about your content, not teaching in general.
+                        </span>
                       </span>
                       <input
                         type="text"
@@ -686,7 +704,7 @@ export default function TryItOut({
                         onChange={(e) => setRoom((prev) => ({ ...prev, topic: e.target.value }))}
                         disabled={generating}
                         placeholder="Photosynthesis, the Federalist papers, factoring quadratics..."
-                        className="rounded-xl border border-cream/20 bg-cream/5 px-3.5 py-2.5 text-sm text-cream placeholder:text-cream/50 focus:border-gold focus:outline-none disabled:opacity-60"
+                        className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
                       />
                     </label>
                   </div>
@@ -696,12 +714,11 @@ export default function TryItOut({
               {/* 4 — Difficulty, labelled so nobody reads it as a judgment
                   about the teacher. */}
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">4 · Difficulty</p>
-                <p className="mt-1 text-sm text-cream/80">
-                  How tough should it be?{' '}
-                  <span className="text-cream/60">This is the scenario&rsquo;s difficulty, not yours.</span>
-                </p>
-                <div className="mt-1.5 flex flex-wrap gap-2">
+                <SectionLabel
+                  title="How tough should it be?"
+                  hint="This is the scenario's difficulty, not yours. Start below where the real one sits."
+                />
+                <div className="mt-2 flex flex-wrap gap-2.5">
                   {DIFFICULTIES.map(({ label, value }) => (
                     <button
                       key={label}
@@ -723,7 +740,7 @@ export default function TryItOut({
                 type="button"
                 onClick={() => handleNewScenario()}
                 disabled={generating || (describingOwn && !ownSituation.trim())}
-                className="rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90 disabled:opacity-60"
+                className="rounded-full bg-terracotta px-7 py-3.5 text-base font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:opacity-60"
               >
                 {generating ? 'Generating...' : describingOwn ? 'Use my situation' : 'New Scenario'}
               </button>
@@ -735,7 +752,7 @@ export default function TryItOut({
                   type="button"
                   onClick={handleStartSession}
                   disabled={generating}
-                  className="rounded-full border border-cream/30 px-6 py-3 text-sm font-semibold text-cream transition-colors hover:border-cream hover:bg-cream/10 disabled:opacity-60"
+                  className="rounded-full border border-hairline px-6 py-3 text-sm font-semibold text-ink transition-colors hover:border-terracotta/50 hover:text-terracotta-600 disabled:opacity-60"
                 >
                   Quick Session ({SESSION_LENGTH} scenarios)
                 </button>

@@ -21,6 +21,7 @@ import type { Review } from '../lib/api'
 const extractReviewDocument = vi.fn()
 const detectReviewType = vi.fn()
 const createReview = vi.fn()
+const deleteReview = vi.fn()
 const updateReview = vi.fn()
 const runReview = vi.fn()
 const setReviewEditStatus = vi.fn()
@@ -37,6 +38,7 @@ vi.mock('../lib/api', () => ({
   setReviewEditStatus: (...a: unknown[]) => setReviewEditStatus(...a),
   getReviewDocument: (...a: unknown[]) => getReviewDocument(...a),
   redesignReviewForAi: (...a: unknown[]) => redesignReviewForAi(...a),
+  deleteReview: (...a: unknown[]) => deleteReview(...a),
   getClassProfiles: () => getClassProfiles(),
   createClassProfile: vi.fn(),
   updateClassProfile: vi.fn(),
@@ -160,10 +162,12 @@ test('the type is confirmed as a question, not asked as one', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
 
   await waitFor(() => expect(screen.getByText('Looks like a quiz or exam — right?')).toBeTruthy())
-  expect(screen.getByRole('button', { name: 'Yes' })).toBeTruthy()
-  expect(screen.getByRole('button', { name: "No — it's something else" })).toBeTruthy()
-  // A confident guess does not unfold every chip.
-  expect(screen.queryByRole('button', { name: 'Lesson plan' })).toBeNull()
+  // The guess is shown as already chosen. Correcting it is one tap on any
+  // other chip, so there is no Yes / "no, it's something else" step standing
+  // in front of them.
+  expect(screen.getByRole('button', { name: 'Quiz or exam' }).getAttribute('aria-pressed')).toBe('true')
+  expect(screen.queryByRole('button', { name: 'Yes' })).toBeNull()
+  expect(screen.queryByRole('button', { name: "No — it's something else" })).toBeNull()
 })
 
 // Being wrong has to cost one tap.
@@ -175,9 +179,7 @@ test('correcting the type is one tap away, and offers all seven', async () => {
   await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
-  await waitFor(() => expect(screen.getByRole('button', { name: "No — it's something else" })).toBeTruthy())
-
-  fireEvent.click(screen.getByRole('button', { name: "No — it's something else" }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Lesson plan' })).toBeTruthy())
 
   for (const label of [
     'Quiz or exam',
@@ -221,7 +223,7 @@ test('lenses are individually toggleable with a visible count', async () => {
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
 
-  await waitFor(() => expect(screen.getByText('2 of 3 on')).toBeTruthy())
+  await waitFor(() => expect(screen.getByText(/2 of 3 on/)).toBeTruthy())
   expect(screen.getByRole('button', { name: /What each item measures/ }).getAttribute('aria-pressed')).toBe('true')
   // A quiz opens with AI-completion risk off — it is sat in the room.
   expect(screen.getByRole('button', { name: /AI-completion risk/ }).getAttribute('aria-pressed')).toBe('false')
@@ -237,10 +239,10 @@ test('toggling a lens updates the count immediately', async () => {
   await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
-  await waitFor(() => expect(screen.getByText('2 of 3 on')).toBeTruthy())
+  await waitFor(() => expect(screen.getByText(/2 of 3 on/)).toBeTruthy())
 
   fireEvent.click(screen.getByRole('button', { name: /AI-completion risk/ }))
-  await waitFor(() => expect(screen.getByText('3 of 3 on')).toBeTruthy())
+  await waitFor(() => expect(screen.getByText(/3 of 3 on/)).toBeTruthy())
 })
 
 // --- the result page ---
@@ -281,7 +283,7 @@ async function openReviewed() {
   await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
-  await waitFor(() => expect(screen.getByText('2 of 3 on')).toBeTruthy())
+  await waitFor(() => expect(screen.getByText(/2 of 3 on/)).toBeTruthy())
   fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
   await waitFor(() => expect(screen.getByText('If you change one thing')).toBeTruthy())
 }
@@ -424,7 +426,7 @@ test('a message result does not offer redesigning for AI use', async () => {
   await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
-  await waitFor(() => expect(screen.getByText('2 of 3 on')).toBeTruthy())
+  await waitFor(() => expect(screen.getByText(/2 of 3 on/)).toBeTruthy())
   fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
 
   await waitFor(() => expect(screen.getByText('If you change one thing')).toBeTruthy())
@@ -487,4 +489,60 @@ test('the result offers talking it through, carrying the one-thing card', async 
   expect(stored.kind).toBe('review_context')
   expect(stored.reviewId).toBe('r1')
   expect(stored.oneThing).toBe('Split question 4 — it is measuring reading, not the content.')
+})
+
+// --- the setup card ---
+
+/// Gets to the state where a document is in and the review is being set up.
+async function reachSetup() {
+  createReview.mockResolvedValue(review({ fileName: 'Unit 3 Quiz.docx', pageCount: 4, sourceKind: 'photo' }))
+  renderPage()
+  await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
+  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText("What I'll look at")).toBeTruthy())
+}
+
+// Setting up a review used to be three separate panels, which made the type
+// confirmation and the lenses read as unrelated questions rather than two
+// halves of the same setup. Each block says what it is.
+test('every block of the setup says what it is', async () => {
+  await reachSetup()
+  for (const heading of ['Looks like a quiz or exam — right?', "What I'll look at", 'Your class']) {
+    expect(screen.getByText(heading), heading).toBeTruthy()
+  }
+})
+
+test('the document is named, with how it arrived', async () => {
+  await reachSetup()
+  expect(screen.getByText('Unit 3 Quiz.docx')).toBeTruthy()
+  expect(screen.getByText(/4 pages/)).toBeTruthy()
+  // A photo says so: it has been through OCR and may be missing content the
+  // paper copy has.
+  expect(screen.getByText(/photographed/)).toBeTruthy()
+})
+
+// A teacher who dropped the wrong file should not have to guess that starting
+// over is possible.
+test('Replace goes back to the drop zone without deleting anything', async () => {
+  await reachSetup()
+  fireEvent.click(screen.getByRole('button', { name: 'Replace' }))
+  await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
+  expect(deleteReview).not.toHaveBeenCalled()
+})
+
+// The promise is on the screen where a teacher is about to upload student
+// work, not only in the guide.
+test('the no-names line is on the setup card', async () => {
+  await reachSetup()
+  expect(screen.getByText(/No student names, please\./)).toBeTruthy()
+})
+
+// Knowing what is NOT being looked at is half of trusting the result, so an
+// off lens stays on screen rather than disappearing.
+test('a lens that is off is still shown, and still says it is off', async () => {
+  await reachSetup()
+  const off = screen.getByRole('button', { name: /AI-completion risk/ })
+  expect(off.getAttribute('aria-pressed')).toBe('false')
+  expect(off.className).toContain('border-dashed')
 })

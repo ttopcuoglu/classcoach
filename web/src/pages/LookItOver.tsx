@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import ClassContextLine from '../components/ClassContextLine'
+import SectionLabel from '../components/SectionLabel'
 import { WorkingRing } from '../components/ProgressRing'
 import { setHandoff } from '../lib/handoff'
 import { useHandoff } from '../hooks/useHandoff'
 import { BookIcon } from '../components/icons'
 import {
   createReview,
-  detectReviewType,
   extractReviewDocument,
   getReviewDocument,
   redesignReviewForAi,
@@ -58,7 +58,6 @@ export default function LookItOver() {
   const [dragging, setDragging] = useState(false)
   /// Open when detection was unsure. A confident guess still shows the
   /// question, just without the chips already unfolded.
-  const [correcting, setCorrecting] = useState(false)
   /// Arriving from Talk It Through, where a document came up in conversation.
   /// Only the intent travels — the document itself is still on the teacher's
   /// machine, so this opens the drop zone knowing why rather than with
@@ -78,7 +77,6 @@ export default function LookItOver() {
         classProfileId: prep?.id ?? null,
       })
       setReview(created)
-      setCorrecting(!created.detectionConfident)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -92,17 +90,15 @@ export default function LookItOver() {
     setBusy('reading')
     setError(null)
     try {
-      // Detected first so the confirmation strip can open its chips when the
-      // guess was weak — the create call detects again rather than trusting a
-      // client-supplied type.
-      const detection = await detectReviewType(text)
+      // No separate detect call: it only ever decided whether to open the
+      // type chips, and every type is on screen now. The create call detects
+      // server-side anyway, rather than trusting a client-supplied type.
       const created = await createReview({
         text,
         sourceKind: 'paste',
         classProfileId: prep?.id ?? null,
       })
       setReview(created)
-      setCorrecting(!detection.confident)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -110,12 +106,36 @@ export default function LookItOver() {
     }
   }
 
+  /// Back to the drop zone, for a teacher who dropped the wrong file. The
+  /// review already created is left where it is rather than deleted — an
+  /// unreviewed draft costs nothing, and deleting what someone just uploaded
+  /// because they tapped "Replace" is a surprise.
+  function discard() {
+    setReview(null)
+    setError(null)
+  }
+
+  /// How the document arrived. Worth saying for a photo in particular: it has
+  /// been through OCR and may be missing content the paper copy has.
+  const SOURCE_KIND_LABELS: Record<string, string> = {
+    file: 'uploaded',
+    paste: 'pasted in',
+    photo: 'photographed',
+  }
+
+  /// The one line under the file name: what came in, and how.
+  function documentMeta(r: Review): string {
+    const parts: string[] = []
+    if (r.pageCount) parts.push(`${r.pageCount} ${r.pageCount === 1 ? 'page' : 'pages'}`)
+    parts.push(SOURCE_KIND_LABELS[r.sourceKind] ?? 'added')
+    return parts.join(' · ')
+  }
+
   async function confirmType(docType: string) {
     if (!review) return
     setError(null)
     try {
       setReview(await updateReview(review.id, { docType }))
-      setCorrecting(false)
     } catch (err) {
       setError((err as Error).message)
     }
@@ -187,13 +207,14 @@ export default function LookItOver() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">
-          Wivoza · Before and after
-        </p>
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Review</p>
         <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
           Look It Over<span className="text-gold">.</span>
         </h1>
-        <p className="text-ink-soft">Before students see it.</p>
+        <p className="max-w-2xl text-ink-soft">
+          A second pair of eyes on anything before students see it — a plan, a quiz, an assignment, a deck, a
+          homework sheet.
+        </p>
       </div>
 
       {!review ? (
@@ -314,98 +335,106 @@ export default function LookItOver() {
         </>
       ) : (
         <>
-          {/* Confirm rather than interrogate. The question is asked either
-              way; a weak guess just arrives with the chips already open. */}
-          <div className="flex flex-col gap-2 rounded-2xl bg-gold-tint/60 p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-medium text-ink">{confirmQuestion(docTypeOf(review.docType))}</p>
-              {!correcting && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => void confirmType(review.docType)}
-                    className="rounded-full bg-forest px-3.5 py-1.5 text-xs font-semibold text-cream"
-                  >
-                    Yes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCorrecting(true)}
-                    className="text-xs font-semibold text-terracotta-600 hover:text-terracotta"
-                  >
-                    No — it's something else
-                  </button>
-                </>
-              )}
+          {/* One card, in the order a teacher reads it: what I have, what I
+              think it is, what I will look at, whose room it is for, and the
+              button. It used to be three separate panels, which made the type
+              confirmation and the lenses look like unrelated questions rather
+              than two halves of setting up one review. */}
+          <div className="flex flex-col gap-6 rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm sm:p-8">
+            {/* What is being reviewed, and the way out if it is the wrong
+                file — a teacher who dropped the wrong thing should not have to
+                guess that starting over is possible. */}
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-hairline bg-cream px-4 py-3.5">
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-ink">{review.fileName ?? 'Pasted text'}</p>
+                <p className="text-xs text-ink-soft">{documentMeta(review)}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void discard()}
+                className="shrink-0 rounded-full border border-hairline px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-terracotta/50 hover:text-terracotta-600"
+              >
+                Replace
+              </button>
             </div>
-            {correcting && (
-              <div className="flex flex-wrap gap-2">
+
+            {/* Confirm rather than interrogate. Every type is on screen, so
+                correcting a wrong guess is one tap rather than a "no, it's
+                something else" first. Tapping the one already chosen confirms
+                it, which is what the question is asking. */}
+            <div>
+              <SectionLabel
+                title={confirmQuestion(docTypeOf(review.docType))}
+                hint="Tap any of these to correct me."
+              />
+              <div className="mt-2.5 flex flex-wrap gap-2.5">
                 {DOC_TYPES.map((type) => (
                   <button
                     key={type}
                     type="button"
                     onClick={() => void confirmType(type)}
                     aria-pressed={review.docType === type}
-                    className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-                      review.docType === type ? 'bg-forest text-cream' : 'bg-cream text-ink-soft hover:text-ink'
+                    className={`rounded-full border px-4 py-2.5 text-sm font-semibold transition-colors ${
+                      review.docType === type
+                        ? 'border-gold bg-gold text-forest'
+                        : 'border-hairline bg-cream text-ink hover:border-terracotta/50 hover:text-terracotta-600'
                     }`}
                   >
                     {DOC_TYPE_LABELS[type]}
                   </button>
                 ))}
               </div>
-            )}
-            {review.fileName && (
-              <p className="text-xs text-ink-soft">
-                {review.fileName}
-                {review.pageCount ? ` · ${review.pageCount} pages` : ''}
-              </p>
-            )}
-          </div>
-
-          {/* Lenses, each individually toggleable, with the count visible so a
-              teacher can see at a glance how much they have asked for. */}
-          <div className="flex flex-col gap-2.5 rounded-2xl border border-hairline bg-cream-card p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-medium text-ink">What to look at</p>
-              <p className="text-xs font-semibold text-ink-soft">
-                {lensesOn} of {review.lenses.length} on
-              </p>
             </div>
-            <div className="flex flex-col gap-1.5">
-              {review.lenses.map((lens) => (
-                <button
-                  key={lens.key}
-                  type="button"
-                  onClick={() => void toggleLens(lens.key)}
-                  aria-pressed={lens.on}
-                  className={`flex items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${
-                    lens.on ? 'bg-mint-tint/50' : 'bg-cream hover:bg-cream/60'
-                  }`}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 text-[10px] font-bold ${
-                      lens.on ? 'border-forest bg-forest text-cream' : 'border-hairline text-transparent'
+
+            {/* Lenses, each individually toggleable, with the count in the
+                heading so a teacher can see at a glance how much they asked
+                for. An off lens is drawn dashed rather than hidden: knowing
+                what is NOT being looked at is half of trusting the result. */}
+            <div>
+              <SectionLabel
+                title="What I'll look at"
+                hint={`These change with the type. ${lensesOn} of ${review.lenses.length} on — tap any to turn it off.`}
+              />
+              <div className="mt-2.5 flex flex-wrap gap-2.5">
+                {review.lenses.map((lens) => (
+                  <button
+                    key={lens.key}
+                    type="button"
+                    title={lens.blurb}
+                    onClick={() => void toggleLens(lens.key)}
+                    aria-pressed={lens.on}
+                    className={`rounded-full border px-4 py-2.5 text-sm font-semibold transition-colors ${
+                      lens.on
+                        ? 'border-mint-tint bg-mint-tint/70 text-forest hover:border-forest/30'
+                        : 'border-dashed border-ink-soft/40 text-ink-soft hover:border-terracotta/50 hover:text-terracotta-600'
                     }`}
                   >
-                    ✓
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium text-ink">{lens.label}</span>
-                    <span className="block text-xs text-ink-soft">{lens.blurb}</span>
-                  </span>
-                </button>
-              ))}
+                    {lens.label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <button
-              type="button"
-              disabled={busy != null || lensesOn === 0}
-              onClick={() => void handleRun()}
-              className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
-            >
-              {review.status === 'reviewed' ? 'Look again' : 'Look it over'}
-            </button>
+
+            {/* The room it is for, which is what timing and grade-level
+                judgments stand on. */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-peach-tint/40 px-4 py-3">
+              <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Your class</span>
+              <ClassContextLine compact onChange={setPrep} />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <p className="max-w-sm text-sm text-ink-soft">
+                No student names, please. Paste text, drop a file, or photograph a paper copy.
+              </p>
+              <button
+                type="button"
+                disabled={busy != null || lensesOn === 0}
+                onClick={() => void handleRun()}
+                className="rounded-full bg-terracotta px-8 py-4 text-base font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+              >
+                {review.status === 'reviewed' ? 'Look again' : 'Look it over'}
+              </button>
+            </div>
           </div>
 
           <WorkingRing

@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import AnswerSection from '../components/AnswerSection'
 import { BrainIcon, MicIcon, StarIcon, WarningIcon } from '../components/icons'
 import ClassContextLine from '../components/ClassContextLine'
+import SectionLabel from '../components/SectionLabel'
 import { TOPICS, topicLabel } from '../lib/topics'
 import { pickTopicStarters } from '../lib/starters'
 import { handoffArrival, handoffContext, handoffOpeningMessage, setHandoff } from '../lib/handoff'
@@ -130,20 +131,6 @@ function statusLabel(state: VisualState, hasConversation: boolean): string {
     case 'error':
       return 'Something went wrong'
   }
-}
-
-/// A block's own heading. Every section of the start screen gets one, in the
-/// same voice and at the same weight: the topic chips used to carry their
-/// question in body text, and the sub-options and the class line carried no
-/// heading at all, which left the page reading as one undifferentiated column
-/// of controls with no way to tell where one choice ended and the next began.
-function SectionLabel({ title, hint }: { title: string; hint?: string }) {
-  return (
-    <div>
-      <p className="font-heading text-base font-bold text-forest">{title}</p>
-      {hint && <p className="mt-0.5 text-sm text-ink-soft">{hint}</p>}
-    </div>
-  )
 }
 
 export default function TalkToMe() {

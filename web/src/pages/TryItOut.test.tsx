@@ -83,10 +83,13 @@ afterEach(() => {
 
 // --- the four rows ---
 
-test('all four rows are on screen, numbered and in order', async () => {
+// The rows were numbered "1 · Topic" through "4 · Difficulty". They are named
+// by the question they ask now, which is what a teacher is actually answering
+// — the cascade is visible in the rows narrowing each other, not in a count.
+test('all four rows are on screen, named and in order', async () => {
   renderPractice()
-  await waitFor(() => expect(screen.getByText('1 · Topic')).toBeTruthy())
-  const labels = ['1 · Topic', '2 · Kind', '3 · Your class', '4 · Difficulty']
+  await waitFor(() => expect(screen.getByText("What's this about?")).toBeTruthy())
+  const labels = ["What's this about?", 'What kind of moment?', 'Your class', 'How tough should it be?']
   const all = Array.from(document.querySelectorAll('*'))
   const positions = labels.map((l) => all.indexOf(screen.getByText(l)))
   expect(positions).toEqual([...positions].sort((a, b) => a - b))
@@ -112,7 +115,7 @@ test('the topic row offers the same seven topics as Talk It Through', async () =
 // show until a topic is chosen.
 test('the kind row is empty until a topic is chosen, and explains why', async () => {
   renderPractice()
-  await waitFor(() => expect(screen.getByText('2 · Kind')).toBeTruthy())
+  await waitFor(() => expect(screen.getByText('What kind of moment?')).toBeTruthy())
   expect(screen.getByText(/Pick a topic to narrow this/)).toBeTruthy()
   expect(screen.queryByRole('button', { name: 'Questioning and discussion' })).toBeNull()
 })
@@ -174,9 +177,8 @@ test('the course row only appears once a subject with courses is chosen', async 
 // The label exists so nobody reads the row as a judgment about themselves.
 test('the difficulty question says whose difficulty it is', async () => {
   renderPractice()
-  await waitFor(() => expect(screen.getByText('4 · Difficulty')).toBeTruthy())
-  expect(screen.getByText(/How tough should it be\?/)).toBeTruthy()
-  expect(screen.getByText(/This is the scenario’s difficulty, not yours\./)).toBeTruthy()
+  await waitFor(() => expect(screen.getByText('How tough should it be?')).toBeTruthy())
+  expect(screen.getByText(/This is the scenario's difficulty, not yours\./)).toBeTruthy()
 })
 
 // --- describe my own ---
@@ -514,7 +516,7 @@ test('a handoff for another surface is left alone', async () => {
     JSON.stringify({ kind: 'review_document', debriefId: 'd1', about: 'my quiz' }),
   )
   renderPractice()
-  await waitFor(() => expect(screen.getByText('1 · Topic')).toBeTruthy())
+  await waitFor(() => expect(screen.getByText("What's this about?")).toBeTruthy())
   expect(screen.getByRole('button', { name: 'Describe my own' }).getAttribute('aria-pressed')).toBe('false')
 })
 
@@ -531,4 +533,13 @@ test('describe my own survives a topic change', async () => {
 
   await waitFor(() => expect(screen.getByRole('button', { name: /Talking with admin/ })).toBeTruthy())
   expect(screen.getByRole('button', { name: 'Describe my own' }).getAttribute('aria-pressed')).toBe('true')
+})
+
+// Practice was a tab inside Ask & Practice and inherited that page's heading.
+// As a surface of its own it has to say what it is and when to use it.
+test('the page names itself and says when to use it', async () => {
+  renderPractice()
+  await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toBeTruthy())
+  expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Practice')
+  expect(screen.getByText(/Rehearse it before it happens for real\./)).toBeTruthy()
 })
