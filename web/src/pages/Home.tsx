@@ -59,7 +59,10 @@ function isTalkItThrough(item: Activity): boolean {
 // Straight to the conversation itself, not just the feature's start screen.
 function activityLink(item: Activity): string {
   if (item.type === 'scenario') return `/coach-chat?tab=practice&open=${item.id}`
-  return isTalkItThrough(item) ? `/talk-to-me?open=${item.id}` : `/coach-chat?tab=ask&open=${item.id}`
+  // Ask is gone as a surface, but the answers a teacher saved under it are
+  // still theirs. Their report page still loads them, so Recent work opens that
+  // rather than a tab that no longer exists.
+  return isTalkItThrough(item) ? `/talk-to-me?open=${item.id}` : `/ask-practice/ask/${item.id}/export`
 }
 
 const MOODS: { label: string; value: Mood }[] = [
@@ -109,10 +112,10 @@ const ACTION_CARDS = [
     icon: ChatBubbleIcon,
     accent: ACCENTS.gold,
     tag: 'Safe practice',
-    title: 'Ask & Practice',
+    title: 'Practice',
     description:
-      'Teaching, behavior, parents, the professional side — ask a straight question, or rehearse it first.',
-    linkLabel: 'Ask or rehearse',
+      'Rehearse a real classroom moment — behavior, a parent, a hard conversation — and get coaching on the words you used.',
+    linkLabel: 'Practice a scenario',
   },
 ]
 
