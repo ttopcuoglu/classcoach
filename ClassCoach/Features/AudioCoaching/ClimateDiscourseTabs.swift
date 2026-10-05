@@ -47,8 +47,9 @@ enum DiscoursePart {
     case talk, questions, understanding
 }
 
-/// The first three Insights sections — Talk & Participation, Questions &
-/// Thinking, and Checks & Feedback — which share the same session metrics.
+/// Talk & Participation, plus the two halves of Questioning & Checking —
+/// which share the same session metrics. The halves stay separate parts
+/// because they are rendered under their own subsection headings.
 struct DiscourseDetailsTab: View {
     let session: AudioSessionWithSegments
     let part: DiscoursePart

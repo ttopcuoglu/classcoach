@@ -18,6 +18,7 @@ import {
   getCountMetric,
   getFollowUpMetric,
   getPresenceMetric,
+  waitTimeMetric,
   isConfidentState,
   MIN_DURATION_FOR_CFU_DETECTION_SEC,
   TINY_RECORDING_THRESHOLD_SEC,
@@ -115,7 +116,7 @@ export default function AudioCoachingExport() {
     session.questionCount != null && rawNum('higherOrderQuestionCount') != null
       ? formatRatio(num('higherOrderQuestionCount'), session.questionCount)
       : null
-  const waitTime = getPresenceMetric(session.avgWaitTimeSec)
+  const waitTime = waitTimeMetric(session.avgWaitTimeSec, session.questionCount)
   const followUps = getFollowUpMetric({
     count: rawNum('followUpQuestionCount'),
     studentVoiceSegments: rawNum('studentVoiceSegments'),
@@ -206,28 +207,39 @@ export default function AudioCoachingExport() {
           )}
         </ReportSection>
 
-        {/* Questions & thinking */}
-        <ReportSection n={++n} title="Questions & Thinking" blurb="What you asked, and how long you left for an answer." accent={A.gold}>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {/* Questioning & checking — one section, two halves, as on screen.
+            Asking and responding are one teaching move, and the half that
+            depends on students answering out loud fails as a unit whenever the
+            microphone didn't reach the room. */}
+        <ReportSection
+          n={++n}
+          title="Questioning & Checking"
+          blurb="What you asked, how you checked, and how you responded."
+          accent={A.gold}
+        >
+          <p className="text-[11px] font-bold uppercase tracking-wide text-forest">What you asked</p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <Stat label="Questions asked" metric={questions} accent={A.gold} />
             {higherOrder && <Stat label="Higher-order" metric={higherOrder} accent={A.gold} />}
-            <Stat label="Avg. wait time" metric={waitTime} unit="s" accent={A.gold} />
-            <Stat label="Follow-ups" metric={followUps} accent={A.gold} />
+            <Stat label="Checks for understanding" metric={cfu} accent={A.gold} />
           </div>
+
+          <p className="mt-1 text-[11px] font-bold uppercase tracking-wide text-forest">How you responded</p>
+          <p className="text-xs text-ink-soft">
+            Limited by how much of the room the microphone reached — a quiet answer leaves nothing to measure.
+          </p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat label="Avg. wait time" metric={waitTime} unit="s" accent={A.mint} />
+            <Stat label="Follow-ups" metric={followUps} accent={A.mint} />
+            {specificShare && <Stat label="Feedback that was specific" metric={specificShare} accent={A.mint} />}
+            <Stat label="Feedback moments" metric={feedbackMoments} accent={A.mint} />
+          </div>
+
           <Callout
             label="Why wait time matters"
             body="Three to five seconds of silence after a question is the single cheapest change most teachers can make. It feels much longer than it is."
             accent={A.gold}
           />
-        </ReportSection>
-
-        {/* Checks & feedback */}
-        <ReportSection n={++n} title="Checks & Feedback" blurb="How you checked they were with you, and how specific your feedback was." accent={A.mint}>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <Stat label="Checks for understanding" metric={cfu} accent={A.mint} />
-            {specificShare && <Stat label="Feedback that was specific" metric={specificShare} accent={A.mint} />}
-            <Stat label="Feedback moments" metric={feedbackMoments} accent={A.mint} />
-          </div>
         </ReportSection>
 
         {/* Clarity & content */}

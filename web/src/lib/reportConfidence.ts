@@ -32,6 +32,21 @@ export const MIN_N_FOR_PERCENT = 10
 // 2 specific" from a recording with nine student utterances in it.
 export const MIN_STUDENT_SEGMENTS_FOR_FEEDBACK = 5
 
+// Wait time is the gap between a question and an audible student answer. On a
+// room mic that gap is usually missing because the answer was never captured,
+// not because the teacher never paused — "not enough data" reads like a glitch
+// and blames the wrong thing.
+export function waitTimeMetric(avgWaitTimeSec: number | null | undefined, questionCount: number | null | undefined): ConfidentMetric {
+  if (avgWaitTimeSec == null && (questionCount ?? 0) > 0) {
+    return {
+      state: 'not_measurable',
+      display: '—',
+      reason: 'None of your questions was followed by an audible student answer, so there was no pause to time.',
+    }
+  }
+  return getPresenceMetric(avgWaitTimeSec)
+}
+
 export function feedbackMeasurable(studentVoiceSegments: number | null | undefined): boolean {
   return (studentVoiceSegments ?? 0) >= MIN_STUDENT_SEGMENTS_FOR_FEEDBACK
 }

@@ -13,11 +13,19 @@ enum ReportTab: String, CaseIterable {
     }
 }
 
-/// The report's five Insights sections, numbered and coloured the same way
+/// The report's four Insights sections, numbered and coloured the same way
 /// as the web report and the printable PDF, so "section 3" means the same
 /// thing on the phone, the website and paper.
+///
+/// Organised by how much a microphone can actually hear. Everything the
+/// teacher says is captured well; everything that depends on students
+/// answering out loud is not. Questions & Thinking and Checks & Feedback were
+/// two sections that failed together whenever the room was quiet, so a teacher
+/// read two apologies for one cause — they are one section with two labelled
+/// halves now, and Rubric Lens is a lens over the whole report (see
+/// `ReportView.rubricLensRow`) rather than a section competing with them.
 enum InsightsSection: String, CaseIterable, Identifiable {
-    case talk, questions, understanding, content, routines, rubric
+    case talk, questions, content, routines
 
     var id: String { rawValue }
     var number: Int { (InsightsSection.allCases.firstIndex(of: self) ?? 0) + 1 }
@@ -25,22 +33,18 @@ enum InsightsSection: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .talk: return "Talk & Participation"
-        case .questions: return "Questions & Thinking"
-        case .understanding: return "Checks & Feedback"
+        case .questions: return "Questioning & Checking"
         case .content: return "Clarity & Content"
         case .routines: return "Climate & Routines"
-        case .rubric: return "Rubric Lens"
         }
     }
 
     var blurb: String {
         switch self {
         case .talk: return "Who was heard, and for how long."
-        case .questions: return "What you asked, and how long you left for an answer."
-        case .understanding: return "How you checked they were with you, and how specific your feedback was."
+        case .questions: return "What you asked, how you checked, and how you responded."
         case .content: return "What the lesson said it was about, in its own words."
         case .routines: return "Counts, not scores. There is no such thing as a correct number here."
-        case .rubric: return "This lesson seen through your evaluation framework. Evidence, not a rating."
         }
     }
 
@@ -48,10 +52,8 @@ enum InsightsSection: String, CaseIterable, Identifiable {
         switch self {
         case .talk: return .terracotta
         case .questions: return .gold
-        case .understanding: return .teal
         case .content: return .forest
         case .routines: return .terracotta
-        case .rubric: return .gold
         }
     }
 }
@@ -88,18 +90,18 @@ struct ReflectFocus: Equatable {
 /// The narrative a teacher is looking at on an Insights sub-page, handed to
 /// Coach so "Discuss this" opens about that page rather than about the lesson
 /// in general. Clarity & Content carries notes rather than a narrative, so its
-/// own text is joined instead; Rubric Lens has neither, and its evidence is
-/// already the whole page.
+/// own text is joined instead; Questioning & Checking shows two narratives on
+/// one page, so Coach gets both.
 func narrativeForSection(_ session: AudioSessionWithSegments, _ section: InsightsSection) -> String? {
     switch section {
     case .talk: return session.talkNarrative
-    case .questions: return session.questionsNarrative
-    case .understanding: return session.checksNarrative
+    case .questions:
+        let halves = [session.questionsNarrative, session.checksNarrative].compactMap { $0 }.filter { !$0.isEmpty }
+        return halves.isEmpty ? nil : halves.joined(separator: " ")
     case .routines: return session.climateNarrative
     case .content:
         let notes = session.contentNotes?.notes ?? []
         return notes.isEmpty ? nil : notes.map { "\($0.label): \($0.text)" }.joined(separator: " ")
-    case .rubric: return nil
     }
 }
 
@@ -163,6 +165,7 @@ struct ReportView: View {
 
     @State private var tab: ReportTab = .summary
     @State private var section: InsightsSection = .talk
+    @State private var rubricOpen = false
     @State private var focusMetric: FocusMetric?
     /// Set by a Discuss footer and consumed by Reflect on arrival.
     @State private var reflectFocus: ReflectFocus?
@@ -335,22 +338,78 @@ struct ReportView: View {
                 }
             }
 
+            rubricLensRow
+
             InsightsSectionHeader(section: section)
 
             Group {
                 switch section {
                 case .talk: DiscourseDetailsTab(session: session, part: .talk)
-                case .questions: DiscourseDetailsTab(session: session, part: .questions)
-                case .understanding: DiscourseDetailsTab(session: session, part: .understanding)
+                case .questions: questioningAndChecking
                 case .content: LessonContentTab(session: session, onUpdate: onUpdate)
                 case .routines: ClimateRoutinesTab(session: session)
-                case .rubric: RubricLensTab(session: session, locked: locked, onUpdate: onUpdate)
                 }
             }
             .environment(\.reportAccent, section.accent)
 
             DiscussFooter { discuss(.forSection(section, in: session)) }
         }
+    }
+
+    /// Ask → student answers → respond is one teaching move, so it reads as one
+    /// page with two labelled halves. Both halves depend on the mic reaching
+    /// the students, and the second heading says so rather than leaving the
+    /// teacher to read a thin "how you responded" as their own failure.
+    private var questioningAndChecking: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 12) {
+                SubsectionHeading(
+                    title: "What you asked",
+                    blurb: "Questions, what they asked of students, and the checks you ran."
+                )
+                DiscourseDetailsTab(session: session, part: .questions)
+            }
+            VStack(alignment: .leading, spacing: 12) {
+                SubsectionHeading(
+                    title: "How you responded",
+                    blurb: "Wait time, follow-ups, and your responses to what students said — all of it limited by how much of the room the microphone reached."
+                )
+                DiscourseDetailsTab(session: session, part: .understanding)
+            }
+        }
+    }
+
+    /// A lens over the whole report rather than a section of its own: it
+    /// rearranges evidence the four sections already hold, so it sat badly in
+    /// the picker as a fifth peer. Closed by default — a teacher reaches for
+    /// their evaluation framework on purpose, not on the way past.
+    private var rubricLensRow: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                withAnimation { rubricOpen.toggle() }
+            } label: {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Rubric lens")
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
+                        Text("This lesson seen through your evaluation framework. Evidence, not a rating.")
+                            .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 8)
+                    Text(rubricOpen ? "Hide" : "Show")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
+                }
+            }
+
+            if rubricOpen {
+                RubricLensTab(session: session, locked: locked, onUpdate: onUpdate)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
     }
 
     private var disclaimer: some View {
@@ -381,6 +440,24 @@ struct InsightsSectionHeader: View {
 }
 
 // MARK: - Shared tab building blocks
+
+/// A labelled half of a section, one step quieter than `InsightsSectionHeader`
+/// so the page still reads as one section rather than two stacked ones.
+struct SubsectionHeading: View {
+    let title: String
+    let blurb: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            RoundedRectangle(cornerRadius: 2).fill(AppTheme.gold).frame(width: 4)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.heading(.headline)).foregroundStyle(AppTheme.forest)
+                Text(blurb).font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
 
 struct CoachNoteView: View {
     let text: String?

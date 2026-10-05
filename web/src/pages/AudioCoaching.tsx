@@ -69,6 +69,7 @@ import {
   MIN_N_FOR_PERCENT,
   SHORT_SESSION_THRESHOLD_SEC,
   STUDENT_TALK_CAVEAT,
+  waitTimeMetric as waitTimeMetricOf,
   type ConfidentMetric,
   type MetricState,
   type TalkBalanceJudgment,
@@ -1075,12 +1076,12 @@ const INSIGHTS_SECTIONS: { key: InsightsSection; label: string }[] = [
 ]
 
 // The printed report's numbers, one-line descriptions and colours for these
-// five sections (see AudioCoachingExport), so the screen and the paper look
+// four sections (see AudioCoachingExport), so the screen and the paper look
 // like one report and a teacher holding the printout can find "section 3" here.
 //
 // One honest gap: the printout skips Clarity & Content when a lesson produced
-// no content quotes, so on those lessons its Climate & Routines is numbered 4
-// while this screen, which always lists all five, still says 5.
+// no content quotes, so on those lessons its Climate & Routines is numbered 3
+// while this screen, which always lists all four, still says 4.
 const INSIGHTS_SECTION_META: Record<InsightsSection, { n: number; blurb: string; accent: Accent }> = {
   talk: { n: 1, blurb: 'Who was heard, and for how long.', accent: ACCENTS.terracotta },
   questions: { n: 2, blurb: 'What you asked, how you checked, and how you responded.', accent: ACCENTS.gold },
@@ -2389,7 +2390,7 @@ function ReportPanel({
     studentVoiceSegments: num('studentVoiceSegments'),
     recordedSec,
   })
-  const waitTimeMetric = waitTimeMetricFor(session)
+  const waitTimeMetric = waitTimeMetricOf(session.avgWaitTimeSec, session.questionCount)
 
   // Checking Understanding
   const cfuMetric = getCountMetric({
@@ -2949,7 +2950,7 @@ function SummaryTab({
           <SummaryStat label="You spoke" metric={getPresenceMetric(session.teacherTalkPct)} unit="%" accent={ACCENTS.terracotta} />
           <SummaryStat label="Students spoke" metric={getPresenceMetric(session.studentTalkPct)} unit="%" accent={ACCENTS.gold} />
           <SummaryStat label="Questions" metric={questionsMetric} accent={ACCENTS.mint} />
-          <SummaryStat label="Avg. wait" metric={waitTimeMetricFor(session)} unit="s" accent={ACCENTS.forest} />
+          <SummaryStat label="Avg. wait" metric={waitTimeMetricOf(session.avgWaitTimeSec, session.questionCount)} unit="s" accent={ACCENTS.forest} />
         </div>
       </NumberedCard>
 
@@ -4337,21 +4338,6 @@ const CONTENT_NOTE_LABEL_STYLES: Record<string, string> = {
 /// which could read "None detected" while the lesson plainly contained the
 /// thing. The subject expertise is what a teacher came here for; the page
 /// closes with the same Discuss action every other page does.
-// "Not enough data" is true but unhelpful: wait time is the gap between a
-// question and an audible student answer, and on a room mic that gap is
-// usually missing because the answer was never captured, not because the
-// teacher never paused.
-function waitTimeMetricFor(session: AudioSessionWithSegments): ConfidentMetric {
-  if (session.avgWaitTimeSec == null && (session.questionCount ?? 0) > 0) {
-    return {
-      state: 'not_measurable',
-      display: '—',
-      reason: 'None of your questions was followed by an audible student answer, so there was no pause to time.',
-    }
-  }
-  return getPresenceMetric(session.avgWaitTimeSec)
-}
-
 function LessonContentTab({
   lessonContent,
   contentNotes,
