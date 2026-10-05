@@ -91,8 +91,7 @@ export default function LookItOver() {
   /// Reads files and adds them to the set. Each is extracted on its own, so
   /// one unreadable file in a drop of three does not lose the other two.
   async function addFiles(files: File[], sourceKind: 'file' | 'photo') {
-    // One drop is one review, so the cap applies to what was dropped.
-    const room = MAX_FILES_PER_REVIEW
+    const room = MAX_FILES_PER_REVIEW - pending.length
     if (room <= 0) {
       setError(`That's the limit — ${MAX_FILES_PER_REVIEW} documents in one review.`)
       return
@@ -117,22 +116,25 @@ export default function LookItOver() {
     // Named one by one: "one of your files could not be read" leaves a
     // teacher checking all three.
     if (failed.length > 0) setError(failed.join(' · '))
-    if (added.length === 0) {
-      setBusy(null)
-      return
-    }
-    // Straight on. Dropping a file is the instruction — asking again
-    // afterwards is a step with no decision in it.
+    setPending((prev) => [...prev, ...added])
+    setBusy(null)
+  }
+
+  /// Turns the attached files into a review and reads it.
+  async function startFromPending() {
+    if (pending.length === 0) return
+    setBusy('reading')
+    setError(null)
     try {
       const created = await createReview({
-        files: added,
+        files: pending,
         docType: chosenType ?? undefined,
         classProfileId: prep?.id ?? null,
       })
       setReview(created)
       setFileSetSummary(created.fileSetSummary ?? null)
+      setPending([])
       navigate(`/look-it-over?draft=${created.id}`, { replace: true })
-      await runReviewFor(created)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -158,9 +160,6 @@ export default function LookItOver() {
       })
       setReview(created)
       navigate(`/look-it-over?draft=${created.id}`, { replace: true })
-      // And read it. Pasting the text and pressing the button is the whole
-      // instruction.
-      await runReviewFor(created)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -231,6 +230,10 @@ export default function LookItOver() {
   /// Set when the server refused to run because the document looks like it
   /// has student names in it. Holding it here, rather than running anyway and
   /// apologising, is what makes the promise real.
+  /// Files read and attached, waiting to be turned into a review. An
+  /// assignment and then its rubric is one review, so nothing is created
+  /// until the teacher says they are done adding.
+  const [pending, setPending] = useState<PendingFile[]>([])
   const [namesFound, setNamesFound] = useState<StudentNamesFound | null>(null)
   /// What the teacher says this is, chosen before anything is uploaded.
   ///
@@ -274,6 +277,19 @@ export default function LookItOver() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reviewId, draftId])
 
+  async function toggleLens(key: string) {
+    if (!review) return
+    const lenses = review.lenses.map((l) => (l.key === key ? { ...l, on: !l.on } : l))
+    // Optimistic: a toggle should feel instant, and the only cost of being
+    // wrong is the next render putting it back.
+    setReview({ ...review, lenses })
+    try {
+      setReview(await updateReview(review.id, { lenses: lenses.map(({ key: k, on }) => ({ key: k, on })) }))
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }
+
   /// Runs the review and shows the result.
   ///
   /// Takes the review rather than reading state, because both ways in call it
@@ -299,34 +315,13 @@ export default function LookItOver() {
     }
   }
 
+  /// The button's version: run the review that is on screen.
   async function handleRun(opts?: { namesHandled?: 'strip' | 'keep'; scope?: string }) {
     if (!review) return
     setBusy('reviewing')
     setError(null)
     try {
-      const chosenScope = opts?.scope ?? scope ?? undefined
-      const ran = await runReview(review.id, { namesHandled: opts?.namesHandled, scope: chosenScope })
-      setReview(ran)
-      // The result has its own URL from the moment it exists.
-      if (ran.status === 'reviewed') navigate(`/look-it-over/${ran.id}`, { replace: true })
-      if (opts?.scope) setScope(opts.scope)
-      setNamesFound(null)
-      setScopeChoice(null)
-    } catch (err) {
-      // 409 is not a failure — it is the server declining to send a roster to
-      // the model until the teacher has answered. Shown as the question it
-      // is, not as an error.
-      const apiErr = err as ApiError
-      const details = apiErr.details as
-        | { studentNames?: StudentNamesFound; scope?: ScopeChoice }
-        | null
-      if (apiErr.status === 409 && details?.studentNames) {
-        setNamesFound(details.studentNames)
-      } else if (apiErr.status === 409 && details?.scope) {
-        setScopeChoice(details.scope)
-      } else {
-        setError(apiErr.message)
-      }
+      await runReviewFor(review, opts)
     } finally {
       setBusy(null)
     }
@@ -534,6 +529,55 @@ export default function LookItOver() {
             />
           </div>
 
+          {/* What is going into this review. A teacher dropping an assignment
+              and then its rubric is building ONE review, so nothing is
+              created until they say they are done adding. */}
+          {pending.length > 0 && (
+            <div>
+              <SectionLabel
+                title={pending.length === 1 ? 'One document' : `${pending.length} documents`}
+                hint={`Read as one review. Up to ${MAX_FILES_PER_REVIEW}.`}
+              />
+              <ul className="mt-2.5 flex flex-col gap-2">
+                {pending.map((file, i) => (
+                  <li
+                    key={`${file.fileName}-${i}`}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-hairline bg-cream px-4 py-2.5"
+                  >
+                    <span className="min-w-0 truncate text-sm font-medium text-ink">
+                      {file.fileName ?? `Document ${i + 1}`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPending((prev) => prev.filter((_, at) => at !== i))}
+                      className="shrink-0 text-xs font-semibold text-terracotta-600 hover:text-terracotta"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={busy != null}
+                  onClick={() => void startFromPending()}
+                  className="rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:opacity-60"
+                >
+                  Read {pending.length === 1 ? 'it' : 'them'}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy != null || pending.length >= MAX_FILES_PER_REVIEW}
+                  onClick={() => fileInput.current?.click()}
+                  className="rounded-full border border-hairline bg-cream-card px-5 py-3 text-sm font-semibold text-ink transition-colors hover:border-terracotta/50 hover:text-terracotta-600 disabled:opacity-60"
+                >
+                  Add another
+                </button>
+              </div>
+            </div>
+          )}
+
           <div>
             <SectionLabel title="Or paste it" hint="Straight out of a doc, an email, a slide — whatever you have." />
             <label>
@@ -670,6 +714,35 @@ export default function LookItOver() {
                     }`}
                   >
                     {DOC_TYPE_LABELS[type]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Lenses, each individually toggleable, with the count in the
+                heading so a teacher can see at a glance how much they asked
+                for. An off lens is drawn dashed rather than hidden: knowing
+                what is NOT being looked at is half of trusting the result. */}
+            <div>
+              <SectionLabel
+                title="What I'll look at"
+                hint={`These change with the type. ${lensesOn} of ${review.lenses.length} on — tap any to turn it off.`}
+              />
+              <div className="mt-2.5 flex flex-wrap gap-2.5">
+                {review.lenses.map((lens) => (
+                  <button
+                    key={lens.key}
+                    type="button"
+                    title={lens.blurb}
+                    onClick={() => void toggleLens(lens.key)}
+                    aria-pressed={lens.on}
+                    className={`rounded-full border px-4 py-2.5 text-sm font-semibold transition-colors ${
+                      lens.on
+                        ? 'border-mint-tint bg-mint-tint/70 text-forest hover:border-forest/30'
+                        : 'border-dashed border-ink-soft/40 text-ink-soft hover:border-terracotta/50 hover:text-terracotta-600'
+                    }`}
+                  >
+                    {lens.label}
                   </button>
                 ))}
               </div>

@@ -190,6 +190,8 @@ test('the chosen type is stated, not asked again', async () => {
   chooseType()
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
+  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
 
   await waitFor(() => expect(screen.getByText('Got it — reviewing as a quiz.')).toBeTruthy())
   // Never asked back as a question, and never with a Yes/No step in front of
@@ -274,7 +276,9 @@ async function openReviewed() {
   chooseType()
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
-  // No second press: pressing it once is the whole instruction.
+  // The review exists; reading it is the second, explicit press.
+  await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
+  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
   await waitFor(() => expect(screen.getByText('If you change one thing')).toBeTruthy())
 }
 
@@ -431,6 +435,8 @@ test('a message result does not offer redesigning for AI use', async () => {
   chooseType()
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
+  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
 
   await waitFor(() => expect(screen.getByText('If you change one thing')).toBeTruthy())
   expect(screen.queryByRole('button', { name: 'Redesign for meaningful AI use' })).toBeNull()
@@ -622,6 +628,8 @@ test('a document with student names asks before it runs', async () => {
   chooseType()
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
+  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
   await waitFor(() => expect(screen.getByText('This looks like it has student names in it.')).toBeTruthy())
   expect(screen.getByText(/a column headed with a student name/)).toBeTruthy()
   for (const choice of ['Strip names', 'Use it as is', 'Cancel']) {
@@ -637,6 +645,8 @@ test('stripping re-runs with the answer, and the question goes away', async () =
   chooseType()
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
+  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
   await waitFor(() => expect(screen.getByRole('button', { name: 'Strip names' })).toBeTruthy())
 
   fireEvent.click(screen.getByRole('button', { name: 'Strip names' }))
@@ -655,6 +665,8 @@ test('using it as is is offered, and says so to the server', async () => {
   chooseType()
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
+  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
   await waitFor(() => expect(screen.getByRole('button', { name: 'Use it as is' })).toBeTruthy())
 
   fireEvent.click(screen.getByRole('button', { name: 'Use it as is' }))
@@ -698,6 +710,8 @@ test('zero edits reads as an answer, not an error', async () => {
   chooseType()
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
+  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
 
   await waitFor(() => expect(screen.getByText('Nothing I would change before tomorrow')).toBeTruthy())
   // The findings still stand and are still on the page — "no edits" is an
@@ -741,7 +755,8 @@ async function reachScopeQuestion() {
   chooseType()
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
-  // The run happens by itself, so the question arrives without a second press.
+  await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
+  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
   await waitFor(() => expect(screen.getByText(/This is 48 pages/)).toBeTruthy())
 }
 
@@ -855,6 +870,9 @@ test('several files dropped together become one review', async () => {
 
   dropFiles(['Essay task.docx', 'Rubric.docx'])
 
+  await waitFor(() => expect(screen.getByText('2 documents')).toBeTruthy())
+  fireEvent.click(screen.getByRole('button', { name: 'Read them' }))
+
   await waitFor(() => expect(createReview).toHaveBeenCalled())
   const sent = createReview.mock.calls[0][0]
   expect(sent.files).toHaveLength(2)
@@ -862,20 +880,24 @@ test('several files dropped together become one review', async () => {
   expect(sent.files[1].fileName).toBe('Rubric.docx')
 })
 
-// Dropping a file is the instruction. Nothing waits to be told again.
-test('dropping a file reads it without being asked twice', async () => {
+// Files are attached first and read when the teacher says so, which is what
+// lets a second document join the first before anything is sent.
+test('files are attached, then read on the press', async () => {
   readsEachFile()
   createReview.mockResolvedValue(review())
-  runReview.mockResolvedValue(REVIEWED)
   renderPage()
   await waitFor(() => expect(screen.getByText('What are you looking over?')).toBeTruthy())
   chooseType()
 
   dropFiles(['quiz.docx'])
 
-  // Straight to the result — no "Read it" in between.
-  await waitFor(() => expect(screen.getByText('If you change one thing')).toBeTruthy())
-  expect(runReview).toHaveBeenCalled()
+  await waitFor(() => expect(screen.getByText('One document')).toBeTruthy())
+  expect(screen.getByText('quiz.docx')).toBeTruthy()
+  expect(createReview).not.toHaveBeenCalled()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Read it' }))
+
+  await waitFor(() => expect(createReview).toHaveBeenCalled())
 })
 
 // One unreadable file in a drop of two must not lose the other.
@@ -891,6 +913,12 @@ test('a file that cannot be read is named, and the rest are still used', async (
   chooseType()
 
   dropFiles(['good.docx', 'broken.pdf'])
+
+  // The good one is attached; the broken one is named rather than silently
+  // dropped.
+  await waitFor(() => expect(screen.getByText(/broken\.pdf/)).toBeTruthy())
+  expect(screen.getByText('One document')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Read it' }))
 
   await waitFor(() => expect(createReview).toHaveBeenCalled())
   // The good one went through, named by name rather than "one of your files".
@@ -918,6 +946,9 @@ test('more than five in one drop takes the first five', async () => {
   chooseType()
 
   dropFiles(['a.docx', 'b.docx', 'c.docx', 'd.docx', 'e.docx', 'f.docx'])
+
+  await waitFor(() => expect(screen.getByText('5 documents')).toBeTruthy())
+  fireEvent.click(screen.getByRole('button', { name: 'Read them' }))
 
   await waitFor(() => expect(createReview).toHaveBeenCalled())
   expect(createReview.mock.calls[0][0].files).toHaveLength(5)
@@ -1029,6 +1060,8 @@ test('detection disagreeing with the choice is said out loud', async () => {
   chooseType('Assignment')
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
+  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
 
   await waitFor(() => expect(screen.getByText(/this looks more like/)).toBeTruthy())
   expect(screen.getByText(/numbered items/)).toBeTruthy()
@@ -1043,6 +1076,8 @@ test('agreement says nothing — it is not a notification', async () => {
   chooseType()
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
+  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
 
   await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
   expect(screen.queryByText(/this looks more like/)).toBeNull()
@@ -1101,10 +1136,69 @@ test('a finding shows its named parts, each explained', async () => {
   chooseType()
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
+  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
 
   await waitFor(() => expect(screen.getByText('Item 4')).toBeTruthy())
   expect(screen.getByText(/A 90-word scenario before any biology appears/)).toBeTruthy()
   expect(screen.getByText('Items 9 and 12')).toBeTruthy()
   // The paragraph is still there — the parts are extra, not a replacement.
   expect(screen.getByText('The recall items do their job.')).toBeTruthy()
+})
+
+// --- what the two steps are for ---
+
+// Attaching and reading are separate so a second document can join the first
+// before anything is sent — an assignment and its rubric are one review.
+test('a second document can join before the review is made', async () => {
+  readsEachFile()
+  createReview.mockResolvedValue(review())
+  renderPage()
+  await waitFor(() => expect(screen.getByText('What are you looking over?')).toBeTruthy())
+  chooseType('Assignment')
+  dropFiles(['Essay task.docx'])
+  await waitFor(() => expect(screen.getByText('One document')).toBeTruthy())
+
+  dropFiles(['Rubric.docx'])
+
+  await waitFor(() => expect(screen.getByText('2 documents')).toBeTruthy())
+  fireEvent.click(screen.getByRole('button', { name: 'Read them' }))
+  await waitFor(() => expect(createReview).toHaveBeenCalled())
+  expect(createReview.mock.calls[0][0].files).toHaveLength(2)
+})
+
+// The lens chooser is back: a teacher can see what will be looked at and turn
+// any of it off before spending the call.
+test('the lenses can be seen and turned off before reading', async () => {
+  await reachSetup()
+
+  expect(screen.getByText("What I'll look at")).toBeTruthy()
+  expect(screen.getByText(/2 of 3 on/)).toBeTruthy()
+  const off = screen.getByRole('button', { name: /AI completion risk/ })
+  expect(off.getAttribute('aria-pressed')).toBe('false')
+  // An off lens stays on screen rather than disappearing: knowing what is NOT
+  // being looked at is half of trusting the result.
+  expect(off.className).toContain('border-dashed')
+})
+
+test('toggling a lens updates the count', async () => {
+  updateReview.mockImplementation((_id: string, data: { lenses: { key: string; on: boolean }[] }) =>
+    Promise.resolve(
+      review({
+        fileName: 'Unit 3 Quiz.docx',
+        pageCount: 4,
+        sourceKind: 'photo',
+        lenses: review().lenses.map((l) => ({
+          ...l,
+          on: data.lenses.find((d) => d.key === l.key)?.on ?? l.on,
+        })),
+      }),
+    ),
+  )
+  await reachSetup()
+  await waitFor(() => expect(screen.getByText(/2 of 3 on/)).toBeTruthy())
+
+  fireEvent.click(screen.getByRole('button', { name: /AI completion risk/ }))
+
+  await waitFor(() => expect(screen.getByText(/3 of 3 on/)).toBeTruthy())
 })
