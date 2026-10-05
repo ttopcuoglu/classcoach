@@ -296,35 +296,7 @@ async function openReviewed() {
   await waitFor(() => expect(screen.getByText('If you change one thing')).toBeTruthy())
 }
 
-// The one change leads, above everything a teacher could choose to read next.
-// The one change leads, above the findings that argue for it.
-test('the result leads with the one-thing card, above the findings', async () => {
-  await openReviewed()
-  const all = Array.from(document.querySelectorAll('*'))
-  const oneThing = all.indexOf(screen.getByText('If you change one thing'))
-  // The first numbered finding section.
-  const found = all.indexOf(screen.getByText('What each item measures'))
-  expect(oneThing).toBeLessThan(found)
-  expect(screen.getByText('Split question 4 — it is measuring reading, not the content.')).toBeTruthy()
-})
 
-// Every finding is on the page, in order. They used to be behind pills, which
-// meant reading one and having to know to go looking for the rest.
-// The same numbered, colour-banded sections as the printed reports and
-// Lesson Debrief's Insights, so every report in this app reads the same way.
-test('findings are numbered sections, all on the page', async () => {
-  await openReviewed()
-  expect(screen.getByText('What each item measures')).toBeTruthy()
-  expect(screen.getByText('Items 1-3 are recall. Item 4 is really a reading test.')).toBeTruthy()
-  expect(screen.getByText('Suggested edits')).toBeTruthy()
-  // Numbered in reading order, so a lens that produced nothing leaves no gap.
-  const numbers = Array.from(document.querySelectorAll('section h3')).map(
-    (h) => h.previousElementSibling?.textContent ?? h.parentElement?.previousElementSibling?.textContent,
-  )
-  expect(numbers.filter(Boolean).length).toBeGreaterThan(0)
-  // Nothing to click to see them.
-  expect(screen.queryByRole('navigation', { name: 'Review sections' })).toBeNull()
-})
 
 // Edits are what a teacher arrived for, so that is what is open.
 
@@ -728,10 +700,10 @@ test('zero edits reads as an answer, not an error', async () => {
   fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
 
   await waitFor(() => expect(screen.getByText('Nothing I would change before tomorrow')).toBeTruthy())
-  // The findings still stand and are still on the page — "no edits" is an
-  // answer about the changes, not about the whole review.
-  expect(screen.getByText('What each item measures')).toBeTruthy()
-  expect(screen.getByText('Items 1-3 are recall. Item 4 is really a reading test.')).toBeTruthy()
+  // The rest of the report still stands — "no edits" is an answer about the
+  // changes, not about the whole review.
+  expect(screen.getByText('Summary')).toBeTruthy()
+  expect(screen.getByText('Strengths')).toBeTruthy()
 })
 
 // Criterion 12: every control is a real button with a name.
@@ -1110,55 +1082,9 @@ test('the setup card gives way to the report', async () => {
   expect(screen.getByRole('button', { name: 'Export my original' })).toBeTruthy()
 })
 
-// The subtitle is the lens's own fixed blurb, not something the model wrote —
-// so a teacher meets the same sections, named the same way, every time.
-test('sections are named by the lens, with its standing description', async () => {
-  await openReviewed()
-  expect(screen.getByText('What each item measures')).toBeTruthy()
-  // The fixture's blurb, which is what the server sends for this lens.
-  expect(screen.getByText('Item by item.')).toBeTruthy()
-})
 
 // --- a finding has parts ---
 
-// A paragraph says what is wrong; the named parts say where, one at a time,
-// so a teacher can act on one without re-reading the rest. This is the shape
-// the old presentation review used — "Opening hook", "Pacing & timing" — and
-// the reason the report stopped reading as three short paragraphs.
-test('a finding shows its named parts, each explained', async () => {
-  const withPoints = review({
-    ...REVIEWED,
-    lenses: [
-      {
-        key: 'item_purpose',
-        label: 'What each item measures',
-        blurb: 'Item by item.',
-        on: true,
-        title: 'Four of eighteen test reading',
-        body: 'The recall items do their job.',
-        points: [
-          { label: 'Item 4', kind: 'weakness' as const, recommendation: 'Split it in two: one item on the reading, one on transport.', body: 'A 90-word scenario before any biology appears. A student who knows the content can still lose it on reading speed.' },
-          { label: 'Items 9 and 12', kind: 'strength' as const, recommendation: null, body: 'The correct option is longer and more precise than the others, which is a tell students learn fast.' },
-        ],
-      },
-    ],
-  })
-  createReview.mockResolvedValue(review())
-  runReview.mockResolvedValue(withPoints)
-  renderPage()
-  await waitFor(() => expect(screen.getByText('What are you looking over?')).toBeTruthy())
-  chooseType()
-  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
-  await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
-  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
-
-  await waitFor(() => expect(screen.getByText('Item 4')).toBeTruthy())
-  expect(screen.getByText(/A 90-word scenario before any biology appears/)).toBeTruthy()
-  expect(screen.getByText('Items 9 and 12')).toBeTruthy()
-  // The paragraph is still there — the parts are extra, not a replacement.
-  expect(screen.getByText('The recall items do their job.')).toBeTruthy()
-})
 
 // --- what the two steps are for ---
 
@@ -1219,13 +1145,33 @@ test('toggling a lens updates the count', async () => {
 
 // --- strengths, not only faults ---
 
-// A review that only lists faults reads as a verdict on the teacher rather
-// than help with the document — and it is usually untrue, because someone
-// made deliberate choices here and some of them worked.
-test('the report opens with how it reads, before anything to change', async () => {
+
+
+
+// --- the report's four parts ---
+
+// Organised by what a teacher wants to know — what this is, what works, what
+// costs, what to do — rather than by which lens happened to notice it. It was
+// a section per lens, which meant finding out what you got right meant
+// reading eleven sections and assembling it yourself.
+test('the report is Summary, Strengths, Weaknesses, Recommendations', async () => {
+  await openReviewed()
+  const all = Array.from(document.querySelectorAll('*'))
+  const at = (text: string) => all.indexOf(screen.getByText(text))
+
+  for (const part of ['Summary', 'Strengths', 'Weaknesses', 'Recommendations']) {
+    expect(screen.getByText(part), part).toBeTruthy()
+  }
+  expect(at('Summary')).toBeLessThan(at('Strengths'))
+  expect(at('Strengths')).toBeLessThan(at('Weaknesses'))
+  expect(at('Weaknesses')).toBeLessThan(at('Recommendations'))
+  expect(at('Recommendations')).toBeLessThan(at('Suggested edits'))
+})
+
+test('the summary is the narrative, and leads', async () => {
   const withNarrative = review({
     ...REVIEWED,
-    narrative: 'This is a tight unit quiz that knows what it is assessing. The recall items are clean and the ordering builds.',
+    narrative: 'This is a tight unit quiz that knows what it is assessing.',
   })
   createReview.mockResolvedValue(review())
   runReview.mockResolvedValue(withNarrative)
@@ -1237,28 +1183,50 @@ test('the report opens with how it reads, before anything to change', async () =
   await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
   fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
 
-  await waitFor(() => expect(screen.getByText('How it reads')).toBeTruthy())
-  expect(screen.getByText(/This is a tight unit quiz/)).toBeTruthy()
-  // Before the change to make.
-  const all = Array.from(document.querySelectorAll('*'))
-  expect(all.indexOf(screen.getByText('How it reads'))).toBeLessThan(
-    all.indexOf(screen.getByText('If you change one thing')),
-  )
+  await waitFor(() => expect(screen.getByText(/This is a tight unit quiz/)).toBeTruthy())
 })
 
-test('each part says whether it works, and what to do about it', async () => {
+// Strengths and weaknesses are gathered from every lens, each still naming
+// the lens that saw it — a finding a teacher cannot trace back to a question
+// is one they cannot argue with.
+test('a strength and a weakness land in their own sections, lens named', async () => {
   await openReviewed()
 
-  // Named rather than colour-coded alone, so a teacher skimming for what they
-  // did well can find it by reading.
-  expect(screen.getByText('Strength')).toBeTruthy()
-  expect(screen.getByText('Worth changing')).toBeTruthy()
-  expect(screen.getByText(/Split it in two/)).toBeTruthy()
-  expect(screen.getByText('Try this:')).toBeTruthy()
+  const strengths = screen.getByText('Strengths').closest('section')!
+  expect(strengths.textContent).toContain('Items 1-3')
+  expect(strengths.textContent).toContain('What each item measures')
+  expect(strengths.textContent).not.toContain('Item 4')
+
+  const weaknesses = screen.getByText('Weaknesses').closest('section')!
+  expect(weaknesses.textContent).toContain('Item 4')
+  expect(weaknesses.textContent).toContain('90-word scenario')
 })
 
-// A strength with nothing to add says nothing rather than padding.
-test('a strength with no recommendation offers none', async () => {
+// Every recommendation in one place, numbered, each saying what it is about.
+test('recommendations are collected and traceable', async () => {
   await openReviewed()
-  expect(screen.queryByText('Keep it going:')).toBeNull()
+  const recs = screen.getByText('Recommendations').closest('section')!
+  expect(recs.textContent).toContain('Split it in two')
+  expect(recs.textContent).toContain('Item 4')
+  expect(recs.textContent).toContain('What each item measures')
+})
+
+// Saying so is information. Inventing a strength to fill the section would
+// cost every other thing the review says.
+test('an empty strengths section says so rather than inventing one', async () => {
+  const noStrengths = review({
+    ...REVIEWED,
+    lenses: [{ ...REVIEWED.lenses[0], points: REVIEWED.lenses[0].points!.filter((p) => p.kind === 'weakness') }],
+  })
+  createReview.mockResolvedValue(review())
+  runReview.mockResolvedValue(noStrengths)
+  renderPage()
+  await waitFor(() => expect(screen.getByText('What are you looking over?')).toBeTruthy())
+  chooseType()
+  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
+  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
+
+  await waitFor(() => expect(screen.getByText(/without inventing one/)).toBeTruthy())
 })

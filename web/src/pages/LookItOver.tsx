@@ -363,9 +363,22 @@ export default function LookItOver() {
   }
 
   const lensesOn = review?.lenses.filter((l) => l.on).length ?? 0
-  /// Only lenses that actually produced something get a pill — an empty one is
-  /// a promise of a finding that is not there.
-  const findingLenses = (review?.lenses ?? []).filter((l) => l.on && (l.body || l.finding))
+  /// Every named part of every finding, flattened, each remembering the lens
+  /// it came from.
+  ///
+  /// The report is organised by what a teacher wants to know — what works,
+  /// what costs, what to do — rather than by which lens happened to notice
+  /// it. The lens is still named on each item, because a finding a teacher
+  /// cannot trace back to a question is one they cannot argue with.
+  const points = (review?.lenses ?? [])
+    .filter((l) => l.on)
+    .flatMap((lens) =>
+      (lens.points ?? []).map((point) => ({ ...point, lensLabel: lens.label, confidence: lens.confidence })),
+    )
+  const strengths = points.filter((p) => p.kind === 'strength')
+  const weaknesses = points.filter((p) => p.kind === 'weakness')
+  /// Every part that came with something to do, in the order they were found.
+  const recommendations = points.filter((p) => !!p.recommendation)
   /// Every number the result shows, with its basis — including the timing
   /// estimate, which predates the contract and is stored in its own column.
   /// Folding it in here rather than giving it a card of its own is what makes
@@ -881,20 +894,8 @@ export default function LookItOver() {
                 )}
               </div>
 
-              {/* 2 — how it reads, before anything about changing it. A
-                  report that opens with the fault reads as a verdict on the
-                  teacher's work; this is where it says what it is looking at
-                  and what is already right about it. */}
-              {review.narrative && (
-                <div className="rounded-3xl border border-hairline bg-cream-card p-6">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
-                    How it reads
-                  </p>
-                  <p className="mt-2 whitespace-pre-wrap text-base leading-relaxed text-ink">{review.narrative}</p>
-                </div>
-              )}
-
-              {/* 3 — the hero. One change, for the whole review. */}
+              {/* 2 — the hero. One change, for the whole review. The
+                  Summary below carries the narrative. */}
               {review.oneThing && (
                 <div className="rounded-3xl bg-peach-tint/60 p-6">
                   <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
@@ -907,87 +908,99 @@ export default function LookItOver() {
                 </div>
               )}
 
-              {/* 3 — the findings, as numbered sections: the same shape as
-                  the printed reports and Lesson Debrief's Insights, so every
-                  report in this app reads the same way. What the part is,
-                  what it is for, then the content. Numbers are assigned in
-                  reading order, so a lens that produced nothing leaves no
-                  gap. */}
-              {findingLenses.map((lens, i) => (
-                <AnswerSection
-                  key={lens.key}
-                  n={i + 1}
-                  // The lens's own name and its fixed blurb, exactly as
-                  // Presentation Review and Assignment Coach did it: a section
-                  // a teacher recognises from one review to the next, and a
-                  // subtitle that says what it is about rather than what this
-                  // particular document turned out to be. The model's own
-                  // heading moved into the body, where a sentence belongs.
-                  title={lens.label}
-                  subtitle={lens.blurb}
-                >
-                  {/* A thin-evidence finding says so rather than sitting at
-                      the same weight as a well-grounded one. */}
-                  {lens.confidence === 'low' && (
-                    <p className="mb-2 text-xs font-semibold text-terracotta-600">
-                      Low confidence — the document didn&rsquo;t give this much to go on.
-                    </p>
-                  )}
-                  {/* What it found, led by the model's own one-line summary
-                      when there is one. */}
-                  {lens.title && <span className="block font-semibold text-forest">{lens.title}</span>}
-                  {lens.body || lens.finding}
+              {/* The report, in four parts: what it is, what works, what
+                  costs, and what to do. Findings used to be a section per
+                  lens, which meant a teacher who wanted to know what they got
+                  right had to read eleven sections and assemble it
+                  themselves. The lenses still produce all of this — they are
+                  named on each item rather than organising the page. */}
+              <AnswerSection n={1} title="Summary" subtitle="What this is, and how it reads">
+                {review.narrative || review.oneThingDetail || 'No summary came back for this one.'}
+              </AnswerSection>
 
-                  {/* The named parts, in the shape the old presentation
-                      review used: the place, then what about it. A teacher
-                      can act on one of these without re-reading the rest. */}
-                  {lens.points && lens.points.length > 0 && (
-                    <div className="mt-3 flex flex-col gap-3.5">
-                      {lens.points.map((point) => (
-                        <div key={point.label}>
-                          <p className="flex flex-wrap items-center gap-2">
-                            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">
-                              {point.label}
-                            </span>
-                            {/* Named, not colour-coded alone: a teacher
-                                skimming for what they did well should be able
-                                to find it by reading. */}
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${
-                                point.kind === 'strength'
-                                  ? 'bg-mint-tint text-forest'
-                                  : 'bg-peach-tint text-terracotta-600'
-                              }`}
-                            >
-                              {point.kind === 'strength' ? 'Strength' : 'Worth changing'}
-                            </span>
-                          </p>
-                          <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{point.body}</p>
-                          {point.recommendation && (
-                            <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">
-                              <span className="font-semibold text-forest">
-                                {point.kind === 'strength' ? 'Keep it going: ' : 'Try this: '}
-                              </span>
-                              {point.recommendation}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {lens.evidence && lens.evidence.length > 0 && (
-                    <p className="mt-2.5 text-xs text-ink-soft">
-                      <span className="font-semibold">From:</span> {lens.evidence.join(' · ')}
-                    </p>
-                  )}
-                </AnswerSection>
-              ))}
-
-              {/* 4 — the changes, last and numbered with the rest, below the
-                  findings that argue for them. */}
               <NumberedCard
-                n={findingLenses.length + 1}
+                n={2}
+                title="Strengths"
+                subtitle={
+                  strengths.length === 0
+                    ? 'Nothing it could point to with confidence'
+                    : 'What is already working, and worth keeping'
+                }
+              >
+                {strengths.length === 0 ? (
+                  // Said plainly rather than hidden. An empty strengths
+                  // section is information — and it is honest in a way that
+                  // inventing one would not be.
+                  <p className="text-sm text-ink-soft">
+                    Nothing here it could call a strength without inventing one. That is a judgment about this
+                    read, not a verdict on the document.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-3.5">
+                    {strengths.map((point) => (
+                      <FindingPoint key={`${point.lensLabel}-${point.label}`} point={point} />
+                    ))}
+                  </div>
+                )}
+              </NumberedCard>
+
+              <NumberedCard
+                n={3}
+                title="Weaknesses"
+                subtitle={
+                  weaknesses.length === 0
+                    ? 'Nothing it would change before tomorrow'
+                    : 'What costs something, and where'
+                }
+              >
+                {weaknesses.length === 0 ? (
+                  <p className="text-sm text-ink-soft">Nothing it would change before tomorrow.</p>
+                ) : (
+                  <div className="flex flex-col gap-3.5">
+                    {weaknesses.map((point) => (
+                      <FindingPoint key={`${point.lensLabel}-${point.label}`} point={point} />
+                    ))}
+                  </div>
+                )}
+              </NumberedCard>
+
+              <NumberedCard
+                n={4}
+                title="Recommendations"
+                subtitle={
+                  recommendations.length === 0
+                    ? 'Nothing to act on from this read'
+                    : 'What to do, and what it is about'
+                }
+              >
+                {recommendations.length === 0 ? (
+                  <p className="text-sm text-ink-soft">Nothing to act on from this read.</p>
+                ) : (
+                  <ol className="flex flex-col gap-3">
+                    {recommendations.map((point, i) => (
+                      <li key={`${point.lensLabel}-${point.label}`} className="flex gap-3">
+                        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-forest font-heading text-xs font-bold text-cream">
+                          {i + 1}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm text-ink">{point.recommendation}</span>
+                          {/* Where it came from, so a recommendation can be
+                              traced back to the thing that prompted it. */}
+                          <span className="mt-0.5 block text-xs text-ink-soft">
+                            {point.label} · {point.lensLabel}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </NumberedCard>
+
+              {/* 5 — the changes, as a diff. Separate from recommendations
+                  because these are accepted or declined one at a time against
+                  the teacher's own words. */}
+              <NumberedCard
+                n={5}
                 title="Suggested edits"
                 subtitle={
                   review.edits.length === 0
@@ -996,9 +1009,8 @@ export default function LookItOver() {
                 }
               >
                 {review.edits.length === 0 ? (
-                  // A result, not an error. The findings above still stand.
                   <p className="text-sm text-ink-soft">
-                    No suggested edits. What I found is above, and your document is unchanged.
+                    No suggested edits. Your document is unchanged.
                   </p>
                 ) : (
                   <div className="flex flex-col gap-3">
@@ -1229,4 +1241,44 @@ function disagreesWithChoice(review: Review): boolean {
   // Only when the teacher actually chose. An unconfirmed type means detection
   // picked it, and detection cannot disagree with itself.
   return review.docTypeConfirmed
+}
+
+/// One named part of a finding: where it is, which lens saw it, and what it
+/// means — with what to do about it when there is something.
+function FindingPoint({
+  point,
+}: {
+  point: {
+    label: string
+    kind: 'strength' | 'weakness'
+    body: string
+    recommendation?: string | null
+    lensLabel: string
+    confidence?: 'high' | 'low' | null
+  }
+}) {
+  return (
+    <div>
+      <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="text-sm font-bold text-forest">{point.label}</span>
+        {/* The lens that saw it, so the item can be traced back to the
+            question that produced it. */}
+        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-soft">
+          {point.lensLabel}
+        </span>
+        {point.confidence === 'low' && (
+          <span className="text-[11px] font-semibold text-terracotta-600">low confidence</span>
+        )}
+      </p>
+      <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{point.body}</p>
+      {point.recommendation && (
+        <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">
+          <span className="font-semibold text-forest">
+            {point.kind === 'strength' ? 'Keep it going: ' : 'Try this: '}
+          </span>
+          {point.recommendation}
+        </p>
+      )}
+    </div>
+  )
 }
