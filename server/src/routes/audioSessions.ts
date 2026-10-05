@@ -78,21 +78,29 @@ const REFLECT_START_MESSAGE = 'Start our reflection conversation.'
 
 const CONTENT_NOTE_LABELS = new Set(['Clarity', 'Vocabulary', 'Engagement with content', 'Worth double-checking'])
 const MIN_CONTENT_EXHIBITS = 3
-const NOT_ENOUGH_CONTENT_ERROR = 'Not enough subject-specific content detected to generate notes this session.'
+const NOT_ENOUGH_CONTENT_ERROR = 'This recording caught too little of what you said to write content notes.'
 
 type ContentNote = { id: string; label: string; text: string; timestampSec: number; excerpt: string }
 
-function buildContentNotesSystemPrompt(
-  subject: string,
+/// `subject` and `topic` come from reading the transcript, and either can be
+/// missing — notes are written either way. Withholding them whenever the
+/// subject was unknown meant a lesson on moon phases got nothing, because the
+/// old keyword scan knew "photosynthesis" and "ecosystem" but not the moon.
+export function buildContentNotesSystemPrompt(
+  subject: string | null,
+  topic: string | null,
   exhibits: { text: string; timestampSec: number }[],
   durationSec: number,
 ): string {
-  const subjectLabel = subject.replace('_', ' ')
+  const subjectLabel = subject ? `${subject.replace('_', ' ')} ` : ''
+  const topicLine = topic
+    ? `\n\nWhat this lesson covered, read from the same transcript: ${topic}\n\nYour notes are about THIS content. Name the specific idea, term, example, or model the teacher used — a note that would fit any lesson on any topic is not worth writing.`
+    : '\n\nEvery note must be about the specific content in the excerpts below — the actual idea, term, or example the teacher used, never generic teaching advice that would fit any lesson.'
   const shortRecordingNotice =
     durationSec > 0 && durationSec < 180
       ? `\n\nThis excerpt is quite short, and automatic transcription can occasionally mishear a word as another that sounds similar (e.g. mishearing one technical term for another that sounds alike). Given the length here, keep every note more tentative than usual, and if a specific term or claim seems slightly inconsistent with the rest of the excerpt, treat that as a possible mishearing worth a gentle double-check rather than building a note on it with confidence.`
       : ''
-  return `You are a supportive ${subjectLabel} content-area specialist reviewing a brief excerpt from a classroom. Your tone is warm, collegial, and constructive — like a helpful colleague, never a critic. Assume good intent and strong subject knowledge on the teacher's part.
+  return `You are a supportive ${subjectLabel}content-area specialist reviewing a brief excerpt from a classroom.${topicLine} Your tone is warm, collegial, and constructive — like a helpful colleague, never a critic. Assume good intent and strong subject knowledge on the teacher's part.
 
 You are working from a short audio transcript excerpt only. You have not seen the full lesson, materials, board work, or planning documents, and audio transcription may contain errors. Do not state or imply factual corrections with confidence — frame anything content-related as a question, a suggestion to double-check, or an observation, never as an assertion that something is wrong.${shortRecordingNotice}
 
@@ -117,7 +125,7 @@ Reserve "Worth double-checking" strictly for a concrete, plainly-stated factual 
 ${CORE_COACHING_RULES}`
 }
 
-function parseContentNotes(text: string, exhibits: { text: string; timestampSec: number }[]): ContentNote[] {
+export function parseContentNotes(text: string, exhibits: { text: string; timestampSec: number }[]): ContentNote[] {
   const blocks = text.match(/<note>[\s\S]*?<\/note>/g) ?? []
   const notes: ContentNote[] = []
   for (const block of blocks) {
@@ -873,12 +881,9 @@ audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
     return
   }
 
-  const lessonContent = session.lessonContent as unknown as { subject: string | null } | null
+  const lessonContent = session.lessonContent as unknown as { subject: string | null; summary?: string | null } | null
   const subject = lessonContent?.subject ?? null
-  if (!subject) {
-    res.status(400).json({ error: NOT_ENOUGH_CONTENT_ERROR })
-    return
-  }
+  const topic = lessonContent?.summary ?? null
 
   const segments: Segment[] = session.segments.map((s) => ({
     speakerLabel: s.speakerLabel,
@@ -902,7 +907,7 @@ audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 600,
-      system: buildContentNotesSystemPrompt(subject, exhibits, session.durationSec ?? 0),
+      system: buildContentNotesSystemPrompt(subject, topic, exhibits, session.durationSec ?? 0),
       messages: [{ role: 'user', content: 'Write the notes now.' }],
     })
     const text = response.content

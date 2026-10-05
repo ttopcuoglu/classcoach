@@ -4300,7 +4300,6 @@ function LessonContentTab({
   onGenerate: () => void
 }) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
-  const subject = lessonContent?.subject ?? null
   const visibleNotes = contentNotes?.notes.filter((n) => !dismissed.has(n.id)) ?? []
   const connections = lessonContent?.connections ?? []
 
@@ -4325,11 +4324,11 @@ function LessonContentTab({
       )}
 
       <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Content Specialist Notes</h2>
-      {subject == null ? (
-        <p className="text-sm text-ink-soft">
-          Not enough subject-specific content detected to generate notes this session.
-        </p>
-      ) : !contentNotes ? (
+      {/* Offered for every lesson. This used to be hidden whenever no subject
+          was detected, which a keyword scan of ~45 words decided — so a lesson
+          on moon phases was told it had no subject-specific content. The
+          server answers if a recording really caught too little to work from. */}
+      {!contentNotes ? (
         <>
           <button
             type="button"

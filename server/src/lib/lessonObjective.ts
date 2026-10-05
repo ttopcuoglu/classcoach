@@ -54,14 +54,17 @@ Most lessons do not contain one. A teacher who starts working without announcing
 
 3. REAL-WORLD AND PRIOR-KNOWLEDGE CONNECTIONS. Up to two moments where the teacher tied the content to something outside the lesson — everyday life, a job, a story, something the class did before. It does not have to announce itself: "that's going to be important in cooking because you want things to taste the same" is a cooking connection, and "remember what we did with slopes last week" is a prior-knowledge one. Copy the teacher's sentence EXACTLY and give the timestamp of its line.
 
-4. DEFINED VOCABULARY. Up to two moments where the teacher gave the meaning of a term, however informally — "equivalent just means they're worth the same", "we call that the numerator". Again, exact sentences and timestamps.
+4. THE SUBJECT. The subject area this lesson belongs to, as a teacher would say it: "science", "math", "English language arts", "US history", "Spanish", "art". Three words at most. ${NONE} if the transcript genuinely doesn't make it clear.
 
-For 3 and 4, ${NONE} is a real answer. Plenty of lessons contain neither, and inventing one is worse than reporting none.
+5. DEFINED VOCABULARY. Up to two moments where the teacher gave the meaning of a term, however informally — "equivalent just means they're worth the same", "we call that the numerator". Again, exact sentences and timestamps.
+
+For 3 and 5, ${NONE} is a real answer. Plenty of lessons contain neither, and inventing one is worse than reporting none.
 
 Write nothing outside these tags:
 <objective>the exact sentence, or ${NONE}</objective>
 <objective_time>m:ss of that line, or ${NONE}</objective_time>
 <summary>one or two sentences, or ${NONE}</summary>
+<subject>the subject area, or ${NONE}</subject>
 <connections>
 one exact sentence per line, each followed by " @ m:ss", or ${NONE}
 </connections>
@@ -161,6 +164,9 @@ export type ObjectiveFromModel = {
   quote: string | null
   timestampSec: number | null
   summary: string | null
+  /// What subject this lesson belongs to, in the teacher's words ("science",
+  /// "algebra"). Null when the transcript doesn't make it clear.
+  subject: string | null
   connections: Quoted[]
   vocabulary: Quoted[]
 }
@@ -189,11 +195,23 @@ function parseQuotedLines(
   return out
 }
 
+/// A subject is a label, used in a heading and in "a supportive X content-area
+/// specialist". Anything long, punctuated, or sentence-like is the model
+/// answering a different question, and is dropped rather than shown.
+function parseSubject(raw: string | null): string | null {
+  if (!raw) return null
+  const value = raw.trim().replace(/[.]+$/, '')
+  if (!value || value.toUpperCase().includes(NONE)) return null
+  if (!/^[A-Za-z][A-Za-z '-]{1,28}$/.test(value)) return null
+  if (value.split(/\s+/).length > 3) return null
+  return value.toLowerCase()
+}
+
 /// Best-effort. Any failure returns nulls and the caller keeps the phrase
 /// detector's answer — a report that loses one line is fine, a transcription
 /// that fails because of this is not.
 export async function readLessonObjective(segments: Segment[]): Promise<ObjectiveFromModel> {
-  const empty: ObjectiveFromModel = { quote: null, timestampSec: null, summary: null, connections: [], vocabulary: [] }
+  const empty: ObjectiveFromModel = { quote: null, timestampSec: null, summary: null, subject: null, connections: [], vocabulary: [] }
   const transcript = transcriptForModel(segments)
   if (transcript.length < 200) return empty
 
@@ -215,13 +233,14 @@ export async function readLessonObjective(segments: Segment[]): Promise<Objectiv
     const rawQuote = extractTag(text, 'objective')
     const rawSummary = extractTag(text, 'summary')
     const summary = !rawSummary || rawSummary.toUpperCase().includes(NONE) ? null : rawSummary
+    const subject = parseSubject(extractTag(text, 'subject'))
 
     const { flat, offsets } = flattenTeacherSpeech(segments)
     const connections = parseQuotedLines(extractTag(text, 'connections'), flat, offsets, 2)
     const vocabulary = parseQuotedLines(extractTag(text, 'vocabulary'), flat, offsets, 2)
 
     if (!rawQuote || rawQuote.toUpperCase().includes(NONE)) {
-      return { quote: null, timestampSec: null, summary, connections, vocabulary }
+      return { quote: null, timestampSec: null, summary, subject, connections, vocabulary }
     }
 
     const claimedTime = parseTimestamp(extractTag(text, 'objective_time'))
@@ -235,6 +254,7 @@ export async function readLessonObjective(segments: Segment[]): Promise<Objectiv
         quote: rawQuote,
         timestampSec: startSecAtOffset(offsets, offset) ?? claimedTime,
         summary,
+        subject,
         connections,
         vocabulary,
       }
@@ -244,11 +264,11 @@ export async function readLessonObjective(segments: Segment[]): Promise<Objectiv
     // rather than from the model.
     const recovered = quoteFromSegment(segments, claimedTime, rawQuote)
     if (recovered) {
-      return { ...recovered, summary, connections, vocabulary }
+      return { ...recovered, summary, subject, connections, vocabulary }
     }
 
     console.warn('[lessonObjective] discarded a quote that is in neither the transcript nor the segment it cited')
-    return { quote: null, timestampSec: null, summary, connections, vocabulary }
+    return { quote: null, timestampSec: null, summary, subject, connections, vocabulary }
   } catch (error) {
     console.error('[lessonObjective] failed:', error)
     return empty
@@ -263,7 +283,7 @@ export async function enrichLessonContent(
   segments: Segment[],
 ): Promise<LessonContentResult> {
   const read = await readLessonObjective(segments)
-  if (!read.quote && !read.summary && read.connections.length === 0 && read.vocabulary.length === 0) {
+  if (!read.quote && !read.summary && !read.subject && read.connections.length === 0 && read.vocabulary.length === 0) {
     return lessonContent
   }
 
@@ -281,6 +301,11 @@ export async function enrichLessonContent(
   return {
     ...lessonContent,
     summary: read.summary ?? lessonContent.summary ?? null,
+    // The keyword scan knows ~45 words: a lesson on moon phases matched none
+    // of them, came back with no subject, and that silently withheld Content
+    // Specialist Notes from a teacher whose transcript says "moon phases"
+    // eight times. The model reads what the lesson was actually about.
+    subject: read.subject ?? lessonContent.subject,
     // The phrase scan looked for ten fixed openers — "in real life", "remember
     // when we" — and missed a teacher tying ratios to cooking because she
     // simply talked about cooking. What the model finds wins; what it finds

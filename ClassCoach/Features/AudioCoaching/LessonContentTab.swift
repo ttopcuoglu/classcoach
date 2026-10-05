@@ -18,7 +18,6 @@ struct LessonContentTab: View {
     @State private var error: String?
     @State private var dismissed: Set<String> = []
 
-    private var subject: String? { session.lessonContent?.subject }
     private var visibleNotes: [AudioContentNote] {
         (session.contentNotes?.notes ?? []).filter { !dismissed.contains($0.id) }
     }
@@ -49,10 +48,10 @@ struct LessonContentTab: View {
                 .font(.caption.weight(.bold))
                 .foregroundStyle(AppTheme.textSecondary)
 
-            if subject == nil {
-                Text("Not enough subject-specific content detected to generate notes this session.")
-                    .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-            } else if session.contentNotes == nil {
+            // Offered for every lesson: a keyword scan deciding a moon-phases
+            // lesson had "no subject" used to hide this entirely. The server
+            // says so if the recording caught too little to write from.
+            if session.contentNotes == nil {
                 Button(generating ? "Generating…" : "Generate content specialist notes") {
                     Task { await generate() }
                 }
