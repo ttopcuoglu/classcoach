@@ -17,10 +17,11 @@ import type { AnalysisResult, Segment } from './audioAnalysis.ts'
 import { extractTag } from './extractTag.ts'
 import { flattenTeacherSpeech, parseQuotedLines, transcriptForModel, type Quoted } from './lessonObjective.ts'
 
-/// Per kind. A lesson has more than a dozen directions in it; the report
-/// shows a handful and counts the rest, and an unbounded list would cost
-/// tokens to produce evidence nobody reads.
-const MAX_PER_KIND = 12
+/// Per kind. These are counts as well as evidence, so the cap has to sit
+/// above what a real lesson holds or the number silently becomes "the cap" —
+/// a twenty-minute lesson already returned twelve directions. The report
+/// shows a handful of them and counts the rest.
+const MAX_PER_KIND = 25
 
 export type ClassroomMoves = {
   directions: Quoted[]
@@ -43,6 +44,8 @@ REDIRECTIONS — bringing attention or behaviour back: "eyes up here", "I need e
 POSITIVE — naming something a student or the class did well, or genuine encouragement. Short counts: "that's a good question", "exactly", "nice thinking" are all a teacher telling a student their contribution was worth something. So do longer ones: "that's exactly the connection I wanted", "you're already most of the way there". What does NOT count is filler that keeps the conversation moving without appraising anything — "okay", "yep", "alright", "thank you" said while taking a handout.
 
 CORRECTIVE — telling a student an answer or an approach is not right yet: "not quite", "let's rethink that", "close, but look at the second step".
+
+These are counted and trended across a teacher's lessons, so be exhaustive, not representative: list EVERY instance you find of each kind, in the order they happen. A lesson with ten directions in it comes back with ten, not with the three clearest. Stop only when you run out.
 
 Rules that matter more than finding things:
 - Copy sentences verbatim. A sentence the teacher did not say is dropped, and a quote that has been tidied up is a quote that gets dropped.
