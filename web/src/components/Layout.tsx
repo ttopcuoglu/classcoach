@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { logout, type FocusMetric } from '../lib/api'
 import type { UserProfile } from '../lib/api'
-import { isExperienced } from '../lib/experience'
 import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import {
   ArrowUpIcon,
@@ -46,7 +45,6 @@ const NAV_GROUPS: NavGroup[] = [
     icon: ArrowUpIcon,
     items: [
       { to: '/profile', label: 'Profile', icon: UserIcon },
-      { to: '/first-30-days', label: 'First 30 Days', icon: ChecklistIcon },
     ],
   },
 ]
@@ -90,12 +88,6 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
   // Covers a school plan, admins and review accounts too — `plan` alone only
   // reflects a personal subscription.
   const hasPlus = user?.plusAccess != null || user?.plan === 'plus'
-  // First 30 Days is a new-teacher track; experienced teachers can still
-  // reach it from Profile, it just doesn't take up a spot in their nav.
-  const navGroups = isExperienced(user?.experienceLevel)
-    ? NAV_GROUPS.map((group) => ({ ...group, items: group.items.filter((item) => item.to !== '/first-30-days') }))
-    : NAV_GROUPS
-
   return (
     <div className="flex min-h-screen bg-cream text-ink">
       {/* Desktop sidebar */}
@@ -110,7 +102,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             Home
           </NavLink>
 
-          {navGroups.map((group) => (
+          {NAV_GROUPS.map((group) => (
             <div key={group.label}>
               <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-cream/40">{group.label}</p>
               <div className="mt-1.5 flex flex-col gap-1">
@@ -217,7 +209,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             Home
           </NavLink>
 
-          {navGroups.map((group) => {
+          {NAV_GROUPS.map((group) => {
             const GroupIcon = group.icon
             if (group.items.length === 1) {
               const item = group.items[0]

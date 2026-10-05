@@ -4,7 +4,6 @@ import SupportChat from '../components/SupportChat'
 import { TrainingLibrary } from '../components/TrainingVideos'
 import {
   ArrowRightIcon,
-  ArrowUpIcon,
   BookIcon,
   BrainIcon,
   ChatBubbleIcon,
@@ -158,7 +157,7 @@ const GETTING_STARTED: Chapter = {
         { label: 'Your coaching path', body: 'a static Notice → Practice → Try → Reflect explainer.' },
         { label: 'Classroom pulse', body: 'a donut chart of your latest lesson\'s student-talk %, plus a sparkline once you have a few sessions.' },
         { label: 'Mood check-in', body: 'tap Good / Okay / Stressed / Overwhelmed and Wivoza quietly suggests a relevant practice category.' },
-        { label: 'Daily tip, quick links, and recent work', body: 'a tip box, a shortcut to First 30 Days or Your growth, and a feed of your last few sessions.' },
+        { label: 'Daily tip, quick links, and recent work', body: 'a tip box, a shortcut to Your growth, and a feed of your last few sessions.' },
       ],
     },
   ],
@@ -358,18 +357,6 @@ const GROW: Chapter = {
         { label: 'Lesson Debrief retention', body: 'keep transcripts and reports indefinitely, or auto-delete after 7, 30, or 90 days.' },
         { label: 'Export playbook', body: 'a printable page of everything you\'ve saved.' },
         { label: 'Reset & clear data', body: 'a permanent, confirmation-gated wipe of your saved scenarios, answers, messages, and Lesson Debrief sessions.' },
-      ],
-    },
-    {
-      id: 'first-30-days',
-      icon: ArrowUpIcon,
-      tint: 'bg-lavender-tint text-[#6B5FA0]',
-      nav: 'Grow → First 30 Days',
-      title: 'First 30 Days',
-      intro: 'A fixed checklist for getting the most out of Wivoza early on.',
-      specs: [
-        { label: 'Progress', body: 'a running complete/incomplete count across every item.' },
-        { label: 'Shortcuts', body: 'several items link straight into the relevant tool, sometimes pre-filled, so checking one off is one click.' },
       ],
     },
   ],

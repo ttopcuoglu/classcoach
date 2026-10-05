@@ -8,8 +8,8 @@ export const EXPERIENCE_OPTIONS: { value: ExperienceLevel; label: string }[] = [
 ]
 
 // Six or more years in. These teachers see refinement-focused starting points
-// instead of the new-teacher ones, and First 30 Days is tucked away. Anyone
-// who hasn't answered keeps the original experience.
+// instead of the new-teacher ones. Anyone who hasn't answered keeps the
+// original experience.
 export function isExperienced(level: ExperienceLevel | null | undefined): boolean {
   return level === 'established' || level === 'veteran'
 }

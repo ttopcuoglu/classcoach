@@ -17,7 +17,6 @@ const Communications = lazy(() => import('./pages/Communications'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Export = lazy(() => import('./pages/Export'))
 const Shared = lazy(() => import('./pages/Shared'))
-const FirstThirtyDays = lazy(() => import('./pages/FirstThirtyDays'))
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
 const AudioCoaching = lazy(() => import('./pages/AudioCoaching'))
 const AudioCoachingExport = lazy(() => import('./pages/AudioCoachingExport'))
@@ -245,7 +244,6 @@ export default function App() {
               <Route path="lesson-planning" element={<LessonPlanning />} />
               <Route path="assignment-coach" element={<AssignmentCoach />} />
               <Route path="profile" element={<Profile />} />
-              <Route path="first-30-days" element={<FirstThirtyDays />} />
               {/* Always registered, so /admin never falls through to a blank page
                   (e.g. right after logging out on it) — a teacher is sent home. */}
               <Route

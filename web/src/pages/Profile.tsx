@@ -588,21 +588,6 @@ export default function Profile() {
         )}
       </div>
 
-      <div className="grid gap-3">
-        <Link
-          to="/first-30-days"
-          className="group flex items-center gap-4 rounded-2xl bg-mint-tint/50 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
-        >
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-forest font-heading text-sm font-bold text-gold">
-            30
-          </span>
-          <div>
-            <p className="font-heading text-base font-bold text-forest">First 30 Days</p>
-            <p className="text-xs text-ink-soft">A short guided track to get grounded early.</p>
-          </div>
-        </Link>
-      </div>
-
       <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
         <SectionHeading
           n={5 + afterTelegram}
