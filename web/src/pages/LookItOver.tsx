@@ -582,6 +582,8 @@ export default function LookItOver() {
         </>
       ) : (
         <>
+          {review.status !== 'reviewed' && (
+          <>
           {/* One card, in the order a teacher reads it: what I have, what I
               think it is, what I will look at, whose room it is for, and the
               button. It used to be three separate panels, which made the type
@@ -772,6 +774,9 @@ export default function LookItOver() {
             </div>
           </div>
 
+          </>
+          )}
+
           <WorkingRing
             active={busy === 'reviewing'}
             estimatedMs={15000}
@@ -826,8 +831,14 @@ export default function LookItOver() {
                 <AnswerSection
                   key={lens.key}
                   n={i + 1}
-                  title={lens.title || lens.label}
-                  subtitle={lens.title ? lens.label : lens.blurb}
+                  // The lens's own name and its fixed blurb, exactly as
+                  // Presentation Review and Assignment Coach did it: a section
+                  // a teacher recognises from one review to the next, and a
+                  // subtitle that says what it is about rather than what this
+                  // particular document turned out to be. The model's own
+                  // heading moved into the body, where a sentence belongs.
+                  title={lens.label}
+                  subtitle={lens.blurb}
                 >
                   {/* A thin-evidence finding says so rather than sitting at
                       the same weight as a well-grounded one. */}
@@ -836,6 +847,9 @@ export default function LookItOver() {
                       Low confidence — the document didn&rsquo;t give this much to go on.
                     </p>
                   )}
+                  {/* What it found, led by the model's own one-line summary
+                      when there is one. */}
+                  {lens.title && <span className="block font-semibold text-forest">{lens.title}</span>}
                   {lens.body || lens.finding}
                   {lens.evidence && lens.evidence.length > 0 && (
                     <p className="mt-2.5 text-xs text-ink-soft">
@@ -908,6 +922,14 @@ export default function LookItOver() {
                     ? 'Nothing changed yet'
                     : `${review.acceptedCount} ${review.acceptedCount === 1 ? 'change' : 'changes'} accepted`}
                 </p>
+                <button
+                  type="button"
+                  onClick={() => void handleRun()}
+                  disabled={busy != null}
+                  className="rounded-full border-2 border-hairline bg-cream-card px-5 py-2.5 text-sm font-semibold text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-60"
+                >
+                  Look again
+                </button>
                 <button
                   type="button"
                   onClick={() => void handleExport()}

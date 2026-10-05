@@ -1047,3 +1047,25 @@ test('agreement says nothing — it is not a notification', async () => {
   await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
   expect(screen.queryByText(/this looks more like/)).toBeNull()
 })
+
+// Once there is a report, the report is the page. The setup card repeated the
+// file name, the type and the class line — all three of which the report's own
+// header states — directly above them.
+test('the setup card gives way to the report', async () => {
+  await openReviewed()
+  expect(screen.queryByText(/Got it — reviewing as/)).toBeNull()
+  expect(screen.queryByText(/No student names, please/)).toBeNull()
+  // And the way to re-run it moved to where the other finished-report actions
+  // are, rather than being stranded above it.
+  expect(screen.getByRole('button', { name: 'Look again' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Export my original' })).toBeTruthy()
+})
+
+// The subtitle is the lens's own fixed blurb, not something the model wrote —
+// so a teacher meets the same sections, named the same way, every time.
+test('sections are named by the lens, with its standing description', async () => {
+  await openReviewed()
+  expect(screen.getByText('What each item measures')).toBeTruthy()
+  // The fixture's blurb, which is what the server sends for this lens.
+  expect(screen.getByText('Item by item.')).toBeTruthy()
+})
