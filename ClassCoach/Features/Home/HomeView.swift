@@ -74,12 +74,12 @@ struct HomeView: View {
                     .buttonStyle(.plain)
                     .padding(.horizontal)
 
-                    NavigationLink { AskAndPracticeView() } label: {
+                    NavigationLink { PracticeView() } label: {
                         FeatureCard(
                             eyebrow: "Safe Practice",
-                            title: "Ask & Practice",
-                            description: "Ask a straight question, or rehearse a difficult classroom moment before it happens.",
-                            actionLabel: "Ask or rehearse",
+                            title: "Practice",
+                            description: "Rehearse a real classroom moment and get coaching on the words you used — before it happens for real.",
+                            actionLabel: "Practice a scenario",
                             systemImage: "bubble.left.and.bubble.right.fill",
                             iconTint: AppTheme.Category.disruption
                         )

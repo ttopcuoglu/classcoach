@@ -1,22 +1,20 @@
 import SwiftUI
 
-/// Mirrors `web/src/pages/CoachChat.tsx` — the Ask & Practice shell.
+/// Mirrors `web/src/pages/Practice.tsx`.
 ///
-/// The section is the main choice on this screen, so it lives here, above the
-/// Ask/Practice switch, and both tabs read it. One row of chips rather than the
-/// card deck this started as — four options with a sentence each put the picker
-/// between a teacher and the box where they type.
+/// This was Ask & Practice, two tabs over one shared section and room. Asking
+/// is Talk It Through's job now — out loud or typed, both in one place — so
+/// what is left here is the thing Talk It Through cannot do: rehearse a moment
+/// against a scenario and get coaching on the words you actually used.
 ///
-/// It stays optional on Ask: a teacher who writes "my class talks over
-/// directions" should never have to classify it first, and the coach infers the
-/// section from the text.
-struct AskAndPracticeView: View {
+/// The section stays above the scenario rather than inside it. Left on "Not
+/// sure yet" the coach picks, weighted toward what this teacher has practiced
+/// least, so it narrows rather than gates.
+struct PracticeView: View {
     @EnvironmentObject private var authManager: AuthManager
-    @State private var tab = "ask"
     @State private var focusArea: String?
-    /// The room lives here for the same reason the section does: a teacher who
-    /// sets their grade band on Ask and switches to Practice is still in the
-    /// same room, and a copy per tab meant setting it twice.
+    /// Seeded from the profile so a teacher who has set a grade band and
+    /// subject never types them again.
     @State private var room = TeachingContextValue()
 
     var body: some View {
@@ -39,14 +37,9 @@ struct AskAndPracticeView: View {
                         .padding(.horizontal)
                 }
 
-                ChipRow(items: [("Ask", "ask"), ("Practice", "practice")], selection: tab) {
-                    tab = $0 ?? "ask"
-                }
-                .padding(.horizontal)
-
                 // Parent and colleague work overlaps Communication Coach on
-                // purpose: a quick question or one rehearsed exchange belongs
-                // here, an actual drafted email or a prepared meeting there.
+                // purpose: one rehearsed exchange belongs here, an actual
+                // drafted email or a prepared meeting there.
                 if let note = findFocusArea(focusArea)?.handoffNote {
                     Text(note)
                         .font(.caption)
@@ -55,20 +48,16 @@ struct AskAndPracticeView: View {
                         .padding(.horizontal)
                 }
 
-                if tab == "practice" {
-                    TryItOutContent(focusArea: focusArea, room: $room)
-                } else {
-                    AskExpertContent(focusArea: focusArea, room: $room)
-                }
+                TryItOutContent(focusArea: focusArea, room: $room)
             }
             .background(AppTheme.background)
-            .navigationTitle("Ask & Practice")
+            .navigationTitle("Practice")
             .onAppear { room.seed(from: authManager.currentUser) }
         }
     }
 }
 
 #Preview {
-    AskAndPracticeView()
+    PracticeView()
         .environmentObject(AuthManager.shared)
 }

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Mirrors `web/src/pages/CheatSheet.tsx`'s two fetches — unlike
-/// `AskExpertService.getDebriefs()` (scoped to `source=ask_tab`), this
+/// the debriefs endpoint (scoped to `source=ask_tab`), this
 /// pulls *all* saved debriefs regardless of source, since a saved Talk It
 /// Through reflection is just as good cheat-sheet material as a saved Ask
 /// answer.

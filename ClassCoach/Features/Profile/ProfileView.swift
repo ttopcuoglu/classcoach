@@ -141,7 +141,7 @@ struct ProfileView: View {
             } header: {
                 Text("What Coach Knows · From Your Conversations")
             } footer: {
-                Text("A short, running note about your recurring strengths and ongoing challenges, built from your Ask, Talk It Through, and Lesson Debrief Reflect conversations. It's never shown to anyone else — not your school, not an administrator.")
+                Text("A short, running note about your recurring strengths and ongoing challenges, built from your Talk It Through and Lesson Debrief Reflect conversations. It's never shown to anyone else — not your school, not an administrator.")
             }
 
             Section {

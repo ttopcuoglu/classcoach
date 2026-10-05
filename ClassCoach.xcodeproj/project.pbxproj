@@ -12,7 +12,6 @@
 		5109BAD9B328467AB9BC7D6D /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF111404EA184773AA7D0998 /* AppTheme.swift */; };
 		757E96A85F244AD0AB5F0275 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E46ECD30C04E48C38C0EF931 /* HomeView.swift */; };
 		B2AEA2BC7E3C4A3DA8F7F32C /* TryItOutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F6BCE86A2EC4F36B828FBA1 /* TryItOutView.swift */; };
-		EC5F7AB838EE4EFE9020C22E /* AskExpertView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FBD37BB6C5649DC866F5A43 /* AskExpertView.swift */; };
 		81F78F2EC64B41D5AF599971 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A1521086FA4997B6B53F22 /* ProfileView.swift */; };
 		078738B0910D433798FB254B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 886F45663D514600A250598C /* Assets.xcassets */; };
 		FA46D84FA9DB9DB5057F9EA7 /* User.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19DE5932552612DEBB7B5013 /* User.swift */; };
@@ -32,7 +31,6 @@
 		D5B31A8E6C2F44D7B903E255 /* Starters.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C4E77B3F1D452EA61B8C99 /* Starters.swift */; };
 		F1A7C93D2E8B45C6A70D1B88 /* PracticeHints.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6E2B84F7A3D49E1B052C777 /* PracticeHints.swift */; };
 		CCDF36F3881AA2A2F3BA9BF1 /* Debrief.swift in Sources */ = {isa = PBXBuildFile; fileRef = 573742D57C4437D7A7D62716 /* Debrief.swift */; };
-		72F6C87CCC8E956C2DBA8717 /* AskExpertService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B2592BD0E7C621A293E1527 /* AskExpertService.swift */; };
 		A340FF93A49CD9ABBF612600 /* ProfileService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDBC5B77E7A9F6BCC3763338 /* ProfileService.swift */; };
 		88F4AF38999D41CA086477F3 /* FollowUpChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2881E406E618A94D8E312175 /* FollowUpChatView.swift */; };
 		D13314D26E466E2F0A84CDE3 /* ChipRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D8607CAC25B9542D0773B64 /* ChipRow.swift */; };
@@ -80,7 +78,7 @@
 		E2DFA7F1AC52172CD678E300 /* CheatSheetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C93C670E69D7252F4172D4E8 /* CheatSheetService.swift */; };
 		94F1DD1DC1DE4B43FA845003 /* CheatSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020D7F70C85D9E09CD305033 /* CheatSheetView.swift */; };
 		53577577DFA091A33335FDBA /* FirstThirtyDaysView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A081C11A01F67A71E1D5CD9 /* FirstThirtyDaysView.swift */; };
-		CF2B154D27D2E37F373C723C /* AskAndPracticeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 025582038E0B9691AAD788E6 /* AskAndPracticeView.swift */; };
+		CF2B154D27D2E37F373C723C /* PracticeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 025582038E0B9691AAD788E6 /* PracticeView.swift */; };
 		E7A2D94C1F5B48E3A62C0B77 /* TeachingContextFields.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C8F35A2D9E41F7C830A166 /* TeachingContextFields.swift */; };
 /* End PBXBuildFile section */
 
@@ -90,7 +88,6 @@
 		AF111404EA184773AA7D0998 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
 		E46ECD30C04E48C38C0EF931 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		6F6BCE86A2EC4F36B828FBA1 /* TryItOutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TryItOutView.swift; sourceTree = "<group>"; };
-		8FBD37BB6C5649DC866F5A43 /* AskExpertView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskExpertView.swift; sourceTree = "<group>"; };
 		E7A1521086FA4997B6B53F22 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		F280A0043D204F56B232AD29 /* ClassCoach.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClassCoach.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		886F45663D514600A250598C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -110,7 +107,6 @@
 		A9C4E77B3F1D452EA61B8C99 /* Starters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Starters.swift; sourceTree = "<group>"; };
 		C6E2B84F7A3D49E1B052C777 /* PracticeHints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeHints.swift; sourceTree = "<group>"; };
 		573742D57C4437D7A7D62716 /* Debrief.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Debrief.swift; sourceTree = "<group>"; };
-		5B2592BD0E7C621A293E1527 /* AskExpertService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskExpertService.swift; sourceTree = "<group>"; };
 		CDBC5B77E7A9F6BCC3763338 /* ProfileService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileService.swift; sourceTree = "<group>"; };
 		2881E406E618A94D8E312175 /* FollowUpChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FollowUpChatView.swift; sourceTree = "<group>"; };
 		6D8607CAC25B9542D0773B64 /* ChipRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChipRow.swift; sourceTree = "<group>"; };
@@ -158,7 +154,7 @@
 		C93C670E69D7252F4172D4E8 /* CheatSheetService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheatSheetService.swift; sourceTree = "<group>"; };
 		020D7F70C85D9E09CD305033 /* CheatSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheatSheetView.swift; sourceTree = "<group>"; };
 		5A081C11A01F67A71E1D5CD9 /* FirstThirtyDaysView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstThirtyDaysView.swift; sourceTree = "<group>"; };
-		025582038E0B9691AAD788E6 /* AskAndPracticeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskAndPracticeView.swift; sourceTree = "<group>"; };
+		025582038E0B9691AAD788E6 /* PracticeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeView.swift; sourceTree = "<group>"; };
 		B4C8F35A2D9E41F7C830A166 /* TeachingContextFields.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeachingContextFields.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -213,7 +209,7 @@
 				6FD0BC2BE8703EE0FF4D6D4B /* Auth */,
 				39E24005647547DDB625FB5E /* Home */,
 				FE38E06114BA4B91AECFE05B /* TryItOut */,
-				E407EF3F3D6642FAA12C8E1A /* AskExpert */,
+				E407EF3F3D6642FAA12C8E1A /* Practice */,
 				F213915639961212889480F8 /* Messages */,
 				8530C42984A2D36D58FF128F /* LessonPlanning */,
 				A5510009A5510009A5510009 /* AssignmentCoach */,
@@ -338,15 +334,13 @@
 			path = TryItOut;
 			sourceTree = "<group>";
 		};
-		E407EF3F3D6642FAA12C8E1A /* AskExpert */ = {
+		E407EF3F3D6642FAA12C8E1A /* Practice */ = {
 			isa = PBXGroup;
 			children = (
-				8FBD37BB6C5649DC866F5A43 /* AskExpertView.swift */,
-				5B2592BD0E7C621A293E1527 /* AskExpertService.swift */,
-				025582038E0B9691AAD788E6 /* AskAndPracticeView.swift */,
+				025582038E0B9691AAD788E6 /* PracticeView.swift */,
 				B4C8F35A2D9E41F7C830A166 /* TeachingContextFields.swift */,
 			);
-			path = AskExpert;
+			path = Practice;
 			sourceTree = "<group>";
 		};
 		C85367DC90EF491687F082D9 /* Profile */ = {
@@ -497,7 +491,6 @@
 				5109BAD9B328467AB9BC7D6D /* AppTheme.swift in Sources */,
 				757E96A85F244AD0AB5F0275 /* HomeView.swift in Sources */,
 				B2AEA2BC7E3C4A3DA8F7F32C /* TryItOutView.swift in Sources */,
-				EC5F7AB838EE4EFE9020C22E /* AskExpertView.swift in Sources */,
 				81F78F2EC64B41D5AF599971 /* ProfileView.swift in Sources */,
 				FA46D84FA9DB9DB5057F9EA7 /* User.swift in Sources */,
 				C8C97D13FFE1E1C4C883441F /* APIClient.swift in Sources */,
@@ -514,7 +507,6 @@
 				D5B31A8E6C2F44D7B903E255 /* Starters.swift in Sources */,
 				F1A7C93D2E8B45C6A70D1B88 /* PracticeHints.swift in Sources */,
 				CCDF36F3881AA2A2F3BA9BF1 /* Debrief.swift in Sources */,
-				72F6C87CCC8E956C2DBA8717 /* AskExpertService.swift in Sources */,
 				A340FF93A49CD9ABBF612600 /* ProfileService.swift in Sources */,
 				88F4AF38999D41CA086477F3 /* FollowUpChatView.swift in Sources */,
 				D13314D26E466E2F0A84CDE3 /* ChipRow.swift in Sources */,
@@ -562,7 +554,7 @@
 				E2DFA7F1AC52172CD678E300 /* CheatSheetService.swift in Sources */,
 				94F1DD1DC1DE4B43FA845003 /* CheatSheetView.swift in Sources */,
 				53577577DFA091A33335FDBA /* FirstThirtyDaysView.swift in Sources */,
-				CF2B154D27D2E37F373C723C /* AskAndPracticeView.swift in Sources */,
+				CF2B154D27D2E37F373C723C /* PracticeView.swift in Sources */,
 				E7A2D94C1F5B48E3A62C0B77 /* TeachingContextFields.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

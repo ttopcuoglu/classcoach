@@ -23,13 +23,13 @@ private let onboardingTrack: [OnboardingStep] = [
         id: "practice-defiance",
         title: "Practice a defiance scenario",
         description: "Try a beginner-level defiance scenario in Practice to build a starting playbook.",
-        hint: "Ask & Practice → Practice → Defiance"
+        hint: "Practice → Defiance"
     ),
     OnboardingStep(
         id: "practice-peer-conflict",
         title: "Practice a peer conflict scenario",
         description: "Two students arguing is one of the most common first-month moments — get a rep in now.",
-        hint: "Ask & Practice → Practice → Peer conflict"
+        hint: "Practice → Peer conflict"
     ),
     OnboardingStep(
         id: "first-parent-message",
@@ -41,13 +41,13 @@ private let onboardingTrack: [OnboardingStep] = [
         id: "practice-disengagement",
         title: "Practice a disengagement scenario",
         description: "A student who checks out is a different challenge than one who acts out — practice both.",
-        hint: "Ask & Practice → Practice → Disengagement"
+        hint: "Practice → Disengagement"
     ),
     OnboardingStep(
         id: "first-debrief",
         title: "Ask about your first real moment",
-        description: "Once something real happens, use Ask & Practice to reflect on it.",
-        hint: "Ask & Practice → Ask"
+        description: "Once something real happens, use Talk It Through to reflect on it — out loud or typed.",
+        hint: "Talk It Through"
     ),
     OnboardingStep(
         id: "review-cheat-sheet",

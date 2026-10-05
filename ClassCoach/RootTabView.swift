@@ -11,7 +11,7 @@ struct RootTabView: View {
                 // Same names and order as the web app's menu, with Lesson
                 // Debrief first. Home's feature cards follow the same order.
                 // Try It Out and Ask an Expert live inside the combined
-                // Ask & Practice tab (see AskAndPracticeView).
+                // Practice tab (see PracticeView).
                 TabView {
                     HomeView()
                         .tabItem {
@@ -28,9 +28,9 @@ struct RootTabView: View {
                             Label("Talk It Through", systemImage: "waveform.circle.fill")
                         }
 
-                    AskAndPracticeView()
+                    PracticeView()
                         .tabItem {
-                            Label("Ask & Practice", systemImage: "bubble.left.and.bubble.right.fill")
+                            Label("Practice", systemImage: "bubble.left.and.bubble.right.fill")
                         }
 
                     // These always sit under More, which supplies its own
