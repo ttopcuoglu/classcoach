@@ -63,6 +63,16 @@ struct LessonContentTab: View {
             } else {
                 Text("These notes are generated from a short audio excerpt and may miss context. They're a starting point for your own reflection, not a factual review — use your own subject expertise as the final word.")
                     .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                // Notes are written once and kept; this is the only way to ask
+                // for a fresh set once the specialist itself has improved.
+                Button(generating ? "Writing new notes…" : "Write these notes again ↻") {
+                    Task { await generate() }
+                }
+                .font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textSecondary)
+                .disabled(generating)
+
+                ProgressRing(active: generating, estimatedSeconds: 16, label: "Writing content specialist notes")
+
                 if let misconceptions = session.contentNotes?.misconceptions, !misconceptions.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("TEACHING THIS TOPIC · WHERE STUDENTS USUALLY GET STUCK")

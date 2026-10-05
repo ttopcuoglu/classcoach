@@ -4374,6 +4374,20 @@ function LessonContentTab({
               </ul>
             </div>
           )}
+          {/* Notes are written once and kept. Without this, a teacher whose
+              notes were written by an older version of the specialist had no
+              way to ask for the current one. */}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onGenerate}
+              disabled={sending}
+              className="self-start text-sm font-medium text-ink-soft hover:text-terracotta-600 disabled:opacity-60"
+            >
+              {sending ? 'Writing new notes...' : 'Write these notes again ↻'}
+            </button>
+          </div>
+          <WorkingRing active={sending} estimatedMs={16000} label="Writing content specialist notes" className="text-forest" />
           {visibleNotes.length === 0 ? (
             <p className="text-sm text-ink-soft">No notes to show.</p>
           ) : (
