@@ -183,13 +183,18 @@ export function parseQuotedLines(
   if (!raw || raw.toUpperCase().includes(NONE)) return []
   const out: Quoted[] = []
   for (const line of raw.split('\n')) {
-    const match = line.match(/^(.*?)\s*@\s*(\d+:\d{1,2})\s*$/)
+    // The "@ m:ss" is optional. Requiring it threw away real moments by the
+    // handful whenever the model left it off — one lesson's directions came
+    // back 0, 4, 0, 7 across four runs purely on whether it remembered the
+    // suffix. Where the quote sits in the teacher's own speech is the better
+    // timestamp anyway; the model's is only the fallback.
+    const match = line.match(/^(.*?)(?:\s*@\s*(\d+:\d{1,2}))?\s*$/)
     if (!match) continue
-    const quote = match[1].trim().replace(/^["']|["']$/g, '')
+    const quote = match[1].trim().replace(/^[-•*\d.\s]+/, '').replace(/^["']|["']$/g, '')
     if (quote.length < 12) continue
     const offset = flat.indexOf(normalizeForMatch(quote))
     if (offset === -1) continue
-    out.push({ quote, timestampSec: startSecAtOffset(offsets, offset) ?? parseTimestamp(match[2]) ?? 0 })
+    out.push({ quote, timestampSec: startSecAtOffset(offsets, offset) ?? parseTimestamp(match[2] ?? null) ?? 0 })
     if (out.length === max) break
   }
   return out
