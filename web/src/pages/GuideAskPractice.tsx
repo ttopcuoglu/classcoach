@@ -157,7 +157,7 @@ function SampleAnswer() {
 
 export default function GuideAskPractice() {
   return (
-    <GuideShell appTo="/coach-chat">
+    <GuideShell appTo="/talk-to-me">
       <GuideHero
         icon={ChatBubbleIcon}
         title="Ask & Practice"
@@ -287,7 +287,7 @@ export default function GuideAskPractice() {
           </div>
 
           <div className="mt-8 flex flex-col items-start gap-3">
-            <GuidePrimaryButton to="/coach-chat">Ask or Practice Now</GuidePrimaryButton>
+            <GuidePrimaryButton to="/talk-to-me">Ask or Practice Now</GuidePrimaryButton>
             <p className="text-xs text-ink-soft">
               Free for everyone, always. Coach talks about people by role — “a student,” “the class” — even if
               you use a name yourself.
@@ -368,7 +368,7 @@ export default function GuideAskPractice() {
             </p>
 
             <div className="mt-7 border-t border-hairline pt-6">
-              <GuidePrimaryButton to="/coach-chat">Ask or Practice Now</GuidePrimaryButton>
+              <GuidePrimaryButton to="/talk-to-me">Ask or Practice Now</GuidePrimaryButton>
             </div>
           </div>
         </GuideSection>
@@ -432,7 +432,7 @@ export default function GuideAskPractice() {
 
             <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-hairline pt-6">
               <GuidePrimaryButton to="/talk-to-me?mode=debrief">Debrief This Experience</GuidePrimaryButton>
-              <Link to="/coach-chat" className="text-sm font-semibold text-terracotta-600 hover:text-terracotta">
+              <Link to="/talk-to-me" className="text-sm font-semibold text-terracotta-600 hover:text-terracotta">
                 Or reopen a saved answer and mark it tried
               </Link>
             </div>
@@ -444,7 +444,7 @@ export default function GuideAskPractice() {
         icon={ScenarioIcon}
         title="Better to get it wrong here."
         body="A scenario has no audience, no bell, and no student who remembers what you said."
-        ctaTo="/coach-chat"
+        ctaTo="/talk-to-me"
         ctaLabel="Ask or Practice Now"
       />
     </GuideShell>

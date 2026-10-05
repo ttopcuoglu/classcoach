@@ -7,8 +7,7 @@ import CoachingChat from '../components/CoachingChat'
 import PastList from '../components/PastList'
 import ReflectionTimeline from '../components/ReflectionTimeline'
 import ShareButton from '../components/ShareButton'
-import { MicIcon, StarIcon } from '../components/icons'
-import { useSpeechToText } from '../hooks/useSpeechToText'
+import { StarIcon } from '../components/icons'
 import { categoryLabel } from '../lib/categories'
 import { TEACHING_AND_LEARNING, findFocusArea, focusAreaForCategory, focusAreaLabel } from '../lib/focusAreas'
 import TeachingContextFields, { type TeachingContext } from '../components/TeachingContextFields'
@@ -58,10 +57,6 @@ export default function Ask({
   const [chatSending, setChatSending] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
 
-
-  const { supported: speechSupported, listening, toggleListening } = useSpeechToText((text) =>
-    setIncidentText((prev) => (prev ? `${prev} ${text}` : text)),
-  )
 
   // Opened from Home's Recent work: show that conversation — its coaching
   // and follow-up chat — rather than an empty form.
@@ -195,7 +190,7 @@ export default function Ask({
     // Carry the area over, so a grading question rehearses a grading scenario
     // rather than whatever Practice happened to be set to.
     const target = debrief?.focusArea ?? focusAreaForCategory(debrief?.category)?.value ?? focusArea
-    navigate(`/coach-chat?tab=practice${target ? `&area=${target}` : ''}`)
+    navigate(`/talk-to-me?tab=practice${target ? `&area=${target}` : ''}`)
   }
 
   // Re-picked whenever the section or the room changes, which is the point: a
@@ -244,24 +239,7 @@ export default function Ask({
               disabled={submitting}
             />
 
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              {speechSupported ? (
-                <button
-                  type="button"
-                  onClick={toggleListening}
-                  disabled={submitting}
-                  className={`flex w-fit items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
-                    listening
-                      ? 'border-terracotta bg-terracotta text-cream'
-                      : 'border-cream/25 text-cream/80 hover:border-cream/60 hover:text-cream'
-                  }`}
-                >
-                  <MicIcon className="h-3.5 w-3.5" />
-                  {listening ? 'Listening... tap to stop' : 'Speak instead'}
-                </button>
-              ) : (
-                <span />
-              )}
+            <div className="flex flex-wrap items-center justify-end gap-3">
               <button
                 type="button"
                 onClick={() => handleSubmit()}

@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import AnswerSection from '../components/AnswerSection'
+import Ask from './Ask'
+import TryItOut from './TryItOut'
+import { DEFAULT_TEACHING_CONTEXT, type TeachingContext } from '../components/TeachingContextFields'
 import { BrainIcon, MicIcon, StarIcon, WarningIcon } from '../components/icons'
 import VoiceBars from '../components/VoiceBars'
 import PastList from '../components/PastList'
@@ -26,6 +29,8 @@ import {
   type TalkVoice,
 } from '../lib/api'
 import { isExperienced } from '../lib/experience'
+import { FOCUS_AREAS, findFocusArea } from '../lib/focusAreas'
+import { SUBJECTS, bandFromProfile, subjectFromProfile } from '../lib/teachingContext'
 import { endTurn, markTurn } from '../lib/turnTiming'
 import { createPlaybackQueue, primeAudioElement, type PlaybackQueue } from '../lib/voicePlayback'
 
@@ -144,11 +149,19 @@ function statusLabel(state: VisualState, hasConversation: boolean): string {
 
 export default function TalkToMe() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const isDebrief = searchParams.get('mode') === 'debrief'
   const followUpId = searchParams.get('followUp')
   // A past conversation opened from Home's Recent work.
   const openId = searchParams.get('open')
+
+  // Ask and Practice moved in here, so their two shared inputs live here now:
+  // which section the teacher is in, and the room they teach. Keeping the room
+  // at this level is why switching Ask -> Practice doesn't ask for a grade band
+  // twice, and why the profile is only fetched once for both.
+  const tab = searchParams.get('tab') === 'practice' ? 'practice' : 'ask'
+  const area = findFocusArea(searchParams.get('area'))
+  const [room, setRoom] = useState<TeachingContext>(DEFAULT_TEACHING_CONTEXT)
   // The check-in this conversation answers, when opened from Home. Only
   // passed with the first turn; later turns continue that same conversation.
   const [followUp, setFollowUp] = useState<CoachFollowUp | null>(null)
@@ -257,6 +270,26 @@ export default function TalkToMe() {
     }
   }, [])
 
+  // Teardown used to live only in Exit, which was the single way off a
+  // full-screen page. Inside the Layout the sidebar is a second way out, and
+  // leaving through it would have left the socket open, the microphone live
+  // and Coach talking into an empty room — so unmount has to do it too.
+  useEffect(() => {
+    return () => {
+      sessionActiveRef.current = false
+      close()
+      queueRef.current?.cancel()
+      queueRef.current = null
+      // Read at unmount deliberately, which is what the rule warns about: the
+      // playback queue is created part-way through a session, so capturing
+      // either ref when the effect first ran would tear down the wrong object
+      // — or, on a page nobody spoke on, nothing at all.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      audioRef.current?.pause()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     if (fatalError) {
       setError(fatalError)
@@ -303,9 +336,30 @@ export default function TalkToMe() {
         setTalkVoice(profile.talkVoice)
         setIsSuperadmin(profile.role === 'superadmin')
         setExamplePrompts(isExperienced(profile.experienceLevel) ? EXPERIENCED_PROMPTS : EXAMPLE_PROMPTS)
+        const mapped = subjectFromProfile(profile.subjects)
+        setRoom((prev) => ({
+          ...prev,
+          gradeBand: bandFromProfile(profile.gradeLevels),
+          subject: mapped,
+          // A profile subject that isn't one of the six lands in "Other".
+          otherSubject: !!mapped && !(SUBJECTS as readonly string[]).includes(mapped),
+        }))
       })
       .catch(() => setExamplePrompts(EXAMPLE_PROMPTS))
   }, [])
+
+  function updateTab(next: { tab?: 'practice' | 'ask'; area?: string | null }) {
+    const params = new URLSearchParams(searchParams)
+    if (next.tab !== undefined) {
+      if (next.tab === 'ask') params.delete('tab')
+      else params.set('tab', next.tab)
+    }
+    if (next.area !== undefined) {
+      if (next.area) params.set('area', next.area)
+      else params.delete('area')
+    }
+    setSearchParams(params)
+  }
 
   function beginListening() {
     sessionActiveRef.current = true
@@ -449,15 +503,6 @@ export default function TalkToMe() {
     queueRef.current = null
     audioRef.current?.pause()
     setPhase('idle')
-  }
-
-  function handleClose() {
-    sessionActiveRef.current = false
-    close()
-    queueRef.current?.cancel()
-    queueRef.current = null
-    audioRef.current?.pause()
-    navigate('/')
   }
 
   // Shared entry point for both an example-prompt tap and a typed
@@ -631,7 +676,7 @@ export default function TalkToMe() {
   const finishing = takeawayLoading || takeaway != null || takeawayError != null
 
   return (
-    <div className="flex min-h-screen flex-col bg-cream text-ink">
+    <div className="flex flex-col gap-6">
       {/* Must render as a genuinely laid-out element, not display:none —
           Chromium's own UA stylesheet has `audio:not([controls]) {
           display: none !important }`, which no inline/author style can
@@ -651,19 +696,25 @@ export default function TalkToMe() {
         style={{ position: 'fixed', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
       />
 
-      <header className="flex items-center justify-between bg-forest px-4 py-3 text-cream sm:px-6">
-        <p className="font-heading text-base font-bold text-cream">
-          {isDebrief ? 'Debrief with Coach' : 'Talk to Coach'}
-          <span className="text-gold">.</span>
-        </p>
-        {/* A fast, no-questions-asked way out — deliberately distinct from
-            "Finish session" below: this skips the takeaway entirely. */}
-        <button type="button" onClick={handleClose} className="text-sm font-medium text-cream/70 hover:text-cream">
-          Exit
-        </button>
-      </header>
 
-      <main className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-10 text-center">
+      <div className="flex flex-col gap-1">
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Coaching</p>
+        <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
+          {isDebrief ? 'Debrief with Coach' : 'Talk It Through'}
+          <span className="text-gold">.</span>
+        </h1>
+        <p className="text-ink-soft">
+          Talk it out loud, ask a question, or rehearse it before it happens for real.
+        </p>
+        <Link
+          to="/guide/talk-it-through"
+          className="mt-1 w-fit text-xs font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta"
+        >
+          New to this? Read the teacher's guide
+        </Link>
+      </div>
+
+      <div className="flex flex-col items-center gap-6 text-center">
         {!supported ? (
           <div className="flex flex-col items-center gap-3">
             <WarningIcon className="h-8 w-8 text-terracotta-600" />
@@ -889,136 +940,6 @@ export default function TalkToMe() {
           </div>
         ) : (
           <>
-            <div className="flex w-full max-w-md flex-col items-center gap-4 rounded-3xl bg-forest px-6 py-8 text-cream shadow-sm">
-              <div className="relative flex h-36 w-36 items-center justify-center">
-                <span
-                  aria-hidden="true"
-                  className={`absolute inset-3 rounded-full blur-2xl transition-colors duration-500 ${STATE_STYLES[visualState].glow}`}
-                />
-                {visualState === 'listening' && (
-                  <span
-                    aria-hidden="true"
-                    className="absolute h-28 w-28 rounded-full border-2 border-gold/40 transition-transform duration-150 ease-out"
-                    style={{ transform: `scale(${1 + Math.min(level, 100) / 130})` }}
-                  />
-                )}
-                <div
-                  className={`relative flex h-28 w-28 items-center justify-center rounded-full border shadow-sm transition-colors duration-500 ${STATE_STYLES[visualState].orb}`}
-                >
-                  {/* One live voice signal in place of the mic icon: it follows the
-                      teacher's voice while listening, moves like speech while
-                      Coach talks, and settles to a calm line when idle. */}
-                  {visualState === 'error' ? null : (
-                    <VoiceBars
-                      mode={visualState}
-                      level={level}
-                      className={visualState === 'idle' ? 'text-cream/70' : 'text-gold'}
-                    />
-                  )}
-                  {visualState === 'error' && <WarningIcon className="h-10 w-10 text-peach-tint" />}
-                </div>
-              </div>
-              {/* A filled chip that changed colour on every turn was competing
-                  with the orb for attention. Quiet text carries the same
-                  information and stops the status from being the loudest
-                  thing on screen. aria-live keeps it doing the job it was
-                  silently already doing for sighted users only: saying whose
-                  turn it is. */}
-              <div
-                aria-live="polite"
-                className={`flex items-center gap-2 text-xs font-medium transition-colors duration-500 ${
-                  visualState === 'error' ? 'text-peach-tint' : 'text-cream/70'
-                }`}
-              >
-                <span
-                  aria-hidden="true"
-                  className={`h-1.5 w-1.5 rounded-full ${STATE_STYLES[visualState].dot} ${
-                    visualState === 'thinking' || visualState === 'speaking' ? 'animate-pulse' : ''
-                  }`}
-                />
-                {statusLabel(visualState, debrief != null)}
-              </div>
-
-              {!debrief && phase === 'idle' && !showTypeInput && (
-                <div className="mt-2">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">
-                    {followUp ? 'Coach is checking in' : isDebrief ? 'Debrief' : 'A moment for your teaching'}
-                  </p>
-                  <h1 className="mt-2 font-heading text-2xl font-bold text-cream sm:text-3xl">
-                    {followUp ? followUp.checkInQuestion : isDebrief ? 'How did it go?' : "What's on your mind today?"}
-                  </h1>
-                  <p className="mt-1.5 text-sm text-cream/70">
-                    {followUp
-                      ? 'Say how it went — good, bad, or not yet. Coach will take it from there.'
-                      : isDebrief
-                        ? "Start wherever you like — Coach will walk through the rest with you."
-                        : 'Talk through a challenge, find the right words, or reflect on your day.'}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {!debrief && phase === 'idle' && !showTypeInput ? (
-              <div className="flex w-full max-w-md flex-col gap-4">
-                {followUp && (
-                  <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5 text-left">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">What you planned to try</p>
-                    <p className="mt-1.5 text-sm text-ink">{followUp.plan}</p>
-                  </div>
-                )}
-                {isDebrief && (
-                  <ul className="flex flex-col gap-1.5 rounded-2xl bg-mint-tint/50 p-5 text-left">
-                    {DEBRIEF_QUESTIONS.map((question) => (
-                      <li key={question} className="text-sm text-forest">
-                        {question}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <div className="flex flex-col gap-2">
-                  {(followUp ? CHECK_IN_PROMPTS : isDebrief ? DEBRIEF_PROMPTS : (examplePrompts ?? [])).map((prompt, i) => (
-                    <button
-                      key={prompt}
-                      type="button"
-                      onClick={() => submitText(prompt)}
-                      className={`group flex items-center justify-between gap-3 rounded-2xl px-4 py-3.5 text-left text-sm font-medium text-forest transition-shadow hover:shadow-md ${
-                        ['bg-peach-tint/60', 'bg-gold-tint/60', 'bg-mint-tint/60', 'bg-peach-tint/30'][i % 4]
-                      }`}
-                    >
-                      "{prompt}"
-                      <span aria-hidden="true" className="text-terracotta transition-transform group-hover:translate-x-0.5">→</span>
-                    </button>
-                  ))}
-                </div>
-
-                {!isDebrief && !followUp && (
-                  <Link
-                    to="/guide/talk-it-through"
-                    className="text-xs font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta-600"
-                  >
-                    New to this? Read the teacher's guide
-                  </Link>
-                )}
-
-              </div>
-            ) : (
-              <div className="flex w-full max-w-md flex-col gap-3">
-                {userTranscript && (
-                  <div className="rounded-2xl border border-hairline bg-cream-card p-5 text-left">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">You</p>
-                    <p className="mt-1.5 text-sm text-ink">{userTranscript}</p>
-                  </div>
-                )}
-                {lastAssistant && (
-                  <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5 text-left">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Coach</p>
-                    <p className="mt-1.5 text-sm text-ink">{lastAssistant.text}</p>
-                  </div>
-                )}
-                {error && <p className="text-sm text-terracotta-600">{error}</p>}
-              </div>
-            )}
-
             {showTypeInput ? (
               <form
                 onSubmit={(e) => {
@@ -1101,6 +1022,128 @@ export default function TalkToMe() {
               </div>
             )}
 
+            <div className="flex w-full max-w-md flex-col items-center gap-4 rounded-3xl bg-forest px-6 py-8 text-cream shadow-sm">
+              <div className="relative flex h-36 w-36 items-center justify-center">
+                <span
+                  aria-hidden="true"
+                  className={`absolute inset-3 rounded-full blur-2xl transition-colors duration-500 ${STATE_STYLES[visualState].glow}`}
+                />
+                {visualState === 'listening' && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute h-28 w-28 rounded-full border-2 border-gold/40 transition-transform duration-150 ease-out"
+                    style={{ transform: `scale(${1 + Math.min(level, 100) / 130})` }}
+                  />
+                )}
+                <div
+                  className={`relative flex h-28 w-28 items-center justify-center rounded-full border shadow-sm transition-colors duration-500 ${STATE_STYLES[visualState].orb}`}
+                >
+                  {/* One live voice signal in place of the mic icon: it follows the
+                      teacher's voice while listening, moves like speech while
+                      Coach talks, and settles to a calm line when idle. */}
+                  {visualState === 'error' ? null : (
+                    <VoiceBars
+                      mode={visualState}
+                      level={level}
+                      className={visualState === 'idle' ? 'text-cream/70' : 'text-gold'}
+                    />
+                  )}
+                  {visualState === 'error' && <WarningIcon className="h-10 w-10 text-peach-tint" />}
+                </div>
+              </div>
+              {/* A filled chip that changed colour on every turn was competing
+                  with the orb for attention. Quiet text carries the same
+                  information and stops the status from being the loudest
+                  thing on screen. aria-live keeps it doing the job it was
+                  silently already doing for sighted users only: saying whose
+                  turn it is. */}
+              <div
+                aria-live="polite"
+                className={`flex items-center gap-2 text-xs font-medium transition-colors duration-500 ${
+                  visualState === 'error' ? 'text-peach-tint' : 'text-cream/70'
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`h-1.5 w-1.5 rounded-full ${STATE_STYLES[visualState].dot} ${
+                    visualState === 'thinking' || visualState === 'speaking' ? 'animate-pulse' : ''
+                  }`}
+                />
+                {statusLabel(visualState, debrief != null)}
+              </div>
+
+              {!debrief && phase === 'idle' && !showTypeInput && (
+                <div className="mt-2">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">
+                    {followUp ? 'Coach is checking in' : isDebrief ? 'Debrief' : 'A moment for your teaching'}
+                  </p>
+                  <h2 className="mt-2 font-heading text-2xl font-bold text-cream sm:text-3xl">
+                    {followUp ? followUp.checkInQuestion : isDebrief ? 'How did it go?' : "What's on your mind today?"}
+                  </h2>
+                  <p className="mt-1.5 text-sm text-cream/70">
+                    {followUp
+                      ? 'Say how it went — good, bad, or not yet. Coach will take it from there.'
+                      : isDebrief
+                        ? "Start wherever you like — Coach will walk through the rest with you."
+                        : 'Talk through a challenge, find the right words, or reflect on your day.'}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {!debrief && phase === 'idle' && !showTypeInput ? (
+              <div className="flex w-full max-w-md flex-col gap-4">
+                {followUp && (
+                  <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5 text-left">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">What you planned to try</p>
+                    <p className="mt-1.5 text-sm text-ink">{followUp.plan}</p>
+                  </div>
+                )}
+                {isDebrief && (
+                  <ul className="flex flex-col gap-1.5 rounded-2xl bg-mint-tint/50 p-5 text-left">
+                    {DEBRIEF_QUESTIONS.map((question) => (
+                      <li key={question} className="text-sm text-forest">
+                        {question}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="flex flex-col gap-2">
+                  {(followUp ? CHECK_IN_PROMPTS : isDebrief ? DEBRIEF_PROMPTS : (examplePrompts ?? [])).map((prompt, i) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      onClick={() => submitText(prompt)}
+                      className={`group flex items-center justify-between gap-3 rounded-2xl px-4 py-3.5 text-left text-sm font-medium text-forest transition-shadow hover:shadow-md ${
+                        ['bg-peach-tint/60', 'bg-gold-tint/60', 'bg-mint-tint/60', 'bg-peach-tint/30'][i % 4]
+                      }`}
+                    >
+                      "{prompt}"
+                      <span aria-hidden="true" className="text-terracotta transition-transform group-hover:translate-x-0.5">→</span>
+                    </button>
+                  ))}
+                </div>
+
+
+              </div>
+            ) : (
+              <div className="flex w-full max-w-md flex-col gap-3">
+                {userTranscript && (
+                  <div className="rounded-2xl border border-hairline bg-cream-card p-5 text-left">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">You</p>
+                    <p className="mt-1.5 text-sm text-ink">{userTranscript}</p>
+                  </div>
+                )}
+                {lastAssistant && (
+                  <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5 text-left">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Coach</p>
+                    <p className="mt-1.5 text-sm text-ink">{lastAssistant.text}</p>
+                  </div>
+                )}
+                {error && <p className="text-sm text-terracotta-600">{error}</p>}
+              </div>
+            )}
+
             {!debrief && phase === 'idle' && !showTypeInput && !isDebrief && !followUp && (pastLoading || pastTalks.length > 0) && (
               <div className="w-full max-w-md text-left">
                 <PastList
@@ -1125,11 +1168,101 @@ export default function TalkToMe() {
             )}
           </>
         )}
-      </main>
+      </div>
 
-      <p className="px-6 pb-6 text-center text-xs text-ink-soft">
+      <p className="text-center text-xs text-ink-soft">
         Your voice is never saved — only the conversation text.
       </p>
+
+      {/* Ask and Practice used to be their own screen. They are the same
+          coaching by other means — typed rather than spoken — so they sit
+          under the voice controls instead of behind a separate nav item. The
+          section and the room are shared with nothing above them, which is
+          what makes switching tabs keep the room a teacher already set.
+
+          Hidden in a debrief or a check-in: those arrive with a question to
+          answer, and a tabbed form underneath is an invitation to wander off
+          mid-reflection. */}
+      {!isDebrief && !followUp && (
+        <div className="flex flex-col gap-6 border-t border-hairline pt-6 text-left">
+          <div className="flex flex-col gap-2">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
+              Or put it in writing
+            </p>
+            <h2 className="font-heading text-xl font-bold text-forest">Ask a question, or rehearse it</h2>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
+              What's this about?
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {[{ label: 'Not sure yet', value: null }, ...FOCUS_AREAS.map((a) => ({ label: a.label, value: a.value }))].map(
+                ({ label, value }) => {
+                  const selected = (value ?? undefined) === area?.value
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => updateTab({ area: value })}
+                      aria-pressed={selected}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                        selected ? 'bg-forest text-cream' : 'bg-cream-card text-ink-soft hover:text-ink'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  )
+                },
+              )}
+            </div>
+            {area && <p className="text-xs text-ink-soft">{area.blurb}</p>}
+            {/* Parent and colleague work overlaps Communication Coach on purpose: a
+                quick question or one rehearsed exchange belongs here, an actual
+                drafted email or a prepared meeting belongs there. */}
+            {area?.handoff && (
+              <Link
+                to={area.handoff.to}
+                className="w-fit text-xs text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta"
+              >
+                {area.handoff.label}
+              </Link>
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => updateTab({ tab: 'ask' })}
+              className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                tab === 'ask' ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
+              }`}
+            >
+              Ask
+            </button>
+            <button
+              type="button"
+              onClick={() => updateTab({ tab: 'practice' })}
+              className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                tab === 'practice' ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
+              }`}
+            >
+              Practice
+            </button>
+          </div>
+
+          {tab === 'practice' ? (
+            <TryItOut focusArea={area?.value} room={room} onRoomChange={setRoom} />
+          ) : (
+            <Ask
+              focusArea={area?.value}
+              onPickArea={(value) => updateTab({ area: value })}
+              room={room}
+              onRoomChange={setRoom}
+            />
+          )}
+        </div>
+      )}
     </div>
   )
 }
