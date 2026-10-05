@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import AnswerSection, { NumberedCard } from '../components/AnswerSection'
 import ClassContextLine from '../components/ClassContextLine'
 import SectionLabel from '../components/SectionLabel'
 import { WorkingRing } from '../components/ProgressRing'
@@ -815,67 +816,64 @@ export default function LookItOver() {
                 </div>
               )}
 
-              {/* 3 — the findings, all of them, in order. These were behind
-                  a row of pills, which meant a teacher read one and had to
-                  know to go looking for the rest. A review is a report: it is
-                  read top to bottom. */}
-              {findingLenses.length > 0 && (
-                <div className="flex flex-col gap-3">
-                  <h2 className="font-heading text-xl font-bold text-forest">What I found</h2>
-                  {findingLenses.map((lens) => (
-                    <div key={lens.key} className="rounded-2xl border border-hairline bg-cream-card p-5">
-                      <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <p className="font-heading text-base font-bold text-forest">{lens.title || lens.label}</p>
-                        {/* The lens it came from, so a finding can be traced
-                            back to the question that produced it. */}
-                        <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-ink-soft">
-                          {lens.label}
-                        </span>
-                      </div>
-                      {/* A thin-evidence finding says so rather than sitting
-                          at the same weight as a well-grounded one. */}
-                      {lens.confidence === 'low' && (
-                        <p className="mt-1 text-xs font-semibold text-terracotta-600">
-                          Low confidence — the document didn&rsquo;t give this much to go on.
-                        </p>
-                      )}
-                      <p className="mt-2 whitespace-pre-wrap text-sm text-ink">{lens.body || lens.finding}</p>
-                      {lens.evidence && lens.evidence.length > 0 && (
-                        <p className="mt-2.5 text-xs text-ink-soft">
-                          <span className="font-semibold">From:</span> {lens.evidence.join(' · ')}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+              {/* 3 — the findings, as numbered sections: the same shape as
+                  the printed reports and Lesson Debrief's Insights, so every
+                  report in this app reads the same way. What the part is,
+                  what it is for, then the content. Numbers are assigned in
+                  reading order, so a lens that produced nothing leaves no
+                  gap. */}
+              {findingLenses.map((lens, i) => (
+                <AnswerSection
+                  key={lens.key}
+                  n={i + 1}
+                  title={lens.title || lens.label}
+                  subtitle={lens.title ? lens.label : lens.blurb}
+                >
+                  {/* A thin-evidence finding says so rather than sitting at
+                      the same weight as a well-grounded one. */}
+                  {lens.confidence === 'low' && (
+                    <p className="mb-2 text-xs font-semibold text-terracotta-600">
+                      Low confidence — the document didn&rsquo;t give this much to go on.
+                    </p>
+                  )}
+                  {lens.body || lens.finding}
+                  {lens.evidence && lens.evidence.length > 0 && (
+                    <p className="mt-2.5 text-xs text-ink-soft">
+                      <span className="font-semibold">From:</span> {lens.evidence.join(' · ')}
+                    </p>
+                  )}
+                </AnswerSection>
+              ))}
 
-              {/* 4 — the changes, below the findings that argue for them. */}
-              <div className="flex flex-col gap-3">
-                <h2 className="font-heading text-xl font-bold text-forest">
-                  Suggested edits{review.edits.length > 0 ? ` · ${review.edits.length}` : ''}
-                </h2>
+              {/* 4 — the changes, last and numbered with the rest, below the
+                  findings that argue for them. */}
+              <NumberedCard
+                n={findingLenses.length + 1}
+                title="Suggested edits"
+                subtitle={
+                  review.edits.length === 0
+                    ? 'Nothing I would change before tomorrow'
+                    : 'Your words, and what they could become — take the ones you want'
+                }
+              >
                 {review.edits.length === 0 ? (
                   // A result, not an error. The findings above still stand.
-                  <div className="rounded-2xl border border-hairline bg-cream-card p-6 text-center">
-                    <p className="font-heading text-lg font-bold text-forest">
-                      Nothing I&rsquo;d change before tomorrow
-                    </p>
-                    <p className="mt-1 text-sm text-ink-soft">
-                      No suggested edits. What I found is above.
-                    </p>
-                  </div>
+                  <p className="text-sm text-ink-soft">
+                    No suggested edits. What I found is above, and your document is unchanged.
+                  </p>
                 ) : (
-                  review.edits.map((edit) => (
-                    <EditCard
-                      key={edit.id}
-                      edit={edit}
-                      unanchored={review.unanchoredEditIds?.includes(edit.id) ?? false}
-                      onDecide={(status) => void handleEdit(edit, status)}
-                    />
-                  ))
+                  <div className="flex flex-col gap-3">
+                    {review.edits.map((edit) => (
+                      <EditCard
+                        key={edit.id}
+                        edit={edit}
+                        unanchored={review.unanchoredEditIds?.includes(edit.id) ?? false}
+                        onDecide={(status) => void handleEdit(edit, status)}
+                      />
+                    ))}
+                  </div>
                 )}
-              </div>
+              </NumberedCard>
 
               {/* Every number on the page, with its basis. Shown rather than
                   held, because a figure nobody can check is a figure that gets

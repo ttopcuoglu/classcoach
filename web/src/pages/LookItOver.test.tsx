@@ -284,18 +284,26 @@ test('the result leads with the one-thing card, above the findings', async () =>
   await openReviewed()
   const all = Array.from(document.querySelectorAll('*'))
   const oneThing = all.indexOf(screen.getByText('If you change one thing'))
-  const found = all.indexOf(screen.getByText('What I found'))
+  // The first numbered finding section.
+  const found = all.indexOf(screen.getByText('What each item measures'))
   expect(oneThing).toBeLessThan(found)
   expect(screen.getByText('Split question 4 — it is measuring reading, not the content.')).toBeTruthy()
 })
 
 // Every finding is on the page, in order. They used to be behind pills, which
 // meant reading one and having to know to go looking for the rest.
-test('every finding is laid out, not hidden behind a tab', async () => {
+// The same numbered, colour-banded sections as the printed reports and
+// Lesson Debrief's Insights, so every report in this app reads the same way.
+test('findings are numbered sections, all on the page', async () => {
   await openReviewed()
-  expect(screen.getByText('What I found')).toBeTruthy()
+  expect(screen.getByText('What each item measures')).toBeTruthy()
   expect(screen.getByText('Items 1-3 are recall. Item 4 is really a reading test.')).toBeTruthy()
-  expect(screen.getByText(/Suggested edits/)).toBeTruthy()
+  expect(screen.getByText('Suggested edits')).toBeTruthy()
+  // Numbered in reading order, so a lens that produced nothing leaves no gap.
+  const numbers = Array.from(document.querySelectorAll('section h3')).map(
+    (h) => h.previousElementSibling?.textContent ?? h.parentElement?.previousElementSibling?.textContent,
+  )
+  expect(numbers.filter(Boolean).length).toBeGreaterThan(0)
   // Nothing to click to see them.
   expect(screen.queryByRole('navigation', { name: 'Review sections' })).toBeNull()
 })
@@ -691,10 +699,10 @@ test('zero edits reads as an answer, not an error', async () => {
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
 
-  await waitFor(() => expect(screen.getByText('Nothing I’d change before tomorrow')).toBeTruthy())
+  await waitFor(() => expect(screen.getByText('Nothing I would change before tomorrow')).toBeTruthy())
   // The findings still stand and are still on the page — "no edits" is an
   // answer about the changes, not about the whole review.
-  expect(screen.getByText('What I found')).toBeTruthy()
+  expect(screen.getByText('What each item measures')).toBeTruthy()
   expect(screen.getByText('Items 1-3 are recall. Item 4 is really a reading test.')).toBeTruthy()
 })
 
