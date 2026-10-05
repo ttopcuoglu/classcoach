@@ -43,7 +43,17 @@ struct OverviewMetrics {
 
         let specific = detail["specificFeedbackCount"].map { Int($0) } ?? 0
         let generic = detail["genericFeedbackCount"].map { Int($0) } ?? 0
-        feedbackRatio = ReportConfidence.formatRatio(numerator: specific, denominator: specific + generic)
+        // Feedback is a response to a student, so it can only be read from a
+        // recording that caught students — mirrors feedbackMeasurable in
+        // web/src/lib/reportConfidence.ts.
+        if (detail["studentVoiceSegments"].map { Int($0) } ?? 0) < ReportConfidence.minStudentSegmentsForFeedback {
+            feedbackRatio = ReportConfidence.ConfidentMetric(
+                state: .limitedEvidence, display: "—",
+                reason: "Too little student voice came through to read how you responded to it."
+            )
+        } else {
+            feedbackRatio = ReportConfidence.formatRatio(numerator: specific, denominator: specific + generic)
+        }
 
         let positive = detail["positivePhraseCount"].map { Int($0) } ?? 0
         let corrective = detail["correctivePhraseCount"].map { Int($0) } ?? 0

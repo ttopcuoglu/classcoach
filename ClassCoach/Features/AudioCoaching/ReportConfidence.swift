@@ -8,6 +8,8 @@ import Foundation
 enum ReportConfidence {
     static let shortSessionThresholdSec: Double = 10 * 60
     static let minNForPercent = 10
+    /// Mirrors MIN_STUDENT_SEGMENTS_FOR_FEEDBACK in reportConfidence.ts.
+    static let minStudentSegmentsForFeedback = 5
     static let minDurationForCFUDetectionSec: Double = 3 * 60
     static let minPhaseDurationSec: Double = 30
     static let balancedStudentFloorPct = 15

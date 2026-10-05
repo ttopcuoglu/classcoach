@@ -26,6 +26,16 @@ export const MIN_DURATION_FOR_TALK_BALANCE_CANDIDATE_SEC = SHORT_SESSION_THRESHO
 // precise than it is ("25%" implies a stable rate; "1 of 4" doesn't).
 export const MIN_N_FOR_PERCENT = 10
 
+// Feedback is a teacher responding to a student, so it can only be read from
+// a recording that caught students. Below this many captured student turns,
+// the split says so rather than drawing a verdict — one lesson reported "2 of
+// 2 specific" from a recording with nine student utterances in it.
+export const MIN_STUDENT_SEGMENTS_FOR_FEEDBACK = 5
+
+export function feedbackMeasurable(studentVoiceSegments: number | null | undefined): boolean {
+  return (studentVoiceSegments ?? 0) >= MIN_STUDENT_SEGMENTS_FOR_FEEDBACK
+}
+
 // Wait time only counts a question followed by an audible student response
 // (see audioAnalysis.ts), so a session with many questions can still have
 // just one or two usable intervals. Below this many, the average is still

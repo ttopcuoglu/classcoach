@@ -57,6 +57,7 @@ import {
   getCoverage,
   getCountMetric,
   getFollowUpMetric,
+  feedbackMeasurable,
   getPresenceMetric,
   hasEnoughWaitTimeSamples,
   isConfidentState,
@@ -2387,8 +2388,13 @@ function ReportPanel({
   })
   const genericCount = num('genericFeedbackCount')
   const specificCount = num('specificFeedbackCount')
-  const feedbackRatio =
-    genericCount != null && specificCount != null && genericCount + specificCount > 0
+  const feedbackRatio = !feedbackMeasurable(num('studentVoiceSegments'))
+    ? {
+        state: 'limited_evidence' as const,
+        display: '—',
+        reason: "Too little student voice came through to read how you responded to it.",
+      }
+    : genericCount != null && specificCount != null && genericCount + specificCount > 0
       ? formatRatio(specificCount, genericCount + specificCount)
       : { state: 'not_measurable' as const, display: '—', reason: 'No feedback-after-response moments detected.' }
 

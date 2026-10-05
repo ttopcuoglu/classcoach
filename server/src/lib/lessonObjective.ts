@@ -83,7 +83,7 @@ function parseTimestamp(value: string | null): number | null {
 /// comma, and rejecting a real quote over that would be worse than accepting
 /// a lightly reformatted one. What this catches is the case that matters — a
 /// sentence the teacher never said at all.
-function normalizeForMatch(text: string): string {
+export function normalizeForMatch(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
@@ -114,7 +114,7 @@ export function flattenTeacherSpeech(segments: Segment[]): { flat: string; offse
   return { flat, offsets }
 }
 
-function startSecAtOffset(offsets: { at: number; startSec: number }[], offset: number): number | null {
+export function startSecAtOffset(offsets: { at: number; startSec: number }[], offset: number): number | null {
   let found: number | null = null
   for (const o of offsets) {
     if (o.at <= offset) found = o.startSec
