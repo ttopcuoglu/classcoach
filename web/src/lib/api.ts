@@ -631,6 +631,8 @@ export type AudioLessonContent = {
   // string[] is the shape stored by sessions analyzed before speaker-split
   // word clouds shipped — rendered as the old flat chip list, never crashes.
   topicTerms: string[] | { teacher: AudioTopicTerm[]; student: AudioTopicTerm[] }
+  /** Ways into this topic from the world students live in — ideas for next time. */
+  connectionIdeas?: string[]
   statedObjective: {
     found: boolean | null
     quote: string | null
@@ -655,7 +657,7 @@ export type AudioContentNote = {
 export type AudioContentNotes = {
   subject: string
   notes: AudioContentNote[]
-  /** Ways into this topic from the world students live in — ideas for next time. */
+  /** Where the first ideas were written, before they moved to lessonContent. */
   connectionIdeas?: string[]
   /** What trips students up in this topic — subject knowledge, not a reading of this lesson. */
   misconceptions?: string[]

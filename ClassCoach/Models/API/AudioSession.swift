@@ -62,6 +62,9 @@ struct AudioLessonContent: Decodable {
     let connections: [AudioQuote]
     let vocabulary: [AudioQuote]
     let subject: String?
+    /// Ways into this topic from the world students live in — ideas for next
+    /// time, not a reading of the lesson. Absent on older reports.
+    let connectionIdeas: [String]?
 
     struct TeacherStudentTerms: Decodable {
         let teacher: [AudioTopicTerm]
@@ -69,7 +72,7 @@ struct AudioLessonContent: Decodable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case topicTerms, statedObjective, summary, connections, vocabulary, subject
+        case topicTerms, statedObjective, summary, connections, vocabulary, subject, connectionIdeas
     }
     private enum ObjectiveKeys: String, CodingKey {
         case found, quote, timestampSec, source
@@ -99,6 +102,7 @@ struct AudioLessonContent: Decodable {
         connections = (try? container.decode([AudioQuote].self, forKey: .connections)) ?? []
         vocabulary = (try? container.decode([AudioQuote].self, forKey: .vocabulary)) ?? []
         subject = try? container.decode(String.self, forKey: .subject)
+        connectionIdeas = try? container.decode([String].self, forKey: .connectionIdeas)
     }
 }
 

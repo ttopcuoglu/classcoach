@@ -4309,7 +4309,7 @@ function LessonContentTab({
   const visibleNotes = contentNotes?.notes.filter((n) => !dismissed.has(n.id)) ?? []
   const connections = lessonContent?.connections ?? []
 
-  const connectionIdeas = contentNotes?.connectionIdeas ?? []
+  const connectionIdeas = lessonContent?.connectionIdeas ?? contentNotes?.connectionIdeas ?? []
 
   return (
     <div className="flex flex-col gap-5">
@@ -4341,7 +4341,8 @@ function LessonContentTab({
             Ways into this topic · ideas for next time
           </p>
           <p className="mt-1 text-xs text-ink-soft">
-            Suggestions from a specialist in {contentNotes?.subject || 'this subject'}, not a reading of your lesson.
+            Suggestions from a specialist in {lessonContent?.subject || contentNotes?.subject || 'this subject'}, not a
+            reading of your lesson.
           </p>
           <ul className="mt-2 flex list-disc flex-col gap-1.5 pl-5">
             {connectionIdeas.map((idea) => (

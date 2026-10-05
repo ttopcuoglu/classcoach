@@ -48,7 +48,7 @@ struct LessonContentTab: View {
                 }
             }
 
-            if let ideas = session.contentNotes?.connectionIdeas, !ideas.isEmpty {
+            if let ideas = session.lessonContent?.connectionIdeas ?? session.contentNotes?.connectionIdeas, !ideas.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("WAYS INTO THIS TOPIC · IDEAS FOR NEXT TIME")
                         .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.terracotta600)

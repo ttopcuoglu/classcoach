@@ -127,20 +127,15 @@ ${exhibits.map((e, i) => `[${i + 1}] ${e.text}`).join('\n')}
 
 Write in plain text only — no markdown.
 
-Then, separately from the notes, write up to ${MAX_CONNECTION_IDEAS} real-world connections a teacher could use for THIS topic — the everyday thing, job, story, or phenomenon, and the question that opens it with students. Concrete and specific: "a monthly calendar app's moon icons" beats "something from daily life". These are ideas for next time, so write them even if the teacher already made good connections, and never imply they made none.
+Then, separately from the notes, write up to ${MAX_MISCONCEPTIONS} lines on what commonly trips students up in THIS topic and the move that heads it off. This part is your subject knowledge, not a reading of this lesson — write it even if the teacher already handled it, and never imply they didn't. One sentence each, concrete and specific to the topic.
 
-Then write up to ${MAX_MISCONCEPTIONS} lines on what commonly trips students up in THIS topic and the move that heads it off. This part is your subject knowledge, not a reading of this lesson — write it even if the teacher already handled it, and never imply they didn't. One sentence each, concrete and specific to the topic.
-
-Respond with the note block below repeated 4 to 6 times, then one connections block and one misconceptions block, and nothing else:
+Respond with the note block below repeated 4 to 6 times, then one misconceptions block, and nothing else:
 <note>
 <label>one of: What worked, Where it could go further, Worth double-checking</label>
 <exhibit>the excerpt number this note is grounded in</exhibit>
 <text>1-2 sentences of warm, constructive feedback</text>
 </note>
 
-<connection_ideas>
-one connection per line, or NONE
-</connection_ideas>
 <misconceptions>
 one sentence per line, or NONE
 </misconceptions>
@@ -971,7 +966,6 @@ audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
         contentNotes: {
           subject,
           notes,
-          connectionIdeas: parseLines(text, 'connection_ideas', MAX_CONNECTION_IDEAS),
           misconceptions: parseMisconceptions(text),
         },
       },
@@ -1238,6 +1232,8 @@ might" — so a question phrased another way is counted as recall even when it
 asked for real thinking. Never let that number stand as a judgement of the
 teacher's questioning.
 
+Then WAYS INTO THIS TOPIC: up to three real-world connections a teacher could use for THIS topic — the everyday thing, job, story, or phenomenon, and the question that opens it with students. Concrete and specific: "a calendar app's moon icons" beats "something from daily life". These are ideas for next time, so write them even when the teacher already made good connections, and never imply they made none.
+
 Then THE CONTENT NOTE: one warm paragraph opening the Clarity & Content section — what this lesson was about and what the teacher did with the content: the explanation, the model or representation, the examples, the vocabulary, the connections drawn. Lead with what worked; this paragraph opens the section, it does not grade it. Name the actual ideas and terms, never "the content" in the abstract.
 
 Respond with exactly these six blocks and nothing else. The summary block
@@ -1265,6 +1261,9 @@ Your questions note.
 <content_note>
 Your content note.
 </content_note>
+<connection_ideas>
+one connection per line, or NONE
+</connection_ideas>
 ${CORE_COACHING_RULES}
 ${TRANSCRIPT_RELIABILITY_NOTICE}`
 }
@@ -1401,6 +1400,12 @@ async function writeClassSummary(
   const talkNarrative = extractTag(text, 'talk_note')
   const questionsNarrative = extractTag(text, 'questions_note')
   const contentNarrative = extractTag(text, 'content_note')
+  // Stored with the connections the teacher actually made, so the section
+  // that shows them has its ideas whether or not specialist notes were ever
+  // generated — they were in the notes first, where a teacher who never
+  // pressed that button never saw them.
+  const connectionIdeas = parseLines(text, 'connection_ideas', MAX_CONNECTION_IDEAS)
+  const lessonContent = session.lessonContent as Record<string, unknown> | null
   const classSummary = extractTag(text, 'class_summary')
   if (!classSummary) return null
 
@@ -1413,6 +1418,7 @@ async function writeClassSummary(
       ...(talkNarrative ? { talkNarrative: normalizeParagraphs(talkNarrative) } : {}),
       ...(questionsNarrative ? { questionsNarrative: normalizeParagraphs(questionsNarrative) } : {}),
       ...(contentNarrative ? { contentNarrative: normalizeParagraphs(contentNarrative) } : {}),
+      ...(connectionIdeas.length > 0 && lessonContent ? { lessonContent: { ...lessonContent, connectionIdeas } } : {}),
     },
     include: { segments: { orderBy: { startSec: 'asc' } } },
   })
