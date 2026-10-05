@@ -58,8 +58,8 @@ function isTalkItThrough(item: Activity): boolean {
 
 // Straight to the conversation itself, not just the feature's start screen.
 function activityLink(item: Activity): string {
-  if (item.type === 'scenario') return `/talk-to-me?tab=practice&open=${item.id}`
-  return isTalkItThrough(item) ? `/talk-to-me?open=${item.id}` : `/talk-to-me?tab=ask&open=${item.id}`
+  if (item.type === 'scenario') return `/coach-chat?tab=practice&open=${item.id}`
+  return isTalkItThrough(item) ? `/talk-to-me?open=${item.id}` : `/coach-chat?tab=ask&open=${item.id}`
 }
 
 const MOODS: { label: string; value: Mood }[] = [
@@ -101,9 +101,18 @@ const ACTION_CARDS = [
     accent: ACCENTS.forest,
     tag: 'Live coach',
     title: 'Talk It Through',
+    description: 'Think out loud. Your coach listens, asks, and helps you find a next step.',
+    linkLabel: 'Start voice coaching',
+  },
+  {
+    to: '/coach-chat',
+    icon: ChatBubbleIcon,
+    accent: ACCENTS.gold,
+    tag: 'Safe practice',
+    title: 'Ask & Practice',
     description:
-      'Think out loud and your coach listens — or type a question, or rehearse a moment before it happens for real.',
-    linkLabel: 'Talk, ask or rehearse',
+      'Teaching, behavior, parents, the professional side — ask a straight question, or rehearse it first.',
+    linkLabel: 'Ask or rehearse',
   },
 ]
 
@@ -311,7 +320,7 @@ export default function Home() {
         title: 'Practice a scenario',
         description: 'Run a realistic classroom moment and get coaching on your response.',
         linkLabel: 'Practice now',
-        to: '/talk-to-me?tab=practice',
+        to: '/coach-chat',
       }
     }
     if (!latestCompletedSession) {
@@ -366,7 +375,7 @@ export default function Home() {
       title: 'Keep the momentum going',
       description: 'Practice another scenario to stay sharp.',
       linkLabel: 'Practice now',
-      to: '/talk-to-me?tab=practice',
+      to: '/coach-chat',
     }
   }
 

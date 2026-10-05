@@ -6,6 +6,7 @@ import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import {
   ArrowUpIcon,
   BookIcon,
+  ChatBubbleIcon,
   ChecklistIcon,
   HomeIcon,
   LessonPlanIcon,
@@ -26,7 +27,8 @@ const NAV_GROUPS: NavGroup[] = [
     icon: MicIcon,
     items: [
       { to: '/audio-coaching', label: 'Lesson Debrief', icon: MicIcon, subtitle: 'recorded-lesson report' },
-      { to: '/talk-to-me', label: 'Talk It Through', icon: WaveformIcon, subtitle: 'talk, ask or rehearse' },
+      { to: '/talk-to-me', label: 'Talk It Through', icon: WaveformIcon, subtitle: 'live voice check-in' },
+      { to: '/coach-chat', label: 'Ask & Practice', icon: ChatBubbleIcon, subtitle: 'chat with your coach' },
     ],
   },
   {

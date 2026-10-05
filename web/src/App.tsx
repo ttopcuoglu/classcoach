@@ -12,6 +12,7 @@ import { applyPageMeta } from './lib/pageMeta'
 // lazy so a new visitor's first load only ever downloads the code for the
 // page they're actually looking at, not the entire authenticated app.
 const Home = lazy(() => import('./pages/Home'))
+const CoachChat = lazy(() => import('./pages/CoachChat'))
 const Communications = lazy(() => import('./pages/Communications'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Export = lazy(() => import('./pages/Export'))
@@ -94,13 +95,6 @@ function PageMeta() {
     applyPageMeta(pathname)
   }, [pathname])
   return null
-}
-
-// `<Navigate>` alone drops the query string, which is the whole payload of
-// these links — the tab to open and sometimes which saved item to show.
-function CoachChatRedirect() {
-  const { search } = useLocation()
-  return <Navigate to={`/talk-to-me${search}`} replace />
 }
 
 export default function App() {
@@ -229,6 +223,14 @@ export default function App() {
               }
             />
             <Route
+              path="talk-to-me"
+              element={
+                <RequireAuth user={user} loading={loading} onSignedIn={refreshUser}>
+                  <TalkToMe />
+                </RequireAuth>
+              }
+            />
+            <Route
               element={
                 <RequireAuth user={user} loading={loading} onSignedIn={refreshUser}>
                   <Layout user={user} onLogout={handleLogout} />
@@ -236,11 +238,7 @@ export default function App() {
               }
             >
               <Route index element={<Home />} />
-              <Route path="talk-to-me" element={<TalkToMe />} />
-              {/* Ask & Practice merged into Talk It Through. Kept as a redirect
-                  rather than dropped, and carrying the query across, so an old
-                  ?tab=practice&open=<id> link still lands on the thing it named. */}
-              <Route path="coach-chat" element={<CoachChatRedirect />} />
+              <Route path="coach-chat" element={<CoachChat />} />
               <Route path="communications" element={<Communications />} />
               <Route path="audio-coaching" element={<AudioCoaching />} />
               <Route path="lesson-planning" element={<LessonPlanning />} />
