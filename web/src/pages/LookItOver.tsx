@@ -28,11 +28,10 @@ import {
   DOC_TYPES,
   DOC_TYPE_LABELS,
   canRedesignForAi,
-  CORRECTED_HINT,
   MAX_FILES_PER_REVIEW,
-  confirmQuestion,
+  DOC_TYPE_IN_A_SENTENCE,
+  lensPreview,
   correctedHeading,
-  detectionHint,
   isDocType,
   type DocType,
 } from '../lib/reviewLenses'
@@ -129,6 +128,7 @@ export default function LookItOver() {
     try {
       const created = await createReview({
         files: pending,
+        docType: chosenType ?? undefined,
         classProfileId: prep?.id ?? null,
       })
       setReview(created)
@@ -156,6 +156,7 @@ export default function LookItOver() {
       const created = await createReview({
         text,
         sourceKind: 'paste',
+        docType: chosenType ?? undefined,
         classProfileId: prep?.id ?? null,
       })
       setReview(created)
@@ -245,6 +246,13 @@ export default function LookItOver() {
   /// has student names in it. Holding it here, rather than running anyway and
   /// apologising, is what makes the promise real.
   const [namesFound, setNamesFound] = useState<StudentNamesFound | null>(null)
+  /// What the teacher says this is, chosen before anything is uploaded.
+  ///
+  /// The surface used to detect first and ask for a correction. Choosing up
+  /// front means the lenses are settled before the document arrives — and it
+  /// means the page can say what it will look at while a teacher is still
+  /// deciding whether to use it at all.
+  const [chosenType, setChosenType] = useState<DocType | null>(null)
   /// Which section of the result is showing. Edits first, because the question
   /// a teacher arrives with is "what do I change", not "what did you think".
   const [activeTab, setActiveTab] = useState<string>('edits')
@@ -411,6 +419,40 @@ export default function LookItOver() {
               workaround — which is why the camera has its own button rather
               than hiding behind the file picker. */}
           <div className="flex flex-col gap-6 rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm sm:p-8">
+            {/* First, because it decides everything after it: which lenses
+                run, and therefore what the review is actually about. */}
+            <div>
+              <SectionLabel
+                title="What are you looking over?"
+                hint="This decides what I check for. You can change it after."
+              />
+              <div className="mt-2.5 flex flex-wrap gap-2.5">
+                {DOC_TYPES.map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setChosenType(chosenType === type ? null : type)}
+                    aria-pressed={chosenType === type}
+                    className={`rounded-full border px-4 py-2.5 text-sm font-semibold transition-colors ${
+                      chosenType === type
+                        ? 'border-gold bg-gold text-forest'
+                        : 'border-hairline bg-cream text-ink hover:border-terracotta/50 hover:text-terracotta-600'
+                    }`}
+                  >
+                    {DOC_TYPE_LABELS[type]}
+                  </button>
+                ))}
+              </div>
+              {/* What picking it bought, stated while they can still change
+                  their mind — a lens set a teacher cannot see is a promise
+                  they have no way to check. */}
+              {chosenType && (
+                <p className="mt-2.5 text-sm text-ink-soft">
+                  I&rsquo;ll look at: {lensPreview(chosenType)}.
+                </p>
+              )}
+            </div>
+
           <div
             onDragOver={(e) => {
               e.preventDefault()
@@ -431,15 +473,19 @@ export default function LookItOver() {
               <BookIcon className="h-6 w-6" />
             </span>
             <div>
-              <p className="font-heading text-lg font-bold text-forest">Drop it here</p>
+              <p className="font-heading text-lg font-bold text-forest">
+                {chosenType ? 'Drop it here' : 'Pick what it is first'}
+              </p>
               <p className="mt-0.5 text-sm text-ink-soft">
-                A quiz, a plan, a slide deck, an assignment, a message — whatever you made.
+                {chosenType
+                  ? `Your ${DOC_TYPE_IN_A_SENTENCE[chosenType]} — a file, a photo, or paste the text below.`
+                  : 'Choose one above and this opens up.'}
               </p>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-2">
               <button
                 type="button"
-                disabled={busy != null}
+                disabled={busy != null || !chosenType}
                 onClick={() => fileInput.current?.click()}
                 className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:opacity-60"
               >
@@ -447,7 +493,7 @@ export default function LookItOver() {
               </button>
               <button
                 type="button"
-                disabled={busy != null}
+                disabled={busy != null || !chosenType}
                 onClick={() => cameraInput.current?.click()}
                 className="rounded-full border-2 border-hairline bg-cream px-5 py-2.5 text-sm font-semibold text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-60"
               >
@@ -557,7 +603,7 @@ export default function LookItOver() {
             </p>
             <button
               type="button"
-              disabled={busy != null || !pasted.trim()}
+              disabled={busy != null || !pasted.trim() || !chosenType}
               onClick={() => void startFromPaste()}
               className="rounded-full bg-terracotta px-8 py-4 text-base font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
             >
@@ -624,13 +670,30 @@ export default function LookItOver() {
                 </p>
               )}
 
-              {review.docTypeConfirmed ? (
-                <SectionLabel title={correctedHeading(docTypeOf(review.docType))} hint={CORRECTED_HINT} />
-              ) : (
-                <SectionLabel
-                  title={confirmQuestion(docTypeOf(review.docType))}
-                  hint={detectionHint(review.detectionEvidence ?? [])}
-                />
+              {/* The teacher chose the type before uploading, so this states
+                  it rather than asking. The chips below still change it in one
+                  tap — being able to change your mind is not the same as being
+                  interrogated. */}
+              <SectionLabel
+                title={correctedHeading(docTypeOf(review.docType))}
+                hint="Different type, different checks — tap any to change it."
+              />
+
+              {/* The one thing choosing up front costs: nothing checks the
+                  teacher's answer. Detection still runs, and says so when it
+                  disagrees, so a wrong pick is visible rather than silently
+                  producing the wrong lenses. */}
+              {disagreesWithChoice(review) && (
+                <p className="rounded-xl bg-gold-tint/60 px-4 py-2.5 text-sm text-ink">
+                  Reading it, this looks more like{' '}
+                  <strong className="font-semibold">
+                    {DOC_TYPE_LABELS[docTypeOf(review.detectedType ?? review.docType)]}
+                  </strong>
+                  {review.detectionEvidence && review.detectionEvidence.length > 0
+                    ? ` — ${review.detectionEvidence.join(' and ')}.`
+                    : '.'}{' '}
+                  Tap it below if that&rsquo;s right.
+                </p>
               )}
               <div className="mt-2.5 flex flex-wrap gap-2.5">
                 {DOC_TYPES.map((type) => (
@@ -1094,4 +1157,19 @@ function EditCard({
 /// bare number — a figure on its own reads as a measurement.
 function minutesLabel([low, high]: [number, number]): string {
   return low === high ? `about ${low} min` : `${low}–${high} min`
+}
+
+/// True when detection read the document as something other than what the
+/// teacher said it was.
+///
+/// Choosing the type up front means nothing checks the choice — a teacher who
+/// picks "assignment" for a quiz gets the assignment lenses and is told
+/// nothing. Detection still runs for exactly this, so the disagreement is
+/// surfaced as a sentence rather than left to be noticed in the results.
+function disagreesWithChoice(review: Review): boolean {
+  if (!review.detectedType) return false
+  if (review.detectedType === review.docType) return false
+  // Only when the teacher actually chose. An unconfirmed type means detection
+  // picked it, and detection cannot disagree with itself.
+  return review.docTypeConfirmed
 }

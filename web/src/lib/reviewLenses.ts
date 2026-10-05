@@ -14,6 +14,82 @@
 /// Lives here rather than beside the API calls because the page needs it to
 /// decide what to send, and a constant that disappears when the API module is
 /// mocked is a constant that silently becomes NaN in a test.
+/// The lenses each type opens with, for the line that tells a teacher what
+/// picking it buys — "I'll look at: what each item measures, reading load…".
+///
+/// Labels only, mirrored by hand from server/src/lib/reviewLenses.ts, which
+/// owns the real set and the instructions behind it. The review's own lenses
+/// always come from the server; this is a preview shown BEFORE anything is
+/// uploaded, which is the one moment the server has nothing to say yet. Drift
+/// here costs a stale sentence, never a wrong review.
+export const LENS_PREVIEW: Record<DocType, string[]> = {
+  quiz: [
+    'what each item measures',
+    'reading load',
+    'answer choices',
+    'standards coverage',
+    'will it fit the period',
+    'AI completion risk',
+  ],
+  homework: [
+    "how long it'll really take",
+    'practice or new learning',
+    'doable without help at home',
+    'are the directions clear alone',
+    'what you do with it tomorrow',
+    'AI completion risk',
+  ],
+  assignment: [
+    'grade fit',
+    'thinking and rigor',
+    'learning value',
+    'workload',
+    'directions and examples',
+    'AI completion risk',
+  ],
+  project: [
+    'grade fit',
+    'where the thinking happens',
+    'workload across the timeline',
+    "group work and who's accountable",
+    'rubric and success criteria',
+    'AI completion risk',
+  ],
+  lesson_plan: [
+    'timing realism',
+    'objective-to-activity fit',
+    'where students do the thinking',
+    'checks for understanding',
+    'if it runs short or long',
+    'materials and prep',
+  ],
+  presentation: [
+    'slide load and text density',
+    'where the thinking happens',
+    'grade-level fit',
+    'legible from the back row',
+    'how to actually run it',
+    'pacing against the period',
+  ],
+  rubric: [
+    'are the criteria distinct',
+    'do the levels describe different work',
+    'does the weighting match what matters',
+    'can a student read it and know what to do',
+    'does it match the assignment',
+  ],
+  message: ['clarity', 'tone for this reader', 'what it invites in response', "what's missing"],
+}
+
+/// The first few, and how many more — the whole list is a wall of text at the
+/// moment a teacher is only deciding whether this surface is the right one.
+export function lensPreview(docType: DocType): string {
+  const all = LENS_PREVIEW[docType]
+  const shown = all.slice(0, 3).join(', ')
+  const rest = all.length - 3
+  return rest > 0 ? `${shown}, and ${rest} more` : shown
+}
+
 export const MAX_FILES_PER_REVIEW = 5
 
 export const DOC_TYPES = [
@@ -46,7 +122,7 @@ export const DOC_TYPE_LABELS: Record<DocType, string> = {
 /// What the question calls each type. Shorter than the chip's own label,
 /// because "Looks like a quiz / exam — right?" reads as a form field and
 /// "Looks like a quiz — right?" reads as someone asking.
-const DOC_TYPE_IN_A_SENTENCE: Record<DocType, string> = {
+export const DOC_TYPE_IN_A_SENTENCE: Record<DocType, string> = {
   quiz: 'quiz',
   homework: 'homework assignment',
   assignment: 'assignment',
