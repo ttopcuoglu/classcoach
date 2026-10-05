@@ -28,7 +28,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/audio-coaching', label: 'Lesson Debrief', icon: MicIcon, subtitle: 'recorded-lesson report' },
       { to: '/talk-to-me', label: 'Talk It Through', icon: WaveformIcon, subtitle: 'live voice check-in' },
-      { to: '/coach-chat', label: 'Ask & Practice', icon: ChatBubbleIcon, subtitle: 'chat with your coach' },
+      { to: '/coach-chat', label: 'Practice', icon: ChatBubbleIcon, subtitle: 'rehearse a moment' },
     ],
   },
   {

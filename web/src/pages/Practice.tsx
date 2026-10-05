@@ -1,30 +1,25 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import Ask from './Ask'
 import TryItOut from './TryItOut'
 import { DEFAULT_TEACHING_CONTEXT, type TeachingContext } from '../components/TeachingContextFields'
 import { FOCUS_AREAS, findFocusArea } from '../lib/focusAreas'
 import { SUBJECTS, bandFromProfile, subjectFromProfile } from '../lib/teachingContext'
 import { getProfile } from '../lib/api'
 
-// The section is the main choice on this screen, so it lives here, above the
-// Ask/Practice switch, and both tabs read it. It is one row of chips rather
-// than the card grid this started as — four options with a sentence each put
-// eleven controls above the box where a teacher types.
+// This was Ask & Practice, two tabs over one shared section and room. Asking is
+// Talk It Through's job now — out loud or typed, both in one place — so what is
+// left here is the thing Talk It Through cannot do: rehearse a moment against a
+// scenario and get feedback on the words you actually used.
 //
-// It stays optional on Ask: a teacher who writes "my class talks over
-// directions" should never have to classify it first, and the coach infers the
-// section from the text. On Practice the coach has to choose what to hand them,
-// so leaving it on All means the coach picks, weighted toward what this teacher
-// has practiced least.
+// The section stays above the scenario rather than inside it. Left on "Not sure
+// yet" the coach picks, weighted toward what this teacher has practiced least,
+// so it is a narrowing tool and not a required field.
 //
-// The room lives here for the same reason the section does: a teacher who sets
-// their grade band on Ask and switches to Practice is still in the same room,
-// and having each tab keep its own copy meant setting it twice — and fetching
-// the profile twice to default it.
-export default function CoachChat() {
+// The room lives here rather than in TryItOut because the profile is fetched
+// here: one call defaults the grade band and subject, and a teacher who has set
+// them never types them again.
+export default function Practice() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const tab = searchParams.get('tab') === 'practice' ? 'practice' : 'ask'
   const area = findFocusArea(searchParams.get('area'))
   const [room, setRoom] = useState<TeachingContext>(DEFAULT_TEACHING_CONTEXT)
 
@@ -43,16 +38,10 @@ export default function CoachChat() {
       .catch(() => {})
   }, [])
 
-  function update(next: { tab?: 'practice' | 'ask'; area?: string | null }) {
+  function pickArea(next: string | null) {
     const params = new URLSearchParams(searchParams)
-    if (next.tab !== undefined) {
-      if (next.tab === 'ask') params.delete('tab')
-      else params.set('tab', next.tab)
-    }
-    if (next.area !== undefined) {
-      if (next.area) params.set('area', next.area)
-      else params.delete('area')
-    }
+    if (next) params.set('area', next)
+    else params.delete('area')
     setSearchParams(params)
   }
 
@@ -61,10 +50,10 @@ export default function CoachChat() {
       <div className="flex flex-col gap-1">
         <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Coaching</p>
         <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
-          Ask &amp; Practice<span className="text-gold">.</span>
+          Practice<span className="text-gold">.</span>
         </h1>
         <p className="text-ink-soft">
-          Ask a question about any part of the job, or rehearse it before it happens for real.
+          Rehearse a real classroom moment and get coaching on your response — before it happens for real.
         </p>
         <Link
           to="/guide/ask-practice"
@@ -86,7 +75,7 @@ export default function CoachChat() {
                 <button
                   key={label}
                   type="button"
-                  onClick={() => update({ area: value })}
+                  onClick={() => pickArea(value)}
                   aria-pressed={selected}
                   className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
                     selected ? 'bg-forest text-cream' : 'bg-cream-card text-ink-soft hover:text-ink'
@@ -99,9 +88,9 @@ export default function CoachChat() {
           )}
         </div>
         {area && <p className="text-xs text-ink-soft">{area.blurb}</p>}
-        {/* Parent and colleague work overlaps Communication Coach on purpose: a
-            quick question or one rehearsed exchange belongs here, an actual
-            drafted email or a prepared meeting belongs there. */}
+        {/* Parent and colleague work overlaps Communication Coach on purpose: one
+            rehearsed exchange belongs here, an actual drafted email or a
+            prepared meeting belongs there. */}
         {area?.handoff && (
           <Link
             to={area.handoff.to}
@@ -112,37 +101,7 @@ export default function CoachChat() {
         )}
       </div>
 
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => update({ tab: 'ask' })}
-          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-            tab === 'ask' ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
-          }`}
-        >
-          Ask
-        </button>
-        <button
-          type="button"
-          onClick={() => update({ tab: 'practice' })}
-          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-            tab === 'practice' ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
-          }`}
-        >
-          Practice
-        </button>
-      </div>
-
-      {tab === 'practice' ? (
-        <TryItOut focusArea={area?.value} room={room} onRoomChange={setRoom} />
-      ) : (
-        <Ask
-          focusArea={area?.value}
-          onPickArea={(value) => update({ area: value })}
-          room={room}
-          onRoomChange={setRoom}
-        />
-      )}
+      <TryItOut focusArea={area?.value} room={room} onRoomChange={setRoom} />
     </div>
   )
 }

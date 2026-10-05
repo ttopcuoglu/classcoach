@@ -12,7 +12,7 @@ import { applyPageMeta } from './lib/pageMeta'
 // lazy so a new visitor's first load only ever downloads the code for the
 // page they're actually looking at, not the entire authenticated app.
 const Home = lazy(() => import('./pages/Home'))
-const CoachChat = lazy(() => import('./pages/CoachChat'))
+const Practice = lazy(() => import('./pages/Practice'))
 const Communications = lazy(() => import('./pages/Communications'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Export = lazy(() => import('./pages/Export'))
@@ -238,7 +238,7 @@ export default function App() {
               }
             >
               <Route index element={<Home />} />
-              <Route path="coach-chat" element={<CoachChat />} />
+              <Route path="coach-chat" element={<Practice />} />
               <Route path="communications" element={<Communications />} />
               <Route path="audio-coaching" element={<AudioCoaching />} />
               <Route path="lesson-planning" element={<LessonPlanning />} />
