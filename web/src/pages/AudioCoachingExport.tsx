@@ -108,8 +108,11 @@ export default function AudioCoachingExport() {
 
   const teacherPct = session.teacherTalkPct
   const studentPct = session.studentTalkPct
+  // One decimal, so the three shares add up to 100 rather than to 100.4.
   const silencePct =
-    teacherPct != null && studentPct != null ? Math.max(0, Math.round(100 - teacherPct - studentPct)) : null
+    teacherPct != null && studentPct != null
+      ? Math.max(0, Math.round((100 - teacherPct - studentPct) * 10) / 10)
+      : null
 
   const questions = getCountMetric({ count: session.questionCount, recordedSec })
   const higherOrder =
@@ -173,9 +176,13 @@ export default function AudioCoachingExport() {
           </div>
         )}
 
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {/* Silence belongs beside the two talk shares: they are shares of the
+            recording, not of the talking, and without it 22.6% and 7.9% read as
+            a missing 70%. */}
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
           <Stat label="You spoke" metric={teacherTalk} unit="%" accent={A.terracotta} />
           <Stat label="Students spoke" metric={studentTalk} unit="%" accent={A.gold} />
+          <Stat label="Silence / other" metric={getPresenceMetric(silencePct)} unit="%" accent={A.mint} />
           <Stat label="Questions" metric={questions} accent={A.mint} />
           <Stat label="Avg. wait" metric={waitTime} unit="s" accent={A.forest} />
         </div>

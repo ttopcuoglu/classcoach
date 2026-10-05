@@ -76,6 +76,15 @@ struct OverviewTab: View {
 
     private var m: OverviewMetrics { OverviewMetrics(session) }
 
+    /// 100 minus the two talk shares — the quiet, the overlap and anything the
+    /// mic could not place. Mirrors the web report's own calculation.
+    private var silencePct: Double? {
+        guard let teacher = session.teacherTalkPct, let student = session.studentTalkPct else { return nil }
+        // One decimal, like the two shares beside it — whole numbers made the
+        // three add up to 100.4.
+        return max(0, ((100 - teacher - student) * 10).rounded() / 10)
+    }
+
     private var talkInsight: String? { AudioInsights.buildTalkInsight(session) }
     private var questioningInsight: String? { AudioInsights.buildQuestioningInsight(session, higherOrderRatio: m.higherOrderRatio) }
     private var cfuInsight: String? { AudioInsights.buildCfuInsight(m.cfuMetric) }
@@ -136,6 +145,9 @@ struct OverviewTab: View {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                 tile("You spoke", percent(session.teacherTalkPct), .terracotta)
                 tile("Students spoke", percent(session.studentTalkPct), .gold)
+                // Shares of the recording, not of the talking: without silence
+                // beside them, 22.6% and 7.9% read as a missing 70%.
+                tile("Silence / other", percent(silencePct), .teal)
                 tile("Questions", ReportConfidence.getCountMetric(count: session.questionCount, recordedSec: m.coverage.recordedSec), .teal)
                 tile("Avg. wait", waitMetric, .forest)
             }

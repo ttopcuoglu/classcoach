@@ -2373,9 +2373,11 @@ function ReportPanel({
   // Talk & Participation
   const teacherTalkMetric = getPresenceMetric(session.teacherTalkPct)
   const studentTalkMetric = getPresenceMetric(session.studentTalkPct)
+  // One decimal, like the two talk shares it is shown beside — rounded to a
+  // whole number it made the three add up to 100.4.
   const silencePct =
     session.teacherTalkPct != null && session.studentTalkPct != null
-      ? Math.max(0, Math.round(100 - session.teacherTalkPct - session.studentTalkPct))
+      ? Math.max(0, Math.round((100 - session.teacherTalkPct - session.studentTalkPct) * 10) / 10)
       : null
   const silenceMetric = getPresenceMetric(silencePct)
   const studentSegmentsMetric = getCountMetric({ count: num('studentVoiceSegments'), recordedSec })
@@ -2945,10 +2947,14 @@ function SummaryTab({
           )
         )}
 
-        {/* The same four numbers, colours and order as page one of the printout. */}
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {/* Silence sits with the two talk shares because without it they look
+            like a split of the talking when they are shares of the recording —
+            22.6% and 7.9% read as a missing 70% rather than as a room that was
+            quiet or working. The three add up to the whole recording. */}
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
           <SummaryStat label="You spoke" metric={getPresenceMetric(session.teacherTalkPct)} unit="%" accent={ACCENTS.terracotta} />
           <SummaryStat label="Students spoke" metric={getPresenceMetric(session.studentTalkPct)} unit="%" accent={ACCENTS.gold} />
+          <SummaryStat label="Silence / other" metric={getPresenceMetric(silencePct)} unit="%" accent={ACCENTS.mint} />
           <SummaryStat label="Questions" metric={questionsMetric} accent={ACCENTS.mint} />
           <SummaryStat label="Avg. wait" metric={waitTimeMetricOf(session.avgWaitTimeSec, session.questionCount)} unit="s" accent={ACCENTS.forest} />
         </div>
