@@ -57,6 +57,9 @@ export type AnalysisResult = {
     recallQuestionCount: number
     higherOrderQuestionCount: number
     followUpQuestionCount: number
+    /// Tasks that asked students to reason rather than follow steps — read
+    /// from the transcript, so absent on sessions analyzed before that.
+    thinkingTaskCount?: number
     // How many question → student-response intervals avgWaitTimeSec averages.
     waitTimeSampleCount: number
     redirectionCount: number

@@ -2723,6 +2723,7 @@ function ReportPanel({
                 waitTimeMetric={waitTimeMetric}
                 avgWaitTimeSec={session.avgWaitTimeSec}
                 waitTimeSampleCount={session.metricsDetail?.waitTimeSampleCount ?? null}
+                thinkingTaskCount={session.metricsDetail?.thinkingTaskCount ?? null}
                 focusMetric={focusMetric}
                 questioningInsight={questioningInsight}
                 highlights={session.highlights}
@@ -5110,6 +5111,7 @@ function QuestionsThinkingTab({
   waitTimeMetric,
   avgWaitTimeSec,
   waitTimeSampleCount,
+  thinkingTaskCount,
   focusMetric,
   questioningInsight,
   highlights,
@@ -5123,6 +5125,7 @@ function QuestionsThinkingTab({
   waitTimeMetric: ReturnType<typeof getPresenceMetric>
   avgWaitTimeSec: number | null
   waitTimeSampleCount: number | null
+  thinkingTaskCount: number | null
   focusMetric: FocusMetric | null
   questioningInsight: string | null
   highlights: AudioHighlight[] | null
@@ -5163,6 +5166,29 @@ function QuestionsThinkingTab({
             focused={focusMetric === 'higherOrderPct'}
           />
         </div>
+        <div id="stat-higherOrderCount">
+          <Stat
+            label="Higher-order questions"
+            value={higherOrderCount != null ? String(higherOrderCount) : '—'}
+            muted={higherOrderCount == null}
+            reason={higherOrderCount == null ? 'This session was analyzed before questions were classified.' : undefined}
+            sub={higherOrderRatio && higherOrderCount != null ? `${higherOrderRatio.display} of your questions` : undefined}
+          />
+        </div>
+        {/* A lesson can be built on reasoning without a single higher-order
+            question in it — a simulation task can ask for more thinking than
+            anything said out loud did. */}
+        <Stat
+          label="Thinking tasks"
+          value={thinkingTaskCount != null ? String(thinkingTaskCount) : '—'}
+          muted={thinkingTaskCount == null}
+          reason={
+            thinkingTaskCount == null
+              ? 'This session was analyzed before thinking tasks were read from the transcript.'
+              : undefined
+          }
+          sub="Things students had to reason through"
+        />
         <Stat
           label="Your follow-up questions"
           value={followUpMetric.display}

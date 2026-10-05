@@ -39,6 +39,9 @@ export type ClassroomMoves = {
   checks: Checked[]
   feedbackSpecific: Quoted[]
   feedbackGeneral: Quoted[]
+  higherOrderQuestions: Quoted[]
+  recallQuestions: Quoted[]
+  thinkingTasks: Checked[]
 }
 
 /// A check carries what it was checking, because "thumbs up" on its own tells
@@ -48,6 +51,7 @@ export type Checked = Quoted & { whatItChecked: string }
 const EMPTY: ClassroomMoves = {
   directions: [], transitions: [], redirections: [], positive: [], corrective: [],
   checks: [], feedbackSpecific: [], feedbackGeneral: [],
+  higherOrderQuestions: [], recallQuestions: [], thinkingTasks: [],
 }
 
 const SYSTEM_PROMPT = `You are reading the teacher's side of a classroom recording. Find five kinds of moment. Copy the teacher's sentence EXACTLY as it appears, and give the timestamp of the line it came from.
@@ -61,6 +65,12 @@ REDIRECTIONS — bringing attention or behaviour back: "eyes up here", "I need e
 POSITIVE — naming something a student or the class did well, or genuine encouragement. Short counts: "that's a good question", "exactly", "nice thinking" are all a teacher telling a student their contribution was worth something. So do longer ones: "that's exactly the connection I wanted", "you're already most of the way there". What does NOT count is filler that keeps the conversation moving without appraising anything — "okay", "yep", "alright", "thank you" said while taking a handout.
 
 CORRECTIVE — telling a student an answer or an approach is not right yet: "not quite", "let's rethink that", "close, but look at the second step".
+
+HIGHER-ORDER QUESTIONS — questions that ask for reasoning, not recall: why something happens, how two things relate, what would happen if, what the evidence is, how to defend a claim. Phrasing doesn't decide it — "so what's going on there?" asked about a model is higher-order; "what's the date today" is not.
+
+RECALL QUESTIONS — questions asking for a fact, a definition, a name, or a number the class already has.
+
+THINKING TASKS — things students were asked to DO that require reasoning rather than following steps: predict what a model will show and check it, compare two cases, explain their reasoning to a partner, work out a quantity from something they know. The sentence that sets the task, plus what students had to think about after a pipe. Procedural instructions ("grab your Chromebooks", "write your name") are not thinking tasks.
 
 CHECKS — a move that asks students to show what they understand, so the teacher can see where they are: "does that make sense so far?", "thumbs up if you're with me", "turn and talk about what you'd predict", "show me on your whiteboards", a cold call, an exit ticket. A question that genuinely probes understanding counts; rhetorical filler ("right?", "okay?") does not, and neither does a procedural question ("does everyone have a Chromebook?"). For each one, add what it was checking after a pipe.
 
@@ -85,6 +95,13 @@ Write nothing outside these tags. Inside each, one sentence per line, each follo
 </positive>
 <corrective>
 </corrective>
+<questions_higher_order>
+</questions_higher_order>
+<questions_recall>
+</questions_recall>
+<thinking_tasks>
+one per line as: sentence @ m:ss | what students had to think about
+</thinking_tasks>
 <checks>
 one per line as: sentence @ m:ss | what it checked
 </checks>
@@ -109,6 +126,7 @@ export function countMoves(moves: ClassroomMoves): number {
   return moves.directions.length + moves.transitions.length + moves.redirections.length
     + moves.positive.length + moves.corrective.length + moves.checks.length
     + moves.feedbackSpecific.length + moves.feedbackGeneral.length
+    + moves.higherOrderQuestions.length + moves.recallQuestions.length + moves.thinkingTasks.length
 }
 
 /// "sentence @ m:ss | what it checked" — the quote verified against the
@@ -163,6 +181,9 @@ async function readOnce(segments: Segment[]): Promise<ClassroomMoves> {
       positive: read('positive'),
       corrective: read('corrective'),
       checks: readChecks(extractTag(text, 'checks'), flat, offsets),
+      higherOrderQuestions: read('questions_higher_order'),
+      recallQuestions: read('questions_recall'),
+      thinkingTasks: readChecks(extractTag(text, 'thinking_tasks'), flat, offsets),
       feedbackSpecific: read('feedback_specific'),
       feedbackGeneral: read('feedback_general'),
     }
@@ -210,6 +231,37 @@ export async function enrichClassroomMoves(analysis: AnalysisResult, segments: S
   ].sort((a, b) => a.timestampSec - b.timestampSec)
   const feedbackLog = feedbackFromModel.length > 0 ? feedbackFromModel : analysis.feedbackLog
 
+  // Questions came from a "?" the transcriber guessed at plus a list of
+  // openers, which logged "Can you get the light for me, please" and a bare
+  // "What" as questions and called a genuine reasoning question recall. A
+  // question the teacher asked keeps whatever wait time was measured for the
+  // moment it was asked at — that timing is the transcript's, not the
+  // model's, and only the deterministic scan can see it.
+  const scannedWaits = analysis.questionLog.filter((q) => q.waitTimeSec != null)
+  const waitAt = (sec: number): number | null =>
+    scannedWaits.find((q) => Math.abs(q.timestampSec - sec) <= 6)?.waitTimeSec ?? null
+  const modelQuestions = [
+    ...moves.higherOrderQuestions.map((q) => ({ ...q, type: 'higher_order' as const })),
+    ...moves.recallQuestions.map((q) => ({ ...q, type: 'recall' as const })),
+  ].sort((a, b) => a.timestampSec - b.timestampSec)
+  const questionLog = modelQuestions.length > 0
+    ? modelQuestions.map((q) => ({
+        timestampSec: q.timestampSec,
+        type: q.type,
+        waitTimeSec: waitAt(q.timestampSec),
+        text: q.quote,
+        followUps: [],
+      }))
+    : analysis.questionLog
+  const higherOrderQuestionCount = modelQuestions.length > 0
+    ? moves.higherOrderQuestions.length
+    : analysis.metricsDetail.higherOrderQuestionCount
+  const recallQuestionCount = modelQuestions.length > 0
+    ? moves.recallQuestions.length
+    : analysis.metricsDetail.recallQuestionCount
+  const questionCount = higherOrderQuestionCount + recallQuestionCount
+  const measuredWaits = questionLog.map((q) => q.waitTimeSec).filter((w): w is number => w != null)
+
   const positivePhraseCount = toneLog.filter((t) => t.kind === 'positive').length
   const correctivePhraseCount = toneLog.filter((t) => t.kind === 'corrective').length
   const transitionCount = moves.transitions.length > 0 ? moves.transitions.length : analysis.metricsDetail.transitionCount
@@ -221,9 +273,21 @@ export async function enrichClassroomMoves(analysis: AnalysisResult, segments: S
     toneLog,
     cfuLog,
     feedbackLog,
+    questionLog,
     cfuCount: cfuLog.length,
+    questionCount,
+    higherOrderPct: questionCount > 0 ? Math.round((higherOrderQuestionCount / questionCount) * 100) : null,
+    avgWaitTimeSec: measuredWaits.length
+      ? Math.round((measuredWaits.reduce((sum, w) => sum + w, 0) / measuredWaits.length) * 100) / 100
+      : null,
     metricsDetail: {
       ...analysis.metricsDetail,
+      higherOrderQuestionCount,
+      recallQuestionCount,
+      waitTimeSampleCount: measuredWaits.length,
+      // Reasoning students were asked to DO, not just answer — a lesson can
+      // be built on one and contain no higher-order question at all.
+      thinkingTaskCount: moves.thinkingTasks.length,
       genericFeedbackCount: feedbackLog.filter((f) => f.kind === 'generic').length,
       specificFeedbackCount: feedbackLog.filter((f) => f.kind === 'specific').length,
       directiveCount: directiveLog.length,

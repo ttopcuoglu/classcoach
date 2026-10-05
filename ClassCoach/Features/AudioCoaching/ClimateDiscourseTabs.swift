@@ -105,6 +105,11 @@ struct DiscourseDetailsTab: View {
                 (m.higherOrderRatio ?? m.cfuMetric).state, m.followUpMetric.state, ReportConfidence.getPresenceMetric(session.avgWaitTimeSec).state,
             ])) {
                 StatView(label: "Questions you asked", metric: ReportConfidence.getCountMetric(count: session.questionCount, recordedSec: recordedSec))
+                StatView(label: "Higher-order questions", metric: higherOrderCountMetric)
+                // A lesson can be built on reasoning without a single
+                // higher-order question in it — a task can ask for more
+                // thinking than anything said out loud did.
+                StatView(label: "Thinking tasks", metric: thinkingTaskMetric)
                 StatView(label: "Your follow-up questions", metric: m.followUpMetric)
                 StatView(label: "Your avg. wait time", metric: waitTimeMetric)
             }
@@ -112,8 +117,31 @@ struct DiscourseDetailsTab: View {
         }
     }
 
+    private var higherOrderCountMetric: ReportConfidence.ConfidentMetric {
+        guard let count = session.metricsDetail?["higherOrderQuestionCount"] else {
+            return ReportConfidence.ConfidentMetric(state: .notAnalyzed, display: "—", reason: "This session was analyzed before questions were classified.")
+        }
+        return ReportConfidence.ConfidentMetric(state: count > 0 ? .measured : .confirmedNone, display: "\(Int(count))")
+    }
+
+    private var thinkingTaskMetric: ReportConfidence.ConfidentMetric {
+        guard let count = session.metricsDetail?["thinkingTaskCount"] else {
+            return ReportConfidence.ConfidentMetric(state: .notAnalyzed, display: "—", reason: "This session was analyzed before thinking tasks were read from the transcript.")
+        }
+        return ReportConfidence.ConfidentMetric(state: count > 0 ? .measured : .confirmedNone, display: "\(Int(count))")
+    }
+
     private var waitTimeMetric: ReportConfidence.ConfidentMetric {
         guard let wait = session.avgWaitTimeSec else {
+            // "Not enough data" is true but unhelpful: on a room mic the pause
+            // is usually missing because the answer was never captured, not
+            // because the teacher never waited.
+            if (session.questionCount ?? 0) > 0 {
+                return ReportConfidence.ConfidentMetric(
+                    state: .notMeasurable, display: "—",
+                    reason: "None of your questions was followed by an audible student answer, so there was no pause to time."
+                )
+            }
             return ReportConfidence.ConfidentMetric(state: .notMeasurable, display: "—", reason: "Not enough data in this session to compute this.")
         }
         return ReportConfidence.ConfidentMetric(state: .measured, display: "\(ReportConfidence.formatNumber(wait))s")
