@@ -124,6 +124,9 @@ beforeEach(() => {
   getReviewDocument.mockReset()
   redesignReviewForAi.mockReset()
   getClassProfiles.mockResolvedValue([])
+  // Reading now happens without being asked, so every upload runs. A draft
+  // result keeps a test on the setup state; the finished one is opted into.
+  runReview.mockResolvedValue(review())
 })
 
 afterEach(() => {
@@ -228,54 +231,10 @@ test('correcting the type is one tap away, and offers all seven', async () => {
 
 // A weak guess still asks the same question — it just arrives with the
 // alternatives already visible.
-test('an unconfident guess opens with the chips already showing', async () => {
-  detectReviewType.mockResolvedValue({ docType: 'assignment', confident: false })
-  createReview.mockResolvedValue(
-    review({ docType: 'assignment', docTypeLabel: 'Assignment', detectionConfident: false }),
-  )
-  renderPage()
-  await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
-  chooseType()
-  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
-
-  await waitFor(() => expect(screen.getByText('Got it — reviewing as an assignment.')).toBeTruthy())
-  expect(screen.getByRole('button', { name: 'Lesson plan' })).toBeTruthy()
-})
 
 // --- lenses ---
 
-test('lenses are individually toggleable with a visible count', async () => {
-  detectReviewType.mockResolvedValue({ docType: 'quiz', confident: true })
-  createReview.mockResolvedValue(review())
-  renderPage()
-  await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
-  chooseType()
-  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
 
-  await waitFor(() => expect(screen.getByText(/2 of 3 on/)).toBeTruthy())
-  expect(screen.getByRole('button', { name: /What each item measures/ }).getAttribute('aria-pressed')).toBe('true')
-  // A quiz opens with AI completion risk off — it is sat in the room.
-  expect(screen.getByRole('button', { name: /AI completion risk/ }).getAttribute('aria-pressed')).toBe('false')
-})
-
-test('toggling a lens updates the count immediately', async () => {
-  detectReviewType.mockResolvedValue({ docType: 'quiz', confident: true })
-  createReview.mockResolvedValue(review())
-  updateReview.mockImplementation((_id, data) =>
-    Promise.resolve(review({ lenses: review().lenses.map((l) => ({ ...l, on: data.lenses.find((d: { key: string; on: boolean }) => d.key === l.key)?.on ?? l.on })) })),
-  )
-  renderPage()
-  await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
-  chooseType()
-  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
-  await waitFor(() => expect(screen.getByText(/2 of 3 on/)).toBeTruthy())
-
-  fireEvent.click(screen.getByRole('button', { name: /AI completion risk/ }))
-  await waitFor(() => expect(screen.getByText(/3 of 3 on/)).toBeTruthy())
-})
 
 // --- the result page ---
 
@@ -308,7 +267,6 @@ const REVIEWED = review({
 })
 
 async function openReviewed() {
-  detectReviewType.mockResolvedValue({ docType: 'quiz', confident: true })
   createReview.mockResolvedValue(review())
   runReview.mockResolvedValue(REVIEWED)
   renderPage()
@@ -316,47 +274,34 @@ async function openReviewed() {
   chooseType()
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
-  await waitFor(() => expect(screen.getByText(/2 of 3 on/)).toBeTruthy())
-  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
+  // No second press: pressing it once is the whole instruction.
   await waitFor(() => expect(screen.getByText('If you change one thing')).toBeTruthy())
 }
 
 // The one change leads, above everything a teacher could choose to read next.
-test('the result leads with the one-thing card, above the lens nav', async () => {
+// The one change leads, above the findings that argue for it.
+test('the result leads with the one-thing card, above the findings', async () => {
   await openReviewed()
   const all = Array.from(document.querySelectorAll('*'))
   const oneThing = all.indexOf(screen.getByText('If you change one thing'))
-  const lensNav = all.indexOf(screen.getByRole('navigation', { name: 'Review sections' }))
-  expect(oneThing).toBeLessThan(lensNav)
+  const found = all.indexOf(screen.getByText('What I found'))
+  expect(oneThing).toBeLessThan(found)
   expect(screen.getByText('Split question 4 — it is measuring reading, not the content.')).toBeTruthy()
 })
 
+// Every finding is on the page, in order. They used to be behind pills, which
+// meant reading one and having to know to go looking for the rest.
+test('every finding is laid out, not hidden behind a tab', async () => {
+  await openReviewed()
+  expect(screen.getByText('What I found')).toBeTruthy()
+  expect(screen.getByText('Items 1-3 are recall. Item 4 is really a reading test.')).toBeTruthy()
+  expect(screen.getByText(/Suggested edits/)).toBeTruthy()
+  // Nothing to click to see them.
+  expect(screen.queryByRole('navigation', { name: 'Review sections' })).toBeNull()
+})
+
 // Edits are what a teacher arrived for, so that is what is open.
-test('the edits section is selected first', async () => {
-  await openReviewed()
-  const edits = screen.getByRole('button', { name: /Suggested edits ·/ })
-  expect(edits.getAttribute('aria-pressed')).toBe('true')
-})
 
-test('only lenses that produced something get a pill, and its finding opens', async () => {
-  await openReviewed()
-  // Scoped to the nav: the lens TOGGLES are still on the page above, and a
-  // teacher has to be able to turn AI risk on. What it must not have is a
-  // result pill, because an empty section promises a finding that is not
-  // there.
-  const nav = screen.getByRole('navigation', { name: 'Review sections' })
-  const pills = Array.from(nav.querySelectorAll('button')).map((b) => b.textContent)
-  expect(pills.some((p) => p?.includes('AI completion risk'))).toBe(false)
-  expect(pills.some((p) => p?.includes('What each item measures'))).toBe(true)
-
-  fireEvent.click(
-    Array.from(nav.querySelectorAll('button')).find((b) => b.textContent === 'What each item measures')!,
-  )
-
-  await waitFor(() =>
-    expect(screen.getByText('Items 1-3 are recall. Item 4 is really a reading test.')).toBeTruthy(),
-  )
-})
 
 // "Any timing estimate must show its assumption or a range."
 test('a timing estimate shows a range and its assumption', async () => {
@@ -478,8 +423,6 @@ test('a message result does not offer redesigning for AI use', async () => {
   chooseType()
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
-  await waitFor(() => expect(screen.getByText(/2 of 3 on/)).toBeTruthy())
-  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
 
   await waitFor(() => expect(screen.getByText('If you change one thing')).toBeTruthy())
   expect(screen.queryByRole('button', { name: 'Redesign for meaningful AI use' })).toBeNull()
@@ -547,13 +490,17 @@ test('the result offers talking it through, carrying the one-thing card', async 
 
 /// Gets to the state where a document is in and the review is being set up.
 async function reachSetup() {
-  createReview.mockResolvedValue(review({ fileName: 'Unit 3 Quiz.docx', pageCount: 4, sourceKind: 'photo' }))
+  const uploaded = review({ fileName: 'Unit 3 Quiz.docx', pageCount: 4, sourceKind: 'photo' })
+  createReview.mockResolvedValue(uploaded)
+  // The automatic run replaces the review on screen, so it has to carry the
+  // same document — otherwise the file details vanish between the two.
+  runReview.mockResolvedValue(uploaded)
   renderPage()
   await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
   chooseType()
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
-  await waitFor(() => expect(screen.getByText("What I'll look at")).toBeTruthy())
+  await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
 }
 
 // Setting up a review used to be three separate panels, which made the type
@@ -561,7 +508,7 @@ async function reachSetup() {
 // halves of the same setup. Each block says what it is.
 test('every block of the setup says what it is', async () => {
   await reachSetup()
-  for (const heading of ['Got it — reviewing as a quiz.', "What I'll look at", 'Your class']) {
+  for (const heading of ['Got it — reviewing as a quiz.', 'Your class']) {
     expect(screen.getByText(heading), heading).toBeTruthy()
   }
 })
@@ -595,14 +542,6 @@ test('the no-names line is on the setup card', async () => {
   expect(screen.getByText(/No student names, please\./)).toBeTruthy()
 })
 
-// Knowing what is NOT being looked at is half of trusting the result, so an
-// off lens stays on screen rather than disappearing.
-test('a lens that is off is still shown, and still says it is off', async () => {
-  await reachSetup()
-  const off = screen.getByRole('button', { name: /AI completion risk/ })
-  expect(off.getAttribute('aria-pressed')).toBe('false')
-  expect(off.className).toContain('border-dashed')
-})
 
 // --- the state every teacher lands on ---
 
@@ -675,10 +614,6 @@ test('a document with student names asks before it runs', async () => {
   chooseType()
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
-  await waitFor(() => expect(screen.getByText("What I'll look at")).toBeTruthy())
-
-  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
-
   await waitFor(() => expect(screen.getByText('This looks like it has student names in it.')).toBeTruthy())
   expect(screen.getByText(/a column headed with a student name/)).toBeTruthy()
   for (const choice of ['Strip names', 'Use it as is', 'Cancel']) {
@@ -693,8 +628,6 @@ test('stripping re-runs with the answer, and the question goes away', async () =
   await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
   chooseType()
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
-  await waitFor(() => expect(screen.getByText("What I'll look at")).toBeTruthy())
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
   await waitFor(() => expect(screen.getByRole('button', { name: 'Strip names' })).toBeTruthy())
 
@@ -713,8 +646,6 @@ test('using it as is is offered, and says so to the server', async () => {
   await waitFor(() => expect(screen.getByPlaceholderText('Paste the text here...')).toBeTruthy())
   chooseType()
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
-  await waitFor(() => expect(screen.getByText("What I'll look at")).toBeTruthy())
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
   await waitFor(() => expect(screen.getByRole('button', { name: 'Use it as is' })).toBeTruthy())
 
@@ -759,13 +690,12 @@ test('zero edits reads as an answer, not an error', async () => {
   chooseType()
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
-  await waitFor(() => expect(screen.getByText(/2 of 3 on/)).toBeTruthy())
-  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
 
   await waitFor(() => expect(screen.getByText('Nothing I’d change before tomorrow')).toBeTruthy())
-  // The lenses still have their pills.
-  const nav = screen.getByRole('navigation', { name: 'Review sections' })
-  expect(nav.querySelectorAll('button').length).toBeGreaterThan(1)
+  // The findings still stand and are still on the page — "no edits" is an
+  // answer about the changes, not about the whole review.
+  expect(screen.getByText('What I found')).toBeTruthy()
+  expect(screen.getByText('Items 1-3 are recall. Item 4 is really a reading test.')).toBeTruthy()
 })
 
 // Criterion 12: every control is a real button with a name.
@@ -803,8 +733,7 @@ async function reachScopeQuestion() {
   chooseType()
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
-  await waitFor(() => expect(screen.getByText("What I'll look at")).toBeTruthy())
-  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
+  // The run happens by itself, so the question arrives without a second press.
   await waitFor(() => expect(screen.getByText(/This is 48 pages/)).toBeTruthy())
 }
 
@@ -869,7 +798,7 @@ test('a draft URL loads the setup, not the result', async () => {
   getReview.mockResolvedValue(review())
   renderAt('/look-it-over?draft=r1')
 
-  await waitFor(() => expect(screen.getByText("What I'll look at")).toBeTruthy())
+  await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
   expect(screen.queryByText('If you change one thing')).toBeNull()
 })
 
@@ -900,102 +829,139 @@ function dropFiles(names: string[]) {
   fireEvent.change(input!, { target: { files: names.map((n) => new File(['x'], n)) } })
 }
 
+function readsEachFile() {
+  extractReviewDocument.mockImplementation((file: File) =>
+    Promise.resolve({ text: `text of ${file.name}`, fileName: file.name, pageCount: 1, docType: 'assignment', confident: true }),
+  )
+}
+
 // Criterion 4: an assignment and its rubric are one review, not two. What a
 // teacher wants from the pair is the comparison, which is exactly what they
 // cannot get by reviewing each separately.
-test('several files are gathered into one review', async () => {
-  extractReviewDocument.mockImplementation((file: File) =>
-    Promise.resolve({ text: `text of ${file.name}`, fileName: file.name, pageCount: 1, docType: 'assignment', confident: true }),
-  )
-  renderPage()
-  await waitFor(() => expect(screen.getByText('Pick what it is first')).toBeTruthy())
-  chooseType()
-
-  dropFiles(['Essay task.docx', 'Rubric.docx'])
-
-  await waitFor(() => expect(screen.getByText('2 documents')).toBeTruthy())
-  expect(screen.getByText('Essay task.docx')).toBeTruthy()
-  expect(screen.getByText('Rubric.docx')).toBeTruthy()
-  // Nothing is created until the teacher says they are done adding.
-  expect(createReview).not.toHaveBeenCalled()
-})
-
-test('reading them creates one review carrying both', async () => {
-  extractReviewDocument.mockImplementation((file: File) =>
-    Promise.resolve({ text: `text of ${file.name}`, fileName: file.name, pageCount: 1, docType: 'assignment', confident: true }),
-  )
+test('several files dropped together become one review', async () => {
+  readsEachFile()
   createReview.mockResolvedValue(review())
   renderPage()
-  await waitFor(() => expect(screen.getByText('Pick what it is first')).toBeTruthy())
-  chooseType()
-  dropFiles(['Essay task.docx', 'Rubric.docx'])
-  await waitFor(() => expect(screen.getByText('2 documents')).toBeTruthy())
+  await waitFor(() => expect(screen.getByText('What are you looking over?')).toBeTruthy())
+  chooseType('Assignment')
 
-  fireEvent.click(screen.getByRole('button', { name: 'Read them' }))
+  dropFiles(['Essay task.docx', 'Rubric.docx'])
 
   await waitFor(() => expect(createReview).toHaveBeenCalled())
   const sent = createReview.mock.calls[0][0]
   expect(sent.files).toHaveLength(2)
   expect(sent.files[0].fileName).toBe('Essay task.docx')
+  expect(sent.files[1].fileName).toBe('Rubric.docx')
 })
 
-// One unreadable file in a drop of three must not lose the other two.
-test('a file that cannot be read is named, and the rest are kept', async () => {
+// Dropping a file is the instruction. Nothing waits to be told again.
+test('dropping a file reads it without being asked twice', async () => {
+  readsEachFile()
+  createReview.mockResolvedValue(review())
+  runReview.mockResolvedValue(REVIEWED)
+  renderPage()
+  await waitFor(() => expect(screen.getByText('What are you looking over?')).toBeTruthy())
+  chooseType()
+
+  dropFiles(['quiz.docx'])
+
+  // Straight to the result — no "Read it" in between.
+  await waitFor(() => expect(screen.getByText('If you change one thing')).toBeTruthy())
+  expect(runReview).toHaveBeenCalled()
+})
+
+// One unreadable file in a drop of two must not lose the other.
+test('a file that cannot be read is named, and the rest are still used', async () => {
   extractReviewDocument.mockImplementation((file: File) =>
     file.name === 'broken.pdf'
       ? Promise.reject(new Error("Couldn't find any text in that file"))
       : Promise.resolve({ text: 'fine', fileName: file.name, pageCount: 1, docType: 'quiz', confident: true }),
   )
+  createReview.mockResolvedValue(review())
   renderPage()
-  await waitFor(() => expect(screen.getByText('Pick what it is first')).toBeTruthy())
+  await waitFor(() => expect(screen.getByText('What are you looking over?')).toBeTruthy())
   chooseType()
 
   dropFiles(['good.docx', 'broken.pdf'])
 
-  await waitFor(() => expect(screen.getByText(/broken\.pdf/)).toBeTruthy())
-  expect(screen.getByText('One document')).toBeTruthy()
-  expect(screen.getByText('good.docx')).toBeTruthy()
+  await waitFor(() => expect(createReview).toHaveBeenCalled())
+  // The good one went through, named by name rather than "one of your files".
+  expect(createReview.mock.calls[0][0].files).toHaveLength(1)
+  expect(createReview.mock.calls[0][0].files[0].fileName).toBe('good.docx')
 })
 
-test('a document can be removed before the review is made', async () => {
-  extractReviewDocument.mockImplementation((file: File) =>
-    Promise.resolve({ text: 'x', fileName: file.name, pageCount: 1, docType: 'quiz', confident: true }),
-  )
+test('no readable file means no review, and a reason', async () => {
+  extractReviewDocument.mockRejectedValue(new Error("Couldn't find any text in that file"))
   renderPage()
-  await waitFor(() => expect(screen.getByText('Pick what it is first')).toBeTruthy())
+  await waitFor(() => expect(screen.getByText('What are you looking over?')).toBeTruthy())
   chooseType()
-  dropFiles(['a.docx', 'b.docx'])
-  await waitFor(() => expect(screen.getByText('2 documents')).toBeTruthy())
 
-  fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0])
+  dropFiles(['broken.pdf'])
 
-  await waitFor(() => expect(screen.getByText('One document')).toBeTruthy())
-  expect(screen.queryByText('a.docx')).toBeNull()
+  await waitFor(() => expect(screen.getByText(/broken\.pdf/)).toBeTruthy())
+  expect(createReview).not.toHaveBeenCalled()
 })
 
-test('the sixth document is refused, by number', async () => {
-  extractReviewDocument.mockImplementation((file: File) =>
-    Promise.resolve({ text: 'x', fileName: file.name, pageCount: 1, docType: 'quiz', confident: true }),
-  )
+test('more than five in one drop takes the first five', async () => {
+  readsEachFile()
+  createReview.mockResolvedValue(review())
   renderPage()
-  await waitFor(() => expect(screen.getByText('Pick what it is first')).toBeTruthy())
+  await waitFor(() => expect(screen.getByText('What are you looking over?')).toBeTruthy())
   chooseType()
 
   dropFiles(['a.docx', 'b.docx', 'c.docx', 'd.docx', 'e.docx', 'f.docx'])
 
-  await waitFor(() => expect(screen.getByText('5 documents')).toBeTruthy())
-  expect(screen.queryByText('f.docx')).toBeNull()
+  await waitFor(() => expect(createReview).toHaveBeenCalled())
+  expect(createReview.mock.calls[0][0].files).toHaveLength(5)
+})
+
+// --- a result has a URL ---
+
+// Bookmarkable, linkable from My Work, and survives a reload. Before this the
+// result existed only in the page's own state, so a refresh lost it.
+test('a result URL loads that review', async () => {
+  getReview.mockResolvedValue(REVIEWED)
+  renderAt('/look-it-over/r1')
+
+  await waitFor(() => expect(screen.getByText('If you change one thing')).toBeTruthy())
+  expect(getReview).toHaveBeenCalledWith('r1')
+})
+
+// A review that exists but has not been run is still somewhere to come back to.
+test('a draft URL loads the setup, not the result', async () => {
+  getReview.mockResolvedValue(review())
+  renderAt('/look-it-over?draft=r1')
+
+  await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
+  expect(screen.queryByText('If you change one thing')).toBeNull()
+})
+
+// A link to a review that is gone has somewhere useful to land.
+test('a URL for a review that no longer exists lands on the drop zone', async () => {
+  getReview.mockRejectedValue(Object.assign(new Error('Not found'), { status: 404 }))
+  renderAt('/look-it-over/gone')
+
+  await waitFor(() => expect(screen.getByText('Pick what it is first')).toBeTruthy())
+})
+
+// My Work linked with ?open= before results had URLs, and those links are in
+// teachers' histories.
+test('the old ?open= link still opens the review', async () => {
+  getReview.mockResolvedValue(REVIEWED)
+  renderAt('/look-it-over?open=r1')
+
+  await waitFor(() => expect(screen.getByText('If you change one thing')).toBeTruthy())
+  expect(getReview).toHaveBeenCalledWith('r1')
 })
 
 // --- the type is chosen first ---
 
 // The surface asks what the document is before it will take one. That is the
-// whole shape of the flow, so it is pinned rather than left to drift back.
+// shape of the whole flow, so it is pinned rather than left to drift back.
 test('the type is asked before anything can be uploaded', async () => {
   renderPage()
   await waitFor(() => expect(screen.getByText('What are you looking over?')).toBeTruthy())
 
-  // All eight, and nothing chosen yet.
   for (const label of ['Quiz / exam', 'Homework', 'Assignment', 'Project', 'Lesson plan', 'Presentation', 'Rubric', 'Message']) {
     expect(screen.getByRole('button', { name: label }), label).toBeTruthy()
   }
@@ -1014,8 +980,8 @@ test('choosing one opens the drop zone', async () => {
   expect(screen.getByRole('button', { name: 'Choose a file' })).toHaveProperty('disabled', false)
 })
 
-// A lens set a teacher cannot see is a promise they have no way to check — and
-// at this moment they are still deciding whether this surface is the right one.
+// A lens set a teacher cannot see is a promise they have no way to check —
+// and this is the moment they are deciding whether to use the surface at all.
 test('choosing a type says what will be checked', async () => {
   renderPage()
   await waitFor(() => expect(screen.getByText('What are you looking over?')).toBeTruthy())
@@ -1039,12 +1005,17 @@ test('the choice is what the review is created as', async () => {
 })
 
 // The cost of choosing first is that nothing checks the choice. Detection
-// still runs for exactly this: a teacher who picks the wrong type gets told,
-// rather than getting the wrong lenses in silence.
+// still runs for exactly this: a teacher who picks the wrong type is told,
+// rather than quietly getting the wrong lenses.
 test('detection disagreeing with the choice is said out loud', async () => {
-  createReview.mockResolvedValue(
-    review({ docType: 'assignment', docTypeLabel: 'Assignment', docTypeConfirmed: true, detectedType: 'quiz' }),
-  )
+  const mismatch = review({
+    docType: 'assignment',
+    docTypeLabel: 'Assignment',
+    docTypeConfirmed: true,
+    detectedType: 'quiz',
+  })
+  createReview.mockResolvedValue(mismatch)
+  runReview.mockResolvedValue(mismatch)
   renderPage()
   await waitFor(() => expect(screen.getByText('What are you looking over?')).toBeTruthy())
   chooseType('Assignment')
@@ -1056,13 +1027,15 @@ test('detection disagreeing with the choice is said out loud', async () => {
 })
 
 test('agreement says nothing — it is not a notification', async () => {
-  createReview.mockResolvedValue(review({ docTypeConfirmed: true, detectedType: 'quiz' }))
+  const agreed = review({ docTypeConfirmed: true, detectedType: 'quiz' })
+  createReview.mockResolvedValue(agreed)
+  runReview.mockResolvedValue(agreed)
   renderPage()
   await waitFor(() => expect(screen.getByText('What are you looking over?')).toBeTruthy())
   chooseType()
   fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
 
-  await waitFor(() => expect(screen.getByText("What I'll look at")).toBeTruthy())
+  await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
   expect(screen.queryByText(/this looks more like/)).toBeNull()
 })

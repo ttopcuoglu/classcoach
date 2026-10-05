@@ -86,12 +86,12 @@ export default function LookItOver() {
   /// Files read but not yet turned into a review. A teacher dropping an
   /// assignment and then its rubric is building one review, so nothing is
   /// created until they say they are done adding.
-  const [pending, setPending] = useState<PendingFile[]>([])
 
   /// Reads files and adds them to the set. Each is extracted on its own, so
   /// one unreadable file in a drop of three does not lose the other two.
   async function addFiles(files: File[], sourceKind: 'file' | 'photo') {
-    const room = MAX_FILES_PER_REVIEW - pending.length
+    // One drop is one review, so the cap applies to what was dropped.
+    const room = MAX_FILES_PER_REVIEW
     if (room <= 0) {
       setError(`That's the limit — ${MAX_FILES_PER_REVIEW} documents in one review.`)
       return
@@ -113,30 +113,25 @@ export default function LookItOver() {
         failed.push(`${file.name}: ${(err as Error).message}`)
       }
     }
-    setPending((prev) => [...prev, ...added])
     // Named one by one: "one of your files could not be read" leaves a
     // teacher checking all three.
     if (failed.length > 0) setError(failed.join(' · '))
-    setBusy(null)
-  }
-
-  /// Turns the pending set into a review.
-  async function startFromPending() {
-    if (pending.length === 0) return
-    setBusy('reading')
-    setError(null)
+    if (added.length === 0) {
+      setBusy(null)
+      return
+    }
+    // Straight on. Dropping a file is the instruction — asking again
+    // afterwards is a step with no decision in it.
     try {
       const created = await createReview({
-        files: pending,
+        files: added,
         docType: chosenType ?? undefined,
         classProfileId: prep?.id ?? null,
       })
       setReview(created)
       setFileSetSummary(created.fileSetSummary ?? null)
-      setPending([])
-      // A review that exists but has not been run is still somewhere a
-      // teacher can come back to.
       navigate(`/look-it-over?draft=${created.id}`, { replace: true })
+      await runReviewFor(created)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -144,6 +139,7 @@ export default function LookItOver() {
     }
   }
 
+  /// Turns the pending set into a review.
   async function startFromPaste() {
     const text = pasted.trim()
     if (!text) return
@@ -160,9 +156,10 @@ export default function LookItOver() {
         classProfileId: prep?.id ?? null,
       })
       setReview(created)
-      // A review that exists but has not been run is still somewhere a
-      // teacher can come back to.
       navigate(`/look-it-over?draft=${created.id}`, { replace: true })
+      // And read it. Pasting the text and pressing the button is the whole
+      // instruction.
+      await runReviewFor(created)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -229,18 +226,6 @@ export default function LookItOver() {
     }
   }
 
-  async function toggleLens(key: string) {
-    if (!review) return
-    const lenses = review.lenses.map((l) => (l.key === key ? { ...l, on: !l.on } : l))
-    // Optimistic: a toggle should feel instant, and the only cost of being
-    // wrong is the next render putting it back.
-    setReview({ ...review, lenses })
-    try {
-      setReview(await updateReview(review.id, { lenses: lenses.map(({ key: k, on }) => ({ key: k, on })) }))
-    } catch (err) {
-      setError((err as Error).message)
-    }
-  }
 
   /// Set when the server refused to run because the document looks like it
   /// has student names in it. Holding it here, rather than running anyway and
@@ -253,9 +238,6 @@ export default function LookItOver() {
   /// means the page can say what it will look at while a teacher is still
   /// deciding whether to use it at all.
   const [chosenType, setChosenType] = useState<DocType | null>(null)
-  /// Which section of the result is showing. Edits first, because the question
-  /// a teacher arrives with is "what do I change", not "what did you think".
-  const [activeTab, setActiveTab] = useState<string>('edits')
 
   /// Set when the document is long enough that the teacher has to say how
   /// much of it to read.
@@ -290,6 +272,31 @@ export default function LookItOver() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reviewId, draftId])
+
+  /// Runs the review and shows the result.
+  ///
+  /// Takes the review rather than reading state, because both ways in call it
+  /// with the one they have just created — before React has re-rendered, when
+  /// `review` is still null.
+  async function runReviewFor(target: Review, opts?: { namesHandled?: 'strip' | 'keep'; scope?: string }) {
+    try {
+      const chosenScope = opts?.scope ?? scope ?? undefined
+      const ran = await runReview(target.id, { namesHandled: opts?.namesHandled, scope: chosenScope })
+      setReview(ran)
+      if (opts?.scope) setScope(opts.scope)
+      setNamesFound(null)
+      setScopeChoice(null)
+      if (ran.status === 'reviewed') navigate(`/look-it-over/${ran.id}`, { replace: true })
+    } catch (err) {
+      // 409 is the server declining to go on until the teacher answers
+      // something, not a failure. Shown as the question it is.
+      const apiErr = err as ApiError
+      const details = apiErr.details as { studentNames?: StudentNamesFound; scope?: ScopeChoice } | null
+      if (apiErr.status === 409 && details?.studentNames) setNamesFound(details.studentNames)
+      else if (apiErr.status === 409 && details?.scope) setScopeChoice(details.scope)
+      else setError(apiErr.message)
+    }
+  }
 
   async function handleRun(opts?: { namesHandled?: 'strip' | 'keep'; scope?: string }) {
     if (!review) return
@@ -526,55 +533,6 @@ export default function LookItOver() {
             />
           </div>
 
-          {/* What is going into this review. A teacher dropping an assignment
-              and then its rubric is building ONE review, so nothing is
-              created until they say they are done adding. */}
-          {pending.length > 0 && (
-            <div>
-              <SectionLabel
-                title={pending.length === 1 ? 'One document' : `${pending.length} documents`}
-                hint={`Read as one review. Up to ${MAX_FILES_PER_REVIEW}.`}
-              />
-              <ul className="mt-2.5 flex flex-col gap-2">
-                {pending.map((file, i) => (
-                  <li
-                    key={`${file.fileName}-${i}`}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-hairline bg-cream px-4 py-2.5"
-                  >
-                    <span className="min-w-0 truncate text-sm font-medium text-ink">
-                      {file.fileName ?? `Document ${i + 1}`}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setPending((prev) => prev.filter((_, at) => at !== i))}
-                      className="shrink-0 text-xs font-semibold text-terracotta-600 hover:text-terracotta"
-                    >
-                      Remove
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={busy != null}
-                  onClick={() => void startFromPending()}
-                  className="rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:opacity-60"
-                >
-                  Read {pending.length === 1 ? 'it' : 'them'}
-                </button>
-                <button
-                  type="button"
-                  disabled={busy != null || pending.length >= MAX_FILES_PER_REVIEW}
-                  onClick={() => fileInput.current?.click()}
-                  className="rounded-full border border-hairline bg-cream-card px-5 py-3 text-sm font-semibold text-ink transition-colors hover:border-terracotta/50 hover:text-terracotta-600 disabled:opacity-60"
-                >
-                  Add another
-                </button>
-              </div>
-            </div>
-          )}
-
           <div>
             <SectionLabel title="Or paste it" hint="Straight out of a doc, an email, a slide — whatever you have." />
             <label>
@@ -709,35 +667,6 @@ export default function LookItOver() {
                     }`}
                   >
                     {DOC_TYPE_LABELS[type]}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Lenses, each individually toggleable, with the count in the
-                heading so a teacher can see at a glance how much they asked
-                for. An off lens is drawn dashed rather than hidden: knowing
-                what is NOT being looked at is half of trusting the result. */}
-            <div>
-              <SectionLabel
-                title="What I'll look at"
-                hint={`These change with the type. ${lensesOn} of ${review.lenses.length} on — tap any to turn it off.`}
-              />
-              <div className="mt-2.5 flex flex-wrap gap-2.5">
-                {review.lenses.map((lens) => (
-                  <button
-                    key={lens.key}
-                    type="button"
-                    title={lens.blurb}
-                    onClick={() => void toggleLens(lens.key)}
-                    aria-pressed={lens.on}
-                    className={`rounded-full border px-4 py-2.5 text-sm font-semibold transition-colors ${
-                      lens.on
-                        ? 'border-mint-tint bg-mint-tint/70 text-forest hover:border-forest/30'
-                        : 'border-dashed border-ink-soft/40 text-ink-soft hover:border-terracotta/50 hover:text-terracotta-600'
-                    }`}
-                  >
-                    {lens.label}
                   </button>
                 ))}
               </div>
@@ -886,62 +815,25 @@ export default function LookItOver() {
                 </div>
               )}
 
-              {/* 3 — the lens nav. Edits first and selected, because the
-                  question a teacher arrives with is "what do I change", not
-                  "what did you think". */}
-              <nav aria-label="Review sections" className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('edits')}
-                  aria-pressed={activeTab === 'edits'}
-                  className={tabChip(activeTab === 'edits')}
-                >
-                  Suggested edits · {review.edits.length}
-                </button>
-                {findingLenses.map((lens) => (
-                  <button
-                    key={lens.key}
-                    type="button"
-                    onClick={() => setActiveTab(lens.key)}
-                    aria-pressed={activeTab === lens.key}
-                    className={tabChip(activeTab === lens.key)}
-                  >
-                    {lens.label}
-                  </button>
-                ))}
-              </nav>
-
-              {/* 4 — whichever was chosen. */}
-              {activeTab === 'edits' ? (
-                review.edits.length === 0 ? (
-                  // A result, not an error. The lenses above still ran and are
-                  // still worth reading.
-                  <div className="rounded-2xl border border-hairline bg-cream-card p-6 text-center">
-                    <p className="font-heading text-lg font-bold text-forest">Nothing I&rsquo;d change before tomorrow</p>
-                    <p className="mt-1 text-sm text-ink-soft">
-                      No suggested edits. The lenses above still have what they found.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    {review.edits.map((edit) => (
-                      <EditCard
-                        key={edit.id}
-                        edit={edit}
-                        unanchored={review.unanchoredEditIds?.includes(edit.id) ?? false}
-                        onDecide={(status) => void handleEdit(edit, status)}
-                      />
-                    ))}
-                  </div>
-                )
-              ) : (
-                findingLenses
-                  .filter((lens) => lens.key === activeTab)
-                  .map((lens) => (
-                    <div key={lens.key} className="rounded-2xl border border-hairline bg-cream-card p-6">
-                      <p className="font-heading text-lg font-bold text-forest">{lens.title || lens.label}</p>
-                      {/* A thin-evidence finding says so rather than being
-                          shown at the same weight as a well-grounded one. */}
+              {/* 3 — the findings, all of them, in order. These were behind
+                  a row of pills, which meant a teacher read one and had to
+                  know to go looking for the rest. A review is a report: it is
+                  read top to bottom. */}
+              {findingLenses.length > 0 && (
+                <div className="flex flex-col gap-3">
+                  <h2 className="font-heading text-xl font-bold text-forest">What I found</h2>
+                  {findingLenses.map((lens) => (
+                    <div key={lens.key} className="rounded-2xl border border-hairline bg-cream-card p-5">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <p className="font-heading text-base font-bold text-forest">{lens.title || lens.label}</p>
+                        {/* The lens it came from, so a finding can be traced
+                            back to the question that produced it. */}
+                        <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-ink-soft">
+                          {lens.label}
+                        </span>
+                      </div>
+                      {/* A thin-evidence finding says so rather than sitting
+                          at the same weight as a well-grounded one. */}
                       {lens.confidence === 'low' && (
                         <p className="mt-1 text-xs font-semibold text-terracotta-600">
                           Low confidence — the document didn&rsquo;t give this much to go on.
@@ -949,13 +841,41 @@ export default function LookItOver() {
                       )}
                       <p className="mt-2 whitespace-pre-wrap text-sm text-ink">{lens.body || lens.finding}</p>
                       {lens.evidence && lens.evidence.length > 0 && (
-                        <p className="mt-3 text-xs text-ink-soft">
+                        <p className="mt-2.5 text-xs text-ink-soft">
                           <span className="font-semibold">From:</span> {lens.evidence.join(' · ')}
                         </p>
                       )}
                     </div>
-                  ))
+                  ))}
+                </div>
               )}
+
+              {/* 4 — the changes, below the findings that argue for them. */}
+              <div className="flex flex-col gap-3">
+                <h2 className="font-heading text-xl font-bold text-forest">
+                  Suggested edits{review.edits.length > 0 ? ` · ${review.edits.length}` : ''}
+                </h2>
+                {review.edits.length === 0 ? (
+                  // A result, not an error. The findings above still stand.
+                  <div className="rounded-2xl border border-hairline bg-cream-card p-6 text-center">
+                    <p className="font-heading text-lg font-bold text-forest">
+                      Nothing I&rsquo;d change before tomorrow
+                    </p>
+                    <p className="mt-1 text-sm text-ink-soft">
+                      No suggested edits. What I found is above.
+                    </p>
+                  </div>
+                ) : (
+                  review.edits.map((edit) => (
+                    <EditCard
+                      key={edit.id}
+                      edit={edit}
+                      unanchored={review.unanchoredEditIds?.includes(edit.id) ?? false}
+                      onDecide={(status) => void handleEdit(edit, status)}
+                    />
+                  ))
+                )}
+              </div>
 
               {/* Every number on the page, with its basis. Shown rather than
                   held, because a figure nobody can check is a figure that gets
@@ -1050,14 +970,6 @@ export default function LookItOver() {
       </Link>
     </div>
   )
-}
-
-/// A result-section pill.
-function tabChip(selected: boolean): string {
-  const base = 'rounded-full border px-4 py-2.5 text-sm font-semibold transition-colors'
-  return selected
-    ? `${base} border-forest bg-forest text-cream`
-    : `${base} border-hairline bg-cream-card text-ink hover:border-terracotta/50 hover:text-terracotta-600`
 }
 
 /// The line under the file name: what it is, how big, and whose room it was
