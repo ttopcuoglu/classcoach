@@ -830,18 +830,35 @@ function useTranscriptionProgress(session: AudioSession): number {
   return progress
 }
 
+// "7 min 7 s · 113 turns" — the two numbers that make the teacher obvious.
+function speakerActivity(speaker: SpeakerSample): string | null {
+  if (speaker.totalSec == null || speaker.utteranceCount == null) return null
+  const secs = Math.round(speaker.totalSec)
+  const spoken = secs >= 60 ? `${Math.floor(secs / 60)} min ${secs % 60} s` : `${secs} s`
+  return `${spoken} · ${speaker.utteranceCount} turn${speaker.utteranceCount === 1 ? '' : 's'}`
+}
+
 function TagSpeakersPanel({
   session,
   speakers,
   onUpdate,
   onExit,
+  onCancel,
 }: {
   session: AudioSessionWithSegments
   speakers: SpeakerSample[]
   onUpdate: (s: AudioSessionWithSegments) => void
   onExit: () => void
+  /** Set when re-tagging an already-analyzed session, so there's a way back. */
+  onCancel?: () => void
 }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set())
+  // The server sorts by talk time, so the first card is the voice that spoke
+  // most — nearly always the teacher. Preselecting it turns the common case
+  // into a confirmation; a teacher who tagged the 35-second voice instead of
+  // the 7-minute one got a report with their talk shares swapped.
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(speakers[0] ? [speakers[0].rawSpeakerTag] : []),
+  )
   const [tagging, setTagging] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -887,8 +904,9 @@ function TagSpeakersPanel({
       <h2 className="font-heading text-xl font-bold text-forest">Which voice is the teacher?</h2>
       <p className="mt-1 text-sm text-ink-soft">
         Automatic diarization can tell voices apart, but it can't reliably tell who's the teacher — and it
-        sometimes splits one teacher into two voices. Select every voice that's you; everyone else will be
-        grouped as Student.
+        sometimes splits one teacher into two voices. The voice that spoke the most is picked for you, since
+        that's usually the teacher. Change it if that's not you, and select every voice that is; everyone else
+        will be grouped as Student.
       </p>
       <div className="mt-4 flex flex-col gap-3">
         {speakers.length === 0 ? (
@@ -916,7 +934,10 @@ function TagSpeakersPanel({
                 }`}
               >
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{s.rawSpeakerTag}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                    {s.rawSpeakerTag}
+                    {speakerActivity(s) ? <span className="normal-case tracking-normal"> · {speakerActivity(s)}</span> : null}
+                  </p>
                   <p className="mt-1 text-sm text-ink">"{s.sample}"</p>
                 </div>
                 <button
@@ -945,6 +966,16 @@ function TagSpeakersPanel({
           className="mt-4 rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-forest/90 disabled:bg-hairline disabled:text-ink-soft"
         >
           {tagging ? 'Analyzing...' : 'Analyze session'}
+        </button>
+      )}
+      {onCancel && (
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={tagging}
+          className="ml-4 text-sm font-medium text-ink-soft hover:text-ink disabled:opacity-60"
+        >
+          Cancel
         </button>
       )}
       <WorkingRing active={tagging} estimatedMs={4000} label="Analyzing your session" className="mt-4 text-forest" />
@@ -2170,6 +2201,10 @@ function ReportPanel({
   const [rubricLensSending, setRubricLensSending] = useState(false)
   const [rubricLensError, setRubricLensError] = useState<string | null>(null)
   const [classSummarySending, setClassSummarySending] = useState(false)
+  // Re-tagging an analyzed report: null until the teacher asks for it.
+  const [retagSpeakers, setRetagSpeakers] = useState<SpeakerSample[] | null>(null)
+  const [retagLoading, setRetagLoading] = useState(false)
+  const [retagError, setRetagError] = useState<string | null>(null)
   const hasAttemptedClassSummaryRef = useRef(false)
   const [externalFocus, setExternalFocus] = useState<{
     label: string
@@ -2478,16 +2513,64 @@ function ReportPanel({
     return () => clearTimeout(timeout)
   }, [tab, insightsSection, pendingScrollId])
 
+  async function handleRetag() {
+    setRetagLoading(true)
+    setRetagError(null)
+    try {
+      const { speakers } = await getSpeakerSamples(session.id)
+      setRetagSpeakers(speakers)
+    } catch {
+      setRetagError("Couldn't load this session's voices. Please try again.")
+    } finally {
+      setRetagLoading(false)
+    }
+  }
+
+  // Tagging the wrong voice swaps every teacher/student number in the report,
+  // and there was no way back short of deleting the recording.
+  if (retagSpeakers) {
+    return (
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-ink-soft">
+          Re-tagging rebuilds this report from the same transcript — your notes and reflection stay.
+        </p>
+        <TagSpeakersPanel
+          session={session}
+          speakers={retagSpeakers}
+          onUpdate={(updated) => {
+            setRetagSpeakers(null)
+            onUpdate(updated)
+          }}
+          onExit={onExit}
+          onCancel={() => setRetagSpeakers(null)}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <button type="button" onClick={() => onExit()} className="text-sm font-medium text-ink-soft hover:text-ink">
           ← Back to sessions
         </button>
-        {locked && (
-          <span className="rounded-full bg-mint-tint/60 px-3 py-1 text-xs font-semibold text-forest">Locked</span>
-        )}
+        <div className="flex items-center gap-3">
+          {!locked && (
+            <button
+              type="button"
+              onClick={handleRetag}
+              disabled={retagLoading}
+              className="text-sm font-medium text-ink-soft hover:text-terracotta-600 disabled:opacity-60"
+            >
+              {retagLoading ? 'Loading voices...' : "Wrong speaker? Fix who's who"}
+            </button>
+          )}
+          {locked && (
+            <span className="rounded-full bg-mint-tint/60 px-3 py-1 text-xs font-semibold text-forest">Locked</span>
+          )}
+        </div>
       </div>
+      {retagError && <p className="text-sm text-terracotta-600">{retagError}</p>}
 
       {/* Persistent lesson identity + evidence-quality read — visible on
           every tab, not just Summary, so context never disappears when you

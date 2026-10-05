@@ -345,16 +345,32 @@ audioSessionsRouter.patch('/:id', async (req, res) => {
 /// tag entirely here used to mean a session could reach TagSpeakersPanel with
 /// zero speaker cards and no way forward, even though diarization genuinely
 /// found distinct voices.
-function speakerSamplesFrom(segments: { rawSpeakerTag: string; text: string }[]) {
-  const samples = new Map<string, string>()
+/// How each diarized voice is shown on the "which voice is the teacher?"
+/// screen. The sample is that voice's LONGEST utterance, not its first: a
+/// first utterance is often a one-word "Okay" that could belong to anyone.
+/// totalSec/utteranceCount travel with it because how much a voice spoke is
+/// the strongest clue of all — a teacher tagged the 35-second voice instead
+/// of the 7-minute one and got a report with the two shares swapped.
+function speakerSamplesFrom(segments: { rawSpeakerTag: string; text: string; startSec: number; endSec: number }[]) {
+  const byTag = new Map<string, { sample: string; totalSec: number; utteranceCount: number }>()
   for (const segment of segments) {
-    if (!samples.has(segment.rawSpeakerTag)) {
-      samples.set(segment.rawSpeakerTag, segment.text.trim() || '(no clear words captured)')
-    } else if (segment.text.trim() && samples.get(segment.rawSpeakerTag) === '(no clear words captured)') {
-      samples.set(segment.rawSpeakerTag, segment.text)
-    }
+    const entry = byTag.get(segment.rawSpeakerTag) ?? { sample: '', totalSec: 0, utteranceCount: 0 }
+    const text = segment.text.trim()
+    if (text.length > entry.sample.length) entry.sample = text
+    entry.totalSec += Math.max(0, segment.endSec - segment.startSec)
+    entry.utteranceCount++
+    byTag.set(segment.rawSpeakerTag, entry)
   }
-  return Array.from(samples.entries()).map(([rawSpeakerTag, sample]) => ({ rawSpeakerTag, sample }))
+  return Array.from(byTag.entries())
+    .map(([rawSpeakerTag, e]) => ({
+      rawSpeakerTag,
+      sample: e.sample || '(no clear words captured)',
+      totalSec: Math.round(e.totalSec),
+      utteranceCount: e.utteranceCount,
+    }))
+    // Most talk first: the teacher is usually at the top, and the clients
+    // preselect that first card.
+    .sort((a, b) => b.totalSec - a.totalSec)
 }
 
 /// Deepgram, then segments, then `tagging`. Roughly 0.15x the recording's
@@ -466,7 +482,7 @@ audioSessionsRouter.get('/:id/speakers', async (req, res) => {
   const segments = await prisma.transcriptSegment.findMany({
     where: { sessionId: session.id },
     orderBy: { startSec: 'asc' },
-    select: { rawSpeakerTag: true, text: true },
+    select: { rawSpeakerTag: true, text: true, startSec: true, endSec: true },
   })
   res.json({ speakers: speakerSamplesFrom(segments) })
 })
@@ -589,6 +605,14 @@ audioSessionsRouter.post('/:id/tag-speaker', async (req, res) => {
   })
   if (!session) {
     res.status(404).json({ error: 'Session not found' })
+    return
+  }
+
+  // Re-tagging an already-analyzed session is allowed — a wrong tag used to
+  // be permanent, leaving a report with teacher and student talk swapped and
+  // no way back except deleting the recording. A locked report is final.
+  if (session.status === 'locked') {
+    res.status(403).json({ error: 'This report is locked and can no longer be edited.' })
     return
   }
 

@@ -336,9 +336,30 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
     }
 }
 
+/// One voice diarization found, as the "Which voice is the teacher?" cards
+/// show it. The server sends them most-talk-first and carries how much each
+/// voice spoke: a card showing only a speaker number and one line of text
+/// gave a teacher no way to tell the voice that talked all lesson from the
+/// one that said nine things, and tagging the wrong one swaps every talk
+/// number in the report. Optional so a response from a server that predates
+/// those counts still decodes.
 struct SpeakerSample: Decodable {
     let rawSpeakerTag: String
     let sample: String
+    let totalSec: Double?
+    let utteranceCount: Int?
+
+    private enum CodingKeys: String, CodingKey {
+        case rawSpeakerTag, sample, totalSec, utteranceCount
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rawSpeakerTag = try container.decode(String.self, forKey: .rawSpeakerTag)
+        sample = (try? container.decode(String.self, forKey: .sample)) ?? ""
+        totalSec = try? container.decodeIfPresent(Double.self, forKey: .totalSec)
+        utteranceCount = try? container.decodeIfPresent(Int.self, forKey: .utteranceCount)
+    }
 }
 
 /// Matches `web/src/lib/api.ts`'s `FocusMetric` union exactly.

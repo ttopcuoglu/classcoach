@@ -32,6 +32,12 @@ struct SessionFlowView: View {
 struct TagSpeakersView: View {
     let session: AudioSessionWithSegments
     let speakers: [SpeakerSample]
+    /// Who to show as the teacher when the view opens. Empty means "nobody
+    /// yet", and the loudest voice gets picked instead; the re-tag sheet
+    /// passes the tags already on the transcript so it opens on the answer
+    /// it is correcting.
+    var preselected: Set<String> = []
+    var confirmTitle = "Analyze session"
     let onTagged: (AudioSessionWithSegments) -> Void
 
     @State private var selected: Set<String> = []
@@ -48,11 +54,18 @@ struct TagSpeakersView: View {
                 Text("No distinct speakers were detected.")
                     .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
             } else {
+                Text("The voice that spoke the most is usually the teacher, so it's already selected. Check the minutes and the quote on each card, and change it if that isn't you.")
+                    .font(.footnote).foregroundStyle(AppTheme.textSecondary)
+
                 ForEach(speakers, id: \.rawSpeakerTag) { speaker in
                     let isTeacher = selected.contains(speaker.rawSpeakerTag)
                     VStack(alignment: .leading, spacing: 8) {
                         Text(speaker.rawSpeakerTag.uppercased())
                             .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
+                        if let talk = speaker.talkSummary {
+                            Text(talk)
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
+                        }
                         Text("\"\(speaker.sample)\"")
                             .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
                         Button {
@@ -77,7 +90,7 @@ struct TagSpeakersView: View {
                 Button {
                     Task { await analyze() }
                 } label: {
-                    Text(tagging ? "Analyzing..." : "Analyze session")
+                    Text(tagging ? "Analyzing..." : confirmTitle)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
@@ -93,6 +106,19 @@ struct TagSpeakersView: View {
                 Text(error).font(.footnote).foregroundStyle(AppTheme.terracotta600)
             }
         }
+        .onAppear(perform: preselect)
+    }
+
+    /// One tap for the common case. The teacher who mis-tagged had to choose
+    /// between two bare speaker numbers with nothing to choose on, and the
+    /// 35-second voice was as likely a pick as the seven-minute one.
+    private func preselect() {
+        guard selected.isEmpty else { return }
+        if !preselected.isEmpty {
+            selected = preselected
+        } else if let loudest = speakers.first {
+            selected = [loudest.rawSpeakerTag]
+        }
     }
 
     private func analyze() async {
@@ -105,5 +131,83 @@ struct TagSpeakersView: View {
             self.error = "Could not tag those speakers. Please try again."
         }
         tagging = false
+    }
+}
+
+private extension SpeakerSample {
+    /// "7 min 7 s · 113 turns", or "45 s · 9 turns" under a minute.
+    ///
+    /// Not `ReportConfidence.formatDuration`: its "7:07" is a timestamp
+    /// format, and on a card about how long someone talked it reads as the
+    /// moment they said it. nil when the server predates these counts, so
+    /// the card simply goes back to the quote alone.
+    var talkSummary: String? {
+        guard let totalSec else { return nil }
+        let whole = max(0, Int(totalSec.rounded()))
+        let minutes = whole / 60
+        let seconds = whole % 60
+        var parts: [String] = []
+        if minutes > 0 {
+            parts.append(seconds > 0 ? "\(minutes) min \(seconds) s" : "\(minutes) min")
+        } else {
+            parts.append("\(seconds) s")
+        }
+        if let utteranceCount {
+            parts.append("\(utteranceCount) turn\(utteranceCount == 1 ? "" : "s")")
+        }
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// "Fix who's who", from inside a report whose talk numbers came out
+/// backwards. The cards aren't in hand here — this session was opened, not
+/// tagged — so they're fetched when the sheet appears.
+struct RetagSpeakersView: View {
+    let session: AudioSessionWithSegments
+    let onTagged: (AudioSessionWithSegments) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var speakers: [SpeakerSample] = []
+    @State private var loading = true
+    @State private var error: String?
+
+    private var currentTeacherTags: Set<String> {
+        Set(session.segments.filter { $0.speakerLabel == "Teacher" }.map(\.rawSpeakerTag))
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    if loading {
+                        ProgressView().frame(maxWidth: .infinity).padding(40)
+                    } else if speakers.isEmpty {
+                        Text(error ?? "This recording's voices are no longer available to re-tag.")
+                            .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                    } else {
+                        TagSpeakersView(
+                            session: session,
+                            speakers: speakers,
+                            preselected: currentTeacherTags,
+                            confirmTitle: "Update the report",
+                            onTagged: onTagged
+                        )
+                    }
+                }
+                .padding()
+            }
+            .background(AppTheme.background)
+            .navigationTitle("Fix who's who")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .task {
+                speakers = (try? await AudioCoachingService.speakers(sessionId: session.id)) ?? []
+                if speakers.isEmpty { error = "Couldn't load the voices from this recording. Please try again." }
+                loading = false
+            }
+        }
     }
 }

@@ -170,14 +170,26 @@ struct ReportView: View {
     /// One attempt per visit, so a server hiccup doesn't retry in a loop every
     /// time the teacher comes back to this tab.
     @State private var attemptedSummary = false
+    @State private var retagging = false
 
     private var locked: Bool { session.status == "locked" }
     private var m: OverviewMetrics { OverviewMetrics(session) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Button("← Back to sessions", action: onExit)
-                .font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textSecondary)
+            HStack {
+                Button("← Back to sessions", action: onExit)
+                    .font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textSecondary)
+                Spacer()
+                // Tagging the wrong voice swapped teacher and student talk
+                // through the whole report, and there was no way back from it
+                // short of deleting the lesson. Only an analyzed report has
+                // voices to re-tag; a locked one is final.
+                if session.status == "analyzed" {
+                    Button("Fix who's who") { retagging = true }
+                        .font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textSecondary)
+                }
+            }
 
             cover
 
@@ -205,6 +217,12 @@ struct ReportView: View {
             disclaimer
         }
         .task(id: tab) { await fillMissingSummary() }
+        .sheet(isPresented: $retagging) {
+            RetagSpeakersView(session: session) { updated in
+                retagging = false
+                onUpdate(updated)
+            }
+        }
     }
 
     /// Asks for the written summary when a report doesn't carry one. Reports

@@ -734,7 +734,13 @@ export type TranscriptSegment = {
 
 export type AudioSessionWithSegments = AudioSession & { segments: TranscriptSegment[] }
 
-export type SpeakerSample = { rawSpeakerTag: string; sample: string }
+export type SpeakerSample = {
+  rawSpeakerTag: string
+  sample: string
+  /** How long this voice speaks in total, and in how many turns — the clearest clue to which one is the teacher. */
+  totalSec?: number
+  utteranceCount?: number
+}
 
 // Exported so the live-transcription socket can derive its own ws:// origin
 // from the same setting rather than assuming the API is same-origin.
