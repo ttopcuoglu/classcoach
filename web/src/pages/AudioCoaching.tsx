@@ -65,6 +65,7 @@ import {
   judgeTalkBalance,
   MIN_DURATION_FOR_CFU_DETECTION_SEC,
   MIN_DURATION_FOR_TALK_BALANCE_CANDIDATE_SEC,
+  MIN_CFU_FOR_STRENGTH,
   MIN_N_FOR_PERCENT,
   SHORT_SESSION_THRESHOLD_SEC,
   STUDENT_TALK_CAVEAT,
@@ -1790,10 +1791,12 @@ function buildStrengthCandidates(
     })
   }
 
-  if (cfuMetric.state === 'measured') {
+  // Stated with its number so this claim cannot drift away from the count the
+  // teacher is reading two cards below it.
+  if (cfuMetric.state === 'measured' && (session.cfuCount ?? 0) >= MIN_CFU_FOR_STRENGTH) {
     candidates.push({
       id: 'cfu',
-      observation: 'You checked for understanding today',
+      observation: `You checked for understanding ${session.cfuCount} times today`,
       whyItMatters: 'Catching confusion before it compounds is one of the highest-leverage coaching moves.',
       timestampSec: null,
       excerpt: null,

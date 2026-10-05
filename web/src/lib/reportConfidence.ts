@@ -44,6 +44,19 @@ export function feedbackMeasurable(studentVoiceSegments: number | null | undefin
 // rule, so a missing count deliberately fails the floor too.
 export const MIN_WAIT_TIME_SAMPLES = 3
 
+/// Below this, checking for understanding is an instance rather than a habit,
+/// so it is not offered as "a strength to keep".
+///
+/// Every other strength on that card has a bar — 40% higher-order questions,
+/// 3s wait time, 50% specific feedback. This one had none, so a single
+/// detected check was headlined as a strength while Checks & Feedback, two
+/// cards below, said "1 verbal check for understanding was detected". The
+/// report contradicted itself on the same screen.
+///
+/// One or two checks now produce neither praise nor criticism, which is the
+/// honest reading: the growth-side candidate still only fires at zero.
+export const MIN_CFU_FOR_STRENGTH = 3
+
 export function hasEnoughWaitTimeSamples(metricsDetail: Record<string, number | null> | null | undefined): boolean {
   const count = metricsDetail?.waitTimeSampleCount
   return count != null && count >= MIN_WAIT_TIME_SAMPLES

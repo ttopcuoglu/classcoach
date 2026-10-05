@@ -11,6 +11,11 @@ enum ReportConfidence {
     /// Mirrors MIN_STUDENT_SEGMENTS_FOR_FEEDBACK in reportConfidence.ts.
     static let minStudentSegmentsForFeedback = 5
     static let minDurationForCFUDetectionSec: Double = 3 * 60
+    /// Below this, checking for understanding is an instance rather than a
+    /// habit, so it is not offered as "a strength to keep". Every other
+    /// strength on that card has a bar; this one had none, so a single check
+    /// was headlined as a strength while Checks & Feedback reported one.
+    static let minCFUForStrength = 3
     static let minPhaseDurationSec: Double = 30
     static let balancedStudentFloorPct = 15
 
@@ -188,7 +193,12 @@ enum AudioInsights {
 
     static func buildCfuInsight(_ cfuMetric: Metric) -> String? {
         if cfuMetric.state == .measured {
-            return "You checked for understanding today — a good habit for catching confusion before it compounds."
+            // Was "a good habit for catching confusion" regardless of how many
+            // were found, which read as praise for a single check. The web
+            // version of this line reports the number; now so does this one.
+            let count = cfuMetric.display
+            let one = count == "1"
+            return "\(count) verbal check\(one ? "" : "s") for understanding \(one ? "was" : "were") detected."
         }
         if cfuMetric.state == .confirmedNone {
             return "None of the common spoken check-for-understanding phrases came through this session — even a quick thumbs-up check can catch confusion early."
@@ -313,9 +323,11 @@ enum AudioInsights {
                 timestampSec: nil, excerpt: nil, durationSec: nil, weight: 1, focusMetric: .avgWaitTime
             ))
         }
-        if cfuMetric.state == .measured {
+        // Stated with its number, so this cannot drift away from the count the
+        // teacher is reading in Checks & Feedback.
+        if cfuMetric.state == .measured, (session.cfuCount ?? 0) >= Confidence.minCFUForStrength {
             candidates.append(NoticeCandidate(
-                id: "cfu", observation: "You checked for understanding today",
+                id: "cfu", observation: "You checked for understanding \(session.cfuCount ?? 0) times today",
                 whyItMatters: "Catching confusion before it compounds is one of the highest-leverage coaching moves.",
                 timestampSec: nil, excerpt: nil, durationSec: nil, weight: 1, focusMetric: .cfuCount
             ))
