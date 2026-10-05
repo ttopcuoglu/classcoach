@@ -748,9 +748,29 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     const body = await res.json().catch(() => null)
-    throw apiError(body?.error ?? `Request failed with status ${res.status}`, res.status)
+    throw apiError(body?.error ?? messageForStatus(res.status), res.status)
   }
   return res.json()
+}
+
+/// What to tell a teacher when a failure arrives with no message of its own.
+///
+/// Every route in this app answers a failure it chose with JSON — "Could not
+/// read that file", "Could not reach your coach" — so a body-less response is
+/// not the server talking at all. It is the platform in front of it, and on
+/// this deployment that nearly always means the instance was restarting or
+/// still waking up, which is worth saying plainly because the fix is simply
+/// to try again. "Request failed with status 502" told a teacher none of
+/// that, and reads as though their document broke something.
+export function messageForStatus(status: number): string {
+  if (status === 502 || status === 503 || status === 504) {
+    return 'The server was restarting or waking up. Give it a moment and try again.'
+  }
+  if (status === 408) return 'That took too long to answer. Please try again.'
+  if (status === 413) return 'That file is too large — the limit is 25MB.'
+  if (status === 429) return 'Too many requests just now. Give it a minute and try again.'
+  if (status >= 500) return 'Something went wrong at our end. Please try again.'
+  return `Request failed with status ${status}`
 }
 
 // An Error that remembers the HTTP status it came from. Most callers only
@@ -1587,7 +1607,7 @@ export async function extractAssignmentText(file: File): Promise<{ text: string 
   })
   if (!res.ok) {
     const body = await res.json().catch(() => null)
-    throw new Error(body?.error ?? `Request failed with status ${res.status}`)
+    throw new Error(body?.error ?? messageForStatus(res.status))
   }
   return res.json()
 }

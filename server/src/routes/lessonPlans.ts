@@ -1,7 +1,6 @@
 import { Router } from 'express'
 import JSZip from 'jszip'
 import multer from 'multer'
-import { PDFParse } from 'pdf-parse'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { checkFeatureAccess, countUsageLogActionsThisMonth, LESSON_PLANNING_ACTIONS } from '../lib/billing.ts'
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
@@ -14,6 +13,14 @@ import { prisma } from '../lib/prisma.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
 import { THEME_GUIDE, type SlideDeck } from '../lib/slidesPptx.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
+
+// pdf-parse costs 176MB at import, measured — more than every other
+// dependency in this server put together. Loaded where it is used, so a
+// process that never opens a PDF never pays for one.
+async function loadPdfParse() {
+  return (await import('pdf-parse')).PDFParse
+}
+
 
 export const lessonPlansRouter = Router()
 
@@ -210,6 +217,7 @@ async function extractPptxSlides(buffer: Buffer): Promise<ExtractedSlide[]> {
 // a scanned image, unlike the scanned-worksheet case Assignment Coach's
 // uploader has to handle.
 async function extractPdfSlides(buffer: Buffer): Promise<ExtractedSlide[]> {
+  const PDFParse = await loadPdfParse()
   const parser = new PDFParse({ data: buffer })
   try {
     const textResult = await parser.getText()
