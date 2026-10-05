@@ -5,7 +5,7 @@ import { BrainIcon, MicIcon, StarIcon, WarningIcon } from '../components/icons'
 import VoiceBars from '../components/VoiceBars'
 import PastList from '../components/PastList'
 import SectionLabel from '../components/SectionLabel'
-import { TOPICS, kindsFor } from '../lib/topics'
+import { SOMETHING_ELSE, TOPICS, kindLabel, kindsFor, topicLabel } from '../lib/topics'
 import { pickTopicStarters } from '../lib/starters'
 import { DEFAULT_TEACHING_CONTEXT, type TeachingContext } from '../components/TeachingContextFields'
 import { SUBJECTS, bandFromProfile, subjectFromProfile } from '../lib/teachingContext'
@@ -350,6 +350,12 @@ export default function TalkToMe() {
   // Resuming an existing conversation, or a muted one with nothing to hear,
   // still goes straight to the mic.
   async function handleStartTalking() {
+    // A chosen topic becomes the opening line, so Coach starts inside the
+    // subject rather than opening by asking what it is about.
+    if (topic && !debrief) {
+      startFocused(topic, kind)
+      return
+    }
     const audio = audioRef.current
     if (debrief || mutedRef.current || !audio) {
       beginListening()
@@ -503,6 +509,28 @@ export default function TalkToMe() {
     setShowTypeInput(false)
     setTypedDraft('')
     handleTurnComplete(trimmed)
+  }
+
+  /// The opening line a chosen topic turns into.
+  ///
+  /// Sent as the teacher's own first message rather than tucked into a system
+  /// prompt, for two reasons: being in the conversation means it still steers
+  /// Coach ten turns later, where a one-off prompt tweak would have stopped
+  /// counting; and the teacher can see exactly what Coach was told about them.
+  function focusOpener(topicValue: string, kindValue: string | null): string {
+    if (topicValue === SOMETHING_ELSE) return "I want to talk something through that doesn't fit a category."
+    const label = topicLabel(topicValue)
+    if (!label) return 'I want to talk something through.'
+    const specific = kindValue ? kindLabel(kindValue) : null
+    return specific
+      ? `I want to focus on ${label.toLowerCase()} — specifically ${specific.toLowerCase()}.`
+      : `I want to focus on ${label.toLowerCase()}.`
+  }
+
+  /// Starts the conversation already pointed at a topic. Used by the chips and
+  /// by Start talking, so all three routes in behave the same way.
+  function startFocused(topicValue: string, kindValue: string | null) {
+    submitText(focusOpener(topicValue, kindValue))
   }
 
   /// A turn typed into the chat box.
@@ -939,7 +967,23 @@ export default function TalkToMe() {
           </div>
         ) : (
           <>
-            <div className="flex w-full max-w-3xl flex-col items-center gap-4 rounded-3xl bg-forest px-6 py-8 text-cream shadow-sm">
+            <div className="relative flex w-full max-w-3xl flex-col items-center gap-4 rounded-3xl bg-forest px-6 py-8 text-cream shadow-sm">
+              {/* Pinned to the top of the hero rather than sitting in the row
+                  under the transcript: muting is something a teacher decides
+                  before Coach starts talking, and hunting for it below the fold
+                  while it is already speaking is too late to be useful. */}
+              <button
+                type="button"
+                onClick={() => setMuted((m) => !m)}
+                aria-pressed={muted}
+                className={`absolute right-4 top-4 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                  muted
+                    ? 'border-gold bg-gold text-forest'
+                    : 'border-cream/25 text-cream/70 hover:border-cream/50 hover:text-cream'
+                }`}
+              >
+                {muted ? 'Unmute coach' : 'Mute coach'}
+              </button>
               <div className="relative flex h-36 w-36 items-center justify-center">
                 <span
                   aria-hidden="true"
@@ -1079,8 +1123,18 @@ export default function TalkToMe() {
                             type="button"
                             aria-pressed={selected}
                             onClick={() => {
-                              setTopic(selected ? null : value)
+                              if (selected) {
+                                setTopic(null)
+                                setKind(null)
+                                return
+                              }
+                              setTopic(value)
                               setKind(null)
+                              // Topics that have no second step have nothing
+                              // left to ask, so they open the conversation
+                              // immediately. The rest reveal their step first —
+                              // starting here would put it out of reach.
+                              if (kindsFor(value).length === 0) startFocused(value, null)
                             }}
                             className={`rounded-full px-4 py-2.5 text-sm font-semibold transition-colors ${
                               selected
@@ -1112,7 +1166,10 @@ export default function TalkToMe() {
                             key={value}
                             type="button"
                             aria-pressed={selected}
-                            onClick={() => setKind(selected ? null : value)}
+                            onClick={() => {
+                              setKind(value)
+                              startFocused(topic, value)
+                            }}
                             className={`rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
                               selected ? 'bg-terracotta text-cream' : 'bg-cream-card text-ink-soft hover:text-ink'
                             }`}
@@ -1217,8 +1274,9 @@ export default function TalkToMe() {
                   e.preventDefault()
                   submitTyped(typedDraft)
                 }}
-                className="flex w-full max-w-3xl items-center gap-2"
+                className="flex w-full max-w-3xl flex-col gap-2.5"
               >
+                <div className="flex items-center gap-2">
                 <input
                   type="text"
                   autoFocus
@@ -1234,17 +1292,31 @@ export default function TalkToMe() {
                 >
                   Send
                 </button>
-                {/* Not "Cancel": there is nothing to cancel once a thread
-                    exists. This is the way back to the microphone, which is the
-                    only thing leaving the chat actually does. */}
-                <button
-                  type="button"
-                  onClick={handleBackToVoice}
-                  className="flex shrink-0 items-center gap-1.5 text-sm font-medium text-ink-soft hover:text-ink"
-                >
-                  <MicIcon className="h-4 w-4" />
-                  Back to voice
-                </button>
+                </div>
+
+                {/* The chat replaced the button row, and the row was where
+                    finishing lived — so a teacher who typed the whole
+                    conversation had no way to end it and get a takeaway. Both
+                    ways out belong here: back to the microphone, and done. */}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={handleBackToVoice}
+                    className="flex shrink-0 items-center gap-1.5 text-sm font-medium text-ink-soft hover:text-ink"
+                  >
+                    <MicIcon className="h-4 w-4" />
+                    Back to voice
+                  </button>
+                  {debrief && (
+                    <button
+                      type="button"
+                      onClick={handleFinishSession}
+                      className="rounded-full border-2 border-hairline bg-cream-card px-5 py-2.5 text-sm font-semibold text-ink-soft transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
+                    >
+                      Finish session
+                    </button>
+                  )}
+                </div>
               </form>
             ) : (
               <div className="flex flex-wrap items-center justify-center gap-3">
@@ -1271,17 +1343,6 @@ export default function TalkToMe() {
                     Pause mic
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setMuted((m) => !m)}
-                  className={`rounded-full border-2 px-5 py-3 text-sm font-semibold transition-colors ${
-                    muted
-                      ? 'border-terracotta bg-peach-tint text-terracotta-600'
-                      : 'border-hairline bg-cream-card text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
-                  }`}
-                >
-                  {muted ? 'Unmute coach' : 'Mute coach'}
-                </button>
                 <button
                   type="button"
                   hidden={atCap || onStartScreen}
