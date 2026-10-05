@@ -223,14 +223,6 @@ export default function App() {
               }
             />
             <Route
-              path="talk-to-me"
-              element={
-                <RequireAuth user={user} loading={loading} onSignedIn={refreshUser}>
-                  <TalkToMe />
-                </RequireAuth>
-              }
-            />
-            <Route
               element={
                 <RequireAuth user={user} loading={loading} onSignedIn={refreshUser}>
                   <Layout user={user} onLogout={handleLogout} />
@@ -238,6 +230,10 @@ export default function App() {
               }
             >
               <Route index element={<Home />} />
+              {/* Inside the Layout, not beside it. The page gave up its own
+                  full-screen chrome — the forest bar and the Exit button in it —
+                  so out here it had no navigation of any kind. */}
+              <Route path="talk-to-me" element={<TalkToMe />} />
               <Route path="coach-chat" element={<CoachChat />} />
               <Route path="communications" element={<Communications />} />
               <Route path="audio-coaching" element={<AudioCoaching />} />
