@@ -23,6 +23,9 @@ export type FocusArea = {
   askExample: string
   practiceExample: string
   subCategories: SubCategory[]
+  /// For the areas that overlap Communication Coach: where to send a teacher
+  /// who needs the actual artifact rather than a quick rehearsal.
+  handoff?: { label: string; to: string }
 }
 
 export const FOCUS_AREAS: FocusArea[] = [
@@ -73,6 +76,10 @@ export const FOCUS_AREAS: FocusArea[] = [
       { label: 'Delivering hard news', value: 'delivering_hard_news' },
       { label: 'Building a partnership', value: 'building_partnership' },
     ],
+    handoff: {
+      label: 'Need the actual email drafted, or a conference prepared? Communication Coach does that.',
+      to: '/communications',
+    },
   },
   {
     value: 'professionalism',
@@ -89,6 +96,10 @@ export const FOCUS_AREAS: FocusArea[] = [
       { label: 'Mentoring & growth', value: 'mentoring' },
       { label: 'Records & deadlines', value: 'records_and_deadlines' },
     ],
+    handoff: {
+      label: 'Need to prepare a whole meeting, or draft the message first? Communication Coach does that.',
+      to: '/communications?tool=prepare',
+    },
   },
 ]
 

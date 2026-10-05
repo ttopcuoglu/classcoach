@@ -55,43 +55,38 @@ const STEPS = [
   },
   {
     title: 'Read the report',
-    body: 'It leads with one next step. Then a plain-language read of the lesson, the evidence behind it, and — if you linked a plan you had reviewed — how the minutes you planned compare with what the recording heard. Insights holds the detail. My Growth trends the same numbers across every session.',
+    body: 'Summary first: a plain-language read of the lesson, one strength, the evidence behind it, and your focus metric. Insights holds the detail. My Growth shows the same numbers trending across every session you’ve recorded.',
   },
   {
-    title: 'Talk it through, or write it down',
-    body: 'Press Discuss anywhere in the report and it hands the lesson to Talk It Through, carrying what was measured with it. My notes is where you write your own: what you noticed, what you want to explore, your next step, and the focus for your next recording.',
+    title: 'Talk it through',
+    body: 'The Reflect tab is a spoken conversation about what the report found — pick a starting point, or just say what’s on your mind. Finish with your own notes: strengths, growth areas, your next step, and a date to follow up.',
   },
 ]
 
 const TABS = [
   {
     name: 'Summary',
-    body: 'One next step first, then the lesson at a glance, the evidence behind it, and the lesson in its own words. Anything the recording could not judge is one line — “too little audio to judge: questions, checks, named students” — rather than a panel apologising for each absence.',
+    body: 'Lesson at a glance, one named strength, the evidence it came from, and a “try next time” tip tied to your focus.',
   },
   {
     name: 'Insights',
-    body: 'Three sections when you want the detail: Talk & Participation, Questions & Checks, and Climate & Routines. What you asked and how you checked it landed used to sit two tabs apart; they are the same question.',
+    body: 'Five sections when you want the detail: Talk & Participation, Questions & Thinking, Checks & Feedback, Clarity & Content, Climate & Routines.',
   },
   {
-    name: 'My notes',
-    body: 'What you write yourself: what you noticed, what you want to explore, your next step, and the focus for your next recording. Plus a Lock button when you are done with the report for good.',
+    name: 'Reflect',
+    body: 'A spoken debrief with your coach, then your own notes — and a Lock button when you’re done with the report for good.',
   },
   {
     name: 'My Growth',
-    body: 'Ten metrics trended over time. Choose one as your focus and it is highlighted here and on Summary.',
+    body: 'Ten metrics trended over time. Choose one as your focus and it’s highlighted here and on Summary.',
   },
 ]
-
-/// Rubric Lens stopped being a sixth section in the Insights list and became
-/// a view over the whole report — which is what it always was.
-const RUBRIC_LENS =
-  'Rubric Lens is a toggle beside the tabs, not a section inside them. It re-reads the whole report through your evaluation framework’s components — evidence, never a rating, and never a level. It is only ever generated when you ask for it.'
 
 const STORY = [
   'Mr. Boateng is proud of third-period science. It’s discussion-based, students argue about evidence, and the room is never quiet. He records it expecting the report to confirm what he already believes.',
   'It doesn’t, exactly. Talk & Participation shows he was speaking for 74% of the period. His average wait time after a question is 1.2 seconds.',
   'His first reaction is to argue with it — a lot of that talk was him restating student ideas so the class could hear them. Which is true, and it’s also the finding.',
-  'He presses Discuss on that section. It hands him to Talk It Through with the numbers already in hand, so he does not have to explain them — he just says what he thinks they are missing. Coach asks what would happen if he waited instead of restating. He doesn’t love the answer: probably silence, and he’d fill it.',
+  'In the Reflect tab he says exactly that out loud. Coach asks what would happen if he waited instead of restating. He doesn’t love the answer: probably silence, and he’d fill it.',
   'His next step is small enough to actually do: after each open question, count to five in his head before saying anything. He writes it in his notes and sets a follow-up date for two weeks out.',
   'The next recording isn’t a transformation. Wait time is 2.9 seconds and his talk share is 66% — better, not fixed. But My Growth now has two points on a line instead of one opinion, and he knows which direction it’s going.',
 ]
@@ -113,7 +108,7 @@ const DEBRIEF_RETURNS = [
 const DEBRIEF_ACTIONS = [
   { label: 'Continue This Conversation', body: 'Keep talking if the debrief opened something up.' },
   { label: 'Set a Next Step', body: 'Write down the one thing you’re committing to.' },
-  { label: 'Save', body: 'Your notes save as you leave each box, and the report is yours to come back to.' },
+  { label: 'Save My Reflection', body: 'Keep it to come back to before your next recording.' },
   { label: 'Start a New Talk It Through', body: 'Begin fresh on something else.' },
 ]
 
@@ -184,7 +179,7 @@ function SampleReport() {
 
 export default function GuideLessonDebrief() {
   return (
-    <GuideShell appTo="/debrief">
+    <GuideShell appTo="/audio-coaching">
       <GuideHero
         icon={MicIcon}
         title="Lesson Debrief"
@@ -281,17 +276,12 @@ export default function GuideLessonDebrief() {
             </ul>
           </div>
 
-          <div className="mt-5 rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-6">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Rubric Lens</p>
-            <p className="mt-2 text-sm text-ink">{RUBRIC_LENS}</p>
-          </div>
-
           <div className="mt-6">
             <SampleReport />
           </div>
 
           <div className="mt-8 flex flex-col items-start gap-3">
-            <GuidePrimaryButton to="/debrief">Record a Lesson</GuidePrimaryButton>
+            <GuidePrimaryButton to="/audio-coaching">Record a Lesson</GuidePrimaryButton>
             <p className="text-xs text-ink-soft">
               Your audio is never saved — it’s transcribed and then discarded. Three recordings a month on the
               free plan.
@@ -374,7 +364,7 @@ export default function GuideLessonDebrief() {
             </p>
 
             <div className="mt-7 border-t border-hairline pt-6">
-              <GuidePrimaryButton to="/debrief">Record a Lesson</GuidePrimaryButton>
+              <GuidePrimaryButton to="/audio-coaching">Record a Lesson</GuidePrimaryButton>
             </div>
           </div>
         </GuideSection>
@@ -389,10 +379,10 @@ export default function GuideLessonDebrief() {
           <div className="mt-8 flex items-start gap-3 rounded-2xl border-l-4 border-mint-tint bg-mint-tint/30 p-5">
             <ChatBubbleIcon className="mt-0.5 h-5 w-5 shrink-0 text-forest" />
             <p className="text-sm leading-relaxed text-forest">
-              Lesson Debrief has two reflection moments, and they do different jobs. Pressing{' '}
-              <strong className="font-semibold">Discuss</strong> in the report happens right after the lesson,
-              while the evidence is in front of you. This debrief happens later — after you’ve taught with the
-              change and found out whether it worked.
+              Lesson Debrief has two reflection moments, and they do different jobs. The{' '}
+              <strong className="font-semibold">Reflect tab</strong> happens right after the lesson, while the
+              evidence is in front of you. This debrief happens later — after you’ve taught with the change and
+              found out whether it worked.
             </p>
           </div>
 
@@ -438,9 +428,9 @@ export default function GuideLessonDebrief() {
             </div>
 
             <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-hairline pt-6">
-              <GuidePrimaryButton to="/talk?mode=debrief">Debrief This Experience</GuidePrimaryButton>
-              <Link to="/debrief" className="text-sm font-semibold text-terracotta-600 hover:text-terracotta">
-                Or reopen a past report
+              <GuidePrimaryButton to="/talk-to-me?mode=debrief">Debrief This Experience</GuidePrimaryButton>
+              <Link to="/audio-coaching" className="text-sm font-semibold text-terracotta-600 hover:text-terracotta">
+                Or reopen a past report’s Reflect tab
               </Link>
             </div>
           </div>
@@ -451,7 +441,7 @@ export default function GuideLessonDebrief() {
         icon={BrainIcon}
         title="One period. One thing worth changing."
         body="You already know your teaching. This just shows you the part you were too busy to watch."
-        ctaTo="/debrief"
+        ctaTo="/audio-coaching"
         ctaLabel="Record a Lesson"
       />
     </GuideShell>

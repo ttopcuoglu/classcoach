@@ -5,13 +5,13 @@ import { Prisma } from '../generated/prisma/client.ts'
 import { checkFeatureAccess, countUsageLogActionsThisMonth, LESSON_PLANNING_ACTIONS } from '../lib/billing.ts'
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
+import { NoTextFoundError, UnsupportedFileError } from '../lib/extractErrors.ts'
+import { ExtractionTimeoutError, ExtractionTooHeavyError, extractInChild } from '../lib/extractInChild.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { buildDocx } from '../lib/docxBuilder.ts'
 import { carryOriginalPictures, parseDocOutput, parseSlidesOutput, sanitizeDeck, sanitizeDocModel, themeFromContext } from '../lib/exportModels.ts'
 import { readOriginalPictures, type OriginalImage, type OriginalPicture } from '../lib/originalImages.ts'
 import { buildPdf } from '../lib/pdfBuilder.ts'
-import { NoTextFoundError, UnsupportedFileError } from '../lib/extractErrors.ts'
-import { ExtractionTimeoutError, ExtractionTooHeavyError, extractInChild } from '../lib/extractInChild.ts'
 import { buildPptx, THEME_GUIDE } from '../lib/slidesPptx.ts'
 import { prisma } from '../lib/prisma.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
@@ -462,17 +462,16 @@ function contextFromSession(session: {
 // pure local parsing, no Claude call, so this isn't usage-capped.
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } })
 
-// Lazily created once per server process and reused across requests — the
-
+// Reading a document happens in a child process that exits when it's done.
+// The parsers are the expensive part — pdf-parse peaks around 535MB on a
+// real scan — and a parse that outgrew the instance used to take the whole
+// server down with it. In a child, the worst case is one failed upload.
 assignmentCoachRouter.post('/extract-text', upload.single('file'), async (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: 'No file received' })
     return
   }
   try {
-    // In a child, for the same reason Look It Over is: the parsers cost the
-    // server 215MB at import and a heavy document used to take the whole
-    // instance with it.
     const { text } = await extractInChild(req.file.buffer, req.file.originalname)
     res.json({ text })
   } catch (error) {
@@ -484,10 +483,21 @@ assignmentCoachRouter.post('/extract-text', upload.single('file'), async (req, r
       res.status(422).json({ error: error.message })
       return
     }
-    if (error instanceof ExtractionTimeoutError || error instanceof ExtractionTooHeavyError) {
+    if (error instanceof ExtractionTimeoutError) {
+      console.error('[assignment-coach] extract timed out:', req.file.originalname, req.file.size)
+      res.status(422).json({
+        error: 'That took too long to read — a photo or a long scan can. Try a smaller file, or paste the text instead.',
+      })
+      return
+    }
+    // Too big to read in the memory one document gets. Said as the fact it
+    // is, with the way round it, rather than as a server error — because
+    // from the teacher's side it is a fact about their file.
+    if (error instanceof ExtractionTooHeavyError) {
+      console.error('[assignment-coach] extract ran out of room:', req.file.originalname, req.file.size)
       res.status(422).json({
         error:
-          'That file was too heavy to read — a long scan usually is. Try a smaller PDF, or paste the text instead.',
+          'That file was too heavy to read — a long scan usually is. Try exporting it as a smaller PDF, sending it in two halves, or pasting the text.',
       })
       return
     }

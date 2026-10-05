@@ -141,7 +141,7 @@ export default function AudioCoachingExport() {
   let n = 0
 
   return (
-    <ReportShell backTo="/debrief">
+    <ReportShell backTo="/audio-coaching">
         <ReportCover
           eyebrow="Wivoza · Lesson Debrief"
           title={session.classSubject || 'Lesson report'}
@@ -206,25 +206,13 @@ export default function AudioCoachingExport() {
           )}
         </ReportSection>
 
-        {/* Questions & checks — one section, matching the screen. What a
-            teacher asked and how they checked it landed are the same
-            question, so the paper stopped putting them two sections apart. */}
-        <ReportSection
-          n={++n}
-          title="Questions & Checks"
-          blurb="What you asked, how long you left for an answer, and how you checked they were with you."
-          accent={A.gold}
-        >
+        {/* Questions & thinking */}
+        <ReportSection n={++n} title="Questions & Thinking" blurb="What you asked, and how long you left for an answer." accent={A.gold}>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="Questions asked" metric={questions} accent={A.gold} />
             {higherOrder && <Stat label="Higher-order" metric={higherOrder} accent={A.gold} />}
             <Stat label="Avg. wait time" metric={waitTime} unit="s" accent={A.gold} />
             <Stat label="Follow-ups" metric={followUps} accent={A.gold} />
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <Stat label="Checks for understanding" metric={cfu} accent={A.mint} />
-            {specificShare && <Stat label="Feedback that was specific" metric={specificShare} accent={A.mint} />}
-            <Stat label="Feedback moments" metric={feedbackMoments} accent={A.mint} />
           </div>
           <Callout
             label="Why wait time matters"
@@ -233,18 +221,18 @@ export default function AudioCoachingExport() {
           />
         </ReportSection>
 
-        {/* The lesson's own words. Unnumbered on purpose: on the screen this
-            folded into the summary, and numbering it here would put a section
-            3 on the paper that the screen does not have. Keeping it
-            unnumbered is also what closed the old drift — the printout used
-            to skip this section entirely on lessons with no content quotes,
-            which left the paper saying 4 where the screen said 5. */}
+        {/* Checks & feedback */}
+        <ReportSection n={++n} title="Checks & Feedback" blurb="How you checked they were with you, and how specific your feedback was." accent={A.mint}>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Stat label="Checks for understanding" metric={cfu} accent={A.mint} />
+            {specificShare && <Stat label="Feedback that was specific" metric={specificShare} accent={A.mint} />}
+            <Stat label="Feedback moments" metric={feedbackMoments} accent={A.mint} />
+          </div>
+        </ReportSection>
+
+        {/* Clarity & content */}
         {content && (
-          <ReportSection
-            title="In the lesson's own words"
-            blurb="What the lesson said it was about, quoted rather than judged."
-            accent={A.forest}
-          >
+          <ReportSection n={++n} title="Clarity & Content" blurb="What the lesson said it was about, in its own words." accent={A.forest}>
             {content.summary && (
               <div className="break-inside-avoid rounded-2xl bg-mint-tint/50 p-5">
                 <p className="text-[11px] font-bold uppercase tracking-wide text-forest">What this lesson covered</p>
@@ -268,6 +256,7 @@ export default function AudioCoachingExport() {
           </ReportSection>
         )}
 
+        {/* Climate & routines */}
         <ReportSection n={++n} title="Climate & Routines" blurb="Counts, not scores. There is no such thing as a correct number here." accent={A.terracotta}>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {([

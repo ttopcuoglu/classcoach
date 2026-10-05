@@ -1,13 +1,19 @@
+import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { logout, type FocusMetric } from '../lib/api'
 import type { UserProfile } from '../lib/api'
+import { isExperienced } from '../lib/experience'
 import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import {
+  ArrowUpIcon,
   BookIcon,
+  ChatBubbleIcon,
   ChecklistIcon,
   HomeIcon,
+  LessonPlanIcon,
+  MailIcon,
   MicIcon,
-  ScenarioIcon,
+  StarIcon,
   TargetIcon,
   UserIcon,
   WaveformIcon,
@@ -15,58 +21,36 @@ import {
 
 type IconComponent = (props: { className?: string }) => React.ReactElement
 type NavItem = { to: string; label: string; icon: IconComponent; subtitle?: string }
-/// A group header is optional now. Three of the four surfaces stand on their
-/// own; only Look It Over gets one, because "before and after" is what
-/// explains why reviewing a document and debriefing a lesson are the same
-/// kind of act at opposite ends of it.
-type NavGroup = { label?: string; icon: IconComponent; items: NavItem[] }
+type NavGroup = { label: string; icon: IconComponent; items: NavItem[] }
 
-// Four surfaces, down from nine tools in three groups.
-//
-// The nine were not nine different things — they were four things with
-// doors cut into them at different angles. "Ask & Practice" and "Talk It
-// Through" were both a teacher talking something over. "Get Feedback",
-// "Review a Presentation", "Review an assignment" and "Review My
-// Communication" were one act performed on four file types. A teacher who
-// knew what they wanted still had to work out which of nine names it lived
-// behind, and the subtitles underneath them were the tell: every one was
-// explaining what the label failed to.
-//
-// The subtitles that survive are doing a different job: they say WHEN, not
-// what. "Before students see it" and "After you taught it" are the two ends
-// of the same lesson, which is the distinction the old IA never drew.
 const NAV_GROUPS: NavGroup[] = [
   {
-    icon: WaveformIcon,
+    label: 'Coaching',
+    icon: MicIcon,
     items: [
-      { to: '/talk', label: 'Talk It Through', icon: WaveformIcon, subtitle: 'ask, or think out loud' },
-      { to: '/practice', label: 'Practice', icon: ScenarioIcon, subtitle: 'rehearse the move' },
+      { to: '/audio-coaching', label: 'Lesson Debrief', icon: MicIcon, subtitle: 'recorded-lesson report' },
+      { to: '/talk-to-me', label: 'Talk It Through', icon: WaveformIcon, subtitle: 'live voice check-in' },
+      { to: '/coach-chat', label: 'Ask & Practice', icon: ChatBubbleIcon, subtitle: 'chat with your coach' },
     ],
   },
   {
-    label: 'Before and after',
-    icon: BookIcon,
+    label: 'Plan',
+    icon: LessonPlanIcon,
     items: [
-      { to: '/look-it-over', label: 'Look It Over', icon: BookIcon, subtitle: 'before students see it' },
-      { to: '/debrief', label: 'Lesson Debrief', icon: MicIcon, subtitle: 'after you taught it' },
+      { to: '/lesson-planning', label: 'Lesson Planning', icon: LessonPlanIcon, subtitle: 'plans & presentations' },
+      { to: '/assignment-coach', label: 'Assignment Coach', icon: BookIcon, subtitle: 'review & redesign assignments' },
+      { to: '/communications', label: 'Communication Coach', icon: MailIcon, subtitle: 'write, prepare & practice' },
     ],
   },
   {
-    icon: UserIcon,
+    label: 'Grow',
+    icon: ArrowUpIcon,
     items: [
-      { to: '/work', label: 'My Work', icon: ChecklistIcon, subtitle: 'everything you have made' },
       { to: '/profile', label: 'Profile', icon: UserIcon },
+      { to: '/cheat-sheet', label: 'Cheat Sheet', icon: StarIcon },
+      { to: '/first-30-days', label: 'First 30 Days', icon: ChecklistIcon },
     ],
   },
-]
-
-/// The four surfaces, for the mobile bottom bar. Short labels: a bottom bar
-/// has room for a word, not a phrase.
-const PRIMARY_SURFACES: { to: string; label: string; icon: IconComponent }[] = [
-  { to: '/talk', label: 'Talk', icon: WaveformIcon },
-  { to: '/practice', label: 'Practice', icon: ScenarioIcon },
-  { to: '/look-it-over', label: 'Review', icon: BookIcon },
-  { to: '/debrief', label: 'Debrief', icon: MicIcon },
 ]
 
 function navLinkClasses(isActive: boolean) {
@@ -86,6 +70,12 @@ function mobileNavClasses(isActive: boolean) {
 export default function Layout({ user, onLogout }: { user: UserProfile | null; onLogout: () => void }) {
   const location = useLocation()
   const navigate = useNavigate()
+  const [openGroup, setOpenGroup] = useState<string | null>(null)
+
+  useEffect(() => {
+    setOpenGroup(null)
+  }, [location.pathname])
+
   async function handleLogout() {
     await logout().catch(() => {})
     // Land on the home page rather than leaving the signed-out visitor on
@@ -94,14 +84,19 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
     onLogout()
   }
 
+  function isGroupActive(group: NavGroup) {
+    return group.items.some((item) => location.pathname.startsWith(item.to))
+  }
+
   const focusMetric = user?.focusMetric as FocusMetric | null | undefined
   // Covers a school plan, admins and review accounts too — `plan` alone only
   // reflects a personal subscription.
   const hasPlus = user?.plusAccess != null || user?.plan === 'plus'
-  // Every teacher sees the same four surfaces. The nav used to vary by
-  // experience level to hide First 30 Days from veterans, which is gone — and
-  // a nav that differs between accounts is a nav nobody can be told how to
-  // use ("it's under Grow" was wrong for half of them).
+  // First 30 Days is a new-teacher track; experienced teachers can still
+  // reach it from Profile, it just doesn't take up a spot in their nav.
+  const navGroups = isExperienced(user?.experienceLevel)
+    ? NAV_GROUPS.map((group) => ({ ...group, items: group.items.filter((item) => item.to !== '/first-30-days') }))
+    : NAV_GROUPS
 
   return (
     <div className="flex min-h-screen bg-cream text-ink">
@@ -117,14 +112,10 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             Home
           </NavLink>
 
-          {NAV_GROUPS.map((group) => (
-            <div key={group.items[0].to}>
-              {group.label && (
-                <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-cream/40">
-                  {group.label}
-                </p>
-              )}
-              <div className={`flex flex-col gap-1 ${group.label ? 'mt-1.5' : ''}`}>
+          {navGroups.map((group) => (
+            <div key={group.label}>
+              <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-cream/40">{group.label}</p>
+              <div className="mt-1.5 flex flex-col gap-1">
                 {group.items.map(({ to, label, icon: Icon, subtitle }) => (
                   <NavLink key={to} to={to} className={({ isActive }) => navLinkClasses(isActive)}>
                     <Icon className="h-5 w-5 shrink-0" />
@@ -149,7 +140,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
           <p className="mt-0.5 text-xs text-cream/60">
             {focusMetric ? FOCUS_METRIC_LABELS[focusMetric] : 'Not set yet'}
           </p>
-          <Link to="/debrief" className="mt-2.5 inline-block text-xs font-semibold text-gold hover:underline">
+          <Link to="/audio-coaching" className="mt-2.5 inline-block text-xs font-semibold text-gold hover:underline">
             View your trends →
           </Link>
         </div>
@@ -158,7 +149,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
           <div className="mx-3 mb-3 rounded-2xl bg-gold-tint p-4">
             <p className="text-sm font-semibold text-terracotta-600">Wivoza Plus</p>
             <p className="mt-1 text-xs text-forest/70">
-              Unlimited Lesson Debrief, Look It Over, and Coach's memory.
+              Unlimited Lesson Debrief, Lesson Planning, Communication Coach, and Coach's memory.
             </p>
             <Link
               to="/profile"
@@ -195,19 +186,9 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
         {/* Mobile top bar */}
         <header className="flex items-center justify-between border-b border-hairline bg-cream-card px-4 py-3 md:hidden">
           <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-6 w-auto" />
-          {/* My Work and Profile left the bottom bar to make room for the
-              four surfaces, so they live here. */}
-          <div className="flex items-center gap-4">
-            <Link to="/work" className="text-sm font-medium text-ink-soft">
-              My Work
-            </Link>
-            <Link to="/profile" className="text-sm font-medium text-ink-soft">
-              Profile
-            </Link>
-            <button type="button" onClick={handleLogout} className="text-sm font-medium text-ink-soft">
-              Log out
-            </button>
-          </div>
+          <button type="button" onClick={handleLogout} className="text-sm font-medium text-ink-soft">
+            Log out
+          </button>
         </header>
 
         {user != null && !hasPlus && (
@@ -238,19 +219,49 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             Home
           </NavLink>
 
-          {/* Flat, now that there are four surfaces rather than nine tools.
-              The popover this replaces existed only because three groups of
-              three could not fit a bottom bar — so tapping "Coaching" opened
-              a menu to choose from, which is two taps to reach a thing whose
-              name the teacher already knew. My Work and Profile live in the
-              top bar on mobile; these five are what a teacher opens the app
-              to do. */}
-          {PRIMARY_SURFACES.map(({ to, label, icon: Icon }) => (
-            <NavLink key={to} to={to} className={({ isActive }) => mobileNavClasses(isActive)}>
-              <Icon className="h-5 w-5" />
-              {label}
-            </NavLink>
-          ))}
+          {navGroups.map((group) => {
+            const GroupIcon = group.icon
+            if (group.items.length === 1) {
+              const item = group.items[0]
+              return (
+                <NavLink key={group.label} to={item.to} className={({ isActive }) => mobileNavClasses(isActive)}>
+                  <GroupIcon className="h-5 w-5" />
+                  {group.label}
+                </NavLink>
+              )
+            }
+
+            const open = openGroup === group.label
+            return (
+              <div key={group.label} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setOpenGroup(open ? null : group.label)}
+                  className={mobileNavClasses(isGroupActive(group) || open)}
+                >
+                  <GroupIcon className="h-5 w-5" />
+                  {group.label}
+                </button>
+                {open && (
+                  <div className="absolute bottom-full right-1/2 mb-2 w-44 translate-x-1/2 rounded-xl border border-hairline bg-cream-card p-1.5 shadow-lg">
+                    {group.items.map(({ to, label, icon: SubIcon, subtitle }) => (
+                      <Link
+                        key={to}
+                        to={to}
+                        className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-ink hover:bg-cream"
+                      >
+                        <SubIcon className="h-4 w-4 shrink-0" />
+                        <span className="flex flex-col leading-tight">
+                          <span>{label}</span>
+                          {subtitle && <span className="text-[11px] font-normal text-ink-soft">{subtitle}</span>}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </nav>
       </div>
     </div>

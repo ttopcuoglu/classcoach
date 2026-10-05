@@ -35,19 +35,31 @@ export const PUBLIC_PAGE_META: Record<string, Meta> = {
   },
   '/guide/talk-it-through': {
     title: 'Talk It Through — a teacher’s guide | Wivoza',
-    description: 'Think out loud about a classroom moment, or just ask — Wivoza’s voice coach listens, asks the right questions, and leaves you with one next step.',
+    description: 'How to use Talk It Through, Wivoza’s live voice coach, to think out loud about a classroom moment and leave with one next step.',
   },
   '/guide/lesson-debrief': {
     title: 'Lesson Debrief — a teacher’s guide | Wivoza',
-    description: 'Record one class period and get a private report on talk time, questioning, wait time and routines. Audio is never saved — only the text.',
+    description: 'Record one class period and get a private report on talk time, questioning, wait time, and routines — then talk it through with your coach.',
   },
-  '/guide/practice': {
-    title: 'Practice — a teacher’s guide | Wivoza',
-    description: 'Rehearse one realistic classroom moment at a time — a misconception, a parent email, a hard conversation — before it happens for real.',
+  '/guide/ask-practice': {
+    title: 'Ask & Practice — a teacher’s guide | Wivoza',
+    description: 'Ask a straight question about a classroom moment, or rehearse a hard one before it happens, with practical, judgment-free coaching.',
   },
-  '/guide/look-it-over': {
-    title: 'Look It Over — a teacher’s guide | Wivoza',
-    description: 'Drop in a quiz, lesson plan, slide deck, assignment or message and get a careful read before students or parents see it.',
+  '/guide/lesson-planning': {
+    title: 'Lesson Planning — a teacher’s guide | Wivoza',
+    description: 'Get feedback on a lesson plan you wrote, generate a sample plan for ideas, or get feedback on a presentation before you teach it.',
+  },
+  '/guide/assignment-coach': {
+    title: 'Assignment Coach — a teacher’s guide | Wivoza',
+    description: 'Review what an assignment really asks of students, or redesign it so students have to show their own thinking in the age of AI.',
+  },
+  '/guide/communication-coach': {
+    title: 'Communication Coach — a teacher’s guide | Wivoza',
+    description: 'Write a message, prepare for a meeting, practice a hard conversation, or get a second read on a reply before you send it.',
+  },
+  '/guide/cheat-sheet': {
+    title: 'Cheat Sheet — a teacher’s guide | Wivoza',
+    description: 'Your go-to phrases and tips, built automatically from the answers and practice responses you save in Wivoza.',
   },
 }
 
