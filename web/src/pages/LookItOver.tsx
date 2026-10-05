@@ -881,7 +881,20 @@ export default function LookItOver() {
                 )}
               </div>
 
-              {/* 2 — the hero. One change, for the whole review. */}
+              {/* 2 — how it reads, before anything about changing it. A
+                  report that opens with the fault reads as a verdict on the
+                  teacher's work; this is where it says what it is looking at
+                  and what is already right about it. */}
+              {review.narrative && (
+                <div className="rounded-3xl border border-hairline bg-cream-card p-6">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
+                    How it reads
+                  </p>
+                  <p className="mt-2 whitespace-pre-wrap text-base leading-relaxed text-ink">{review.narrative}</p>
+                </div>
+              )}
+
+              {/* 3 — the hero. One change, for the whole review. */}
               {review.oneThing && (
                 <div className="rounded-3xl bg-peach-tint/60 p-6">
                   <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
@@ -929,13 +942,35 @@ export default function LookItOver() {
                       review used: the place, then what about it. A teacher
                       can act on one of these without re-reading the rest. */}
                   {lens.points && lens.points.length > 0 && (
-                    <div className="mt-3 flex flex-col gap-3">
+                    <div className="mt-3 flex flex-col gap-3.5">
                       {lens.points.map((point) => (
                         <div key={point.label}>
-                          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">
-                            {point.label}
+                          <p className="flex flex-wrap items-center gap-2">
+                            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">
+                              {point.label}
+                            </span>
+                            {/* Named, not colour-coded alone: a teacher
+                                skimming for what they did well should be able
+                                to find it by reading. */}
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${
+                                point.kind === 'strength'
+                                  ? 'bg-mint-tint text-forest'
+                                  : 'bg-peach-tint text-terracotta-600'
+                              }`}
+                            >
+                              {point.kind === 'strength' ? 'Strength' : 'Worth changing'}
+                            </span>
                           </p>
-                          <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{point.body}</p>
+                          <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{point.body}</p>
+                          {point.recommendation && (
+                            <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">
+                              <span className="font-semibold text-forest">
+                                {point.kind === 'strength' ? 'Keep it going: ' : 'Try this: '}
+                              </span>
+                              {point.recommendation}
+                            </p>
+                          )}
                         </div>
                       ))}
                     </div>

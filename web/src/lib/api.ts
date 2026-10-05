@@ -2084,7 +2084,14 @@ export type ReviewLens = {
   /// The finding broken into named parts, each explained — the shape the old
   /// presentation review used. A paragraph says what is wrong; these say
   /// where, one at a time.
-  points?: { label: string; body: string }[]
+  points?: {
+    label: string
+    /// Whether this part is something that works or something that costs.
+    kind: 'strength' | 'weakness'
+    body: string
+    /// What to do about it. Null on a strength that needs nothing added.
+    recommendation?: string | null
+  }[]
 }
 
 export type TimingBasis = { minutes: [number, number]; assumption: string }
@@ -2116,6 +2123,9 @@ export type Review = {
   lenses: ReviewLens[]
   oneThing: string | null
   oneThingDetail?: string | null
+  /// How the document reads as a whole, and what already works in it. The
+  /// report opens with this.
+  narrative?: string | null
   assumptions?: Assumption[]
   notVisible?: string[]
   scope?: ReviewScope | null

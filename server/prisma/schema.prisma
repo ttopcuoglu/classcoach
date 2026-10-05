@@ -646,6 +646,11 @@ model Review {
   // The sentence under that headline.
   oneThingDetail String?
 
+  // How the document reads as a whole, and what already works in it. The
+  // report opens with this rather than with the change to make: a review that
+  // leads with the problem reads as a verdict on the teacher's work.
+  narrative   String?
+
   // [{ label, value, calibratable }] — the basis for every number the result
   // shows. Stored rather than re-derived: a figure whose basis is gone is a
   // figure nobody can check, and the rule is that each one traces to an entry

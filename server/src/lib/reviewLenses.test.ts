@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
 import { DOC_TYPES, DOC_TYPE_LABELS, LENSES, LENSES_BY_TYPE, RETIRED_LENS_KEYS, REVIEW_LIMITS, allowedLensKeys, defaultLensesFor, detectDocType, evidenceFor, isDocType } from './reviewLenses.ts'
 
@@ -390,4 +391,24 @@ test('every lens instruction asks for something specific', () => {
     assert.ok(lens.instruction.length > 120, `${key}'s instruction is too thin to produce a finding`)
     assert.ok(lens.blurb.length > 0, `${key} has no blurb, which is the report's subtitle`)
   }
+})
+
+// --- the report says what works, not only what does not ---
+
+// This is a prompt rule rather than a data rule, so what can be checked here
+// is that the rule is actually in the prompt the model receives. A review that
+// only lists faults reads as a verdict on the teacher's work, and is usually
+// also untrue — someone made deliberate choices and some of them worked.
+test('the run prompt asks for strengths and forbids inventing them', async () => {
+  const source = await readFile(new URL('../routes/reviews.ts', import.meta.url), 'utf8')
+  assert.match(source, /AT LEAST ONE must be a strength/)
+  assert.match(source, /Never invent a strength/)
+  // And a recommendation on each part, which is what makes a finding usable.
+  assert.match(source, /"recommendation" is what to do about it/)
+})
+
+test('the run prompt opens the report with a narrative', async () => {
+  const source = await readFile(new URL('../routes/reviews.ts', import.meta.url), 'utf8')
+  assert.match(source, /<narrative>/)
+  assert.match(source, /what already works/)
 })

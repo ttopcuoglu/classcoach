@@ -251,6 +251,20 @@ const REVIEWED = review({
       blurb: 'Item by item.',
       on: true,
       finding: 'Items 1-3 are recall. Item 4 is really a reading test.',
+      points: [
+        {
+          label: 'Items 1-3',
+          kind: 'strength' as const,
+          recommendation: null,
+          body: 'Clean recall items that ask exactly one thing each. A student either knows the term or does not, which is what you want this early.',
+        },
+        {
+          label: 'Item 4',
+          kind: 'weakness' as const,
+          recommendation: 'Split it in two: one item on the reading, one on transport.',
+          body: 'A 90-word scenario before any biology appears. A student who knows the content can still lose it on reading speed.',
+        },
+      ],
     },
     { key: 'ai_risk', label: 'AI completion risk', blurb: 'What a chatbot could do.', on: false, finding: null },
   ],
@@ -1123,8 +1137,8 @@ test('a finding shows its named parts, each explained', async () => {
         title: 'Four of eighteen test reading',
         body: 'The recall items do their job.',
         points: [
-          { label: 'Item 4', body: 'A 90-word scenario before any biology appears. A student who knows the content can still lose it on reading speed.' },
-          { label: 'Items 9 and 12', body: 'The correct option is longer and more precise than the others, which is a tell students learn fast.' },
+          { label: 'Item 4', kind: 'weakness' as const, recommendation: 'Split it in two: one item on the reading, one on transport.', body: 'A 90-word scenario before any biology appears. A student who knows the content can still lose it on reading speed.' },
+          { label: 'Items 9 and 12', kind: 'strength' as const, recommendation: null, body: 'The correct option is longer and more precise than the others, which is a tell students learn fast.' },
         ],
       },
     ],
@@ -1201,4 +1215,50 @@ test('toggling a lens updates the count', async () => {
   fireEvent.click(screen.getByRole('button', { name: /AI completion risk/ }))
 
   await waitFor(() => expect(screen.getByText(/3 of 3 on/)).toBeTruthy())
+})
+
+// --- strengths, not only faults ---
+
+// A review that only lists faults reads as a verdict on the teacher rather
+// than help with the document — and it is usually untrue, because someone
+// made deliberate choices here and some of them worked.
+test('the report opens with how it reads, before anything to change', async () => {
+  const withNarrative = review({
+    ...REVIEWED,
+    narrative: 'This is a tight unit quiz that knows what it is assessing. The recall items are clean and the ordering builds.',
+  })
+  createReview.mockResolvedValue(review())
+  runReview.mockResolvedValue(withNarrative)
+  renderPage()
+  await waitFor(() => expect(screen.getByText('What are you looking over?')).toBeTruthy())
+  chooseType()
+  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+  await waitFor(() => expect(screen.getByText(/Got it — reviewing as/)).toBeTruthy())
+  fireEvent.click(screen.getAllByRole('button', { name: 'Look it over' })[0])
+
+  await waitFor(() => expect(screen.getByText('How it reads')).toBeTruthy())
+  expect(screen.getByText(/This is a tight unit quiz/)).toBeTruthy()
+  // Before the change to make.
+  const all = Array.from(document.querySelectorAll('*'))
+  expect(all.indexOf(screen.getByText('How it reads'))).toBeLessThan(
+    all.indexOf(screen.getByText('If you change one thing')),
+  )
+})
+
+test('each part says whether it works, and what to do about it', async () => {
+  await openReviewed()
+
+  // Named rather than colour-coded alone, so a teacher skimming for what they
+  // did well can find it by reading.
+  expect(screen.getByText('Strength')).toBeTruthy()
+  expect(screen.getByText('Worth changing')).toBeTruthy()
+  expect(screen.getByText(/Split it in two/)).toBeTruthy()
+  expect(screen.getByText('Try this:')).toBeTruthy()
+})
+
+// A strength with nothing to add says nothing rather than padding.
+test('a strength with no recommendation offers none', async () => {
+  await openReviewed()
+  expect(screen.queryByText('Keep it going:')).toBeNull()
 })

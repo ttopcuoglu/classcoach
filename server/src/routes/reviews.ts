@@ -78,7 +78,7 @@ type StoredLens = {
   /// presentation review used ("Opening hook", "Pacing & timing", …). A
   /// paragraph says what is wrong; these say where, one at a time, so a
   /// teacher can act on one without re-reading the rest.
-  points?: { label: string; body: string }[]
+  points?: { label: string; kind: 'strength' | 'weakness'; body: string; recommendation: string | null }[]
 }
 
 function parseLenses(value: unknown, docType: DocType): StoredLens[] {
@@ -137,6 +137,7 @@ function toReview(row: {
   lenses: unknown
   oneThing: string | null
   oneThingDetail: string | null
+  narrative: string | null
   assumptions: unknown
   notVisible: unknown
   scopeMode: string | null
@@ -190,6 +191,7 @@ function toReview(row: {
     })),
     oneThing: row.oneThing,
     oneThingDetail: row.oneThingDetail ?? null,
+    narrative: row.narrative ?? null,
     assumptions: Array.isArray(row.assumptions) ? row.assumptions : [],
     notVisible: Array.isArray(row.notVisible) ? row.notVisible.filter((n) => typeof n === 'string') : [],
     scope: row.scopeMode ? { mode: row.scopeMode, label: row.scopeLabel ?? null } : null,
@@ -228,6 +230,7 @@ const SELECT = {
   lenses: true,
   oneThing: true,
   oneThingDetail: true,
+  narrative: true,
   assumptions: true,
   notVisible: true,
   scopeMode: true,
@@ -499,16 +502,24 @@ ${CORE_COACHING_RULES}`
 /// finding, and dropping it would lose the only thing the lens produced.
 /// The named parts of a finding. Anything without both a label and a body is
 /// dropped: a heading with nothing under it is worse than no heading.
-function parsePoints(value: unknown): { label: string; body: string }[] {
+function parsePoints(value: unknown): NonNullable<StoredLens['points']> {
   if (!Array.isArray(value)) return []
   return value
     .filter((p): p is Record<string, unknown> => !!p && typeof p === 'object')
     .map((p) => ({
       label: typeof p.label === 'string' ? p.label.trim() : '',
+      // Anything not explicitly a strength is read as a weakness: a model that
+      // forgot the field was almost certainly describing a problem, and
+      // mislabelling a problem as praise is the worse of the two mistakes.
+      kind: (p.kind === 'strength' ? 'strength' : 'weakness') as 'strength' | 'weakness',
       body: typeof p.body === 'string' ? p.body.trim() : '',
+      // A strength needs no recommendation; a weakness without one is just a
+      // complaint, but it is still worth showing.
+      recommendation:
+        typeof p.recommendation === 'string' && p.recommendation.trim() ? p.recommendation.trim() : null,
     }))
     .filter((p) => p.label && p.body)
-    .slice(0, 5)
+    .slice(0, 6)
 }
 
 function parseLensFinding(raw: string): Partial<StoredLens> | null {
@@ -558,7 +569,7 @@ function buildRunPrompt(
   const lensBlocks = lensKeys
     .map(
       (key, i) =>
-        `<lens_${i + 1} key="${key}">\n${LENSES[key].label}: ${LENSES[key].instruction}\n\nAnswer as a JSON object and nothing else: {"title": "...", "body": "...", "points": [{"label": "...", "body": "..."}], "confidence": "high|low", "evidence": ["..."]}\n- "title" is three to six words naming what you found, not the lens's own name.\n- "body" is the finding, three to five sentences. Say what you saw, where, and what it means for this class — not a summary of the lens.\n- "points" breaks it into the specific places a teacher can act on, two to four of them, each a {label, body}. "label" is two to four words naming the spot — "Item 4", "Slides 9-12", "The closing", "Step 2 of the directions". "body" is TWO OR MORE sentences: what is there, and why it matters or what to do instead. One-line points are the thing to avoid — a teacher who cannot act on it did not need to be told.\n- Every point must be about something actually in the document. Fewer, real points beat four invented ones.\n- "confidence" is "low" when the document did not give you enough to judge this. Say what you cannot see in the body rather than guessing — a confident answer built on nothing is worse than no answer.\n- "evidence" quotes or names the parts of the document you are pointing at. Empty if you are reasoning about an absence.\n</lens_${i + 1}>`,
+        `<lens_${i + 1} key="${key}">\n${LENSES[key].label}: ${LENSES[key].instruction}\n\nAnswer as a JSON object and nothing else: {"title": "...", "body": "...", "points": [{"label": "...", "body": "..."}], "confidence": "high|low", "evidence": ["..."]}\n- "title" is three to six words naming what you found, not the lens's own name.\n- "body" is the finding, three to five sentences. Say what you saw, where, and what it means for this class — not a summary of the lens.\n- "points" breaks it into specific places in the document, three to five of them, each a {label, kind, body, recommendation}.\n  - "label" is two to four words naming the spot — "Item 4", "Slides 9-12", "The closing", "Step 2 of the directions".\n  - "kind" is "strength" or "weakness". AT LEAST ONE must be a strength wherever one honestly exists, and in most documents one does. A review that only lists faults is read as a verdict on the teacher rather than help with the document, and it is usually also untrue — someone made deliberate choices here and some of them worked.\n  - "body" is TWO OR MORE sentences: what is there, and why it works or why it costs something. Name the thing, do not characterise it.\n  - "recommendation" is what to do about it, in one or two sentences, specific enough to act on before tomorrow. For a strength, say how to keep or extend it — or use null if there is genuinely nothing to add.\n- Never invent a strength. Praising something that is not there costs you every other thing you say.\n- Every point must be about something actually in the document. Three real points beat five invented ones.\n- "confidence" is "low" when the document did not give you enough to judge this. Say what you cannot see in the body rather than guessing — a confident answer built on nothing is worse than no answer.\n- "evidence" quotes or names the parts of the document you are pointing at. Empty if you are reasoning about an absence.\n</lens_${i + 1}>`,
     )
     .join('\n')
 
@@ -568,6 +579,14 @@ This document is a ${DOC_TYPE_LABELS[docType].toLowerCase()}.${classLine ? `\nIt
 
 ${sectionLabel ? `\nYou are reading one part of a longer document: ${sectionLabel}. Judge only what is in front of you, and do not infer what the rest contains. Where something looks missing, say it may be elsewhere in the document rather than that it is absent.\n` : ''}
 Respond with exactly these sections and nothing outside them.
+
+<narrative>
+How this document reads as a whole, in four to six sentences, and the first thing in the report.
+
+Say what it is and what it is trying to do, in the teacher's terms. Say what already works — specifically, naming the parts — before anything that does not. Then say, in a sentence, where the rest of this review is going to concentrate.
+
+This is the paragraph a teacher reads before they are told anything to change, so it has to be true rather than warm: name real choices they made, not "a solid effort". If the document is genuinely weak, say what it is reaching for rather than inventing a strength it does not have.
+</narrative>
 
 <one_thing>
 A JSON object and nothing else: {"headline": "...", "detail": "..."}
@@ -791,6 +810,7 @@ reviewsRouter.post('/:id/run', async (req, res) => {
       where: { id: existing.id },
       data: {
         lenses: withFindings,
+        narrative: extractTag(text, 'narrative')?.trim() || null,
         scopeMode: chosenSection ? 'section' : sections.length > 0 ? 'whole' : null,
         scopeLabel: chosenSection?.label ?? null,
         oneThing,
