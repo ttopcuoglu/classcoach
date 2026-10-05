@@ -24,6 +24,10 @@ struct LessonContentTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // Every other Insights page opens with its paragraph; this one
+            // opened with a bare heading and a button.
+            CoachNoteView(text: session.contentNarrative)
+
             // Only when the lesson actually contained one — "None detected"
             // over a lesson built on a cooking example said more about the
             // detector than the teaching.
@@ -42,6 +46,22 @@ struct LessonContentTab: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
                 }
+            }
+
+            if let ideas = session.contentNotes?.connectionIdeas, !ideas.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("WAYS INTO THIS TOPIC · IDEAS FOR NEXT TIME")
+                        .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.terracotta600)
+                    Text("Suggestions from a subject specialist, not a reading of your lesson.")
+                        .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                    ForEach(ideas, id: \.self) { idea in
+                        Text("• \(idea)").font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppTheme.goldTint.opacity(0.5), in: RoundedRectangle(cornerRadius: 16))
             }
 
             Text("CONTENT SPECIALIST NOTES")

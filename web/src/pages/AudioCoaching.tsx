@@ -2738,6 +2738,7 @@ function ReportPanel({
               <LessonContentTab
                 lessonContent={session.lessonContent}
                 contentNotes={session.contentNotes}
+                narrative={session.contentNarrative ?? null}
                 isShort={coverage.isShort}
                 sending={contentNotesSending}
                 error={contentNotesError}
@@ -4290,6 +4291,7 @@ const CONTENT_NOTE_LABEL_STYLES: Record<string, string> = {
 function LessonContentTab({
   lessonContent,
   contentNotes,
+  narrative,
   isShort,
   sending,
   error,
@@ -4297,6 +4299,7 @@ function LessonContentTab({
 }: {
   lessonContent: AudioLessonContent | null
   contentNotes: AudioContentNotes | null
+  narrative: string | null
   isShort: boolean
   sending: boolean
   error: string | null
@@ -4306,8 +4309,14 @@ function LessonContentTab({
   const visibleNotes = contentNotes?.notes.filter((n) => !dismissed.has(n.id)) ?? []
   const connections = lessonContent?.connections ?? []
 
+  const connectionIdeas = contentNotes?.connectionIdeas ?? []
+
   return (
     <div className="flex flex-col gap-5">
+      {/* Every other Insights page opens with its paragraph; this one opened
+          with a bare heading and a button. */}
+      {narrative && <CoachNote text={narrative} />}
+
       {/* Only when the lesson actually contained one. The old section printed
           "None detected" over a lesson built on a cooking example, which said
           more about the detector than the teaching — so silence is the right
@@ -4323,6 +4332,24 @@ function LessonContentTab({
               <p className="mt-1 text-xs text-ink-soft">{formatTime(c.timestampSec)}</p>
             </div>
           ))}
+        </div>
+      )}
+
+      {connectionIdeas.length > 0 && (
+        <div className="rounded-xl border border-hairline bg-gold-tint/40 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">
+            Ways into this topic · ideas for next time
+          </p>
+          <p className="mt-1 text-xs text-ink-soft">
+            Suggestions from a specialist in {contentNotes?.subject || 'this subject'}, not a reading of your lesson.
+          </p>
+          <ul className="mt-2 flex list-disc flex-col gap-1.5 pl-5">
+            {connectionIdeas.map((idea) => (
+              <li key={idea.slice(0, 32)} className="text-sm text-ink">
+                {idea}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

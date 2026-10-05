@@ -655,6 +655,8 @@ export type AudioContentNote = {
 export type AudioContentNotes = {
   subject: string
   notes: AudioContentNote[]
+  /** Ways into this topic from the world students live in — ideas for next time. */
+  connectionIdeas?: string[]
   /** What trips students up in this topic — subject knowledge, not a reading of this lesson. */
   misconceptions?: string[]
 }

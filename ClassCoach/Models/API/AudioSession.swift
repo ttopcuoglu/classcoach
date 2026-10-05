@@ -113,6 +113,9 @@ struct AudioContentNote: Decodable, Identifiable {
 struct AudioContentNotes: Decodable {
     let subject: String
     let notes: [AudioContentNote]
+    /// Ways into this topic from the world students live in — ideas for next
+    /// time, not a reading of the lesson. Absent on older notes.
+    let connectionIdeas: [String]?
     /// What trips students up in this topic — subject knowledge, not a reading
     /// of this lesson. Absent on notes written before it existed.
     let misconceptions: [String]?

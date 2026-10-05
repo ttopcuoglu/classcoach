@@ -81,6 +81,9 @@ const REFLECT_START_MESSAGE = 'Start our reflection conversation.'
 // note was about rather than whether it was working, so a teacher couldn't
 // tell praise from a suggestion without reading every word.
 const CONTENT_NOTE_LABELS = new Set(['What worked', 'Where it could go further', 'Worth double-checking'])
+/// Up to this many "ways into this topic from the world students live in"
+/// ideas. Suggestions for next time, never a claim the lesson lacked them.
+const MAX_CONNECTION_IDEAS = 3
 /// Up to this many "what trips students up in this topic" lines. Subject
 /// knowledge, not a reading of the lesson, and labelled that way wherever
 /// it's shown.
@@ -124,15 +127,20 @@ ${exhibits.map((e, i) => `[${i + 1}] ${e.text}`).join('\n')}
 
 Write in plain text only — no markdown.
 
-Then, separately from the notes, write up to ${MAX_MISCONCEPTIONS} lines on what commonly trips students up in THIS topic and the move that heads it off. This part is your subject knowledge, not a reading of this lesson — write it even if the teacher already handled it, and never imply they didn't. One sentence each, concrete and specific to the topic.
+Then, separately from the notes, write up to ${MAX_CONNECTION_IDEAS} real-world connections a teacher could use for THIS topic — the everyday thing, job, story, or phenomenon, and the question that opens it with students. Concrete and specific: "a monthly calendar app's moon icons" beats "something from daily life". These are ideas for next time, so write them even if the teacher already made good connections, and never imply they made none.
 
-Respond with the note block below repeated 4 to 6 times, then one misconceptions block, and nothing else:
+Then write up to ${MAX_MISCONCEPTIONS} lines on what commonly trips students up in THIS topic and the move that heads it off. This part is your subject knowledge, not a reading of this lesson — write it even if the teacher already handled it, and never imply they didn't. One sentence each, concrete and specific to the topic.
+
+Respond with the note block below repeated 4 to 6 times, then one connections block and one misconceptions block, and nothing else:
 <note>
 <label>one of: What worked, Where it could go further, Worth double-checking</label>
 <exhibit>the excerpt number this note is grounded in</exhibit>
 <text>1-2 sentences of warm, constructive feedback</text>
 </note>
 
+<connection_ideas>
+one connection per line, or NONE
+</connection_ideas>
 <misconceptions>
 one sentence per line, or NONE
 </misconceptions>
@@ -144,7 +152,11 @@ ${CORE_COACHING_RULES}`
 /// Subject knowledge about the topic, kept apart from the notes so it can be
 /// shown as exactly that rather than as a finding about the lesson.
 function parseMisconceptions(text: string): string[] {
-  const block = extractTag(text, 'misconceptions')
+  return parseLines(text, 'misconceptions', MAX_MISCONCEPTIONS)
+}
+
+function parseLines(text: string, tag: string, max: number): string[] {
+  const block = extractTag(text, tag)
   if (!block || block.toUpperCase().includes('NONE')) return []
   return block
     .split('\n')
@@ -153,7 +165,7 @@ function parseMisconceptions(text: string): string[] {
     // A reply that ran into the token ceiling ends mid-sentence; half a
     // misconception is worse than one fewer.
     .filter((line) => /[.!?]$/.test(line))
-    .slice(0, MAX_MISCONCEPTIONS)
+    .slice(0, max)
 }
 
 export function parseContentNotes(text: string, exhibits: { text: string; timestampSec: number }[]): ContentNote[] {
@@ -955,7 +967,14 @@ audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
 
     const updated = await prisma.audioSession.update({
       where: { id: session.id },
-      data: { contentNotes: { subject, notes, misconceptions: parseMisconceptions(text) } },
+      data: {
+        contentNotes: {
+          subject,
+          notes,
+          connectionIdeas: parseLines(text, 'connection_ideas', MAX_CONNECTION_IDEAS),
+          misconceptions: parseMisconceptions(text),
+        },
+      },
       include: { segments: { orderBy: { startSec: 'asc' } } },
     })
     res.json(updated)
@@ -1219,7 +1238,9 @@ might" — so a question phrased another way is counted as recall even when it
 asked for real thinking. Never let that number stand as a judgement of the
 teacher's questioning.
 
-Respond with exactly these five blocks and nothing else. The summary block
+Then THE CONTENT NOTE: one warm paragraph opening the Clarity & Content section — what this lesson was about and what the teacher did with the content: the explanation, the model or representation, the examples, the vocabulary, the connections drawn. Lead with what worked; this paragraph opens the section, it does not grade it. Name the actual ideas and terms, never "the content" in the abstract.
+
+Respond with exactly these six blocks and nothing else. The summary block
 holds all three paragraphs described above, separated by blank lines — one
 paragraph back is a failure, not a concise answer:
 <class_summary>
@@ -1241,6 +1262,9 @@ Your talk note.
 <questions_note>
 Your questions note.
 </questions_note>
+<content_note>
+Your content note.
+</content_note>
 ${CORE_COACHING_RULES}
 ${TRANSCRIPT_RELIABILITY_NOTICE}`
 }
@@ -1376,6 +1400,7 @@ async function writeClassSummary(
   const climateNarrative = extractTag(text, 'climate_note')
   const talkNarrative = extractTag(text, 'talk_note')
   const questionsNarrative = extractTag(text, 'questions_note')
+  const contentNarrative = extractTag(text, 'content_note')
   const classSummary = extractTag(text, 'class_summary')
   if (!classSummary) return null
 
@@ -1387,6 +1412,7 @@ async function writeClassSummary(
       ...(climateNarrative ? { climateNarrative: normalizeParagraphs(climateNarrative) } : {}),
       ...(talkNarrative ? { talkNarrative: normalizeParagraphs(talkNarrative) } : {}),
       ...(questionsNarrative ? { questionsNarrative: normalizeParagraphs(questionsNarrative) } : {}),
+      ...(contentNarrative ? { contentNarrative: normalizeParagraphs(contentNarrative) } : {}),
     },
     include: { segments: { orderBy: { startSec: 'asc' } } },
   })
