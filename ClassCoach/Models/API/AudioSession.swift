@@ -113,6 +113,9 @@ struct AudioContentNote: Decodable, Identifiable {
 struct AudioContentNotes: Decodable {
     let subject: String
     let notes: [AudioContentNote]
+    /// What trips students up in this topic — subject knowledge, not a reading
+    /// of this lesson. Absent on notes written before it existed.
+    let misconceptions: [String]?
 }
 
 /// Mirrors `web/src/lib/api.ts`'s `AudioRubricLens` — a session's evidence

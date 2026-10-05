@@ -4272,10 +4272,13 @@ function ReflectTab({
 /// listed beside it, so the section says what a subject specialist who
 /// listened would say, about the content and about how it was delivered.
 const CONTENT_NOTE_LABEL_STYLES: Record<string, string> = {
+  'What worked': 'bg-mint-tint/60 text-forest',
+  'Where it could go further': 'bg-gold-tint text-terracotta-600',
+  'Worth double-checking': 'bg-peach-tint text-terracotta-600',
+  // Labels from before specialist notes were strengths-and-next-steps.
   Clarity: 'bg-mint-tint/60 text-forest',
   Vocabulary: 'bg-mint-tint/60 text-forest',
   'Engagement with content': 'bg-mint-tint/60 text-forest',
-  'Worth double-checking': 'bg-peach-tint text-terracotta-600',
 }
 /// Content Specialist Notes, and nothing else.
 ///
@@ -4352,6 +4355,24 @@ function LessonContentTab({
               This session is under {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes — content feedback from a
               short sample is especially limited.
             </p>
+          )}
+          {(contentNotes.misconceptions ?? []).length > 0 && (
+            <div className="rounded-xl border border-hairline bg-mint-tint/30 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-forest">
+                Teaching this topic · where students usually get stuck
+              </p>
+              <p className="mt-1 text-xs text-ink-soft">
+                Subject knowledge about {contentNotes.subject || 'this topic'}, not a reading of your lesson — you may
+                well have covered it.
+              </p>
+              <ul className="mt-2 flex list-disc flex-col gap-1.5 pl-5">
+                {(contentNotes.misconceptions ?? []).map((m) => (
+                  <li key={m.slice(0, 32)} className="text-sm text-ink">
+                    {m}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
           {visibleNotes.length === 0 ? (
             <p className="text-sm text-ink-soft">No notes to show.</p>

@@ -647,12 +647,17 @@ export type AudioLessonContent = {
 
 export type AudioContentNote = {
   id: string
-  label: 'Clarity' | 'Vocabulary' | 'Engagement with content' | 'Worth double-checking'
+  label: 'What worked' | 'Where it could go further' | 'Worth double-checking'
   text: string
   timestampSec: number
   excerpt: string
 }
-export type AudioContentNotes = { subject: string; notes: AudioContentNote[] }
+export type AudioContentNotes = {
+  subject: string
+  notes: AudioContentNote[]
+  /** What trips students up in this topic — subject knowledge, not a reading of this lesson. */
+  misconceptions?: string[]
+}
 
 // Rubric Lens — the session's evidence organised under a teaching
 // framework's components. Evidence and next steps only, never a level.

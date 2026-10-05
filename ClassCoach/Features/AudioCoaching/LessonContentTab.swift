@@ -63,6 +63,22 @@ struct LessonContentTab: View {
             } else {
                 Text("These notes are generated from a short audio excerpt and may miss context. They're a starting point for your own reflection, not a factual review — use your own subject expertise as the final word.")
                     .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                if let misconceptions = session.contentNotes?.misconceptions, !misconceptions.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("TEACHING THIS TOPIC · WHERE STUDENTS USUALLY GET STUCK")
+                            .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.forest)
+                        Text("Subject knowledge, not a reading of your lesson — you may well have covered it.")
+                            .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                        ForEach(misconceptions, id: \.self) { line in
+                            Text("• \(line)").font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppTheme.mintTint.opacity(0.4), in: RoundedRectangle(cornerRadius: 16))
+                }
+
                 ForEach(visibleNotes, id: \.id) { note in
                     VStack(alignment: .leading, spacing: 6) {
                         Text(note.label.uppercased())

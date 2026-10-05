@@ -76,7 +76,15 @@ ${CORE_COACHING_RULES}`
 const REFLECT_TURN_CAP = 12
 const REFLECT_START_MESSAGE = 'Start our reflection conversation.'
 
-const CONTENT_NOTE_LABELS = new Set(['Clarity', 'Vocabulary', 'Engagement with content', 'Worth double-checking'])
+// A specialist's read is strengths first, then where the content could go
+// further — the old labels (Clarity, Vocabulary, Engagement) described what a
+// note was about rather than whether it was working, so a teacher couldn't
+// tell praise from a suggestion without reading every word.
+const CONTENT_NOTE_LABELS = new Set(['What worked', 'Where it could go further', 'Worth double-checking'])
+/// Up to this many "what trips students up in this topic" lines. Subject
+/// knowledge, not a reading of the lesson, and labelled that way wherever
+/// it's shown.
+const MAX_MISCONCEPTIONS = 3
 const MIN_CONTENT_EXHIBITS = 3
 const NOT_ENOUGH_CONTENT_ERROR = 'This recording caught too little of what you said to write content notes.'
 
@@ -104,25 +112,48 @@ export function buildContentNotesSystemPrompt(
 
 You are working from a short audio transcript excerpt only. You have not seen the full lesson, materials, board work, or planning documents, and audio transcription may contain errors. Do not state or imply factual corrections with confidence — frame anything content-related as a question, a suggestion to double-check, or an observation, never as an assertion that something is wrong.${shortRecordingNotice}
 
-Focus primarily on things you can reasonably assess from spoken language alone: clarity of explanation, whether key vocabulary was defined, whether examples helped build understanding, whether the content connects to what students likely already know. Avoid commenting on strict factual accuracy unless a claim is unambiguous and verifiably incorrect independent of context — and even then, phrase it as a gentle check, not a correction.
+Focus on how this particular content was taught: the explanation, the representation or model used, the examples, the vocabulary, the sequence, and what the next layer of depth would be. Judge it as a specialist in this topic would — someone who knows where students usually get stuck in it and what tends to work. Avoid commenting on strict factual accuracy unless a claim is unambiguous and verifiably incorrect independent of context — and even then, phrase it as a gentle check, not a correction.
 
 Never invent or assume standards, curriculum, or grade-level expectations not evident in the transcript.
 
-Below are numbered excerpts from the transcript, each an exact quote. Write 2-4 short notes, each grounded in exactly one excerpt below — reference it only by its number, never quote or restate the excerpt text yourself.
+Below are numbered excerpts from the transcript, each an exact quote. Write 4 to 6 notes, each grounded in exactly one excerpt below — reference it only by its number, never quote or restate the excerpt text yourself. At least two should be "What worked" and at least two "Where it could go further", so the teacher gets both. Use "Worth double-checking" only if something genuinely warrants it.
+
+A "What worked" note names the content move that was effective and why it works for this topic — not just that it was good. A "Where it could go further" note names one concrete, specific thing to try: a representation, a question to ask, an order to put two ideas in, a distinction to draw. It is a suggestion for next time, never a verdict on the teacher. Two sentences at most each.
 
 ${exhibits.map((e, i) => `[${i + 1}] ${e.text}`).join('\n')}
 
 Write in plain text only — no markdown.
 
-Respond with exactly this block, repeated 2 to 4 times, and nothing else:
+Then, separately from the notes, write up to ${MAX_MISCONCEPTIONS} lines on what commonly trips students up in THIS topic and the move that heads it off. This part is your subject knowledge, not a reading of this lesson — write it even if the teacher already handled it, and never imply they didn't. One sentence each, concrete and specific to the topic.
+
+Respond with the note block below repeated 4 to 6 times, then one misconceptions block, and nothing else:
 <note>
-<label>one of: Clarity, Vocabulary, Engagement with content, Worth double-checking</label>
+<label>one of: What worked, Where it could go further, Worth double-checking</label>
 <exhibit>the excerpt number this note is grounded in</exhibit>
 <text>1-2 sentences of warm, constructive feedback</text>
 </note>
 
+<misconceptions>
+one sentence per line, or NONE
+</misconceptions>
+
 Reserve "Worth double-checking" strictly for a concrete, plainly-stated factual claim — never for opinions, interpretations, or open-ended discussion — and always phrase it as a question, e.g. "Worth double-checking: ... — was that the intended framing?" Use it rarely, and only include it at all if something genuinely fits.
 ${CORE_COACHING_RULES}`
+}
+
+/// Subject knowledge about the topic, kept apart from the notes so it can be
+/// shown as exactly that rather than as a finding about the lesson.
+function parseMisconceptions(text: string): string[] {
+  const block = extractTag(text, 'misconceptions')
+  if (!block || block.toUpperCase().includes('NONE')) return []
+  return block
+    .split('\n')
+    .map((line) => line.replace(/^[-•*\d.\s]+/, '').trim())
+    .filter((line) => line.length > 20)
+    // A reply that ran into the token ceiling ends mid-sentence; half a
+    // misconception is worse than one fewer.
+    .filter((line) => /[.!?]$/.test(line))
+    .slice(0, MAX_MISCONCEPTIONS)
 }
 
 export function parseContentNotes(text: string, exhibits: { text: string; timestampSec: number }[]): ContentNote[] {
@@ -142,7 +173,7 @@ export function parseContentNotes(text: string, exhibits: { text: string; timest
       timestampSec: exhibit.timestampSec,
       excerpt: exhibit.text,
     })
-    if (notes.length >= 4) break
+    if (notes.length >= 6) break
   }
   return notes
 }
@@ -906,7 +937,7 @@ audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 600,
+      max_tokens: 2200,
       system: buildContentNotesSystemPrompt(subject, topic, exhibits, session.durationSec ?? 0),
       messages: [{ role: 'user', content: 'Write the notes now.' }],
     })
@@ -924,7 +955,7 @@ audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
 
     const updated = await prisma.audioSession.update({
       where: { id: session.id },
-      data: { contentNotes: { subject, notes } },
+      data: { contentNotes: { subject, notes, misconceptions: parseMisconceptions(text) } },
       include: { segments: { orderBy: { startSec: 'asc' } } },
     })
     res.json(updated)
