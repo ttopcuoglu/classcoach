@@ -10,7 +10,6 @@ import {
   MailIcon,
   MicIcon,
   PlayIcon,
-  StarIcon,
 } from '../components/icons'
 import {
   getAssignmentCoachSessions,
@@ -605,19 +604,7 @@ export default function Home() {
         <p className="mt-2 text-base text-ink">{tip}</p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Link
-          to="/cheat-sheet"
-          className="group flex items-center gap-4 rounded-2xl bg-peach-tint/50 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
-        >
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-terracotta text-cream">
-            <StarIcon className="h-5 w-5" />
-          </span>
-          <div>
-            <p className="font-heading text-base font-bold text-forest">Your Cheat Sheet</p>
-            <p className="text-xs text-ink-soft">Go-to phrases, auto-built from your saved content.</p>
-          </div>
-        </Link>
+      <div className="grid gap-3">
         {experienced ? (
           <Link
             to="/audio-coaching#my-growth"

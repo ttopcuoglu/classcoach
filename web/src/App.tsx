@@ -17,7 +17,6 @@ const Communications = lazy(() => import('./pages/Communications'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Export = lazy(() => import('./pages/Export'))
 const Shared = lazy(() => import('./pages/Shared'))
-const CheatSheet = lazy(() => import('./pages/CheatSheet'))
 const FirstThirtyDays = lazy(() => import('./pages/FirstThirtyDays'))
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
 const AudioCoaching = lazy(() => import('./pages/AudioCoaching'))
@@ -41,7 +40,6 @@ const GuideAskPractice = lazy(() => import('./pages/GuideAskPractice'))
 const GuideLessonPlanning = lazy(() => import('./pages/GuideLessonPlanning'))
 const GuideAssignmentCoach = lazy(() => import('./pages/GuideAssignmentCoach'))
 const GuideCommunicationCoach = lazy(() => import('./pages/GuideCommunicationCoach'))
-const GuideCheatSheet = lazy(() => import('./pages/GuideCheatSheet'))
 const Faq = lazy(() => import('./pages/Faq'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
@@ -151,7 +149,6 @@ export default function App() {
             <Route path="guide/lesson-planning" element={<GuideLessonPlanning />} />
             <Route path="guide/assignment-coach" element={<GuideAssignmentCoach />} />
             <Route path="guide/communication-coach" element={<GuideCommunicationCoach />} />
-            <Route path="guide/cheat-sheet" element={<GuideCheatSheet />} />
             <Route path="faq" element={<Faq />} />
             <Route path="for-schools" element={<ForSchools />} />
             <Route
@@ -248,7 +245,6 @@ export default function App() {
               <Route path="lesson-planning" element={<LessonPlanning />} />
               <Route path="assignment-coach" element={<AssignmentCoach />} />
               <Route path="profile" element={<Profile />} />
-              <Route path="cheat-sheet" element={<CheatSheet />} />
               <Route path="first-30-days" element={<FirstThirtyDays />} />
               {/* Always registered, so /admin never falls through to a blank page
                   (e.g. right after logging out on it) — a teacher is sent home. */}

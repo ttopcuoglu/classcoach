@@ -13,7 +13,6 @@ import {
   LessonPlanIcon,
   MailIcon,
   MicIcon,
-  StarIcon,
   TargetIcon,
   UserIcon,
   WaveformIcon,
@@ -47,7 +46,6 @@ const NAV_GROUPS: NavGroup[] = [
     icon: ArrowUpIcon,
     items: [
       { to: '/profile', label: 'Profile', icon: UserIcon },
-      { to: '/cheat-sheet', label: 'Cheat Sheet', icon: StarIcon },
       { to: '/first-30-days', label: 'First 30 Days', icon: ChecklistIcon },
     ],
   },

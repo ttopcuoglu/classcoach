@@ -18,7 +18,6 @@ import {
   MicIcon,
   ScenarioIcon,
   SparkleIcon,
-  StarIcon,
   TargetIcon,
   UserIcon,
   WaveformIcon,
@@ -159,7 +158,7 @@ const GETTING_STARTED: Chapter = {
         { label: 'Your coaching path', body: 'a static Notice → Practice → Try → Reflect explainer.' },
         { label: 'Classroom pulse', body: 'a donut chart of your latest lesson\'s student-talk %, plus a sparkline once you have a few sessions.' },
         { label: 'Mood check-in', body: 'tap Good / Okay / Stressed / Overwhelmed and Wivoza quietly suggests a relevant practice category.' },
-        { label: 'Daily tip, quick links, and recent work', body: 'a tip box, shortcuts to Cheat Sheet and First 30 Days, and a feed of your last few sessions.' },
+        { label: 'Daily tip, quick links, and recent work', body: 'a tip box, a shortcut to First 30 Days or Your growth, and a feed of your last few sessions.' },
       ],
     },
   ],
@@ -362,21 +361,6 @@ const GROW: Chapter = {
       ],
     },
     {
-      id: 'cheat-sheet',
-      icon: StarIcon,
-      tint: 'bg-lavender-tint text-[#6B5FA0]',
-      nav: 'Grow → Cheat Sheet',
-      title: 'Cheat Sheet',
-      guideTo: '/guide/cheat-sheet',
-      intro: 'A personal reference built automatically — nothing shows up until you\'ve saved something, on purpose.',
-      specs: [
-        { label: 'What feeds it', body: 'two things, both a single star tap elsewhere — a saved Practice attempt contributes its model response, and a saved Ask answer contributes its follow-up guidance.' },
-        { label: 'How it\'s grouped', body: 'by situation, not by source: both kinds land together under the same six headings used across the app (responding to resistance, engagement & participation, conflict & repair, interruptions & redirection, routines & transitions, devices & digital routines). A heading only appears once you\'ve saved something into it.' },
-        { label: 'General tips', body: 'saved Ask answers with no specific category — a broader question rather than a situation — collect here instead.' },
-        { label: 'Every entry', body: 'shows the phrase, then a "For:" line naming the original scenario or incident it came from, so an old note still makes sense months later.' },
-      ],
-    },
-    {
       id: 'first-30-days',
       icon: ArrowUpIcon,
       tint: 'bg-lavender-tint text-[#6B5FA0]',
@@ -560,7 +544,7 @@ export default function Guide() {
           <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
             <SpecList
               items={[
-                { label: 'Save', body: 'a star toggle on practice attempts, answers, messages, and plans — keeps the good ones out of the noise and feeds your Cheat Sheet.' },
+                { label: 'Save', body: 'a star toggle on practice attempts, answers, messages, and plans — keeps the good ones out of the noise, and they are what your playbook export collects.' },
                 { label: 'Share', body: 'a private, read-only link. No account is needed to view it, and the recipient sees only that one item — nothing else in your account.' },
                 { label: 'Export', body: 'one printable "Wivoza — Your Playbook" page of everything you\'ve saved, ready to print or save as a PDF.' },
               ]}

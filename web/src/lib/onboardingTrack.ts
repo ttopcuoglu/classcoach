@@ -52,11 +52,4 @@ export const ONBOARDING_TRACK: OnboardingStep[] = [
     linkTo: '/coach-chat?tab=ask',
     linkLabel: 'Go to Ask & Practice',
   },
-  {
-    id: 'review-cheat-sheet',
-    title: 'Review your cheat sheet',
-    description: 'Check in on the go-to phrases you\'ve built up so far.',
-    linkTo: '/cheat-sheet',
-    linkLabel: 'View Cheat Sheet',
-  },
 ]

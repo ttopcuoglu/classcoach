@@ -588,19 +588,7 @@ export default function Profile() {
         )}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Link
-          to="/cheat-sheet"
-          className="group flex items-center gap-4 rounded-2xl bg-peach-tint/50 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
-        >
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-terracotta font-heading text-lg font-bold text-cream">
-            ★
-          </span>
-          <div>
-            <p className="font-heading text-base font-bold text-forest">Your Cheat Sheet</p>
-            <p className="text-xs text-ink-soft">Go-to phrases, auto-built from your saved content.</p>
-          </div>
-        </Link>
+      <div className="grid gap-3">
         <Link
           to="/first-30-days"
           className="group flex items-center gap-4 rounded-2xl bg-mint-tint/50 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"

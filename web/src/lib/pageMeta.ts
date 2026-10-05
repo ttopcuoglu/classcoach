@@ -57,10 +57,6 @@ export const PUBLIC_PAGE_META: Record<string, Meta> = {
     title: 'Communication Coach — a teacher’s guide | Wivoza',
     description: 'Write a message, prepare for a meeting, practice a hard conversation, or get a second read on a reply before you send it.',
   },
-  '/guide/cheat-sheet': {
-    title: 'Cheat Sheet — a teacher’s guide | Wivoza',
-    description: 'Your go-to phrases and tips, built automatically from the answers and practice responses you save in Wivoza.',
-  },
 }
 
 function setMeta(selector: string, attr: 'content' | 'href', value: string, create: () => HTMLElement) {

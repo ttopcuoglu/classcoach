@@ -32,7 +32,7 @@ const BENEFITS = [
   { title: 'Rehearse before it costs you', body: 'Try the firmer version on a scenario, not on a real fourteen-year-old.' },
   { title: 'Get it wrong somewhere safe', body: 'Nobody sees a practice attempt. That’s the whole point of one.' },
   { title: 'Compare against a model', body: 'Your response and a strong one, side by side — so you can see the gap, not just be told there is one.' },
-  { title: 'Build your own bank', body: 'Anything you save turns into your Cheat Sheet, grouped by situation.' },
+  { title: 'Build your own bank', body: 'Star anything worth keeping and it stays in your saved list, ready to pull up again.' },
   { title: 'Watch yourself get better', body: 'Enough attempts in one category and Wivoza tells you where you’re growing.' },
 ]
 
@@ -348,7 +348,7 @@ export default function GuideAskPractice() {
                 {
                   icon: StarIcon,
                   title: 'Save the good ones',
-                  body: 'Saved answers and attempts become your Cheat Sheet, grouped by situation and waiting when you need them.',
+                  body: 'Saved answers and attempts stay in your saved list, and your playbook export collects every one of them.',
                 },
               ].map((item) => (
                 <div key={item.title}>
