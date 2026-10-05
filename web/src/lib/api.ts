@@ -2081,6 +2081,10 @@ export type ReviewLens = {
   confidence?: 'high' | 'low' | null
   evidence?: string[]
   section?: string | null
+  /// The finding broken into named parts, each explained — the shape the old
+  /// presentation review used. A paragraph says what is wrong; these say
+  /// where, one at a time.
+  points?: { label: string; body: string }[]
 }
 
 export type TimingBasis = { minutes: [number, number]; assumption: string }

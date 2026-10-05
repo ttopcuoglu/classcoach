@@ -1069,3 +1069,42 @@ test('sections are named by the lens, with its standing description', async () =
   // The fixture's blurb, which is what the server sends for this lens.
   expect(screen.getByText('Item by item.')).toBeTruthy()
 })
+
+// --- a finding has parts ---
+
+// A paragraph says what is wrong; the named parts say where, one at a time,
+// so a teacher can act on one without re-reading the rest. This is the shape
+// the old presentation review used — "Opening hook", "Pacing & timing" — and
+// the reason the report stopped reading as three short paragraphs.
+test('a finding shows its named parts, each explained', async () => {
+  const withPoints = review({
+    ...REVIEWED,
+    lenses: [
+      {
+        key: 'item_purpose',
+        label: 'What each item measures',
+        blurb: 'Item by item.',
+        on: true,
+        title: 'Four of eighteen test reading',
+        body: 'The recall items do their job.',
+        points: [
+          { label: 'Item 4', body: 'A 90-word scenario before any biology appears. A student who knows the content can still lose it on reading speed.' },
+          { label: 'Items 9 and 12', body: 'The correct option is longer and more precise than the others, which is a tell students learn fast.' },
+        ],
+      },
+    ],
+  })
+  createReview.mockResolvedValue(review())
+  runReview.mockResolvedValue(withPoints)
+  renderPage()
+  await waitFor(() => expect(screen.getByText('What are you looking over?')).toBeTruthy())
+  chooseType()
+  fireEvent.change(screen.getByPlaceholderText('Paste the text here...'), { target: { value: 'x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Look it over' }))
+
+  await waitFor(() => expect(screen.getByText('Item 4')).toBeTruthy())
+  expect(screen.getByText(/A 90-word scenario before any biology appears/)).toBeTruthy()
+  expect(screen.getByText('Items 9 and 12')).toBeTruthy()
+  // The paragraph is still there — the parts are extra, not a replacement.
+  expect(screen.getByText('The recall items do their job.')).toBeTruthy()
+})

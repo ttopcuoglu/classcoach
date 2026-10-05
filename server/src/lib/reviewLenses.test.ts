@@ -120,16 +120,26 @@ test('a lesson plan opens with the five planning lenses', () => {
   ])
 })
 
-test('a presentation opens with the five delivery lenses', () => {
+// The longest set in the app, deliberately: a deck is the document teachers
+// get the least feedback on, and the one where "it looks fine" hides the most.
+// The old presentation review covered how the ideas build, the opening and the
+// close; those came back as lenses rather than being dropped.
+test('a presentation opens with every delivery lens, in reading order', () => {
   const on = defaultLensesFor('presentation')
     .filter((l) => l.on)
     .map((l) => l.key)
   assert.deepEqual(on, [
     'slide_load',
+    'ideas_build',
+    'opening_hook',
     'where_thinking',
+    'engagement_checks',
+    'closing_landing',
     'grade_level_fit',
     'legible_from_the_back',
+    'speaker_support',
     'how_to_run_it',
+    'pacing_period',
   ])
 })
 
@@ -356,4 +366,28 @@ test('evidence can be asked for a type that did not win', () => {
 test('a document with no signals offers no reasons', () => {
   const detected = detectDocType('aaaa bbbb cccc')
   assert.deepEqual(detected.evidence, [])
+})
+
+// --- the presentation set ---
+
+// A deck is the document teachers get the least feedback on, and the one
+// where "it looks fine" hides the most. The old presentation review covered
+// how the ideas build, the opening and the close; those are lenses now rather
+// than things the consolidation quietly dropped.
+test('presentation covers the parts the old review covered', () => {
+  const keys = defaultLensesFor('presentation').map((l) => l.key)
+  for (const key of ['ideas_build', 'opening_hook', 'closing_landing', 'engagement_checks', 'speaker_support']) {
+    assert.ok(keys.includes(key), `presentation is missing ${key}`)
+  }
+  // All of them on: nothing is asked, so nothing is held back.
+  assert.ok(defaultLensesFor('presentation').every((l) => l.on))
+})
+
+// Every lens has to tell the model what to look for, or the section it
+// produces is the lens's name restated.
+test('every lens instruction asks for something specific', () => {
+  for (const [key, lens] of Object.entries(LENSES)) {
+    assert.ok(lens.instruction.length > 120, `${key}'s instruction is too thin to produce a finding`)
+    assert.ok(lens.blurb.length > 0, `${key} has no blurb, which is the report's subtitle`)
+  }
 })

@@ -74,6 +74,11 @@ type StoredLens = {
   evidence?: string[]
   /// Which section of a long document, when the review was scoped.
   section?: string | null
+  /// The finding broken into named parts, each explained — the shape the old
+  /// presentation review used ("Opening hook", "Pacing & timing", …). A
+  /// paragraph says what is wrong; these say where, one at a time, so a
+  /// teacher can act on one without re-reading the rest.
+  points?: { label: string; body: string }[]
 }
 
 function parseLenses(value: unknown, docType: DocType): StoredLens[] {
@@ -91,13 +96,23 @@ function parseLenses(value: unknown, docType: DocType): StoredLens[] {
       confidence: (l.confidence === 'low' || l.confidence === 'high' ? l.confidence : null) as StoredLens['confidence'],
       evidence: Array.isArray(l.evidence) ? l.evidence.filter((e): e is string => typeof e === 'string') : [],
       section: typeof l.section === 'string' ? l.section : null,
+      points: parsePoints(l.points),
     }))
   // A stored list that has drifted from the type's lens set (the teacher
   // corrected the type after the review ran) is topped up rather than
   // replaced, so findings already produced survive the correction.
   for (const fallback of defaultLensesFor(docType)) {
     if (!parsed.some((l) => l.key === fallback.key)) {
-      parsed.push({ ...fallback, finding: null, title: null, body: null, confidence: null, evidence: [], section: null })
+      parsed.push({
+        ...fallback,
+        finding: null,
+        title: null,
+        body: null,
+        confidence: null,
+        evidence: [],
+        section: null,
+        points: [],
+      })
     }
   }
   return allowed.map((key) => parsed.find((l) => l.key === key)!).filter(Boolean)
@@ -171,6 +186,7 @@ function toReview(row: {
       ...l,
       label: LENSES[l.key]?.label ?? l.key,
       blurb: LENSES[l.key]?.blurb ?? '',
+      points: l.points ?? [],
     })),
     oneThing: row.oneThing,
     oneThingDetail: row.oneThingDetail ?? null,
@@ -481,6 +497,20 @@ ${CORE_COACHING_RULES}`
 /// Returns null when the block is not the JSON it was asked for, so the caller
 /// can keep the raw text instead — a finding in the wrong shape is still a
 /// finding, and dropping it would lose the only thing the lens produced.
+/// The named parts of a finding. Anything without both a label and a body is
+/// dropped: a heading with nothing under it is worse than no heading.
+function parsePoints(value: unknown): { label: string; body: string }[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter((p): p is Record<string, unknown> => !!p && typeof p === 'object')
+    .map((p) => ({
+      label: typeof p.label === 'string' ? p.label.trim() : '',
+      body: typeof p.body === 'string' ? p.body.trim() : '',
+    }))
+    .filter((p) => p.label && p.body)
+    .slice(0, 5)
+}
+
 function parseLensFinding(raw: string): Partial<StoredLens> | null {
   let value: unknown
   try {
@@ -499,6 +529,7 @@ function parseLensFinding(raw: string): Partial<StoredLens> | null {
     // forgot the field is not thereby expressing doubt.
     confidence: r.confidence === 'low' ? 'low' : 'high',
     evidence: Array.isArray(r.evidence) ? r.evidence.filter((e): e is string => typeof e === 'string') : [],
+    points: parsePoints(r.points),
     // Kept so an old result and a new one render through the same path.
     finding: body,
   }
@@ -527,7 +558,7 @@ function buildRunPrompt(
   const lensBlocks = lensKeys
     .map(
       (key, i) =>
-        `<lens_${i + 1} key="${key}">\n${LENSES[key].label}: ${LENSES[key].instruction}\n\nAnswer as a JSON object and nothing else: {"title": "...", "body": "...", "confidence": "high|low", "evidence": ["..."]}\n- "title" is three to six words naming what you found, not the lens's own name.\n- "body" is the finding itself, two to four sentences.\n- "confidence" is "low" when the document did not give you enough to judge this. Say what you cannot see in the body rather than guessing — a confident answer built on nothing is worse than no answer.\n- "evidence" quotes or names the parts of the document you are pointing at. Empty if you are reasoning about an absence.\n</lens_${i + 1}>`,
+        `<lens_${i + 1} key="${key}">\n${LENSES[key].label}: ${LENSES[key].instruction}\n\nAnswer as a JSON object and nothing else: {"title": "...", "body": "...", "points": [{"label": "...", "body": "..."}], "confidence": "high|low", "evidence": ["..."]}\n- "title" is three to six words naming what you found, not the lens's own name.\n- "body" is the finding, three to five sentences. Say what you saw, where, and what it means for this class — not a summary of the lens.\n- "points" breaks it into the specific places a teacher can act on, two to four of them, each a {label, body}. "label" is two to four words naming the spot — "Item 4", "Slides 9-12", "The closing", "Step 2 of the directions". "body" is TWO OR MORE sentences: what is there, and why it matters or what to do instead. One-line points are the thing to avoid — a teacher who cannot act on it did not need to be told.\n- Every point must be about something actually in the document. Fewer, real points beat four invented ones.\n- "confidence" is "low" when the document did not give you enough to judge this. Say what you cannot see in the body rather than guessing — a confident answer built on nothing is worse than no answer.\n- "evidence" quotes or names the parts of the document you are pointing at. Empty if you are reasoning about an absence.\n</lens_${i + 1}>`,
     )
     .join('\n')
 

@@ -302,6 +302,43 @@ export const LENSES: Record<string, Lens> = {
       'Estimate how long this deck takes to deliver at a realistic pace for this class, state the per-slide basis, and compare it to the period length. Say which slides are the ones to cut if it runs long, and which cannot be cut without losing the point.',
   },
 
+  // --- Presentation, the parts the old review covered that lenses did not ---
+  ideas_build: {
+    key: 'ideas_build',
+    label: 'How the ideas build',
+    blurb: 'Whether each slide earns the next one.',
+    instruction:
+      'Follow the argument slide to slide. Say where it builds and where it jumps — a slide that assumes something never established, two that make the same point, an order that would land better reversed. Name the slide numbers.',
+  },
+  engagement_checks: {
+    key: 'engagement_checks',
+    label: 'Where students do something',
+    blurb: 'How long they go between being asked to act.',
+    instruction:
+      'Find every point where students are asked to do, answer or decide something rather than watch. Say the longest stretch between two of them, in slides and in minutes. Name the specific slides where one could be added without adding content.',
+  },
+  opening_hook: {
+    key: 'opening_hook',
+    label: 'How it opens',
+    blurb: 'The first two minutes, and whether they earn attention.',
+    instruction:
+      'Judge the opening as a class experiences it: what is on the first slides, and whether it gives students a reason to care before the content starts. Flag an opening that begins with objectives or an agenda rather than something to think about. Say what the deck already contains that could open it instead.',
+  },
+  closing_landing: {
+    key: 'closing_landing',
+    label: 'How it ends',
+    blurb: 'Whether it lands, or just stops.',
+    instruction:
+      'Say what the last slides do. Flag a deck that ends on "Questions?" or the final content slide with no consolidation. Name what students should leave able to say, and whether anything in the deck asks them to say it.',
+  },
+  speaker_support: {
+    key: 'speaker_support',
+    label: 'What you have to carry',
+    blurb: 'How much of this lives only in what you say.',
+    instruction:
+      'Separate what the slides carry from what the teacher must supply out loud. Flag slides that are only a title or an image and would be meaningless without narration, and slides so dense that reading them aloud is the lesson. Say which ones need a note to run well.',
+  },
+
   // --- Rubric ---
   criteria_distinct: {
     key: 'criteria_distinct',
@@ -423,13 +460,20 @@ export const LENSES_BY_TYPE: Record<DocType, { key: string; on: boolean }[]> = {
     { key: 'short_or_long', on: true },
     { key: 'materials_prep', on: false },
   ],
+  // The longest set in the app, because a deck is the document teachers get
+  // the least feedback on and the one where "it looks fine" hides the most.
   presentation: [
     { key: 'slide_load', on: true },
+    { key: 'ideas_build', on: true },
+    { key: 'opening_hook', on: true },
     { key: 'where_thinking', on: true },
+    { key: 'engagement_checks', on: true },
+    { key: 'closing_landing', on: true },
     { key: 'grade_level_fit', on: true },
     { key: 'legible_from_the_back', on: true },
+    { key: 'speaker_support', on: true },
     { key: 'how_to_run_it', on: true },
-    { key: 'pacing_period', on: false },
+    { key: 'pacing_period', on: true },
   ],
   rubric: [
     { key: 'criteria_distinct', on: true },

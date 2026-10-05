@@ -851,6 +851,23 @@ export default function LookItOver() {
                       when there is one. */}
                   {lens.title && <span className="block font-semibold text-forest">{lens.title}</span>}
                   {lens.body || lens.finding}
+
+                  {/* The named parts, in the shape the old presentation
+                      review used: the place, then what about it. A teacher
+                      can act on one of these without re-reading the rest. */}
+                  {lens.points && lens.points.length > 0 && (
+                    <div className="mt-3 flex flex-col gap-3">
+                      {lens.points.map((point) => (
+                        <div key={point.label}>
+                          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">
+                            {point.label}
+                          </p>
+                          <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{point.body}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {lens.evidence && lens.evidence.length > 0 && (
                     <p className="mt-2.5 text-xs text-ink-soft">
                       <span className="font-semibold">From:</span> {lens.evidence.join(' · ')}
