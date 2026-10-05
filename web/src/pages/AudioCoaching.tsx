@@ -1011,7 +1011,14 @@ function sessionTitle(session: { lessonContent?: AudioLessonContent | null; clas
 }
 
 type ReportTab = 'summary' | 'insights' | 'reflect' | 'growth'
-type InsightsSection = 'talk' | 'questions' | 'understanding' | 'content' | 'routines' | 'rubric'
+// Four sections, organised by how much a microphone can actually hear.
+// Everything the teacher says is captured well; everything that depends on
+// students answering out loud is not. Questioning and checking were two
+// sections that failed together whenever the room was quiet, leaving a
+// teacher reading two apologies for one cause — they are one section with two
+// halves now, and Rubric Lens is a lens over the whole report rather than a
+// section competing with them.
+type InsightsSection = 'talk' | 'questions' | 'content' | 'routines'
 type ReflectPath = 'full_report' | 'specific_moment' | 'how_it_felt' | 'ask_question'
 
 const REFLECT_PATH_CARDS: {
@@ -1062,11 +1069,9 @@ const REPORT_TABS: { key: ReportTab; label: string }[] = [
 
 const INSIGHTS_SECTIONS: { key: InsightsSection; label: string }[] = [
   { key: 'talk', label: 'Talk & Participation' },
-  { key: 'questions', label: 'Questions & Thinking' },
-  { key: 'understanding', label: 'Checks & Feedback' },
+  { key: 'questions', label: 'Questioning & Checking' },
   { key: 'content', label: 'Clarity & Content' },
   { key: 'routines', label: 'Climate & Routines' },
-  { key: 'rubric', label: 'Rubric Lens' },
 ]
 
 // The printed report's numbers, one-line descriptions and colours for these
@@ -1078,21 +1083,23 @@ const INSIGHTS_SECTIONS: { key: InsightsSection; label: string }[] = [
 // while this screen, which always lists all five, still says 5.
 const INSIGHTS_SECTION_META: Record<InsightsSection, { n: number; blurb: string; accent: Accent }> = {
   talk: { n: 1, blurb: 'Who was heard, and for how long.', accent: ACCENTS.terracotta },
-  questions: { n: 2, blurb: 'What you asked, and how long you left for an answer.', accent: ACCENTS.gold },
-  understanding: {
-    n: 3,
-    blurb: 'How you checked they were with you, and how specific your feedback was.',
-    accent: ACCENTS.mint,
-  },
-  content: { n: 4, blurb: 'What the lesson said it was about, in its own words.', accent: ACCENTS.forest },
-  routines: { n: 5, blurb: 'Counts, not scores. There is no such thing as a correct number here.', accent: ACCENTS.terracotta },
-  // Screen only — the printed report stops at section 5.
-  rubric: { n: 6, blurb: 'This lesson seen through your evaluation framework. Evidence, not a rating.', accent: ACCENTS.gold },
+  questions: { n: 2, blurb: 'What you asked, how you checked, and how you responded.', accent: ACCENTS.gold },
+  content: { n: 3, blurb: 'What the lesson said it was about, in its own words.', accent: ACCENTS.forest },
+  routines: { n: 4, blurb: 'Counts, not scores. There is no such thing as a correct number here.', accent: ACCENTS.terracotta },
 }
 
 // Lets the stat groups inside a section tint themselves with that section's
 // colour without every Insights tab having to pass it down by hand.
 const SectionAccentContext = createContext<Accent>(ACCENTS.mint)
+
+function SubsectionHeading({ title, blurb }: { title: string; blurb: string }) {
+  return (
+    <div className="mb-4 border-l-4 border-gold pl-3">
+      <h3 className="font-heading text-lg font-bold text-forest">{title}</h3>
+      <p className="text-sm text-ink-soft">{blurb}</p>
+    </div>
+  )
+}
 
 function InsightsSectionHeader({ section }: { section: InsightsSection }) {
   const meta = INSIGHTS_SECTION_META[section]
@@ -2186,6 +2193,7 @@ function ReportPanel({
   // TEMPORARY preview params — removed before commit.
   const [tab, setTab] = useState<ReportTab>('summary')
   const [insightsSection, setInsightsSection] = useState<InsightsSection>('talk')
+  const [rubricOpen, setRubricOpen] = useState(false)
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null)
   const locked = session.status === 'locked'
   const [strengths, setStrengths] = useState(session.strengths ?? '')
@@ -2699,6 +2707,35 @@ function ReportPanel({
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
           <InsightsNav section={insightsSection} onSelect={setInsightsSection} />
           <div className="min-w-0 flex-1">
+            {/* A lens over the whole report rather than a section of its own:
+                it rearranges evidence the other four sections already hold. */}
+            <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-4">
+              <button
+                type="button"
+                onClick={() => setRubricOpen((open) => !open)}
+                className="flex items-center justify-between gap-3 text-left"
+              >
+                <span>
+                  <span className="text-sm font-semibold text-forest">Rubric lens</span>
+                  <span className="ml-2 text-xs text-ink-soft">
+                    This lesson seen through your evaluation framework. Evidence, not a rating.
+                  </span>
+                </span>
+                <span className="shrink-0 text-sm font-semibold text-terracotta-600">
+                  {rubricOpen ? 'Hide' : 'Show'}
+                </span>
+              </button>
+              {rubricOpen && (
+                <RubricLensTab
+                  rubricLens={session.rubricLens}
+                  locked={locked}
+                  isShort={coverage.isShort}
+                  sending={rubricLensSending}
+                  error={rubricLensError}
+                  onGenerate={handleGenerateRubricLens}
+                />
+              )}
+            </div>
             <InsightsSectionHeader section={insightsSection} />
             <SectionAccentContext.Provider value={INSIGHTS_SECTION_META[insightsSection].accent}>
             {insightsSection === 'talk' && (
@@ -2716,7 +2753,13 @@ function ReportPanel({
             )}
 
             {insightsSection === 'questions' && (
-              <QuestionsThinkingTab
+              <div className="flex flex-col gap-8">
+                <div>
+                  <SubsectionHeading
+                    title="What you asked"
+                    blurb="Questions, what they asked of students, and the checks you ran."
+                  />
+                  <QuestionsThinkingTab
                 questionCount={session.questionCount}
                 questionLog={session.questionLog}
                 questionsMetric={questionsMetric}
@@ -2728,20 +2771,25 @@ function ReportPanel({
                 waitTimeSampleCount={session.metricsDetail?.waitTimeSampleCount ?? null}
                 thinkingTaskCount={session.metricsDetail?.thinkingTaskCount ?? null}
                 focusMetric={focusMetric}
-                questioningInsight={questioningInsight}
-                highlights={session.highlights}
-              />
-            )}
-
-            {insightsSection === 'understanding' && (
-              <UnderstandingFeedbackTab
-                checksNarrative={session.checksNarrative ?? null}
-                cfuLog={session.cfuLog}
-                feedbackLog={session.feedbackLog}
-                segments={session.segments}
-                specificFeedbackCount={specificCount}
-                feedbackTotal={feedbackTotal}
-              />
+                    questioningInsight={questioningInsight}
+                    highlights={session.highlights}
+                  />
+                </div>
+                <div>
+                  <SubsectionHeading
+                    title="How you responded"
+                    blurb="Wait time, follow-ups, and your responses to what students said — all of it limited by how much of the room the microphone reached."
+                  />
+                  <UnderstandingFeedbackTab
+                    checksNarrative={session.checksNarrative ?? null}
+                    cfuLog={session.cfuLog}
+                    feedbackLog={session.feedbackLog}
+                    segments={session.segments}
+                    specificFeedbackCount={specificCount}
+                    feedbackTotal={feedbackTotal}
+                  />
+                </div>
+              </div>
             )}
 
             {insightsSection === 'content' && (
@@ -2768,16 +2816,7 @@ function ReportPanel({
               />
             )}
 
-            {insightsSection === 'rubric' && (
-              <RubricLensTab
-                rubricLens={session.rubricLens}
-                locked={locked}
-                isShort={coverage.isShort}
-                sending={rubricLensSending}
-                error={rubricLensError}
-                onGenerate={handleGenerateRubricLens}
-              />
-            )}
+
             <DiscussFooter
               label="Discuss this with Wivoza Coach"
               onClick={() =>
@@ -5514,9 +5553,8 @@ function narrativeForSection(session: AudioSession, section: InsightsSection): s
     case 'talk':
       return session.talkNarrative ?? null
     case 'questions':
-      return session.questionsNarrative ?? null
-    case 'understanding':
-      return session.checksNarrative ?? null
+      return [session.questionsNarrative, session.checksNarrative].filter(Boolean).join(' ') || null
+
     case 'routines':
       return session.climateNarrative ?? null
     case 'content': {
