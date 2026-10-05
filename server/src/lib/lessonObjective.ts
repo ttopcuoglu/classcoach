@@ -33,7 +33,7 @@ function timestamp(sec: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-function transcriptForModel(segments: Segment[]): string {
+export function transcriptForModel(segments: Segment[]): string {
   const lines = segments
     .filter((s) => s.speakerLabel === 'Teacher')
     .map((s) => `[${timestamp(s.startSec)}] ${s.text.trim()}`)
@@ -100,7 +100,7 @@ function words(text: string): string[] {
 /// transcript therefore fails for any sentence that crosses a boundary, which
 /// is most of them. Flattening first is what makes the check mean "did the
 /// teacher say this", rather than "did one segment happen to contain it".
-function flattenTeacherSpeech(segments: Segment[]): { flat: string; offsets: { at: number; startSec: number }[] } {
+export function flattenTeacherSpeech(segments: Segment[]): { flat: string; offsets: { at: number; startSec: number }[] } {
   const offsets: { at: number; startSec: number }[] = []
   let flat = ''
   for (const segment of segments) {
@@ -174,7 +174,7 @@ export type ObjectiveFromModel = {
 /// Each line is "the teacher's sentence @ m:ss". Verified the same way the
 /// objective is — against the teacher's speech flattened into one string — so
 /// a sentence nobody said is dropped rather than shown to a teacher as theirs.
-function parseQuotedLines(
+export function parseQuotedLines(
   raw: string | null,
   flat: string,
   offsets: { at: number; startSec: number }[],
