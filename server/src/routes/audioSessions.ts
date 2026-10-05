@@ -1189,30 +1189,28 @@ ${
 
 Then THE CLIMATE NOTE: one paragraph for a section about routines,
 directions and classroom language, covering both how the class was moved
-between activities and how the teacher spoke to students. That section counts fixed phrases, so on a
-perfectly well-run lesson most of its numbers are zero — a teacher who said
-"turn and talk to your partner for thirty seconds" gave a clear direction that
-the counter simply does not recognise. Never let a zero read as an absence.
-Say what the transcript shows about how this teacher moved the class between
-activities, how they spoke to students, and whether names were used — and
-where the count is zero, say plainly that the phrases it looks for did not
-appear, not that the teaching did not happen. If there is genuinely nothing to
-say, one honest sentence is the right answer.
+between activities and how the teacher spoke to students. These moments are
+read from the transcript, so they are the teacher's own words rather than
+matches against a phrase list — write about what was said and how it worked,
+and never explain the detector to the teacher. A zero still means only that
+nothing of that kind was heard: encouragement carried by tone, a look that
+settles a room, and anything said too quietly for the mic leave no trace. If
+there is genuinely nothing to say, one honest sentence is the right answer.
 
 ${
     metrics?.directionMoments?.length
       ? `Directions heard:\n${metrics.directionMoments.map((m) => `- ${mmss(m.timestampSec)} ${m.text}`).join('\n')}`
-      : 'No direction phrases were recognised.'
+      : 'No directions were heard.'
   }
 ${
     metrics?.toneMoments?.length
       ? `Tone moments:\n${metrics.toneMoments.map((m) => `- ${mmss(m.timestampSec)} (${m.kind}) ${m.text}`).join('\n')}`
-      : 'No positive or corrective phrases were recognised.'
+      : 'No positive or corrective moments were heard.'
   }
 ${
     metrics?.redirectionMoments?.length
       ? `Redirections:\n${metrics.redirectionMoments.map((m) => `- ${mmss(m.timestampSec)} ${m.text}`).join('\n')}`
-      : 'No redirection phrases were recognised.'
+      : 'No redirections were heard.'
   }
 Student names: ${metrics?.nameMentions ?? 'not measured'} mentions across ${metrics?.uniqueNames ?? 'not measured'} names.
 

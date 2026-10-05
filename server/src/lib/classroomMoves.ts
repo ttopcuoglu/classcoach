@@ -173,17 +173,34 @@ async function readOnce(segments: Segment[]): Promise<ClassroomMoves> {
       .join('\n')
 
     const { flat, offsets } = flattenTeacherSpeech(segments)
-    const read = (tag: string) => parseQuotedLines(extractTag(text, tag), flat, offsets, MAX_PER_KIND)
+    // "A moment belongs to ONE kind" is in the prompt, and the model still
+    // filed one "Alrighty, so listen up" as both a direction and a
+    // redirection, which showed up twice in the evidence and counted twice.
+    // First kind to claim a moment keeps it; the order below is the order
+    // they are read in.
+    const claimed = new Set<number>()
+    const read = (tag: string) =>
+      parseQuotedLines(extractTag(text, tag), flat, offsets, MAX_PER_KIND).filter((q) => {
+        if (claimed.has(Math.round(q.timestampSec))) return false
+        claimed.add(Math.round(q.timestampSec))
+        return true
+      })
+    const readUnique = (tag: string) =>
+      readChecks(extractTag(text, tag), flat, offsets).filter((q) => {
+        if (claimed.has(Math.round(q.timestampSec))) return false
+        claimed.add(Math.round(q.timestampSec))
+        return true
+      })
     return {
       directions: read('directions'),
       transitions: read('transitions'),
       redirections: read('redirections'),
       positive: read('positive'),
       corrective: read('corrective'),
-      checks: readChecks(extractTag(text, 'checks'), flat, offsets),
+      checks: readUnique('checks'),
       higherOrderQuestions: read('questions_higher_order'),
       recallQuestions: read('questions_recall'),
-      thinkingTasks: readChecks(extractTag(text, 'thinking_tasks'), flat, offsets),
+      thinkingTasks: readUnique('thinking_tasks'),
       feedbackSpecific: read('feedback_specific'),
       feedbackGeneral: read('feedback_general'),
     }

@@ -2381,7 +2381,7 @@ function ReportPanel({
     studentVoiceSegments: num('studentVoiceSegments'),
     recordedSec,
   })
-  const waitTimeMetric = getPresenceMetric(session.avgWaitTimeSec)
+  const waitTimeMetric = waitTimeMetricFor(session)
 
   // Checking Understanding
   const cfuMetric = getCountMetric({
@@ -2910,7 +2910,7 @@ function SummaryTab({
           <SummaryStat label="You spoke" metric={getPresenceMetric(session.teacherTalkPct)} unit="%" accent={ACCENTS.terracotta} />
           <SummaryStat label="Students spoke" metric={getPresenceMetric(session.studentTalkPct)} unit="%" accent={ACCENTS.gold} />
           <SummaryStat label="Questions" metric={questionsMetric} accent={ACCENTS.mint} />
-          <SummaryStat label="Avg. wait" metric={getPresenceMetric(session.avgWaitTimeSec)} unit="s" accent={ACCENTS.forest} />
+          <SummaryStat label="Avg. wait" metric={waitTimeMetricFor(session)} unit="s" accent={ACCENTS.forest} />
         </div>
       </NumberedCard>
 
@@ -4298,6 +4298,21 @@ const CONTENT_NOTE_LABEL_STYLES: Record<string, string> = {
 /// which could read "None detected" while the lesson plainly contained the
 /// thing. The subject expertise is what a teacher came here for; the page
 /// closes with the same Discuss action every other page does.
+// "Not enough data" is true but unhelpful: wait time is the gap between a
+// question and an audible student answer, and on a room mic that gap is
+// usually missing because the answer was never captured, not because the
+// teacher never paused.
+function waitTimeMetricFor(session: AudioSessionWithSegments): ConfidentMetric {
+  if (session.avgWaitTimeSec == null && (session.questionCount ?? 0) > 0) {
+    return {
+      state: 'not_measurable',
+      display: '—',
+      reason: 'None of your questions was followed by an audible student answer, so there was no pause to time.',
+    }
+  }
+  return getPresenceMetric(session.avgWaitTimeSec)
+}
+
 function LessonContentTab({
   lessonContent,
   contentNotes,
