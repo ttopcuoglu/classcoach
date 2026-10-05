@@ -50,7 +50,15 @@ struct TalkToMeView: View {
     @State private var muted = false
     @State private var conversationFull = false
 
+    /// Typing is a mode, not a one-off message: it stays open, Coach answers in
+    /// text, and the microphone stays out of it until "Back to voice".
     @State private var showTypeInput = false
+    /// The optional topic chips, and the second step inside a chosen topic.
+    @State private var topic: String?
+    @State private var kind: String?
+    /// Only used to narrow which starter prompts are worth showing — a K-2 room
+    /// and a 9-12 room are not stuck on the same things.
+    @State private var room = TeachingContextValue()
     @State private var typedDraft = ""
     @FocusState private var typeFieldFocused: Bool
 
@@ -103,14 +111,7 @@ struct TalkToMeView: View {
                     if finishing {
                         takeawayView
                     } else {
-                        VStack(spacing: 14) {
-                            orb
-                            statusLabel
-                        }
-                        .padding(.vertical, 22)
-                        .frame(maxWidth: .infinity)
-                        .background(AppTheme.forest, in: RoundedRectangle(cornerRadius: 28))
-                        .padding(.horizontal)
+                        heroCard
 
                         if onStartScreen {
                             startScreen
@@ -162,6 +163,7 @@ struct TalkToMeView: View {
             }
             .onAppear {
                 recorder.configure(onTurnComplete: { text in Task { await handleTurnComplete(text) } })
+                room.seed(from: authManager.currentUser)
             }
             .task { await loadSavedTalks() }
             .onDisappear {
@@ -185,6 +187,88 @@ struct TalkToMeView: View {
                 }
             }
         }
+    }
+
+    /// The orb, what Coach is doing, the question, and both ways in — one card.
+    ///
+    /// Start talking and Type instead sit inside it, under the mic, because they
+    /// are the two ways into the one thing this screen does; they used to live
+    /// below the topic chips, a scroll away from the thing they start.
+    private var heroCard: some View {
+        VStack(spacing: 14) {
+            // Muting is decided before Coach starts talking, so it is pinned to
+            // the top of the card rather than sitting below the transcript,
+            // where it is only reachable once it is too late to be useful.
+            HStack {
+                Spacer()
+                Button {
+                    muted.toggle()
+                    if muted { player.stop() }
+                } label: {
+                    Text(muted ? "Unmute coach" : "Mute coach")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(muted ? AppTheme.forest : AppTheme.cream.opacity(0.7))
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(
+                            Capsule().fill(muted ? AppTheme.gold : Color.clear)
+                        )
+                        .overlay(Capsule().strokeBorder(muted ? Color.clear : AppTheme.cream.opacity(0.25)))
+                }
+                .buttonStyle(.plain)
+            }
+
+            orb
+            statusLabel
+
+            if onStartScreen {
+                VStack(spacing: 8) {
+                    if activeFollowUp != nil {
+                        Text("COACH IS CHECKING IN")
+                            .font(.caption2.weight(.bold)).tracking(0.8)
+                            .foregroundStyle(AppTheme.gold)
+                    }
+                    Text(activeFollowUp?.checkInQuestion ?? "Hi. What would you like to talk about?")
+                        .font(.heading(.title2))
+                        .foregroundStyle(AppTheme.cream)
+                        .multilineTextAlignment(.center)
+                    Text(activeFollowUp != nil
+                         ? "Say how it went — good, bad, or not yet. Coach will take it from there."
+                         : "Say whatever is on your mind and I will follow you. Pick a topic below only if you want me to start somewhere.")
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.cream.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top, 4)
+
+                if !atCap {
+                    VStack(spacing: 10) {
+                        Button { startTalking() } label: {
+                            Label("Start talking", systemImage: "mic.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(AppTheme.cream)
+                                .padding(.horizontal, 28).padding(.vertical, 14)
+                                .background(Capsule().fill(AppTheme.accent))
+                        }
+                        .buttonStyle(.plain)
+
+                        Button { openTypeInput() } label: {
+                            Text("Type instead")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(AppTheme.cream.opacity(0.9))
+                                .padding(.horizontal, 24).padding(.vertical, 12)
+                                .overlay(Capsule().strokeBorder(AppTheme.cream.opacity(0.25), lineWidth: 2))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.top, 2)
+                }
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 22)
+        .frame(maxWidth: .infinity)
+        .background(AppTheme.forest, in: RoundedRectangle(cornerRadius: 28))
+        .padding(.horizontal)
     }
 
     // MARK: - Orb & status
@@ -270,27 +354,42 @@ struct TalkToMeView: View {
 
     private var startPrompts: [String] {
         if activeFollowUp != nil { return checkInPrompts }
-        return ExperienceLevel.isExperienced(authManager.currentUser?.experienceLevel) ? experiencedPrompts : examplePrompts
+        return pickTopicStarters(
+            topic: topic,
+            room: room,
+            experienced: ExperienceLevel.isExperienced(authManager.currentUser?.experienceLevel)
+        )
     }
 
-    /// The heading only. The example prompts are a separate view so the body can
-    /// put "Start Talking" between them — see `startPromptCards`.
-    private var startScreen: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(activeFollowUp != nil ? "COACH IS CHECKING IN" : "A MOMENT FOR YOUR TEACHING")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(AppTheme.accent)
-                Text(activeFollowUp?.checkInQuestion ?? "What's on your mind today?")
-                    .font(.heading(.title2))
-                    .foregroundStyle(AppTheme.forest)
-                Text(activeFollowUp != nil
-                     ? "Say how it went — good, bad, or not yet. Coach will take it from there."
-                     : "Talk through a challenge, find the right words, or reflect on your day.")
-                    .font(.subheadline)
-                    .foregroundStyle(AppTheme.textSecondary)
-            }
+    /// The opening line a chosen topic turns into.
+    ///
+    /// Sent as the teacher's own first message rather than tucked into a system
+    /// prompt, for two reasons: being in the conversation means it still steers
+    /// Coach ten turns later, where a one-off prompt tweak would have stopped
+    /// counting; and the teacher can see exactly what Coach was told.
+    private func focusOpener(_ topicValue: String, _ kindValue: String?) -> String {
+        if topicValue == somethingElseTopic {
+            return "I want to talk something through that doesn't fit a category."
+        }
+        guard let label = talkTopicLabel(topicValue) else { return "I want to talk something through." }
+        if let kindValue, let specific = talkKindLabel(kindValue) {
+            return "I want to focus on \(label.lowercased()) — specifically \(specific.lowercased())."
+        }
+        return "I want to focus on \(label.lowercased())."
+    }
 
+    /// Starts the conversation already pointed at a topic. Used by the chips and
+    /// by Start talking, so every route in behaves the same way.
+    private func startFocused(_ topicValue: String, _ kindValue: String?) {
+        submit(focusOpener(topicValue, kindValue), typed: false)
+    }
+
+    /// Everything under the hero on a fresh start screen: what Coach already
+    /// knows about a check-in, and the optional topic chips.
+    ///
+    /// The heading moved into the hero card, beside the mic it belongs to.
+    private var startScreen: some View {
+        VStack(alignment: .leading, spacing: 16) {
             if let activeFollowUp {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("WHAT YOU PLANNED TO TRY")
@@ -305,6 +404,61 @@ struct TalkToMeView: View {
                 .background(AppTheme.goldTint.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
             }
 
+            // Genuinely optional, and it says so: Coach reads the topic out of
+            // the teacher's own words anyway. A check-in already has its
+            // subject, so the chips would be asking a question already answered.
+            if activeFollowUp == nil {
+                VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Want me focused on something?")
+                            .font(.heading(.subheadline))
+                            .foregroundStyle(AppTheme.forest)
+                        Text("Optional — skip it and I'll just listen.")
+                            .font(.subheadline)
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                    ChipRow(
+                        items: talkTopics.map { ($0.label, Optional($0.value)) },
+                        selection: topic
+                    ) { picked in
+                        guard let picked else { return }
+                        if topic == picked {
+                            topic = nil
+                            kind = nil
+                            return
+                        }
+                        topic = picked
+                        kind = nil
+                        // Topics with no second step have nothing left to ask,
+                        // so they open the conversation straight away. The rest
+                        // reveal their step first — starting here would put it
+                        // out of reach.
+                        if talkKinds(for: picked).isEmpty { startFocused(picked, nil) }
+                    }
+                }
+
+                // The second step, and only once the first is answered.
+                if let topic, !talkKinds(for: topic).isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Anything more specific?")
+                                .font(.heading(.subheadline))
+                                .foregroundStyle(AppTheme.forest)
+                            Text("Still optional.")
+                                .font(.subheadline)
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
+                        ChipRow(
+                            items: talkKinds(for: topic).map { ($0.label, Optional($0.value)) },
+                            selection: kind
+                        ) { picked in
+                            guard let picked else { return }
+                            kind = picked
+                            startFocused(topic, picked)
+                        }
+                    }
+                }
+            }
         }
         .padding(.horizontal)
     }
@@ -314,7 +468,7 @@ struct TalkToMeView: View {
     /// and one who doesn't still has them a thumb away.
     private var startPromptCards: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("OR START FROM ONE OF THESE")
+            Text("OR START WITH ONE OF THESE")
                 .font(.caption2.weight(.bold)).tracking(0.8)
                 .foregroundStyle(AppTheme.terracotta600)
             ForEach(startPrompts, id: \.self) { prompt in
@@ -343,13 +497,33 @@ struct TalkToMeView: View {
 
     // MARK: - Conversation
 
+    /// Spoken, the last exchange is enough — the teacher heard the rest. Typed,
+    /// the thread is the conversation: scrolling back to what Coach said four
+    /// turns ago is the whole point of having it in writing.
     private var conversationCards: some View {
         VStack(spacing: 10) {
-            if let userTranscript {
-                messageCard(label: "YOU", text: userTranscript, labelColor: AppTheme.textSecondary, fill: Color.white)
-            }
-            if let coachReplyText, !coachReplyText.isEmpty {
-                messageCard(label: "COACH", text: coachReplyText, labelColor: AppTheme.accent, fill: AppTheme.surface)
+            if showTypeInput, let conversation = debrief?.conversation, !conversation.isEmpty {
+                ForEach(Array(conversation.enumerated()), id: \.offset) { _, message in
+                    messageCard(
+                        label: message.role == "user" ? "YOU" : "COACH",
+                        text: message.text,
+                        labelColor: message.role == "user" ? AppTheme.textSecondary : AppTheme.accent,
+                        fill: message.role == "user" ? Color.white : AppTheme.surface
+                    )
+                }
+                if phase == .thinking {
+                    Text("Coach is writing…")
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                if let userTranscript {
+                    messageCard(label: "YOU", text: userTranscript, labelColor: AppTheme.textSecondary, fill: Color.white)
+                }
+                if let coachReplyText, !coachReplyText.isEmpty {
+                    messageCard(label: "COACH", text: coachReplyText, labelColor: AppTheme.accent, fill: AppTheme.surface)
+                }
             }
         }
         .padding(.horizontal)
@@ -366,29 +540,29 @@ struct TalkToMeView: View {
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.black.opacity(0.05)))
     }
 
+    /// The row under the transcript. On a fresh start screen the hero owns
+    /// Start talking and Type instead, so this covers only what the hero does
+    /// not: pausing, resuming, retrying, and finishing.
     private var controls: some View {
         VStack(spacing: 12) {
             HStack(spacing: 10) {
                 if !atCap {
                     if phase == .idle || phase == .error {
-                        pillButton(
-                            phase == .error ? "Try Again" : (debrief == nil ? "Start Talking" : "Resume"),
-                            systemImage: "mic.fill",
-                            filled: AppTheme.accent
-                        ) { startTalking() }
+                        if !onStartScreen {
+                            pillButton(
+                                phase == .error ? "Try Again" : (debrief == nil ? "Start talking" : "Resume"),
+                                systemImage: "mic.fill",
+                                filled: AppTheme.accent
+                            ) { startTalking() }
+                        }
                     } else {
                         pillButton("Pause mic", filled: AppTheme.primary) { handleStop() }
                     }
                 }
-
-                pillButton(muted ? "Unmute coach" : "Mute coach", outlined: muted ? AppTheme.terracotta : AppTheme.textSecondary) {
-                    muted.toggle()
-                    if muted { player.stop() }
-                }
             }
 
             HStack(spacing: 10) {
-                if !atCap {
+                if !atCap && !onStartScreen {
                     pillButton("Type instead", outlined: AppTheme.textSecondary) { openTypeInput() }
                 }
                 if debrief != nil {
@@ -401,27 +575,53 @@ struct TalkToMeView: View {
         .padding(.horizontal)
     }
 
+    /// The chat. It stays open until "Back to voice", so a teacher can hold the
+    /// whole conversation by keyboard.
     private var typeInput: some View {
-        HStack(spacing: 8) {
-            TextField("Type what's on your mind…", text: $typedDraft, axis: .vertical)
+        VStack(spacing: 10) {
+            HStack(spacing: 8) {
+                TextField(
+                    debrief == nil ? "Type what's on your mind…" : "Keep going…",
+                    text: $typedDraft,
+                    axis: .vertical
+                )
                 .lineLimit(1...4)
                 .focused($typeFieldFocused)
                 .padding(.horizontal, 14).padding(.vertical, 10)
                 .background(Color.white, in: RoundedRectangle(cornerRadius: 20))
                 .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.black.opacity(0.08)))
-            Button("Send") {
-                let text = typedDraft
-                typedDraft = ""
-                submit(text, typed: true)
+                Button("Send") {
+                    let text = typedDraft
+                    typedDraft = ""
+                    submit(text, typed: true)
+                }
+                .font(.subheadline.weight(.semibold))
+                .disabled(typedDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            .font(.subheadline.weight(.semibold))
-            .disabled(typedDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            Button("Cancel") {
-                showTypeInput = false
-                typeFieldFocused = false
+
+            // Typing replaced the button row, and the row was where finishing
+            // lived — so a teacher who held the whole conversation by keyboard
+            // had no way to end it or get a takeaway. Both ways out live here.
+            HStack(spacing: 14) {
+                Button {
+                    showTypeInput = false
+                    typedDraft = ""
+                    typeFieldFocused = false
+                } label: {
+                    Label("Back to voice", systemImage: "mic.fill")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                if debrief != nil {
+                    Button("Finish session") { Task { await finishSession() } }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
             }
-            .font(.subheadline)
-            .foregroundStyle(AppTheme.textSecondary)
         }
         .padding(.horizontal)
     }
@@ -672,7 +872,8 @@ struct TalkToMeView: View {
         if typed {
             recorder.close()
             sessionActive = false
-            showTypeInput = false
+            // The box stays open: this is a conversation, not one message. A
+            // chip-started turn is not "typed" and so still hands off to voice.
             typeFieldFocused = false
         }
         Task { await reply(to: trimmed) }
@@ -683,6 +884,12 @@ struct TalkToMeView: View {
     /// Talking should hear a colleague say hello, not silence they have to
     /// fill. Resuming an existing conversation still goes straight to the mic.
     private func startTalking() {
+        // A chosen topic becomes the opening line, so Coach starts inside the
+        // subject rather than opening by asking what it is about.
+        if let topic, debrief == nil, phase == .idle, !atCap {
+            startFocused(topic, kind)
+            return
+        }
         guard debrief == nil, phase == .idle, !atCap else {
             beginListening()
             return
@@ -710,11 +917,14 @@ struct TalkToMeView: View {
             ) { sentence in
                 streamingReply = streamingReply.map { "\($0) \(sentence)" } ?? sentence
                 phase = .speaking
-                if !muted { player.enqueue(sentence, voice: spokenVoice) }
+                // Silent while muted, and silent while the teacher is typing —
+                // a written exchange that talked back would be answering a
+                // question nobody asked out loud.
+                if !muted && !showTypeInput { player.enqueue(sentence, voice: spokenVoice) }
             }
             debrief = result
             streamingReply = nil
-            if !muted { await player.waitUntilDone() }
+            if !muted && !showTypeInput { await player.waitUntilDone() }
             resumeListeningIfActive()
         } catch {
             streamingReply = nil

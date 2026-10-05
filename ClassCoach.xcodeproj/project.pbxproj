@@ -27,6 +27,7 @@
 		BD7438888C3E04B89D29A2A2 /* TryItOutService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9674160BA6B8D289506548A9 /* TryItOutService.swift */; };
 		C5EC6B67818C4290C83B8B0E /* Categories.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3585852E3B968C6EEFABBF1 /* Categories.swift */; };
 		A1F0CA5E7B4D41A2B9E30C11 /* FocusAreas.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B7E4419C6F48A7B1035E22 /* FocusAreas.swift */; };
+		B7C41D9E2A5F43C8A0E17D34 /* TalkTopics.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8D52EAF3B6054D9B1F28E45 /* TalkTopics.swift */; };
 		C3E9A17D5B8F42C1A07D4E33 /* TeachingContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8D1B62E4A0C43D9B5E27A44 /* TeachingContext.swift */; };
 		D5B31A8E6C2F44D7B903E255 /* Starters.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C4E77B3F1D452EA61B8C99 /* Starters.swift */; };
 		F1A7C93D2E8B45C6A70D1B88 /* PracticeHints.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6E2B84F7A3D49E1B052C777 /* PracticeHints.swift */; };
@@ -103,6 +104,7 @@
 		9674160BA6B8D289506548A9 /* TryItOutService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TryItOutService.swift; sourceTree = "<group>"; };
 		E3585852E3B968C6EEFABBF1 /* Categories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Categories.swift; sourceTree = "<group>"; };
 		D2B7E4419C6F48A7B1035E22 /* FocusAreas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusAreas.swift; sourceTree = "<group>"; };
+		C8D52EAF3B6054D9B1F28E45 /* TalkTopics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkTopics.swift; sourceTree = "<group>"; };
 		F8D1B62E4A0C43D9B5E27A44 /* TeachingContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeachingContext.swift; sourceTree = "<group>"; };
 		A9C4E77B3F1D452EA61B8C99 /* Starters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Starters.swift; sourceTree = "<group>"; };
 		C6E2B84F7A3D49E1B052C777 /* PracticeHints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeHints.swift; sourceTree = "<group>"; };
@@ -367,6 +369,7 @@
 				0DAB353C2E35233EA2C16166 /* Scenario.swift */,
 				E3585852E3B968C6EEFABBF1 /* Categories.swift */,
 				D2B7E4419C6F48A7B1035E22 /* FocusAreas.swift */,
+				C8D52EAF3B6054D9B1F28E45 /* TalkTopics.swift */,
 				F8D1B62E4A0C43D9B5E27A44 /* TeachingContext.swift */,
 				A9C4E77B3F1D452EA61B8C99 /* Starters.swift */,
 				C6E2B84F7A3D49E1B052C777 /* PracticeHints.swift */,
@@ -503,6 +506,7 @@
 				BD7438888C3E04B89D29A2A2 /* TryItOutService.swift in Sources */,
 				C5EC6B67818C4290C83B8B0E /* Categories.swift in Sources */,
 				A1F0CA5E7B4D41A2B9E30C11 /* FocusAreas.swift in Sources */,
+				B7C41D9E2A5F43C8A0E17D34 /* TalkTopics.swift in Sources */,
 				C3E9A17D5B8F42C1A07D4E33 /* TeachingContext.swift in Sources */,
 				D5B31A8E6C2F44D7B903E255 /* Starters.swift in Sources */,
 				F1A7C93D2E8B45C6A70D1B88 /* PracticeHints.swift in Sources */,
