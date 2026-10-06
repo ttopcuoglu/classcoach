@@ -9,6 +9,34 @@ const MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'a
 // Same "signal detected" threshold MicLevelMeter.tsx already uses.
 const SPEECH_LEVEL_THRESHOLD = 8
 
+// Interrupting Coach has to clear a far higher bar than simply speaking into
+// a quiet room, because echo cancellation leaves some of Coach's own voice in
+// the microphone. Two defences: a louder level, and holding it long enough
+// that a word or two of leaked echo cannot stop a reply. A real interruption
+// is someone talking continuously, so a third of a second costs the teacher
+// nothing they would notice.
+const BARGE_IN_LEVEL_THRESHOLD = 20
+const BARGE_IN_SUSTAIN_MS = 350
+
+// Off until it has been heard on real machines, because it reopens a bug
+// this file already fixed once: the microphone track is deliberately
+// disabled while Coach is speaking, since Chrome's audio processing on a
+// live getUserMedia track interferes with separate <audio> playback (see
+// start()). Barge-in cannot work without that track live, so the two are in
+// direct tension and only listening can say whether it matters here.
+//
+//   localStorage.wivozaBargeIn = '1'    (or open the page with ?bargein=1)
+export function bargeInEnabled(): boolean {
+  try {
+    const query = new URLSearchParams(location.search).get('bargein')
+    if (query === '1') return true
+    if (query === '0') return false
+    return localStorage.getItem('wivozaBargeIn') === '1'
+  } catch {
+    return false
+  }
+}
+
 const FATAL_ERROR_MESSAGES: Record<string, string> = {
   NotAllowedError: 'Microphone access was denied. Check your browser/device settings and try again.',
   SecurityError: 'Microphone access was denied. Check your browser/device settings and try again.',
@@ -155,7 +183,14 @@ export function useVoiceTurn(
     const streamIsLive = stream != null && stream.getTracks().some((t) => t.readyState === 'live')
     if (!streamIsLive) {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        // Echo cancellation is what makes barge-in possible: without it the
+        // microphone hears Coach through the speakers and the teacher
+        // "interrupts" with Coach's own voice. Chrome applies these for a
+        // bare `{ audio: true }`; Safari is less consistent, so they are
+        // asked for by name.
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        })
       } catch (err) {
         const name = (err as DOMException)?.name
         setFatalError(FATAL_ERROR_MESSAGES[name] ?? 'Could not access your microphone. Check your device and try again.')
@@ -349,14 +384,18 @@ export function useVoiceTurn(
     }
   }
 
-  // Watches the microphone for the teacher carrying on after a turn was
-  // declared over, and before Coach has said anything. The end-of-turn guess
-  // is a guess; this is what makes guessing early survivable (see
-  // turnEndpointing.ts). Returns a stop function the caller MUST call the
-  // moment Coach becomes audible — past that point the microphone is picking
-  // up the room while a reply is playing, and resuming would be reacting to
-  // Coach's own voice coming back through the speakers.
-  function watchForResume(onResume: () => void): () => void {
+  // Watches the microphone for the teacher speaking when no turn is being
+  // recorded. Used twice, with very different sensitivity:
+  //
+  // - After a turn ended but before Coach is audible (watchForResume): the
+  //   room is quiet, so a hair trigger is right — the end-of-turn guess may
+  //   have been wrong and the cost of catching it is nothing.
+  // - While Coach is speaking (watchWhileSpeaking): the microphone is also
+  //   hearing Coach through the speakers. Echo cancellation removes most of
+  //   that, but not all of it on every device, so this needs a much higher
+  //   bar — a louder level, held for long enough that leaked echo or a cough
+  //   cannot cut Coach off mid-sentence.
+  function watchLevel(threshold: number, sustainMs: number, onSpeech: () => void): () => void {
     const analyser = analyserRef.current
     const stream = streamRef.current
     if (!analyser || !stream) return () => {}
@@ -364,7 +403,7 @@ export function useVoiceTurn(
     stream.getAudioTracks().forEach((t) => (t.enabled = true))
     const data = new Uint8Array(analyser.frequencyBinCount)
     let rafId: number | null = null
-    let loudFrames = 0
+    let loudSince = 0
     let stopped = false
 
     const stopWatching = () => {
@@ -384,19 +423,36 @@ export function useVoiceTurn(
         sumSquares += normalized * normalized
       }
       const pct = Math.min(100, Math.round(Math.sqrt(sumSquares / data.length) * 300))
-      // A few consecutive loud frames rather than one: a chair creak or a
-      // door is a single spike, speech is not. At 60fps this is ~50ms, far
-      // too short for the teacher to notice the reply being dropped.
-      loudFrames = pct > SPEECH_LEVEL_THRESHOLD ? loudFrames + 1 : 0
-      if (loudFrames >= 3) {
-        stopWatching()
-        onResume()
-        return
+      const now = performance.now()
+      if (pct > threshold) {
+        if (!loudSince) loudSince = now
+        if (now - loudSince >= sustainMs) {
+          stopWatching()
+          onSpeech()
+          return
+        }
+      } else {
+        loudSince = 0
       }
       rafId = requestAnimationFrame(watch)
     }
     watch()
     return stopWatching
+  }
+
+  // The teacher carried on after the turn was called, and before Coach said
+  // anything. The caller MUST stop this the moment Coach becomes audible —
+  // past that point watchWhileSpeaking is the right tool, because the
+  // microphone is hearing the room with Coach playing into it.
+  function watchForResume(onResume: () => void): () => void {
+    // ~50ms at 60fps: a chair creak is a spike, speech is not.
+    return watchLevel(SPEECH_LEVEL_THRESHOLD, 50, onResume)
+  }
+
+  // The teacher started talking over Coach. Deliberately hard to trigger.
+  function watchWhileSpeaking(onBargeIn: () => void): () => void {
+    if (!bargeInEnabled()) return () => {}
+    return watchLevel(BARGE_IN_LEVEL_THRESHOLD, BARGE_IN_SUSTAIN_MS, onBargeIn)
   }
 
   function stop() {
@@ -406,5 +462,5 @@ export function useVoiceTurn(
   const supported =
     typeof MediaRecorder !== 'undefined' && typeof navigator?.mediaDevices?.getUserMedia === 'function'
 
-  return { supported, listening, level, fatalError, transcribing, start, stop, close, watchForResume }
+  return { supported, listening, level, fatalError, transcribing, start, stop, close, watchForResume, watchWhileSpeaking }
 }

@@ -210,6 +210,34 @@ export default function TalkToMe() {
   // together with how they finished it. See handleTurnComplete.
   const carriedTextRef = useRef('')
 
+  // True from the moment the teacher talks over Coach until the interrupted
+  // reply has finished unwinding, so the usual "listen again when playback
+  // ends" does not start a second turn on top of the one already listening.
+  const bargedInRef = useRef(false)
+  // The reply currently being streamed, whether or not it is still audible.
+  // An interruption starts the next turn immediately, so that turn has to
+  // wait for this to settle before it asks for anything — otherwise its
+  // request can go out before the conversation it belongs to exists.
+  const pendingReplyRef = useRef<Promise<unknown> | null>(null)
+  const replyInFlightRef = useRef(false)
+
+  // Remembers a reply while it is being streamed, so a turn that starts
+  // before it has landed (which only happens when the teacher interrupts)
+  // can wait for it rather than racing it.
+  function trackReply<T>(reply: Promise<T>): Promise<T> {
+    replyInFlightRef.current = true
+    pendingReplyRef.current = reply
+    void reply
+      .catch(() => {})
+      .finally(() => {
+        if (pendingReplyRef.current === reply) {
+          replyInFlightRef.current = false
+          pendingReplyRef.current = null
+        }
+      })
+    return reply
+  }
+
   // A reply started during the pause at the end of a turn, before the turn
   // was officially over. Its sentences are held rather than spoken until the
   // turn actually ends and the draft it answered turns out to be what the
@@ -225,7 +253,7 @@ export default function TalkToMe() {
   }
   const speculationRef = useRef<Speculation | null>(null)
 
-  const { supported, level, fatalError, transcribing, start, close, watchForResume } = useVoiceTurn(
+  const { supported, level, fatalError, transcribing, start, close, watchForResume, watchWhileSpeaking } = useVoiceTurn(
     handleTurnComplete,
     { onSpeculate: handleSpeculate, onSpeculationStale: dropSpeculation },
   )
@@ -390,10 +418,16 @@ export default function TalkToMe() {
     sessionActiveRef.current = true
     setError(null)
     setPhase('thinking')
-    const queue = createPlaybackQueue(audio, talkVoiceRef.current, () => setPhase('speaking'))
+    // Held in an object rather than a plain variable: it is assigned inside
+    // the playback callback, which the compiler cannot follow.
+    const bargeIn: { stop: (() => void) | null } = { stop: null }
+    const queue = createPlaybackQueue(audio, talkVoiceRef.current, () => {
+      setPhase('speaking')
+      bargeIn.stop = watchWhileSpeaking(handleBargeIn)
+    })
     queueRef.current = queue
     try {
-      const result = await streamCoachReply(
+      const reply = streamCoachReply(
         null,
         null,
         (sentence) => {
@@ -402,12 +436,20 @@ export default function TalkToMe() {
         },
         followUpRef.current?.id,
       )
+      const result = await trackReply(reply)
       setDebrief(result)
       queue.end()
       await queue.finished
+      bargeIn.stop?.()
       queueRef.current = null
+      if (bargedInRef.current) {
+        // Already listening to the interruption.
+        bargedInRef.current = false
+        return
+      }
       resumeListeningIfActive()
     } catch (err) {
+      bargeIn.stop?.()
       queue.cancel()
       queueRef.current = null
       if (!sessionActiveRef.current) return
@@ -419,6 +461,22 @@ export default function TalkToMe() {
   // record -> transcribe -> reply -> speak chain was already in flight.
   function resumeListeningIfActive() {
     if (!sessionActiveRef.current) return
+    beginListening()
+  }
+
+  // The teacher started talking over Coach. Stop the speech, and start
+  // listening at once so the first words of the interruption are captured.
+  //
+  // The reply itself is deliberately NOT cancelled. It is already written,
+  // and letting it finish keeps the conversation (and what Coach remembers)
+  // honest about what was said — a half-saved reply would have Coach
+  // repeating the advice the teacher cut off. They simply stop hearing it.
+  function handleBargeIn() {
+    if (!sessionActiveRef.current || bargedInRef.current) return
+    bargedInRef.current = true
+    markTurn('barge_in')
+    queueRef.current?.cancel()
+    queueRef.current = null
     beginListening()
   }
 
@@ -438,6 +496,9 @@ export default function TalkToMe() {
   function handleSpeculate(draft: string) {
     if (!sessionActiveRef.current || mutedRef.current || chatRef.current) return
     if (speculationRef.current || !audioRef.current) return
+    // A reply is still streaming (the teacher interrupted it). Speculating
+    // now would ask on behalf of a conversation that may not exist yet.
+    if (replyInFlightRef.current) return
     const controller = new AbortController()
     const spec: Speculation = {
       text: draft,
@@ -496,6 +557,11 @@ export default function TalkToMe() {
     setUserTranscript(text)
     setPhase('thinking')
 
+    // After an interruption the previous reply may still be arriving. It
+    // carries the conversation this turn belongs to, so wait for it — on
+    // every other turn it has long since settled and this costs nothing.
+    if (pendingReplyRef.current) await pendingReplyRef.current.catch(() => {})
+
     // Nothing to speak, so nothing to overlap — take the plain request and
     // skip the streaming machinery entirely. True when muted, and true while
     // the teacher is typing: a written exchange that talked back would be
@@ -541,10 +607,18 @@ export default function TalkToMe() {
     if (pending && !committed) pending.controller.abort()
     if (committed) markTurn('speculation_used')
 
+    // Held in an object rather than a plain variable: it is assigned inside
+    // the playback callback, which the compiler cannot follow.
+    const bargeIn: { stop: (() => void) | null } = { stop: null }
     const queue = createPlaybackQueue(audio, talkVoiceRef.current, () => {
       markTurn('speak')
       endTurn()
       setPhase('speaking')
+      // Coach is audible now, so the microphone switches from "did they
+      // carry on?" to the much harder-to-trigger "are they talking over
+      // this?" — see watchWhileSpeaking.
+      stopWatching()
+      bargeIn.stop = watchWhileSpeaking(handleBargeIn)
     })
     queueRef.current = queue
 
@@ -574,29 +648,38 @@ export default function TalkToMe() {
           queue.push(sentence)
         }
         committed.buffered = []
-        result = await committed.reply
+        result = await trackReply(committed.reply)
       } else {
-        result = await streamCoachReply(
-          current ? current.id : null,
-          text,
-          (sentence) => {
-            if (!sessionActiveRef.current) return
-            // First sentence in hand means Coach is about to speak, so the
-            // microphone stops listening for a continuation.
-            stopWatching()
-            queue.push(sentence)
-          },
-          followUpRef.current?.id,
-          resumption.signal,
+        result = await trackReply(
+          streamCoachReply(
+            current ? current.id : null,
+            text,
+            (sentence) => {
+              if (!sessionActiveRef.current) return
+              // First sentence in hand means Coach is about to speak, so the
+              // microphone stops listening for a continuation.
+              stopWatching()
+              queue.push(sentence)
+            },
+            followUpRef.current?.id,
+            resumption.signal,
+          ),
         )
       }
       setDebrief(result)
       queue.end()
       await queue.finished
+      bargeIn.stop?.()
       queueRef.current = null
+      if (bargedInRef.current) {
+        // The teacher is already mid-turn; do not start another one.
+        bargedInRef.current = false
+        return
+      }
       resumeListeningIfActive()
     } catch (err) {
       stopWatching()
+      bargeIn.stop?.()
       queue.cancel()
       queueRef.current = null
       if (resumed) {
