@@ -50,7 +50,12 @@ export function attachLiveSttServer(server: Server, allowedOrigins: string[]): v
       const cookies = parseCookie(req.headers.cookie ?? '')
       const cookieToken = cookies[SESSION_COOKIE]
       const queryToken = searchParams.get('token')
-      const token = cookieToken ?? queryToken ?? ''
+      // A native client can set headers on an upgrade, which a browser
+      // cannot, so the iOS app sends its session token the same way it sends
+      // it everywhere else rather than writing it into a URL.
+      const header = req.headers.authorization
+      const headerToken = header?.startsWith('Bearer ') ? header.slice(7) : undefined
+      const token = cookieToken ?? headerToken ?? queryToken ?? ''
 
       // WebSockets are not covered by CORS, so the cors() middleware protecting
       // every HTTP route does nothing here. And because the session cookie is
@@ -77,7 +82,9 @@ export function attachLiveSttServer(server: Server, allowedOrigins: string[]): v
       // through the proxy) or a plain session token (the iOS app).
       const session = token ? verifySession(token, 'stt') : null
       if (!session) {
-        console.warn(`[stt-live] refused: no usable session (cookie=${Boolean(cookieToken)} query=${Boolean(queryToken)})`)
+        console.warn(
+          `[stt-live] refused: no usable session (cookie=${Boolean(cookieToken)} header=${Boolean(headerToken)} query=${Boolean(queryToken)})`,
+        )
         refuse(socket, 401, 'Unauthorized')
         return
       }

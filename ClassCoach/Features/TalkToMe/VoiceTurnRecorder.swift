@@ -28,6 +28,12 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     private var engineRunning = false
     private var silenceTimer: Timer?
     private var onTurnComplete: ((String) -> Void)?
+    /// The live socket for the turn being recorded, when one opened. Nil
+    /// means this turn takes the upload path, exactly as every turn used to.
+    private var live: LiveTranscriber?
+    /// Bumped per turn so a socket that finishes opening after its turn has
+    /// ended is abandoned rather than attached to the next one.
+    private var turnId = 0
     private var observers: [NSObjectProtocol] = []
 
     /// dBFS above which the mic is considered to be picking up speech, not
@@ -132,7 +138,30 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
         listening = true
         speechMs = 0
         lastLevelAt = nil
+        turnId += 1
         scheduleSilenceEnd()
+
+        // Opened alongside recording rather than before it: waiting for the
+        // socket first would mean the microphone was not yet capturing while
+        // it connected, so the teacher's opening words would be missing from
+        // both the live stream and the fallback recording.
+        let rate = engine.inputNode.outputFormat(forBus: 0).sampleRate
+        let thisTurn = turnId
+        Task { [weak self] in
+            guard let token = await AuthManager.shared.token else { return }
+            let session = await LiveTranscriber.open(sampleRate: rate, token: token)
+            await MainActor.run {
+                guard let self else { return }
+                // Stop, Close, or simply a very short answer can all end the
+                // turn before the socket is ready.
+                guard let session, self.turnId == thisTurn, self.listening else {
+                    session?.abandon()
+                    return
+                }
+                self.live = session
+                self.capture.streamTo(session)
+            }
+        }
     }
 
     /// Ends the current turn early; the mic itself stays open.
@@ -145,6 +174,13 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     func close() {
         silenceTimer?.invalidate()
         silenceTimer = nil
+        turnId += 1
+        capture.streamTo(nil)
+        // Dropped without asking for a transcript: closing means the teacher
+        // is done, so there is nothing left to transcribe and nothing to wait
+        // for.
+        live?.abandon()
+        live = nil
         _ = capture.end()
         listening = false
         level = 0
@@ -231,11 +267,32 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
         listening = false
         lastLevelAt = nil
         level = 0
-        guard let url = capture.end() else { return }
+        turnId += 1
+        capture.streamTo(nil)
+        let session = live
+        live = nil
+        guard let url = capture.end() else {
+            session?.abandon()
+            return
+        }
 
         transcribing = true
         Task { @MainActor in
             defer { try? FileManager.default.removeItem(at: url) }
+
+            // If the socket was running, the words are already there and the
+            // recording never has to be uploaded at all. Anything short of a
+            // usable transcript falls through to the upload below, which
+            // still holds the complete turn.
+            if let session {
+                let transcript = await session.finish()
+                if let transcript {
+                    self.transcribing = false
+                    self.onTurnComplete?(transcript)
+                    return
+                }
+            }
+
             do {
                 let transcript = try await TalkToMeService.transcribe(audioFileURL: url)
                 self.transcribing = false
@@ -257,6 +314,15 @@ private final class TurnCapture: @unchecked Sendable {
     private let lock = NSLock()
     private var file: AVAudioFile?
     private var url: URL?
+    private var live: LiveTranscriber?
+
+    /// Starts (or stops) forwarding every captured buffer to the live
+    /// socket. The file keeps being written either way — it is the fallback.
+    func streamTo(_ transcriber: LiveTranscriber?) {
+        lock.lock()
+        live = transcriber
+        lock.unlock()
+    }
 
     func installTap(on input: AVAudioInputNode, onLevel: @escaping @Sendable (Float) -> Void) {
         let format = input.outputFormat(forBus: 0)
@@ -264,8 +330,10 @@ private final class TurnCapture: @unchecked Sendable {
             guard let self else { return }
             onLevel(Self.rmsDecibels(buffer))
             self.lock.lock()
-            defer { self.lock.unlock() }
+            let session = self.live
             try? self.file?.write(from: buffer)
+            self.lock.unlock()
+            session?.send(buffer)
         }
     }
 
@@ -307,5 +375,164 @@ private final class TurnCapture: @unchecked Sendable {
         }
         let rms = (sum / Float(buffer.frameLength)).squareRoot()
         return rms > 0 ? 20 * log10(rms) : -160
+    }
+}
+
+/// Streams a turn's audio to the server (and on to Deepgram) while the
+/// teacher is still talking, so the transcript is ready the moment they
+/// stop instead of being requested then — the native half of
+/// `web/src/lib/liveTranscription.ts`.
+///
+/// Strictly a fast path. `VoiceTurnRecorder` keeps recording the whole turn
+/// to a file regardless, and every failure here returns nil, which means
+/// "upload it the old way". The worst case is the latency the app always
+/// had.
+///
+/// Audio goes up as mono 16-bit PCM at the engine's own sample rate rather
+/// than the AAC file the fallback uses: a container split into chunks is
+/// ambiguous to stream, while raw PCM at a declared rate has exactly one
+/// interpretation.
+final class LiveTranscriber: @unchecked Sendable {
+    private let task: URLSessionWebSocketTask
+    private let lock = NSLock()
+    private var transcriptHandler: ((String?) -> Void)?
+    private var settled = false
+    private var sendsInFlight = 0
+
+    /// Opens the socket. Returns nil when there is nothing to open it with,
+    /// or when the server does not answer "ready" in time — the caller then
+    /// simply uploads the recording.
+    static func open(sampleRate: Double, token: String) async -> LiveTranscriber? {
+        let endpoint = APIClient.shared.uploadBaseURL.appendingPathComponent("/api/stt/live")
+        guard var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false) else { return nil }
+        components.scheme = components.scheme == "https" ? "wss" : "ws"
+        components.queryItems = [URLQueryItem(name: "sample_rate", value: String(Int(sampleRate)))]
+        guard let url = components.url else { return nil }
+
+        var request = URLRequest(url: url)
+        // Unlike a browser, a native WebSocket can carry headers, so the
+        // session token travels the same way it does on every other call
+        // instead of in the query string.
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let transcriber = LiveTranscriber(task: URLSession.shared.webSocketTask(with: request))
+        return await transcriber.start() ? transcriber : nil
+    }
+
+    private init(task: URLSessionWebSocketTask) {
+        self.task = task
+    }
+
+    private func start() async -> Bool {
+        task.resume()
+        return await withCheckedContinuation { continuation in
+            var resumed = false
+            let finish: (Bool) -> Void = { ok in
+                guard !resumed else { return }
+                resumed = true
+                continuation.resume(returning: ok)
+            }
+            receive(onReady: { finish(true) })
+            // The turn is already being recorded; a socket that has not said
+            // "ready" within this is not worth waiting on.
+            DispatchQueue.global().asyncAfter(deadline: .now() + 2.5) { finish(false) }
+        }
+    }
+
+    private func receive(onReady: (() -> Void)? = nil) {
+        task.receive { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .failure:
+                self.deliver(nil)
+            case .success(let message):
+                if case .string(let text) = message,
+                   let data = text.data(using: .utf8),
+                   let frame = try? JSONDecoder().decode(Frame.self, from: data) {
+                    switch frame.type {
+                    case "ready":
+                        onReady?()
+                    case "transcript":
+                        self.deliver(frame.transcript)
+                    case "unavailable":
+                        self.deliver(nil)
+                    default:
+                        break // "draft" — used by the web client, not here yet
+                    }
+                }
+                self.receive(onReady: onReady)
+            }
+        }
+    }
+
+    private struct Frame: Decodable {
+        let type: String
+        let transcript: String?
+    }
+
+    /// Feeds one buffer. Safe to call from the audio tap's thread.
+    func send(_ buffer: AVAudioPCMBuffer) {
+        guard let data = Self.pcm16(from: buffer) else { return }
+        lock.lock()
+        let done = settled
+        if !done { sendsInFlight += 1 }
+        lock.unlock()
+        guard !done else { return }
+        task.send(.data(data)) { [weak self] _ in
+            guard let self else { return }
+            self.lock.lock()
+            self.sendsInFlight -= 1
+            self.lock.unlock()
+        }
+    }
+
+    /// Asks the server to finalize. Returns the transcript, or nil when the
+    /// caller should fall back to uploading the recording.
+    func finish() async -> String? {
+        let transcript = await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
+            lock.lock()
+            if settled {
+                lock.unlock()
+                continuation.resume(returning: nil)
+                return
+            }
+            transcriptHandler = { continuation.resume(returning: $0) }
+            lock.unlock()
+
+            task.send(.string("{\"type\":\"finish\"}")) { [weak self] error in
+                if error != nil { self?.deliver(nil) }
+            }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 3) { [weak self] in self?.deliver(nil) }
+        }
+        abandon()
+        let trimmed = transcript?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (trimmed?.isEmpty ?? true) ? nil : trimmed
+    }
+
+    func abandon() {
+        deliver(nil)
+        task.cancel(with: .goingAway, reason: nil)
+    }
+
+    private func deliver(_ transcript: String?) {
+        lock.lock()
+        let handler = transcriptHandler
+        transcriptHandler = nil
+        settled = true
+        lock.unlock()
+        handler?(transcript)
+    }
+
+    /// Mono 16-bit little-endian, which is what the server tells Deepgram to
+    /// expect. Only channel 0 is taken: a second channel would double the
+    /// bytes without adding anything a transcript can use.
+    private static func pcm16(from buffer: AVAudioPCMBuffer) -> Data? {
+        guard let channel = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return nil }
+        var samples = [Int16]()
+        samples.reserveCapacity(Int(buffer.frameLength))
+        for i in 0..<Int(buffer.frameLength) {
+            let clamped = max(-1, min(1, channel[i]))
+            samples.append(Int16(clamped * Float(clamped < 0 ? 32768 : 32767)))
+        }
+        return samples.withUnsafeBufferPointer { Data(buffer: $0) }
     }
 }
