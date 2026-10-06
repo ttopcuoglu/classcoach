@@ -10,8 +10,12 @@ struct RootTabView: View {
             } else if authManager.currentUser != nil {
                 // Same names and order as the web app's menu, with Lesson
                 // Debrief first. Home's feature cards follow the same order.
-                // Try It Out and Ask an Expert live inside the combined
-                // Practice tab (see PracticeView).
+                //
+                // Two tabs fewer than there were tools: rehearsing a scenario and
+                // rehearsing a conversation are both Practice (see PracticeView),
+                // and reviewing an assignment is a chip inside Lesson Planning
+                // (see LessonPlanningView). Both were merges of the same job, not
+                // of two different ones.
                 TabView {
                     HomeView()
                         .tabItem {
@@ -39,11 +43,6 @@ struct RootTabView: View {
                     LessonPlanningView()
                         .tabItem {
                             Label("Lesson Planning", systemImage: "doc.text.fill")
-                        }
-
-                    AssignmentCoachView()
-                        .tabItem {
-                            Label("Assignment Coach", systemImage: "checklist")
                         }
 
                     MessagesHubView()

@@ -50,6 +50,11 @@ private struct RedesignPrefill {
 }
 
 struct AssignmentCoachView: View {
+    /// Rendered as Lesson Planning's third chip, which supplies the navigation
+    /// title. Its own panel header stays either way: on that chip it is the only
+    /// thing saying which of the three you are looking at.
+    var embedded = false
+
     @State private var session: AssignmentCoachSession?
     @State private var pendingMode: String?
     @State private var prefill: RedesignPrefill?
@@ -92,7 +97,7 @@ struct AssignmentCoachView: View {
             }
         }
         .background(AppTheme.background)
-        .navigationTitle("Assignment Coach")
+        .navigationTitle(embedded ? "" : "Assignment Coach")
         .task { await loadHistory() }
     }
 

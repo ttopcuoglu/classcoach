@@ -1,28 +1,46 @@
 import SwiftUI
 
+/// Assignment Coach is the third chip rather than a seventh tab. Every chip here
+/// is the same job — something you made, read back to you before students see it
+/// — and a chip row puts them one tap apart instead of a tab apart.
+///
+/// The chips sit above the scroll rather than inside it, the way Practice's
+/// section chips do, so the assignment tab can bring its own scrolling instead of
+/// nesting one ScrollView inside another.
 struct LessonPlanningView: View {
     @State private var tab = "generate"
 
+    private let tabs: [(label: String, value: String?)] = [
+        ("Generate Ideas", "generate"),
+        ("Get Feedback", "feedback"),
+        ("Review an Assignment", "assignment"),
+    ]
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                PanelHeader(
-                    eyebrow: "Wivoza · Plan",
-                    title: "Lesson Planning",
-                    subtitle: "Get feedback on a plan you wrote, or generate a sample plan for ideas."
-                )
+        VStack(alignment: .leading, spacing: 0) {
+            ChipRow(items: tabs, selection: tab) { tab = $0 ?? "generate" }
+                .padding(.vertical, 10)
 
-                ChipRow(items: [("Generate Ideas", "generate"), ("Get Feedback", "feedback")], selection: tab) {
-                    tab = $0 ?? "generate"
-                }
+            if tab == "assignment" {
+                AssignmentCoachView(embedded: true)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        PanelHeader(
+                            eyebrow: "Wivoza · Plan",
+                            title: "Lesson Planning",
+                            subtitle: "Get feedback on a plan you wrote, or generate a sample plan for ideas."
+                        )
 
-                if tab == "generate" {
-                    GeneratePanel()
-                } else {
-                    FeedbackPanel()
+                        if tab == "generate" {
+                            GeneratePanel()
+                        } else {
+                            FeedbackPanel()
+                        }
+                    }
+                    .padding()
                 }
             }
-            .padding()
         }
         .background(AppTheme.background)
         .navigationTitle("Lesson Planning")
