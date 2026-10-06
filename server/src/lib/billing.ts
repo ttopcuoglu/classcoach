@@ -62,6 +62,14 @@ export function countUsageLogActionsThisMonth(userId: string, actions: string[])
 // The Communications area spans three route files (parentMessage.ts,
 // conversationPrep.ts, conversationPlan.ts) — one shared list so a future
 // new action in any of them doesn't silently fall outside the gate.
+//
+// conversationPrep.ts serves two products now. Its conversation_prep_* actions
+// below are Communication Coach's "Review My Communication" and stay Plus. Its
+// conversation_practice_* actions are Practice's conversation rehearsal and are
+// deliberately absent: Practice is free forever (see the note at the top of this
+// file), and the app says so on the landing page, in the FAQ and in the teacher's
+// guide. Listing them here is what made a free teacher clicking Conversation in
+// Practice read "Messages is part of Wivoza Plus".
 export const COMMUNICATIONS_ACTIONS = [
   'parent_message',
   'parent_message_chat',

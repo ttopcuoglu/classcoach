@@ -242,15 +242,11 @@ conversationPrepRouter.post('/generate-scenario', async (req, res) => {
   const resolvedPersonType = isValidRecipientType(personType) ? personType : null
   const resolvedDifficulty = isValidConversationDifficulty(difficulty) ? difficulty : null
 
-  const access = await checkFeatureAccess(req.user!.userId, 'communications', () =>
-    countUsageLogActionsThisMonth(req.user!.userId, COMMUNICATIONS_ACTIONS),
-  )
-  if (!access.allowed) {
-    res.status(403).json({ error: access.upgradeMessage })
-    return
-  }
-
-  const denied = await checkAndLogUsage(req.user!.userId, 'conversation_prep_generate')
+  // No Plus gate: /generate-scenario has exactly two callers, Practice's
+  // conversation rehearsal on web and on iOS, and Practice is free forever. The
+  // flat ceiling below is the only protection it needs, same as every other
+  // Practice action.
+  const denied = await checkAndLogUsage(req.user!.userId, 'conversation_practice_generate')
   if (denied) {
     res.status(429).json({ error: denied })
     return
@@ -309,15 +305,23 @@ conversationPrepRouter.post('/', async (req, res) => {
   const resolvedReviewMode = isValidReviewMode(reviewMode) ? reviewMode : 'both'
   const resolvedCategory = resolvedSource === 'practice' && isValidChallengeType(category) ? category : null
 
-  const access = await checkFeatureAccess(req.user!.userId, 'communications', () =>
-    countUsageLogActionsThisMonth(req.user!.userId, COMMUNICATIONS_ACTIONS),
-  )
-  if (!access.allowed) {
-    res.status(403).json({ error: access.upgradeMessage })
-    return
+  // The only endpoint both products share, so the gate follows the source
+  // rather than the route: a review is Communication Coach and stays Plus, a
+  // rehearsal is Practice and is free.
+  if (resolvedSource === 'review') {
+    const access = await checkFeatureAccess(req.user!.userId, 'communications', () =>
+      countUsageLogActionsThisMonth(req.user!.userId, COMMUNICATIONS_ACTIONS),
+    )
+    if (!access.allowed) {
+      res.status(403).json({ error: access.upgradeMessage })
+      return
+    }
   }
 
-  const denied = await checkAndLogUsage(req.user!.userId, 'conversation_prep_feedback')
+  const denied = await checkAndLogUsage(
+    req.user!.userId,
+    resolvedSource === 'review' ? 'conversation_prep_feedback' : 'conversation_practice_feedback',
+  )
   if (denied) {
     res.status(429).json({ error: denied })
     return
@@ -440,7 +444,10 @@ conversationPrepRouter.post('/:id/chat', async (req, res) => {
     return
   }
 
-  const denied = await checkAndLogUsage(req.user!.userId, 'conversation_prep_chat')
+  const denied = await checkAndLogUsage(
+    req.user!.userId,
+    prep.source === 'review' ? 'conversation_prep_chat' : 'conversation_practice_chat',
+  )
   if (denied) {
     res.status(429).json({ error: denied })
     return

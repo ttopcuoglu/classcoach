@@ -47,6 +47,13 @@ export type UsageAction =
   | 'lesson_plan_generate'
   | 'conversation_prep_feedback'
   | 'conversation_prep_generate'
+  // Practice's conversation rehearsal. Same route file as the three
+  // conversation_prep_* actions above and the same table, split off by source
+  // because they are no longer the same product: these are Practice, which is
+  // free forever, and those are Communication Coach's review, which is Plus.
+  | 'conversation_practice_generate'
+  | 'conversation_practice_feedback'
+  | 'conversation_practice_chat'
   | 'reflect_chat'
   | 'content_notes'
   | 'rubric_lens'
@@ -74,7 +81,7 @@ export type UsageAction =
 
 // Every turn-based call in the two free-forever features. Kept as one list so
 // a future action in either area doesn't silently fall back into the flat cap.
-const CONVERSATIONAL_ACTIONS: readonly UsageAction[] = [
+export const CONVERSATIONAL_ACTIONS: readonly UsageAction[] = [
   'talk_to_me',
   'talk_to_me_chat',
   'talk_to_me_takeaway',
@@ -83,6 +90,12 @@ const CONVERSATIONAL_ACTIONS: readonly UsageAction[] = [
   'scenario_generate',
   'attempt_feedback',
   'attempt_chat',
+  // The other half of Practice. Same bucket as the scenario engine above, so
+  // rehearsing a conversation is protected by the same free-forever ceiling
+  // rather than a different one.
+  'conversation_practice_generate',
+  'conversation_practice_feedback',
+  'conversation_practice_chat',
 ]
 
 // A user already loaded by the caller. The live coaching turns select this
