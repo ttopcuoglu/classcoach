@@ -552,8 +552,8 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub: st
 const FEATURE_ACTIVITY_META: Record<keyof AdminOverview['featureActivity'], { label: string; sub: string }> = {
   lessonDebrief: { label: 'Lesson Debrief', sub: 'Analyzed classroom recordings' },
   lessonPlanning: { label: 'Lesson Planning', sub: 'Plans generated or reviewed' },
-  communications: { label: 'Communications', sub: 'Messages, prep, and practice conversations' },
-  practiceReflect: { label: 'Practice & Ask', sub: 'Scenario practice and reflections' },
+  communications: { label: 'Communications', sub: 'Messages, meeting prep, and second reads' },
+  practiceReflect: { label: 'Practice', sub: 'Scenario and conversation rehearsals' },
 }
 
 const INACTIVE_THRESHOLD_DAYS = 14

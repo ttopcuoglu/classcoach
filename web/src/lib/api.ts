@@ -230,6 +230,14 @@ export type AdminOverview = {
     communications: number
     practiceReflect: number
   }
+  /// Communication Coach's three tools, counted apart. The single
+  /// `communications` number above cannot answer whether any one of them earns
+  /// its place, which is the question it keeps being asked.
+  communicationsByTool: {
+    write: { activity: number; teachers: number }
+    prepare: { activity: number; teachers: number }
+    review: { activity: number; teachers: number }
+  }
   categoryTally: Record<string, TallyEntry>
   challengeTally: Record<string, TallyEntry>
   messagePurposeTally: Record<string, TallyEntry>

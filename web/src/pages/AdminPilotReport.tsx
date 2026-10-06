@@ -44,9 +44,19 @@ import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 
 const FEATURE_ROWS: { key: keyof AdminOverview['featureAdoption']; label: string; what: string; unit: string }[] = [
   { key: 'lessonDebrief', label: 'Lesson Debrief', what: 'Record a lesson, get private feedback on it', unit: 'lessons analyzed' },
-  { key: 'practiceReflect', label: 'Ask & Practice', what: 'Ask a coach, rehearse classroom moments', unit: 'questions and rehearsals' },
+  { key: 'practiceReflect', label: 'Practice', what: 'Rehearse a classroom moment or a hard conversation', unit: 'rehearsals and reflections' },
   { key: 'lessonPlanning', label: 'Lesson Planning', what: 'Draft or improve lesson plans', unit: 'plans' },
-  { key: 'communications', label: 'Communication Coach', what: 'Messages home and hard conversations', unit: 'messages and meeting preps' },
+  { key: 'communications', label: 'Communication Coach', what: 'Messages home, meetings, and a second read', unit: 'messages, meeting preps and reviews' },
+]
+
+// Communication Coach is three tools under one number, and the number keeps
+// being used to decide whether one of them is worth keeping. Shown as sub-rows
+// rather than top-level features, because a teacher reaches them through
+// Communication Coach rather than as separate tools.
+const COMMUNICATIONS_TOOLS: { key: 'write' | 'prepare' | 'review'; label: string }[] = [
+  { key: 'write', label: 'Write a Message' },
+  { key: 'prepare', label: 'Prepare for a Meeting' },
+  { key: 'review', label: 'Review My Communication' },
 ]
 
 function formatRange(start: string, end: string): string {
@@ -186,7 +196,7 @@ export default function AdminPilotReport() {
 
       <ReportSection n={++n} title="How Teachers Used It" blurb="How many teachers have used each part of Wivoza, and how often." accent={A.gold}>
         <div className="break-inside-avoid overflow-hidden rounded-2xl border border-hairline bg-white">
-          {FEATURE_ROWS.map((row, i) => (
+          {FEATURE_ROWS.flatMap((row, i) => [
             <div
               key={row.key}
               className={`flex items-center justify-between gap-4 px-5 py-3 text-sm ${i > 0 ? 'border-t border-hairline' : ''}`}
@@ -200,8 +210,23 @@ export default function AdminPilotReport() {
                 {' · '}
                 {overview.featureActivity[row.key]} {row.unit}
               </span>
-            </div>
-          ))}
+            </div>,
+            row.key === 'communications' ? (
+              <div key="communications-tools" className="border-t border-hairline bg-cream/40 px-5 py-2">
+                {COMMUNICATIONS_TOOLS.map((tool) => {
+                  const stat = overview.communicationsByTool[tool.key]
+                  return (
+                    <div key={tool.key} className="flex items-center justify-between gap-4 py-1 text-xs text-ink-soft">
+                      <span className="pl-3">{tool.label}</span>
+                      <span>
+                        {plural(stat.teachers, 'teacher', 'teachers')} · {stat.activity}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : null,
+          ])}
         </div>
       </ReportSection>
 

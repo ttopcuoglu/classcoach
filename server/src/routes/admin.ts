@@ -511,27 +511,48 @@ async function computeOverview(req: Request, res: Response) {
   // counts so the same query also powers Engagement's adoption-breadth
   // stat (how many distinct teachers have tried each feature at least
   // once) with no extra round trips.
-  const [lessonPlanUsers, conversationPrepUsers, parentMessageUsers, conversationPlanUsers, debriefAllUsers] =
+  const [allPrepUsers, lessonPlanUsers, parentMessageUsers, conversationPlanUsers, debriefAllUsers] =
     await Promise.all([
+      // source decides which product a row belongs to. One table, two features
+      // since the rehearsal moved into Practice.
+      prisma.conversationPrep.findMany({ where: relatedUserScope, select: { userId: true, source: true } }),
       prisma.lessonPlan.findMany({ where: relatedUserScope, select: { userId: true } }),
-      prisma.conversationPrep.findMany({ where: relatedUserScope, select: { userId: true } }),
       prisma.parentMessage.findMany({ where: relatedUserScope, select: { userId: true } }),
       prisma.conversationPlan.findMany({ where: relatedUserScope, select: { userId: true } }),
       prisma.debrief.findMany({ where: relatedUserScope, select: { userId: true } }),
     ])
+  // Rehearsing a conversation is Practice's, not Communication Coach's. Counting
+  // every prep as Communications made this report overstate the tool these
+  // numbers are most often used to judge, and understate the one it moved to.
+  // Split on 'practice' rather than on 'review': the column has carried "real"
+  // as well (see schema.prisma), so anything that is not a rehearsal stays
+  // counted where it was counted before rather than vanishing from both totals.
+  const rehearsalPreps = allPrepUsers.filter((p) => p.source === 'practice')
+  const reviewPreps = allPrepUsers.filter((p) => p.source !== 'practice')
+
   const featureActivity = {
     lessonDebrief: audioSessions.length,
     lessonPlanning: lessonPlanUsers.length,
-    communications: conversationPrepUsers.length + parentMessageUsers.length + conversationPlanUsers.length,
-    practiceReflect: attempts.length + debriefAllUsers.length,
+    communications: reviewPreps.length + parentMessageUsers.length + conversationPlanUsers.length,
+    practiceReflect: attempts.length + debriefAllUsers.length + rehearsalPreps.length,
   }
 
   const distinctTeacherCount = (rows: { userId: string }[]): number => new Set(rows.map((r) => r.userId)).size
   const featureAdoption = {
     lessonDebrief: distinctTeacherCount(audioSessions),
     lessonPlanning: distinctTeacherCount(lessonPlanUsers),
-    communications: distinctTeacherCount([...conversationPrepUsers, ...parentMessageUsers, ...conversationPlanUsers]),
-    practiceReflect: distinctTeacherCount([...attempts, ...debriefAllUsers]),
+    communications: distinctTeacherCount([...reviewPreps, ...parentMessageUsers, ...conversationPlanUsers]),
+    practiceReflect: distinctTeacherCount([...attempts, ...debriefAllUsers, ...rehearsalPreps]),
+  }
+
+  // Communication Coach is three separate tools wearing one number, which is no
+  // use when the question is whether a particular one of them earns its place.
+  // Same privacy rules as everything else here: counts and distinct teachers,
+  // never a row.
+  const communicationsByTool = {
+    write: { activity: parentMessageUsers.length, teachers: distinctTeacherCount(parentMessageUsers) },
+    prepare: { activity: conversationPlanUsers.length, teachers: distinctTeacherCount(conversationPlanUsers) },
+    review: { activity: reviewPreps.length, teachers: distinctTeacherCount(reviewPreps) },
   }
 
   // Staff-wide averages for the same underlying numbers each session's own
@@ -731,6 +752,7 @@ async function computeOverview(req: Request, res: Response) {
     periodEnd: new Date(periodEnd.getTime() - 1).toISOString(),
     featureActivity,
     featureAdoption,
+    communicationsByTool,
     categoryTally: categoryTally.toJSON(),
     challengeTally: challengeTally.toJSON(),
     messagePurposeTally: messagePurposeTally.toJSON(),
