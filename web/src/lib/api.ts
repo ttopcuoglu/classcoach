@@ -822,7 +822,10 @@ export function resetPassword(token: string, password: string): Promise<UserProf
 // that forwards the session cookie on ordinary requests but not on an
 // upgrade — so without this the socket is refused and every turn falls back
 // to uploading the recording.
-export function getWsToken(): Promise<{ token: string }> {
+// `url` is where to open it: in production the API's own origin, because
+// the proxy in front of the site completes a WebSocket handshake and then
+// drops the connection. Null in development, where same-origin works.
+export function getWsToken(): Promise<{ token: string; url: string | null }> {
   return request('/api/auth/ws-token', { method: 'POST' })
 }
 

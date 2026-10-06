@@ -51,14 +51,14 @@ const FINISH_TIMEOUT_MS = 3000
 // Tokens last a minute; one is reused across the turns inside that minute
 // rather than fetched per turn, since a turn opens its socket while the
 // teacher is already speaking.
-let cachedToken: { token: string; expiresAt: number } | null = null
+let cachedToken: { token: string; url: string | null; expiresAt: number } | null = null
 
-async function socketToken(): Promise<string | null> {
-  if (cachedToken && cachedToken.expiresAt > Date.now() + 5000) return cachedToken.token
+async function socketToken(): Promise<{ token: string; url: string | null } | null> {
+  if (cachedToken && cachedToken.expiresAt > Date.now() + 5000) return cachedToken
   try {
-    const { token } = await getWsToken()
-    cachedToken = { token, expiresAt: Date.now() + 55000 }
-    return token
+    const { token, url } = await getWsToken()
+    cachedToken = { token, url, expiresAt: Date.now() + 55000 }
+    return cachedToken
   } catch (err) {
     // Not fatal: a same-origin socket may still be accepted on the cookie
     // alone (it is in local development), and if it is not, the batch upload
@@ -69,18 +69,18 @@ async function socketToken(): Promise<string | null> {
 }
 
 export async function openLiveSession(sampleRate: number): Promise<LiveSession | null> {
-  const token = await socketToken()
+  const auth = await socketToken()
   return new Promise<LiveSession | null>((resolve) => {
     let socket: WebSocket
     try {
       // API_BASE_URL is empty in dev (Vite proxies /api) and an absolute
       // https:// origin in production, so derive the ws origin from whichever
       // applies rather than assuming same-origin.
-      const httpOrigin = API_BASE_URL || location.origin
-      const wsUrl = new URL(httpOrigin)
+      // The API's own address when the server gave one, rather than this
+      // page's origin; see getWsToken for why.
+      const wsUrl = new URL(auth?.url ?? `${API_BASE_URL || location.origin}/api/stt/live`)
       wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:'
-      wsUrl.pathname = '/api/stt/live'
-      wsUrl.search = `?sample_rate=${Math.round(sampleRate)}${token ? `&token=${encodeURIComponent(token)}` : ''}`
+      wsUrl.search = `?sample_rate=${Math.round(sampleRate)}${auth ? `&token=${encodeURIComponent(auth.token)}` : ''}`
       socket = new WebSocket(wsUrl.toString())
     } catch (err) {
       console.warn('[liveTranscription] could not open socket', err)

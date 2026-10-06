@@ -406,12 +406,26 @@ authRouter.post('/reset-password', async (req, res) => {
   res.json({ ...updated, token: sessionToken })
 })
 
-// A one-minute token for opening the live-transcription socket. The socket
-// cannot send headers and the proxy in front of the site does not forward
-// cookies on an upgrade, so this is how a signed-in browser proves who it
-// is; see signWsToken.
+// A one-minute token for opening the live-transcription socket, and where to
+// open it.
+//
+// Both halves exist because of the proxy in front of the website. It does
+// not forward cookies on an upgrade, which is what the token is for; and
+// although it completes the handshake, it then drops the connection instead
+// of carrying frames — the server logs a successful upgrade and an open
+// Deepgram stream while the browser reports the socket as failed. So the
+// browser is told to bypass the website and talk to this API directly,
+// which the token makes possible: no cookie, so no need to be same-origin.
+//
+// RENDER_EXTERNAL_URL is set by Render on every service. Locally neither is
+// set, no url is sent, and the client stays same-origin, where Vite's dev
+// proxy does forward WebSockets properly.
 authRouter.post('/ws-token', requireAuth, (req, res) => {
-  res.json({ token: signWsToken({ userId: req.user!.userId, role: req.user!.role }) })
+  const origin = process.env.PUBLIC_API_URL ?? process.env.RENDER_EXTERNAL_URL
+  res.json({
+    token: signWsToken({ userId: req.user!.userId, role: req.user!.role }),
+    url: origin ? `${origin.replace(/\/$/, '')}/api/stt/live` : null,
+  })
 })
 
 authRouter.get('/me', requireAuth, async (req, res) => {
