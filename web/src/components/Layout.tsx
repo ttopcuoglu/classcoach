@@ -4,7 +4,7 @@ import { logout, type FocusMetric } from '../lib/api'
 import type { UserProfile } from '../lib/api'
 import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import {
-  ArrowUpIcon,
+  UserIcon,
   BookIcon,
   ChatBubbleIcon,
   ChecklistIcon,
@@ -13,7 +13,6 @@ import {
   MailIcon,
   MicIcon,
   TargetIcon,
-  UserIcon,
   WaveformIcon,
 } from './icons'
 
@@ -40,14 +39,12 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/communications', label: 'Communication Coach', icon: MailIcon, subtitle: 'write, prepare & review' },
     ],
   },
-  {
-    label: 'Grow',
-    icon: ArrowUpIcon,
-    items: [
-      { to: '/profile', label: 'Profile', icon: UserIcon },
-    ],
-  },
 ]
+
+// Profile is not in the nav. It was a group of its own — a "Grow" header over a
+// single link — which spent a section of the sidebar on the one thing every app
+// puts in the same corner. It lives in the footer block below instead, on the
+// name that was already sitting there not doing anything.
 
 function navLinkClasses(isActive: boolean) {
   return [
@@ -160,15 +157,29 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
         )}
 
         <div className="flex items-center gap-2.5 border-t border-cream/10 px-6 py-4">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gold text-xs font-bold text-forest">
-            {(user?.name?.[0] ?? user?.email?.[0] ?? '?').toUpperCase()}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-cream">{user?.name || user?.email}</p>
-            <button type="button" onClick={handleLogout} className="text-xs font-medium text-cream/50 hover:text-cream">
-              Log out
-            </button>
-          </div>
+          <NavLink
+            to="/profile"
+            className={({ isActive }) =>
+              `flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2 py-1.5 -mx-2 transition-colors ${
+                isActive ? 'bg-cream/10' : 'hover:bg-cream/5'
+              }`
+            }
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gold text-xs font-bold text-forest">
+              {(user?.name?.[0] ?? user?.email?.[0] ?? '?').toUpperCase()}
+            </span>
+            <span className="min-w-0 flex-1 text-left">
+              <span className="block truncate text-sm font-medium text-cream">{user?.name || user?.email}</span>
+              <span className="block text-xs text-cream/50">Profile &amp; settings</span>
+            </span>
+          </NavLink>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="shrink-0 text-xs font-medium text-cream/50 hover:text-cream"
+          >
+            Log out
+          </button>
         </div>
       </aside>
 
@@ -199,10 +210,12 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
           </div>
         </main>
 
-        {/* Mobile bottom nav — Home plus one button per category. A category
-            with a single tool links straight to it; one with several
-            (Coaching, Plan, Grow) pops a small menu open above the button
-            instead of picking one page for the user. */}
+        {/* Mobile bottom nav — Home, one button per category, then You. A
+            category with a single tool links straight to it; one with several
+            (Coaching, Plan) pops a small menu open above the button instead of
+            picking one page for the user. Profile is the last slot rather than
+            a category of its own, matching the account block the sidebar puts
+            in the same corner on a wide screen. */}
         <nav className="fixed inset-x-0 bottom-0 z-10 flex items-center justify-around border-t border-hairline bg-cream-card py-2 md:hidden">
           <NavLink to="/" end className={({ isActive }) => mobileNavClasses(isActive)}>
             <HomeIcon className="h-5 w-5" />
@@ -252,6 +265,11 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
               </div>
             )
           })}
+
+          <NavLink to="/profile" className={({ isActive }) => mobileNavClasses(isActive)}>
+            <UserIcon className="h-5 w-5" />
+            You
+          </NavLink>
         </nav>
       </div>
     </div>
