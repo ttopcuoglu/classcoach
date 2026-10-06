@@ -54,6 +54,9 @@ function ReportDimension({ label, rating, feedback }: { label: string; rating: s
 
 export default function PracticeConversation() {
   const [prefill] = useState(() => takePracticePrefill())
+  // Nothing pre-selected: the section is just "Conversation" now, so who you're
+  // facing is the first real question. Only a handoff that already knows — Recent
+  // work, "Practice This Meeting" — arrives with it filled.
   const [personType, setPersonType] = useState<RecipientType | undefined>(
     (prefill?.personType as RecipientType | undefined) ?? undefined,
   )
@@ -160,13 +163,12 @@ export default function PracticeConversation() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Link to="/communications" className="w-fit text-sm font-medium text-ink-soft hover:text-ink">
-        ← Communication Coach
-      </Link>
-
       <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6">
-        <PanelHeader as="h1" eyebrow="Wivoza · Communication Coach" title="Practice a Conversation" className="mb-6">
-          Role-play with a parent, student, colleague, or administrator.
+        {/* Same opening as the scenario engine next door — "Practice a scenario /
+            Ready when you are." — so the two rehearsals read as one page that
+            changed shape, not two tools wearing different hats. */}
+        <PanelHeader eyebrow="Practice a conversation" title="Ready when you are" className="mb-6">
+          Pick who you're facing and how hard they push, then let Wivoza build the conversation.
         </PanelHeader>
         {!prep ? (
           <div className="flex flex-col gap-4">

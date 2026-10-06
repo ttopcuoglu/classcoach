@@ -1,9 +1,8 @@
-import { useEffect } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import RecentWork from '../components/RecentWork'
+import { CONVERSATION_AREA } from '../lib/focusAreas'
 import { ACCENTS, ACCENT_CYCLE } from '../components/report'
-import { ChatBubbleIcon, ChecklistIcon, MailIcon, ScenarioIcon } from '../components/icons'
-import PracticeConversation from './PracticeConversation'
+import { ChatBubbleIcon, ChecklistIcon, MailIcon } from '../components/icons'
 import PrepareConversation from './PrepareConversation'
 import ReviewCommunication from './ReviewCommunication'
 import WriteMessage from './WriteMessage'
@@ -22,12 +21,6 @@ const TOOLS = [
     icon: ChecklistIcon,
   },
   {
-    value: 'practice',
-    label: 'Practice a Conversation',
-    description: 'Role-play with a parent, student, colleague, or administrator.',
-    icon: ScenarioIcon,
-  },
-  {
     value: 'review',
     label: 'Review My Communication',
     description: 'Get feedback on something already written.',
@@ -37,18 +30,18 @@ const TOOLS = [
 
 export default function Communications() {
   const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
   const tool = searchParams.get('tool')
   const legacyTab = searchParams.get('tab')
 
-  useEffect(() => {
-    if (legacyTab === 'difficult') navigate('/communications?tool=practice', { replace: true })
-    else if (legacyTab === 'parent') navigate('/communications?tool=write', { replace: true })
-  }, [legacyTab, navigate])
+  // Redirects, not effects: an effect renders the hub grid for a frame first, so a
+  // teacher following an old link would see it flash before being moved on.
+  if (tool === 'practice' || legacyTab === 'difficult') {
+    return <Navigate to={`/coach-chat?area=${CONVERSATION_AREA}`} replace />
+  }
+  if (legacyTab === 'parent') return <Navigate to="/communications?tool=write" replace />
 
   if (tool === 'write') return <WriteMessage />
   if (tool === 'prepare') return <PrepareConversation />
-  if (tool === 'practice') return <PracticeConversation />
   if (tool === 'review') return <ReviewCommunication />
 
   return (
@@ -58,12 +51,21 @@ export default function Communications() {
         <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
           Communication Coach<span className="text-gold">.</span>
         </h1>
-        <p className="text-ink-soft">Prepare, write, practice, and improve important communication.</p>
+        <p className="text-ink-soft">Write it, prepare for it, or get a second read before you send it.</p>
         <Link
           to="/guide/communication-coach"
           className="mt-1 w-fit text-xs font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta"
         >
           New to this? Read the teacher's guide
+        </Link>
+        {/* The counterpart to Practice's own handoff: everything here ends in
+            something you send or carry into a room, and rehearsing it first is
+            Practice's job. */}
+        <Link
+          to={`/coach-chat?area=${CONVERSATION_AREA}`}
+          className="mt-1 w-fit text-xs text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta"
+        >
+          Want to rehearse the conversation first? Practice does that.
         </Link>
       </div>
 

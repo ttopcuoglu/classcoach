@@ -62,9 +62,9 @@ const LANES = [
   {
     icon: ScenarioIcon,
     name: 'Practice a Conversation',
-    when: 'You’re dreading it.',
+    when: 'You’re dreading it. — now in Practice',
     detail:
-      'Role-play it first. Choose who you’re facing, the kind of challenge, and how hard they push — supportive, concerned, resistant, or highly escalated. Respond by typing or speaking.',
+      'Role-play it first: choose who you’re facing, the kind of challenge, and how hard they push — supportive, concerned, resistant, or highly escalated. This lives in Coaching → Practice now, under Conversation, beside the rest of your rehearsals.',
   },
   {
     icon: ChatBubbleIcon,
@@ -300,7 +300,7 @@ export default function GuideCommunicationCoach() {
             <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
               <h3 className="flex items-center gap-2.5 font-heading text-base font-bold text-forest">
                 <ScenarioIcon className="h-4 w-4 text-terracotta-600" />
-                How a rehearsal is read back
+                How a rehearsal is read back — in Practice
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-ink-soft">
                 Six dimensions, each marked strong, developing, or needs work — with specific feedback, not a
@@ -467,7 +467,10 @@ export default function GuideCommunicationCoach() {
 
             <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-hairline pt-6">
               <GuidePrimaryButton to="/talk-to-me?mode=debrief">Debrief This Experience</GuidePrimaryButton>
-              <Link to="/communications?tool=practice" className="text-sm font-semibold text-terracotta-600 hover:text-terracotta">
+              <Link
+                to="/coach-chat?area=parent_communication"
+                className="text-sm font-semibold text-terracotta-600 hover:text-terracotta"
+              >
                 Or rehearse the follow-up conversation
               </Link>
             </div>

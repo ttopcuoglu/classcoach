@@ -26,11 +26,26 @@ export type FocusArea = {
   /// For the areas that overlap Communication Coach: where to send a teacher
   /// who needs the actual artifact rather than a quick rehearsal.
   handoff?: { label: string; to: string }
+  /// Which rehearsal this area opens. Client-only, and deliberately not mirrored
+  /// on the server: both engines are ordinary endpoints that neither know nor
+  /// care which chip a teacher pressed.
+  ///   'scenario'     — a generated classroom moment, answered once, coached with
+  ///                    feedback and a model response (Scenario/ScenarioAttempt).
+  ///   'conversation' — a role-play against a person who pushes back, rated on six
+  ///                    dimensions (ConversationPrep). This used to be Communication
+  ///                    Coach's "Practice a Conversation" card; it sits here now
+  ///                    because rehearsing is Practice's job, and what stayed behind
+  ///                    there all ends in something you send or carry into a room.
+  /// Exactly one area uses 'conversation' (see CONVERSATION_AREA). Professionalism
+  /// looks conversational but is not only that — records, deadlines and PLC time are
+  /// not role-plays — so it keeps the scenario engine and the whole of its range.
+  engine: 'scenario' | 'conversation'
 }
 
 export const FOCUS_AREAS: FocusArea[] = [
   {
     value: 'teaching_and_learning',
+    engine: 'scenario',
     label: 'Teaching and Learning',
     shortLabel: 'Teaching',
     blurb: 'Explaining, questioning, checking, pacing — and grading what comes back.',
@@ -49,6 +64,7 @@ export const FOCUS_AREAS: FocusArea[] = [
   },
   {
     value: 'classroom_management',
+    engine: 'scenario',
     label: 'Classroom Management',
     shortLabel: 'Classroom',
     blurb: 'Behavior, routines, and getting the room with you.',
@@ -64,10 +80,14 @@ export const FOCUS_AREAS: FocusArea[] = [
     ],
   },
   {
+    // The value stays parent_communication: every saved Scenario, Debrief and
+    // ConversationPrep row carries it, and a label is not worth a migration. The
+    // area covers all four person types now, not just families.
     value: 'parent_communication',
-    label: 'Parent Communication',
-    shortLabel: 'Parents',
-    blurb: 'Hard emails, conferences, and hard news — said well.',
+    engine: 'conversation',
+    label: 'Conversation',
+    shortLabel: 'Conversation',
+    blurb: 'A conversation you are dreading — with a parent, a student, a colleague, or an administrator.',
     askExample: 'A parent email is accusatory and I do not know how to answer.',
     practiceExample: 'A parent writes: "That is not what I expect from her teacher."',
     subCategories: [
@@ -83,6 +103,7 @@ export const FOCUS_AREAS: FocusArea[] = [
   },
   {
     value: 'professionalism',
+    engine: 'scenario',
     label: 'Professionalism',
     shortLabel: 'Professional',
     blurb: 'Co-teachers, admin, team time, paperwork, and growing as a teacher.',
@@ -125,3 +146,8 @@ export function focusAreaForCategory(category: string | null | undefined): Focus
 export function subCategoriesFor(focusArea: string | null | undefined): SubCategory[] {
   return findFocusArea(focusArea)?.subCategories ?? []
 }
+
+/// The one area whose engine is 'conversation' — where every handoff into a
+/// role-play lands. Who the teacher is facing rides along in the prefill, so this
+/// only has to name the section.
+export const CONVERSATION_AREA = 'parent_communication'

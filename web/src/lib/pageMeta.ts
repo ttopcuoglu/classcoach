@@ -55,7 +55,7 @@ export const PUBLIC_PAGE_META: Record<string, Meta> = {
   },
   '/guide/communication-coach': {
     title: 'Communication Coach — a teacher’s guide | Wivoza',
-    description: 'Write a message, prepare for a meeting, practice a hard conversation, or get a second read on a reply before you send it.',
+    description: 'Write a message, prepare for a meeting, or get a second read on a reply before you send it.',
   },
 }
 

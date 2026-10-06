@@ -7,6 +7,7 @@ import {
   setReviewPrefill,
   setWritePrefill,
 } from '../lib/communicationsPrefill'
+import { CONVERSATION_AREA } from '../lib/focusAreas'
 import {
   deleteConversationPlan,
   deleteConversationPrep,
@@ -37,6 +38,8 @@ const FILTERS: { label: string; value: WorkKind | 'all' }[] = [
   { label: 'All', value: 'all' },
   { label: 'Messages', value: 'message' },
   { label: 'Conversation Plans', value: 'plan' },
+  // Kept after the role-play moved to Practice: a teacher who rehearsed here
+  // before still looks for it here, and opening one lands in its new home.
   { label: 'Practice Sessions', value: 'practice' },
   { label: 'Communication Reviews', value: 'review' },
 ]
@@ -156,7 +159,8 @@ export default function RecentWork() {
         gradeBand: p.gradeBand ?? undefined,
         difficulty: p.difficulty ?? undefined,
       })
-      navigate('/communications?tool=practice')
+      // Rehearsals live in Practice now; the prefill above carries who they faced.
+      navigate(`/coach-chat?area=${CONVERSATION_AREA}`)
     } else {
       const p = item.raw as ConversationPrep
       setReviewPrefill({ situationText: p.situationText, responseText: p.responseText })
@@ -207,7 +211,7 @@ export default function RecentWork() {
         <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
       ) : visible.length === 0 ? (
         <div className="mt-2 text-sm text-ink-soft">
-          Work you create in any of the four tools will show up here.
+          Work you create in any of these tools will show up here.
         </div>
       ) : (
         <div className="mt-3 flex flex-col gap-3">

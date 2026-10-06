@@ -21,6 +21,7 @@ import {
   type MeetingType,
 } from '../lib/communicationOptions'
 import { setPracticePrefill, setWritePrefill, takePreparePrefill } from '../lib/communicationsPrefill'
+import { CONVERSATION_AREA } from '../lib/focusAreas'
 import {
   extractAssignmentText,
   getConversationPlans,
@@ -157,13 +158,16 @@ export default function PrepareConversation() {
     navigate('/communications?tool=write')
   }
 
+  // The one handoff that crosses out of Communication Coach: the plan stays here,
+  // rehearsing it is Practice's job. The situation goes over verbatim, which skips
+  // scenario generation entirely — this is a real meeting, not an invented one.
   function handlePracticeThisMeeting() {
     if (!plan) return
     setPracticePrefill({
       personType: meetingTypeToRecipientType(plan.meetingType as MeetingType | undefined),
       situationText: plan.situationText,
     })
-    navigate('/communications?tool=practice')
+    navigate(`/coach-chat?area=${CONVERSATION_AREA}`)
   }
 
   const past = usePastItems(getConversationPlans, plan)

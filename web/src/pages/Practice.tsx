@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import PracticeConversation from './PracticeConversation'
 import TryItOut from './TryItOut'
 import { DEFAULT_TEACHING_CONTEXT, type TeachingContext } from '../components/TeachingContextFields'
 import { FOCUS_AREAS, findFocusArea } from '../lib/focusAreas'
@@ -18,9 +19,24 @@ import { getProfile } from '../lib/api'
 // The room lives here rather than in TryItOut because the profile is fetched
 // here: one call defaults the grade band and subject, and a teacher who has set
 // them never types them again.
+//
+// The section also decides which rehearsal opens below it (FocusArea.engine).
+// Three sections get a generated classroom moment; Conversation gets a role-play
+// against someone who pushes back, which used to be Communication Coach's
+// "Practice a Conversation" card. Both are rehearsals that end in coaching on the
+// teacher's own words, so one section holds them and Communication Coach keeps
+// only the tools that end in something you send.
+//
+// Two engines rather than one on purpose: a classroom move wants "here's how I'd
+// have said it", while an escalated parent wants to know whether you held a
+// boundary without losing the partnership. One prompt doing both would do both
+// worse. The teacher sees one page either way.
 export default function Practice() {
   const [searchParams, setSearchParams] = useSearchParams()
   const area = findFocusArea(searchParams.get('area'))
+  // No section chosen keeps the scenario engine: the coach picking for you only
+  // makes sense where it can pick, and a role-play needs to know who you're facing.
+  const isConversation = area?.engine === 'conversation'
   const [room, setRoom] = useState<TeachingContext>(DEFAULT_TEACHING_CONTEXT)
 
   useEffect(() => {
@@ -53,7 +69,8 @@ export default function Practice() {
           Practice<span className="text-gold">.</span>
         </h1>
         <p className="text-ink-soft">
-          Rehearse a real classroom moment and get coaching on your response — before it happens for real.
+          Rehearse a real moment — a classroom situation or a hard conversation — and get coaching on the
+          words you used, before it happens for real.
         </p>
         <Link
           to="/guide/ask-practice"
@@ -101,7 +118,11 @@ export default function Practice() {
         )}
       </div>
 
-      <TryItOut focusArea={area?.value} room={room} onRoomChange={setRoom} />
+      {isConversation ? (
+        <PracticeConversation />
+      ) : (
+        <TryItOut focusArea={area?.value} room={room} onRoomChange={setRoom} />
+      )}
     </div>
   )
 }

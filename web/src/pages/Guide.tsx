@@ -273,6 +273,22 @@ const ASSIGNMENT_COACH: Feature = {
   ],
 }
 
+const PRACTICE_CONVERSATION: Feature = {
+  id: 'practice-conversation',
+  icon: ScenarioIcon,
+  tint: 'bg-mint-tint text-forest',
+  nav: 'Coaching → Practice → Conversation',
+  title: 'Practice a Conversation',
+  intro: 'The same rehearsal, pointed at a person instead of a classroom: pick Conversation and Practice role-plays a parent, student, colleague, or administrator who pushes back.',
+  specs: [
+    { label: 'Setup', body: 'who you\'re talking to, the challenge type, grade band (when the other person is a student), and how hard they push — supportive, concerned, resistant, or highly escalated.' },
+    { label: 'Your turn', body: 'generate a scenario or write your own, then respond by typing or speaking.' },
+    { label: 'Feedback — six rated dimensions', body: 'clarity, empathy, use of evidence, professional boundaries, collaboration, and resolution — each rated strong / developing / needs work with specific feedback.' },
+    { label: 'Also included', body: 'what you did well, your single top priority, a stronger phrase to try, and a full model response.' },
+    { label: 'Where it used to live', body: 'this was Communication Coach\'s "Practice a Conversation" card. Rehearsing belongs with the rest of your rehearsals; Communication Coach kept the three tools that end in something you send or carry into a room. Old links still work, and everything you practiced there is still in Recent work.' },
+  ],
+}
+
 const MESSAGE_TOOLS: Feature[] = [
   {
     id: 'write-a-message',
@@ -303,21 +319,6 @@ const MESSAGE_TOOLS: Feature[] = [
       { label: 'Supporting material', body: 'paste or upload an agenda, email, report, notes, or a spreadsheet you already have — .docx, .pdf, .xlsx, .xls, .txt, .jpg, .jpeg, or .png — so the plan is built around what\'s actually been said rather than a blank slate.' },
       { label: 'Output — twelve sections', body: 'a suggested meeting agenda, a suggested opening, key talking points, important facts to present, questions to ask, possible reactions, how to respond, language to avoid, boundaries to maintain, a suggested closing, next steps, and honest guidance on when to involve an administrator — with a complete model response sitting in the middle, there to read aloud if the moment gets away from you.' },
       { label: 'After the plan', body: 'a follow-up chat that revises the plan in place rather than just discussing it alongside, plus two handoffs — "Practice This Meeting" and "Create a Follow-Up Message" — that carry the situation into the relevant tool pre-filled. Save it, or print it to take into the room.' },
-    ],
-  },
-  {
-    id: 'practice-conversation',
-    icon: ScenarioIcon,
-    tint: 'bg-peach-tint text-terracotta',
-    nav: 'Plan → Communication Coach → Practice a Conversation',
-    title: 'Practice a Conversation',
-    intro: 'Rehearse a hard conversation before you have it.',
-    specs: [
-      { label: 'Setup', body: 'who you\'re talking to, the challenge type, grade band (when the other person is a student), and difficulty.' },
-      { label: 'Your turn', body: 'generate a scenario or write your own, then respond by typing or speaking.' },
-      { label: 'Feedback — six rated dimensions', body: 'clarity, empathy, use of evidence, professional boundaries, collaboration, and resolution — each rated strong / developing / needs work with specific feedback.' },
-      { label: 'Also included', body: 'what you did well, your single top priority, a stronger phrase to try, and a full model response.' },
-      { label: 'Next', body: '"Practice Again" resets with a fresh scenario.' },
     ],
   },
   {
@@ -473,6 +474,7 @@ export default function Guide() {
 
             <FeatureBlock feature={TALK_IT_THROUGH} />
             <FeatureBlock feature={ASK_PRACTICE} />
+            <FeatureBlock feature={PRACTICE_CONVERSATION} />
           </div>
         </section>
 

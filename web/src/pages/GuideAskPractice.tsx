@@ -233,9 +233,9 @@ export default function GuideAskPractice() {
             ))}
           </div>
           <p className="mt-6 text-sm leading-relaxed text-ink-soft">
-            Parent Communication and Professionalism overlap with Communication Coach on purpose. Come here for a quick
-            question or one rehearsed exchange; go to Communication Coach when you need the actual email drafted or a
-            whole meeting prepared.
+            Conversation overlaps with Communication Coach on purpose. Come here to rehearse the exchange against
+            someone who pushes back; go to Communication Coach when you need the actual email drafted or a whole
+            meeting prepared.
           </p>
         </GuideSection>
 
