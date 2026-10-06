@@ -437,6 +437,14 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
   let consumed = 0
   const spoken: string[] = []
 
+  // Talk It Through ends a turn on a short silence, and sometimes guesses
+  // wrong: the teacher was drawing breath, carries on talking, and the
+  // client aborts this request (see watchForResume in useVoiceTurn). Their
+  // next request carries the whole thought, so this half of it must leave
+  // nothing behind — no saved turn, no memory update, and no Claude call
+  // still running and being billed for a reply nobody will hear.
+  let abandoned = false
+
   try {
     const stream = anthropic.messages.stream({
       model: CLAUDE_MODEL,
@@ -444,6 +452,13 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
       thinking: { type: 'disabled' },
       system: opts.system,
       messages: opts.messages,
+    })
+
+    res.on('close', () => {
+      if (res.writableEnded) return
+      abandoned = true
+      stream.abort()
+      timing.end({ abandoned: 'true', sentences: spoken.length })
     })
 
     stream.on('text', (delta) => {
@@ -460,6 +475,7 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
     })
 
     const message = await stream.finalMessage()
+    if (abandoned) return
     timing.mark('claude_done')
 
     const text = message.content
@@ -485,6 +501,10 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
       send({ type: 'sentence', text: tail })
     }
 
+    // Checked again here, not just after the stream: the teacher can carry
+    // on talking in the gap between Claude finishing and this write, and a
+    // turn saved then would be a turn they never heard.
+    if (abandoned) return
     const record = await opts.persist(reply)
     timing.mark('persist')
     send({ type: 'done', debrief: record })
@@ -498,8 +518,11 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
 
     // Deliberately after res.end(): memory is bookkeeping for the NEXT turn,
     // so making this turn wait on another write would be pure added latency.
-    if (opts.afterPersist) await opts.afterPersist(text)
+    if (opts.afterPersist && !abandoned) await opts.afterPersist(text)
   } catch (error) {
+    // An aborted stream throws on the way out; that is this turn being
+    // withdrawn, not a failure worth logging or answering.
+    if (abandoned) return
     console.error(`[debrief] ${label} failed:`, error)
     // Headers are long gone, so this cannot be a 502 — the client treats a
     // terminal error frame the same way it treats a failed request.

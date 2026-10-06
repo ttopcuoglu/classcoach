@@ -206,8 +206,11 @@ export default function TalkToMe() {
   // element alone would only stop the clip currently playing, and the next
   // queued sentence would start moments later.
   const queueRef = useRef<PlaybackQueue | null>(null)
+  // What the teacher said in a turn that ended too early, waiting to be sent
+  // together with how they finished it. See handleTurnComplete.
+  const carriedTextRef = useRef('')
 
-  const { supported, level, fatalError, transcribing, start, close } = useVoiceTurn(handleTurnComplete)
+  const { supported, level, fatalError, transcribing, start, close, watchForResume } = useVoiceTurn(handleTurnComplete)
 
   const visualState: VisualState =
     phase === 'error' ? 'error' : phase === 'idle' ? 'idle' : transcribing || phase === 'thinking' ? 'thinking' : phase === 'speaking' ? 'speaking' : 'listening'
@@ -396,7 +399,14 @@ export default function TalkToMe() {
     beginListening()
   }
 
-  async function handleTurnComplete(text: string) {
+  async function handleTurnComplete(newText: string) {
+    // A turn that ended while the teacher was still mid-thought left its
+    // words here; they belong to the same sentence, so they are sent as one.
+    const carried = carriedTextRef.current
+    carriedTextRef.current = ''
+    // Either half can be empty: a resume that turned out to be a cough leaves
+    // nothing new to add, and the carried half still has to be answered.
+    const text = [carried, newText].filter(Boolean).join(' ')
     if (!text) {
       // Silence timer fired with nothing said (or a benign recognition
       // hiccup) — just listen again rather than bothering the backend.
@@ -449,6 +459,20 @@ export default function TalkToMe() {
       setPhase('speaking')
     })
     queueRef.current = queue
+
+    // The end of a turn is a guess from a silence timer, and the waits are
+    // short (turnEndpointing.ts). So until Coach is actually audible, keep
+    // listening: a teacher who was only drawing breath gets their reply
+    // dropped and their turn continued, rather than being answered
+    // mid-thought and losing what they said next.
+    const resumption = new AbortController()
+    let resumed = false
+    const stopWatching = watchForResume(() => {
+      resumed = true
+      carriedTextRef.current = text
+      resumption.abort()
+    })
+
     try {
       const current = debriefRef.current
       const result = await streamCoachReply(
@@ -456,9 +480,13 @@ export default function TalkToMe() {
         text,
         (sentence) => {
           if (!sessionActiveRef.current) return
+          // First sentence in hand means Coach is about to speak, so the
+          // microphone stops listening for a continuation.
+          stopWatching()
           queue.push(sentence)
         },
         followUpRef.current?.id,
+        resumption.signal,
       )
       setDebrief(result)
       queue.end()
@@ -466,10 +494,19 @@ export default function TalkToMe() {
       queueRef.current = null
       resumeListeningIfActive()
     } catch (err) {
+      stopWatching()
       queue.cancel()
       queueRef.current = null
+      if (resumed) {
+        // Not a failure: the teacher is still talking. Their words are held
+        // in carriedTextRef and this turn simply carries on.
+        resumeListeningIfActive()
+        return
+      }
       if (!sessionActiveRef.current) return
       handleTurnFailed(err as ApiError)
+    } finally {
+      stopWatching()
     }
   }
 

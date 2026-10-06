@@ -313,6 +313,56 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void) {
     }
   }
 
+  // Watches the microphone for the teacher carrying on after a turn was
+  // declared over, and before Coach has said anything. The end-of-turn guess
+  // is a guess; this is what makes guessing early survivable (see
+  // turnEndpointing.ts). Returns a stop function the caller MUST call the
+  // moment Coach becomes audible — past that point the microphone is picking
+  // up the room while a reply is playing, and resuming would be reacting to
+  // Coach's own voice coming back through the speakers.
+  function watchForResume(onResume: () => void): () => void {
+    const analyser = analyserRef.current
+    const stream = streamRef.current
+    if (!analyser || !stream) return () => {}
+
+    stream.getAudioTracks().forEach((t) => (t.enabled = true))
+    const data = new Uint8Array(analyser.frequencyBinCount)
+    let rafId: number | null = null
+    let loudFrames = 0
+    let stopped = false
+
+    const stopWatching = () => {
+      if (stopped) return
+      stopped = true
+      if (rafId) cancelAnimationFrame(rafId)
+      rafId = null
+      // Only quieten the microphone if a new turn has not already claimed it.
+      if (!recorderRef.current) streamRef.current?.getAudioTracks().forEach((t) => (t.enabled = false))
+    }
+
+    const watch = () => {
+      analyser.getByteTimeDomainData(data)
+      let sumSquares = 0
+      for (let i = 0; i < data.length; i++) {
+        const normalized = (data[i] - 128) / 128
+        sumSquares += normalized * normalized
+      }
+      const pct = Math.min(100, Math.round(Math.sqrt(sumSquares / data.length) * 300))
+      // A few consecutive loud frames rather than one: a chair creak or a
+      // door is a single spike, speech is not. At 60fps this is ~50ms, far
+      // too short for the teacher to notice the reply being dropped.
+      loudFrames = pct > SPEECH_LEVEL_THRESHOLD ? loudFrames + 1 : 0
+      if (loudFrames >= 3) {
+        stopWatching()
+        onResume()
+        return
+      }
+      rafId = requestAnimationFrame(watch)
+    }
+    watch()
+    return stopWatching
+  }
+
   function stop() {
     recorderRef.current?.stop()
   }
@@ -320,5 +370,5 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void) {
   const supported =
     typeof MediaRecorder !== 'undefined' && typeof navigator?.mediaDevices?.getUserMedia === 'function'
 
-  return { supported, listening, level, fatalError, transcribing, start, stop, close }
+  return { supported, listening, level, fatalError, transcribing, start, stop, close, watchForResume }
 }

@@ -1172,6 +1172,11 @@ export async function streamCoachReply(
   message: string | null,
   onSentence: (sentence: string) => void,
   followUpId?: string | null,
+  // Aborted when the teacher turns out not to have finished talking. The
+  // server watches for that disconnect and drops the half-written reply
+  // instead of saving a turn nobody heard — see streamCoachReply in
+  // server/src/routes/debrief.ts.
+  signal?: AbortSignal,
 ): Promise<Debrief> {
   const path = id ? `/api/debriefs/${id}/chat/stream` : '/api/debriefs/talk/stream'
   const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -1181,6 +1186,7 @@ export async function streamCoachReply(
     body: JSON.stringify(
       id ? { message } : { ...(message == null ? {} : { message }), followUpId: followUpId ?? undefined },
     ),
+    signal,
   })
   // Everything the caller can act on (turn cap, daily limit) is rejected
   // before the stream starts, so it still arrives as a normal status code.

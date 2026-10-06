@@ -12,14 +12,26 @@
 // long speech and lengthened after short speech, and the lengthening is
 // deliberately the bigger move of the two.
 //
-// The floor stays well above a natural mid-sentence pause on purpose. Talk It
-// Through exists to give teachers room to think out loud; shaving the last
-// couple of hundred milliseconds off is not worth ever talking over one.
+// The whole curve came down by about 500ms in October 2026, as half of a
+// pair of changes. On its own that would have been the wrong trade — these
+// waits were set deliberately high, and cutting a thinking teacher off is
+// the worst failure this feature has. What makes the shorter waits safe is
+// the other half: the microphone now stays live through the "thinking"
+// phase, and a teacher who carries on talking before Coach has said
+// anything silently cancels the reply and keeps the same turn going (see
+// watchForResume in useVoiceTurn and handleTurnComplete in TalkToMe). An
+// end-of-turn guess that fires too early now costs a cancelled request
+// nobody heard, instead of costing the teacher their sentence.
+//
+// The floor still sits above a natural mid-sentence pause. The recovery
+// above is a safety net, not a licence to guess: it only covers the window
+// before Coach is audible, so a wait short enough to fire mid-breath would
+// still talk over a teacher once the reply started.
 const CURVE: { speechMs: number; waitMs: number }[] = [
-  { speechMs: 0, waitMs: 2000 },
-  { speechMs: 1500, waitMs: 1700 },
-  { speechMs: 4000, waitMs: 1300 },
-  { speechMs: 9000, waitMs: 1100 },
+  { speechMs: 0, waitMs: 1500 },
+  { speechMs: 1500, waitMs: 1200 },
+  { speechMs: 4000, waitMs: 900 },
+  { speechMs: 9000, waitMs: 750 },
 ]
 
 export const MIN_SILENCE_MS = CURVE[CURVE.length - 1].waitMs
