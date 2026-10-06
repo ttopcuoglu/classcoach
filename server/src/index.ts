@@ -124,6 +124,19 @@ app.use('/api/tts', requireAuth, ttsRouter)
 app.use('/api/onboarding', requireAuth, onboardingRouter)
 app.use('/api/telegram', requireAuth, telegramRouter)
 
+// A process that dies should say why. Render restarts it either way, so the
+// only thing lost without this is the reason — and a restart mid-session
+// looks, from the browser, like an unexplained 500 on whatever was in
+// flight. Behaviour is unchanged: Node ends the process on both of these.
+process.on('uncaughtException', (error) => {
+  console.error('[fatal] uncaught exception:', error)
+  process.exit(1)
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('[fatal] unhandled rejection:', reason)
+  process.exit(1)
+})
+
 const port = Number(process.env.PORT) || 3001
 const server = app.listen(port, () => {
   console.log(`Wivoza API listening on http://localhost:${port}`)

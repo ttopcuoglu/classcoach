@@ -1,4 +1,5 @@
 import type { Server } from 'node:http'
+import type { Duplex } from 'node:stream'
 import { parseCookie } from 'cookie'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { openLiveTranscription, type LiveTranscriber } from '../lib/deepgramLive.ts'
@@ -25,55 +26,91 @@ type ClientMessage = { type: 'finish' }
 export function attachLiveSttServer(server: Server, allowedOrigins: string[]): void {
   const wss = new WebSocketServer({ noServer: true })
 
+  // A reply to an upgrade that a proxy can read: a bare status line with no
+  // headers and an abrupt destroy() is ambiguous to anything in front of
+  // this server, which can turn a deliberate 401 into an opaque 502/500.
+  const refuse = (socket: Duplex, status: number, reason: string) => {
+    socket.write(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`)
+    socket.destroy()
+  }
+
   server.on('upgrade', (req, socket, head) => {
     const { pathname, searchParams } = new URL(req.url ?? '', 'http://localhost')
     if (pathname !== '/api/stt/live') return
 
-    // Same two credentials the HTTP middleware accepts: the browser's
-    // httpOnly session cookie, or a bearer token for native clients (which
-    // has to ride in the query string, because a browser WebSocket cannot
-    // set request headers).
-    const cookies = parseCookie(req.headers.cookie ?? '')
-    const cookieToken = cookies[SESSION_COOKIE]
-    const queryToken = searchParams.get('token')
-    const token = cookieToken ?? queryToken ?? ''
+    // Every branch below logs under the same [stt-live] prefix. This path
+    // failed in production for a while with nothing but a 500 at the
+    // browser and silence in the log, which is what made it hard to find.
+    try {
 
-    // WebSockets are not covered by CORS, so the cors() middleware protecting
-    // every HTTP route does nothing here. And because the session cookie is
-    // SameSite=None (the API is a different origin from the site), the
-    // browser attaches it to a socket opened by ANY page a signed-in teacher
-    // happens to visit. That page could not reach their microphone — that
-    // permission belongs to the site that asked — but it could stream audio
-    // through our Deepgram key on their account.
-    //
-    // So a cookie is only honoured from our own front end. A token in the
-    // query string needs no such check: a hostile page has no way to know
-    // it, and the iOS app, which is the thing that sends one, may not send
-    // an Origin header at all.
-    if (cookieToken) {
-      const origin = req.headers.origin
-      if (!origin || !allowedOrigins.includes(origin)) {
-        socket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
-        socket.destroy()
+      // Same two credentials the HTTP middleware accepts: the browser's
+      // httpOnly session cookie, or a bearer token for native clients (which
+      // has to ride in the query string, because a browser WebSocket cannot
+      // set request headers).
+      const cookies = parseCookie(req.headers.cookie ?? '')
+      const cookieToken = cookies[SESSION_COOKIE]
+      const queryToken = searchParams.get('token')
+      const token = cookieToken ?? queryToken ?? ''
+
+      // WebSockets are not covered by CORS, so the cors() middleware protecting
+      // every HTTP route does nothing here. And because the session cookie is
+      // SameSite=None (the API is a different origin from the site), the
+      // browser attaches it to a socket opened by ANY page a signed-in teacher
+      // happens to visit. That page could not reach their microphone — that
+      // permission belongs to the site that asked — but it could stream audio
+      // through our Deepgram key on their account.
+      //
+      // So a cookie is only honoured from our own front end. A token in the
+      // query string needs no such check: a hostile page has no way to know
+      // it, and the iOS app, which is the thing that sends one, may not send
+      // an Origin header at all.
+      if (cookieToken) {
+        const origin = req.headers.origin
+        if (!origin || !allowedOrigins.includes(origin)) {
+          console.warn(`[stt-live] refused: origin ${origin ?? '(none)'} is not in FRONTEND_ORIGINS`)
+          refuse(socket, 403, 'Forbidden')
+          return
+        }
+      }
+
+      const session = token ? verifySession(token) : null
+      if (!session) {
+        console.warn(`[stt-live] refused: no usable session (cookie=${Boolean(cookieToken)} query=${Boolean(queryToken)})`)
+        refuse(socket, 401, 'Unauthorized')
         return
       }
-    }
 
-    const session = token ? verifySession(token) : null
-    if (!session) {
-      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
-      socket.destroy()
-      return
-    }
+      const rate = Number(searchParams.get('sample_rate'))
+      if (!Number.isFinite(rate) || rate < MIN_SAMPLE_RATE || rate > MAX_SAMPLE_RATE) {
+        console.warn(`[stt-live] refused: sample_rate ${searchParams.get('sample_rate')} is out of range`)
+        refuse(socket, 400, 'Bad Request')
+        return
+      }
 
-    const rate = Number(searchParams.get('sample_rate'))
-    if (!Number.isFinite(rate) || rate < MIN_SAMPLE_RATE || rate > MAX_SAMPLE_RATE) {
-      socket.write('HTTP/1.1 400 Bad Request\r\n\r\n')
-      socket.destroy()
-      return
+      wss.handleUpgrade(req, socket, head, (ws) => {
+        console.log(`[stt-live] upgraded at ${Math.round(rate)}Hz`)
+        // Nothing in one teacher's socket may take the server down with it,
+        // which is what an unhandled rejection here would do.
+        void handleConnection(ws, Math.round(rate)).catch((error) => {
+          console.error('[stt-live] connection failed:', error)
+          try {
+            ws.close()
+          } catch {
+            // Already gone.
+          }
+        })
+      })
+    } catch (error) {
+      // Before this, a throw here reached Node as an uncaught exception,
+      // which ends the process — taking every other teacher's turn with it
+      // and leaving the browser to report an unexplained 500.
+      console.error('[stt-live] upgrade threw:', error)
+      try {
+        refuse(socket, 500, 'Internal Server Error')
+      } catch {
+        // Socket already unusable.
+      }
     }
-
-    wss.handleUpgrade(req, socket, head, (ws) => handleConnection(ws, Math.round(rate)))
   })
 }
 
@@ -100,6 +137,7 @@ async function handleConnection(ws: WebSocket, sampleRate: number): Promise<void
       if (!finishing && ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: 'draft', transcript: draft }))
     })
     timing.mark('deepgram_open')
+    console.log('[stt-live] deepgram stream open, transcribing')
     ws.send(JSON.stringify({ type: 'ready' }))
   } catch (error) {
     console.error('[stt-live] could not open Deepgram stream:', error)
