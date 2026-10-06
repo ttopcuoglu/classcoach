@@ -875,6 +875,17 @@ struct TalkToMeView: View {
             // The box stays open: this is a conversation, not one message. A
             // chip-started turn is not "typed" and so still hands off to voice.
             typeFieldFocused = false
+        } else {
+            // Marking the session active is what that hand-off actually
+            // depends on: when Coach finishes the opening line,
+            // resumeListeningIfActive checks this flag and otherwise drops to
+            // .idle. Without it a conversation started from a topic chip
+            // stopped dead after "Okay, good topic..." and the teacher had to
+            // press Resume to say anything — the web client sets the same flag
+            // in submitText.
+            sessionActive = true
+            errorMessage = nil
+            showTypeInput = false
         }
         Task { await reply(to: trimmed) }
     }
