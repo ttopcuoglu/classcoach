@@ -10,7 +10,6 @@ private struct MessagesTool: Identifiable {
 private let tools: [MessagesTool] = [
     MessagesTool(label: "Write a Message", description: "Create a professional message or response.", systemImage: "envelope.fill"),
     MessagesTool(label: "Prepare for a Meeting", description: "Build an agenda, talking points, and a plan for an upcoming meeting.", systemImage: "checklist"),
-    MessagesTool(label: "Practice a Conversation", description: "Role-play with a parent, student, colleague, or administrator.", systemImage: "person.2.fill"),
     MessagesTool(label: "Review My Communication", description: "Get feedback on something already written.", systemImage: "bubble.left.and.text.bubble.right.fill"),
 ]
 
@@ -30,7 +29,7 @@ struct MessagesHubView: View {
                 PanelHeader(
                     eyebrow: "Wivoza · Plan",
                     title: "Communication Coach",
-                    subtitle: "Prepare, write, practice, and improve important communication."
+                    subtitle: "Write it, prepare for it, or get a second read before you send it."
                 )
                 .padding(.bottom, 4)
 
@@ -69,7 +68,6 @@ struct MessagesHubView: View {
         switch tool.label {
         case "Write a Message": WriteMessageView()
         case "Prepare for a Meeting": PrepareConversationView()
-        case "Practice a Conversation": PracticeConversationView()
         default: ReviewCommunicationView()
         }
     }

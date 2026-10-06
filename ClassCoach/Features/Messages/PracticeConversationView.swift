@@ -34,7 +34,7 @@ struct PracticeConversationView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                PanelHeader(eyebrow: "Wivoza · Communication Coach", title: "Practice a Conversation", subtitle: "Role-play with a parent, student, colleague, or administrator.")
+                PanelHeader(eyebrow: "Practice a conversation", title: "Ready when you are", subtitle: "Pick who you're facing and how hard they push, then let Wivoza build the conversation.")
                 if let prep, let report = prep.coachingReport {
                     reportView(prep, report)
                 } else {
@@ -48,25 +48,41 @@ struct PracticeConversationView: View {
             .padding()
         }
         .background(AppTheme.background)
-        .navigationTitle("Practice a Conversation")
-        .navigationBarTitleDisplayMode(.inline)
+        .clearsFloatingTabBar()
+    }
+
+    private func fieldLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2.weight(.bold)).tracking(0.8)
+            .foregroundStyle(AppTheme.terracotta600)
+            .padding(.horizontal)
     }
 
     private var form: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Who are you practicing with?").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
-            ChipRow(items: personTypeChips, selection: personType) { personType = $0 }
+            VStack(alignment: .leading, spacing: 10) {
+                fieldLabel("WHO YOU'RE PRACTICING WITH")
+                ChipRow(items: personTypeChips, selection: personType) { personType = $0 }
 
-            Text("Challenge").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
-            ChipRow(items: challengeChips, selection: challenge) { challenge = $0 }
+                fieldLabel("CHALLENGE")
+                ChipRow(items: challengeChips, selection: challenge) { challenge = $0 }
 
-            if personType == "student" {
-                Text("Grade band").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
-                ChipRow(items: practiceGradeBands, selection: gradeBand) { gradeBand = $0 ?? "6-8" }
+                fieldLabel("DIFFICULTY")
+                ChipRow(items: difficultyChips, selection: difficulty) { difficulty = $0 }
             }
+            .padding(.vertical, 12)
+            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 16))
 
-            Text("Difficulty").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
-            ChipRow(items: difficultyChips, selection: difficulty) { difficulty = $0 }
+            // Its own card, the way the room is next door: who is in front of
+            // you is the scenario, what grade they are is the setting.
+            if personType == "student" {
+                VStack(alignment: .leading, spacing: 10) {
+                    fieldLabel("GRADE BAND")
+                    ChipRow(items: practiceGradeBands, selection: gradeBand) { gradeBand = $0 ?? "6-8" }
+                }
+                .padding(.vertical, 12)
+                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+            }
 
             if let activeSituation {
                 VStack(alignment: .leading, spacing: 4) {

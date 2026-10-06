@@ -10,15 +10,30 @@ import Foundation
 /// what its coaching is about, and mean nothing for the other three.
 let teachingAndLearning = "teaching_and_learning"
 
+/// Which rehearsal a section opens. Client-side only, exactly as on the web:
+/// both engines are ordinary endpoints that neither know nor care which chip a
+/// teacher pressed.
+enum RehearsalEngine {
+    /// A generated classroom moment, answered once, coached with feedback and a
+    /// model response.
+    case scenario
+    /// A role-play against a person who pushes back, rated on six dimensions.
+    /// This was Communication Coach's "Practice a Conversation"; rehearsing is
+    /// Practice's job, and what stayed behind there all ends in something you
+    /// send or carry into a room. Exactly one section uses it.
+    case conversation
+}
+
 struct FocusArea: Identifiable {
     let value: String
+    let engine: RehearsalEngine
     let label: String
     /// One or two words, for the chip rows where the full label would wrap.
     let shortLabel: String
     /// What this area covers, in a teacher's words.
     let blurb: String
-    /// One example of each mode, so the picker teaches what the area is for.
-    let askExample: String
+    /// What a rehearsal in this section opens with. There was an askExample
+    /// beside this until Ask left the surface; nothing read it afterwards.
     let practiceExample: String
     let subCategories: [(label: String, value: String)]
     /// First-person openers for Ask — sent verbatim as the teacher's first turn.
@@ -36,10 +51,10 @@ struct FocusArea: Identifiable {
 let focusAreas: [FocusArea] = [
     FocusArea(
         value: "teaching_and_learning",
+        engine: .scenario,
         label: "Teaching and Learning",
         shortLabel: "Teaching",
         blurb: "Explaining, questioning, checking, pacing — and grading what comes back.",
-        askExample: "I explain it well and half the room still does not have it.",
         practiceExample: "A student says plants get their food from the soil.",
         subCategories: [
             ("Explaining clearly", "explaining_clearly"),
@@ -65,10 +80,10 @@ let focusAreas: [FocusArea] = [
     ),
     FocusArea(
         value: "classroom_management",
+        engine: .scenario,
         label: "Classroom Management",
         shortLabel: "Classroom",
         blurb: "Behavior, routines, and getting the room with you.",
-        askExample: "My class talks over directions.",
         practiceExample: "A student refuses to move to their assigned seat.",
         subCategories: [
             ("Responding to resistance", "defiance"),
@@ -92,10 +107,10 @@ let focusAreas: [FocusArea] = [
     ),
     FocusArea(
         value: "parent_communication",
-        label: "Parent Communication",
-        shortLabel: "Parents",
-        blurb: "Hard emails, conferences, and hard news — said well.",
-        askExample: "A parent email is accusatory and I do not know how to answer.",
+        engine: .conversation,
+        label: "Conversation",
+        shortLabel: "Conversation",
+        blurb: "A conversation you are dreading — with a parent, a student, a colleague, or an administrator.",
         practiceExample: "A parent writes: \"That is not what I expect from her teacher.\"",
         subCategories: [
             ("A difficult email", "difficult_parent_email"),
@@ -118,10 +133,10 @@ let focusAreas: [FocusArea] = [
     ),
     FocusArea(
         value: "professionalism",
+        engine: .scenario,
         label: "Professionalism",
         shortLabel: "Professional",
         blurb: "Co-teachers, admin, team time, paperwork, and growing as a teacher.",
-        askExample: "A co-teacher keeps overriding me in front of students.",
         practiceExample: "Your co-teacher re-explains your task, mid-class.",
         subCategories: [
             ("Co-teaching", "co_teaching"),

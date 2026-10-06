@@ -10,6 +10,13 @@ import SwiftUI
 /// The section stays above the scenario rather than inside it. Left on "Not
 /// sure yet" the coach picks, weighted toward what this teacher has practiced
 /// least, so it narrows rather than gates.
+///
+/// The section also decides which rehearsal opens below it (FocusArea.engine).
+/// Three sections get a generated classroom moment; Conversation gets a
+/// role-play against someone who pushes back, which used to be Communication
+/// Coach's "Practice a Conversation" screen. Both end in coaching on the
+/// teacher's own words, so one tab holds them and Communication Coach keeps
+/// only the tools that end in something you send.
 struct PracticeView: View {
     @EnvironmentObject private var authManager: AuthManager
     @State private var focusArea: String?
@@ -48,7 +55,14 @@ struct PracticeView: View {
                         .padding(.horizontal)
                 }
 
-                TryItOutContent(focusArea: focusArea, room: $room)
+                // No section chosen keeps the scenario engine: the coach
+                // picking for you only makes sense where it can pick, and a
+                // role-play needs to know who you are facing.
+                if findFocusArea(focusArea)?.engine == .conversation {
+                    PracticeConversationView()
+                } else {
+                    TryItOutContent(focusArea: focusArea, room: $room)
+                }
             }
             .background(AppTheme.background)
             .navigationTitle("Practice")

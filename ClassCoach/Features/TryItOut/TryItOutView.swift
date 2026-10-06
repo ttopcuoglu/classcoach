@@ -41,8 +41,6 @@ struct TryItOutContent: View {
     @State private var category: String?
     @State private var difficulty: String?
     @Binding var room: TeachingContextValue
-    /// Collapsed by default: most teachers want any situation at any difficulty.
-    @State private var narrowing = false
 
     @State private var attempt: ScenarioAttempt?
     @State private var responseText = ""
@@ -101,44 +99,29 @@ struct TryItOutContent: View {
 
     // MARK: - Filter rows
 
-    /// Situation and difficulty are refinements, not the room: most teachers
-    /// want any situation at any difficulty, so they rest as one line and open
-    /// when someone wants to narrow. The room below stays visible, because the
-    /// coaching depends on it.
+    /// Every choice is shown. Situation and difficulty used to rest behind a
+    /// Change toggle as "refinements" — but a teacher cannot choose what they
+    /// cannot see, and the conversation rehearsal one chip away never hid its
+    /// own.
     private var narrowingRow: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Scenarios: \(situationText) · \(difficultyText)")
-                    .font(.footnote)
-                    .foregroundStyle(AppTheme.textSecondary)
-                Spacer()
-                Button(narrowing ? "Hide" : "Change") {
-                    withAnimation { narrowing.toggle() }
-                }
-                .font(.footnote.weight(.semibold))
+            // Showing all twenty-four sub-categories at once would be a wall of
+            // chips, so this narrows only once a section is chosen.
+            if area != nil {
+                Text("SITUATION")
+                    .font(.caption2.weight(.bold)).tracking(0.8)
+                    .foregroundStyle(AppTheme.terracotta600)
+                    .padding(.horizontal)
+                ChipRow(items: subCategoryChips(focusArea), selection: category) { category = $0 }
+            }
+            Text("DIFFICULTY")
+                .font(.caption2.weight(.bold)).tracking(0.8)
                 .foregroundStyle(AppTheme.terracotta600)
-            }
-            .padding(.horizontal)
-
-            if narrowing {
-                // Showing all twenty-four sub-categories at once would be a
-                // wall of chips, so this narrows only once a section is chosen.
-                if area != nil {
-                    ChipRow(items: subCategoryChips(focusArea), selection: category) { category = $0 }
-                }
-                ChipRow(items: difficulties, selection: difficulty) { difficulty = $0 }
-            }
+                .padding(.horizontal)
+            ChipRow(items: difficulties, selection: difficulty) { difficulty = $0 }
         }
         .padding(.vertical, 12)
         .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 16))
-    }
-
-    private var situationText: String {
-        category.map { categoryLabel($0).lowercased() } ?? "any situation"
-    }
-
-    private var difficultyText: String {
-        (difficulties.first { $0.value == difficulty }?.label ?? "Any difficulty").lowercased()
     }
 
     // MARK: - Main card
