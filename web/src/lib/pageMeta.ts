@@ -41,9 +41,10 @@ export const PUBLIC_PAGE_META: Record<string, Meta> = {
     title: 'Lesson Debrief — a teacher’s guide | Wivoza',
     description: 'Record one class period and get a private report on talk time, questioning, wait time, and routines — then talk it through with your coach.',
   },
+  // Route kept from when this surface was Ask & Practice; the page is Practice now.
   '/guide/ask-practice': {
-    title: 'Ask & Practice — a teacher’s guide | Wivoza',
-    description: 'Ask a straight question about a classroom moment, or rehearse a hard one before it happens, with practical, judgment-free coaching.',
+    title: 'Practice — a teacher’s guide | Wivoza',
+    description: 'Rehearse a classroom moment or a hard conversation before it happens, and get practical, judgment-free coaching on the words you used.',
   },
   '/guide/lesson-planning': {
     title: 'Lesson Planning — a teacher’s guide | Wivoza',

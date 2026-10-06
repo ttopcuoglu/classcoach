@@ -19,8 +19,9 @@ export type FocusArea = {
   shortLabel: string
   /// What this area covers, in a teacher's words.
   blurb: string
-  /// One example of each mode, for the teacher's guide.
-  askExample: string
+  /// What a rehearsal in this area opens with, for the teacher's guide. There was
+  /// an askExample beside this until Ask left the surface; the guide was its only
+  /// reader, so it went with it.
   practiceExample: string
   subCategories: SubCategory[]
   /// For the areas that overlap Communication Coach: where to send a teacher
@@ -49,7 +50,6 @@ export const FOCUS_AREAS: FocusArea[] = [
     label: 'Teaching and Learning',
     shortLabel: 'Teaching',
     blurb: 'Explaining, questioning, checking, pacing — and grading what comes back.',
-    askExample: 'I explain it well and half the room still does not have it.',
     practiceExample: 'A student says plants get their food from the soil.',
     subCategories: [
       { label: 'Explaining clearly', value: 'explaining_clearly' },
@@ -68,7 +68,6 @@ export const FOCUS_AREAS: FocusArea[] = [
     label: 'Classroom Management',
     shortLabel: 'Classroom',
     blurb: 'Behavior, routines, and getting the room with you.',
-    askExample: 'My class talks over directions.',
     practiceExample: 'A student refuses to move to their assigned seat.',
     subCategories: [
       { label: 'Responding to resistance', value: 'defiance' },
@@ -88,7 +87,6 @@ export const FOCUS_AREAS: FocusArea[] = [
     label: 'Conversation',
     shortLabel: 'Conversation',
     blurb: 'A conversation you are dreading — with a parent, a student, a colleague, or an administrator.',
-    askExample: 'A parent email is accusatory and I do not know how to answer.',
     practiceExample: 'A parent writes: "That is not what I expect from her teacher."',
     subCategories: [
       { label: 'A difficult email', value: 'difficult_parent_email' },
@@ -107,7 +105,6 @@ export const FOCUS_AREAS: FocusArea[] = [
     label: 'Professionalism',
     shortLabel: 'Professional',
     blurb: 'Co-teachers, admin, team time, paperwork, and growing as a teacher.',
-    askExample: 'A co-teacher keeps overriding me in front of students.',
     practiceExample: 'Your co-teacher re-explains your task, mid-class.',
     subCategories: [
       { label: 'Co-teaching', value: 'co_teaching' },

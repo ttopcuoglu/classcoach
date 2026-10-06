@@ -21,13 +21,15 @@ import {
   GuideShell,
 } from '../components/featureGuide'
 
-// Teacher's guide to Ask & Practice. Layout and section order come from
-// components/featureGuide.tsx; everything below is content only.
+// Teacher's guide to Practice. The route is still /guide/ask-practice, from when
+// this surface was Ask & Practice and asking had not yet moved to Talk It Through
+// — a live URL is not worth breaking over a name. Layout and section order come
+// from components/featureGuide.tsx; everything below is content only.
 
 import { FOCUS_AREAS } from '../lib/focusAreas'
 
 const BENEFITS = [
-  { title: 'Get an answer, not a reading list', body: 'You asked about one student on one day. That’s what comes back.' },
+  { title: 'One moment, not a reading list', body: 'One student, one period, one exchange. That’s what you rehearse and that’s what comes back.' },
   { title: 'Find the words while it’s calm', body: 'The right sentence is easier to write at 3:40 than to invent at 10:15.' },
   { title: 'Rehearse before it costs you', body: 'Try the firmer version on a scenario, not on a real fourteen-year-old.' },
   { title: 'Get it wrong somewhere safe', body: 'Nobody sees a practice attempt. That’s the whole point of one.' },
@@ -49,51 +51,55 @@ const MOMENTS = [
 
 const STEPS = [
   {
-    title: 'Pick the tab that matches your moment',
-    body: 'Ask is for something that already happened, or a real question you have right now. Practice is for something that hasn’t happened yet and you’d rather not improvise.',
+    title: 'Pick the section that matches your moment',
+    body: 'Four chips across the top: Teaching and Learning, Classroom Management, Conversation, Professionalism. The section is the only thing you have to decide — it quietly sets up the right kind of rehearsal underneath. Left on “Not sure yet,” your coach picks for you, weighted toward whatever you have practiced least.',
   },
   {
-    title: 'Say what’s going on',
-    body: 'In Ask, just type it, or tap “Speak instead.” You don’t have to say which of the four sections it belongs to — your coach works that out from your own words, and tells you which one it answered as. The four sections sit at the top of the screen, and under the box sits your room.',
+    title: 'Set up the rehearsal',
+    body: 'For a classroom section, describe your room. Every one asks your grade band. Teaching and Learning also asks your subject, and from 6th grade up the actual course — Math 7, Algebra 1, Biology — plus whether it’s AP, honors or regular, and who is in the room: SPED/504, English learners, or both. Those last two change the coaching more than anything else on the screen, and they are kept apart on purpose — an English learner is not a student with a disability.',
   },
   {
-    title: 'Or set up a rehearsal',
-    body: 'In Practice you do pick an area, because it decides what you get handed: a room that’s stopped following you, a misconception in a student’s words, a piece of work on a rubric boundary, a parent email, a line a colleague said. Then set the room. Every section asks your grade band. Teaching and Learning also asks your subject, and from 6th grade up the actual course — Math 7, Algebra 1, Biology — plus whether it’s AP, honors or regular, and who is in the room — SPED/504, English learners, or both. Those last two change the coaching more than anything else on the screen, and they are kept apart on purpose: an English learner is not a student with a disability.',
+    title: 'Or say who you’re facing',
+    body: 'Conversation asks something different, because a person is not a room: who you’re up against, the kind of challenge, and how hard they push. Generate the situation, or paste in the real one you’re dreading.',
   },
   {
-    title: 'Get something you can use',
-    body: 'Ask hands back Coaching, Words to try, and One next step. Practice shows your response, coaching on it, and a model response to compare against. Either way you can keep asking follow-ups until it actually makes sense.',
+    title: 'Respond, badly if you like',
+    body: 'Type it or speak it. Nobody sees a practice attempt — that is the entire point of one. A classroom moment comes back with coaching and a model response side by side; a conversation comes back marked on six parts of a hard exchange. Either way you can keep asking follow-ups until it actually makes sense.',
   },
   {
     title: 'Keep what works',
-    body: 'Save it, share it as a read-only link, or hand it straight to the other tab — “Practice this” turns the real situation you just described into a rehearsal.',
+    body: 'Save it, share it as a read-only link, or print it. A classroom attempt can also be marked tried in class, so you can come back later and write down what actually happened.',
   },
 ]
 
+// The section chip decides which of these opens; a teacher never picks an engine
+// by name. Kept side by side here because the difference in what comes back is
+// worth knowing before you start.
 const LANES = [
   {
-    icon: ChatBubbleIcon,
-    name: 'Ask',
-    when: 'Something real — it happened, or it’s about to.',
+    icon: ScenarioIcon,
+    name: 'A classroom moment',
+    when: 'Teaching and Learning, Classroom Management, Professionalism.',
     detail:
-      'Describe the moment or ask a straight question — about any of the four sections, and you never have to say which. Starter questions are there if you’re stuck. You get coaching, specific words to try, and one next step, plus an open follow-up chat.',
+      'Filter by situation and difficulty — Guided, Independent, or Challenge — and describe your room: grade band (K–2, 3–5, 6–8, 9–12) always, plus subject, course, topic, level and who’s in the room when you’re working on Teaching and Learning — courses from 6th grade up, where a schedule actually has them, with Other for whatever your district calls it. What you get handed depends on the section: a room that’s stopped following you, a misconception in a student’s own words, a piece of work on a rubric boundary, a line a colleague just said. Take one, or a Quick Session of three. Back comes coaching on your response and a model one to compare against.',
   },
   {
-    icon: ScenarioIcon,
-    name: 'Practice',
-    when: 'A rehearsal — low stakes, nobody watching.',
+    icon: ChatBubbleIcon,
+    name: 'A conversation',
+    when: 'Conversation — a parent, student, colleague, or administrator.',
     detail:
-      'Filter by situation and difficulty — Guided, Independent, or Challenge — and describe your room: grade band (K–2, 3–5, 6–8, 9–12) always, plus subject, course, topic, level and who’s in the room when you’re working on Teaching and Learning — courses from 6th grade up, where a schedule actually has them, with Other for whatever your district calls it. What a scenario looks like depends on the area: a room that’s stopped following you, a misconception in a student’s own words, a piece of work on a rubric boundary, the text of a parent email, a line a colleague just said. Take one, or a Quick Session of three.',
+      'Say who you’re facing, the kind of challenge, and how hard they push — supportive, concerned, resistant, or highly escalated. Generate the situation or write your own, then respond by typing or speaking. Back comes a six-part read — clarity, empathy, use of evidence, professional boundaries, collaboration, and resolution — each marked strong, developing, or needs work, plus what you did well, your one top priority, a stronger phrase to borrow, and a full model response.',
   },
 ]
 
 const STORY = [
   'Fourth period, Ms. Ruiz asks a student to put his phone away. He says “you can’t make me,” loudly, and the room goes quiet and interested.',
   'What she actually says is “fine, keep it, see what happens on the test” — which ends the moment and which she regrets before the bell.',
-  'That afternoon she opens Ask and describes it. She never says this is a classroom management problem; the coaching works that out and tells her so. It names what made the moment hard: the audience. Words to try gives her a low-volume, low-audience line and a way to move on without a standoff. One next step is to handle the phone privately, after the transition, not in front of twenty-eight people.',
-  'Then she taps Practice this. Same situation, now a rehearsal. She runs it three times — Guided, then Independent, then Challenge, where the student escalates instead of folding.',
+  'That afternoon she opens Practice and picks Classroom Management. She does not have to explain the whole thing — she takes the scenario it hands her, which is near enough, and types what she wishes she had said. The coaching names what made the moment hard: the audience. The model response is a low-volume line that moves on without a standoff.',
+  'She runs it three times — Guided, then Independent, then Challenge, where the student escalates instead of folding.',
   'Her third attempt still isn’t the model response. It’s shorter and it sounds like her, which is the version she’ll actually say out loud.',
   'It happens again the following week. She isn’t smooth, and he doesn’t hand over the phone. But she doesn’t say the thing she’ll regret, and the class goes back to work — which is the part that mattered.',
+  'His mother emails that evening, and it is not a friendly email. She switches the section to Conversation, sets the other side to resistant, and drafts a reply she never sends. It comes back marked down on boundaries. The one she does send is her fourth try.',
 ]
 
 const DEBRIEF_QUESTIONS = [
@@ -120,14 +126,20 @@ const DEBRIEF_ACTIONS = [
 function SampleAnswer() {
   return (
     <GuideSample
-      title="Ask · Your coaching"
-      caption="An illustration of an Ask answer. A Practice attempt looks similar, with your own response and a model one side by side."
+      title="Practice · Your coaching"
+      caption="An illustration of a classroom rehearsal. A Conversation comes back in a different shape — six parts of a hard exchange, each marked strong, developing, or needs work."
     >
       <div className="rounded-xl border border-hairline bg-cream p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">What&apos;s going on</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Your scenario</p>
         <p className="mt-1.5 text-sm text-ink">
-          A student told me &quot;you can&apos;t make me&quot; in front of the whole class when I asked him to put his
-          phone away.
+          You ask a student to put his phone away. In front of the whole class, he says &quot;you can&apos;t make
+          me.&quot;
+        </p>
+      </div>
+      <div className="rounded-xl border border-hairline bg-cream p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">What you said</p>
+        <p className="mt-1.5 text-sm text-ink">
+          &quot;Phone away. Now, please — I&apos;m not asking again.&quot;
         </p>
       </div>
       <div className="rounded-xl border border-hairline bg-peach-tint/60 p-4">
@@ -139,14 +151,14 @@ function SampleAnswer() {
         </p>
       </div>
       <div className="rounded-xl border border-hairline bg-cream p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Words to try</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">A model response</p>
         <p className="mt-1.5 text-sm text-ink">
           &quot;I&apos;m not going to argue about it in front of everyone. Hang on to it for now and see me at the
           end.&quot;
         </p>
       </div>
       <div className="rounded-xl border border-mint-tint bg-mint-tint/60 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-forest">One next step</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-forest">What to try for real</p>
         <p className="mt-1.5 text-sm text-ink">
           Handle the phone privately after the transition, not in front of the room.
         </p>
@@ -160,10 +172,10 @@ export default function GuideAskPractice() {
     <GuideShell appTo="/coach-chat">
       <GuideHero
         icon={ChatBubbleIcon}
-        title="Ask & Practice"
+        title="Practice"
         paragraphs={[
-          'Two tools that sit behind one tab. One is for the thing that already happened. The other is for the thing you’re quietly dreading.',
-          'Ask gives you coaching on a real situation — including the actual words to try. Practice puts you in a realistic classroom moment and lets you respond badly, as many times as you need, where it costs nothing. Both are free, always, with no limit.',
+          'One rehearsal space for the thing you’re quietly dreading — whether it’s a room that has stopped listening or a conversation on tomorrow’s calendar.',
+          'Practice hands you a realistic moment and lets you respond badly, as many times as you need, where it costs nothing. Asking a real question is Talk It Through’s job now, out loud or typed. Both are free, always, with no limit.',
         ]}
       />
 
@@ -218,16 +230,16 @@ export default function GuideAskPractice() {
           id="four-sections"
           eyebrow="What you can bring"
           title="Four sections, not just behavior"
-          lede="Ask &amp; Practice used to be about student behavior only. It now covers the four things teachers actually come to a coach with — and each one works in both modes."
+          lede="Practice used to be about student behavior only. It now covers the four things teachers actually come to a coach with — and the section you pick decides what kind of rehearsal opens."
         >
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             {FOCUS_AREAS.map((a) => (
               <div key={a.value} className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
                 <p className="font-heading text-lg font-bold text-forest">{a.label}</p>
                 <p className="mt-1 text-sm font-semibold text-terracotta-600">{a.blurb}</p>
-                <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Ask</p>
-                <p className="mt-1 text-sm italic leading-relaxed text-ink">&ldquo;{a.askExample}&rdquo;</p>
-                <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Practice</p>
+                <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">
+                  {a.engine === 'conversation' ? 'They open with' : 'You get handed'}
+                </p>
                 <p className="mt-1 text-sm italic leading-relaxed text-ink">&ldquo;{a.practiceExample}&rdquo;</p>
               </div>
             ))}
@@ -276,9 +288,10 @@ export default function GuideAskPractice() {
           <p className="mt-6 flex items-start gap-3 rounded-xl bg-gold-tint/40 p-4 text-sm leading-relaxed text-forest">
             <SparkleIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
             <span>
-              The bridge is worth knowing about: every Ask answer has a{' '}
-              <strong className="font-semibold">Practice this</strong> button that rebuilds your real situation
-              as a scenario. Advice, then reps — without retyping a thing.
+              The bridge is worth knowing about: a meeting you planned in{' '}
+              <strong className="font-semibold">Communication Coach</strong> has a{' '}
+              <strong className="font-semibold">Practice This Meeting</strong> button that carries the real
+              situation straight into a rehearsal here. Plan, then reps — without retyping a thing.
             </span>
           </p>
 
@@ -287,7 +300,7 @@ export default function GuideAskPractice() {
           </div>
 
           <div className="mt-8 flex flex-col items-start gap-3">
-            <GuidePrimaryButton to="/coach-chat">Ask or Practice Now</GuidePrimaryButton>
+            <GuidePrimaryButton to="/coach-chat">Practice Now</GuidePrimaryButton>
             <p className="text-xs text-ink-soft">
               Free for everyone, always. Coach talks about people by role — “a student,” “the class” — even if
               you use a name yourself.
@@ -337,8 +350,8 @@ export default function GuideAskPractice() {
               {[
                 {
                   icon: MicIcon,
-                  title: 'Start in Ask if it’s real',
-                  body: 'Describe what happened out loud with “Speak instead.” It’s faster than typing and you’ll say more.',
+                  title: 'Speak it instead of typing',
+                  body: 'Tap the mic and say your response out loud. It’s faster than typing, you’ll say more, and it’s closer to how the real moment goes.',
                 },
                 {
                   icon: TargetIcon,
@@ -362,13 +375,14 @@ export default function GuideAskPractice() {
             </div>
 
             <p className="mt-6 rounded-2xl bg-mint-tint/50 p-5 text-sm leading-relaxed text-forest">
-              Every filter in Practice is optional. Skipping all three and hitting{' '}
+              Every filter on a classroom rehearsal is optional. Skipping all of them and hitting{' '}
               <strong className="font-semibold">New Scenario</strong> is a perfectly good way to start — you
-              can always narrow it down once you know what you want to work on.
+              can always narrow it down once you know what you want to work on. Conversation asks for a little
+              more up front, because who you’re facing is the whole scenario.
             </p>
 
             <div className="mt-7 border-t border-hairline pt-6">
-              <GuidePrimaryButton to="/coach-chat">Ask or Practice Now</GuidePrimaryButton>
+              <GuidePrimaryButton to="/coach-chat">Practice Now</GuidePrimaryButton>
             </div>
           </div>
         </GuideSection>
@@ -383,7 +397,7 @@ export default function GuideAskPractice() {
           <div className="mt-8 flex items-start gap-3 rounded-2xl border-l-4 border-mint-tint bg-mint-tint/30 p-5">
             <CheckIcon className="mt-0.5 h-5 w-5 shrink-0 text-forest" />
             <p className="text-sm leading-relaxed text-forest">
-              There’s a quick version built into every answer and attempt: mark it{' '}
+              There’s a quick version built into every classroom attempt: mark it{' '}
               <strong className="font-semibold">tried in class</strong>, then jot down what happened. Use that
               for a one-line note. Use the full debrief below when it deserves a conversation.
             </p>
@@ -433,7 +447,7 @@ export default function GuideAskPractice() {
             <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-hairline pt-6">
               <GuidePrimaryButton to="/talk-to-me?mode=debrief">Debrief This Experience</GuidePrimaryButton>
               <Link to="/coach-chat" className="text-sm font-semibold text-terracotta-600 hover:text-terracotta">
-                Or reopen a saved answer and mark it tried
+                Or reopen a saved attempt and mark it tried
               </Link>
             </div>
           </div>
@@ -445,7 +459,7 @@ export default function GuideAskPractice() {
         title="Better to get it wrong here."
         body="A scenario has no audience, no bell, and no student who remembers what you said."
         ctaTo="/coach-chat"
-        ctaLabel="Ask or Practice Now"
+        ctaLabel="Practice Now"
       />
     </GuideShell>
   )
