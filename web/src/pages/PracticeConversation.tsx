@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { PanelHeader } from '../components/PanelHeader'
 import { Link } from 'react-router-dom'
 import AnswerSection, { NumberedCard } from '../components/AnswerSection'
 import { MicIcon, StarIcon } from '../components/icons'
@@ -160,133 +159,172 @@ export default function PracticeConversation() {
   }
 
   const report = prep?.coachingReport
+  // The scenario engine's shape, because this is the same page: a forest panel
+  // while you set it up, a cream card once there is something to read. Chips
+  // follow it, since they stay on screen either side of that switch.
+  const setup = !prep && !activeSituation
+  const label = 'text-[11px] font-bold uppercase tracking-[0.14em] text-gold'
+  const chip = (selected: boolean) =>
+    setup
+      ? `rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-60 ${
+          selected ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
+        }`
+      : `rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors disabled:opacity-60 ${
+          selected
+            ? 'border-forest bg-forest text-cream'
+            : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
+        }`
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6">
-        {/* Same opening as the scenario engine next door — "Practice a scenario /
-            Ready when you are." — so the two rehearsals read as one page that
-            changed shape, not two tools wearing different hats. */}
-        <PanelHeader eyebrow="Practice a conversation" title="Ready when you are" className="mb-6">
-          Pick who you're facing and how hard they push, then let Wivoza build the conversation.
-        </PanelHeader>
+      <div
+        className={
+          setup
+            ? 'rounded-3xl bg-forest p-6 text-cream sm:p-8'
+            : 'overflow-hidden rounded-2xl border border-hairline bg-cream-card p-6'
+        }
+      >
+        {setup && (
+          <>
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Practice a conversation</p>
+            <p className="mt-2 font-heading text-2xl font-bold text-cream">Ready when you are.</p>
+            <p className="mt-1 text-sm text-cream/70">
+              Pick who you&rsquo;re facing and how hard they push, then let Wivoza build the conversation.
+            </p>
+          </>
+        )}
         {!prep ? (
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-ink">Who are you practicing with?</span>
-              <div className="flex flex-wrap gap-2">
-                {RECIPIENT_TYPES.map((r) => (
-                  <button
-                    key={r.value}
-                    type="button"
-                    onClick={() => setPersonType(r.value)}
-                    disabled={generating || submitting}
-                    className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                      personType === r.value
-                        ? 'border-forest bg-forest text-cream'
-                        : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
-                    }`}
-                  >
-                    {r.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-ink">Challenge</span>
-              <div className="flex flex-wrap gap-2">
-                {CHALLENGE_TYPES.map((c) => (
-                  <button
-                    key={c.value}
-                    type="button"
-                    onClick={() => setChallenge(c.value)}
-                    disabled={generating || submitting}
-                    className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                      challenge === c.value
-                        ? 'border-forest bg-forest text-cream'
-                        : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
-                    }`}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {personType === 'student' && (
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">Grade band</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {GRADE_BANDS.map((band) => (
+          <div className={setup ? 'mt-5 flex flex-col gap-4' : 'flex flex-col gap-4'}>
+            {/* One box, the same tinted box the scenario engine groups its choices
+                in — every choice on screen, one format, nothing folded away. */}
+            <div
+              className={
+                setup ? 'flex flex-col gap-3.5 rounded-2xl bg-cream/10 p-4' : 'flex flex-col gap-3.5'
+              }
+            >
+              <div>
+                <p className={setup ? label : 'text-sm font-medium text-ink'}>Who you&rsquo;re practicing with</p>
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {RECIPIENT_TYPES.map((r) => (
                     <button
-                      key={band}
+                      key={r.value}
                       type="button"
-                      onClick={() => setGradeBand(band)}
+                      onClick={() => setPersonType(r.value)}
                       disabled={generating || submitting}
-                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                        gradeBand === band
-                          ? 'border-forest bg-forest text-cream'
-                          : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
-                      }`}
+                      aria-pressed={personType === r.value}
+                      className={chip(personType === r.value)}
                     >
-                      {band}
+                      {r.label}
                     </button>
                   ))}
                 </div>
               </div>
-            )}
 
-            <div className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-ink">Difficulty</span>
-              <div className="flex flex-wrap gap-2">
-                {CONVERSATION_DIFFICULTY_LEVELS.map((d) => (
-                  <button
-                    key={d.value}
-                    type="button"
-                    onClick={() => setDifficulty(d.value)}
-                    disabled={generating || submitting}
-                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                      difficulty === d.value
-                        ? 'border-forest bg-forest text-cream'
-                        : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
-                    }`}
-                  >
-                    {d.label}
-                  </button>
-                ))}
+              <div>
+                <p className={setup ? label : 'text-sm font-medium text-ink'}>Challenge</p>
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {CHALLENGE_TYPES.map((c) => (
+                    <button
+                      key={c.value}
+                      type="button"
+                      onClick={() => setChallenge(c.value)}
+                      disabled={generating || submitting}
+                      aria-pressed={challenge === c.value}
+                      className={chip(challenge === c.value)}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className={setup ? label : 'text-sm font-medium text-ink'}>Difficulty</p>
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {CONVERSATION_DIFFICULTY_LEVELS.map((d) => (
+                    <button
+                      key={d.value}
+                      type="button"
+                      onClick={() => setDifficulty(d.value)}
+                      disabled={generating || submitting}
+                      aria-pressed={difficulty === d.value}
+                      className={chip(difficulty === d.value)}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
+            {/* Its own box, like the room next door: who is in front of you is the
+                scenario, what grade they are is the setting. */}
+            {personType === 'student' && (
+              <div
+                className={
+                  setup ? 'flex flex-col gap-3.5 rounded-2xl bg-cream/10 p-4' : 'flex flex-col gap-3.5'
+                }
+              >
+                <div>
+                  <p className={setup ? label : 'text-sm font-medium text-ink'}>Grade band</p>
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    {GRADE_BANDS.map((band) => (
+                      <button
+                        key={band}
+                        type="button"
+                        onClick={() => setGradeBand(band)}
+                        disabled={generating || submitting}
+                        aria-pressed={gradeBand === band}
+                        className={chip(gradeBand === band)}
+                      >
+                        {band}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {!activeSituation ? (
-              <div className="p-2 text-center">
-                <p className="text-sm text-ink-soft">No scenario loaded yet.</p>
-                <WorkingRing active={generating} estimatedMs={8000} label="Building a scenario" hint="Usually under ten seconds." className="mt-4 text-forest" />
-                <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+              <div>
+                <WorkingRing
+                  active={generating}
+                  estimatedMs={8000}
+                  label="Building a conversation"
+                  hint="Usually under ten seconds."
+                  className="mb-4 text-gold"
+                />
+                {/* The scenario engine's button row: primary first, the second
+                    option outlined beside it, left-aligned on the panel. */}
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={handleGenerate}
                     disabled={!canGenerate}
-                    className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+                    className="rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90 disabled:opacity-60"
                   >
-                    {generating ? 'Generating...' : 'Generate a Scenario'}
+                    {generating ? 'Generating...' : 'New Conversation'}
                   </button>
                   <button
                     type="button"
-                    onClick={() => setUseCustom(true)}
-                    className="text-sm font-medium text-ink-soft hover:text-ink"
+                    onClick={() => setUseCustom((v) => !v)}
+                    aria-pressed={useCustom}
+                    className="rounded-full border border-cream/30 px-6 py-3 text-sm font-semibold text-cream transition-colors hover:border-cream hover:bg-cream/10"
                   >
-                    Or enter your own situation
+                    Use my own situation
                   </button>
                 </div>
                 {useCustom && (
-                  <label className="mt-4 flex flex-col gap-1.5 text-left">
-                    <span className="text-sm font-medium text-ink">Describe the situation</span>
+                  <label className="mt-4 flex flex-col gap-1.5">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">
+                      Describe the situation
+                    </span>
                     <textarea
                       value={customSituation}
                       onChange={(e) => setCustomSituation(e.target.value)}
                       rows={3}
-                      className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none"
+                      placeholder="What is actually going on, in your own words..."
+                      className="rounded-xl border border-cream/20 bg-cream/10 px-4 py-3 text-sm text-cream placeholder:text-cream/40 focus:border-gold focus:outline-none"
                     />
                   </label>
                 )}
@@ -433,7 +471,7 @@ export default function PracticeConversation() {
           </div>
         ) : null}
         {error && (
-          <p className="mt-4 text-center text-sm text-terracotta-600">
+          <p className={`mt-4 text-center text-sm ${setup ? 'text-peach-tint' : 'text-terracotta-600'}`}>
             <UpgradeMessage text={error} />
           </p>
         )}
