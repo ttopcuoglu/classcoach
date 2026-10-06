@@ -40,15 +40,39 @@ export function checkLoginRateLimit(key: string): boolean {
 export type SessionPayload = {
   userId: string
   role: string
+  // Present only on the short-lived socket token below. A session has none.
+  scope?: 'stt'
 }
 
 export function signSession(payload: SessionPayload): string {
   return jwt.sign(payload, JWT_SECRET ?? '', { expiresIn: '30d' })
 }
 
-export function verifySession(token: string): SessionPayload | null {
+// A WebSocket cannot set request headers, so the live-transcription socket
+// has always accepted a token in the query string for native clients. The
+// browser now needs the same door: in production the site reaches the API
+// through a proxy that forwards cookies on ordinary requests but not on an
+// upgrade, so a cookie-authenticated socket is refused every time.
+//
+// This is deliberately not the 30-day session token. It lives for a minute,
+// is fetched over the HTTP path that does work, and is only good for
+// opening a transcription socket — a query string is the one place a
+// credential is most likely to be written down by something along the way.
+const WS_TOKEN_TTL_SECONDS = 60
+
+export function signWsToken(payload: SessionPayload): string {
+  return jwt.sign({ ...payload, scope: 'stt' }, JWT_SECRET ?? '', { expiresIn: WS_TOKEN_TTL_SECONDS })
+}
+
+// `scope` decides what a token may be used for. A socket token is signed
+// with the same secret as a session, so without this check it would also be
+// a one-minute pass to the whole HTTP API — a credential that travels in a
+// query string must not be worth that much.
+export function verifySession(token: string, accept: 'session' | 'stt' = 'session'): SessionPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET ?? '') as SessionPayload
+    const payload = jwt.verify(token, JWT_SECRET ?? '') as SessionPayload
+    if (accept === 'session' && payload.scope) return null
+    return payload
   } catch {
     return null
   }

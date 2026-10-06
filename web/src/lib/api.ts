@@ -817,6 +817,15 @@ export function resetPassword(token: string, password: string): Promise<UserProf
   return request('/api/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) })
 }
 
+// A one-minute token for the live-transcription socket. A WebSocket cannot
+// send headers, and in production the site reaches the API through a proxy
+// that forwards the session cookie on ordinary requests but not on an
+// upgrade — so without this the socket is refused and every turn falls back
+// to uploading the recording.
+export function getWsToken(): Promise<{ token: string }> {
+  return request('/api/auth/ws-token', { method: 'POST' })
+}
+
 export function signInWithGoogle(credential: string): Promise<UserProfile> {
   return request('/api/auth/google', { method: 'POST', body: JSON.stringify({ credential }) })
 }

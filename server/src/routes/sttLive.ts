@@ -73,7 +73,9 @@ export function attachLiveSttServer(server: Server, allowedOrigins: string[]): v
         }
       }
 
-      const session = token ? verifySession(token) : null
+      // Either a socket token (the browser, and the only thing that works
+      // through the proxy) or a plain session token (the iOS app).
+      const session = token ? verifySession(token, 'stt') : null
       if (!session) {
         console.warn(`[stt-live] refused: no usable session (cookie=${Boolean(cookieToken)} query=${Boolean(queryToken)})`)
         refuse(socket, 401, 'Unauthorized')

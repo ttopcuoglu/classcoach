@@ -2,14 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import bcrypt from 'bcryptjs'
 import { OAuth2Client } from 'google-auth-library'
 import { Router } from 'express'
-import {
-  checkLoginRateLimit,
-  requireAuth,
-  SAFE_USER_OMIT,
-  SESSION_COOKIE,
-  signSession,
-  USER_INCLUDE_ORG,
-} from '../lib/auth.ts'
+import { checkLoginRateLimit, requireAuth, SAFE_USER_OMIT, SESSION_COOKIE, signSession, signWsToken, USER_INCLUDE_ORG } from '../lib/auth.ts'
 import { verifyAppleIdentityToken } from '../lib/appleAuth.ts'
 import { withPlusAccess } from '../lib/billing.ts'
 import { resolveSignInRole } from '../lib/organization.ts'
@@ -411,6 +404,14 @@ authRouter.post('/reset-password', async (req, res) => {
   const sessionToken = signSession({ userId: updated.id, role: updated.role })
   res.cookie(SESSION_COOKIE, sessionToken, COOKIE_OPTIONS)
   res.json({ ...updated, token: sessionToken })
+})
+
+// A one-minute token for opening the live-transcription socket. The socket
+// cannot send headers and the proxy in front of the site does not forward
+// cookies on an upgrade, so this is how a signed-in browser proves who it
+// is; see signWsToken.
+authRouter.post('/ws-token', requireAuth, (req, res) => {
+  res.json({ token: signWsToken({ userId: req.user!.userId, role: req.user!.role }) })
 })
 
 authRouter.get('/me', requireAuth, async (req, res) => {
