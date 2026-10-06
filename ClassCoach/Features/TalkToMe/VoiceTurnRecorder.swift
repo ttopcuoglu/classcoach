@@ -34,7 +34,45 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     /// ambient noise — same scale as `AVAudioRecorder.averagePower`, which
     /// this threshold was originally tuned against.
     private let speechThresholdDB: Float = -35
-    private let silenceInterval: TimeInterval = 1.4
+
+    /// How long to wait in silence before deciding the turn is over, as a
+    /// function of how long the teacher has just been speaking — the native
+    /// half of `web/src/lib/turnEndpointing.ts`, where the reasoning lives.
+    /// In short: a long flowing answer that stops has usually finished, while
+    /// a three-word fragment that stops is usually mid-thought, and cutting
+    /// that off is the worst failure this feature has.
+    ///
+    /// This replaces a flat 1.4s for every turn. The floor is deliberately
+    /// higher than web's 750ms: there, a turn that ends too early is
+    /// recoverable, because the microphone keeps listening while Coach is
+    /// thinking and a teacher who carries on cancels the reply and continues
+    /// the same turn. The app has no such recovery yet, so it cannot afford
+    /// web's shortest waits. Short fragments actually wait *longer* than they
+    /// used to, which is the safer half of the same trade.
+    private let silenceCurve: [(speechMs: Double, waitMs: Double)] = [
+        (0, 1500),
+        (1500, 1300),
+        (4000, 1050),
+        (9000, 950),
+    ]
+
+    /// Time spent above the speech threshold this turn, not wall-clock time
+    /// since it started — a teacher who opened the screen and sat quietly for
+    /// ten seconds has not been talking for ten seconds.
+    private var speechMs: Double = 0
+    private var lastLevelAt: Date?
+
+    private var silenceInterval: TimeInterval {
+        guard speechMs > 0 else { return silenceCurve[0].waitMs / 1000 }
+        for i in 1..<silenceCurve.count {
+            let prev = silenceCurve[i - 1]
+            let next = silenceCurve[i]
+            if speechMs >= next.speechMs { continue }
+            let ratio = (speechMs - prev.speechMs) / (next.speechMs - prev.speechMs)
+            return (prev.waitMs + ratio * (next.waitMs - prev.waitMs)) / 1000
+        }
+        return silenceCurve[silenceCurve.count - 1].waitMs / 1000
+    }
 
     deinit {
         observers.forEach(NotificationCenter.default.removeObserver)
@@ -92,6 +130,8 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
         }
 
         listening = true
+        speechMs = 0
+        lastLevelAt = nil
         scheduleSilenceEnd()
     }
 
@@ -166,7 +206,13 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     private func handleLevel(_ db: Float) {
         guard listening else { return }
         level = Double(max(0, min(100, (db + 60) * (100.0 / 60.0))))
+        let now = Date()
+        let sinceLast = lastLevelAt.map { now.timeIntervalSince($0) * 1000 } ?? 0
+        lastLevelAt = now
         if db > speechThresholdDB {
+            // Capped per callback so a gap (the app suspended, the engine
+            // restarted after an interruption) cannot be counted as speech.
+            speechMs += min(sinceLast, 100)
             scheduleSilenceEnd()
         }
     }
@@ -183,6 +229,7 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
         silenceTimer?.invalidate()
         silenceTimer = nil
         listening = false
+        lastLevelAt = nil
         level = 0
         guard let url = capture.end() else { return }
 
