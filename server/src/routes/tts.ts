@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { Readable } from 'node:stream'
 import { synthesizeSpeechStream } from '../lib/deepgram.ts'
+import { takeSpeech } from '../lib/speechCache.ts'
 
 export const ttsRouter = Router()
 
@@ -24,6 +25,18 @@ ttsRouter.get('/', async (req, res) => {
   const voice = typeof req.query.voice === 'string' ? req.query.voice : undefined
 
   try {
+    // Usually already in flight: the reply stream starts synthesizing its
+    // first sentence the moment Claude writes it, which is a round trip
+    // before this request arrives (see lib/speechCache.ts).
+    const prefetched = takeSpeech(text.trim(), voice)
+    if (prefetched) {
+      res.setHeader('Content-Type', 'audio/mpeg')
+      for (const chunk of prefetched.buffered) res.write(chunk)
+      await prefetched.rest((chunk) => res.write(chunk))
+      res.end()
+      return
+    }
+
     const upstream = await synthesizeSpeechStream(text.trim(), voice)
     res.setHeader('Content-Type', 'audio/mpeg')
     if (!upstream.body) {

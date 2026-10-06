@@ -26,6 +26,7 @@ import { transcribeAudio } from '../lib/deepgram.ts'
 import { extractTag, stripStructuralTags, stripTag } from '../lib/extractTag.ts'
 import type { CoachFollowUp, Debrief } from '../generated/prisma/client.ts'
 import { prisma } from '../lib/prisma.ts'
+import { prefetchSpeech } from '../lib/speechCache.ts'
 import { buildDigestFor } from '../lib/coachDigest.ts'
 import { cachedSystem, cacheStats, type SystemPrompt } from '../lib/promptCache.ts'
 import { categoryInArea, isKnownCategory } from '../lib/scenarioCategories.ts'
@@ -419,6 +420,14 @@ type StreamOptions = {
   // visible — it is latency the teacher waits through just the same, and it
   // is invisible in a timer that only starts once the reply does.
   gateMs?: number
+  // Present when this reply will be spoken aloud: start synthesizing the
+  // first sentence as soon as it exists. Absent means nobody is listening
+  // (Lesson Debrief's Reflect chat, which is read rather than spoken).
+  //
+  // `voice` is undefined for a teacher who has never chosen one, which is
+  // most of them — the same undefined the client sends to /api/tts, so the
+  // prefetch and the request that collects it agree on the key.
+  speak?: { voice: string | undefined }
 }
 
 async function streamCoachReply(res: Response, label: string, opts: StreamOptions) {
@@ -468,6 +477,9 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
       if (sentences.length === 0) return
       if (spoken.length === 0) timing.mark('first_sentence')
       for (const sentence of sentences) {
+        // Only the first one: every later sentence is already being
+        // prefetched by the client while the ones ahead of it play.
+        if (spoken.length === 0 && opts.speak) prefetchSpeech(sentence, opts.speak.voice)
         spoken.push(sentence)
         send({ type: 'sentence', text: sentence })
       }
@@ -498,6 +510,9 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
     const tail = reconcileTail(spoken, reply)
     if (tail) {
       if (spoken.length === 0) timing.mark('first_sentence')
+      // A reply short enough to be one sentence never passed through the
+      // boundary check above, so this is its first sentence too.
+      if (spoken.length === 0 && opts.speak) prefetchSpeech(tail, opts.speak.voice)
       send({ type: 'sentence', text: tail })
     }
 
@@ -563,7 +578,7 @@ debriefRouter.post('/talk/stream', async (req, res) => {
   // another while the teacher waited.
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { ...PLAN_USER_SELECT, coachMemory: true, coachMemoryEnabled: true, experienceLevel: true, name: true },
+    select: { ...PLAN_USER_SELECT, coachMemory: true, coachMemoryEnabled: true, experienceLevel: true, name: true, talkVoice: true },
   })
   const talkDenied = await checkUsage(userId, 'talk_to_me', user)
   if (talkDenied) {
@@ -583,6 +598,7 @@ debriefRouter.post('/talk/stream', async (req, res) => {
 
   await streamCoachReply(res, 'talk_start', {
     gateMs: Date.now() - gateStart,
+    speak: { voice: user?.talkVoice ?? undefined },
     system: cachedSystem(
       TALK_SYSTEM_PROMPT,
       memoryOn ? `${talkTail}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}` : talkTail,
@@ -629,7 +645,7 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
     prisma.debrief.findFirst({ where: { id: req.params.id, userId } }),
     prisma.user.findUnique({
       where: { id: userId },
-      select: { ...PLAN_USER_SELECT, coachMemory: true, coachMemoryEnabled: true, experienceLevel: true, focusMetric: true, coachDigestEnabled: true, email: true },
+      select: { ...PLAN_USER_SELECT, coachMemory: true, coachMemoryEnabled: true, experienceLevel: true, focusMetric: true, coachDigestEnabled: true, email: true, talkVoice: true },
     }),
   ])
   if (!debrief) {
@@ -683,6 +699,8 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
 
   await streamCoachReply(res, isTalk ? 'talk_chat' : 'debrief_chat', {
     gateMs: Date.now() - gateStart,
+    // Only Talk It Through is spoken; Lesson Debrief's Reflect chat is read.
+    speak: isTalk ? { voice: user?.talkVoice ?? undefined } : undefined,
     system: cachedSystem(
       stablePrompt,
       memoryOn

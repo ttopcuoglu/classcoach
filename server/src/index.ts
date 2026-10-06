@@ -25,9 +25,14 @@ import { supportRouter } from './routes/support.ts'
 import { telegramRouter, telegramWebhookRouter } from './routes/telegram.ts'
 import { schoolInquiriesRouter } from './routes/schoolInquiries.ts'
 import { requireAuth } from './lib/auth.ts'
+import { keepConnectionsWarm } from './lib/httpPool.ts'
 import { startRetentionSweeps } from './lib/retention.ts'
 import { startTelegramBot } from './lib/telegramCoach.ts'
 import { attachLiveSttServer } from './routes/sttLive.ts'
+
+// Must run before anything makes a request: it replaces the dispatcher that
+// fetch uses process-wide. See lib/httpPool.ts.
+keepConnectionsWarm()
 
 const app = express()
 
