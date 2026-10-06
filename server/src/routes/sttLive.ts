@@ -93,7 +93,12 @@ async function handleConnection(ws: WebSocket, sampleRate: number): Promise<void
   }
 
   try {
-    transcriber = await openLiveTranscription(sampleRate)
+    // Drafts are forwarded as they change, so the browser always has the
+    // latest words without asking for them — it needs them the moment the
+    // teacher pauses, and a round trip then would defeat the point.
+    transcriber = await openLiveTranscription(sampleRate, (draft) => {
+      if (!finishing && ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: 'draft', transcript: draft }))
+    })
     timing.mark('deepgram_open')
     ws.send(JSON.stringify({ type: 'ready' }))
   } catch (error) {

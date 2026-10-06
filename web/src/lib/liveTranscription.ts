@@ -35,6 +35,10 @@ export function liveTranscriptionEnabled(): boolean {
 export type LiveSession = {
   // Feeds one block of mono PCM. Silently ignored once finished.
   send: (samples: Float32Array) => void
+  // The words so far, settled text plus Deepgram's current guess at the
+  // unfinished ones. Revisable until finish() resolves, so it is only safe
+  // for work that can be thrown away — see onSpeculate in useVoiceTurn.
+  draft: () => string
   // Resolves with the transcript, or null if live transcription did not
   // produce one and the caller should fall back to the batch upload.
   finish: () => Promise<string | null>
@@ -65,6 +69,7 @@ export function openLiveSession(sampleRate: number): Promise<LiveSession | null>
     socket.binaryType = 'arraybuffer'
 
     let settled = false
+    let draftText = ''
     let transcriptResolve: ((t: string | null) => void) | null = null
     let finishTimer: number | null = null
 
@@ -108,6 +113,10 @@ export function openLiveSession(sampleRate: number): Promise<LiveSession | null>
         resolve(session)
         return
       }
+      if (frame.type === 'draft') {
+        draftText = (frame.transcript ?? '').trim()
+        return
+      }
       if (frame.type === 'unavailable') {
         giveUp()
         return
@@ -137,6 +146,7 @@ export function openLiveSession(sampleRate: number): Promise<LiveSession | null>
         if (socket.readyState !== WebSocket.OPEN) return
         socket.send(floatToPcm16(samples))
       },
+      draft: () => draftText,
       finish() {
         return new Promise<string | null>((resolveFinish) => {
           if (socket.readyState !== WebSocket.OPEN) {

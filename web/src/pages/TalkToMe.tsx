@@ -210,7 +210,25 @@ export default function TalkToMe() {
   // together with how they finished it. See handleTurnComplete.
   const carriedTextRef = useRef('')
 
-  const { supported, level, fatalError, transcribing, start, close, watchForResume } = useVoiceTurn(handleTurnComplete)
+  // A reply started during the pause at the end of a turn, before the turn
+  // was officially over. Its sentences are held rather than spoken until the
+  // turn actually ends and the draft it answered turns out to be what the
+  // teacher said. See onSpeculate below.
+  type Speculation = {
+    text: string
+    controller: AbortController
+    buffered: string[]
+    reply: Promise<Debrief>
+    // Set when the turn ends and this reply is the one being played.
+    queue: PlaybackQueue | null
+    onPlaying: () => void
+  }
+  const speculationRef = useRef<Speculation | null>(null)
+
+  const { supported, level, fatalError, transcribing, start, close, watchForResume } = useVoiceTurn(
+    handleTurnComplete,
+    { onSpeculate: handleSpeculate, onSpeculationStale: dropSpeculation },
+  )
 
   const visualState: VisualState =
     phase === 'error' ? 'error' : phase === 'idle' ? 'idle' : transcribing || phase === 'thinking' ? 'thinking' : phase === 'speaking' ? 'speaking' : 'listening'
@@ -267,6 +285,11 @@ export default function TalkToMe() {
     return () => {
       sessionActiveRef.current = false
       close()
+      // A reply started during a pause is in flight on its own; leaving the
+      // page has to stop it too, or it finishes and saves a turn into a
+      // conversation the teacher has walked away from.
+      speculationRef.current?.controller.abort()
+      speculationRef.current = null
       queueRef.current?.cancel()
       queueRef.current = null
       // Read at unmount deliberately: the playback queue is created part-way
@@ -399,6 +422,59 @@ export default function TalkToMe() {
     beginListening()
   }
 
+  // Same words, ignoring the punctuation and capitalisation Deepgram only
+  // settles on in the final result.
+  function sameWords(a: string, b: string): boolean {
+    const normalize = (t: string) => t.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim()
+    return normalize(a) === normalize(b)
+  }
+
+  // The teacher has gone quiet but the turn is not over yet. Claude takes
+  // over a second to write its first sentence, and the silence window is
+  // most of another, so those two seconds can overlap instead of running one
+  // after the other: the reply starts now and is held until the turn really
+  // ends. If they were only drawing breath, it is thrown away — the server
+  // saves nothing for a reply nobody heard (see streamCoachReply there).
+  function handleSpeculate(draft: string) {
+    if (!sessionActiveRef.current || mutedRef.current || chatRef.current) return
+    if (speculationRef.current || !audioRef.current) return
+    const controller = new AbortController()
+    const spec: Speculation = {
+      text: draft,
+      controller,
+      buffered: [],
+      queue: null,
+      onPlaying: () => {},
+      reply: null as unknown as Promise<Debrief>,
+    }
+    spec.reply = streamCoachReply(
+      debriefRef.current?.id ?? null,
+      draft,
+      (sentence) => {
+        if (spec.queue) {
+          spec.onPlaying()
+          spec.queue.push(sentence)
+        } else {
+          spec.buffered.push(sentence)
+        }
+      },
+      followUpRef.current?.id,
+      controller.signal,
+    )
+    // Nothing awaits this until the turn ends, and it may never be awaited at
+    // all, so its rejection is absorbed here and re-read later if it matters.
+    spec.reply.catch(() => {})
+    speculationRef.current = spec
+    markTurn('speculate')
+  }
+
+  function dropSpeculation() {
+    const spec = speculationRef.current
+    if (!spec) return
+    speculationRef.current = null
+    spec.controller.abort()
+  }
+
   async function handleTurnComplete(newText: string) {
     // A turn that ended while the teacher was still mid-thought left its
     // words here; they belong to the same sentence, so they are sent as one.
@@ -408,6 +484,9 @@ export default function TalkToMe() {
     // nothing new to add, and the carried half still has to be answered.
     const text = [carried, newText].filter(Boolean).join(' ')
     if (!text) {
+      // Nothing was said after all, so a reply started during the pause is
+      // answering a draft that no longer exists.
+      dropSpeculation()
       // Silence timer fired with nothing said (or a benign recognition
       // hiccup) — just listen again rather than bothering the backend.
       resumeListeningIfActive()
@@ -453,6 +532,15 @@ export default function TalkToMe() {
     // Each sentence starts synthesizing the instant Claude finishes writing
     // it, so Coach starts speaking while the rest of the reply is still
     // being generated rather than after all of it is.
+    // A reply started during the pause only counts if the draft it answered
+    // is what the teacher actually said. Otherwise it answered half a
+    // thought, and is dropped for a fresh request with the whole one.
+    const pending = speculationRef.current
+    speculationRef.current = null
+    const committed = pending && sameWords(pending.text, text) ? pending : null
+    if (pending && !committed) pending.controller.abort()
+    if (committed) markTurn('speculation_used')
+
     const queue = createPlaybackQueue(audio, talkVoiceRef.current, () => {
       markTurn('speak')
       endTurn()
@@ -465,7 +553,7 @@ export default function TalkToMe() {
     // listening: a teacher who was only drawing breath gets their reply
     // dropped and their turn continued, rather than being answered
     // mid-thought and losing what they said next.
-    const resumption = new AbortController()
+    const resumption = committed ? committed.controller : new AbortController()
     let resumed = false
     const stopWatching = watchForResume(() => {
       resumed = true
@@ -475,19 +563,33 @@ export default function TalkToMe() {
 
     try {
       const current = debriefRef.current
-      const result = await streamCoachReply(
-        current ? current.id : null,
-        text,
-        (sentence) => {
-          if (!sessionActiveRef.current) return
-          // First sentence in hand means Coach is about to speak, so the
-          // microphone stops listening for a continuation.
+      let result: Debrief
+      if (committed) {
+        // Everything written during the pause is already in hand; it plays
+        // immediately, and the rest of the reply streams into the same queue.
+        committed.onPlaying = stopWatching
+        committed.queue = queue
+        for (const sentence of committed.buffered) {
           stopWatching()
           queue.push(sentence)
-        },
-        followUpRef.current?.id,
-        resumption.signal,
-      )
+        }
+        committed.buffered = []
+        result = await committed.reply
+      } else {
+        result = await streamCoachReply(
+          current ? current.id : null,
+          text,
+          (sentence) => {
+            if (!sessionActiveRef.current) return
+            // First sentence in hand means Coach is about to speak, so the
+            // microphone stops listening for a continuation.
+            stopWatching()
+            queue.push(sentence)
+          },
+          followUpRef.current?.id,
+          resumption.signal,
+        )
+      }
       setDebrief(result)
       queue.end()
       await queue.finished
@@ -529,6 +631,7 @@ export default function TalkToMe() {
   function handleStop() {
     sessionActiveRef.current = false
     close()
+    dropSpeculation()
     queueRef.current?.cancel()
     queueRef.current = null
     audioRef.current?.pause()

@@ -23,7 +23,14 @@ export type LiveTranscriber = {
   close: () => void
 }
 
-export function openLiveTranscription(sampleRate: number): Promise<LiveTranscriber> {
+// Called with the transcript so far — settled text plus whatever Deepgram
+// currently thinks the unfinished words are — every time that changes. It is
+// a draft: it can be revised right up until the final result. Talk It
+// Through uses it to start writing a reply during the pause at the end of a
+// turn rather than after it (see onSpeculate in useVoiceTurn).
+export type OnDraft = (transcript: string) => void
+
+export function openLiveTranscription(sampleRate: number, onDraft?: OnDraft): Promise<LiveTranscriber> {
   const apiKey = process.env.DEEPGRAM_API_KEY
   if (!apiKey) return Promise.reject(new Error('DEEPGRAM_API_KEY is not set'))
 
@@ -34,7 +41,10 @@ export function openLiveTranscription(sampleRate: number): Promise<LiveTranscrib
     channels: '1',
     punctuate: 'true',
     smart_format: 'true',
-    interim_results: 'false',
+    // Interim results are what make the draft above possible. They arrive
+    // while the teacher is still talking — measured at roughly 280ms before
+    // their last word lands.
+    interim_results: 'true',
     // Opts out of Deepgram's Model Improvement Program, as every other
     // Deepgram request does (see deepgram.ts) — the Privacy Notice promises it.
     mip_opt_out: 'true',
@@ -50,6 +60,7 @@ export function openLiveTranscription(sampleRate: number): Promise<LiveTranscrib
     // read as an abandoned connection.
     let keepalive: NodeJS.Timeout | null = null
     const finals: string[] = []
+    let lastInterim = ''
     let finishResolve: ((transcript: string) => void) | null = null
     let closed = false
 
@@ -103,10 +114,19 @@ export function openLiveTranscription(sampleRate: number): Promise<LiveTranscrib
           is_final?: boolean
           channel?: { alternatives?: { transcript?: string }[] }
         }
-        if (payload.type === 'Results' || payload.channel) {
-          const text = payload.channel?.alternatives?.[0]?.transcript
-          if (text && text.trim()) finals.push(text.trim())
+        if (payload.type !== 'Results' && !payload.channel) return
+        const text = payload.channel?.alternatives?.[0]?.transcript?.trim()
+        if (!text) return
+        // Only settled results are kept; an interim is Deepgram's current
+        // guess at the words still in flight and is replaced wholesale by
+        // the next one, so appending them would repeat half the sentence.
+        if (payload.is_final === false) {
+          lastInterim = text
+        } else {
+          finals.push(text)
+          lastInterim = ''
         }
+        onDraft?.([...finals, lastInterim].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim())
       } catch {
         // A frame we cannot parse is not worth failing a turn over.
       }

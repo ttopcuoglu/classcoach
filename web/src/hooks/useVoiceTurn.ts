@@ -29,7 +29,21 @@ const FATAL_ERROR_MESSAGES: Record<string, string> = {
 // paused. How long that stretch has to be is not fixed: see
 // silenceWindowFor, which reads it off how long they have just been
 // talking.
-export function useVoiceTurn(onTurnComplete: (text: string) => void) {
+// A reply started this early is a bet on the teacher being finished, so it
+// has to be cheap to lose: 400ms is long enough that it does not fire inside
+// every comma-length pause, short enough to cover most of the silence window
+// that follows it (750-1500ms, see turnEndpointing.ts).
+const SPECULATE_AFTER_SILENCE_MS = 400
+// Two words, so a cough or a stray "um" does not buy a Claude call.
+const SPECULATE_MIN_WORDS = 2
+
+export function useVoiceTurn(
+  onTurnComplete: (text: string) => void,
+  // Fired once per turn, during the pause, with the draft transcript so far:
+  // "they have probably finished, start writing". onSpeculationStale fires if
+  // they turn out to have been mid-breath, and the caller drops that reply.
+  speculation?: { onSpeculate: (draft: string) => void; onSpeculationStale: () => void },
+) {
   const [listening, setListening] = useState(false)
   const [level, setLevel] = useState(0)
   const [fatalError, setFatalError] = useState<string | null>(null)
@@ -67,11 +81,30 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void) {
   // loud first frame (there is no previous frame to measure a gap from).
   const heardSpeechRef = useRef(false)
 
+  // Set when a speculative reply is already in flight for this turn.
+  const speculatedRef = useRef(false)
+  const speculateTimerRef = useRef<number | null>(null)
+
   function scheduleEnd() {
     if (timerRef.current) window.clearTimeout(timerRef.current)
     timerRef.current = window.setTimeout(() => {
       recorderRef.current?.stop()
     }, silenceWindowFor(speechMsRef.current))
+
+    // The teacher is audible again, so any reply started during the last
+    // pause was answering half a thought.
+    if (speculatedRef.current) {
+      speculatedRef.current = false
+      speculation?.onSpeculationStale()
+    }
+    if (speculateTimerRef.current) window.clearTimeout(speculateTimerRef.current)
+    if (!speculation) return
+    speculateTimerRef.current = window.setTimeout(() => {
+      const draft = liveRef.current?.draft()?.trim()
+      if (!draft || draft.split(/\s+/).length < SPECULATE_MIN_WORDS) return
+      speculatedRef.current = true
+      speculation.onSpeculate(draft)
+    }, SPECULATE_AFTER_SILENCE_MS)
   }
 
   // Ends the current turn's level/silence-detection loop only — the
@@ -86,6 +119,8 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void) {
 
   function stopTurnLoop() {
     stopLiveTap()
+    if (speculateTimerRef.current) window.clearTimeout(speculateTimerRef.current)
+    speculateTimerRef.current = null
     if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current)
     rafIdRef.current = null
     if (timerRef.current) window.clearTimeout(timerRef.current)
@@ -252,6 +287,7 @@ export function useVoiceTurn(onTurnComplete: (text: string) => void) {
 
     speechMsRef.current = 0
     heardSpeechRef.current = false
+    speculatedRef.current = false
     lastFrameRef.current = 0
     turnIdRef.current += 1
 
