@@ -21,7 +21,6 @@ const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
 const AudioCoaching = lazy(() => import('./pages/AudioCoaching'))
 const AudioCoachingExport = lazy(() => import('./pages/AudioCoachingExport'))
 const LessonPlanning = lazy(() => import('./pages/LessonPlanning'))
-const AssignmentCoach = lazy(() => import('./pages/AssignmentCoach'))
 const AssignmentCoachExport = lazy(() => import('./pages/AssignmentCoachExport'))
 const LessonPlanExport = lazy(() => import('./pages/LessonPlanExport'))
 const TalkItThroughExport = lazy(() => import('./pages/TalkItThroughExport'))
@@ -238,7 +237,10 @@ export default function App() {
               <Route path="communications" element={<Communications />} />
               <Route path="audio-coaching" element={<AudioCoaching />} />
               <Route path="lesson-planning" element={<LessonPlanning />} />
-              <Route path="assignment-coach" element={<AssignmentCoach />} />
+              {/* Assignment Coach is a chip inside Lesson Planning now. The
+                  route stays as a redirect: it is in the guide, in Home's cards
+                  and in teachers' bookmarks. */}
+              <Route path="assignment-coach" element={<Navigate to="/lesson-planning?tab=assignment" replace />} />
               <Route path="profile" element={<Profile />} />
               {/* Always registered, so /admin never falls through to a blank page
                   (e.g. right after logging out on it) — a teacher is sent home. */}

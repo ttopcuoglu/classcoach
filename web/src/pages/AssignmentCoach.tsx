@@ -132,7 +132,7 @@ function modeLabel(mode: AssignmentCoachMode): string {
 
 const HISTORY_SHOWN_AT_FIRST = 8
 
-export default function AssignmentCoach() {
+export default function AssignmentCoach({ embedded = false }: { embedded?: boolean } = {}) {
   const [pendingMode, setPendingMode] = useState<'review' | 'redesign_ai' | null>(null)
   const [session, setSession] = useState<AssignmentCoachSession | null>(null)
 
@@ -221,20 +221,22 @@ export default function AssignmentCoach() {
   }
 
   return (
-    <div className="flex min-h-full flex-col gap-8 bg-cream px-1 py-2 text-ink">
-      <div className="flex flex-col gap-1.5">
-        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Plan</p>
-        <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
-          Assignment Coach<span className="text-gold">.</span>
-        </h1>
-        <p className="text-ink-soft">Design, review, and refine meaningful student work—with a coach beside you.</p>
-        <Link
-          to="/guide/assignment-coach"
-          className="w-fit text-xs font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta"
-        >
-          New to this? Read the teacher's guide
-        </Link>
-      </div>
+    <div className={`flex min-h-full flex-col gap-8 text-ink ${embedded ? '' : 'bg-cream px-1 py-2'}`}>
+      {!embedded && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Plan</p>
+          <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
+            Assignment Coach<span className="text-gold">.</span>
+          </h1>
+          <p className="text-ink-soft">Design, review, and refine meaningful student work—with a coach beside you.</p>
+          <Link
+            to="/guide/assignment-coach"
+            className="w-fit text-xs font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta"
+          >
+            New to this? Read the teacher's guide
+          </Link>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <button

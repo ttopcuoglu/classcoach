@@ -359,7 +359,7 @@ export default function Home() {
         title: 'Try Assignment Coach',
         description: "A tool you haven't opened yet — review or redesign an assignment.",
         linkLabel: 'Open Assignment Coach',
-        to: '/assignment-coach',
+        to: '/lesson-planning?tab=assignment',
       }
     }
     if (!hasConversationPlans) {

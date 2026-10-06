@@ -5,7 +5,6 @@ import type { UserProfile } from '../lib/api'
 import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import {
   UserIcon,
-  BookIcon,
   ChatBubbleIcon,
   ChecklistIcon,
   HomeIcon,
@@ -34,8 +33,12 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Plan',
     icon: LessonPlanIcon,
     items: [
-      { to: '/lesson-planning', label: 'Lesson Planning', icon: LessonPlanIcon, subtitle: 'plans & presentations' },
-      { to: '/assignment-coach', label: 'Assignment Coach', icon: BookIcon, subtitle: 'review & redesign assignments' },
+      {
+        to: '/lesson-planning',
+        label: 'Lesson Planning',
+        icon: LessonPlanIcon,
+        subtitle: 'plans, presentations & assignments',
+      },
       { to: '/communications', label: 'Communication Coach', icon: MailIcon, subtitle: 'write, prepare & review' },
     ],
   },

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
+import AssignmentCoach from './AssignmentCoach'
 import AnswerSection, { NumberedCard } from '../components/AnswerSection'
 import PastList, { type PastItem } from '../components/PastList'
 import { ShareIcon, StarIcon, UploadIcon, ClipboardIcon, CloseIcon } from '../components/icons'
@@ -59,8 +60,33 @@ function toApiContext(context: ContextForm): LessonPlanContext {
   }
 }
 
+// Assignment Coach is the fourth chip rather than a seventh menu item. Every
+// chip here is the same job — something you made, read back to you before
+// students see it — and a chip row puts them one tap apart instead of a tool
+// apart. The tab lives in the URL so /assignment-coach can redirect straight
+// into it and old links keep landing where a teacher expects.
+type PlanningTab = 'generate' | 'feedback' | 'presentation' | 'assignment'
+
+const TABS: { value: PlanningTab; label: string }[] = [
+  { value: 'generate', label: 'Generate Ideas' },
+  { value: 'feedback', label: 'Get Feedback' },
+  { value: 'presentation', label: 'Review a Presentation' },
+  { value: 'assignment', label: 'Review an Assignment' },
+]
+
+function isPlanningTab(value: string | null): value is PlanningTab {
+  return TABS.some((t) => t.value === value)
+}
+
 export default function LessonPlanning() {
-  const [tab, setTab] = useState<'generate' | 'feedback' | 'presentation'>('generate')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const raw = searchParams.get('tab')
+  const tab: PlanningTab = isPlanningTab(raw) ? raw : 'generate'
+  function setTab(next: PlanningTab) {
+    const params = new URLSearchParams(searchParams)
+    params.set('tab', next)
+    setSearchParams(params)
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -70,7 +96,8 @@ export default function LessonPlanning() {
           Lesson Planning<span className="text-gold">.</span>
         </h1>
         <p className="text-ink-soft">
-          Get feedback on a plan you wrote, generate a sample plan for ideas, or get feedback on a presentation.
+          Generate a plan for ideas, or have a plan, a presentation, or an assignment you already made read
+          back to you before students see it.
         </p>
         <Link
           to="/guide/lesson-planning"
@@ -81,36 +108,30 @@ export default function LessonPlanning() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setTab('generate')}
-          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-            tab === 'generate' ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
-          }`}
-        >
-          Generate Ideas
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('feedback')}
-          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-            tab === 'feedback' ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
-          }`}
-        >
-          Get Feedback
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('presentation')}
-          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-            tab === 'presentation' ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
-          }`}
-        >
-          Review a Presentation
-        </button>
+        {TABS.map(({ value, label }) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setTab(value)}
+            aria-pressed={tab === value}
+            className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+              tab === value ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {tab === 'generate' ? <GeneratePanel /> : tab === 'feedback' ? <FeedbackPanel /> : <PresentationPanel />}
+      {tab === 'generate' ? (
+        <GeneratePanel />
+      ) : tab === 'feedback' ? (
+        <FeedbackPanel />
+      ) : tab === 'presentation' ? (
+        <PresentationPanel />
+      ) : (
+        <AssignmentCoach embedded />
+      )}
     </div>
   )
 }
