@@ -135,6 +135,7 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
             return
         }
 
+        stopWatchingWhileSpeaking()
         listening = true
         speechMs = 0
         lastLevelAt = nil
@@ -172,6 +173,7 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     /// Fully releases the mic — call when leaving Talk It Through or pausing,
     /// not between turns (mirrors `useVoiceTurn`'s `close()`).
     func close() {
+        stopWatchingWhileSpeaking()
         silenceTimer?.invalidate()
         silenceTimer = nil
         turnId += 1
@@ -192,11 +194,20 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
 
     private func startEngine() throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
+        // .voiceChat turns on the system's echo cancellation, which is what
+        // lets the microphone stay open while Coach is speaking without
+        // hearing Coach. It routes to the receiver by default, hence
+        // .defaultToSpeaker — a coaching conversation should come out of the
+        // speaker like a speakerphone call, not be held to the ear.
+        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker])
         try session.setActive(true)
 
         let input = engine.inputNode
         input.removeTap(onBus: 0)
+        // Must be set before the engine starts rendering. Best-effort: on a
+        // device that refuses it, everything still works, and barge-in is
+        // simply more likely to hear Coach and stop for nothing.
+        try? input.setVoiceProcessingEnabled(true)
         capture.installTap(on: input) { [weak self] db in
             Task { @MainActor in self?.handleLevel(db) }
         }
@@ -240,7 +251,10 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     // MARK: - Turn
 
     private func handleLevel(_ db: Float) {
-        guard listening else { return }
+        guard listening else {
+            if monitoringForBargeIn { checkForBargeIn(db) }
+            return
+        }
         level = Double(max(0, min(100, (db + 60) * (100.0 / 60.0))))
         let now = Date()
         let sinceLast = lastLevelAt.map { now.timeIntervalSince($0) * 1000 } ?? 0
@@ -251,6 +265,55 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
             speechMs += min(sinceLast, 100)
             scheduleSilenceEnd()
         }
+    }
+
+    // MARK: - Interrupting Coach
+    //
+    // While Coach speaks the microphone stays open, and a teacher who starts
+    // talking stops it. This has to clear a far higher bar than ordinary
+    // speech does, because the microphone is also hearing Coach come back
+    // through the speaker: echo cancellation removes most of that, but how
+    // much depends on the device and how loud it is, so the level has to be
+    // well above the threshold that ends a turn AND hold there. A word of
+    // leaked echo must never cut Coach off mid-sentence.
+    private let bargeInThresholdDB: Float = -22
+    private let bargeInSustain: TimeInterval = 0.35
+
+    private var monitoringForBargeIn = false
+    private var onBargeIn: (() -> Void)?
+    private var loudSince: Date?
+
+    /// Starts listening for the teacher talking over Coach. The caller stops
+    /// it when Coach finishes, or when a new turn begins.
+    func watchWhileSpeaking(onBargeIn: @escaping () -> Void) {
+        self.onBargeIn = onBargeIn
+        // Each sentence of a reply arms this, and restarting the clock every
+        // time would mean a teacher who starts talking as the next sentence
+        // begins has to start over.
+        if !monitoringForBargeIn { loudSince = nil }
+        monitoringForBargeIn = true
+    }
+
+    func stopWatchingWhileSpeaking() {
+        monitoringForBargeIn = false
+        onBargeIn = nil
+        loudSince = nil
+    }
+
+    private func checkForBargeIn(_ db: Float) {
+        guard db > bargeInThresholdDB else {
+            loudSince = nil
+            return
+        }
+        let now = Date()
+        guard let since = loudSince else {
+            loudSince = now
+            return
+        }
+        guard now.timeIntervalSince(since) >= bargeInSustain else { return }
+        let fire = onBargeIn
+        stopWatchingWhileSpeaking()
+        fire?()
     }
 
     private func scheduleSilenceEnd() {

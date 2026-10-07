@@ -74,6 +74,14 @@ struct TalkToMeView: View {
     // one of those steps may already be in flight when Pause is tapped.
     // Without this flag the in-flight step would switch the mic back on.
     @State private var sessionActive = false
+    /// Bumped whenever a reply stops being the current one — the teacher
+    /// talked over it, or a newer turn began. A reply whose generation no
+    /// longer matches keeps being written down (the conversation should
+    /// record what Coach said) but is never spoken and never starts the
+    /// microphone again, which a plain "was interrupted" flag could not
+    /// express: by the time an interrupted reply finishes streaming, the
+    /// next turn may already have reset it.
+    @State private var replyGeneration = 0
 
     /// The check-in this conversation answers, when opened from Home's card.
     /// Sent with the first turn only; cleared when starting a new conversation.
@@ -914,6 +922,22 @@ struct TalkToMeView: View {
         Task { await reply(to: nil) }
     }
 
+    /// Armed once Coach is actually audible. Coach's own voice comes back
+    /// through the speaker, so this deliberately needs a loud, sustained
+    /// interruption (see VoiceTurnRecorder) rather than any sound at all.
+    private func startWatchingForInterruption() {
+        recorder.watchWhileSpeaking {
+            Task { @MainActor in
+                guard sessionActive else { return }
+                // Retires the reply being spoken: what is left of it is still
+                // written down, but nothing more of it is said.
+                replyGeneration += 1
+                player.stop()
+                beginListening()
+            }
+        }
+    }
+
     /// A failure that a second attempt might survive: the connection died, or
     /// the server could not reach Claude this once. A refusal, a full
     /// conversation (409) or a daily limit (429) would simply fail again.
@@ -931,6 +955,8 @@ struct TalkToMeView: View {
         errorMessage = nil
         phase = .thinking
         player.stop()
+        replyGeneration += 1
+        let generation = replyGeneration
         // Coach thinks out loud while Claude writes, the way a colleague
         // would — silent when nobody is listening for it.
         if !muted && !showTypeInput { player.startThinking() }
@@ -956,11 +982,17 @@ struct TalkToMeView: View {
                         ) { sentence in
                             heardAnything = true
                             streamingReply = streamingReply.map { "\($0) \(sentence)" } ?? sentence
+                            // Everything Coach writes is kept, even after an
+                            // interruption — only the speaking stops.
+                            guard generation == replyGeneration else { return }
                             phase = .speaking
                             // Silent while muted, and silent while the teacher is typing —
                             // a written exchange that talked back would be answering a
                             // question nobody asked out loud.
-                            if !muted && !showTypeInput { player.enqueue(sentence, voice: spokenVoice) }
+                            if !muted && !showTypeInput {
+                                player.enqueue(sentence, voice: spokenVoice)
+                                startWatchingForInterruption()
+                            }
                         }
                     } catch {
                         guard attempt == 1, !heardAnything, isWorthRetrying(error) else { throw error }
@@ -971,12 +1003,19 @@ struct TalkToMeView: View {
             }()
             debrief = result
             streamingReply = nil
+            // Interrupted, or overtaken by a newer turn: the teacher is
+            // already talking, so this reply ends quietly.
+            guard generation == replyGeneration else { return }
             if !muted && !showTypeInput { await player.waitUntilDone() }
+            recorder.stopWatchingWhileSpeaking()
             resumeListeningIfActive()
         } catch {
             streamingReply = nil
             // Nothing is coming, so Coach should not be heard still thinking.
             player.cancelThinking()
+            // A reply the teacher already talked past should not surface its
+            // failure on top of the turn they are in the middle of.
+            guard generation == replyGeneration else { return }
             if case APIError.server(let status, _) = error, status == 409 {
                 conversationFull = true
                 sessionActive = false
