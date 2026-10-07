@@ -914,6 +914,15 @@ struct TalkToMeView: View {
         Task { await reply(to: nil) }
     }
 
+    /// A failure that a second attempt might survive: the connection died, or
+    /// the server could not reach Claude this once. A refusal, a full
+    /// conversation (409) or a daily limit (429) would simply fail again.
+    private func isWorthRetrying(_ error: Error) -> Bool {
+        if case APIError.server(let status, _) = error { return status >= 500 }
+        if case APIError.transport = error { return true }
+        return false
+    }
+
     /// `text` is nil only for Coach's opening greeting, where there is no
     /// teacher turn to show or send.
     private func reply(to text: String?) async {
@@ -927,18 +936,39 @@ struct TalkToMeView: View {
         if !muted && !showTypeInput { player.startThinking() }
         let spokenVoice = voice
         do {
-            let result = try await TalkToMeService.streamReply(
-                debriefId: debrief?.id,
-                message: text,
-                followUpId: activeFollowUp?.id
-            ) { sentence in
-                streamingReply = streamingReply.map { "\($0) \(sentence)" } ?? sentence
-                phase = .speaking
-                // Silent while muted, and silent while the teacher is typing —
-                // a written exchange that talked back would be answering a
-                // question nobody asked out loud.
-                if !muted && !showTypeInput { player.enqueue(sentence, voice: spokenVoice) }
-            }
+            // A phone's connection drops; a reply that died before Coach said
+            // anything is worth asking for again rather than handing the
+            // teacher a "Try Again" button mid-conversation. Only before the
+            // first sentence: once Coach has started speaking, a second
+            // attempt would repeat half an answer, and only for transport
+            // failures — a refusal or a full conversation would fail the same
+            // way twice.
+            var heardAnything = false
+            var attempt = 0
+            let result: Debrief = try await {
+                while true {
+                    attempt += 1
+                    do {
+                        return try await TalkToMeService.streamReply(
+                            debriefId: debrief?.id,
+                            message: text,
+                            followUpId: activeFollowUp?.id
+                        ) { sentence in
+                            heardAnything = true
+                            streamingReply = streamingReply.map { "\($0) \(sentence)" } ?? sentence
+                            phase = .speaking
+                            // Silent while muted, and silent while the teacher is typing —
+                            // a written exchange that talked back would be answering a
+                            // question nobody asked out loud.
+                            if !muted && !showTypeInput { player.enqueue(sentence, voice: spokenVoice) }
+                        }
+                    } catch {
+                        guard attempt == 1, !heardAnything, isWorthRetrying(error) else { throw error }
+                        phase = .thinking
+                        if !muted && !showTypeInput { player.startThinking() }
+                    }
+                }
+            }()
             debrief = result
             streamingReply = nil
             if !muted && !showTypeInput { await player.waitUntilDone() }

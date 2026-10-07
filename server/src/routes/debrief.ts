@@ -430,6 +430,15 @@ type StreamOptions = {
   speak?: { voice: string | undefined }
 }
 
+// Enough to tell the app from the browser in a log line, and nothing more:
+// no versions, no device, nothing that identifies a teacher.
+function clientTag(req: { headers: Record<string, unknown> }): string {
+  const agent = String(req.headers['user-agent'] ?? '')
+  if (/ClassCoach|Wivoza|CFNetwork|Darwin/i.test(agent)) return 'ios'
+  if (/Mozilla/i.test(agent)) return 'web'
+  return 'other'
+}
+
 async function streamCoachReply(res: Response, label: string, opts: StreamOptions) {
   const timing = startTiming(label)
   res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8')
@@ -467,7 +476,11 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
       if (res.writableEnded) return
       abandoned = true
       stream.abort()
-      timing.end({ abandoned: 'true', sentences: spoken.length })
+      // Which client dropped matters: the browser abandons a turn on purpose
+      // (a speculative reply the teacher talked past), while the iOS app
+      // never does — so an abandoned turn from the app is a connection that
+      // died mid-reply, and the teacher saw "Could not reach Coach".
+      timing.end({ abandoned: 'true', client: clientTag(res.req), sentences: spoken.length })
     })
 
     stream.on('text', (delta) => {
@@ -526,6 +539,7 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
     res.end()
     timing.end({
       gate: `${opts.gateMs ?? 0}ms`,
+      client: clientTag(res.req),
       sentences: spoken.length + (tail ? 1 : 0),
       chars: reply.length,
       ...cacheStats(message.usage),
