@@ -130,3 +130,34 @@ export function takeSpeech(text: string, voice: string | undefined): SpeechStrea
       }),
   }
 }
+
+// ---------------------------------------------------------------------------
+// Thinking sounds
+// ---------------------------------------------------------------------------
+//
+// Unlike a sentence of coaching, these are the same every time, for everyone.
+// Each one is synthesized once per voice for the life of the process and then
+// handed out, which is the difference between paying Deepgram for a fixed
+// fifteen clips once and paying for them in every conversation.
+//
+// Fifteen phrases across six voices is ninety short clips, a couple of
+// megabytes at most, so there is no eviction: anything evicted would only be
+// bought again.
+const fillerClips = new Map<string, Promise<Buffer>>()
+
+export function fillerAudio(text: string, voice: string | undefined): Promise<Buffer> {
+  const key = keyFor(text.trim(), voice)
+  const existing = fillerClips.get(key)
+  if (existing) return existing
+
+  const clip = (async () => {
+    const upstream = await synthesizeSpeechStream(text.trim(), voice)
+    const audio = Buffer.from(await upstream.arrayBuffer())
+    if (audio.length === 0) throw new Error('Deepgram returned no audio')
+    return audio
+  })()
+  // A failure must not be remembered as the answer forever.
+  clip.catch(() => fillerClips.delete(key))
+  fillerClips.set(key, clip)
+  return clip
+}

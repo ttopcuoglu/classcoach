@@ -1,7 +1,8 @@
 import { Router } from 'express'
 import { Readable } from 'node:stream'
 import { synthesizeSpeechStream } from '../lib/deepgram.ts'
-import { takeSpeech } from '../lib/speechCache.ts'
+import { isFillerPhrase } from '../lib/fillerPhrases.ts'
+import { fillerAudio, takeSpeech } from '../lib/speechCache.ts'
 
 export const ttsRouter = Router()
 
@@ -25,6 +26,18 @@ ttsRouter.get('/', async (req, res) => {
   const voice = typeof req.query.voice === 'string' ? req.query.voice : undefined
 
   try {
+    // Said by every teacher in every conversation, so it is synthesized once
+    // per voice and then reused — and the client is told it may keep its own
+    // copy, which saves even the round trip. See lib/fillerPhrases.ts.
+    if (isFillerPhrase(text)) {
+      const audio = await fillerAudio(text.trim(), voice)
+      res.setHeader('Content-Type', 'audio/mpeg')
+      res.setHeader('Content-Length', String(audio.length))
+      res.setHeader('Cache-Control', 'private, max-age=86400')
+      res.end(audio)
+      return
+    }
+
     // Usually already in flight: the reply stream starts synthesizing its
     // first sentence the moment Claude writes it, which is a round trip
     // before this request arrives (see lib/speechCache.ts).
