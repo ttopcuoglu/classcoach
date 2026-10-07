@@ -516,8 +516,16 @@ export const WITTY_FILLER_PHRASES = [
   "...well... my brain and mouth are negotiating...",
 ]
 
-// Roughly one gap in four, and never two running. The rest of the time the
+// Roughly one turn in four, and never two running. The rest of the time the
 // plain hesitation noises do the work.
+//
+// These are drawn mostly at the START of a turn, not between sentences,
+// which is the opposite of where they were first put. A gap between Coach's
+// sentences almost never opens: Claude writes a sentence in a few hundred
+// milliseconds and Coach takes three or four seconds to say one, so the
+// queue is never dry. The second of silence after the teacher stops talking
+// is the only reliable gap there is — and "the gears are warming up" is a
+// thinking-out-loud line anyway, so that is where it belongs.
 export const WITTY_GAP_CHANCE = 0.25
 
 // Coach has just reacted to something painful: "Ugh, that's rough." — and
@@ -525,6 +533,47 @@ export const WITTY_GAP_CHANCE = 0.25
 // feature could do. Checked against Coach's own first sentence, which is
 // where the prompt puts its sympathy, and it silences the jokes for the
 // rest of that turn. Kept in step with SpeechPlayer.swift.
+// At the start of a turn there is no reply yet to read the mood from, so the
+// teacher's own words are what decide. Deliberately broad: suppressing a
+// joke that would have been fine costs nothing, and telling one over a
+// teacher who just said they cried in their car is unforgivable.
+const HARD_MOMENT_MARKERS = [
+  'cried',
+  'crying',
+  'in tears',
+  'quit',
+  'quitting',
+  'resign',
+  'burnt out',
+  'burned out',
+  'exhausted',
+  'overwhelmed',
+  'breaking point',
+  'falling apart',
+  "can't do this",
+  'cant do this',
+  'at my limit',
+  'had enough',
+  'lost it',
+  'humiliated',
+  'awful',
+  'terrible',
+  'the worst',
+  'hate teaching',
+  'panic',
+  'anxiety',
+  'depressed',
+  'no idea what to do',
+  'helpless',
+  'hopeless',
+]
+
+/// Whether what the teacher just said rules out a joke this turn.
+export function soundsLikeAHardTurn(transcript: string): boolean {
+  const text = transcript.toLowerCase()
+  return HARD_MOMENT_MARKERS.some((marker) => text.includes(marker))
+}
+
 const SYMPATHY_MARKERS = [
   'oof',
   'ugh',

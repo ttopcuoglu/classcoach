@@ -37,6 +37,7 @@ import {
   loadFillers,
   primeAudioElement,
   soundsLikeAHardMoment,
+  soundsLikeAHardTurn,
   WITTY_GAP_CHANCE,
   type Fillers,
   type PlaybackQueue,
@@ -246,8 +247,11 @@ export default function TalkToMe() {
   // Set for the rest of the turn when Coach's first sentence is sympathetic,
   // and when a joke has just been told.
   const noJokesRef = useRef(false)
-  const lastGapWasJokeRef = useRef(false)
+  // Whether the last thing Coach joked through was a joke — kept across
+  // turns, not reset with them, since a joke is drawn once per turn now.
+  const lastWasJokeRef = useRef(false)
   const openingSentenceRef = useRef(true)
+  const jokePlayingRef = useRef(false)
   // The reply currently being streamed, whether or not it is still audible.
   // An interruption starts the next turn immediately, so that turn has to
   // wait for this to settle before it asks for anything — otherwise its
@@ -538,13 +542,20 @@ export default function TalkToMe() {
 
   function startThinkingSound() {
     cancelThinkingSound()
+    // The second after the teacher stops talking is the only gap that
+    // reliably opens, so it is the only place a joke is reliably heard.
+    const joking = !noJokesRef.current && !lastWasJokeRef.current && Math.random() < WITTY_GAP_CHANCE
     fillerTimerRef.current = window.setTimeout(() => {
       const audio = fillerAudioRef.current
-      const clip = fillersRef.current?.nextStarter()
+      const clip = joking ? fillersRef.current?.nextWitty() : fillersRef.current?.nextStarter()
       // Only into silence: once Coach is speaking, or the teacher is, a
       // thinking sound would be talking over one of them.
       if (!audio || !clip || !sessionActiveRef.current || phaseRef.current !== 'thinking') return
-      fillerHoldRef.current = HOLD_FOR_FILLER_MS
+      jokePlayingRef.current = joking
+      lastWasJokeRef.current = joking
+      // A punchline is never faded for a sentence that is ready. The teacher
+      // talking over it still cuts it off — that is barge-in.
+      fillerHoldRef.current = joking ? LET_THE_JOKE_FINISH_MS : HOLD_FOR_FILLER_MS
       audio.volume = 1
       audio.src = clip
       void audio.play().catch(() => {})
@@ -577,14 +588,14 @@ export default function TalkToMe() {
       // A joke now and then, not every gap: often enough to be a character
       // trait, rarely enough to stay funny. Never twice running, and never
       // in a turn where Coach has just said "Ugh, that's rough."
-      const joking =
-        !noJokesRef.current && !lastGapWasJokeRef.current && Math.random() < WITTY_GAP_CHANCE
+      const joking = !noJokesRef.current && !lastWasJokeRef.current && Math.random() < WITTY_GAP_CHANCE
       const clip = joking ? fillersRef.current?.nextWitty() : fillersRef.current?.nextGap()
       // Only while Coach is the one speaking. If the teacher has cut in, or
       // the turn has ended, the gap this was covering no longer exists.
       if (!audio || !clip || !sessionActiveRef.current || phaseRef.current !== 'speaking') return
       if (bargedInRef.current) return
-      lastGapWasJokeRef.current = joking
+      lastWasJokeRef.current = joking
+      jokePlayingRef.current = joking
       // A joke is only worth telling if its ending is heard, so Coach's next
       // sentence waits it out however long it runs. The teacher talking over
       // it still cuts it off at once — that is barge-in, not the hand-off.
@@ -642,7 +653,12 @@ export default function TalkToMe() {
     // that reaction is a sympathetic one, this turn gets no jokes.
     if (openingSentenceRef.current) {
       openingSentenceRef.current = false
-      if (soundsLikeAHardMoment(sentence)) noJokesRef.current = true
+      if (soundsLikeAHardMoment(sentence)) {
+        noJokesRef.current = true
+        // A joke already started over what turns out to be a hard moment:
+        // the reply does not wait for the punchline, it fades it out.
+        if (jokePlayingRef.current) fillerHoldRef.current = 0
+      }
     }
     const handoff = thinkingHandoffRef.current ?? (thinkingHandoffRef.current = handOffFromThinkingSound())
     void handoff.then(() => queue.push(sentence))
@@ -745,8 +761,9 @@ export default function TalkToMe() {
 
     phaseRef.current = 'thinking'
     thinkingHandoffRef.current = null
-    noJokesRef.current = false
-    lastGapWasJokeRef.current = false
+    // A joke is decided before Coach has written anything, so the teacher's
+    // own words are the only thing to read the mood from.
+    noJokesRef.current = soundsLikeAHardTurn(text)
     openingSentenceRef.current = true
     startThinkingSound()
 

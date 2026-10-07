@@ -71,7 +71,12 @@ final class SpeechPlayer: NSObject, ObservableObject {
         if openingSentence {
             openingSentence = false
             let lowered = text.lowercased()
-            if Self.sympathyMarkers.contains(where: lowered.contains) { noJokesThisTurn = true }
+            if Self.sympathyMarkers.contains(where: lowered.contains) {
+                noJokesThisTurn = true
+                // A joke already started over what turns out to be a hard
+                // moment: the reply does not wait for the punchline.
+                if jokePlaying { currentHold = 0 }
+            }
         }
         pending.append(Task { try? await TalkToMeService.fetchSpeech(text: text, voice: voice) })
         if drainTask == nil { startDrain() }
@@ -205,8 +210,34 @@ final class SpeechPlayer: NSObject, ObservableObject {
         "...well... my brain and mouth are negotiating...",
     ]
 
-    /// Roughly one gap in four, and never two running.
+    /// Roughly one turn in four, and never two running.
+    ///
+    /// Drawn mostly at the START of a turn, not between sentences, which is
+    /// the opposite of where they were first put. A gap between Coach's
+    /// sentences almost never opens: Claude writes a sentence in a few
+    /// hundred milliseconds and Coach takes three or four seconds to say
+    /// one, so the queue is never dry. The second of silence after the
+    /// teacher stops talking is the only reliable gap there is — and "the
+    /// gears are warming up" is a thinking-out-loud line anyway.
     private static let wittyGapChance = 0.25
+
+    /// At the start of a turn there is no reply yet to read the mood from,
+    /// so the teacher's own words are what decide. Deliberately broad:
+    /// suppressing a joke that would have been fine costs nothing, and
+    /// telling one over a teacher who just said they cried in their car is
+    /// unforgivable. Kept in step with voicePlayback.ts.
+    private static let hardMomentMarkers = [
+        "cried", "crying", "in tears",
+        "quit", "quitting", "resign",
+        "burnt out", "burned out", "exhausted",
+        "overwhelmed", "breaking point", "falling apart",
+        "can't do this", "cant do this", "at my limit",
+        "had enough", "lost it", "humiliated",
+        "awful", "terrible", "the worst",
+        "hate teaching", "panic", "anxiety",
+        "depressed", "no idea what to do", "helpless",
+        "hopeless",
+    ]
 
     /// Coach has just reacted to something painful — "Ugh, that's rough." —
     /// and "the mental hamster is running" would be the worst thing this
@@ -241,12 +272,15 @@ final class SpeechPlayer: NSObject, ObservableObject {
     /// Set for the rest of a turn when Coach's opener is sympathetic, and
     /// when a joke has just been told.
     private var noJokesThisTurn = false
-    private var lastGapWasJoke = false
+    /// Whether the last clip Coach played was a joke — kept across turns,
+    /// not reset with them, since a joke is drawn once per turn now.
+    private var lastWasJoke = false
     /// The next sentence enqueued is the one Coach opens the turn with.
     private var openingSentence = true
     /// How long the clip now playing may hold the floor. A joke gets to
     /// finish; everything else gets the ordinary beat.
     private var currentHold: TimeInterval = 0
+    private var jokePlaying = false
     /// Sentences played in the current turn. A gap sound belongs between
     /// sentences, so nothing happens until Coach has said one.
     private var sentencesPlayed = 0
@@ -283,17 +317,22 @@ final class SpeechPlayer: NSObject, ObservableObject {
 
     /// Starts the thinking sounds for a turn. Cancelled automatically the
     /// moment real speech plays.
-    func startThinking() {
+    /// Starts the thinking sounds for a turn. Cancelled automatically the
+    /// moment real speech plays. `teacherSaid` is what the teacher just
+    /// said, which is the only thing available to judge whether this is a
+    /// turn for a joke — Coach has not written a word yet.
+    func startThinking(teacherSaid: String? = nil) {
         cancelThinking()
         sentencesPlayed = 0
         replyStreaming = true
-        noJokesThisTurn = false
-        lastGapWasJoke = false
         openingSentence = true
+        let lowered = (teacherSaid ?? "").lowercased()
+        noJokesThisTurn = Self.hardMomentMarkers.contains(where: lowered.contains)
+        let joking = !noJokesThisTurn && !lastWasJoke && Double.random(in: 0..<1) < Self.wittyGapChance
         thinkingTask = Task { [weak self] in
             try? await Task.sleep(for: Self.fillerDelay)
             guard !Task.isCancelled else { return }
-            await self?.playFiller(starter: true)
+            await self?.playFiller(starter: true, joking: joking)
         }
     }
 
@@ -306,7 +345,7 @@ final class SpeechPlayer: NSObject, ObservableObject {
         cancelThinking()
         // A joke now and then, not every gap: often enough to be a
         // character trait, rarely enough to stay funny.
-        let joking = !noJokesThisTurn && !lastGapWasJoke && Double.random(in: 0..<1) < Self.wittyGapChance
+        let joking = !noJokesThisTurn && !lastWasJoke && Double.random(in: 0..<1) < Self.wittyGapChance
         thinkingTask = Task { [weak self] in
             try? await Task.sleep(for: Self.fillerDelay)
             guard !Task.isCancelled else { return }
@@ -376,19 +415,20 @@ final class SpeechPlayer: NSObject, ObservableObject {
         // Never over real speech: by the time a clip is due, the reply may
         // already have started.
         guard player?.isPlaying != true else { return }
-        let clips = starter ? starterClips : (joking ? wittyClips : gapClips)
+        let clips = joking ? wittyClips : (starter ? starterClips : gapClips)
         guard !clips.isEmpty else { return }
         var index = Int.random(in: 0..<clips.count)
-        let last = starter ? lastStarter : (joking ? lastWitty : lastGap)
+        let last = joking ? lastWitty : (starter ? lastStarter : lastGap)
         if clips.count > 1, index == last { index = (index + 1) % clips.count }
-        if starter {
-            lastStarter = index
-        } else if joking {
+        if joking {
             lastWitty = index
+        } else if starter {
+            lastStarter = index
         } else {
             lastGap = index
         }
-        if !starter { lastGapWasJoke = joking }
+        lastWasJoke = joking
+        jokePlaying = joking
         // A punchline is never faded for a sentence that is ready. A teacher
         // who starts talking still cuts it off at once — that is barge-in.
         currentHold = joking ? Self.letTheJokeFinish : Self.holdForFiller
