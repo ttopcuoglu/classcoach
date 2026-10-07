@@ -146,6 +146,68 @@ export function takeSpeech(text: string, voice: string | undefined): SpeechStrea
 // bought again.
 const fillerClips = new Map<string, Promise<Buffer>>()
 
+// Aura cannot reliably say two interjections in one breath.
+//
+// Asked for "...hmm... alrighty...", four draws came back at 2.16s with
+// three bursts of sound, 2.08s with two, 1.40s with one and 1.44s with two —
+// and a one-burst draw is "hmm" with the second word missing. Rewording does
+// not help: commas, full stops and a single ellipsis all produced one-word
+// draws. Retrying does not fix it either; asking three times and keeping the
+// fullest answer still left seven of the twenty between-sentence phrases as
+// a single sound, every one of them a pair of short interjections ("...so...
+// yeah...", "...oh... well...").
+//
+// A clip is cached for the life of the process, so one bad draw means every
+// teacher on that instance hears "hmm" and nothing else for days. That is
+// what a teacher reported hearing.
+//
+// So these are not asked for as one phrase. Each word is synthesized on its
+// own — which Aura does perfectly well — and the pause between them is ours,
+// not Deepgram's. Deterministic, and it is the pause this feature wanted all
+// along rather than whatever Aura felt like putting there.
+const SEGMENT_PAUSE_MS = 200
+const SEGMENT_DRAWS = 2
+
+function splitSegments(phrase: string): string[] {
+  return phrase
+    .split(/\.{2,}|…/)
+    .map((part) => part.trim().replace(/^[,.\s]+|[,.\s]+$/g, ''))
+    .filter(Boolean)
+}
+
+/// One word of a multi-part filler, trimmed, with a couple of attempts in
+/// case a draw comes back empty.
+async function segmentAudio(segment: string, voice: string | undefined): Promise<Buffer | null> {
+  for (let draw = 0; draw < SEGMENT_DRAWS; draw++) {
+    const upstream = await synthesizeSpeechStream(`${segment}...`, voice, 'wav')
+    const audio = Buffer.from(await upstream.arrayBuffer())
+    const marker = audio.indexOf('data')
+    if (marker === -1) continue
+    const body = audio.subarray(marker + 8)
+    const count = Math.floor(body.length / 2)
+    if (count === 0) continue
+    const trimmed = trimLeadingSilence(body, count)
+    if (peakOf(trimmed, Math.floor(trimmed.length / 2)) > MIN_USABLE_PEAK / 4) return trimmed
+  }
+  return null
+}
+
+/// A multi-part filler, built word by word with our own pauses between.
+async function splicedFiller(phrase: string, voice: string | undefined): Promise<Buffer> {
+  const segments = splitSegments(phrase)
+  const parts: Buffer[] = []
+  for (const segment of segments) {
+    const audio = await segmentAudio(segment, voice)
+    if (audio) parts.push(audio)
+  }
+  if (parts.length === 0) throw new Error('Deepgram returned no audio')
+  const pause = Buffer.alloc(Math.round((SPEECH_WAV_SAMPLE_RATE * SEGMENT_PAUSE_MS) / 1000) * 2)
+  const joined = Buffer.concat(parts.flatMap((part, i) => (i === 0 ? [part] : [pause, part])))
+  // The tail still wants the fade and the trailing silence every filler gets,
+  // and the inner pauses are already the length we chose, so no collapsing.
+  return softenEnding(wavFile(joined))
+}
+
 export function fillerAudio(text: string, voice: string | undefined): Promise<Buffer> {
   const key = keyFor(text.trim(), voice)
   const existing = fillerClips.get(key)
@@ -153,10 +215,13 @@ export function fillerAudio(text: string, voice: string | undefined): Promise<Bu
 
   const clip = (async () => {
     const phrase = text.trim()
+    // Anything made of several interjections is built word by word; a single
+    // utterance ("Well, let me think...") Aura says reliably in one go.
+    if (splitSegments(phrase).length >= 2) return splicedFiller(phrase, voice)
     const upstream = await synthesizeSpeechStream(phrase, voice, 'wav')
     const audio = Buffer.from(await upstream.arrayBuffer())
     if (audio.length === 0) throw new Error('Deepgram returned no audio')
-    return softenEnding(audio, isGapFillerPhrase(phrase), isWittyFillerPhrase(phrase))
+    return softenEnding(audio)
   })()
   // A failure must not be remembered as the answer forever.
   clip.catch(() => fillerClips.delete(key))
