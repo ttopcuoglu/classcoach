@@ -401,33 +401,30 @@ export async function playQueue(
 // Two measured rules shaped this list, and the server keeps the same one in
 // fillerPhrases.ts so the audio can be kept forever:
 //
-//  - Under ~1.35s: the filler starts 250ms into the pause, Coach's first
-//    sentence lands around 1.2s, and one with 400ms or less left is allowed
-//    to finish first. Anything longer is faded mid-word every turn, which is
-//    what made the earlier, wordier set sound chopped.
+//  - They start 250ms into the pause, Coach's first sentence lands around
+//    1.2s, and the reply waits for one with 1.2s or less left to finish. So
+//    anything up to ~2.15s plays in full; past that it fades mid-word, which
+//    is what made an earlier, wordier set sound chopped.
 //  - Ending in "..." rather than ".", which makes the voice trail off rather
-//    than stop. "Mm-hmm." is the one exception, measuring better as it is.
+//    than stop.
 export const FILLER_PHRASES = [
-  'Hmm...',
-  'Mm-hmm.',
-  'Mm, mm...',
-  'Hmm, hmm...',
-  'Yeah...',
-  'Yep...',
-  'Ah...',
-  'Okay...',
-  'Right...',
-  'Sure...',
-  'Uh-huh...',
-  'Got it...',
-  'Well...',
-  'So...',
-  'Alright...',
-  'Well, hmm...',
-  'So, hmm...',
-  'Right, hmm...',
   'Let me see...',
+  "Well, let's see...",
+  "Okay, let's see...",
+  "Alright, let's see...",
+  "So, let's see...",
   'Well, let me think...',
+  'Okay, let me think...',
+  'Hmm, let me think...',
+  'Let me take a moment...',
+  'Just a moment...',
+  'Give me a second...',
+  'Let me gather my thoughts...',
+  "Let's think about this...",
+  'Well, now...',
+  'Okay, so...',
+  'Alright, then...',
+  'Hmm, okay...',
 ]
 
 export type Fillers = {

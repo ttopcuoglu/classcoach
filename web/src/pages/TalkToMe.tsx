@@ -530,8 +530,14 @@ export default function TalkToMe() {
 
   // A thinking sound with this little left to play is worth waiting out:
   // Coach answering over the last syllable of its own "hmm" sounds worse
-  // than a beat of silence, and a beat is all it costs.
-  const HOLD_FOR_FILLER_MS = 400
+  // than a beat of silence.
+  //
+  // Generous on purpose. At 400ms only the shortest clips ever finished, and
+  // "Well, let me think..." — the kind of thing that actually sounds like
+  // someone considering a question — was faded every single turn. Waiting
+  // costs up to a second, once, at the front of a reply the teacher has
+  // already heard Coach start thinking about.
+  const HOLD_FOR_FILLER_MS = 1200
 
   function cancelThinkingSound() {
     if (fillerTimerRef.current) window.clearTimeout(fillerTimerRef.current)

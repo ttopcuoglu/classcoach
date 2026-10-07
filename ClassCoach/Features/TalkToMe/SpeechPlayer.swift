@@ -129,17 +129,19 @@ final class SpeechPlayer: NSObject, ObservableObject {
     // belongs in Coach's real replies, where it knows what happened) and
     // nothing that invites them to keep talking.
     //
-    // They are also all under ~0.9s and end in "...", both measured: the
-    // filler starts 250ms into the pause and the reply lands around 1.2s, so
-    // anything longer is cut mid-word, and an ellipsis makes the voice trail
-    // off where a full stop makes it stop dead. Kept in step with
-    // web/src/lib/voicePlayback.ts and the server's fillerPhrases.ts.
+    // They all end in "..." and run under ~2.15s, both measured: a clip
+    // starts 250ms into the pause, the reply lands around 1.2s and then
+    // waits out a filler with 1.2s or less left, and an ellipsis makes the
+    // voice trail off where a full stop makes it stop dead. Kept in step
+    // with web/src/lib/voicePlayback.ts and the server's fillerPhrases.ts,
+    // which is also where the breath in front of the longer ones is added.
     private static let shortFillers = [
-        "Hmm...", "Mm-hmm.", "Mm, mm...", "Hmm, hmm...",
-        "Yeah...", "Yep...", "Ah...", "Okay...",
-        "Right...", "Sure...", "Uh-huh...", "Got it...",
-        "Well...", "So...", "Alright...", "Well, hmm...",
-        "So, hmm...", "Right, hmm...", "Let me see...", "Well, let me think...",
+        "Let me see...", "Well, let's see...", "Okay, let's see...",
+        "Alright, let's see...", "So, let's see...", "Well, let me think...",
+        "Okay, let me think...", "Hmm, let me think...", "Let me take a moment...",
+        "Just a moment...", "Give me a second...", "Let me gather my thoughts...",
+        "Let's think about this...", "Well, now...", "Okay, so...",
+        "Alright, then...", "Hmm, okay...",
     ]
     private static let fillerDelay: Duration = .milliseconds(250)
 
@@ -185,8 +187,12 @@ final class SpeechPlayer: NSObject, ObservableObject {
 
     /// A thinking sound with this little left is worth waiting out: Coach
     /// answering over the last syllable of its own "hmm" sounds worse than a
-    /// beat of silence, and a beat is all it costs.
-    private static let holdForFiller: TimeInterval = 0.4
+    /// beat of silence.
+    ///
+    /// Generous on purpose. At 0.4s only the shortest clips ever finished,
+    /// and the ones that actually sound like someone considering a question
+    /// were faded every turn. Matches HOLD_FOR_FILLER_MS on the web.
+    private static let holdForFiller: TimeInterval = 1.2
 
     /// Called when Coach's first sentence is ready. Returns once it may be
     /// spoken — at once, having faded the filler, or after letting a

@@ -1,4 +1,5 @@
 import { SPEECH_WAV_SAMPLE_RATE, synthesizeSpeechStream } from './deepgram.ts'
+import { BREATHY_PHRASES } from './fillerPhrases.ts'
 import { DEFAULT_TALK_VOICE, isValidTalkVoice } from './talkVoices.ts'
 
 // Starts synthesizing a sentence before anyone asks for it.
@@ -212,4 +213,82 @@ function wavFile(pcm: Buffer): Buffer {
   header.write('data', 36)
   header.writeUInt32LE(pcm.length, 40)
   return Buffer.concat([header, pcm])
+}
+
+// ---------------------------------------------------------------------------
+// Breath
+// ---------------------------------------------------------------------------
+//
+// Asked for, and worth the trouble: a thinking sound that arrives out of
+// nowhere still reads as a machine, where the same sound after an intake of
+// breath reads as somebody gathering themselves. Deepgram has no breath to
+// request — "Phew", "Hhh" and "*sigh*" are all spoken as words — so it is
+// made here.
+//
+// Noise alone sounds like wind. What makes it read as breath is movement:
+// it brightens as the air speeds up, wavers rather than hissing evenly, and
+// builds more slowly than it stops. Baked in once when a clip is cached, so
+// it costs nothing per turn.
+const BREATH_MS = 460
+const BREATH_GAP_MS = 55
+// Measured against the clip's own peak: a real breath beside speech sits far
+// below it, and anything louder sounds like a sigh of exasperation.
+const BREATH_LEVEL = 0.15
+
+// Seeded, so a given phrase always breathes the same way rather than
+// sounding different each time the cache is rebuilt.
+function seededRandom(seed: number): () => number {
+  let state = seed >>> 0
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0
+    let t = Math.imul(state ^ (state >>> 15), 1 | state)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+function breathSamples(peak: number, seed: number): Int16Array {
+  const random = seededRandom(seed)
+  const length = Math.round((SPEECH_WAV_SAMPLE_RATE * BREATH_MS) / 1000)
+  const out = new Int16Array(length)
+  let lowPass = 0
+  let rumble = 0
+  let drift = 0
+  for (let i = 0; i < length; i++) {
+    const t = i / length
+    // The filter opens as the breath goes on: air moving faster is brighter.
+    const openness = 0.04 + (0.26 - 0.04) * t
+    const white = random() * 2 - 1
+    lowPass += openness * (white - lowPass)
+    rumble += 0.004 * (lowPass - rumble)
+    // A slow wander in loudness, so it breathes rather than hisses.
+    drift = Math.max(-1, Math.min(1, drift * 0.995 + (random() - 0.5) * 0.1))
+    const envelope = Math.pow(Math.sin(Math.PI * Math.pow(t, 0.75)), 1.2)
+    const value = (lowPass - rumble) * envelope * peak * (1 + 0.22 * drift)
+    out[i] = Math.round(Math.max(-1, Math.min(1, value)) * 32767)
+  }
+  return out
+}
+
+/// Puts an intake of breath in front of a clip.
+export function withBreath(wav: Buffer, phrase: string): Buffer {
+  const marker = wav.indexOf('data')
+  if (marker === -1) return wav
+  const pcm = wav.subarray(marker + 8)
+  const sampleCount = Math.floor(pcm.length / 2)
+  if (sampleCount === 0) return wav
+
+  let peak = 0
+  for (let i = 0; i < sampleCount; i++) peak = Math.max(peak, Math.abs(pcm.readInt16LE(i * 2)))
+  if (peak === 0) return wav
+
+  let seed = 0
+  for (let i = 0; i < phrase.length; i++) seed = (seed * 31 + phrase.charCodeAt(i)) >>> 0
+  const breath = breathSamples((peak / 32767) * BREATH_LEVEL, seed)
+  const gap = Math.round((SPEECH_WAV_SAMPLE_RATE * BREATH_GAP_MS) / 1000)
+
+  const out = Buffer.alloc((breath.length + gap + sampleCount) * 2)
+  for (let i = 0; i < breath.length; i++) out.writeInt16LE(breath[i], i * 2)
+  pcm.copy(out, (breath.length + gap) * 2, 0, sampleCount * 2)
+  return wavFile(out)
 }
