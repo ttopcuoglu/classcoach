@@ -32,7 +32,7 @@ import {
 } from '../lib/api'
 import { isExperienced } from '../lib/experience'
 import { endTurn, markTurn } from '../lib/turnTiming'
-import { createPlaybackQueue, primeAudioElement, type PlaybackQueue } from '../lib/voicePlayback'
+import { createPlaybackQueue, loadFillers, primeAudioElement, type Fillers, type PlaybackQueue } from '../lib/voicePlayback'
 
 // Flipped to false: auto-starting the mic on open meant a teacher could
 // go through an entire hands-free conversation without ever tapping the
@@ -182,6 +182,10 @@ export default function TalkToMe() {
   const [checkInOff, setCheckInOff] = useState(false)
   const talkVoiceRef = useRef<TalkVoice | null>(null)
   talkVoiceRef.current = talkVoice
+  // Read inside timers and audio callbacks, which capture the render they
+  // were created in and would otherwise test a stale phase.
+  const phaseRef = useRef<Phase>('idle')
+  phaseRef.current = phase
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const mutedRef = useRef(muted)
@@ -214,6 +218,10 @@ export default function TalkToMe() {
   // reply has finished unwinding, so the usual "listen again when playback
   // ends" does not start a second turn on top of the one already listening.
   const bargedInRef = useRef(false)
+  // Pre-made thinking sounds for the gap while Claude writes. Loaded once a
+  // conversation, in the teacher's own Coach voice.
+  const fillersRef = useRef<Fillers | null>(null)
+  const fillerTimerRef = useRef<number | null>(null)
   // The reply currently being streamed, whether or not it is still audible.
   // An interruption starts the next turn immediately, so that turn has to
   // wait for this to settle before it asks for anything — otherwise its
@@ -313,6 +321,9 @@ export default function TalkToMe() {
     return () => {
       sessionActiveRef.current = false
       close()
+      if (fillerTimerRef.current) window.clearTimeout(fillerTimerRef.current)
+      fillersRef.current?.release()
+      fillersRef.current = null
       // A reply started during a pause is in flight on its own; leaving the
       // page has to stop it too, or it finishes and saves a turn into a
       // conversation the teacher has walked away from.
@@ -393,6 +404,14 @@ export default function TalkToMe() {
 
   function beginListening() {
     sessionActiveRef.current = true
+    // Fetched once per conversation, while the teacher is drawing breath to
+    // speak rather than while they wait for an answer.
+    if (!fillersRef.current) {
+      void loadFillers(talkVoiceRef.current).then((fillers) => {
+        if (sessionActiveRef.current) fillersRef.current = fillers
+        else fillers.release()
+      })
+    }
     setError(null)
     setPhase('listening')
     start()
@@ -422,7 +441,9 @@ export default function TalkToMe() {
     // the playback callback, which the compiler cannot follow.
     const bargeIn: { stop: (() => void) | null } = { stop: null }
     const queue = createPlaybackQueue(audio, talkVoiceRef.current, () => {
+      cancelThinkingSound()
       setPhase('speaking')
+      phaseRef.current = 'speaking'
       bargeIn.stop = watchWhileSpeaking(handleBargeIn)
     })
     queueRef.current = queue
@@ -464,6 +485,31 @@ export default function TalkToMe() {
     beginListening()
   }
 
+  // Coach makes a noise while it thinks, the way a colleague would, rather
+  // than leaving the teacher with a second of silence after every sentence
+  // they finish. Scheduled rather than immediate: a reply that arrives
+  // quickly (a speculative one, usually) should just be spoken, with no
+  // "hmm" in front of it.
+  const FILLER_AFTER_MS = 400
+
+  function startThinkingSound() {
+    cancelThinkingSound()
+    fillerTimerRef.current = window.setTimeout(() => {
+      const audio = audioRef.current
+      const clip = fillersRef.current?.next()
+      // Only into silence: once Coach is speaking, or the teacher is, a
+      // thinking sound would be talking over one of them.
+      if (!audio || !clip || !sessionActiveRef.current || phaseRef.current !== 'thinking') return
+      audio.src = clip
+      void audio.play().catch(() => {})
+    }, FILLER_AFTER_MS)
+  }
+
+  function cancelThinkingSound() {
+    if (fillerTimerRef.current) window.clearTimeout(fillerTimerRef.current)
+    fillerTimerRef.current = null
+  }
+
   // The teacher started talking over Coach. Stop the speech, and start
   // listening at once so the first words of the interruption are captured.
   //
@@ -474,6 +520,7 @@ export default function TalkToMe() {
   function handleBargeIn() {
     if (!sessionActiveRef.current || bargedInRef.current) return
     bargedInRef.current = true
+    cancelThinkingSound()
     markTurn('barge_in')
     queueRef.current?.cancel()
     queueRef.current = null
@@ -557,6 +604,9 @@ export default function TalkToMe() {
     setUserTranscript(text)
     setPhase('thinking')
 
+    phaseRef.current = 'thinking'
+    startThinkingSound()
+
     // After an interruption the previous reply may still be arriving. It
     // carries the conversation this turn belongs to, so wait for it — on
     // every other turn it has long since settled and this costs nothing.
@@ -611,9 +661,11 @@ export default function TalkToMe() {
     // the playback callback, which the compiler cannot follow.
     const bargeIn: { stop: (() => void) | null } = { stop: null }
     const queue = createPlaybackQueue(audio, talkVoiceRef.current, () => {
+      cancelThinkingSound()
       markTurn('speak')
       endTurn()
       setPhase('speaking')
+      phaseRef.current = 'speaking'
       // Coach is audible now, so the microphone switches from "did they
       // carry on?" to the much harder-to-trigger "are they talking over
       // this?" — see watchWhileSpeaking.
@@ -714,6 +766,7 @@ export default function TalkToMe() {
   function handleStop() {
     sessionActiveRef.current = false
     close()
+    cancelThinkingSound()
     dropSpeculation()
     queueRef.current?.cancel()
     queueRef.current = null

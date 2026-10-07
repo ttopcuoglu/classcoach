@@ -18,22 +18,29 @@ const SPEECH_LEVEL_THRESHOLD = 8
 const BARGE_IN_LEVEL_THRESHOLD = 20
 const BARGE_IN_SUSTAIN_MS = 350
 
-// Off until it has been heard on real machines, because it reopens a bug
-// this file already fixed once: the microphone track is deliberately
-// disabled while Coach is speaking, since Chrome's audio processing on a
-// live getUserMedia track interferes with separate <audio> playback (see
-// start()). Barge-in cannot work without that track live, so the two are in
-// direct tension and only listening can say whether it matters here.
+// On by default: a teacher who starts talking expects Coach to stop, and
+// without that the thinking sounds below would be something they cannot get
+// a word in past.
 //
-//   localStorage.wivozaBargeIn = '1'    (or open the page with ?bargein=1)
+// It comes with a known cost. The microphone track is deliberately disabled
+// while Coach speaks, because Chrome's audio processing on a live
+// getUserMedia track interferes with separate <audio> playback (see
+// start()). Barge-in cannot work without that track live, so the two are in
+// direct tension; echo cancellation is requested explicitly to keep Coach's
+// own voice from triggering it. If it turns out to degrade playback on real
+// hardware, this is the switch:
+//
+//   localStorage.wivozaBargeIn = '0'    (or open the page with ?bargein=0)
 export function bargeInEnabled(): boolean {
   try {
     const query = new URLSearchParams(location.search).get('bargein')
     if (query === '1') return true
     if (query === '0') return false
-    return localStorage.getItem('wivozaBargeIn') === '1'
+    return localStorage.getItem('wivozaBargeIn') !== '0'
   } catch {
-    return false
+    // Storage blocked: barge-in does not depend on anything stored, so there
+    // is no reason to lose it.
+    return true
   }
 }
 

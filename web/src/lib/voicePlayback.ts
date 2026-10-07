@@ -376,3 +376,51 @@ export async function playQueue(
   queue.end()
   await queue.finished
 }
+
+// Thinking sounds.
+//
+// Claude takes about a second to write its first sentence, and no amount of
+// plumbing removes that — it is the model thinking. What it does not have to
+// be is silence. A colleague who is considering what you just said makes
+// noise while they do it, so Coach does too.
+//
+// These are fetched once per conversation and kept as blobs, so playing one
+// costs nothing and starts instantly. Fetching them per turn would reintroduce
+// exactly the delay they exist to cover.
+export const FILLER_PHRASES = [
+  'Mm-hmm.',
+  'Hmm.',
+  'I see.',
+  'Okay, so...',
+  'Right.',
+  'Let me think.',
+  'Yeah.',
+  'Got it.',
+]
+
+export type Fillers = {
+  /// A clip that is not the one played last, so Coach does not say "Hmm"
+  /// twice in a row. Null when none loaded.
+  next: () => string | null
+  release: () => void
+}
+
+export async function loadFillers(voice: TalkVoice | null): Promise<Fillers> {
+  const urls = (await Promise.all(FILLER_PHRASES.map((phrase) => fetchSentenceAudio(phrase, voice)))).filter(
+    (url): url is string => url !== null,
+  )
+  let last = -1
+  return {
+    next() {
+      if (urls.length === 0) return null
+      let index = Math.floor(Math.random() * urls.length)
+      if (urls.length > 1 && index === last) index = (index + 1) % urls.length
+      last = index
+      return urls[index]
+    },
+    release() {
+      for (const url of urls) URL.revokeObjectURL(url)
+      urls.length = 0
+    },
+  }
+}
