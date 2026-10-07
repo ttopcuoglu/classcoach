@@ -1,4 +1,4 @@
-import { synthesizeSpeechStream } from './deepgram.ts'
+import { SPEECH_WAV_SAMPLE_RATE, synthesizeSpeechStream } from './deepgram.ts'
 import { DEFAULT_TALK_VOICE, isValidTalkVoice } from './talkVoices.ts'
 
 // Starts synthesizing a sentence before anyone asks for it.
@@ -151,13 +151,61 @@ export function fillerAudio(text: string, voice: string | undefined): Promise<Bu
   if (existing) return existing
 
   const clip = (async () => {
-    const upstream = await synthesizeSpeechStream(text.trim(), voice)
+    const upstream = await synthesizeSpeechStream(text.trim(), voice, 'wav')
     const audio = Buffer.from(await upstream.arrayBuffer())
     if (audio.length === 0) throw new Error('Deepgram returned no audio')
-    return audio
+    return softenEnding(audio)
   })()
   // A failure must not be remembered as the answer forever.
   clip.catch(() => fillerClips.delete(key))
   fillerClips.set(key, clip)
   return clip
+}
+
+// How a thinking sound ends decides whether it sounds like someone trailing
+// off or like a recording stopping. Deepgram's own clips end 20-30ms after
+// the last sound, which on a short nasal one ("Mm", "Hmm") reads as a cut
+// even though the waveform is complete.
+//
+// So the tail is faded by hand and real silence is left after it. Doing it
+// here rather than choosing phrases that happen to end softly means the
+// choice of words stops being delicate: anything short enough ends cleanly.
+const FADE_SAMPLES = Math.round(SPEECH_WAV_SAMPLE_RATE * 0.07)
+const PAD_SAMPLES = Math.round(SPEECH_WAV_SAMPLE_RATE * 0.14)
+
+function softenEnding(wav: Buffer): Buffer {
+  // Deepgram streams its wav, so the header's declared sizes are a
+  // placeholder; the samples are whatever follows the data chunk.
+  const marker = wav.indexOf('data')
+  if (marker === -1) return wav
+  const pcm = wav.subarray(marker + 8)
+  const sampleCount = Math.floor(pcm.length / 2)
+  if (sampleCount === 0) return wav
+
+  const out = Buffer.alloc((sampleCount + PAD_SAMPLES) * 2)
+  pcm.copy(out, 0, 0, sampleCount * 2)
+  const fade = Math.min(FADE_SAMPLES, sampleCount)
+  for (let i = 0; i < fade; i++) {
+    const at = (sampleCount - 1 - i) * 2
+    out.writeInt16LE(Math.round(out.readInt16LE(at) * (i / fade)), at)
+  }
+  return wavFile(out)
+}
+
+function wavFile(pcm: Buffer): Buffer {
+  const header = Buffer.alloc(44)
+  header.write('RIFF', 0)
+  header.writeUInt32LE(36 + pcm.length, 4)
+  header.write('WAVE', 8)
+  header.write('fmt ', 12)
+  header.writeUInt32LE(16, 16) // PCM chunk size
+  header.writeUInt16LE(1, 20) // uncompressed
+  header.writeUInt16LE(1, 22) // mono
+  header.writeUInt32LE(SPEECH_WAV_SAMPLE_RATE, 24)
+  header.writeUInt32LE(SPEECH_WAV_SAMPLE_RATE * 2, 28) // bytes per second
+  header.writeUInt16LE(2, 32) // bytes per sample
+  header.writeUInt16LE(16, 34) // bits per sample
+  header.write('data', 36)
+  header.writeUInt32LE(pcm.length, 40)
+  return Buffer.concat([header, pcm])
 }

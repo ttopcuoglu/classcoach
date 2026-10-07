@@ -94,12 +94,24 @@ async function sendToDeepgram(
 // before the full clip is synthesized), so this returns the raw Response
 // for the caller to pipe straight through rather than buffering the whole
 // thing into memory first.
-export async function synthesizeSpeechStream(text: string, voice?: string): Promise<Response> {
+// Linear PCM rather than mp3, for audio that is going to be edited before
+// anyone hears it. The mp3 encoder clips roughly 0.15s off the end of a
+// short clip — barely noticeable in a sentence, but it is most of the trail
+// on a thinking sound, which is what made them sound chopped.
+export const SPEECH_WAV_SAMPLE_RATE = 24000
+
+export async function synthesizeSpeechStream(
+  text: string,
+  voice?: string,
+  format: 'mp3' | 'wav' = 'mp3',
+): Promise<Response> {
   const apiKey = process.env.DEEPGRAM_API_KEY
   if (!apiKey) throw new Error('DEEPGRAM_API_KEY is not set')
 
   const safeVoice = isValidTalkVoice(voice) ? voice : DEFAULT_TALK_VOICE
-  const response = await fetch(`https://api.deepgram.com/v1/speak?model=aura-2-${safeVoice}-en&mip_opt_out=true`, {
+  const encoding =
+    format === 'wav' ? `&encoding=linear16&sample_rate=${SPEECH_WAV_SAMPLE_RATE}&container=wav` : ''
+  const response = await fetch(`https://api.deepgram.com/v1/speak?model=aura-2-${safeVoice}-en&mip_opt_out=true${encoding}`, {
     method: 'POST',
     headers: {
       Authorization: `Token ${apiKey}`,

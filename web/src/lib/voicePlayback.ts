@@ -396,19 +396,35 @@ export async function playQueue(
 // All of them have to fit ANY turn, because they are recorded before anyone
 // knows what the teacher said. That rules out the reactions Coach uses in
 // its actual replies: "Oof" is right half the time and badly wrong the other
-// half. Nothing here reads the news, invites the teacher to keep talking, or
-// runs long enough to be cut mid-word when the real reply arrives.
+// half, and "Oh..." or "Huh..." carry a read on news nobody has heard yet.
+//
+// Two measured rules shaped this list, and the server keeps the same one in
+// fillerPhrases.ts so the audio can be kept forever:
+//
+//  - Under ~0.9s, because the filler starts 400ms into the pause and Coach's
+//    first sentence lands around 1.2s. Anything longer is faded mid-word
+//    every time, which is what made the earlier, wordier set sound chopped.
+//    That rules out every two-part phrase: the voice pauses at the comma,
+//    so even "Mm, okay..." runs 2.5s.
+//  - Ending in "..." rather than ".", which makes the voice trail off rather
+//    than stop. "Mm-hmm." is the one exception, measuring better as it is.
 export const FILLER_PHRASES = [
+  'Mm...',
   'Mm-hmm.',
-  'Hmm.',
-  'I see.',
-  'Right.',
-  'Okay.',
-  'Yeah.',
-  'Got it.',
-  'Okay, so...',
-  'Mm, okay.',
-  'Right, okay.',
+  'Mhm...',
+  'Hmm...',
+  'Hm...',
+  'Yeah...',
+  'Yep...',
+  'Ah...',
+  'Okay...',
+  'Right...',
+  'Sure...',
+  'Uh-huh...',
+  'Got it...',
+  'Well...',
+  'So...',
+  'Alright...',
 ]
 
 export type Fillers = {
