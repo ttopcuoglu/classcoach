@@ -20,6 +20,7 @@ struct LessonPlanningView: View {
     private let tabs: [(label: String, value: String?)] = [
         ("Generate Ideas", "generate"),
         ("Get Feedback", "feedback"),
+        ("Review a Presentation", "presentation"),
         ("Review an Assignment", "assignment"),
     ]
 
@@ -30,6 +31,10 @@ struct LessonPlanningView: View {
 
             if tab == "assignment" {
                 AssignmentCoachView(embedded: true)
+            } else if tab == "presentation" {
+                // Brings its own scrolling, like the assignment tab, rather than
+                // nesting a ScrollView inside the one below.
+                PresentationReviewContent()
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {

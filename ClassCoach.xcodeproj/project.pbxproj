@@ -53,6 +53,7 @@
 		A5510008A5510008A5510008 /* AssignmentWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5510007A5510007A5510007 /* AssignmentWorkspaceView.swift */; };
 		F33384E63369E0CF83AAB58C /* LessonPlanningService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 511FF45676C58C84D82F00DC /* LessonPlanningService.swift */; };
 		A91E3AB0DF695B5C0D7750CA /* LessonPlanningView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2D7D552A2E51BEFFD552507 /* LessonPlanningView.swift */; };
+		D9E63FB04C7165EAC2039F56 /* PresentationReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAF74AC15D8276FBD314A067 /* PresentationReviewView.swift */; };
 		AB9B8367E14E648F73712E10 /* AudioSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC41C84EDAEEF4D28A99A4D7 /* AudioSession.swift */; };
 		AB14C09003B590801CF3DBFA /* AudioCoachingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 327797D3C4B2F09DEF6D0800 /* AudioCoachingService.swift */; };
 		3A1D7C4E0930F1B28E4A0012 /* AudioCompressor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A1D7C4E0930F1B28E4A0011 /* AudioCompressor.swift */; };
@@ -130,6 +131,7 @@
 		A5510007A5510007A5510007 /* AssignmentWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssignmentWorkspaceView.swift; sourceTree = "<group>"; };
 		511FF45676C58C84D82F00DC /* LessonPlanningService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonPlanningService.swift; sourceTree = "<group>"; };
 		A2D7D552A2E51BEFFD552507 /* LessonPlanningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonPlanningView.swift; sourceTree = "<group>"; };
+		EAF74AC15D8276FBD314A067 /* PresentationReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresentationReviewView.swift; sourceTree = "<group>"; };
 		EC41C84EDAEEF4D28A99A4D7 /* AudioSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSession.swift; sourceTree = "<group>"; };
 		327797D3C4B2F09DEF6D0800 /* AudioCoachingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCoachingService.swift; sourceTree = "<group>"; };
 		3A1D7C4E0930F1B28E4A0011 /* AudioCompressor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCompressor.swift; sourceTree = "<group>"; };
@@ -291,6 +293,7 @@
 			isa = PBXGroup;
 			children = (
 				A2D7D552A2E51BEFFD552507 /* LessonPlanningView.swift */,
+				EAF74AC15D8276FBD314A067 /* PresentationReviewView.swift */,
 				511FF45676C58C84D82F00DC /* LessonPlanningService.swift */,
 			);
 			path = LessonPlanning;
@@ -532,6 +535,7 @@
 				A5510006A5510006A5510006 /* AssignmentCoachView.swift in Sources */,
 				A5510008A5510008A5510008 /* AssignmentWorkspaceView.swift in Sources */,
 				A91E3AB0DF695B5C0D7750CA /* LessonPlanningView.swift in Sources */,
+				D9E63FB04C7165EAC2039F56 /* PresentationReviewView.swift in Sources */,
 				AB9B8367E14E648F73712E10 /* AudioSession.swift in Sources */,
 				AB14C09003B590801CF3DBFA /* AudioCoachingService.swift in Sources */,
 				3A1D7C4E0930F1B28E4A0012 /* AudioCompressor.swift in Sources */,
