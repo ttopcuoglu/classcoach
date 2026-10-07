@@ -617,23 +617,41 @@ export default function TalkToMe() {
   // which is the point: a punchline is never faded.
   const LET_THE_JOKE_FINISH_MS = 4000
 
+  // The join sound is about 0.6s. If 'ended' has not arrived by here,
+  // something is wrong with the element and the reply carries on regardless.
+  const JOIN_SOUND_GUARD_MS = 1500
+
   /// The short hum between Coach's own sentences. Played on the filler
   /// element and never awaited, so it tucks into the join that already
   /// exists — every sentence clip opens with about 100ms of Deepgram's
   /// silence — rather than making the reply longer.
-  function playJoinSound() {
+  function playJoinSound(): Promise<void> {
     const audio = fillerAudioRef.current
     const url = joinSoundRef.current
-    if (!audio || !url || !sessionActiveRef.current || bargedInRef.current) return
-    if (phaseRef.current !== 'speaking') return
+    if (!audio || !url || !sessionActiveRef.current || bargedInRef.current) return Promise.resolve()
+    if (phaseRef.current !== 'speaking') return Promise.resolve()
     // Something is already using the element: a gap filler, or the tail of
     // a thinking sound. Either outranks this.
-    if (!audio.paused) return
-    // Nothing ever waits for this to finish.
+    if (!audio.paused) return Promise.resolve()
     fillerHoldRef.current = 0
     audio.volume = 1
     audio.src = url
-    void audio.play().catch(() => {})
+    // Resolved when the clip (hum plus its beat) has finished, so Coach's
+    // next sentence starts after it rather than over it. Guarded by a
+    // timeout: a clip that never fires 'ended' must not stall the reply.
+    return new Promise<void>((resolve) => {
+      let done = false
+      const finish = () => {
+        if (done) return
+        done = true
+        window.clearTimeout(guard)
+        audio.removeEventListener('ended', finish)
+        resolve()
+      }
+      const guard = window.setTimeout(finish, JOIN_SOUND_GUARD_MS)
+      audio.addEventListener('ended', finish, { once: true })
+      void audio.play().catch(finish)
+    })
   }
 
   /// The between-sentence sound. Coach has already started answering and

@@ -288,9 +288,10 @@ export type GapHandler = {
   onOpen: () => void
   onClose: () => Promise<void>
   /// Called after a sentence when the next one is already in hand, which is
-  /// where a person would hesitate. Not awaited: the sound is meant to tuck
-  /// into the join, not lengthen it.
-  onJoin: () => void
+  /// where a person would hesitate. Awaited, so the hum and the beat after
+  /// it are heard before the next sentence starts — played underneath the
+  /// next sentence instead, it was simply buried.
+  onJoin: () => Promise<void>
 }
 
 export function createPlaybackQueue(
@@ -339,9 +340,9 @@ export function createPlaybackQueue(
     // Only when the next sentence is already here. If the queue has run dry
     // the gap machinery owns that silence, and this would be fighting it for
     // the same audio element.
-    const breatheIfMoreToCome = () => {
+    const breatheIfMoreToCome = async () => {
       if (!gap || cancellation.cancelled) return
-      if (i < pending.length) gap.onJoin()
+      if (i < pending.length) await gap.onJoin()
     }
 
     while (!cancellation.cancelled) {
@@ -372,12 +373,12 @@ export function createPlaybackQueue(
       if (clip.kind === 'blob') {
         await playOne(audio, clip.url, cancellation, announce)
         release(clip)
-        breatheIfMoreToCome()
+        await breatheIfMoreToCome()
         continue
       }
       const result = await playDirect(audio, clip.url, cancellation, announce)
       if (result === 'played' || cancellation.cancelled) {
-        breatheIfMoreToCome()
+        await breatheIfMoreToCome()
         continue
       }
       // Nothing was heard — download it the slow way rather than skipping a
@@ -389,7 +390,7 @@ export function createPlaybackQueue(
       }
       await playOne(audio, fallback, cancellation, announce)
       URL.revokeObjectURL(fallback)
-      breatheIfMoreToCome()
+      await breatheIfMoreToCome()
     }
     // Anything fetched but never played still holds an object URL.
     for (; i < pending.length; i++) release(await pending[i].catch(() => null))

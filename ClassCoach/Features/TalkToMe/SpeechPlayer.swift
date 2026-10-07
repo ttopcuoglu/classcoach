@@ -104,9 +104,9 @@ final class SpeechPlayer: NSObject, ObservableObject {
                 self.sentencesPlayed += 1
                 await self.playOne(data: data)
                 // Only when the next sentence is already here. If the queue
-                // has run dry the gap machinery owns that silence, and a
-                // breath would be fighting it for the same moment.
-                if !self.pending.isEmpty { self.playJoinSound() }
+                // has run dry the gap machinery owns that silence, and this
+                // would be fighting it for the same moment.
+                if !self.pending.isEmpty { await self.playJoinSound() }
             }
             if let self, gen == self.generation {
                 self.drainTask = nil
@@ -334,16 +334,23 @@ final class SpeechPlayer: NSObject, ObservableObject {
     }
 
     /// Played after a sentence when another is already in hand, which is
-    /// where a person would hesitate. On its own player and never awaited,
-    /// so it tucks into the join that already exists — every sentence clip
-    /// opens with about 100ms of Deepgram's own silence — rather than making
-    /// the reply longer.
-    private func playJoinSound() {
+    /// where a person would hesitate.
+    ///
+    /// Awaited, unlike the first version of this: played underneath Coach's
+    /// next sentence it was simply buried, audible only as a sound starting
+    /// and being cut off. The clip now carries its own beat and the reply
+    /// waits for it — about a third of a second per join, which is roughly
+    /// what a person takes between two sentences.
+    private func playJoinSound() async {
         guard let joinSound else { return }
         // A filler, or the tail of one, outranks this.
         guard fillerPlayer?.isPlaying != true else { return }
-        joinPlayer = try? AVAudioPlayer(data: joinSound)
-        joinPlayer?.play()
+        guard let player = try? AVAudioPlayer(data: joinSound) else { return }
+        joinPlayer = player
+        player.play()
+        // Slept rather than awaited on a delegate: this player has no
+        // continuation of its own, and the clip's length is known.
+        try? await Task.sleep(for: .milliseconds(Int(player.duration * 1000)))
     }
 
     private static func fetchAll(_ phrases: some Sequence<String>, voice: String?) async -> [Data] {

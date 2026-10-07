@@ -472,11 +472,19 @@ export function hesitationClip(voice: string | undefined): Promise<Buffer> {
 // joins are quiet, even, and identical, which is what makes a long reply
 // sound assembled rather than spoken.
 //
-// The short hum goes there, well under the speech around it, on its own
-// element so it tucks into the join rather than lengthening the reply. Softer
-// and darker than the one in front of a thinking sound, because this one
-// plays underneath Coach's own next sentence.
+// The short hum goes there, softer and darker than the one in front of a
+// thinking sound.
+//
+// It first played on its own element WITHOUT lengthening the reply, which
+// meant it started underneath Coach's next sentence and was buried by it —
+// audible as a sound beginning and being cut off, with no pause at all. The
+// cost of that design was zero and so was the benefit.
+//
+// So the beat is part of the clip now, and the reply waits for it. Between
+// two sentences a person stops for about a third of a second; that is what
+// this buys, at the price of the same third of a second per join.
 const JOIN_LEVEL = 0.11
+const JOIN_PAUSE_MS = 190
 
 export async function joinSound(voice: string | undefined): Promise<Buffer> {
   const draws = await hesitationDraws(voice)
@@ -485,8 +493,12 @@ export async function joinSound(voice: string | undefined): Promise<Buffer> {
   const sampleCount = Math.floor(lead.length / 2)
   const peak = peakOf(lead, sampleCount)
   if (peak === 0) return wavFile(lead)
-  // Scaled to a fixed level rather than to its neighbours: it plays over the
-  // start of the next sentence, whose loudness is not known here.
+  // Scaled to a fixed level rather than to its neighbours: there is nothing
+  // beside it to measure against, and it plays into a gap rather than under
+  // speech.
   const gain = Math.min(LEAD_IN_MAX_GAIN, (32767 * JOIN_LEVEL) / peak)
-  return wavFile(soften(lead, sampleCount, gain))
+  const pause = Math.round((SPEECH_WAV_SAMPLE_RATE * JOIN_PAUSE_MS) / 1000)
+  const out = Buffer.alloc((sampleCount + pause) * 2)
+  soften(lead, sampleCount, gain).copy(out, 0)
+  return wavFile(out)
 }
