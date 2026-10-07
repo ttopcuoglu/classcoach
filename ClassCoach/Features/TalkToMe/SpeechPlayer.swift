@@ -106,7 +106,7 @@ final class SpeechPlayer: NSObject, ObservableObject {
                 // Only when the next sentence is already here. If the queue
                 // has run dry the gap machinery owns that silence, and a
                 // breath would be fighting it for the same moment.
-                if !self.pending.isEmpty { self.playJoinBreath() }
+                if !self.pending.isEmpty { self.playJoinSound() }
             }
             if let self, gen == self.generation {
                 self.drainTask = nil
@@ -136,8 +136,8 @@ final class SpeechPlayer: NSObject, ObservableObject {
         pending.removeAll()
         drainTask = nil
         cancelThinking()
-        breathPlayer?.stop()
-        breathPlayer = nil
+        joinPlayer?.stop()
+        joinPlayer = nil
         player?.stop()
         continuation?.resume()
         continuation = nil
@@ -298,9 +298,9 @@ final class SpeechPlayer: NSObject, ObservableObject {
     /// finish; everything else gets the ordinary beat.
     private var currentHold: TimeInterval = 0
     private var jokePlaying = false
-    /// The between-sentence breath, fetched once a conversation.
-    private var joinBreath: Data?
-    private var breathPlayer: AVAudioPlayer?
+    /// The between-sentence hum, fetched once a conversation.
+    private var joinSound: Data?
+    private var joinPlayer: AVAudioPlayer?
     /// Sentences played in the current turn. A gap sound belongs between
     /// sentences, so nothing happens until Coach has said one.
     private var sentencesPlayed = 0
@@ -317,24 +317,24 @@ final class SpeechPlayer: NSObject, ObservableObject {
         async let starters = Self.fetchAll(Self.shortFillers.shuffled().prefix(Self.clipsPerPool), voice: voice)
         async let gaps = Self.fetchAll(Self.betweenFillers.shuffled().prefix(Self.clipsPerPool), voice: voice)
         async let witty = Self.fetchAll(Self.wittyFillers.shuffled().prefix(Self.wittyClipCount), voice: voice)
-        async let breath = try? TalkToMeService.fetchBreath()
+        async let join = try? TalkToMeService.fetchJoinSound(voice: voice)
         starterClips = await starters
         gapClips = await gaps
         wittyClips = await witty
-        joinBreath = await breath
+        joinSound = await join
     }
 
     /// Played after a sentence when another is already in hand, which is
-    /// where a person would breathe. On its own player and never awaited, so
-    /// it tucks into the join that already exists — every sentence clip opens
-    /// with about 100ms of Deepgram's own silence — rather than making the
-    /// reply longer.
-    private func playJoinBreath() {
-        guard let joinBreath else { return }
-        // A filler, or the tail of one, outranks a breath.
+    /// where a person would hesitate. On its own player and never awaited,
+    /// so it tucks into the join that already exists — every sentence clip
+    /// opens with about 100ms of Deepgram's own silence — rather than making
+    /// the reply longer.
+    private func playJoinSound() {
+        guard let joinSound else { return }
+        // A filler, or the tail of one, outranks this.
         guard fillerPlayer?.isPlaying != true else { return }
-        breathPlayer = try? AVAudioPlayer(data: joinBreath)
-        breathPlayer?.play()
+        joinPlayer = try? AVAudioPlayer(data: joinSound)
+        joinPlayer?.play()
     }
 
     private static func fetchAll(_ phrases: some Sequence<String>, voice: String?) async -> [Data] {

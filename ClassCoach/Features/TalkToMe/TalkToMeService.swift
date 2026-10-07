@@ -133,9 +133,11 @@ enum TalkToMeService {
         return try await APIClient.shared.rawGet("/api/tts", queryItems: query)
     }
 
-    /// The breath Coach takes between its own sentences. Synthesized noise,
-    /// not speech — no text, no voice, the same bytes for everyone.
-    static func fetchBreath() async throws -> Data {
-        try await APIClient.shared.rawGet("/api/tts/breath", queryItems: [])
+    /// The short hum Coach makes between its own sentences. No text — one
+    /// clip per voice, cached on both sides.
+    static func fetchJoinSound(voice: String?) async throws -> Data {
+        var query: [URLQueryItem] = []
+        if let voice { query.append(URLQueryItem(name: "voice", value: voice)) }
+        return try await APIClient.shared.rawGet("/api/tts/join", queryItems: query)
     }
 }

@@ -1333,10 +1333,13 @@ export function buildSpeechUrl(text: string, voice?: TalkVoice | null): string {
   return `${API_BASE_URL}/api/tts?${query.toString()}`
 }
 
-/// The between-sentence breath: no text, no voice, the same bytes for
-/// everyone.
-export function buildBreathUrl(): string {
-  return `${API_BASE_URL}/api/tts/breath`
+/// The short hum Coach makes between its own sentences. No text — one clip
+/// per voice, cached hard on both sides.
+export function buildJoinSoundUrl(voice?: TalkVoice | null): string {
+  const query = new URLSearchParams()
+  if (voice) query.set('voice', voice)
+  const suffix = query.toString()
+  return `${API_BASE_URL}/api/tts/join${suffix ? `?${suffix}` : ''}`
 }
 
 export function setDebriefSaved(id: string, saved: boolean): Promise<Debrief> {

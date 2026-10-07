@@ -2,21 +2,29 @@ import { Router } from 'express'
 import { Readable } from 'node:stream'
 import { synthesizeSpeechStream } from '../lib/deepgram.ts'
 import { isFillerPhrase } from '../lib/fillerPhrases.ts'
-import { breathClip, fillerAudio, takeSpeech } from '../lib/speechCache.ts'
+import { fillerAudio, joinSound, takeSpeech } from '../lib/speechCache.ts'
 
 export const ttsRouter = Router()
 
 const MAX_TEXT_LENGTH = 2000
 
-// The breath Coach takes between its own sentences. Synthesized noise, not
-// speech — no Deepgram call, nothing per-teacher, the same bytes for
-// everyone — so it is built once and may be cached hard at the client.
-ttsRouter.get('/breath', (_req, res) => {
-  const audio = breathClip()
-  res.setHeader('Content-Type', 'audio/wav')
-  res.setHeader('Content-Length', String(audio.length))
-  res.setHeader('Cache-Control', 'private, max-age=604800')
-  res.end(audio)
+// The short hum Coach makes between its own sentences. One clip per voice,
+// synthesized once for the life of the process, so the client may keep its
+// own copy for a week.
+ttsRouter.get('/join', async (req, res) => {
+  const voice = typeof req.query.voice === 'string' ? req.query.voice : undefined
+  try {
+    const audio = await joinSound(voice)
+    res.setHeader('Content-Type', 'audio/wav')
+    res.setHeader('Content-Length', String(audio.length))
+    res.setHeader('Cache-Control', 'private, max-age=604800')
+    res.end(audio)
+  } catch (error) {
+    console.error('[tts] join sound failed:', error)
+    // Nothing depends on this: a client that cannot get it simply plays no
+    // sound at the joins.
+    res.status(502).json({ error: 'could not synthesize' })
+  }
 })
 
 // GET, not POST — an <audio src="..."> element can only stream natively

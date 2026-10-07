@@ -1,5 +1,5 @@
 import { SPEECH_WAV_SAMPLE_RATE, synthesizeSpeechStream } from './deepgram.ts'
-import { BREATHY_PHRASES, isGapFillerPhrase, isWittyFillerPhrase } from './fillerPhrases.ts'
+import { LEAD_IN_PHRASES, isGapFillerPhrase, isWittyFillerPhrase } from './fillerPhrases.ts'
 import { DEFAULT_TALK_VOICE, isValidTalkVoice } from './talkVoices.ts'
 
 // Starts synthesizing a sentence before anyone asks for it.
@@ -157,7 +157,7 @@ export function fillerAudio(text: string, voice: string | undefined): Promise<Bu
     const audio = Buffer.from(await upstream.arrayBuffer())
     if (audio.length === 0) throw new Error('Deepgram returned no audio')
     const settled = softenEnding(audio, isGapFillerPhrase(phrase), isWittyFillerPhrase(phrase))
-    return BREATHY_PHRASES.has(phrase) ? withBreath(settled, phrase) : settled
+    return LEAD_IN_PHRASES.has(phrase) ? await withLeadIn(settled, voice) : settled
   })()
   // A failure must not be remembered as the answer forever.
   clip.catch(() => fillerClips.delete(key))
@@ -290,169 +290,150 @@ function wavFile(pcm: Buffer): Buffer {
 }
 
 // ---------------------------------------------------------------------------
-// Breath
+// The hesitation in front of a thinking sound
 // ---------------------------------------------------------------------------
 //
-// Asked for, and worth the trouble: a thinking sound that arrives out of
-// nowhere still reads as a machine, where the same sound after an intake of
-// breath reads as somebody gathering themselves. Deepgram has no breath to
-// request — "Phew", "Hhh" and "*sigh*" are all spoken as words — so it is
-// made here.
+// A thinking sound that arrives out of nowhere still reads as a machine,
+// where the same sound after a hesitation reads as somebody gathering
+// themselves.
 //
-// The first attempt swept a low-pass filter open across the clip, which is
-// exactly how you synthesize a whoosh: a smooth sweep is a jet of air, not a
-// person. A breath is turbulent noise in a more or less FIXED band — a broad
-// one around 500Hz with a little hiss above it — and what makes it read as
-// breath is that the loudness flutters irregularly while the shape of it
-// rises slowly and falls more slowly still.
+// This began as a synthesized inhale, which was the wrong instrument: noise
+// shaped to sound like breathing sounds like air, and the version that swept
+// a filter open sounded like a whoosh, because that is what a sweep is.
+// Coach's own voice can just hum, which is more convincing than any of it
+// and costs nothing after the first time — these are cached as hard as the
+// phrases themselves.
 //
-// Baked in once when a clip is cached, so it costs nothing per turn.
+// Aura will not say the same thing twice. The identical request for
+// "Hmmm..." came back at 0.76s, then 0.36s, then 0.44s, with peaks of 6068,
+// 5088 and 10992 — and "Mm..." once came back at a peak of 371, which is
+// silence. So neither the length nor the level of a hesitation can be chosen
+// by choosing its spelling, and an earlier version of this that picked
+// between a "long" and a "short" hum was choosing between two draws of the
+// same dice.
+//
+// Instead: ask a few times and keep the usable ones. It happens once per
+// voice for the life of the process, so a handful of requests costs nothing,
+// it turns a lottery into clips we have actually looked at, and because the
+// draws differ Coach does not hum in exactly the same way every time.
+const LEAD_IN_SOUND = 'Hmmm...'
+const LEAD_IN_DRAWS = 3
+// Below this a draw is effectively silent, and amplifying it just raises its
+// own noise.
+const MIN_USABLE_PEAK = 2000
+// And a long draw is as bad as a quiet one: a hesitation is a beat, not a
+// sigh, and anything longer eats the budget below.
+const MAX_LEAD_IN_MS = 700
 
-// A real inhale in speech runs 300-700ms. Longer sounds like a sigh, and
-// shorter has to be loud to be heard at all, which is the whoosh again.
-const BREATH_MS = 620
-const BREATH_GAP_MS = 55
-// The shortest worth having: under this it stops sounding like breathing.
-const MIN_BREATH_MS = 400
-// Measured against the clip's own peak: a real breath beside speech sits far
-// below it, and anything louder sounds like exasperation.
-const BREATH_LEVEL = 0.095
-// The band. Low and broad for the body of it, with a quieter, brighter layer
-// for the air — a single band alone sounds like a filtered hiss.
-const BREATH_HZ = 520
-const BREATH_Q = 0.65
-const BREATH_AIR_HZ = 2600
-const BREATH_AIR_Q = 1.2
-const BREATH_AIR_LEVEL = 0.22
-// The rise takes half the breath; the fall takes the rest and is gentler.
-const BREATH_ATTACK = 0.5
-// Turbulence: how much the loudness wanders, and how quickly.
-const BREATH_FLUTTER = 0.22
-const BREATH_FLUTTER_HZ = 28
-
-// Seeded, so a given phrase always breathes the same way rather than
-// sounding different each time the cache is rebuilt.
-function seededRandom(seed: number): () => number {
-  let state = seed >>> 0
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0
-    let t = Math.imul(state ^ (state >>> 15), 1 | state)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-/// One band of a two-pole band-pass (RBJ cookbook), which is what gives the
-/// noise a formant rather than a hiss.
-function bandPass(input: Float64Array, hz: number, q: number): Float64Array {
-  const w0 = (2 * Math.PI * hz) / SPEECH_WAV_SAMPLE_RATE
-  const alpha = Math.sin(w0) / (2 * q)
-  const a0 = 1 + alpha
-  const b0 = alpha / a0
-  const b2 = -alpha / a0
-  const a1 = (-2 * Math.cos(w0)) / a0
-  const a2 = (1 - alpha) / a0
-  const out = new Float64Array(input.length)
-  let x1 = 0
-  let x2 = 0
-  let y1 = 0
-  let y2 = 0
-  for (let i = 0; i < input.length; i++) {
-    const x = input[i]
-    const y = b0 * x + b2 * x2 - a1 * y1 - a2 * y2
-    x2 = x1
-    x1 = x
-    y2 = y1
-    y1 = y
-    out[i] = y
-  }
-  return out
-}
-
-function breathSamples(ms: number, peak: number, seed: number): Int16Array {
-  const length = Math.round((SPEECH_WAV_SAMPLE_RATE * ms) / 1000)
-  const random = seededRandom(seed)
-  const white = new Float64Array(length)
-  for (let i = 0; i < length; i++) white[i] = random() * 2 - 1
-
-  const body = bandPass(white, BREATH_HZ, BREATH_Q)
-  const air = bandPass(white, BREATH_AIR_HZ, BREATH_AIR_Q)
-
-  // The flutter is its own slow noise, not a tone: a regular wobble would
-  // read as tremolo.
-  const flutterCoeff = Math.min(1, (BREATH_FLUTTER_HZ * 2 * Math.PI) / SPEECH_WAV_SAMPLE_RATE)
-  const flutterNoise = seededRandom(seed + 7)
-  const flutter = new Float64Array(length)
-  let smoothed = 0
-  let flutterPeak = 1e-9
-  for (let i = 0; i < length; i++) {
-    smoothed += flutterCoeff * (flutterNoise() * 2 - 1 - smoothed)
-    flutter[i] = smoothed
-    flutterPeak = Math.max(flutterPeak, Math.abs(smoothed))
-  }
-
-  let mixPeak = 1e-9
-  const mixed = new Float64Array(length)
-  for (let i = 0; i < length; i++) {
-    mixed[i] = body[i] + BREATH_AIR_LEVEL * air[i]
-    mixPeak = Math.max(mixPeak, Math.abs(mixed[i]))
-  }
-
-  const out = new Int16Array(length)
-  for (let i = 0; i < length; i++) {
-    const t = i / length
-    const envelope =
-      t < BREATH_ATTACK
-        ? // smooth rise
-          ((u) => u * u * (3 - 2 * u))(t / BREATH_ATTACK)
-        : // and a longer, gentler fall
-          Math.pow(1 - (t - BREATH_ATTACK) / (1 - BREATH_ATTACK), 1.6)
-    const value = (mixed[i] / mixPeak) * envelope * (1 + BREATH_FLUTTER * (flutter[i] / flutterPeak)) * peak
-    out[i] = Math.round(Math.max(-1, Math.min(1, value)) * 32767)
-  }
-  return out
-}
+// Aura's level for these is a lottery even among usable draws, so a
+// hesitation is scaled to a fixed share of the words it precedes rather than
+// trusted as recorded. Under half, so it sits beneath them as a real one
+// does.
+const LEAD_IN_LEVEL = 0.45
+// A cap on that scaling, so a quiet clip is left quiet rather than being
+// amplified into its own noise floor.
+const LEAD_IN_MAX_GAIN = 3
+const LEAD_IN_GAP_MS = 80
 
 // A thinking sound only plays in full if it fits inside the beat before
 // Coach's reply: the clip starts about 250ms into the pause, the first
 // sentence is ready around 0.9s later, and a clip with 1.2s or less left is
-// then allowed to finish (HOLD_FOR_FILLER_MS). So a clip over about this
-// long is faded mid-word, and a breath that pushes it over the line costs
-// more than it adds.
+// then allowed to finish (HOLD_FOR_FILLER_MS). Past this it is faded
+// mid-word, and a hesitation that pushes it over the line has cost more than
+// it added.
 const CLIP_BUDGET_MS = 2100
 
-/// Puts an intake of breath in front of a clip — as long a one as will fit
-/// before the reply arrives, and none at all when the words alone already
-/// fill the beat.
-export function withBreath(wav: Buffer, phrase: string): Buffer {
+function peakOf(pcm: Buffer, sampleCount: number): number {
+  let peak = 0
+  for (let i = 0; i < sampleCount; i++) peak = Math.max(peak, Math.abs(pcm.readInt16LE(i * 2)))
+  return peak
+}
+
+/// The hesitation sounds for a voice: raw samples, trimmed of Deepgram's
+/// leading silence, the usable draws kept for good.
+const hesitations = new Map<string, Promise<Buffer[]>>()
+
+function hesitationDraws(voice: string | undefined): Promise<Buffer[]> {
+  const key = keyFor(LEAD_IN_SOUND, voice)
+  const existing = hesitations.get(key)
+  if (existing) return existing
+
+  const draws = (async () => {
+    const usable: Buffer[] = []
+    let loudest: Buffer | null = null
+    let loudestPeak = 0
+    for (let draw = 0; draw < LEAD_IN_DRAWS; draw++) {
+      const upstream = await synthesizeSpeechStream(LEAD_IN_SOUND, voice, 'wav')
+      const audio = Buffer.from(await upstream.arrayBuffer())
+      const marker = audio.indexOf('data')
+      if (marker === -1) continue
+      const whole = audio.subarray(marker + 8)
+      const trimmed = trimLeadingSilence(whole, Math.floor(whole.length / 2))
+      const count = Math.floor(trimmed.length / 2)
+      if (count === 0) continue
+      if ((count / SPEECH_WAV_SAMPLE_RATE) * 1000 > MAX_LEAD_IN_MS) continue
+      const peak = peakOf(trimmed, count)
+      if (peak > loudestPeak) {
+        loudest = trimmed
+        loudestPeak = peak
+      }
+      if (peak >= MIN_USABLE_PEAK) usable.push(trimmed)
+    }
+    // A draw that is merely quiet still beats no hesitation at all, since it
+    // is levelled against the words it precedes anyway.
+    if (usable.length === 0 && loudest) usable.push(loudest)
+    if (usable.length === 0) throw new Error('no usable hesitation came back')
+    return usable
+  })()
+  draws.catch(() => hesitations.delete(key))
+  hesitations.set(key, draws)
+  return draws
+}
+
+/// Puts a hesitation in front of a clip — the longest one that still fits
+/// before the reply arrives, and none at all when the words already fill the
+/// beat on their own.
+export async function withLeadIn(wav: Buffer, voice: string | undefined): Promise<Buffer> {
   const marker = wav.indexOf('data')
   if (marker === -1) return wav
   const pcm = wav.subarray(marker + 8)
   const sampleCount = Math.floor(pcm.length / 2)
   if (sampleCount === 0) return wav
+  const phrasePeak = peakOf(pcm, sampleCount)
+  if (phrasePeak === 0) return wav
 
   const speechMs = (sampleCount / SPEECH_WAV_SAMPLE_RATE) * 1000
-  const room = CLIP_BUDGET_MS - speechMs - BREATH_GAP_MS
-  const breathMs = Math.min(BREATH_MS, room)
-  if (breathMs < MIN_BREATH_MS) return wav
+  const gap = Math.round((SPEECH_WAV_SAMPLE_RATE * LEAD_IN_GAP_MS) / 1000)
+  const room = CLIP_BUDGET_MS - speechMs - LEAD_IN_GAP_MS
+  if (room <= 0) return wav
 
-  let peak = 0
-  for (let i = 0; i < sampleCount; i++) peak = Math.max(peak, Math.abs(pcm.readInt16LE(i * 2)))
-  if (peak === 0) return wav
+  let draws: Buffer[]
+  try {
+    draws = await hesitationDraws(voice)
+  } catch (error) {
+    console.error('[speech] hesitation failed:', error)
+    return wav
+  }
+  // Only the draws that fit the room left, and a different one each time a
+  // phrase is cached.
+  const fits = draws.filter((d) => (Math.floor(d.length / 2) / SPEECH_WAV_SAMPLE_RATE) * 1000 <= room)
+  if (fits.length === 0) return wav
+  const lead = fits[Math.floor(Math.random() * fits.length)]
+  const leadSamples = Math.floor(lead.length / 2)
+  const leadPeak = peakOf(lead, leadSamples)
+  if (leadPeak === 0) return wav
 
-  let seed = 0
-  for (let i = 0; i < phrase.length; i++) seed = (seed * 31 + phrase.charCodeAt(i)) >>> 0
-  const breath = breathSamples(breathMs, (peak / 32767) * BREATH_LEVEL, seed)
-  const gap = Math.round((SPEECH_WAV_SAMPLE_RATE * BREATH_GAP_MS) / 1000)
-
-  const out = Buffer.alloc((breath.length + gap + sampleCount) * 2)
-  for (let i = 0; i < breath.length; i++) out.writeInt16LE(breath[i], i * 2)
-  pcm.copy(out, (breath.length + gap) * 2, 0, sampleCount * 2)
+  const gain = Math.min(LEAD_IN_MAX_GAIN, (phrasePeak * LEAD_IN_LEVEL) / leadPeak)
+  const out = Buffer.alloc((leadSamples + gap + sampleCount) * 2)
+  for (let i = 0; i < leadSamples; i++) {
+    out.writeInt16LE(Math.round(lead.readInt16LE(i * 2) * gain), i * 2)
+  }
+  pcm.copy(out, (leadSamples + gap) * 2, 0, sampleCount * 2)
   return wavFile(out)
 }
 
 // ---------------------------------------------------------------------------
-// The breath between sentences
+// The sound between sentences
 // ---------------------------------------------------------------------------
 //
 // A reply of three sentences is three separate clips played back to back,
@@ -460,17 +441,21 @@ export function withBreath(wav: Buffer, phrase: string): Buffer {
 // joins are quiet, even, and identical, which is what makes a long reply
 // sound assembled rather than spoken.
 //
-// A person breathes there. This is that breath: quieter and shorter than the
-// one in front of a thinking sound, and played on its own element so it
-// tucks into the join that already exists instead of adding to it. It costs
-// nothing at all to make — no Deepgram call, just noise — and is the same
-// for everyone, so it is built once for the life of the process.
-const JOIN_BREATH_MS = 260
-const JOIN_BREATH_LEVEL = 0.055
+// The short hum goes there, well under the speech around it, on its own
+// element so it tucks into the join rather than lengthening the reply.
+const JOIN_LEVEL = 0.18
 
-let joinBreath: Buffer | null = null
-
-export function breathClip(): Buffer {
-  joinBreath ??= wavFile(Buffer.from(breathSamples(JOIN_BREATH_MS, JOIN_BREATH_LEVEL, 101).buffer))
-  return joinBreath
+export async function joinSound(voice: string | undefined): Promise<Buffer> {
+  const draws = await hesitationDraws(voice)
+  // The shortest of them: this one plays inside a join, not into silence.
+  const lead = draws.reduce((a, b) => (a.length <= b.length ? a : b))
+  const sampleCount = Math.floor(lead.length / 2)
+  const peak = peakOf(lead, sampleCount)
+  if (peak === 0) return wavFile(lead)
+  // Scaled to a fixed level rather than to its neighbours: it plays over the
+  // start of the next sentence, whose loudness is not known here.
+  const gain = Math.min(LEAD_IN_MAX_GAIN, (32767 * JOIN_LEVEL) / peak)
+  const out = Buffer.alloc(sampleCount * 2)
+  for (let i = 0; i < sampleCount; i++) out.writeInt16LE(Math.round(lead.readInt16LE(i * 2) * gain), i * 2)
+  return wavFile(out)
 }

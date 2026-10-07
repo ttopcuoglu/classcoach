@@ -1,4 +1,4 @@
-import { buildBreathUrl, buildSpeechUrl, type TalkVoice } from './api'
+import { buildJoinSoundUrl, buildSpeechUrl, type TalkVoice } from './api'
 
 // Shared by Talk It Through and Lesson Debrief's Reflect tab — both need
 // the identical sentence-splitting/prefetch/playback behavior (including
@@ -93,12 +93,12 @@ export async function fetchSentenceAudio(sentence: string, voice: TalkVoice | nu
   }
 }
 
-/// The breath Coach takes between its own sentences, fetched once a
-/// conversation. Not voice-specific — it is synthesized noise, the same for
-/// everyone — and free to make, so the server caches it hard.
-export async function loadJoinBreath(): Promise<string | null> {
+/// The short hum Coach makes between its own sentences, fetched once a
+/// conversation. In the teacher's own Coach voice, and the same clip every
+/// time, so both sides cache it.
+export async function loadJoinSound(voice: TalkVoice | null): Promise<string | null> {
   try {
-    const res = await fetch(buildBreathUrl(), { credentials: 'include' })
+    const res = await fetch(buildJoinSoundUrl(voice), { credentials: 'include' })
     if (!res.ok) return null
     return URL.createObjectURL(await res.blob())
   } catch {
@@ -288,7 +288,7 @@ export type GapHandler = {
   onOpen: () => void
   onClose: () => Promise<void>
   /// Called after a sentence when the next one is already in hand, which is
-  /// where a person would breathe. Not awaited: the breath is meant to tuck
+  /// where a person would hesitate. Not awaited: the sound is meant to tuck
   /// into the join, not lengthen it.
   onJoin: () => void
 }
@@ -337,8 +337,8 @@ export function createPlaybackQueue(
       await gap.onClose()
     }
     // Only when the next sentence is already here. If the queue has run dry
-    // the gap machinery owns that silence, and a breath would be fighting it
-    // for the same audio element.
+    // the gap machinery owns that silence, and this would be fighting it for
+    // the same audio element.
     const breatheIfMoreToCome = () => {
       if (!gap || cancellation.cancelled) return
       if (i < pending.length) gap.onJoin()

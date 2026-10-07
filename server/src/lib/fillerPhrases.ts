@@ -42,10 +42,14 @@ export const FILLER_PHRASES = [
   "Hmm, okay...",
 ]
 
-// A breath before "Let me think..." reads as someone gathering themselves.
-// A breath before "Okay, so..." reads as someone about to make a speech, so
-// only the ones that are already a thought get one.
-export const BREATHY_PHRASES = new Set([
+// A soft "Hmmm..." in front of "Let me think..." reads as someone gathering
+// themselves. In front of "Okay, so..." it reads as someone about to make a
+// speech, so only the ones that are already a thought get one.
+//
+// This replaced a synthesized inhale. Noise shaped to sound like breathing
+// kept sounding like air instead — and Coach's own voice can simply hum,
+// which is both more convincing and free after the first time.
+export const LEAD_IN_PHRASES = new Set([
   "Let me see...",
   "Well, let's see...",
   "Okay, let's see...",
