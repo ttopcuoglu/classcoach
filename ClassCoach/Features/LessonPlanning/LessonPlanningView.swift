@@ -8,7 +8,14 @@ import SwiftUI
 /// section chips do, so the assignment tab can bring its own scrolling instead of
 /// nesting one ScrollView inside another.
 struct LessonPlanningView: View {
-    @State private var tab = "generate"
+    @State private var tab: String
+
+    /// Lets a caller open straight onto a chip, the way the web's
+    /// `/lesson-planning?tab=assignment` does — Home links to the assignment
+    /// review rather than to a second, separate Assignment Coach screen.
+    init(initialTab: String = "generate") {
+        _tab = State(initialValue: initialTab)
+    }
 
     private let tabs: [(label: String, value: String?)] = [
         ("Generate Ideas", "generate"),
