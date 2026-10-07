@@ -1,5 +1,5 @@
 import { SPEECH_WAV_SAMPLE_RATE, synthesizeSpeechStream } from './deepgram.ts'
-import { BREATHY_PHRASES, isBetweenFillerPhrase } from './fillerPhrases.ts'
+import { BREATHY_PHRASES, isGapFillerPhrase, isWittyFillerPhrase } from './fillerPhrases.ts'
 import { DEFAULT_TALK_VOICE, isValidTalkVoice } from './talkVoices.ts'
 
 // Starts synthesizing a sentence before anyone asks for it.
@@ -156,7 +156,7 @@ export function fillerAudio(text: string, voice: string | undefined): Promise<Bu
     const upstream = await synthesizeSpeechStream(phrase, voice, 'wav')
     const audio = Buffer.from(await upstream.arrayBuffer())
     if (audio.length === 0) throw new Error('Deepgram returned no audio')
-    const settled = softenEnding(audio, isBetweenFillerPhrase(phrase))
+    const settled = softenEnding(audio, isGapFillerPhrase(phrase), isWittyFillerPhrase(phrase))
     return BREATHY_PHRASES.has(phrase) ? withBreath(settled, phrase) : settled
   })()
   // A failure must not be remembered as the answer forever.
@@ -219,6 +219,9 @@ const MAX_INNER_PAUSE_MS = 220
 // a hesitation noise nobody was listening to the end of.
 const MAX_GAP_CLIP_MS = 2400
 
+// Except for the ones with a joke in them, where the ending is the point.
+const MAX_WITTY_CLIP_MS = 3000
+
 function collapseInnerPauses(pcm: Buffer): Buffer {
   const sampleCount = Math.floor(pcm.length / 2)
   const floor = silenceFloor(pcm, sampleCount)
@@ -240,12 +243,13 @@ function collapseInnerPauses(pcm: Buffer): Buffer {
   return out.subarray(0, written * 2)
 }
 
-function capLength(pcm: Buffer): Buffer {
-  const limit = Math.round((SPEECH_WAV_SAMPLE_RATE * MAX_GAP_CLIP_MS) / 1000) * 2
+function capLength(pcm: Buffer, witty: boolean): Buffer {
+  const ms = witty ? MAX_WITTY_CLIP_MS : MAX_GAP_CLIP_MS
+  const limit = Math.round((SPEECH_WAV_SAMPLE_RATE * ms) / 1000) * 2
   return pcm.length > limit ? pcm.subarray(0, limit) : pcm
 }
 
-function softenEnding(wav: Buffer, collapse = false): Buffer {
+function softenEnding(wav: Buffer, collapse = false, witty = false): Buffer {
   // Deepgram streams its wav, so the header's declared sizes are a
   // placeholder; the samples are whatever follows the data chunk.
   const marker = wav.indexOf('data')
@@ -253,7 +257,7 @@ function softenEnding(wav: Buffer, collapse = false): Buffer {
   const whole = wav.subarray(marker + 8)
   if (Math.floor(whole.length / 2) === 0) return wav
   const trimmed = trimLeadingSilence(whole, Math.floor(whole.length / 2))
-  const pcm = collapse ? capLength(collapseInnerPauses(trimmed)) : trimmed
+  const pcm = collapse ? capLength(collapseInnerPauses(trimmed), witty) : trimmed
   const sampleCount = Math.floor(pcm.length / 2)
   if (sampleCount === 0) return wav
 

@@ -496,12 +496,72 @@ export const BETWEEN_FILLER_PHRASES = [
   "...well... hmm...",
 ]
 
+// The third pool: the same gaps, with a joke in them.
+//
+// These are the one kind that has to be heard to the end — "...my words took
+// the scenic route..." faded after "...my words took the..." is worse than
+// silence — so they are never faded for a sentence that is ready, only for
+// a teacher who starts talking. Which is also why they are rare: a joke
+// Coach refuses to be interrupted out of is charming once a conversation
+// and wearing by the fourth time.
+export const WITTY_FILLER_PHRASES = [
+  "...well... the wheels are turning...",
+  "...so... little mental pit stop...",
+  "...hmm... a little traffic upstairs...",
+  "...well... my words took the scenic route...",
+  "...so... the gears are warming up...",
+  "...hmm... just catching a wandering thought...",
+  "...well... one brain cell at a time...",
+  "...so... the mental hamster is running...",
+  "...well... my brain and mouth are negotiating...",
+]
+
+// Roughly one gap in four, and never two running. The rest of the time the
+// plain hesitation noises do the work.
+export const WITTY_GAP_CHANCE = 0.25
+
+// Coach has just reacted to something painful: "Ugh, that's rough." — and
+// then "the mental hamster is running" would be the worst thing this
+// feature could do. Checked against Coach's own first sentence, which is
+// where the prompt puts its sympathy, and it silences the jokes for the
+// rest of that turn. Kept in step with SpeechPlayer.swift.
+const SYMPATHY_MARKERS = [
+  'oof',
+  'ugh',
+  'oh no',
+  "i'm sorry",
+  'im sorry',
+  "that's rough",
+  "that's hard",
+  "that's awful",
+  "that's a lot",
+  "that's frustrating",
+  'sounds hard',
+  'sounds exhausting',
+  'long day',
+  'rough day',
+  'exhausting',
+  'overwhelming',
+  'in tears',
+  'crying',
+  'burnt out',
+  'burned out',
+]
+
+/// Whether Coach's own words mean this is not a moment for a joke.
+export function soundsLikeAHardMoment(sentence: string): boolean {
+  const text = sentence.toLowerCase()
+  return SYMPATHY_MARKERS.some((marker) => text.includes(marker))
+}
+
 export type Fillers = {
   /// A clip that is not the one played last, so Coach does not say "Hmm"
   /// twice in a row. Null when none loaded.
   nextStarter: () => string | null
   /// The same, from the between-sentence pool.
   nextGap: () => string | null
+  /// A gap filler with a joke in it, for the rare turn that gets one.
+  nextWitty: () => string | null
   release: () => void
 }
 
@@ -509,7 +569,11 @@ export type Fillers = {
 // a lot to spend on a teacher's cellular data for sounds they will hear
 // perhaps ten of. A handful from each pool gives all the variety a single
 // conversation can use, and a different handful next time.
-const CLIPS_PER_POOL = 8
+const CLIPS_PER_POOL = 6
+
+// Fewer still of these: they are drawn a quarter as often, and three is
+// already more than one conversation will get through.
+const WITTY_CLIPS = 3
 
 function sample<T>(items: readonly T[], count: number): T[] {
   const pool = items.slice()
@@ -533,18 +597,24 @@ function rotate(urls: string[]): () => string | null {
 }
 
 export async function loadFillers(voice: TalkVoice | null): Promise<Fillers> {
-  const fetchPool = async (phrases: readonly string[]) =>
-    (await Promise.all(sample(phrases, CLIPS_PER_POOL).map((phrase) => fetchSentenceAudio(phrase, voice)))).filter(
+  const fetchPool = async (phrases: readonly string[], count: number) =>
+    (await Promise.all(sample(phrases, count).map((phrase) => fetchSentenceAudio(phrase, voice)))).filter(
       (url): url is string => url !== null,
     )
-  const [starters, gaps] = await Promise.all([fetchPool(FILLER_PHRASES), fetchPool(BETWEEN_FILLER_PHRASES)])
+  const [starters, gaps, witty] = await Promise.all([
+    fetchPool(FILLER_PHRASES, CLIPS_PER_POOL),
+    fetchPool(BETWEEN_FILLER_PHRASES, CLIPS_PER_POOL),
+    fetchPool(WITTY_FILLER_PHRASES, WITTY_CLIPS),
+  ])
   return {
     nextStarter: rotate(starters),
     nextGap: rotate(gaps),
+    nextWitty: rotate(witty),
     release() {
-      for (const url of [...starters, ...gaps]) URL.revokeObjectURL(url)
+      for (const url of [...starters, ...gaps, ...witty]) URL.revokeObjectURL(url)
       starters.length = 0
       gaps.length = 0
+      witty.length = 0
     },
   }
 }

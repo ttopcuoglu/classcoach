@@ -66,6 +66,13 @@ final class SpeechPlayer: NSObject, ObservableObject {
     func enqueue(_ sentence: String, voice: String?) {
         let text = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
+        // Coach's opener is where it reacts to what the teacher just said.
+        // If that reaction is a sympathetic one, this turn gets no jokes.
+        if openingSentence {
+            openingSentence = false
+            let lowered = text.lowercased()
+            if Self.sympathyMarkers.contains(where: lowered.contains) { noJokesThisTurn = true }
+        }
         pending.append(Task { try? await TalkToMeService.fetchSpeech(text: text, voice: voice) })
         if drainTask == nil { startDrain() }
     }
@@ -178,18 +185,68 @@ final class SpeechPlayer: NSObject, ObservableObject {
         "...right... right...", "...oh... well...",
         "...okay... so, yeah...", "...well... hmm...",
     ]
+    /// The same gaps, with a joke in them.
+    ///
+    /// These are the one kind that has to be heard to the end — "...my words
+    /// took the scenic route..." faded after "...my words took the..." is
+    /// worse than silence — so Coach's next sentence waits one out however
+    /// long it runs. Which is also why they are rare: a joke Coach refuses
+    /// to be interrupted out of is charming once and wearing by the fourth
+    /// time.
+    private static let wittyFillers = [
+        "...well... the wheels are turning...",
+        "...so... little mental pit stop...",
+        "...hmm... a little traffic upstairs...",
+        "...well... my words took the scenic route...",
+        "...so... the gears are warming up...",
+        "...hmm... just catching a wandering thought...",
+        "...well... one brain cell at a time...",
+        "...so... the mental hamster is running...",
+        "...well... my brain and mouth are negotiating...",
+    ]
+
+    /// Roughly one gap in four, and never two running.
+    private static let wittyGapChance = 0.25
+
+    /// Coach has just reacted to something painful — "Ugh, that's rough." —
+    /// and "the mental hamster is running" would be the worst thing this
+    /// feature could do. Read off Coach's own first sentence, which is where
+    /// the prompt puts its sympathy. Kept in step with voicePlayback.ts.
+    private static let sympathyMarkers = [
+        "oof", "ugh", "oh no", "i'm sorry",
+        "im sorry", "that's rough", "that's hard", "that's awful",
+        "that's a lot", "that's frustrating", "sounds hard", "sounds exhausting",
+        "long day", "rough day", "exhausting", "overwhelming",
+        "in tears", "crying", "burnt out", "burned out",
+    ]
+
     private static let fillerDelay: Duration = .milliseconds(250)
 
     /// Not the whole list of either. Thirty-seven clips is a couple of
     /// megabytes of a teacher's cellular data for sounds they will hear
     /// perhaps ten of; a handful from each pool is all the variety one
     /// conversation can use, and it is a different handful next time.
-    private static let clipsPerPool = 8
+    private static let clipsPerPool = 6
+
+    /// Fewer still of the jokes: drawn a quarter as often, and three is more
+    /// than one conversation will get through.
+    private static let wittyClipCount = 3
 
     private var starterClips: [Data] = []
     private var gapClips: [Data] = []
+    private var wittyClips: [Data] = []
     private var lastStarter = -1
     private var lastGap = -1
+    private var lastWitty = -1
+    /// Set for the rest of a turn when Coach's opener is sympathetic, and
+    /// when a joke has just been told.
+    private var noJokesThisTurn = false
+    private var lastGapWasJoke = false
+    /// The next sentence enqueued is the one Coach opens the turn with.
+    private var openingSentence = true
+    /// How long the clip now playing may hold the floor. A joke gets to
+    /// finish; everything else gets the ordinary beat.
+    private var currentHold: TimeInterval = 0
     /// Sentences played in the current turn. A gap sound belongs between
     /// sentences, so nothing happens until Coach has said one.
     private var sentencesPlayed = 0
@@ -205,8 +262,10 @@ final class SpeechPlayer: NSObject, ObservableObject {
         guard starterClips.isEmpty, gapClips.isEmpty else { return }
         async let starters = Self.fetchAll(Self.shortFillers.shuffled().prefix(Self.clipsPerPool), voice: voice)
         async let gaps = Self.fetchAll(Self.betweenFillers.shuffled().prefix(Self.clipsPerPool), voice: voice)
+        async let witty = Self.fetchAll(Self.wittyFillers.shuffled().prefix(Self.wittyClipCount), voice: voice)
         starterClips = await starters
         gapClips = await gaps
+        wittyClips = await witty
     }
 
     private static func fetchAll(_ phrases: some Sequence<String>, voice: String?) async -> [Data] {
@@ -228,6 +287,9 @@ final class SpeechPlayer: NSObject, ObservableObject {
         cancelThinking()
         sentencesPlayed = 0
         replyStreaming = true
+        noJokesThisTurn = false
+        lastGapWasJoke = false
+        openingSentence = true
         thinkingTask = Task { [weak self] in
             try? await Task.sleep(for: Self.fillerDelay)
             guard !Task.isCancelled else { return }
@@ -242,10 +304,13 @@ final class SpeechPlayer: NSObject, ObservableObject {
     func startGap() {
         guard sentencesPlayed > 0 else { return }
         cancelThinking()
+        // A joke now and then, not every gap: often enough to be a
+        // character trait, rarely enough to stay funny.
+        let joking = !noJokesThisTurn && !lastGapWasJoke && Double.random(in: 0..<1) < Self.wittyGapChance
         thinkingTask = Task { [weak self] in
             try? await Task.sleep(for: Self.fillerDelay)
             guard !Task.isCancelled else { return }
-            await self?.playFiller(starter: false)
+            await self?.playFiller(starter: false, joking: joking)
         }
     }
 
@@ -268,6 +333,11 @@ final class SpeechPlayer: NSObject, ObservableObject {
     /// were faded every turn. Matches HOLD_FOR_FILLER_MS on the web.
     private static let holdForFiller: TimeInterval = 1.2
 
+    /// Longer than any clip the server will produce (gap fillers are capped
+    /// at 2.4s, the ones with a joke at 3.0s, both plus 0.3s of trailing
+    /// silence), which is the point.
+    private static let letTheJokeFinish: TimeInterval = 4.0
+
     /// Called when Coach's first sentence is ready. Returns once it may be
     /// spoken — at once, having faded the filler, or after letting a
     /// nearly-finished one play out.
@@ -276,7 +346,7 @@ final class SpeechPlayer: NSObject, ObservableObject {
         thinkingTask = nil
         guard let playing = fillerPlayer, playing.isPlaying else { return }
         let remaining = playing.duration - playing.currentTime
-        if remaining > 0, remaining <= Self.holdForFiller {
+        if remaining > 0, remaining <= currentHold {
             try? await Task.sleep(for: .milliseconds(Int(remaining * 1000)))
             fillerPlayer = nil
             return
@@ -302,16 +372,26 @@ final class SpeechPlayer: NSObject, ObservableObject {
         }
     }
 
-    private func playFiller(starter: Bool) {
+    private func playFiller(starter: Bool, joking: Bool = false) {
         // Never over real speech: by the time a clip is due, the reply may
         // already have started.
         guard player?.isPlaying != true else { return }
-        let clips = starter ? starterClips : gapClips
+        let clips = starter ? starterClips : (joking ? wittyClips : gapClips)
         guard !clips.isEmpty else { return }
         var index = Int.random(in: 0..<clips.count)
-        let last = starter ? lastStarter : lastGap
+        let last = starter ? lastStarter : (joking ? lastWitty : lastGap)
         if clips.count > 1, index == last { index = (index + 1) % clips.count }
-        if starter { lastStarter = index } else { lastGap = index }
+        if starter {
+            lastStarter = index
+        } else if joking {
+            lastWitty = index
+        } else {
+            lastGap = index
+        }
+        if !starter { lastGapWasJoke = joking }
+        // A punchline is never faded for a sentence that is ready. A teacher
+        // who starts talking still cuts it off at once — that is barge-in.
+        currentHold = joking ? Self.letTheJokeFinish : Self.holdForFiller
         PlaybackSession.activate()
         fillerPlayer = try? AVAudioPlayer(data: clips[index])
         fillerPlayer?.play()

@@ -92,14 +92,45 @@ export const BETWEEN_FILLER_PHRASES = [
   "...well... hmm...",
 ]
 
-const lookup = new Set([...FILLER_PHRASES, ...BETWEEN_FILLER_PHRASES].map((phrase) => phrase.toLowerCase()))
+// And a handful with a joke in them, for the same gaps.
+//
+// These are the one kind that must be heard to the end: "...my words took
+// the scenic route..." faded after "...my words took the..." is worse than
+// silence. So they are held longer than any other clip (the clients know
+// them as a separate pool), drawn rarely — roughly one gap in four — and
+// never when Coach has just reacted to something painful, which the client
+// checks before it picks one. A hamster joke on top of a teacher in tears
+// would be the worst thing this feature could do.
+export const WITTY_FILLER_PHRASES = [
+  "...well... the wheels are turning...",
+  "...so... little mental pit stop...",
+  "...hmm... a little traffic upstairs...",
+  "...well... my words took the scenic route...",
+  "...so... the gears are warming up...",
+  "...hmm... just catching a wandering thought...",
+  "...well... one brain cell at a time...",
+  "...so... the mental hamster is running...",
+  "...well... my brain and mouth are negotiating...",
+]
+
+const lookup = new Set([...FILLER_PHRASES, ...BETWEEN_FILLER_PHRASES, ...WITTY_FILLER_PHRASES].map((phrase) => phrase.toLowerCase()))
 
 export function isFillerPhrase(text: string): boolean {
   return lookup.has(text.trim().toLowerCase())
 }
 
-const betweenLookup = new Set(BETWEEN_FILLER_PHRASES.map((phrase) => phrase.toLowerCase()))
+// Both kinds of gap filler get the same treatment in speechCache.ts: dead
+// air at the front trimmed, the pauses between their words shortened.
+const gapLookup = new Set([...BETWEEN_FILLER_PHRASES, ...WITTY_FILLER_PHRASES].map((p) => p.toLowerCase()))
 
-export function isBetweenFillerPhrase(text: string): boolean {
-  return betweenLookup.has(text.trim().toLowerCase())
+export function isGapFillerPhrase(text: string): boolean {
+  return gapLookup.has(text.trim().toLowerCase())
+}
+
+const wittyLookup = new Set(WITTY_FILLER_PHRASES.map((phrase) => phrase.toLowerCase()))
+
+/// A joke is allowed to run longer than a plain hesitation noise, since it
+/// is only worth playing if its ending is heard.
+export function isWittyFillerPhrase(text: string): boolean {
+  return wittyLookup.has(text.trim().toLowerCase())
 }
