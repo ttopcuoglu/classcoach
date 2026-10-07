@@ -8,51 +8,40 @@ struct RootTabView: View {
             if authManager.isRestoringSession {
                 ProgressView()
             } else if authManager.currentUser != nil {
-                // Same names and order as the web app's menu, with Lesson
-                // Debrief first. Home's feature cards follow the same order.
+                // Four slots, the same four the web's phone bar settled on:
+                // Home, Coaching, Plan, You.
                 //
-                // Two tabs fewer than there were tools: rehearsing a scenario and
-                // rehearsing a conversation are both Practice (see PracticeView),
-                // and reviewing an assignment is a chip inside Lesson Planning
-                // (see LessonPlanningView). Both were merges of the same job, not
-                // of two different ones.
+                // There were seven tabs. A phone's TabView shows four and sweeps
+                // the rest into a system "More" list, so Lesson Planning,
+                // Communication Coach and Profile were all buried in it — and
+                // Home had been growing extra cards to compensate for tools
+                // nobody could find. Grouping is what fixes that; deleting more
+                // Home cards was only ever treating the symptom.
+                //
+                // Coaching and Plan are sections, not pages: each is a tab whose
+                // root lists its tools (see SectionHubs). Profile is "You",
+                // where every app puts it.
                 TabView {
                     HomeView()
                         .tabItem {
                             Label("Home", systemImage: "house.fill")
                         }
 
-                    AudioCoachingView()
+                    CoachingHubView()
                         .tabItem {
-                            Label("Lesson Debrief", systemImage: "mic.fill")
+                            Label("Coaching", systemImage: "mic.fill")
                         }
 
-                    TalkToMeView()
+                    PlanHubView()
                         .tabItem {
-                            Label("Talk It Through", systemImage: "waveform.circle.fill")
+                            Label("Plan", systemImage: "doc.text.fill")
                         }
 
-                    PracticeView()
+                    // ProfileView owns no NavigationStack — it used to get one
+                    // from the system More list, which no longer exists here.
+                    NavigationStack { ProfileView() }
                         .tabItem {
-                            Label("Practice", systemImage: "bubble.left.and.bubble.right.fill")
-                        }
-
-                    // These always sit under More, which supplies its own
-                    // navigation bar — wrapping them in another stack drew a
-                    // second back button on every pushed screen.
-                    LessonPlanningView()
-                        .tabItem {
-                            Label("Lesson Planning", systemImage: "doc.text.fill")
-                        }
-
-                    MessagesHubView()
-                        .tabItem {
-                            Label("Communication Coach", systemImage: "envelope.fill")
-                        }
-
-                    ProfileView()
-                        .tabItem {
-                            Label("Profile", systemImage: "person.crop.circle")
+                            Label("You", systemImage: "person.crop.circle")
                         }
                 }
                 .tint(AppTheme.primary)
