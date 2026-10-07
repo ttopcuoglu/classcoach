@@ -31,8 +31,9 @@ final class SpeechPlayer: NSObject, ObservableObject {
     }
 
     private func playOne(data: Data) async {
-        // The reply is here; whatever Coach was humming stops now.
-        cancelThinking()
+        // The reply is here. Whatever Coach was humming either finishes, if
+        // it is nearly done, or fades under this.
+        await handOffFromThinking()
         PlaybackSession.activate()
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             self.continuation = continuation
@@ -129,15 +130,18 @@ final class SpeechPlayer: NSObject, ObservableObject {
     // nothing that invites them to keep talking.
     //
     // They are also all under ~0.9s and end in "...", both measured: the
-    // filler starts 400ms into the pause and the reply lands around 1.2s, so
+    // filler starts 250ms into the pause and the reply lands around 1.2s, so
     // anything longer is cut mid-word, and an ellipsis makes the voice trail
     // off where a full stop makes it stop dead. Kept in step with
     // web/src/lib/voicePlayback.ts and the server's fillerPhrases.ts.
     private static let shortFillers = [
-        "Mm...", "Mm-hmm.", "Mhm...", "Hmm...", "Hm...", "Yeah...", "Yep...", "Ah...",
-        "Okay...", "Right...", "Sure...", "Uh-huh...", "Got it...", "Well...", "So...", "Alright...",
+        "Hmm...", "Mm-hmm.", "Mm, mm...", "Hmm, hmm...",
+        "Yeah...", "Yep...", "Ah...", "Okay...",
+        "Right...", "Sure...", "Uh-huh...", "Got it...",
+        "Well...", "So...", "Alright...", "Well, hmm...",
+        "So, hmm...", "Right, hmm...", "Let me see...", "Well, let me think...",
     ]
-    private static let fillerDelay: Duration = .milliseconds(400)
+    private static let fillerDelay: Duration = .milliseconds(250)
 
     private var clips: [Data] = []
     private var lastPlayed = -1
@@ -178,6 +182,27 @@ final class SpeechPlayer: NSObject, ObservableObject {
     /// Long enough not to click, short enough that Coach's first word is not
     /// competing with a filler still trailing off underneath it.
     private static let fillerFade: TimeInterval = 0.12
+
+    /// A thinking sound with this little left is worth waiting out: Coach
+    /// answering over the last syllable of its own "hmm" sounds worse than a
+    /// beat of silence, and a beat is all it costs.
+    private static let holdForFiller: TimeInterval = 0.4
+
+    /// Called when Coach's first sentence is ready. Returns once it may be
+    /// spoken — at once, having faded the filler, or after letting a
+    /// nearly-finished one play out.
+    func handOffFromThinking() async {
+        thinkingTask?.cancel()
+        thinkingTask = nil
+        guard let playing = fillerPlayer, playing.isPlaying else { return }
+        let remaining = playing.duration - playing.currentTime
+        if remaining > 0, remaining <= Self.holdForFiller {
+            try? await Task.sleep(for: .milliseconds(Int(remaining * 1000)))
+            fillerPlayer = nil
+            return
+        }
+        cancelThinking()
+    }
 
     func cancelThinking() {
         thinkingTask?.cancel()

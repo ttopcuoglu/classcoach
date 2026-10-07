@@ -14,19 +14,19 @@
 //
 // Two rules decided this list, both measured:
 //
-//  - Under ~0.9s. The filler starts 400ms into the pause and Coach's first
-//    sentence lands around 1.2s, so anything longer is faded out mid-word
-//    every single time. That rules out every two-part phrase, because the
-//    voice puts a real pause at the comma: "Mm, okay..." runs 2.5s.
+//  - Under ~1.35s. The filler starts 250ms into the pause and Coach's
+//    first sentence lands around 1.2s, and a clip with 400ms or less left
+//    is allowed to finish before Coach speaks (see handOffFromThinkingSound
+//    in TalkToMe.tsx). Anything longer than that is faded out mid-word every
+//    turn — measured out: "Okay, let me think..." runs 1.96s.
 //  - Ending in "..." rather than ".", which makes the voice trail off
 //    instead of stopping dead. "Mm." trails for 0.05s; "Mm..." for 0.16s.
 //    "Mm-hmm." is the exception, measuring better with the full stop.
 export const FILLER_PHRASES = [
-  'Mm...',
-  'Mm-hmm.',
-  'Mhm...',
   'Hmm...',
-  'Hm...',
+  'Mm-hmm.',
+  'Mm, mm...',
+  'Hmm, hmm...',
   'Yeah...',
   'Yep...',
   'Ah...',
@@ -38,6 +38,11 @@ export const FILLER_PHRASES = [
   'Well...',
   'So...',
   'Alright...',
+  'Well, hmm...',
+  'So, hmm...',
+  'Right, hmm...',
+  'Let me see...',
+  'Well, let me think...',
 ]
 
 const lookup = new Set(FILLER_PHRASES.map((phrase) => phrase.toLowerCase()))

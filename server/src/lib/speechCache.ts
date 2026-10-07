@@ -170,8 +170,12 @@ export function fillerAudio(text: string, voice: string | undefined): Promise<Bu
 // So the tail is faded by hand and real silence is left after it. Doing it
 // here rather than choosing phrases that happen to end softly means the
 // choice of words stops being delicate: anything short enough ends cleanly.
-const FADE_SAMPLES = Math.round(SPEECH_WAV_SAMPLE_RATE * 0.07)
-const PAD_SAMPLES = Math.round(SPEECH_WAV_SAMPLE_RATE * 0.14)
+// Lengthened after listening: 70ms of fade and 140ms of silence still left
+// the shortest clips feeling clipped. The fade is the part that is heard —
+// it is the sound trailing away — and the silence after it is what stops the
+// reply treading on its heels.
+const FADE_SAMPLES = Math.round(SPEECH_WAV_SAMPLE_RATE * 0.12)
+const PAD_SAMPLES = Math.round(SPEECH_WAV_SAMPLE_RATE * 0.3)
 
 function softenEnding(wav: Buffer): Buffer {
   // Deepgram streams its wav, so the header's declared sizes are a

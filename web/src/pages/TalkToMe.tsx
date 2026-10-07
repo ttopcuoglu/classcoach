@@ -227,6 +227,10 @@ export default function TalkToMe() {
   // difference between a splice and a person trailing off.
   const fillerAudioRef = useRef<HTMLAudioElement | null>(null)
   const fillerTimerRef = useRef<number | null>(null)
+  // Resolves when Coach may start speaking: immediately, or once a thinking
+  // sound that was nearly finished has finished. Every sentence of the reply
+  // waits on the same promise, so they still play in order.
+  const thinkingHandoffRef = useRef<Promise<void> | null>(null)
   // The reply currently being streamed, whether or not it is still audible.
   // An interruption starts the next turn immediately, so that turn has to
   // wait for this to settle before it asks for anything — otherwise its
@@ -263,6 +267,9 @@ export default function TalkToMe() {
     // Set when the turn ends and this reply is the one being played.
     queue: PlaybackQueue | null
     onPlaying: () => void
+    // Set when this reply commits: pushes a sentence through the same hold
+    // the first one waited on, so they cannot arrive out of order.
+    speak: (sentence: string) => void
   }
   const speculationRef = useRef<Speculation | null>(null)
 
@@ -498,7 +505,10 @@ export default function TalkToMe() {
   // they finish. Scheduled rather than immediate: a reply that arrives
   // quickly (a speculative one, usually) should just be spoken, with no
   // "hmm" in front of it.
-  const FILLER_AFTER_MS = 400
+  // Sooner than it was: at 400ms the pause had already registered as silence
+  // before Coach made a sound, and starting earlier also leaves more of the
+  // ~1.2s before the reply for the clip to play in.
+  const FILLER_AFTER_MS = 250
 
   // Long enough not to click, short enough that Coach's first word is not
   // competing with a filler still trailing off underneath it.
@@ -518,10 +528,35 @@ export default function TalkToMe() {
     }, FILLER_AFTER_MS)
   }
 
+  // A thinking sound with this little left to play is worth waiting out:
+  // Coach answering over the last syllable of its own "hmm" sounds worse
+  // than a beat of silence, and a beat is all it costs.
+  const HOLD_FOR_FILLER_MS = 400
+
   function cancelThinkingSound() {
     if (fillerTimerRef.current) window.clearTimeout(fillerTimerRef.current)
     fillerTimerRef.current = null
+    fadeOutThinkingSound()
+  }
 
+  /// Called when Coach's first sentence exists. Resolves when it may be
+  /// spoken — at once, having faded the filler under it, or after letting a
+  /// nearly-finished one play out.
+  function handOffFromThinkingSound(): Promise<void> {
+    if (fillerTimerRef.current) window.clearTimeout(fillerTimerRef.current)
+    fillerTimerRef.current = null
+
+    const audio = fillerAudioRef.current
+    if (!audio || audio.paused) return Promise.resolve()
+    const remaining = (audio.duration || 0) - audio.currentTime
+    if (Number.isFinite(remaining) && remaining > 0 && remaining <= HOLD_FOR_FILLER_MS / 1000) {
+      return new Promise((resolve) => window.setTimeout(resolve, remaining * 1000))
+    }
+    fadeOutThinkingSound()
+    return Promise.resolve()
+  }
+
+  function fadeOutThinkingSound() {
     // Fade rather than stop: a filler cut mid-word is the "chopped" sound
     // this feature is supposed to avoid. Coach's first word arrives over the
     // last of it, which is how one person stops as another starts.
@@ -537,6 +572,12 @@ export default function TalkToMe() {
       audio.pause()
       audio.volume = 1
     }, FILLER_FADE_MS / steps)
+  }
+
+  /// Every sentence goes through here so they stay in order behind a hold.
+  function speak(queue: PlaybackQueue, sentence: string) {
+    const handoff = thinkingHandoffRef.current ?? (thinkingHandoffRef.current = handOffFromThinkingSound())
+    void handoff.then(() => queue.push(sentence))
   }
 
   // The teacher started talking over Coach. Stop the speech, and start
@@ -582,6 +623,7 @@ export default function TalkToMe() {
       buffered: [],
       queue: null,
       onPlaying: () => {},
+      speak: () => {},
       reply: null as unknown as Promise<Debrief>,
     }
     spec.reply = streamCoachReply(
@@ -590,7 +632,7 @@ export default function TalkToMe() {
       (sentence) => {
         if (spec.queue) {
           spec.onPlaying()
-          spec.queue.push(sentence)
+          spec.speak(sentence)
         } else {
           spec.buffered.push(sentence)
         }
@@ -634,6 +676,7 @@ export default function TalkToMe() {
     setPhase('thinking')
 
     phaseRef.current = 'thinking'
+    thinkingHandoffRef.current = null
     startThinkingSound()
 
     // After an interruption the previous reply may still be arriving. It
@@ -724,10 +767,10 @@ export default function TalkToMe() {
         // immediately, and the rest of the reply streams into the same queue.
         committed.onPlaying = stopWatching
         committed.queue = queue
+        committed.speak = (sentence) => speak(queue, sentence)
         for (const sentence of committed.buffered) {
           stopWatching()
-          cancelThinkingSound()
-          queue.push(sentence)
+          speak(queue, sentence)
         }
         committed.buffered = []
         result = await trackReply(committed.reply)

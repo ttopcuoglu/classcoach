@@ -401,19 +401,17 @@ export async function playQueue(
 // Two measured rules shaped this list, and the server keeps the same one in
 // fillerPhrases.ts so the audio can be kept forever:
 //
-//  - Under ~0.9s, because the filler starts 400ms into the pause and Coach's
-//    first sentence lands around 1.2s. Anything longer is faded mid-word
-//    every time, which is what made the earlier, wordier set sound chopped.
-//    That rules out every two-part phrase: the voice pauses at the comma,
-//    so even "Mm, okay..." runs 2.5s.
+//  - Under ~1.35s: the filler starts 250ms into the pause, Coach's first
+//    sentence lands around 1.2s, and one with 400ms or less left is allowed
+//    to finish first. Anything longer is faded mid-word every turn, which is
+//    what made the earlier, wordier set sound chopped.
 //  - Ending in "..." rather than ".", which makes the voice trail off rather
 //    than stop. "Mm-hmm." is the one exception, measuring better as it is.
 export const FILLER_PHRASES = [
-  'Mm...',
-  'Mm-hmm.',
-  'Mhm...',
   'Hmm...',
-  'Hm...',
+  'Mm-hmm.',
+  'Mm, mm...',
+  'Hmm, hmm...',
   'Yeah...',
   'Yep...',
   'Ah...',
@@ -425,6 +423,11 @@ export const FILLER_PHRASES = [
   'Well...',
   'So...',
   'Alright...',
+  'Well, hmm...',
+  'So, hmm...',
+  'Right, hmm...',
+  'Let me see...',
+  'Well, let me think...',
 ]
 
 export type Fillers = {
