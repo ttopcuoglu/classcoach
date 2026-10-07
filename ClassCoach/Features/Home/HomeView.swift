@@ -100,21 +100,10 @@ struct HomeView: View {
                     .buttonStyle(.plain)
                     .padding(.horizontal)
 
-                    // Assignment review is a chip inside Lesson Planning, not a
-                    // screen of its own — the same move the web made. Opening the
-                    // standalone view from here gave it two front doors.
-                    NavigationLink { LessonPlanningView(initialTab: "assignment") } label: {
-                        FeatureCard(
-                            eyebrow: "Plan",
-                            title: "Review an Assignment",
-                            description: "Have an assignment you already made read for rigor, clarity, and what students will actually do.",
-                            actionLabel: "Review an assignment",
-                            systemImage: "checklist",
-                            iconTint: AppTheme.accent
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal)
+                    // No card for reviewing an assignment: it is one of Lesson
+                    // Planning's four chips, so a card here would be a second
+                    // Home tile opening the same screen a chip along. The web's
+                    // Home has no assignment card either.
                 }
                 .padding(.vertical)
             }
