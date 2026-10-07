@@ -1003,6 +1003,10 @@ struct TalkToMeView: View {
             }()
             debrief = result
             streamingReply = nil
+            // Everything Coach is going to say has been enqueued, so an
+            // empty queue from here is the end of the reply rather than a
+            // gap to cover.
+            player.replyFinished()
             // Interrupted, or overtaken by a newer turn: the teacher is
             // already talking, so this reply ends quietly.
             guard generation == replyGeneration else { return }
@@ -1012,6 +1016,7 @@ struct TalkToMeView: View {
         } catch {
             streamingReply = nil
             // Nothing is coming, so Coach should not be heard still thinking.
+            player.replyFinished()
             player.cancelThinking()
             // A reply the teacher already talked past should not surface its
             // failure on top of the turn they are in the middle of.

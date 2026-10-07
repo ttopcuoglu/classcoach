@@ -59,8 +59,47 @@ export const BREATHY_PHRASES = new Set([
   "Let's think about this...",
 ])
 
-const lookup = new Set(FILLER_PHRASES.map((phrase) => phrase.toLowerCase()))
+// And these are what Coach says BETWEEN its own sentences, when Claude has
+// not finished writing the next one. A different job from an opener: the
+// teacher is already mid-answer, so "Let me think..." would sound like Coach
+// forgetting what it was saying. These are the noises someone makes while
+// still holding the floor.
+//
+// They lead with "..." on purpose — it lands Coach a beat late rather than
+// jumping in, which is how the gap actually feels. The dead air Deepgram
+// puts at the very front of the clip for it is trimmed in speechCache.ts;
+// the pauses between the words are the point and are kept.
+export const BETWEEN_FILLER_PHRASES = [
+  "...well... okay then...",
+  "...hmm... alrighty...",
+  "...so... yeah...",
+  "...okay... well, well...",
+  "...well... you know...",
+  "...I mean... yeah...",
+  "...hmm... okay, okay...",
+  "...alrighty... so...",
+  "...well... huh...",
+  "...okay-dokey...",
+  "...yeah... well...",
+  "...so... um... yeah...",
+  "...well... I mean...",
+  "...hmm... right...",
+  "...okay... well then...",
+  "...ah... okay...",
+  "...right... right...",
+  "...oh... well...",
+  "...okay... so, yeah...",
+  "...well... hmm...",
+]
+
+const lookup = new Set([...FILLER_PHRASES, ...BETWEEN_FILLER_PHRASES].map((phrase) => phrase.toLowerCase()))
 
 export function isFillerPhrase(text: string): boolean {
   return lookup.has(text.trim().toLowerCase())
+}
+
+const betweenLookup = new Set(BETWEEN_FILLER_PHRASES.map((phrase) => phrase.toLowerCase()))
+
+export function isBetweenFillerPhrase(text: string): boolean {
+  return betweenLookup.has(text.trim().toLowerCase())
 }

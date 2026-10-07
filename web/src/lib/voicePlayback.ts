@@ -267,10 +267,20 @@ export type PlaybackQueue = {
   finished: Promise<void>
 }
 
+/// What the page does with a gap in the middle of a reply. `onOpen` is
+/// called when the queue runs dry and may start a sound; `onClose` is
+/// awaited before the next sentence plays, so a sound that is nearly
+/// finished can be allowed to end.
+export type GapHandler = {
+  onOpen: () => void
+  onClose: () => Promise<void>
+}
+
 export function createPlaybackQueue(
   audio: HTMLAudioElement,
   voice: TalkVoice | null,
   onFirstPlay?: () => void,
+  gap?: GapHandler,
 ): PlaybackQueue {
   const pending: Promise<Clip | null>[] = []
   const cancellation: Cancellation = { cancelled: false, onAbort: null }
@@ -293,16 +303,43 @@ export function createPlaybackQueue(
       if (played > 1) return
       onFirstPlay?.()
     }
+    // A gap is open from the moment the queue has nothing in hand until the
+    // next sentence is about to play. Both waits below count: Claude may not
+    // have written the sentence yet, or it may be written and still
+    // downloading. Never before the first sentence — that silence belongs to
+    // the thinking sound, and two of them at once is one too many.
+    let inGap = false
+    const openGap = () => {
+      if (!gap || inGap || played === 0) return
+      inGap = true
+      gap.onOpen()
+    }
+    const closeGap = async () => {
+      if (!inGap || !gap) return
+      inGap = false
+      await gap.onClose()
+    }
+
     while (!cancellation.cancelled) {
       if (i >= pending.length) {
         if (closed) break
+        openGap()
         await new Promise<void>((resolve) => {
           wake = resolve
         })
         continue
       }
+      openGap()
       const clip = await pending[i++]
       if (!clip) continue // this segment failed to fetch — skip it, not fatal
+      if (cancellation.cancelled) {
+        release(clip)
+        break
+      }
+      // Nothing here schedules a sound itself: `onOpen` waits out its own
+      // delay, so a clip that was already in hand closes the gap again
+      // before anything was heard.
+      await closeGap()
       if (cancellation.cancelled) {
         release(clip)
         break
@@ -427,29 +464,87 @@ export const FILLER_PHRASES = [
   'Hmm, okay...',
 ]
 
+// The second pool: what Coach says between its own sentences, when Claude
+// has not finished writing the next one. A different job from an opener —
+// the teacher is already mid-answer, so "Let me think..." would sound like
+// Coach losing its place. These hold the floor instead of taking it.
+//
+// They lead with "..." deliberately: Coach comes in a beat late rather than
+// jumping into its own pause. The server trims the dead air that produces
+// and shortens the pauses between the words (speechCache.ts), so what
+// arrives here is between 0.7s and 2.5s.
+export const BETWEEN_FILLER_PHRASES = [
+  "...well... okay then...",
+  "...hmm... alrighty...",
+  "...so... yeah...",
+  "...okay... well, well...",
+  "...well... you know...",
+  "...I mean... yeah...",
+  "...hmm... okay, okay...",
+  "...alrighty... so...",
+  "...well... huh...",
+  "...okay-dokey...",
+  "...yeah... well...",
+  "...so... um... yeah...",
+  "...well... I mean...",
+  "...hmm... right...",
+  "...okay... well then...",
+  "...ah... okay...",
+  "...right... right...",
+  "...oh... well...",
+  "...okay... so, yeah...",
+  "...well... hmm...",
+]
+
 export type Fillers = {
   /// A clip that is not the one played last, so Coach does not say "Hmm"
   /// twice in a row. Null when none loaded.
-  next: () => string | null
+  nextStarter: () => string | null
+  /// The same, from the between-sentence pool.
+  nextGap: () => string | null
   release: () => void
 }
 
-export async function loadFillers(voice: TalkVoice | null): Promise<Fillers> {
-  const urls = (await Promise.all(FILLER_PHRASES.map((phrase) => fetchSentenceAudio(phrase, voice)))).filter(
-    (url): url is string => url !== null,
-  )
+// Not the whole list. Thirty-seven clips is a couple of megabytes, which is
+// a lot to spend on a teacher's cellular data for sounds they will hear
+// perhaps ten of. A handful from each pool gives all the variety a single
+// conversation can use, and a different handful next time.
+const CLIPS_PER_POOL = 8
+
+function sample<T>(items: readonly T[], count: number): T[] {
+  const pool = items.slice()
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[pool[i], pool[j]] = [pool[j], pool[i]]
+  }
+  return pool.slice(0, count)
+}
+
+/// Draws from a loaded pool without repeating the clip it just gave out.
+function rotate(urls: string[]): () => string | null {
   let last = -1
+  return () => {
+    if (urls.length === 0) return null
+    let index = Math.floor(Math.random() * urls.length)
+    if (urls.length > 1 && index === last) index = (index + 1) % urls.length
+    last = index
+    return urls[index]
+  }
+}
+
+export async function loadFillers(voice: TalkVoice | null): Promise<Fillers> {
+  const fetchPool = async (phrases: readonly string[]) =>
+    (await Promise.all(sample(phrases, CLIPS_PER_POOL).map((phrase) => fetchSentenceAudio(phrase, voice)))).filter(
+      (url): url is string => url !== null,
+    )
+  const [starters, gaps] = await Promise.all([fetchPool(FILLER_PHRASES), fetchPool(BETWEEN_FILLER_PHRASES)])
   return {
-    next() {
-      if (urls.length === 0) return null
-      let index = Math.floor(Math.random() * urls.length)
-      if (urls.length > 1 && index === last) index = (index + 1) % urls.length
-      last = index
-      return urls[index]
-    },
+    nextStarter: rotate(starters),
+    nextGap: rotate(gaps),
     release() {
-      for (const url of urls) URL.revokeObjectURL(url)
-      urls.length = 0
+      for (const url of [...starters, ...gaps]) URL.revokeObjectURL(url)
+      starters.length = 0
+      gaps.length = 0
     },
   }
 }

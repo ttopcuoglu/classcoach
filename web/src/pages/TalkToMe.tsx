@@ -455,12 +455,17 @@ export default function TalkToMe() {
     // Held in an object rather than a plain variable: it is assigned inside
     // the playback callback, which the compiler cannot follow.
     const bargeIn: { stop: (() => void) | null } = { stop: null }
-    const queue = createPlaybackQueue(audio, talkVoiceRef.current, () => {
-      cancelThinkingSound()
-      setPhase('speaking')
-      phaseRef.current = 'speaking'
-      bargeIn.stop = watchWhileSpeaking(handleBargeIn)
-    })
+    const queue = createPlaybackQueue(
+      audio,
+      talkVoiceRef.current,
+      () => {
+        cancelThinkingSound()
+        setPhase('speaking')
+        phaseRef.current = 'speaking'
+        bargeIn.stop = watchWhileSpeaking(handleBargeIn)
+      },
+      { onOpen: startGapSound, onClose: handOffFromThinkingSound },
+    )
     queueRef.current = queue
     try {
       const reply = streamCoachReply(
@@ -518,7 +523,7 @@ export default function TalkToMe() {
     cancelThinkingSound()
     fillerTimerRef.current = window.setTimeout(() => {
       const audio = fillerAudioRef.current
-      const clip = fillersRef.current?.next()
+      const clip = fillersRef.current?.nextStarter()
       // Only into silence: once Coach is speaking, or the teacher is, a
       // thinking sound would be talking over one of them.
       if (!audio || !clip || !sessionActiveRef.current || phaseRef.current !== 'thinking') return
@@ -539,15 +544,33 @@ export default function TalkToMe() {
   // already heard Coach start thinking about.
   const HOLD_FOR_FILLER_MS = 1200
 
+  /// The between-sentence sound. Coach has already started answering and
+  /// has run out of written sentences, so this holds the floor rather than
+  /// leaving a hole in the middle of the reply.
+  function startGapSound() {
+    cancelThinkingSound()
+    fillerTimerRef.current = window.setTimeout(() => {
+      const audio = fillerAudioRef.current
+      const clip = fillersRef.current?.nextGap()
+      // Only while Coach is the one speaking. If the teacher has cut in, or
+      // the turn has ended, the gap this was covering no longer exists.
+      if (!audio || !clip || !sessionActiveRef.current || phaseRef.current !== 'speaking') return
+      if (bargedInRef.current) return
+      audio.volume = 1
+      audio.src = clip
+      void audio.play().catch(() => {})
+    }, FILLER_AFTER_MS)
+  }
+
   function cancelThinkingSound() {
     if (fillerTimerRef.current) window.clearTimeout(fillerTimerRef.current)
     fillerTimerRef.current = null
     fadeOutThinkingSound()
   }
 
-  /// Called when Coach's first sentence exists. Resolves when it may be
-  /// spoken — at once, having faded the filler under it, or after letting a
-  /// nearly-finished one play out.
+  /// Called when the next sentence exists — the first of a reply, or the
+  /// one after a gap. Resolves when it may be spoken: at once, having faded
+  /// the filler under it, or after letting a nearly-finished one play out.
   function handOffFromThinkingSound(): Promise<void> {
     if (fillerTimerRef.current) window.clearTimeout(fillerTimerRef.current)
     fillerTimerRef.current = null
@@ -738,18 +761,23 @@ export default function TalkToMe() {
     // Held in an object rather than a plain variable: it is assigned inside
     // the playback callback, which the compiler cannot follow.
     const bargeIn: { stop: (() => void) | null } = { stop: null }
-    const queue = createPlaybackQueue(audio, talkVoiceRef.current, () => {
-      cancelThinkingSound()
-      markTurn('speak')
-      endTurn()
-      setPhase('speaking')
-      phaseRef.current = 'speaking'
-      // Coach is audible now, so the microphone switches from "did they
-      // carry on?" to the much harder-to-trigger "are they talking over
-      // this?" — see watchWhileSpeaking.
-      stopWatching()
-      bargeIn.stop = watchWhileSpeaking(handleBargeIn)
-    })
+    const queue = createPlaybackQueue(
+      audio,
+      talkVoiceRef.current,
+      () => {
+        cancelThinkingSound()
+        markTurn('speak')
+        endTurn()
+        setPhase('speaking')
+        phaseRef.current = 'speaking'
+        // Coach is audible now, so the microphone switches from "did they
+        // carry on?" to the much harder-to-trigger "are they talking over
+        // this?" — see watchWhileSpeaking.
+        stopWatching()
+        bargeIn.stop = watchWhileSpeaking(handleBargeIn)
+      },
+      { onOpen: startGapSound, onClose: handOffFromThinkingSound },
+    )
     queueRef.current = queue
 
     // The end of a turn is a guess from a silence timer, and the waits are

@@ -1,5 +1,5 @@
 import { SPEECH_WAV_SAMPLE_RATE, synthesizeSpeechStream } from './deepgram.ts'
-import { BREATHY_PHRASES } from './fillerPhrases.ts'
+import { BREATHY_PHRASES, isBetweenFillerPhrase } from './fillerPhrases.ts'
 import { DEFAULT_TALK_VOICE, isValidTalkVoice } from './talkVoices.ts'
 
 // Starts synthesizing a sentence before anyone asks for it.
@@ -152,10 +152,12 @@ export function fillerAudio(text: string, voice: string | undefined): Promise<Bu
   if (existing) return existing
 
   const clip = (async () => {
-    const upstream = await synthesizeSpeechStream(text.trim(), voice, 'wav')
+    const phrase = text.trim()
+    const upstream = await synthesizeSpeechStream(phrase, voice, 'wav')
     const audio = Buffer.from(await upstream.arrayBuffer())
     if (audio.length === 0) throw new Error('Deepgram returned no audio')
-    return softenEnding(audio)
+    const settled = softenEnding(audio, isBetweenFillerPhrase(phrase))
+    return BREATHY_PHRASES.has(phrase) ? withBreath(settled, phrase) : settled
   })()
   // A failure must not be remembered as the answer forever.
   clip.catch(() => fillerClips.delete(key))
@@ -178,12 +180,80 @@ export function fillerAudio(text: string, voice: string | undefined): Promise<Bu
 const FADE_SAMPLES = Math.round(SPEECH_WAV_SAMPLE_RATE * 0.12)
 const PAD_SAMPLES = Math.round(SPEECH_WAV_SAMPLE_RATE * 0.3)
 
-function softenEnding(wav: Buffer): Buffer {
+// Deepgram answers a leading "..." with real silence, which is right in a
+// sentence and wrong in a clip: the gap it is covering may be shorter than
+// the pause in front of the words. The beat is kept, just a short one.
+const KEEP_LEAD_MS = 60
+
+// Relative, not absolute: Aura's pauses are not digital silence, they carry
+// room noise and breath, and an absolute floor low enough to be safe on a
+// quiet clip sees none of it as a pause at all.
+const SILENCE_FRACTION = 0.03
+const MIN_SILENCE_FLOOR = 180
+
+function silenceFloor(pcm: Buffer, sampleCount: number): number {
+  let peak = 0
+  for (let i = 0; i < sampleCount; i++) peak = Math.max(peak, Math.abs(pcm.readInt16LE(i * 2)))
+  return Math.max(MIN_SILENCE_FLOOR, peak * SILENCE_FRACTION)
+}
+
+function trimLeadingSilence(pcm: Buffer, sampleCount: number): Buffer {
+  const floor = silenceFloor(pcm, sampleCount)
+  let first = 0
+  while (first < sampleCount && Math.abs(pcm.readInt16LE(first * 2)) < floor) first++
+  if (first >= sampleCount) return pcm.subarray(0, sampleCount * 2)
+  const keep = Math.round((SPEECH_WAV_SAMPLE_RATE * KEEP_LEAD_MS) / 1000)
+  return pcm.subarray(Math.max(0, first - keep) * 2, sampleCount * 2)
+}
+
+// The pauses BETWEEN the words of a gap filler are the whole character of
+// it — but Deepgram reads each "..." as a full breath's worth of silence,
+// which turns "...well... okay then..." into 3.6s, far longer than the gap
+// it is covering. Shortened to a beat, which keeps the hesitation and loses
+// the dead air.
+const MAX_INNER_PAUSE_MS = 220
+
+// And a ceiling, because Aura's pacing is not ours to set: the same phrase
+// came back at 1.7s on one run and 3.6s on another, and a client cannot plan
+// around that. Past this the clip is simply cut short and faded, which costs
+// a hesitation noise nobody was listening to the end of.
+const MAX_GAP_CLIP_MS = 2400
+
+function collapseInnerPauses(pcm: Buffer): Buffer {
+  const sampleCount = Math.floor(pcm.length / 2)
+  const floor = silenceFloor(pcm, sampleCount)
+  const limit = Math.round((SPEECH_WAV_SAMPLE_RATE * MAX_INNER_PAUSE_MS) / 1000)
+  const out = Buffer.alloc(pcm.length)
+  let written = 0
+  let run = 0
+  for (let i = 0; i < sampleCount; i++) {
+    const sample = pcm.readInt16LE(i * 2)
+    if (Math.abs(sample) < floor) {
+      run += 1
+      if (run > limit) continue
+    } else {
+      run = 0
+    }
+    out.writeInt16LE(sample, written * 2)
+    written += 1
+  }
+  return out.subarray(0, written * 2)
+}
+
+function capLength(pcm: Buffer): Buffer {
+  const limit = Math.round((SPEECH_WAV_SAMPLE_RATE * MAX_GAP_CLIP_MS) / 1000) * 2
+  return pcm.length > limit ? pcm.subarray(0, limit) : pcm
+}
+
+function softenEnding(wav: Buffer, collapse = false): Buffer {
   // Deepgram streams its wav, so the header's declared sizes are a
   // placeholder; the samples are whatever follows the data chunk.
   const marker = wav.indexOf('data')
   if (marker === -1) return wav
-  const pcm = wav.subarray(marker + 8)
+  const whole = wav.subarray(marker + 8)
+  if (Math.floor(whole.length / 2) === 0) return wav
+  const trimmed = trimLeadingSilence(whole, Math.floor(whole.length / 2))
+  const pcm = collapse ? capLength(collapseInnerPauses(trimmed)) : trimmed
   const sampleCount = Math.floor(pcm.length / 2)
   if (sampleCount === 0) return wav
 

@@ -83,10 +83,22 @@ final class SpeechPlayer: NSObject, ObservableObject {
         drainTask = Task { [weak self] in
             while let self, gen == self.generation, !self.pending.isEmpty {
                 let next = self.pending.removeFirst()
+                // The sentence exists but its audio may not be here yet.
+                // Scheduling a sound costs nothing if it arrives in time —
+                // `startGap` waits out its own delay first, and the hand-off
+                // in `playOne` cancels it before anything is heard.
+                self.startGap()
                 guard let data = await next.value, gen == self.generation else { continue }
+                self.sentencesPlayed += 1
                 await self.playOne(data: data)
             }
-            if let self, gen == self.generation { self.drainTask = nil }
+            if let self, gen == self.generation {
+                self.drainTask = nil
+                // Out of sentences while Claude is still writing: the hole
+                // this leaves in the middle of a reply is the one the
+                // between-sentence sounds exist for.
+                if self.replyStreaming { self.startGap() }
+            }
         }
     }
 
@@ -102,6 +114,8 @@ final class SpeechPlayer: NSObject, ObservableObject {
 
     func stop() {
         generation += 1
+        replyStreaming = false
+        sentencesPlayed = 0
         pending.forEach { $0.cancel() }
         pending.removeAll()
         drainTask = nil
@@ -143,21 +157,59 @@ final class SpeechPlayer: NSObject, ObservableObject {
         "Let's think about this...", "Well, now...", "Okay, so...",
         "Alright, then...", "Hmm, okay...",
     ]
+    /// And what Coach says BETWEEN its own sentences, when Claude has not
+    /// finished writing the next one. A different job from an opener: the
+    /// teacher is already mid-answer, so "Let me think..." would sound like
+    /// Coach losing its place. These hold the floor instead of taking it.
+    ///
+    /// The leading "..." is deliberate — Coach comes in a beat late rather
+    /// than jumping into its own pause. The server trims the dead air that
+    /// produces and shortens the pauses between the words, so what arrives
+    /// here runs 0.7s to 2.5s.
+    private static let betweenFillers = [
+        "...well... okay then...", "...hmm... alrighty...",
+        "...so... yeah...", "...okay... well, well...",
+        "...well... you know...", "...I mean... yeah...",
+        "...hmm... okay, okay...", "...alrighty... so...",
+        "...well... huh...", "...okay-dokey...",
+        "...yeah... well...", "...so... um... yeah...",
+        "...well... I mean...", "...hmm... right...",
+        "...okay... well then...", "...ah... okay...",
+        "...right... right...", "...oh... well...",
+        "...okay... so, yeah...", "...well... hmm...",
+    ]
     private static let fillerDelay: Duration = .milliseconds(250)
 
-    private var clips: [Data] = []
-    private var lastPlayed = -1
+    /// Not the whole list of either. Thirty-seven clips is a couple of
+    /// megabytes of a teacher's cellular data for sounds they will hear
+    /// perhaps ten of; a handful from each pool is all the variety one
+    /// conversation can use, and it is a different handful next time.
+    private static let clipsPerPool = 8
+
+    private var starterClips: [Data] = []
+    private var gapClips: [Data] = []
+    private var lastStarter = -1
+    private var lastGap = -1
+    /// Sentences played in the current turn. A gap sound belongs between
+    /// sentences, so nothing happens until Coach has said one.
+    private var sentencesPlayed = 0
+    /// Whether Claude is still writing. An empty queue mid-reply is a gap to
+    /// cover; an empty queue at the end of a reply is just the end.
+    private var replyStreaming = false
     private var fillerPlayer: AVAudioPlayer?
     private var thinkingTask: Task<Void, Never>?
 
     /// Fetched once a conversation, in the teacher's own Coach voice. Doing
     /// this per turn would reintroduce exactly the delay they exist to cover.
     func loadFillers(voice: String?) async {
-        guard clips.isEmpty else { return }
-        clips = await Self.fetchAll(Self.shortFillers, voice: voice)
+        guard starterClips.isEmpty, gapClips.isEmpty else { return }
+        async let starters = Self.fetchAll(Self.shortFillers.shuffled().prefix(Self.clipsPerPool), voice: voice)
+        async let gaps = Self.fetchAll(Self.betweenFillers.shuffled().prefix(Self.clipsPerPool), voice: voice)
+        starterClips = await starters
+        gapClips = await gaps
     }
 
-    private static func fetchAll(_ phrases: [String], voice: String?) async -> [Data] {
+    private static func fetchAll(_ phrases: some Sequence<String>, voice: String?) async -> [Data] {
         await withTaskGroup(of: Data?.self) { group in
             for phrase in phrases {
                 group.addTask { try? await TalkToMeService.fetchSpeech(text: phrase, voice: voice) }
@@ -174,11 +226,33 @@ final class SpeechPlayer: NSObject, ObservableObject {
     /// moment real speech plays.
     func startThinking() {
         cancelThinking()
+        sentencesPlayed = 0
+        replyStreaming = true
         thinkingTask = Task { [weak self] in
             try? await Task.sleep(for: Self.fillerDelay)
             guard !Task.isCancelled else { return }
-            await self?.playFiller()
+            await self?.playFiller(starter: true)
         }
+    }
+
+    /// The between-sentence sound. Coach has already started answering and
+    /// has run out of written sentences, so this holds the floor rather than
+    /// leaving a hole in the middle of the reply. Ended by the hand-off in
+    /// `playOne`, like a thinking sound.
+    func startGap() {
+        guard sentencesPlayed > 0 else { return }
+        cancelThinking()
+        thinkingTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.fillerDelay)
+            guard !Task.isCancelled else { return }
+            await self?.playFiller(starter: false)
+        }
+    }
+
+    /// Claude has stopped writing: an empty queue from here on is the end of
+    /// the reply, not a gap in it.
+    func replyFinished() {
+        replyStreaming = false
     }
 
     /// Long enough not to click, short enough that Coach's first word is not
@@ -228,14 +302,16 @@ final class SpeechPlayer: NSObject, ObservableObject {
         }
     }
 
-    private func playFiller() {
+    private func playFiller(starter: Bool) {
         // Never over real speech: by the time a clip is due, the reply may
         // already have started.
         guard player?.isPlaying != true else { return }
+        let clips = starter ? starterClips : gapClips
         guard !clips.isEmpty else { return }
         var index = Int.random(in: 0..<clips.count)
-        if clips.count > 1, index == lastPlayed { index = (index + 1) % clips.count }
-        lastPlayed = index
+        let last = starter ? lastStarter : lastGap
+        if clips.count > 1, index == last { index = (index + 1) % clips.count }
+        if starter { lastStarter = index } else { lastGap = index }
         PlaybackSession.activate()
         fillerPlayer = try? AVAudioPlayer(data: clips[index])
         fillerPlayer?.play()
