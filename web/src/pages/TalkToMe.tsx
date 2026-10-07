@@ -221,6 +221,11 @@ export default function TalkToMe() {
   // Pre-made thinking sounds for the gap while Claude writes. Loaded once a
   // conversation, in the teacher's own Coach voice.
   const fillersRef = useRef<Fillers | null>(null)
+  // Thinking sounds get their own element. Sharing one with Coach's speech
+  // meant the reply's src assignment cut a filler dead mid-word; separate
+  // elements let the filler fade under the reply instead, which is the
+  // difference between a splice and a person trailing off.
+  const fillerAudioRef = useRef<HTMLAudioElement | null>(null)
   const fillerTimerRef = useRef<number | null>(null)
   // The reply currently being streamed, whether or not it is still audible.
   // An interruption starts the next turn immediately, so that turn has to
@@ -297,6 +302,9 @@ export default function TalkToMe() {
     function primeAudio() {
       const audio = audioRef.current
       if (audio) primeAudioElement(audio)
+      // Same unlock, same gesture: a filler is played programmatically too.
+      const filler = fillerAudioRef.current
+      if (filler) primeAudioElement(filler)
     }
     // pointerdown alone missed one real path: submitting "Type instead" by
     // pressing Enter in the text field fires no pointerdown at all (it's a
@@ -492,14 +500,19 @@ export default function TalkToMe() {
   // "hmm" in front of it.
   const FILLER_AFTER_MS = 400
 
+  // Long enough not to click, short enough that Coach's first word is not
+  // competing with a filler still trailing off underneath it.
+  const FILLER_FADE_MS = 120
+
   function startThinkingSound() {
     cancelThinkingSound()
     fillerTimerRef.current = window.setTimeout(() => {
-      const audio = audioRef.current
+      const audio = fillerAudioRef.current
       const clip = fillersRef.current?.next()
       // Only into silence: once Coach is speaking, or the teacher is, a
       // thinking sound would be talking over one of them.
       if (!audio || !clip || !sessionActiveRef.current || phaseRef.current !== 'thinking') return
+      audio.volume = 1
       audio.src = clip
       void audio.play().catch(() => {})
     }, FILLER_AFTER_MS)
@@ -508,6 +521,22 @@ export default function TalkToMe() {
   function cancelThinkingSound() {
     if (fillerTimerRef.current) window.clearTimeout(fillerTimerRef.current)
     fillerTimerRef.current = null
+
+    // Fade rather than stop: a filler cut mid-word is the "chopped" sound
+    // this feature is supposed to avoid. Coach's first word arrives over the
+    // last of it, which is how one person stops as another starts.
+    const audio = fillerAudioRef.current
+    if (!audio || audio.paused) return
+    const steps = 6
+    let step = 0
+    const fade = window.setInterval(() => {
+      step += 1
+      audio.volume = Math.max(0, 1 - step / steps)
+      if (step < steps) return
+      window.clearInterval(fade)
+      audio.pause()
+      audio.volume = 1
+    }, FILLER_FADE_MS / steps)
   }
 
   // The teacher started talking over Coach. Stop the speech, and start
@@ -697,6 +726,7 @@ export default function TalkToMe() {
         committed.queue = queue
         for (const sentence of committed.buffered) {
           stopWatching()
+          cancelThinkingSound()
           queue.push(sentence)
         }
         committed.buffered = []
@@ -1001,6 +1031,12 @@ export default function TalkToMe() {
           and silently failing on Chrome. The `controls` attribute escapes
           that UA rule; opacity/size/position then hide the native player
           UI without display:none ever coming back into play. */}
+      <audio
+        ref={fillerAudioRef}
+        crossOrigin="use-credentials"
+        controls
+        style={{ position: 'fixed', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
+      />
       <audio
         ref={audioRef}
         crossOrigin="use-credentials"

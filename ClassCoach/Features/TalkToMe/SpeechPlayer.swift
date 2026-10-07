@@ -169,11 +169,26 @@ final class SpeechPlayer: NSObject, ObservableObject {
         }
     }
 
+    /// Long enough not to click, short enough that Coach's first word is not
+    /// competing with a filler still trailing off underneath it.
+    private static let fillerFade: TimeInterval = 0.12
+
     func cancelThinking() {
         thinkingTask?.cancel()
         thinkingTask = nil
-        fillerPlayer?.stop()
+        // Faded, not stopped: a thinking sound cut mid-word is the chopped
+        // sound this feature exists to avoid. Coach's first word arrives over
+        // the last of it, the way one person stops as another starts.
+        guard let fading = fillerPlayer, fading.isPlaying else {
+            fillerPlayer = nil
+            return
+        }
         fillerPlayer = nil
+        fading.setVolume(0, fadeDuration: Self.fillerFade)
+        Task {
+            try? await Task.sleep(for: .milliseconds(Int(Self.fillerFade * 1000) + 20))
+            fading.stop()
+        }
     }
 
     private func playFiller() {
