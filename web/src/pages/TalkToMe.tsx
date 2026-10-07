@@ -222,7 +222,6 @@ export default function TalkToMe() {
   // conversation, in the teacher's own Coach voice.
   const fillersRef = useRef<Fillers | null>(null)
   const fillerTimerRef = useRef<number | null>(null)
-  const longerFillerTimerRef = useRef<number | null>(null)
   // The reply currently being streamed, whether or not it is still audible.
   // An interruption starts the next turn immediately, so that turn has to
   // wait for this to settle before it asks for anything — otherwise its
@@ -323,7 +322,6 @@ export default function TalkToMe() {
       sessionActiveRef.current = false
       close()
       if (fillerTimerRef.current) window.clearTimeout(fillerTimerRef.current)
-      if (longerFillerTimerRef.current) window.clearTimeout(longerFillerTimerRef.current)
       fillersRef.current?.release()
       fillersRef.current = null
       // A reply started during a pause is in flight on its own; leaving the
@@ -493,32 +491,23 @@ export default function TalkToMe() {
   // quickly (a speculative one, usually) should just be spoken, with no
   // "hmm" in front of it.
   const FILLER_AFTER_MS = 400
-  // The second one lands as the first is finishing, rather than after a gap:
-  // the point is that the silence never reopens while Claude is still
-  // writing. Turns that run this long are the minority, which is why the
-  // longer, more deliberate phrases live here rather than first.
-  const LONGER_FILLER_AFTER_MS = 1600
 
   function startThinkingSound() {
     cancelThinkingSound()
-    const play = (tier: 'short' | 'longer') => {
+    fillerTimerRef.current = window.setTimeout(() => {
       const audio = audioRef.current
-      const clip = fillersRef.current?.next(tier)
+      const clip = fillersRef.current?.next()
       // Only into silence: once Coach is speaking, or the teacher is, a
       // thinking sound would be talking over one of them.
       if (!audio || !clip || !sessionActiveRef.current || phaseRef.current !== 'thinking') return
       audio.src = clip
       void audio.play().catch(() => {})
-    }
-    fillerTimerRef.current = window.setTimeout(() => play('short'), FILLER_AFTER_MS)
-    longerFillerTimerRef.current = window.setTimeout(() => play('longer'), LONGER_FILLER_AFTER_MS)
+    }, FILLER_AFTER_MS)
   }
 
   function cancelThinkingSound() {
     if (fillerTimerRef.current) window.clearTimeout(fillerTimerRef.current)
     fillerTimerRef.current = null
-    if (longerFillerTimerRef.current) window.clearTimeout(longerFillerTimerRef.current)
-    longerFillerTimerRef.current = null
   }
 
   // The teacher started talking over Coach. Stop the speech, and start
