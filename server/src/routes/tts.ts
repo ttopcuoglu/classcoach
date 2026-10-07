@@ -2,11 +2,22 @@ import { Router } from 'express'
 import { Readable } from 'node:stream'
 import { synthesizeSpeechStream } from '../lib/deepgram.ts'
 import { isFillerPhrase } from '../lib/fillerPhrases.ts'
-import { fillerAudio, takeSpeech } from '../lib/speechCache.ts'
+import { breathClip, fillerAudio, takeSpeech } from '../lib/speechCache.ts'
 
 export const ttsRouter = Router()
 
 const MAX_TEXT_LENGTH = 2000
+
+// The breath Coach takes between its own sentences. Synthesized noise, not
+// speech — no Deepgram call, nothing per-teacher, the same bytes for
+// everyone — so it is built once and may be cached hard at the client.
+ttsRouter.get('/breath', (_req, res) => {
+  const audio = breathClip()
+  res.setHeader('Content-Type', 'audio/wav')
+  res.setHeader('Content-Length', String(audio.length))
+  res.setHeader('Cache-Control', 'private, max-age=604800')
+  res.end(audio)
+})
 
 // GET, not POST — an <audio src="..."> element can only stream natively
 // from a plain GET it points directly at, which is what lets the browser

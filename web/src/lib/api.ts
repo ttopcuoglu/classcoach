@@ -1333,6 +1333,12 @@ export function buildSpeechUrl(text: string, voice?: TalkVoice | null): string {
   return `${API_BASE_URL}/api/tts?${query.toString()}`
 }
 
+/// The between-sentence breath: no text, no voice, the same bytes for
+/// everyone.
+export function buildBreathUrl(): string {
+  return `${API_BASE_URL}/api/tts/breath`
+}
+
 export function setDebriefSaved(id: string, saved: boolean): Promise<Debrief> {
   return request(`/api/debriefs/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) })
 }

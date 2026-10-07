@@ -1,4 +1,4 @@
-import { buildSpeechUrl, type TalkVoice } from './api'
+import { buildBreathUrl, buildSpeechUrl, type TalkVoice } from './api'
 
 // Shared by Talk It Through and Lesson Debrief's Reflect tab — both need
 // the identical sentence-splitting/prefetch/playback behavior (including
@@ -89,6 +89,19 @@ export async function fetchSentenceAudio(sentence: string, voice: TalkVoice | nu
     return URL.createObjectURL(blob)
   } catch (err) {
     console.warn('[voicePlayback] TTS fetch threw', err)
+    return null
+  }
+}
+
+/// The breath Coach takes between its own sentences, fetched once a
+/// conversation. Not voice-specific — it is synthesized noise, the same for
+/// everyone — and free to make, so the server caches it hard.
+export async function loadJoinBreath(): Promise<string | null> {
+  try {
+    const res = await fetch(buildBreathUrl(), { credentials: 'include' })
+    if (!res.ok) return null
+    return URL.createObjectURL(await res.blob())
+  } catch {
     return null
   }
 }
@@ -274,6 +287,10 @@ export type PlaybackQueue = {
 export type GapHandler = {
   onOpen: () => void
   onClose: () => Promise<void>
+  /// Called after a sentence when the next one is already in hand, which is
+  /// where a person would breathe. Not awaited: the breath is meant to tuck
+  /// into the join, not lengthen it.
+  onJoin: () => void
 }
 
 export function createPlaybackQueue(
@@ -319,6 +336,13 @@ export function createPlaybackQueue(
       inGap = false
       await gap.onClose()
     }
+    // Only when the next sentence is already here. If the queue has run dry
+    // the gap machinery owns that silence, and a breath would be fighting it
+    // for the same audio element.
+    const breatheIfMoreToCome = () => {
+      if (!gap || cancellation.cancelled) return
+      if (i < pending.length) gap.onJoin()
+    }
 
     while (!cancellation.cancelled) {
       if (i >= pending.length) {
@@ -348,10 +372,14 @@ export function createPlaybackQueue(
       if (clip.kind === 'blob') {
         await playOne(audio, clip.url, cancellation, announce)
         release(clip)
+        breatheIfMoreToCome()
         continue
       }
       const result = await playDirect(audio, clip.url, cancellation, announce)
-      if (result === 'played' || cancellation.cancelled) continue
+      if (result === 'played' || cancellation.cancelled) {
+        breatheIfMoreToCome()
+        continue
+      }
       // Nothing was heard — download it the slow way rather than skipping a
       // sentence of Coach's answer.
       const fallback = await fetchSentenceAudio(clip.sentence, voice)
@@ -361,6 +389,7 @@ export function createPlaybackQueue(
       }
       await playOne(audio, fallback, cancellation, announce)
       URL.revokeObjectURL(fallback)
+      breatheIfMoreToCome()
     }
     // Anything fetched but never played still holds an object URL.
     for (; i < pending.length; i++) release(await pending[i].catch(() => null))

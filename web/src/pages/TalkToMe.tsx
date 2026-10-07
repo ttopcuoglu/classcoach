@@ -35,6 +35,7 @@ import { endTurn, markTurn } from '../lib/turnTiming'
 import {
   createPlaybackQueue,
   loadFillers,
+  loadJoinBreath,
   primeAudioElement,
   soundsLikeAHardMoment,
   soundsLikeAHardTurn,
@@ -252,6 +253,7 @@ export default function TalkToMe() {
   const lastWasJokeRef = useRef(false)
   const openingSentenceRef = useRef(true)
   const jokePlayingRef = useRef(false)
+  const joinBreathRef = useRef<string | null>(null)
   // The reply currently being streamed, whether or not it is still audible.
   // An interruption starts the next turn immediately, so that turn has to
   // wait for this to settle before it asks for anything — otherwise its
@@ -360,6 +362,8 @@ export default function TalkToMe() {
       if (fillerTimerRef.current) window.clearTimeout(fillerTimerRef.current)
       fillersRef.current?.release()
       fillersRef.current = null
+      if (joinBreathRef.current) URL.revokeObjectURL(joinBreathRef.current)
+      joinBreathRef.current = null
       // A reply started during a pause is in flight on its own; leaving the
       // page has to stop it too, or it finishes and saves a turn into a
       // conversation the teacher has walked away from.
@@ -448,6 +452,12 @@ export default function TalkToMe() {
         else fillers.release()
       })
     }
+    if (!joinBreathRef.current) {
+      void loadJoinBreath().then((url) => {
+        if (url && sessionActiveRef.current) joinBreathRef.current = url
+        else if (url) URL.revokeObjectURL(url)
+      })
+    }
     setError(null)
     setPhase('listening')
     start()
@@ -485,7 +495,7 @@ export default function TalkToMe() {
         phaseRef.current = 'speaking'
         bargeIn.stop = watchWhileSpeaking(handleBargeIn)
       },
-      { onOpen: startGapSound, onClose: handOffFromThinkingSound },
+      { onOpen: startGapSound, onClose: handOffFromThinkingSound, onJoin: playJoinBreath },
     )
     queueRef.current = queue
     try {
@@ -598,6 +608,25 @@ export default function TalkToMe() {
   // 2.4s, the ones with a joke at 3.0s, both plus 0.3s of trailing silence),
   // which is the point: a punchline is never faded.
   const LET_THE_JOKE_FINISH_MS = 4000
+
+  /// The breath between Coach's own sentences. Played on the filler element
+  /// and never awaited, so it tucks into the join that already exists —
+  /// every sentence clip opens with about 100ms of Deepgram's silence —
+  /// rather than making the reply longer.
+  function playJoinBreath() {
+    const audio = fillerAudioRef.current
+    const url = joinBreathRef.current
+    if (!audio || !url || !sessionActiveRef.current || bargedInRef.current) return
+    if (phaseRef.current !== 'speaking') return
+    // Something is already using the element: a gap filler, or the tail of
+    // a thinking sound. Either outranks a breath.
+    if (!audio.paused) return
+    // Nothing ever waits for a breath to finish.
+    fillerHoldRef.current = 0
+    audio.volume = 1
+    audio.src = url
+    void audio.play().catch(() => {})
+  }
 
   /// The between-sentence sound. Coach has already started answering and
   /// has run out of written sentences, so this holds the floor rather than
@@ -856,7 +885,7 @@ export default function TalkToMe() {
         stopWatching()
         bargeIn.stop = watchWhileSpeaking(handleBargeIn)
       },
-      { onOpen: startGapSound, onClose: handOffFromThinkingSound },
+      { onOpen: startGapSound, onClose: handOffFromThinkingSound, onJoin: playJoinBreath },
     )
     queueRef.current = queue
 

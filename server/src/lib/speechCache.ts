@@ -299,15 +299,36 @@ function wavFile(pcm: Buffer): Buffer {
 // request — "Phew", "Hhh" and "*sigh*" are all spoken as words — so it is
 // made here.
 //
-// Noise alone sounds like wind. What makes it read as breath is movement:
-// it brightens as the air speeds up, wavers rather than hissing evenly, and
-// builds more slowly than it stops. Baked in once when a clip is cached, so
-// it costs nothing per turn.
-const BREATH_MS = 460
+// The first attempt swept a low-pass filter open across the clip, which is
+// exactly how you synthesize a whoosh: a smooth sweep is a jet of air, not a
+// person. A breath is turbulent noise in a more or less FIXED band — a broad
+// one around 500Hz with a little hiss above it — and what makes it read as
+// breath is that the loudness flutters irregularly while the shape of it
+// rises slowly and falls more slowly still.
+//
+// Baked in once when a clip is cached, so it costs nothing per turn.
+
+// A real inhale in speech runs 300-700ms. Longer sounds like a sigh, and
+// shorter has to be loud to be heard at all, which is the whoosh again.
+const BREATH_MS = 620
 const BREATH_GAP_MS = 55
+// The shortest worth having: under this it stops sounding like breathing.
+const MIN_BREATH_MS = 400
 // Measured against the clip's own peak: a real breath beside speech sits far
-// below it, and anything louder sounds like a sigh of exasperation.
-const BREATH_LEVEL = 0.15
+// below it, and anything louder sounds like exasperation.
+const BREATH_LEVEL = 0.095
+// The band. Low and broad for the body of it, with a quieter, brighter layer
+// for the air — a single band alone sounds like a filtered hiss.
+const BREATH_HZ = 520
+const BREATH_Q = 0.65
+const BREATH_AIR_HZ = 2600
+const BREATH_AIR_Q = 1.2
+const BREATH_AIR_LEVEL = 0.22
+// The rise takes half the breath; the fall takes the rest and is gentler.
+const BREATH_ATTACK = 0.5
+// Turbulence: how much the loudness wanders, and how quickly.
+const BREATH_FLUTTER = 0.22
+const BREATH_FLUTTER_HZ = 28
 
 // Seeded, so a given phrase always breathes the same way rather than
 // sounding different each time the cache is rebuilt.
@@ -321,30 +342,88 @@ function seededRandom(seed: number): () => number {
   }
 }
 
-function breathSamples(peak: number, seed: number): Int16Array {
+/// One band of a two-pole band-pass (RBJ cookbook), which is what gives the
+/// noise a formant rather than a hiss.
+function bandPass(input: Float64Array, hz: number, q: number): Float64Array {
+  const w0 = (2 * Math.PI * hz) / SPEECH_WAV_SAMPLE_RATE
+  const alpha = Math.sin(w0) / (2 * q)
+  const a0 = 1 + alpha
+  const b0 = alpha / a0
+  const b2 = -alpha / a0
+  const a1 = (-2 * Math.cos(w0)) / a0
+  const a2 = (1 - alpha) / a0
+  const out = new Float64Array(input.length)
+  let x1 = 0
+  let x2 = 0
+  let y1 = 0
+  let y2 = 0
+  for (let i = 0; i < input.length; i++) {
+    const x = input[i]
+    const y = b0 * x + b2 * x2 - a1 * y1 - a2 * y2
+    x2 = x1
+    x1 = x
+    y2 = y1
+    y1 = y
+    out[i] = y
+  }
+  return out
+}
+
+function breathSamples(ms: number, peak: number, seed: number): Int16Array {
+  const length = Math.round((SPEECH_WAV_SAMPLE_RATE * ms) / 1000)
   const random = seededRandom(seed)
-  const length = Math.round((SPEECH_WAV_SAMPLE_RATE * BREATH_MS) / 1000)
+  const white = new Float64Array(length)
+  for (let i = 0; i < length; i++) white[i] = random() * 2 - 1
+
+  const body = bandPass(white, BREATH_HZ, BREATH_Q)
+  const air = bandPass(white, BREATH_AIR_HZ, BREATH_AIR_Q)
+
+  // The flutter is its own slow noise, not a tone: a regular wobble would
+  // read as tremolo.
+  const flutterCoeff = Math.min(1, (BREATH_FLUTTER_HZ * 2 * Math.PI) / SPEECH_WAV_SAMPLE_RATE)
+  const flutterNoise = seededRandom(seed + 7)
+  const flutter = new Float64Array(length)
+  let smoothed = 0
+  let flutterPeak = 1e-9
+  for (let i = 0; i < length; i++) {
+    smoothed += flutterCoeff * (flutterNoise() * 2 - 1 - smoothed)
+    flutter[i] = smoothed
+    flutterPeak = Math.max(flutterPeak, Math.abs(smoothed))
+  }
+
+  let mixPeak = 1e-9
+  const mixed = new Float64Array(length)
+  for (let i = 0; i < length; i++) {
+    mixed[i] = body[i] + BREATH_AIR_LEVEL * air[i]
+    mixPeak = Math.max(mixPeak, Math.abs(mixed[i]))
+  }
+
   const out = new Int16Array(length)
-  let lowPass = 0
-  let rumble = 0
-  let drift = 0
   for (let i = 0; i < length; i++) {
     const t = i / length
-    // The filter opens as the breath goes on: air moving faster is brighter.
-    const openness = 0.04 + (0.26 - 0.04) * t
-    const white = random() * 2 - 1
-    lowPass += openness * (white - lowPass)
-    rumble += 0.004 * (lowPass - rumble)
-    // A slow wander in loudness, so it breathes rather than hisses.
-    drift = Math.max(-1, Math.min(1, drift * 0.995 + (random() - 0.5) * 0.1))
-    const envelope = Math.pow(Math.sin(Math.PI * Math.pow(t, 0.75)), 1.2)
-    const value = (lowPass - rumble) * envelope * peak * (1 + 0.22 * drift)
+    const envelope =
+      t < BREATH_ATTACK
+        ? // smooth rise
+          ((u) => u * u * (3 - 2 * u))(t / BREATH_ATTACK)
+        : // and a longer, gentler fall
+          Math.pow(1 - (t - BREATH_ATTACK) / (1 - BREATH_ATTACK), 1.6)
+    const value = (mixed[i] / mixPeak) * envelope * (1 + BREATH_FLUTTER * (flutter[i] / flutterPeak)) * peak
     out[i] = Math.round(Math.max(-1, Math.min(1, value)) * 32767)
   }
   return out
 }
 
-/// Puts an intake of breath in front of a clip.
+// A thinking sound only plays in full if it fits inside the beat before
+// Coach's reply: the clip starts about 250ms into the pause, the first
+// sentence is ready around 0.9s later, and a clip with 1.2s or less left is
+// then allowed to finish (HOLD_FOR_FILLER_MS). So a clip over about this
+// long is faded mid-word, and a breath that pushes it over the line costs
+// more than it adds.
+const CLIP_BUDGET_MS = 2100
+
+/// Puts an intake of breath in front of a clip — as long a one as will fit
+/// before the reply arrives, and none at all when the words alone already
+/// fill the beat.
 export function withBreath(wav: Buffer, phrase: string): Buffer {
   const marker = wav.indexOf('data')
   if (marker === -1) return wav
@@ -352,17 +431,46 @@ export function withBreath(wav: Buffer, phrase: string): Buffer {
   const sampleCount = Math.floor(pcm.length / 2)
   if (sampleCount === 0) return wav
 
+  const speechMs = (sampleCount / SPEECH_WAV_SAMPLE_RATE) * 1000
+  const room = CLIP_BUDGET_MS - speechMs - BREATH_GAP_MS
+  const breathMs = Math.min(BREATH_MS, room)
+  if (breathMs < MIN_BREATH_MS) return wav
+
   let peak = 0
   for (let i = 0; i < sampleCount; i++) peak = Math.max(peak, Math.abs(pcm.readInt16LE(i * 2)))
   if (peak === 0) return wav
 
   let seed = 0
   for (let i = 0; i < phrase.length; i++) seed = (seed * 31 + phrase.charCodeAt(i)) >>> 0
-  const breath = breathSamples((peak / 32767) * BREATH_LEVEL, seed)
+  const breath = breathSamples(breathMs, (peak / 32767) * BREATH_LEVEL, seed)
   const gap = Math.round((SPEECH_WAV_SAMPLE_RATE * BREATH_GAP_MS) / 1000)
 
   const out = Buffer.alloc((breath.length + gap + sampleCount) * 2)
   for (let i = 0; i < breath.length; i++) out.writeInt16LE(breath[i], i * 2)
   pcm.copy(out, (breath.length + gap) * 2, 0, sampleCount * 2)
   return wavFile(out)
+}
+
+// ---------------------------------------------------------------------------
+// The breath between sentences
+// ---------------------------------------------------------------------------
+//
+// A reply of three sentences is three separate clips played back to back,
+// and each one begins with about 100ms of Deepgram's own silence — so the
+// joins are quiet, even, and identical, which is what makes a long reply
+// sound assembled rather than spoken.
+//
+// A person breathes there. This is that breath: quieter and shorter than the
+// one in front of a thinking sound, and played on its own element so it
+// tucks into the join that already exists instead of adding to it. It costs
+// nothing at all to make — no Deepgram call, just noise — and is the same
+// for everyone, so it is built once for the life of the process.
+const JOIN_BREATH_MS = 260
+const JOIN_BREATH_LEVEL = 0.055
+
+let joinBreath: Buffer | null = null
+
+export function breathClip(): Buffer {
+  joinBreath ??= wavFile(Buffer.from(breathSamples(JOIN_BREATH_MS, JOIN_BREATH_LEVEL, 101).buffer))
+  return joinBreath
 }
