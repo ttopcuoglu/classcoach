@@ -39,6 +39,7 @@ import {
   primeAudioElement,
   soundsLikeAHardMoment,
   soundsLikeAHardTurn,
+  HESITATION_CHANCE,
   WITTY_GAP_CHANCE,
   type Fillers,
   type PlaybackQueue,
@@ -575,10 +576,17 @@ export default function TalkToMe() {
     const roll = Math.random()
     if (roll >= 1 - SILENT_TURN_CHANCE) return
     const joking = !noJokesRef.current && !lastWasJokeRef.current && roll < WITTY_GAP_CHANCE
+    // Wordless: a hum and then a beat. Coach is audibly thinking without
+    // claiming to be doing anything in particular.
+    const humming = !joking && roll < WITTY_GAP_CHANCE + HESITATION_CHANCE
     const delay = FILLER_AFTER_MIN_MS + Math.random() * (FILLER_AFTER_MAX_MS - FILLER_AFTER_MIN_MS)
     fillerTimerRef.current = window.setTimeout(() => {
       const audio = fillerAudioRef.current
-      const clip = joking ? fillersRef.current?.nextWitty() : fillersRef.current?.nextStarter()
+      const clip = joking
+        ? fillersRef.current?.nextWitty()
+        : humming
+          ? fillersRef.current?.hesitation()
+          : fillersRef.current?.nextStarter()
       // Only into silence: once Coach is speaking, or the teacher is, a
       // thinking sound would be talking over one of them.
       if (!audio || !clip || !sessionActiveRef.current || phaseRef.current !== 'thinking') return

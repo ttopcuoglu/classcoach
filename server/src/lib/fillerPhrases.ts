@@ -42,27 +42,6 @@ export const FILLER_PHRASES = [
   "Hmm, okay...",
 ]
 
-// A soft "Hmmm..." in front of "Let me think..." reads as someone gathering
-// themselves. In front of "Okay, so..." it reads as someone about to make a
-// speech, so only the ones that are already a thought get one.
-//
-// This replaced a synthesized inhale. Noise shaped to sound like breathing
-// kept sounding like air instead — and Coach's own voice can simply hum,
-// which is both more convincing and free after the first time.
-export const LEAD_IN_PHRASES = new Set([
-  "Let me see...",
-  "Well, let's see...",
-  "Okay, let's see...",
-  "Alright, let's see...",
-  "So, let's see...",
-  "Well, let me think...",
-  "Okay, let me think...",
-  "Hmm, let me think...",
-  "Let me take a moment...",
-  "Let me gather my thoughts...",
-  "Let's think about this...",
-])
-
 // And these are what Coach says BETWEEN its own sentences, when Claude has
 // not finished writing the next one. A different job from an opener: the
 // teacher is already mid-answer, so "Let me think..." would sound like Coach

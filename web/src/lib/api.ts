@@ -1327,19 +1327,35 @@ export async function transcribeTalkToMeAudio(audioBlob: Blob): Promise<{ transc
 // this lets the browser stream Deepgram's response natively (playback can
 // start from the first byte) instead of buffering the whole clip via
 // fetch().blob() first.
+// Thinking sounds are served with a day of client caching, and their URL is
+// just the phrase — so when what we bake into a clip changes (a hum instead
+// of a breath, a pause before the words), a teacher keeps yesterday's audio
+// for up to a day and sees none of it. This is the version of that baking.
+// Bump it whenever the audio for an unchanged phrase changes.
+//
+// The server ignores it. It exists purely to be part of the URL.
+export const SPEECH_REVISION = '2'
+
 export function buildSpeechUrl(text: string, voice?: TalkVoice | null): string {
   const query = new URLSearchParams({ text })
   if (voice) query.set('voice', voice)
+  query.set('rev', SPEECH_REVISION)
   return `${API_BASE_URL}/api/tts?${query.toString()}`
 }
 
 /// The short hum Coach makes between its own sentences. No text — one clip
 /// per voice, cached hard on both sides.
-export function buildJoinSoundUrl(voice?: TalkVoice | null): string {
-  const query = new URLSearchParams()
+/// A hum and a beat of silence, played instead of a spoken thinking sound.
+export function buildHesitationUrl(voice?: TalkVoice | null): string {
+  const query = new URLSearchParams({ rev: SPEECH_REVISION })
   if (voice) query.set('voice', voice)
-  const suffix = query.toString()
-  return `${API_BASE_URL}/api/tts/join${suffix ? `?${suffix}` : ''}`
+  return `${API_BASE_URL}/api/tts/hesitate?${query.toString()}`
+}
+
+export function buildJoinSoundUrl(voice?: TalkVoice | null): string {
+  const query = new URLSearchParams({ rev: SPEECH_REVISION })
+  if (voice) query.set('voice', voice)
+  return `${API_BASE_URL}/api/tts/join?${query.toString()}`
 }
 
 export function setDebriefSaved(id: string, saved: boolean): Promise<Debrief> {

@@ -2,11 +2,27 @@ import { Router } from 'express'
 import { Readable } from 'node:stream'
 import { synthesizeSpeechStream } from '../lib/deepgram.ts'
 import { isFillerPhrase } from '../lib/fillerPhrases.ts'
-import { fillerAudio, joinSound, takeSpeech } from '../lib/speechCache.ts'
+import { fillerAudio, hesitationClip, joinSound, takeSpeech } from '../lib/speechCache.ts'
 
 export const ttsRouter = Router()
 
 const MAX_TEXT_LENGTH = 2000
+
+// A hum and then a beat of silence: Coach thinking, played in place of a
+// spoken thinking sound rather than in front of one.
+ttsRouter.get('/hesitate', async (req, res) => {
+  const voice = typeof req.query.voice === 'string' ? req.query.voice : undefined
+  try {
+    const audio = await hesitationClip(voice)
+    res.setHeader('Content-Type', 'audio/wav')
+    res.setHeader('Content-Length', String(audio.length))
+    res.setHeader('Cache-Control', 'private, max-age=604800')
+    res.end(audio)
+  } catch (error) {
+    console.error('[tts] hesitation failed:', error)
+    res.status(502).json({ error: 'could not synthesize' })
+  }
+})
 
 // The short hum Coach makes between its own sentences. One clip per voice,
 // synthesized once for the life of the process, so the client may keep its

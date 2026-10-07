@@ -1,4 +1,4 @@
-import { buildJoinSoundUrl, buildSpeechUrl, type TalkVoice } from './api'
+import { buildHesitationUrl, buildJoinSoundUrl, buildSpeechUrl, type TalkVoice } from './api'
 
 // Shared by Talk It Through and Lesson Debrief's Reflect tab — both need
 // the identical sentence-splitting/prefetch/playback behavior (including
@@ -632,6 +632,11 @@ export function soundsLikeAHardMoment(sentence: string): boolean {
   return SYMPATHY_MARKERS.some((marker) => text.includes(marker))
 }
 
+// How often Coach hums and pauses instead of saying a thinking phrase.
+// Often enough to be part of how it sounds, rarely enough that a teacher
+// still hears it think out loud most turns.
+export const HESITATION_CHANCE = 0.35
+
 export type Fillers = {
   /// A clip that is not the one played last, so Coach does not say "Hmm"
   /// twice in a row. Null when none loaded.
@@ -640,6 +645,8 @@ export type Fillers = {
   nextGap: () => string | null
   /// A gap filler with a joke in it, for the rare turn that gets one.
   nextWitty: () => string | null
+  /// The wordless one: a hum and a beat of thinking.
+  hesitation: () => string | null
   release: () => void
 }
 
@@ -679,17 +686,28 @@ export async function loadFillers(voice: TalkVoice | null): Promise<Fillers> {
     (await Promise.all(sample(phrases, count).map((phrase) => fetchSentenceAudio(phrase, voice)))).filter(
       (url): url is string => url !== null,
     )
-  const [starters, gaps, witty] = await Promise.all([
+  const fetchOne = async (url: string) => {
+    try {
+      const res = await fetch(url, { credentials: 'include' })
+      return res.ok ? URL.createObjectURL(await res.blob()) : null
+    } catch {
+      return null
+    }
+  }
+  const [starters, gaps, witty, hesitation] = await Promise.all([
     fetchPool(FILLER_PHRASES, CLIPS_PER_POOL),
     fetchPool(BETWEEN_FILLER_PHRASES, CLIPS_PER_POOL),
     fetchPool(WITTY_FILLER_PHRASES, WITTY_CLIPS),
+    fetchOne(buildHesitationUrl(voice)),
   ])
   return {
     nextStarter: rotate(starters),
     nextGap: rotate(gaps),
     nextWitty: rotate(witty),
+    hesitation: () => hesitation,
     release() {
       for (const url of [...starters, ...gaps, ...witty]) URL.revokeObjectURL(url)
+      if (hesitation) URL.revokeObjectURL(hesitation)
       starters.length = 0
       gaps.length = 0
       witty.length = 0

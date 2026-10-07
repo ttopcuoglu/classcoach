@@ -1,5 +1,5 @@
 import { SPEECH_WAV_SAMPLE_RATE, synthesizeSpeechStream } from './deepgram.ts'
-import { LEAD_IN_PHRASES, isGapFillerPhrase, isWittyFillerPhrase } from './fillerPhrases.ts'
+import { isGapFillerPhrase, isWittyFillerPhrase } from './fillerPhrases.ts'
 import { DEFAULT_TALK_VOICE, isValidTalkVoice } from './talkVoices.ts'
 
 // Starts synthesizing a sentence before anyone asks for it.
@@ -156,8 +156,7 @@ export function fillerAudio(text: string, voice: string | undefined): Promise<Bu
     const upstream = await synthesizeSpeechStream(phrase, voice, 'wav')
     const audio = Buffer.from(await upstream.arrayBuffer())
     if (audio.length === 0) throw new Error('Deepgram returned no audio')
-    const settled = softenEnding(audio, isGapFillerPhrase(phrase), isWittyFillerPhrase(phrase))
-    return LEAD_IN_PHRASES.has(phrase) ? await withLeadIn(settled, voice) : settled
+    return softenEnding(audio, isGapFillerPhrase(phrase), isWittyFillerPhrase(phrase))
   })()
   // A failure must not be remembered as the answer forever.
   clip.catch(() => fillerClips.delete(key))
@@ -327,13 +326,37 @@ const MAX_LEAD_IN_MS = 700
 
 // Aura's level for these is a lottery even among usable draws, so a
 // hesitation is scaled to a fixed share of the words it precedes rather than
-// trusted as recorded. Under half, so it sits beneath them as a real one
-// does.
-const LEAD_IN_LEVEL = 0.45
+// trusted as recorded. Well under half: it should be felt rather than heard,
+// and a hum at conversational level sounds like Coach agreeing with itself.
+const HESITATION_LEVEL = 0.22
 // A cap on that scaling, so a quiet clip is left quiet rather than being
 // amplified into its own noise floor.
 const LEAD_IN_MAX_GAIN = 3
-const LEAD_IN_GAP_MS = 80
+
+// And rolled off, so what is left is the chest of the hum rather than the
+// front of it. Aura puts a bright attack on "Hmmm" that reads as a syllable;
+// without it the same clip reads as breath.
+const LEAD_IN_LOWPASS_HZ = 900
+
+// Then a real pause, and nothing else. This is the point of the whole
+// thing: a hum that runs straight into words is a mouth noise, where a hum
+// and then a beat of nothing is somebody thinking.
+//
+// It took two tries to get this right. The first version baked the hum onto
+// the FRONT of a spoken phrase — "Hmmm... [pause] Let me see..." — which
+// fails twice over. The clip budget then has to cover hum, pause and words
+// together, so only the shortest phrase in the list ever qualified. And
+// worse, Coach's reply is ready about 0.9s in, which lands inside the pause:
+// the clip is faded there, so the teacher heard the hum, a fraction of the
+// pause, and then the answer. The pause the hum exists to create was the
+// first thing thrown away.
+//
+// So the hesitation is its own clip, played INSTEAD of a spoken phrase. A
+// hum and a beat is about 1.2s, which means a reply ready at 0.9s has 0.3s
+// left to wait — inside the hold, so Coach waits it out and the pause is
+// heard in full. The pause is no longer competing with words for the budget;
+// it is what the clip is.
+const HESITATION_PAUSE_MS = 500
 
 // A thinking sound only plays in full if it fits inside the beat before
 // Coach's reply: the clip starts about 250ms into the pause, the first
@@ -390,46 +413,54 @@ function hesitationDraws(voice: string | undefined): Promise<Buffer[]> {
   return draws
 }
 
-/// Puts a hesitation in front of a clip — the longest one that still fits
-/// before the reply arrives, and none at all when the words already fill the
-/// beat on their own.
-export async function withLeadIn(wav: Buffer, voice: string | undefined): Promise<Buffer> {
-  const marker = wav.indexOf('data')
-  if (marker === -1) return wav
-  const pcm = wav.subarray(marker + 8)
-  const sampleCount = Math.floor(pcm.length / 2)
-  if (sampleCount === 0) return wav
-  const phrasePeak = peakOf(pcm, sampleCount)
-  if (phrasePeak === 0) return wav
-
-  const speechMs = (sampleCount / SPEECH_WAV_SAMPLE_RATE) * 1000
-  const gap = Math.round((SPEECH_WAV_SAMPLE_RATE * LEAD_IN_GAP_MS) / 1000)
-  const room = CLIP_BUDGET_MS - speechMs - LEAD_IN_GAP_MS
-  if (room <= 0) return wav
-
-  let draws: Buffer[]
-  try {
-    draws = await hesitationDraws(voice)
-  } catch (error) {
-    console.error('[speech] hesitation failed:', error)
-    return wav
+/// Quieter and darker, in one pass: a one-pole roll-off takes the bright
+/// attack off the hum, and the gain puts it under the words.
+function soften(pcm: Buffer, sampleCount: number, gain: number): Buffer {
+  const coeff = Math.min(1, (2 * Math.PI * LEAD_IN_LOWPASS_HZ) / SPEECH_WAV_SAMPLE_RATE)
+  const out = Buffer.alloc(sampleCount * 2)
+  let y = 0
+  let peak = 0
+  const filtered = new Float64Array(sampleCount)
+  for (let i = 0; i < sampleCount; i++) {
+    y += coeff * (pcm.readInt16LE(i * 2) - y)
+    filtered[i] = y
+    peak = Math.max(peak, Math.abs(y))
   }
-  // Only the draws that fit the room left, and a different one each time a
-  // phrase is cached.
-  const fits = draws.filter((d) => (Math.floor(d.length / 2) / SPEECH_WAV_SAMPLE_RATE) * 1000 <= room)
-  if (fits.length === 0) return wav
-  const lead = fits[Math.floor(Math.random() * fits.length)]
-  const leadSamples = Math.floor(lead.length / 2)
-  const leadPeak = peakOf(lead, leadSamples)
-  if (leadPeak === 0) return wav
-
-  const gain = Math.min(LEAD_IN_MAX_GAIN, (phrasePeak * LEAD_IN_LEVEL) / leadPeak)
-  const out = Buffer.alloc((leadSamples + gap + sampleCount) * 2)
-  for (let i = 0; i < leadSamples; i++) {
-    out.writeInt16LE(Math.round(lead.readInt16LE(i * 2) * gain), i * 2)
+  // The roll-off costs level, so the gain is applied to what came out of it
+  // rather than to what went in.
+  const rawPeak = peakOf(pcm, sampleCount)
+  const correction = peak > 0 ? rawPeak / peak : 1
+  for (let i = 0; i < sampleCount; i++) {
+    out.writeInt16LE(Math.round(Math.max(-32767, Math.min(32767, filtered[i] * correction * gain))), i * 2)
   }
-  pcm.copy(out, (leadSamples + gap) * 2, 0, sampleCount * 2)
-  return wavFile(out)
+  return out
+}
+
+/// A hum and then a beat of silence: Coach thinking, with no words in it.
+/// Played in place of a spoken thinking sound, not in front of one.
+const hesitationClips = new Map<string, Promise<Buffer>>()
+
+export function hesitationClip(voice: string | undefined): Promise<Buffer> {
+  const key = keyFor('hesitate', voice)
+  const existing = hesitationClips.get(key)
+  if (existing) return existing
+  const clip = (async () => {
+    const draws = await hesitationDraws(voice)
+    const lead = draws[Math.floor(Math.random() * draws.length)]
+    const sampleCount = Math.floor(lead.length / 2)
+    const peak = peakOf(lead, sampleCount)
+    // Nothing to level it against here — it plays into silence rather than
+    // in front of words — so a fixed share of full scale, near enough to the
+    // level it had beside a phrase.
+    const gain = peak > 0 ? Math.min(LEAD_IN_MAX_GAIN, (32767 * HESITATION_LEVEL) / peak) : 1
+    const pause = Math.round((SPEECH_WAV_SAMPLE_RATE * HESITATION_PAUSE_MS) / 1000)
+    const out = Buffer.alloc((sampleCount + pause) * 2)
+    soften(lead, sampleCount, gain).copy(out, 0)
+    return wavFile(out)
+  })()
+  clip.catch(() => hesitationClips.delete(key))
+  hesitationClips.set(key, clip)
+  return clip
 }
 
 // ---------------------------------------------------------------------------
@@ -442,8 +473,10 @@ export async function withLeadIn(wav: Buffer, voice: string | undefined): Promis
 // sound assembled rather than spoken.
 //
 // The short hum goes there, well under the speech around it, on its own
-// element so it tucks into the join rather than lengthening the reply.
-const JOIN_LEVEL = 0.18
+// element so it tucks into the join rather than lengthening the reply. Softer
+// and darker than the one in front of a thinking sound, because this one
+// plays underneath Coach's own next sentence.
+const JOIN_LEVEL = 0.11
 
 export async function joinSound(voice: string | undefined): Promise<Buffer> {
   const draws = await hesitationDraws(voice)
@@ -455,7 +488,5 @@ export async function joinSound(voice: string | undefined): Promise<Buffer> {
   // Scaled to a fixed level rather than to its neighbours: it plays over the
   // start of the next sentence, whose loudness is not known here.
   const gain = Math.min(LEAD_IN_MAX_GAIN, (32767 * JOIN_LEVEL) / peak)
-  const out = Buffer.alloc(sampleCount * 2)
-  for (let i = 0; i < sampleCount; i++) out.writeInt16LE(Math.round(lead.readInt16LE(i * 2) * gain), i * 2)
-  return wavFile(out)
+  return wavFile(soften(lead, sampleCount, gain))
 }

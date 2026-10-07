@@ -216,6 +216,11 @@ final class SpeechPlayer: NSObject, ObservableObject {
         "...well... my brain and mouth are negotiating...",
     ]
 
+    /// How often Coach hums and pauses instead of saying a thinking phrase.
+    /// Often enough to be part of how it sounds, rarely enough that a
+    /// teacher still hears it think out loud most turns.
+    private static let hesitationChance = 0.35
+
     /// Roughly one turn in four, and never two running.
     ///
     /// Drawn mostly at the START of a turn, not between sentences, which is
@@ -283,6 +288,8 @@ final class SpeechPlayer: NSObject, ObservableObject {
     private var starterClips: [Data] = []
     private var gapClips: [Data] = []
     private var wittyClips: [Data] = []
+    /// The wordless one: a hum and a beat of thinking. One clip, not a pool.
+    private var hesitationClip: Data?
     private var lastStarter = -1
     private var lastGap = -1
     private var lastWitty = -1
@@ -318,10 +325,12 @@ final class SpeechPlayer: NSObject, ObservableObject {
         async let gaps = Self.fetchAll(Self.betweenFillers.shuffled().prefix(Self.clipsPerPool), voice: voice)
         async let witty = Self.fetchAll(Self.wittyFillers.shuffled().prefix(Self.wittyClipCount), voice: voice)
         async let join = try? TalkToMeService.fetchJoinSound(voice: voice)
+        async let hesitation = try? TalkToMeService.fetchHesitation(voice: voice)
         starterClips = await starters
         gapClips = await gaps
         wittyClips = await witty
         joinSound = await join
+        hesitationClip = await hesitation
     }
 
     /// Played after a sentence when another is already in hand, which is
@@ -371,11 +380,14 @@ final class SpeechPlayer: NSObject, ObservableObject {
         let roll = Double.random(in: 0..<1)
         guard roll < 1 - Self.silentTurnChance else { return }
         let joking = !noJokesThisTurn && !lastWasJoke && roll < Self.wittyGapChance
+        // Wordless: a hum and then a beat. Coach is audibly thinking without
+        // claiming to be doing anything in particular.
+        let humming = !joking && roll < Self.wittyGapChance + Self.hesitationChance
         let delay = Duration.milliseconds(Int.random(in: Self.fillerDelayRange))
         thinkingTask = Task { [weak self] in
             try? await Task.sleep(for: delay)
             guard !Task.isCancelled else { return }
-            await self?.playFiller(starter: true, joking: joking)
+            await self?.playFiller(starter: true, joking: joking, humming: humming)
         }
     }
 
@@ -454,10 +466,19 @@ final class SpeechPlayer: NSObject, ObservableObject {
         }
     }
 
-    private func playFiller(starter: Bool, joking: Bool = false) {
+    private func playFiller(starter: Bool, joking: Bool = false, humming: Bool = false) {
         // Never over real speech: by the time a clip is due, the reply may
         // already have started.
         guard player?.isPlaying != true else { return }
+        if humming, let hesitationClip {
+            lastWasJoke = false
+            jokePlaying = false
+            currentHold = Self.holdForFiller
+            PlaybackSession.activate()
+            fillerPlayer = try? AVAudioPlayer(data: hesitationClip)
+            fillerPlayer?.play()
+            return
+        }
         let clips = joking ? wittyClips : (starter ? starterClips : gapClips)
         guard !clips.isEmpty else { return }
         var index = Int.random(in: 0..<clips.count)

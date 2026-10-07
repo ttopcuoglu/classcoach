@@ -127,16 +127,33 @@ enum TalkToMeService {
     /// Fetches one sentence's speech as MP3 bytes, in the teacher's chosen
     /// voice — same per-sentence approach as web, just fully downloaded
     /// before playback, since `AVAudioPlayer` needs the complete data up front.
+    /// Thinking sounds are served with a day of client caching, and their
+    /// URL is just the phrase — so when what the server bakes into a clip
+    /// changes (a hum instead of a breath, a pause before the words), a
+    /// teacher would keep yesterday's audio for up to a day. This is the
+    /// version of that baking; bump it when the audio for an unchanged
+    /// phrase changes. The server ignores it. Kept in step with
+    /// SPEECH_REVISION in web/src/lib/api.ts.
+    static let speechRevision = "2"
+
     static func fetchSpeech(text: String, voice: String? = nil) async throws -> Data {
-        var query = [URLQueryItem(name: "text", value: text)]
+        var query = [URLQueryItem(name: "text", value: text), URLQueryItem(name: "rev", value: speechRevision)]
         if let voice { query.append(URLQueryItem(name: "voice", value: voice)) }
         return try await APIClient.shared.rawGet("/api/tts", queryItems: query)
+    }
+
+    /// A hum and then a beat of silence: Coach thinking, played in place of
+    /// a spoken thinking sound rather than in front of one.
+    static func fetchHesitation(voice: String?) async throws -> Data {
+        var query = [URLQueryItem(name: "rev", value: speechRevision)]
+        if let voice { query.append(URLQueryItem(name: "voice", value: voice)) }
+        return try await APIClient.shared.rawGet("/api/tts/hesitate", queryItems: query)
     }
 
     /// The short hum Coach makes between its own sentences. No text — one
     /// clip per voice, cached on both sides.
     static func fetchJoinSound(voice: String?) async throws -> Data {
-        var query: [URLQueryItem] = []
+        var query = [URLQueryItem(name: "rev", value: speechRevision)]
         if let voice { query.append(URLQueryItem(name: "voice", value: voice)) }
         return try await APIClient.shared.rawGet("/api/tts/join", queryItems: query)
     }
