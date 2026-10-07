@@ -10,6 +10,7 @@ import {
   shouldWriteMemory,
 } from '../lib/coachMemory.ts'
 import { buildExperienceContextBlock } from '../lib/experience.ts'
+import { admitsSentence, countWords, TALK_REPLY_WORD_BUDGET } from '../lib/replyBudget.ts'
 import { buildFollowUpContextBlock, checkInQuestionFor, nextCheckInDate } from '../lib/followUps.ts'
 import {
   appendTurn,
@@ -161,7 +162,18 @@ ${CORE_COACHING_RULES}`
 // being audible drops ~250ms on average, and about a second on the turns
 // that were worst — "what should I say to her?", where Coach used to put the
 // whole suggested script, quote and all, in sentence one.
-export const TALK_SYSTEM_PROMPT = `You are Coach, a warm, practical coach for K-12 teachers — for classroom management, but just as much for the day-to-day workload, stress, and overwhelm of teaching — having a live SPOKEN conversation — the teacher is talking to you out loud and your reply will be read aloud back to them, so length itself costs them time. Default to TWO sentences: say the thing, then say a little more about it — what it looks like in practice, why it tends to work, or what to watch for. A third is for when it genuinely helps, not as a habit. A bare one-sentence answer is right only when the teacher asked something small and factual, or when they are mid-story and clearly about to keep going. Never pad: every sentence has to carry its own content, and none of them may soften, preface, or restate what the teacher just said. Skip generic warm-up phrases like "That's a great question" or "I hear you" — they sound scripted; a brief, genuine reaction (below) is different and doesn't count toward the sentence limit. Give exactly ONE concrete idea, suggestion, or next step per reply — never a list, never "first... second..." or "one thing... another thing." Elaborating means saying more ABOUT that one idea, never adding a second one: if you have another, save it for a later turn. End on something that keeps the conversation going — most often a single question about their situation, sometimes just an opening they can pick up or let pass. Never more than one question, and never a question you could have answered yourself from what they already told you. Plain conversational language, no lists, no markdown, no parenthetical asides. Stay grounded in what the teacher has actually said; never invent details.
+// Headroom, not a length control — the prompt's word budget is what sets
+// length. The cap exists only so a reply is never cut off, because an
+// overrun is trimmed back to its last complete sentence by trimIfTruncated:
+// a cap sitting near the intended length does not truncate visibly, it
+// silently deletes the final sentence and makes the instruction above look
+// ignored. Measured at 160 that is exactly what happened on one turn in
+// three, so this sits well clear of a fifty-five word reply (~75 tokens).
+export const TALK_REPLY_MAX_TOKENS = 200
+
+
+export const TALK_SYSTEM_PROMPT = `You are Coach, a warm, practical coach for K-12 teachers — for classroom management, but just as much for the day-to-day workload, stress, and overwhelm of teaching — having a live SPOKEN conversation — the teacher is talking to you out loud and your reply will be read aloud back to them, so length itself costs them time. Default to TWO sentences: say the thing, then say a little more about it — what it looks like in practice, why it tends to work, or what to watch for. Take a THIRD sentence whenever it carries real content — a routine to walk through, a phrase to actually say to a student, a reason the first idea might not land — but never to round the reply off, soften it, or restate what you just said. This is spoken aloud: two sentences take about eleven seconds to listen to and three take fifteen, so a third sentence that is only there for shape costs the teacher four seconds of their own time. Never one long sentence with three clauses stapled together by dashes; that is the same length with none of the rhythm.
+NEVER more than SIXTY WORDS in a reply, whatever the sentence count. This is a hard limit and it outranks every other instruction about length. It is here because the sentence count does not control length on its own: when only the sentences were specified, replies came back at a hundred and twenty words and thirty-eight seconds of listening, with the content packed into two enormous run-ons rather than more sentences. Sixty words is nineteen seconds. Two short sentences always beat one that runs on, and a reply you have to cut off to stay inside sixty words was carrying a second idea it should not have had. A bare one-sentence answer is right only when the teacher asked something small and factual, or when they are mid-story and clearly about to keep going. Never pad: every sentence has to carry its own content, and none of them may soften, preface, or restate what the teacher just said. Skip generic warm-up phrases like "That's a great question" or "I hear you" — they sound scripted; a brief, genuine reaction (below) is different and doesn't count toward the sentence limit. Give exactly ONE concrete idea, suggestion, or next step per reply — never a list, never "first... second..." or "one thing... another thing." Elaborating means saying more ABOUT that one idea, never adding a second one: if you have another, save it for a later turn. End on something that keeps the conversation going — most often a single question about their situation, sometimes just an opening they can pick up or let pass. Never more than one question, and never a question you could have answered yourself from what they already told you. Plain conversational language, no lists, no markdown, no parenthetical asides. Stay grounded in what the teacher has actually said; never invent details.
 Your first sentence is spoken aloud the instant you finish writing it, while the rest of the reply is still being written, so it must be SHORT — roughly ten words or fewer. When your answer needs a long sentence (a phrase to say to a student, a multi-part suggestion, anything with a quote in it), do not put it first. Lead with a short framing line of its own — "Keep it short and warm." "Give them somewhere to put that energy." "Name it, then move on." — and let the long part be the sentence after it. A reaction counts as that short first sentence.
 
 Since this is read aloud, sound like a warm, engaged person talking — not a script, and not overly polished. The voice reads your words exactly as written, so the warmth and rhythm have to be in the text itself:
@@ -426,6 +438,10 @@ debriefRouter.post('/', async (req, res) => {
 // the status code is already sent and can no longer say 429.
 type StreamOptions = {
   system: SystemPrompt
+  /// Stop sending sentences once this many words have gone out. A sentence
+  /// that would cross the budget is held back, so the limit is never met by
+  /// cutting one in half.
+  wordBudget?: number
   maxTokens: number
   messages: { role: 'user' | 'assistant'; content: string }[]
   safetyLabel: string
@@ -475,6 +491,11 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
   // How far into the visible (memory-tag-free) text has already been sent.
   let consumed = 0
   const spoken: string[] = []
+  let wordsSent = 0
+  // Set when the word budget stopped a sentence from going out, which means
+  // the saved reply must be the sentences the teacher actually heard rather
+  // than everything Claude wrote.
+  let capped = false
 
   // Talk It Through ends a turn on a short silence, and sometimes guesses
   // wrong: the teacher was drawing breath, carries on talking, and the
@@ -511,10 +532,19 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
       if (sentences.length === 0) return
       if (spoken.length === 0) timing.mark('first_sentence')
       for (const sentence of sentences) {
+        if (capped) break
+        // A sentence that would take the reply past the budget is dropped
+        // whole — except the very first one, since a reply has to say
+        // something even when the model opens with a run-on.
+        if (!admitsSentence(wordsSent, sentence, opts.wordBudget)) {
+          capped = true
+          break
+        }
         // Only the first one: every later sentence is already being
         // prefetched by the client while the ones ahead of it play.
         if (spoken.length === 0 && opts.speak) prefetchSpeech(sentence, opts.speak.voice)
         spoken.push(sentence)
+        wordsSent += countWords(sentence)
         send({ type: 'sentence', text: sentence })
       }
       consumed = visible.length - rest.length
@@ -541,7 +571,11 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
     // boundaries need a following character to be recognised, so the last
     // sentence of a reply never streams out — it is sent here, along with
     // anything else the boundary rule did not catch.
-    const tail = reconcileTail(spoken, reply)
+    //
+    // Unless the budget stopped the reply early, in which case there is
+    // deliberately more text than was spoken and none of it should be sent
+    // or saved: what Coach said is what Coach is remembered as having said.
+    const tail = capped ? '' : reconcileTail(spoken, reply)
     if (tail) {
       if (spoken.length === 0) timing.mark('first_sentence')
       // A reply short enough to be one sentence never passed through the
@@ -554,7 +588,13 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
     // on talking in the gap between Claude finishing and this write, and a
     // turn saved then would be a turn they never heard.
     if (abandoned) return
-    const record = await opts.persist(reply)
+    // What was spoken is what gets saved. When the budget cut the reply
+    // short, the words Claude wrote after that point were never sent to the
+    // client and must not end up in the conversation either — otherwise
+    // Coach's next turn builds on advice the teacher never heard, which is
+    // the same bug as a barged-in reply being saved in full.
+    const heard = capped ? spoken.join(' ') : reply
+    const record = await opts.persist(heard)
     timing.mark('persist')
     send({ type: 'done', debrief: record })
     res.end()
@@ -562,7 +602,9 @@ async function streamCoachReply(res: Response, label: string, opts: StreamOption
       gate: `${opts.gateMs ?? 0}ms`,
       client: clientTag(res.req),
       sentences: spoken.length + (tail ? 1 : 0),
-      chars: reply.length,
+      chars: heard.length,
+      words: wordsSent,
+      capped: String(capped),
       ...cacheStats(message.usage),
     })
 
@@ -638,7 +680,9 @@ debriefRouter.post('/talk/stream', async (req, res) => {
       TALK_SYSTEM_PROMPT,
       memoryOn ? `${talkTail}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}` : talkTail,
     ),
-    maxTokens: (isGreeting ? 150 : 110) + (memoryOn ? MEMORY_UPDATE_TOKEN_BUFFER : 0),
+    maxTokens: (isGreeting ? 150 : TALK_REPLY_MAX_TOKENS) + (memoryOn ? MEMORY_UPDATE_TOKEN_BUFFER : 0),
+    // The greeting is two sentences of hello; it needs no budget.
+    wordBudget: isGreeting ? undefined : TALK_REPLY_WORD_BUDGET,
     messages: [{ role: 'user', content: trimmed }],
     safetyLabel: 'debrief.talk',
     persist: async (reply) => {
@@ -728,7 +772,7 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
   // Talk carries no room context; Ask's belongs to this conversation, not to
   // every teacher, so either way it goes after the cache breakpoint.
   const roomBlock = isTalk ? '' : teachingContextBlock(debrief)
-  const baseMaxTokens = isTalk ? 110 : 300
+  const baseMaxTokens = isTalk ? TALK_REPLY_MAX_TOKENS : 300
   // Memory is read every turn but rewritten only on some — see shouldWriteMemory.
   const writeMemory = memoryOn && shouldWriteMemory(countUserTurns(existing) + 1)
 
@@ -743,6 +787,9 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
         : `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}`,
     ),
     maxTokens: writeMemory ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
+    // Only the spoken surface has a budget: Lesson Debrief's Reflect chat is
+    // read, where length costs nothing but screen.
+    wordBudget: isTalk ? TALK_REPLY_WORD_BUDGET : undefined,
     messages: toClaudeMessages(existing, trimmed),
     safetyLabel: isTalk ? 'debrief.talk.chat' : 'debrief.ask.chat',
     persist: (reply) =>
@@ -788,7 +835,7 @@ debriefRouter.post('/talk', async (req, res) => {
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: memoryOn ? 110 + MEMORY_UPDATE_TOKEN_BUFFER : 110,
+      max_tokens: memoryOn ? TALK_REPLY_MAX_TOKENS + MEMORY_UPDATE_TOKEN_BUFFER : TALK_REPLY_MAX_TOKENS,
       thinking: { type: 'disabled' },
       system: cachedSystem(
         TALK_SYSTEM_PROMPT,
@@ -877,7 +924,7 @@ debriefRouter.post('/:id/chat', async (req, res) => {
     // otherwise a grading question gets a behavior-management voice on turn two.
     const stablePrompt = isTalk ? TALK_SYSTEM_PROMPT : askChatSystemPrompt(findFocusArea(debrief.focusArea))
     const roomBlock = isTalk ? '' : teachingContextBlock(debrief)
-    const baseMaxTokens = isTalk ? 110 : 300
+    const baseMaxTokens = isTalk ? TALK_REPLY_MAX_TOKENS : 300
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: writeMemory ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
