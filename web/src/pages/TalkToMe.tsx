@@ -536,6 +536,18 @@ export default function TalkToMe() {
   // ~1.2s before the reply for the clip to play in.
   const FILLER_AFTER_MS = 250
 
+  // For the opener, jittered rather than fixed: a hesitation that begins at
+  // exactly the same instant every single turn is a machine keeping time. A
+  // gap filler keeps the flat delay — it is covering a hole mid-reply, not
+  // deciding whether to speak.
+  const FILLER_AFTER_MIN_MS = 180
+  const FILLER_AFTER_MAX_MS = 400
+
+  // And sometimes Coach makes no sound at all. A person thinking does not
+  // hum every time they think, and a noise on every single turn became its
+  // own tell — the more so now that the reply often arrives sooner.
+  const SILENT_TURN_CHANCE = 0.2
+
   // Long enough not to click, short enough that Coach's first word is not
   // competing with a filler still trailing off underneath it.
   const FILLER_FADE_MS = 120
@@ -544,7 +556,16 @@ export default function TalkToMe() {
     cancelThinkingSound()
     // The second after the teacher stops talking is the only gap that
     // reliably opens, so it is the only place a joke is reliably heard.
-    const joking = !noJokesRef.current && !lastWasJokeRef.current && Math.random() < WITTY_GAP_CHANCE
+    //
+    // One roll decides all three outcomes, so the joke rate does not drop
+    // just because some turns are silent: a joke a quarter of the time, no
+    // sound a fifth of the time, an ordinary opener for the rest. When jokes
+    // are off for this turn their share becomes ordinary openers, and the
+    // silent share is the same either way.
+    const roll = Math.random()
+    if (roll >= 1 - SILENT_TURN_CHANCE) return
+    const joking = !noJokesRef.current && !lastWasJokeRef.current && roll < WITTY_GAP_CHANCE
+    const delay = FILLER_AFTER_MIN_MS + Math.random() * (FILLER_AFTER_MAX_MS - FILLER_AFTER_MIN_MS)
     fillerTimerRef.current = window.setTimeout(() => {
       const audio = fillerAudioRef.current
       const clip = joking ? fillersRef.current?.nextWitty() : fillersRef.current?.nextStarter()
@@ -559,7 +580,7 @@ export default function TalkToMe() {
       audio.volume = 1
       audio.src = clip
       void audio.play().catch(() => {})
-    }, FILLER_AFTER_MS)
+    }, delay)
   }
 
   // A thinking sound with this little left to play is worth waiting out:

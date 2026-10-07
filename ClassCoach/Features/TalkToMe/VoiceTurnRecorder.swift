@@ -62,13 +62,97 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
         (9000, 950),
     ]
 
+    /// How long someone has been talking is a weak signal, though. What they
+    /// actually SAID is a much stronger one, and once live transcription is
+    /// running we have it: the draft arrives punctuated.
+    ///
+    /// A finished question is the clearest handoff in conversation — "So what
+    /// should I do?" — and sitting in silence after one is the most unnatural
+    /// thing left in a spoken turn. The same signal works in reverse: a draft
+    /// ending on "and", "because" or a comma is someone mid-thought, and
+    /// deserves longer than the curve would give.
+    ///
+    /// The numbers are a little more cautious than the web's (which answers a
+    /// question after 400ms) for the reason the curve above is: the app
+    /// cannot yet recover from ending a turn too early. Kept otherwise in
+    /// step with web/src/lib/turnEndpointing.ts.
+    private static let questionWait: TimeInterval = 0.5
+    private static let statementCeiling: TimeInterval = 0.95
+    private static let midThoughtWait: TimeInterval = 2.0
+
+    private enum Ending { case question, statement, midThought, unknown }
+
+    /// Words that cannot end an English sentence: a draft ending on one is
+    /// mid-thought whatever punctuation Deepgram put after it.
+    private static let cannotEndASentence: Set<String> = [
+        "and", "but", "or", "because", "cause", "since", "although", "though",
+        "while", "whenever", "unless", "until", "as", "plus", "than", "that",
+        "which", "the", "a", "an", "my", "his", "her", "their", "our", "your",
+        "its", "these", "those", "to", "for", "with", "about", "at", "in",
+        "on", "of", "from", "into", "onto", "is", "was", "were", "be", "been",
+        "am", "are", "had", "has", "have", "very", "really",
+    ]
+
+    /// Words that can end a sentence, so they only count when Deepgram has
+    /// not put a full stop there: "so what should I" is unfinished, where
+    /// "That was me." plainly is not.
+    private static let rarelyEndsASentence: Set<String> = [
+        "i", "he", "she", "we", "they", "you", "it", "him", "them", "me",
+        "us", "said", "says", "told", "tells", "asked", "asks", "goes",
+        "went", "called", "wanted", "started", "keeps", "kept", "tried",
+        "got", "so", "if", "when", "then", "also", "who", "like", "well",
+        "um", "uh", "uhh", "erm", "er", "hmm", "basically", "actually",
+        "literally", "mean", "know", "just", "kind", "sort", "maybe",
+    ]
+
+    private static func classify(_ transcript: String) -> Ending {
+        let text = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return .unknown }
+        // An ellipsis is Deepgram transcribing a trailing off, not a stop.
+        if text.hasSuffix("...") || text.hasSuffix("\u{2026}") || text.hasSuffix(",") { return .midThought }
+        let words = text.lowercased()
+            .components(separatedBy: CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789'").inverted)
+            .filter { !$0.isEmpty }
+        let lastWord = words.last ?? ""
+        if cannotEndASentence.contains(lastWord) { return .midThought }
+        if text.hasSuffix("?") { return .question }
+        if text.hasSuffix(".") || text.hasSuffix("!") { return .statement }
+        // Unpunctuated, so Deepgram has not decided either — and these
+        // endings mean it is very likely still coming. Leaning long here is
+        // what makes leaning short on a finished question safe.
+        if rarelyEndsASentence.contains(lastWord) { return .midThought }
+        return .unknown
+    }
+
     /// Time spent above the speech threshold this turn, not wall-clock time
     /// since it started — a teacher who opened the screen and sat quietly for
     /// ten seconds has not been talking for ten seconds.
     private var speechMs: Double = 0
     private var lastLevelAt: Date?
+    /// When the teacher was last audible — the point the wait is measured
+    /// from, since the decision is re-taken on every level callback.
+    private var lastSpeechAt: Date?
 
+    /// The longest any draft can ask for — what the backstop timer waits.
+    private var longestSilenceInterval: TimeInterval {
+        max(silenceCurve[0].waitMs / 1000, Self.midThoughtWait)
+    }
+
+    /// The window to wait out right now, given what the teacher has said so
+    /// far. Read repeatedly while the silence runs, not once when it starts:
+    /// the draft lags the voice by a couple of hundred milliseconds, so at
+    /// the instant they stop it may still end on "what should I".
     private var silenceInterval: TimeInterval {
+        let base = curveInterval
+        switch Self.classify(live?.draft ?? "") {
+        case .question: return Self.questionWait
+        case .statement: return min(base, Self.statementCeiling)
+        case .midThought: return max(base, Self.midThoughtWait)
+        case .unknown: return base
+        }
+    }
+
+    private var curveInterval: TimeInterval {
         guard speechMs > 0 else { return silenceCurve[0].waitMs / 1000 }
         for i in 1..<silenceCurve.count {
             let prev = silenceCurve[i - 1]
@@ -263,7 +347,14 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
             // Capped per callback so a gap (the app suspended, the engine
             // restarted after an interruption) cannot be counted as speech.
             speechMs += min(sinceLast, 100)
+            lastSpeechAt = now
             scheduleSilenceEnd()
+        } else if let since = lastSpeechAt, now.timeIntervalSince(since) >= silenceInterval {
+            // Silence, and the window to wait out depends on what was said.
+            // Judged here rather than fixed when the silence began, so a
+            // draft that becomes a question a moment later is answered at
+            // once instead of waiting out the whole window.
+            finishTurn()
         }
     }
 
@@ -316,9 +407,13 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
         fire?()
     }
 
+    /// A backstop, not the decision — that is taken in `handleLevel`, which
+    /// can see the draft as it grows. This covers the case where level
+    /// callbacks stop arriving at all, so it waits out the longest window
+    /// any draft could ask for rather than guessing with what is known now.
     private func scheduleSilenceEnd() {
         silenceTimer?.invalidate()
-        silenceTimer = Timer.scheduledTimer(withTimeInterval: silenceInterval, repeats: false) { [weak self] _ in
+        silenceTimer = Timer.scheduledTimer(withTimeInterval: longestSilenceInterval, repeats: false) { [weak self] _ in
             Task { @MainActor in self?.finishTurn() }
         }
     }
@@ -329,6 +424,7 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
         silenceTimer = nil
         listening = false
         lastLevelAt = nil
+        lastSpeechAt = nil
         level = 0
         turnId += 1
         capture.streamTo(nil)
@@ -459,6 +555,16 @@ final class LiveTranscriber: @unchecked Sendable {
     private let task: URLSessionWebSocketTask
     private let lock = NSLock()
     private var transcriptHandler: ((String?) -> Void)?
+    private var latestDraft = ""
+
+    /// The words so far, as Deepgram has them. Read from the main actor
+    /// while a turn's silence is being judged, written from the socket's
+    /// callback, so it goes through the same lock as everything else here.
+    var draft: String {
+        lock.lock()
+        defer { lock.unlock() }
+        return latestDraft
+    }
     private var settled = false
     private var sendsInFlight = 0
 
@@ -518,8 +624,14 @@ final class LiveTranscriber: @unchecked Sendable {
                         self.deliver(frame.transcript)
                     case "unavailable":
                         self.deliver(nil)
+                    case "draft":
+                        if let draft = frame.transcript {
+                            self.lock.lock()
+                            self.latestDraft = draft
+                            self.lock.unlock()
+                        }
                     default:
-                        break // "draft" — used by the web client, not here yet
+                        break
                     }
                 }
                 self.receive(onReady: onReady)

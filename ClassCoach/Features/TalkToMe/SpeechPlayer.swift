@@ -253,6 +253,17 @@ final class SpeechPlayer: NSObject, ObservableObject {
 
     private static let fillerDelay: Duration = .milliseconds(250)
 
+    /// For the opener, jittered rather than fixed: a hesitation that begins
+    /// at exactly the same instant every single turn is a machine keeping
+    /// time. A gap filler keeps the flat delay — it is covering a hole
+    /// mid-reply, not deciding whether to speak.
+    private static let fillerDelayRange = 180...400
+
+    /// And sometimes Coach makes no sound at all. A person thinking does not
+    /// hum every time they think, and a noise on every single turn became
+    /// its own tell.
+    private static let silentTurnChance = 0.2
+
     /// Not the whole list of either. Thirty-seven clips is a couple of
     /// megabytes of a teacher's cellular data for sounds they will hear
     /// perhaps ten of; a handful from each pool is all the variety one
@@ -328,9 +339,17 @@ final class SpeechPlayer: NSObject, ObservableObject {
         openingSentence = true
         let lowered = (teacherSaid ?? "").lowercased()
         noJokesThisTurn = Self.hardMomentMarkers.contains(where: lowered.contains)
-        let joking = !noJokesThisTurn && !lastWasJoke && Double.random(in: 0..<1) < Self.wittyGapChance
+        // One roll decides all three outcomes, so the joke rate does not
+        // drop just because some turns are silent: a joke a quarter of the
+        // time, no sound a fifth of the time, an ordinary opener for the
+        // rest. When jokes are off for this turn their share becomes
+        // ordinary openers, and the silent share is the same either way.
+        let roll = Double.random(in: 0..<1)
+        guard roll < 1 - Self.silentTurnChance else { return }
+        let joking = !noJokesThisTurn && !lastWasJoke && roll < Self.wittyGapChance
+        let delay = Duration.milliseconds(Int.random(in: Self.fillerDelayRange))
         thinkingTask = Task { [weak self] in
-            try? await Task.sleep(for: Self.fillerDelay)
+            try? await Task.sleep(for: delay)
             guard !Task.isCancelled else { return }
             await self?.playFiller(starter: true, joking: joking)
         }

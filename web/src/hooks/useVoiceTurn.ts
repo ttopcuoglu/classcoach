@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { transcribeTalkToMeAudio } from '../lib/api'
 import { liveTranscriptionEnabled, openLiveSession, type LiveSession } from '../lib/liveTranscription'
-import { silenceWindowFor } from '../lib/turnEndpointing'
+import { LONGEST_WAIT_MS, silenceWindowFor } from '../lib/turnEndpointing'
 import { beginTurn, markTurn } from '../lib/turnTiming'
 
 const MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
@@ -115,16 +115,31 @@ export function useVoiceTurn(
   // from speechMsRef, which can legitimately still read 0 after a single
   // loud first frame (there is no previous frame to measure a gap from).
   const heardSpeechRef = useRef(false)
+  // When the teacher was last audible, and whether this turn has already
+  // been ended. The wait is measured from the first and guarded by the
+  // second, since the decision is re-taken on every animation frame.
+  const lastSpeechAtRef = useRef(0)
+  const endedRef = useRef(false)
 
   // Set when a speculative reply is already in flight for this turn.
   const speculatedRef = useRef(false)
   const speculateTimerRef = useRef<number | null>(null)
 
+  function endTurnNow() {
+    if (endedRef.current) return
+    endedRef.current = true
+    recorderRef.current?.stop()
+  }
+
   function scheduleEnd() {
     if (timerRef.current) window.clearTimeout(timerRef.current)
-    timerRef.current = window.setTimeout(() => {
-      recorderRef.current?.stop()
-    }, silenceWindowFor(speechMsRef.current))
+    // A backstop, not the decision. The decision is taken frame by frame in
+    // `tick` below, because the wait depends on the live draft and the draft
+    // arrives a couple of hundred milliseconds behind the voice. This timer
+    // only covers the case where there are no frames to think in — a
+    // backgrounded tab — so it waits out the longest window any draft could
+    // ask for rather than guessing with what is known right now.
+    timerRef.current = window.setTimeout(endTurnNow, LONGEST_WAIT_MS)
 
     // The teacher is audible again, so any reply started during the last
     // pause was answering half a thought.
@@ -318,11 +333,20 @@ export function useVoiceTurn(
         // cannot come back and count the whole gap as speech.
         speechMsRef.current += Math.min(sinceLastFrame, 100)
         heardSpeechRef.current = true
+        lastSpeechAtRef.current = now
         scheduleEnd()
         // Restarted on every frame the teacher is still audible, so the
         // clock ends up starting at the last instant they were actually
         // speaking — which is when the wait starts from their side.
         beginTurn()
+      } else if (heardSpeechRef.current && !endedRef.current) {
+        // Silence, and the window to wait out depends on what the teacher
+        // said. Recomputed here rather than fixed when the silence began:
+        // at the instant they stop, the draft may still end on "what should
+        // I" and only become "what should I do?" a moment later — the
+        // difference between waiting 1.8s and answering in 0.4s.
+        const wait = silenceWindowFor(speechMsRef.current, liveRef.current?.draft())
+        if (now - lastSpeechAtRef.current >= wait) endTurnNow()
       }
       rafIdRef.current = requestAnimationFrame(tick)
     }
@@ -331,6 +355,8 @@ export function useVoiceTurn(
     heardSpeechRef.current = false
     speculatedRef.current = false
     lastFrameRef.current = 0
+    lastSpeechAtRef.current = 0
+    endedRef.current = false
     turnIdRef.current += 1
 
     recorder.start()
