@@ -13,7 +13,14 @@
 // is, and misses the trimming in speechCache.ts.
 //
 // These are the openers — what Coach says at the top of a turn, before it
-// has anything to say yet. Two rules decided them, both measured:
+// has anything to say yet.
+//
+// Nothing starts with "Hmm" any more, here or below: two openers and three
+// between-sentence phrases were dropped for it, and two of the jokes had the
+// word swapped off the front. Aura renders a leading "hmm" short and clipped
+// however it is faded, and the sound was asked for by name not to be used.
+// "...well... hmm..." went with them: the clips fade at the end, so a phrase
+// that finishes on a hum finishes on exactly the sound being removed. Two rules decided them, both measured:
 //
 //  - Under ~2.15s. A clip starts 250ms into the pause, Coach's first
 //    sentence lands around 1.2s, and a clip with 1.2s or less left is
@@ -30,7 +37,6 @@ export const FILLER_PHRASES = [
   "So, let's see...",
   "Well, let me think...",
   "Okay, let me think...",
-  "Hmm, let me think...",
   "Let me take a moment...",
   "Just a moment...",
   "Give me a second...",
@@ -39,7 +45,6 @@ export const FILLER_PHRASES = [
   "Well, now...",
   "Okay, so...",
   "Alright, then...",
-  "Hmm, okay...",
 ]
 
 // And these are what Coach says BETWEEN its own sentences, when Claude has
@@ -54,25 +59,21 @@ export const FILLER_PHRASES = [
 // the pauses between the words are the point and are kept.
 export const BETWEEN_FILLER_PHRASES = [
   "...well... okay then...",
-  "...hmm... alrighty...",
   "...so... yeah...",
   "...okay... well, well...",
   "...well... you know...",
   "...I mean... yeah...",
-  "...hmm... okay, okay...",
   "...alrighty... so...",
   "...well... huh...",
   "...okay-dokey...",
   "...yeah... well...",
   "...so... um... yeah...",
   "...well... I mean...",
-  "...hmm... right...",
   "...okay... well then...",
   "...ah... okay...",
   "...right... right...",
   "...oh... well...",
   "...okay... so, yeah...",
-  "...well... hmm...",
 ]
 
 // And a handful with a joke in them, for the same gaps.
@@ -87,10 +88,10 @@ export const BETWEEN_FILLER_PHRASES = [
 export const WITTY_FILLER_PHRASES = [
   "...well... the wheels are turning...",
   "...so... little mental pit stop...",
-  "...hmm... a little traffic upstairs...",
+  "...so... a little traffic upstairs...",
   "...well... my words took the scenic route...",
   "...so... the gears are warming up...",
-  "...hmm... just catching a wandering thought...",
+  "...well... just catching a wandering thought...",
   "...well... one brain cell at a time...",
   "...so... the mental hamster is running...",
   "...well... my brain and mouth are negotiating...",

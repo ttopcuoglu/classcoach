@@ -380,14 +380,24 @@ function wavFile(pcm: Buffer): Buffer {
 // voice for the life of the process, so a handful of requests costs nothing,
 // it turns a lottery into clips we have actually looked at, and because the
 // draws differ Coach does not hum in exactly the same way every time.
-const LEAD_IN_SOUND = 'Hmmm...'
-const LEAD_IN_DRAWS = 3
+// Not a hum: "Well...", a word, because a hum was wrong twice over. It kept
+// coming out short and clipped however it was faded, and it was asked for by
+// name not to be used.
+//
+// It is also the only alternative Aura says reliably. Four draws each of
+// seven candidates: "Well..." came back at 0.60-0.80s with peaks of 32-51%
+// every time, while "Ah", "Oh", "So", "Right", "Okay" and "Uh" each produced
+// draws at 0-7% of full scale — silence — some as short as 0.20s. So this is
+// measurement, not taste.
+const LEAD_IN_SOUND = 'Well...'
+const LEAD_IN_DRAWS = 4
 // Below this a draw is effectively silent, and amplifying it just raises its
 // own noise.
 const MIN_USABLE_PEAK = 2000
 // And a long draw is as bad as a quiet one: a hesitation is a beat, not a
-// sigh, and anything longer eats the budget below.
-const MAX_LEAD_IN_MS = 700
+// sigh. Four draws rather than three, because both hums now use the LONGEST
+// of them and a run of three short ones leaves nothing worth playing.
+const MAX_LEAD_IN_MS = 800
 
 // Aura's level for these is a lottery even among usable draws, so a
 // hesitation is scaled to a fixed share of the words it precedes rather than
@@ -422,6 +432,9 @@ const LEAD_IN_LOWPASS_HZ = 900
 // heard in full. The pause is no longer competing with words for the budget;
 // it is what the clip is.
 const HESITATION_PAUSE_MS = 500
+// The longest draw rather than a random one, and faded out over its last
+// fifth, so it trails off into the pause instead of stopping in it.
+const HESITATION_FADE_MS = 180
 
 // A thinking sound only plays in full if it fits inside the beat before
 // Coach's reply: the clip starts about 250ms into the pause, the first
@@ -478,6 +491,19 @@ function hesitationDraws(voice: string | undefined): Promise<Buffer[]> {
   return draws
 }
 
+/// Fades the last `ms` of a clip to nothing, in place.
+///
+/// Both hums need this and only the join one had it, which is why the one at
+/// the start of a turn sounded cut: it stopped dead into its own pause.
+function fadeTail(pcm: Buffer, sampleCount: number, ms: number): Buffer {
+  const fade = Math.min(Math.round((SPEECH_WAV_SAMPLE_RATE * ms) / 1000), sampleCount)
+  for (let i = 0; i < fade; i++) {
+    const at = (sampleCount - 1 - i) * 2
+    pcm.writeInt16LE(Math.round(pcm.readInt16LE(at) * (i / fade)), at)
+  }
+  return pcm
+}
+
 /// Quieter and darker, in one pass: a one-pole roll-off takes the bright
 /// attack off the hum, and the gain puts it under the words.
 function soften(pcm: Buffer, sampleCount: number, gain: number): Buffer {
@@ -511,7 +537,9 @@ export function hesitationClip(voice: string | undefined): Promise<Buffer> {
   if (existing) return existing
   const clip = (async () => {
     const draws = await hesitationDraws(voice)
-    const lead = draws[Math.floor(Math.random() * draws.length)]
+    // The longest of them: this is the whole sound, not a lead-in to words,
+    // so a 300ms draw reads as a click where a 600ms one reads as thinking.
+    const lead = draws.reduce((a, b) => (a.length >= b.length ? a : b))
     const sampleCount = Math.floor(lead.length / 2)
     const peak = peakOf(lead, sampleCount)
     // Nothing to level it against here — it plays into silence rather than
@@ -520,7 +548,7 @@ export function hesitationClip(voice: string | undefined): Promise<Buffer> {
     const gain = peak > 0 ? Math.min(LEAD_IN_MAX_GAIN, (32767 * HESITATION_LEVEL) / peak) : 1
     const pause = Math.round((SPEECH_WAV_SAMPLE_RATE * HESITATION_PAUSE_MS) / 1000)
     const out = Buffer.alloc((sampleCount + pause) * 2)
-    soften(lead, sampleCount, gain).copy(out, 0)
+    fadeTail(soften(lead, sampleCount, gain), sampleCount, HESITATION_FADE_MS).copy(out, 0)
     return wavFile(out)
   })()
   clip.catch(() => hesitationClips.delete(key))
@@ -573,16 +601,10 @@ export async function joinSound(voice: string | undefined): Promise<Buffer> {
   // beside it to measure against, and it plays into a gap rather than under
   // speech.
   const gain = Math.min(LEAD_IN_MAX_GAIN, (32767 * JOIN_LEVEL) / peak)
-  const hum = soften(lead, sampleCount, gain)
-
-  // Faded by hand rather than left to stop: a hum that ends abruptly into
-  // silence is the cut sound again, just with the silence after it instead
-  // of a sentence.
-  const fade = Math.min(Math.round((SPEECH_WAV_SAMPLE_RATE * JOIN_FADE_MS) / 1000), sampleCount)
-  for (let i = 0; i < fade; i++) {
-    const at = (sampleCount - 1 - i) * 2
-    hum.writeInt16LE(Math.round(hum.readInt16LE(at) * (i / fade)), at)
-  }
+  // Faded rather than left to stop: a hum that ends abruptly into silence is
+  // the cut sound again, just with the silence after it instead of a
+  // sentence.
+  const hum = fadeTail(soften(lead, sampleCount, gain), sampleCount, JOIN_FADE_MS)
 
   const pause = Math.round((SPEECH_WAV_SAMPLE_RATE * JOIN_PAUSE_MS) / 1000)
   const out = Buffer.alloc((sampleCount + pause) * 2)
