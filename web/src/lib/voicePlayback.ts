@@ -387,40 +387,68 @@ export async function playQueue(
 // These are fetched once per conversation and kept as blobs, so playing one
 // costs nothing and starts instantly. Fetching them per turn would reintroduce
 // exactly the delay they exist to cover.
+// Two tiers, because the wait is not one length. The first sound covers the
+// ordinary second it takes Claude to write a sentence. The second exists for
+// the turns that run long — without it the silence simply reopens after the
+// "hmm", which is the thing this is here to prevent.
+//
+// All of them have to fit ANY turn, because they are recorded before anyone
+// knows what the teacher said. That rules out the reactions Coach uses in
+// its actual replies: "Oof" is right half the time and badly wrong the other
+// half. Nothing here reads the news, invites the teacher to keep talking, or
+// runs long enough to be cut mid-word when the real reply arrives.
 export const FILLER_PHRASES = [
   'Mm-hmm.',
   'Hmm.',
   'I see.',
-  'Okay, so...',
   'Right.',
-  'Let me think.',
+  'Okay.',
   'Yeah.',
   'Got it.',
+  'Okay, so...',
+  'Mm, okay.',
+  'Right, okay.',
+]
+
+// Longer, and deliberately about thinking rather than acknowledging: by the
+// time one of these plays, the teacher has been waiting long enough that
+// another "mm-hmm" would sound like Coach had stopped listening.
+export const LONGER_FILLER_PHRASES = [
+  'Let me think.',
+  'Hmm, let me think about that.',
+  'Okay, let me think for a second.',
+  "Hmm, let's see.",
+  'Give me a second here.',
 ]
 
 export type Fillers = {
   /// A clip that is not the one played last, so Coach does not say "Hmm"
   /// twice in a row. Null when none loaded.
-  next: () => string | null
+  next: (tier?: 'short' | 'longer') => string | null
   release: () => void
 }
 
 export async function loadFillers(voice: TalkVoice | null): Promise<Fillers> {
-  const urls = (await Promise.all(FILLER_PHRASES.map((phrase) => fetchSentenceAudio(phrase, voice)))).filter(
-    (url): url is string => url !== null,
-  )
-  let last = -1
+  const fetchAll = (phrases: string[]) =>
+    Promise.all(phrases.map((phrase) => fetchSentenceAudio(phrase, voice))).then((urls) =>
+      urls.filter((url): url is string => url !== null),
+    )
+  const [short, longer] = await Promise.all([fetchAll(FILLER_PHRASES), fetchAll(LONGER_FILLER_PHRASES)])
+  const lastPlayed: Record<string, number> = { short: -1, longer: -1 }
+
   return {
-    next() {
+    next(tier = 'short') {
+      const urls = tier === 'longer' ? longer : short
       if (urls.length === 0) return null
       let index = Math.floor(Math.random() * urls.length)
-      if (urls.length > 1 && index === last) index = (index + 1) % urls.length
-      last = index
+      if (urls.length > 1 && index === lastPlayed[tier]) index = (index + 1) % urls.length
+      lastPlayed[tier] = index
       return urls[index]
     },
     release() {
-      for (const url of urls) URL.revokeObjectURL(url)
-      urls.length = 0
+      for (const url of [...short, ...longer]) URL.revokeObjectURL(url)
+      short.length = 0
+      longer.length = 0
     },
   }
 }
