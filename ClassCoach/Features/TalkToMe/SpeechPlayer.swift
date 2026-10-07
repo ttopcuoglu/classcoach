@@ -31,6 +31,8 @@ final class SpeechPlayer: NSObject, ObservableObject {
     }
 
     private func playOne(data: Data) async {
+        // The reply is here; whatever Coach was humming stops now.
+        cancelThinking()
         PlaybackSession.activate()
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             self.continuation = continuation
@@ -102,9 +104,103 @@ final class SpeechPlayer: NSObject, ObservableObject {
         pending.forEach { $0.cancel() }
         pending.removeAll()
         drainTask = nil
+        cancelThinking()
         player?.stop()
         continuation?.resume()
         continuation = nil
+    }
+
+    // MARK: - Thinking sounds
+    //
+    // Claude takes about a second to write its first sentence, and that is
+    // the model thinking rather than anything that can be tuned away. What it
+    // does not have to be is silence, so Coach makes the noise a colleague
+    // makes while considering what you just said. The native half of the
+    // fillers in `web/src/lib/voicePlayback.ts`, including the two tiers:
+    // short acknowledgements first, and if the turn runs long, something
+    // about thinking rather than a second "mm-hmm", which by then would sound
+    // like Coach had stopped listening.
+    //
+    // Every clip must fit ANY turn, because they are fetched before anyone
+    // knows what the teacher said — so nothing that reads the news ("Oof"
+    // belongs in Coach's real replies, where it knows what happened), nothing
+    // that invites them to keep talking, and nothing long enough to be cut
+    // mid-word when the reply arrives.
+    private static let shortFillers = [
+        "Mm-hmm.", "Hmm.", "I see.", "Right.", "Okay.", "Yeah.", "Got it.", "Okay, so...", "Mm, okay.", "Right, okay.",
+    ]
+    private static let longerFillers = [
+        "Let me think.", "Hmm, let me think about that.", "Okay, let me think for a second.",
+        "Hmm, let's see.", "Give me a second here.",
+    ]
+    private static let firstFillerDelay: Duration = .milliseconds(400)
+    private static let longerFillerDelay: Duration = .milliseconds(1600)
+
+    private var shortClips: [Data] = []
+    private var longerClips: [Data] = []
+    private var lastShort = -1
+    private var lastLonger = -1
+    private var fillerPlayer: AVAudioPlayer?
+    private var thinkingTask: Task<Void, Never>?
+
+    /// Fetched once a conversation, in the teacher's own Coach voice. Doing
+    /// this per turn would reintroduce exactly the delay they exist to cover.
+    func loadFillers(voice: String?) async {
+        guard shortClips.isEmpty, longerClips.isEmpty else { return }
+        async let short = Self.fetchAll(Self.shortFillers, voice: voice)
+        async let longer = Self.fetchAll(Self.longerFillers, voice: voice)
+        let (loadedShort, loadedLonger) = await (short, longer)
+        shortClips = loadedShort
+        longerClips = loadedLonger
+    }
+
+    private static func fetchAll(_ phrases: [String], voice: String?) async -> [Data] {
+        await withTaskGroup(of: Data?.self) { group in
+            for phrase in phrases {
+                group.addTask { try? await TalkToMeService.fetchSpeech(text: phrase, voice: voice) }
+            }
+            var clips: [Data] = []
+            for await clip in group {
+                if let clip { clips.append(clip) }
+            }
+            return clips
+        }
+    }
+
+    /// Starts the thinking sounds for a turn. Cancelled automatically the
+    /// moment real speech plays.
+    func startThinking() {
+        cancelThinking()
+        thinkingTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.firstFillerDelay)
+            guard !Task.isCancelled else { return }
+            await self?.playFiller(short: true)
+            try? await Task.sleep(for: Self.longerFillerDelay - Self.firstFillerDelay)
+            guard !Task.isCancelled else { return }
+            await self?.playFiller(short: false)
+        }
+    }
+
+    func cancelThinking() {
+        thinkingTask?.cancel()
+        thinkingTask = nil
+        fillerPlayer?.stop()
+        fillerPlayer = nil
+    }
+
+    private func playFiller(short: Bool) {
+        // Never over real speech: by the time a clip is due, the reply may
+        // already have started.
+        guard player?.isPlaying != true else { return }
+        let clips = short ? shortClips : longerClips
+        guard !clips.isEmpty else { return }
+        var index = Int.random(in: 0..<clips.count)
+        let last = short ? lastShort : lastLonger
+        if clips.count > 1, index == last { index = (index + 1) % clips.count }
+        if short { lastShort = index } else { lastLonger = index }
+        PlaybackSession.activate()
+        fillerPlayer = try? AVAudioPlayer(data: clips[index])
+        fillerPlayer?.play()
     }
 }
 

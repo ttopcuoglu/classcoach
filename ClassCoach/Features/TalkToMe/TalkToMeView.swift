@@ -826,6 +826,9 @@ struct TalkToMeView: View {
 
     private func beginListening() {
         guard !atCap else { return }
+        // Fetched once a conversation, while the teacher is drawing breath to
+        // speak rather than while they wait for an answer.
+        Task { await player.loadFillers(voice: voice) }
         sessionActive = true
         errorMessage = nil
         showTypeInput = false
@@ -919,6 +922,9 @@ struct TalkToMeView: View {
         errorMessage = nil
         phase = .thinking
         player.stop()
+        // Coach thinks out loud while Claude writes, the way a colleague
+        // would — silent when nobody is listening for it.
+        if !muted && !showTypeInput { player.startThinking() }
         let spokenVoice = voice
         do {
             let result = try await TalkToMeService.streamReply(
@@ -939,6 +945,8 @@ struct TalkToMeView: View {
             resumeListeningIfActive()
         } catch {
             streamingReply = nil
+            // Nothing is coming, so Coach should not be heard still thinking.
+            player.cancelThinking()
             if case APIError.server(let status, _) = error, status == 409 {
                 conversationFull = true
                 sessionActive = false
