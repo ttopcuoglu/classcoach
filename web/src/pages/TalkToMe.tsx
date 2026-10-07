@@ -617,9 +617,9 @@ export default function TalkToMe() {
   // which is the point: a punchline is never faded.
   const LET_THE_JOKE_FINISH_MS = 4000
 
-  // The join sound is about 0.6s. If 'ended' has not arrived by here,
+  // The join sound is about 1.1s. If 'ended' has not arrived by here,
   // something is wrong with the element and the reply carries on regardless.
-  const JOIN_SOUND_GUARD_MS = 1500
+  const JOIN_SOUND_GUARD_MS = 2200
 
   /// The short hum between Coach's own sentences. Played on the filler
   /// element and never awaited, so it tucks into the join that already

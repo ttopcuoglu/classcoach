@@ -484,12 +484,23 @@ export function hesitationClip(voice: string | undefined): Promise<Buffer> {
 // two sentences a person stops for about a third of a second; that is what
 // this buys, at the price of the same third of a second per join.
 const JOIN_LEVEL = 0.11
-const JOIN_PAUSE_MS = 190
+// The longest of the draws rather than the shortest, faded out over its last
+// third so it trails off instead of stopping, and then a real silence. The
+// whole thing is about a second.
+//
+// That second is the point of it. A teacher has just been told something
+// they are meant to act on, and the next sentence arriving on top of it
+// leaves nowhere to put the first one — the pause is where the advice lands.
+// It costs a second per join, so a three-sentence reply is two seconds
+// longer than it would otherwise be.
+const JOIN_FADE_MS = 160
+const JOIN_PAUSE_MS = 550
 
 export async function joinSound(voice: string | undefined): Promise<Buffer> {
   const draws = await hesitationDraws(voice)
-  // The shortest of them: this one plays inside a join, not into silence.
-  const lead = draws.reduce((a, b) => (a.length <= b.length ? a : b))
+  // The longest of them, since this one is meant to be heard rather than
+  // tucked away.
+  const lead = draws.reduce((a, b) => (a.length >= b.length ? a : b))
   const sampleCount = Math.floor(lead.length / 2)
   const peak = peakOf(lead, sampleCount)
   if (peak === 0) return wavFile(lead)
@@ -497,8 +508,19 @@ export async function joinSound(voice: string | undefined): Promise<Buffer> {
   // beside it to measure against, and it plays into a gap rather than under
   // speech.
   const gain = Math.min(LEAD_IN_MAX_GAIN, (32767 * JOIN_LEVEL) / peak)
+  const hum = soften(lead, sampleCount, gain)
+
+  // Faded by hand rather than left to stop: a hum that ends abruptly into
+  // silence is the cut sound again, just with the silence after it instead
+  // of a sentence.
+  const fade = Math.min(Math.round((SPEECH_WAV_SAMPLE_RATE * JOIN_FADE_MS) / 1000), sampleCount)
+  for (let i = 0; i < fade; i++) {
+    const at = (sampleCount - 1 - i) * 2
+    hum.writeInt16LE(Math.round(hum.readInt16LE(at) * (i / fade)), at)
+  }
+
   const pause = Math.round((SPEECH_WAV_SAMPLE_RATE * JOIN_PAUSE_MS) / 1000)
   const out = Buffer.alloc((sampleCount + pause) * 2)
-  soften(lead, sampleCount, gain).copy(out, 0)
+  hum.copy(out, 0)
   return wavFile(out)
 }
