@@ -31,7 +31,8 @@ ttsRouter.get('/', async (req, res) => {
     // copy, which saves even the round trip. See lib/fillerPhrases.ts.
     if (isFillerPhrase(text)) {
       const audio = await fillerAudio(text.trim(), voice)
-      res.setHeader('Content-Type', 'audio/mpeg')
+      // Linear PCM, not mp3: see softenEnding in lib/speechCache.ts.
+      res.setHeader('Content-Type', 'audio/wav')
       res.setHeader('Content-Length', String(audio.length))
       res.setHeader('Cache-Control', 'private, max-age=86400')
       res.end(audio)

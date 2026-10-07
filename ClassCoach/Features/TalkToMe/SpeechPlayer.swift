@@ -125,11 +125,17 @@ final class SpeechPlayer: NSObject, ObservableObject {
     //
     // Every clip must fit ANY turn, because they are fetched before anyone
     // knows what the teacher said — so nothing that reads the news ("Oof"
-    // belongs in Coach's real replies, where it knows what happened), nothing
-    // that invites them to keep talking, and nothing long enough to be cut
-    // mid-word when the reply arrives.
+    // belongs in Coach's real replies, where it knows what happened) and
+    // nothing that invites them to keep talking.
+    //
+    // They are also all under ~0.9s and end in "...", both measured: the
+    // filler starts 400ms into the pause and the reply lands around 1.2s, so
+    // anything longer is cut mid-word, and an ellipsis makes the voice trail
+    // off where a full stop makes it stop dead. Kept in step with
+    // web/src/lib/voicePlayback.ts and the server's fillerPhrases.ts.
     private static let shortFillers = [
-        "Mm-hmm.", "Hmm.", "I see.", "Right.", "Okay.", "Yeah.", "Got it.", "Okay, so...", "Mm, okay.", "Right, okay.",
+        "Mm...", "Mm-hmm.", "Mhm...", "Hmm...", "Hm...", "Yeah...", "Yep...", "Ah...",
+        "Okay...", "Right...", "Sure...", "Uh-huh...", "Got it...", "Well...", "So...", "Alright...",
     ]
     private static let fillerDelay: Duration = .milliseconds(400)
 

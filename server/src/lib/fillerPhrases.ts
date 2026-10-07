@@ -7,26 +7,37 @@
 // the feature exists. Synthesizing them per conversation cost about a penny
 // each time — more than Coach's actual thinking.
 //
-// Kept in step with FILLER_PHRASES and LONGER_FILLER_PHRASES in
-// web/src/lib/voicePlayback.ts and the pair in iOS's SpeechPlayer.swift. A
-// phrase that drifts out of this list still works — it is simply paid for
-// every time, as any other sentence is.
+// Kept in step with FILLER_PHRASES in web/src/lib/voicePlayback.ts and
+// shortFillers in iOS's SpeechPlayer.swift. A phrase that drifts out of this
+// list still works — it is simply paid for every time, as any other sentence
+// is, and misses the trimming in speechCache.ts.
+//
+// Two rules decided this list, both measured:
+//
+//  - Under ~0.9s. The filler starts 400ms into the pause and Coach's first
+//    sentence lands around 1.2s, so anything longer is faded out mid-word
+//    every single time. That rules out every two-part phrase, because the
+//    voice puts a real pause at the comma: "Mm, okay..." runs 2.5s.
+//  - Ending in "..." rather than ".", which makes the voice trail off
+//    instead of stopping dead. "Mm." trails for 0.05s; "Mm..." for 0.16s.
+//    "Mm-hmm." is the exception, measuring better with the full stop.
 export const FILLER_PHRASES = [
+  'Mm...',
   'Mm-hmm.',
-  'Hmm.',
-  'I see.',
-  'Right.',
-  'Okay.',
-  'Yeah.',
-  'Got it.',
-  'Okay, so...',
-  'Mm, okay.',
-  'Right, okay.',
-  'Let me think.',
-  'Hmm, let me think about that.',
-  'Okay, let me think for a second.',
-  "Hmm, let's see.",
-  'Give me a second here.',
+  'Mhm...',
+  'Hmm...',
+  'Hm...',
+  'Yeah...',
+  'Yep...',
+  'Ah...',
+  'Okay...',
+  'Right...',
+  'Sure...',
+  'Uh-huh...',
+  'Got it...',
+  'Well...',
+  'So...',
+  'Alright...',
 ]
 
 const lookup = new Set(FILLER_PHRASES.map((phrase) => phrase.toLowerCase()))
