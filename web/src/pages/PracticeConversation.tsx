@@ -67,18 +67,12 @@ export default function PracticeConversation() {
     (prefill?.difficulty as ConversationDifficulty | undefined) ?? undefined,
   )
 
-  // Practice is hypothetical only: you set who, what and how hard, and Wivoza
-  // writes the scenario. A real conversation goes to Communication Coach, which
-  // takes it as prose and infers the rest — asking a teacher to classify a
-  // situation they just described, and to pick how difficult their actual
-  // colleague is, was work for no one's benefit.
-  //
-  // `real` survives for one caller: "Practice This Meeting" hands a real meeting
-  // over with its situation already written. There is no way to choose it on this
-  // screen. It goes when that rehearsal moves into Communication Coach.
-  const [start] = useState<'real' | 'generated'>(prefill?.situationText ? 'real' : 'generated')
+  // Practice is hypothetical, end to end: you set who, what and how hard, and
+  // Wivoza writes the scenario. A conversation that is actually happening goes to
+  // Communication Coach, which takes it as prose and rehearses it against the
+  // plan the teacher wrote rather than asking them to classify what they just
+  // described.
   const [situationText, setSituationText] = useState<string | null>(null)
-  const [customSituation, setCustomSituation] = useState(prefill?.situationText ?? '')
   const [responseText, setResponseText] = useState('')
   const [prep, setPrep] = useState<ConversationPrep | null>(null)
   const [generating, setGenerating] = useState(false)
@@ -90,7 +84,7 @@ export default function PracticeConversation() {
     setResponseText((prev) => (prev ? `${prev} ${text}` : text)),
   )
 
-  const activeSituation = start === 'real' ? customSituation : situationText
+  const activeSituation = situationText
   const canGenerate = !!challenge && !generating
   const canSubmit = !!activeSituation?.trim() && responseText.trim().length > 0 && !submitting
 
@@ -162,7 +156,6 @@ export default function PracticeConversation() {
   function handlePracticeAgain() {
     setPrep(null)
     setSituationText(null)
-    setCustomSituation('')
     setResponseText('')
     setError(null)
   }
@@ -204,35 +197,6 @@ export default function PracticeConversation() {
         )}
         {!prep ? (
           <div className={setup ? 'mt-5 flex flex-col gap-4' : 'flex flex-col gap-4'}>
-            {/* Only ever reached by "Practice This Meeting", which arrives with
-                the situation written. Editable because a teacher may want to
-                sharpen it before rehearsing. Outside every situation branch: when
-                this lived inside one, the first keystroke made activeSituation
-                truthy and unmounted the box being typed in. */}
-            {start === 'real' && (
-              <div
-                className={
-                  setup ? 'flex flex-col gap-3.5 rounded-2xl bg-cream/10 p-4' : 'flex flex-col gap-3.5'
-                }
-              >
-                <label className="flex flex-col gap-1.5">
-                  <span className={setup ? label : 'text-sm font-medium text-ink'}>The meeting you are rehearsing</span>
-                  <textarea
-                    value={customSituation}
-                    onChange={(e) => setCustomSituation(e.target.value)}
-                    disabled={submitting}
-                    rows={4}
-                    placeholder="A colleague keeps overriding me in front of students, and we have a planning period together on Thursday..."
-                    className={
-                      setup
-                        ? 'rounded-xl border border-cream/20 bg-cream/10 px-4 py-3 text-sm text-cream placeholder:text-cream/40 focus:border-gold focus:outline-none disabled:opacity-60'
-                        : 'rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60'
-                    }
-                  />
-                </label>
-              </div>
-            )}
-
             {/* One box, the same tinted box the scenario engine groups its choices
                 in — every choice on screen, one format, nothing folded away. */}
             <div
@@ -242,7 +206,7 @@ export default function PracticeConversation() {
             >
               <div>
                 <p className={setup ? label : 'text-sm font-medium text-ink'}>
-                  {start === 'real' ? 'Who you’re facing' : 'Who you’re practicing with'}
+                  Who you’re practicing with
                 </p>
                 <div className="mt-1.5 flex flex-wrap gap-2">
                   {RECIPIENT_TYPES.map((r) => (
@@ -327,7 +291,7 @@ export default function PracticeConversation() {
 
             {/* Only the generated path has anything to press: a real situation is
                 already written above, so it goes straight to responding. */}
-            {start === 'generated' && !situationText ? (
+            {!situationText ? (
               <div>
                 <WorkingRing
                   active={generating}
@@ -355,7 +319,7 @@ export default function PracticeConversation() {
                 {/* A generated situation is read back; one the teacher wrote is
                     still editable in its own box above, so repeating it here would
                     be the same words twice. */}
-                {start === 'generated' && (
+                {(
                   <div className="rounded-3xl bg-forest p-6 text-cream">
                     <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Situation</p>
                     <p className="mt-3 text-base leading-relaxed text-cream">{activeSituation}</p>
@@ -394,13 +358,12 @@ export default function PracticeConversation() {
                     type="button"
                     onClick={() => {
                       setSituationText(null)
-                      setCustomSituation('')
                       setResponseText('')
                     }}
                     disabled={generating}
                     className="text-sm font-medium text-ink-soft hover:text-ink"
                   >
-                    {start === 'real' ? 'Start over' : 'Try a different scenario'}
+                    Try a different scenario
                   </button>
                   {submitting && (
                     <div className="flex justify-center py-1 text-forest">

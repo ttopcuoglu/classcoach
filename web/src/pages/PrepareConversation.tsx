@@ -20,8 +20,7 @@ import {
   type MeetingFormat,
   type MeetingType,
 } from '../lib/communicationOptions'
-import { setPracticePrefill, setWritePrefill, takePreparePrefill } from '../lib/communicationsPrefill'
-import { CONVERSATION_AREA } from '../lib/focusAreas'
+import { setWritePrefill, takePreparePrefill } from '../lib/communicationsPrefill'
 import {
   extractAssignmentText,
   getConversationPlans,
@@ -124,6 +123,30 @@ export default function PrepareConversation() {
     }
   }
 
+  // Once a rehearsal has started every reply is a line in it, not a question
+  // about the plan — Coach is in character and the teacher is answering a person.
+  const [rehearsing, setRehearsing] = useState(false)
+
+  async function handleStartRehearsal() {
+    if (!plan || chatSending) return
+    setRehearsing(true)
+    setChatSending(true)
+    setChatError(null)
+    try {
+      const updated = await sendConversationPlanChat(
+        plan.id,
+        'Let us rehearse this. Open as the other person, with their first line.',
+        'rehearse',
+      )
+      setPlan(updated)
+    } catch (err) {
+      setChatError((err as Error).message || 'Could not reach your coach. Please try again.')
+      setRehearsing(false)
+    } finally {
+      setChatSending(false)
+    }
+  }
+
   async function handleSendChat() {
     const trimmed = chatDraft.trim()
     if (!plan || !trimmed || chatSending) return
@@ -131,7 +154,7 @@ export default function PrepareConversation() {
     setChatError(null)
     setChatDraft('')
     try {
-      const updated = await sendConversationPlanChat(plan.id, trimmed)
+      const updated = await sendConversationPlanChat(plan.id, trimmed, rehearsing ? 'rehearse' : undefined)
       setPlan(updated)
     } catch (err) {
       setChatError((err as Error).message || 'Could not reach your coach. Please try again.')
@@ -162,17 +185,6 @@ export default function PrepareConversation() {
     navigate('/communications?tool=write')
   }
 
-  // The one handoff that crosses out of Communication Coach: the plan stays here,
-  // rehearsing it is Practice's job. The situation goes over verbatim, which skips
-  // scenario generation entirely — this is a real meeting, not an invented one.
-  function handlePracticeThisMeeting() {
-    if (!plan) return
-    setPracticePrefill({
-      personType: meetingTypeToRecipientType(plan.meetingType as MeetingType | undefined),
-      situationText: plan.situationText,
-    })
-    navigate(`/coach-chat?area=${CONVERSATION_AREA}`)
-  }
 
   const past = usePastItems(getConversationPlans, plan)
 
@@ -450,18 +462,26 @@ export default function PrepareConversation() {
                 draft={chatDraft}
                 onDraftChange={setChatDraft}
                 onSend={handleSendChat}
-                placeholder="Ask a follow-up, e.g. 'what if they deny it?' or 'give me a stronger opening'..."
+                placeholder={
+                  rehearsing
+                    ? 'Say your next line, the way you would actually say it...'
+                    : "Ask a follow-up, e.g. 'what if they deny it?' or 'give me a stronger opening'..."
+                }
               />
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
               <div className="flex flex-wrap items-center gap-4">
+                {/* Rehearsing happens here rather than in Practice. Practice
+                    writes you a stranger to argue with; this one already knows
+                    the boundaries you set and the phrases you ruled out. */}
                 <button
                   type="button"
-                  onClick={handlePracticeThisMeeting}
-                  className="text-sm font-medium text-ink-soft hover:text-ink"
+                  onClick={handleStartRehearsal}
+                  disabled={chatSending || rehearsing}
+                  className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:opacity-60"
                 >
-                  Practice This Meeting
+                  {rehearsing ? 'Rehearsing below' : 'Rehearse this conversation'}
                 </button>
                 <button
                   type="button"

@@ -81,7 +81,47 @@ When (if at all) an administrator should be involved — say plainly if this see
 </admin_involvement>
 ${CORE_COACHING_RULES}`
 
+// The plan itself, handed to the coach rather than left behind. The chat used to
+// start from a two-line seed (opening + main concern), so Coach could answer
+// "give me a stronger opening" and not "what was I going to avoid saying?" — ten
+// of the twelve sections it had just written were invisible to it.
+function renderPlan(plan: PlanContent | null): string {
+  if (!plan) return ''
+  const section = (label: string, body: string) => (body?.trim() ? `${label}:\n${body.trim()}` : null)
+  const parts = [
+    section('Suggested agenda', plan.agenda),
+    section('Suggested opening', plan.opening),
+    section('The main concern to land', plan.mainConcern),
+    section('Facts worth bringing', plan.facts),
+    section('Questions to ask', plan.questions),
+    section('Reactions to expect', plan.reactions),
+    section('Recommended responses', plan.recommendedResponses),
+    section('Phrases to avoid', plan.phrasesToAvoid),
+    section('Boundaries to hold', plan.boundaries),
+    section('Suggested closing', plan.closing),
+    section('Next steps', plan.nextSteps),
+    section('On involving an administrator', plan.adminInvolvement),
+  ].filter(Boolean)
+  return parts.length ? `\n\nThe plan you already wrote for this teacher:\n\n${parts.join('\n\n')}` : ''
+}
+
 const PLAN_CHAT_SYSTEM_PROMPT = `You are a warm, practical communication coach continuing to help a K-12 teacher prepare for a real, upcoming conversation you already built a plan for. This is a live revision/discussion — if the teacher asks a specific question (e.g. "what if they deny it?"), answer it directly and practically in 2-4 sentences. If they ask you to change the plan (e.g. "give me a stronger opening"), revise the plan and say so briefly. Stay grounded in what they've told you; never invent details.
+${CORE_COACHING_RULES}`
+
+// Rehearsal is the plan out loud. Coach plays the other person from the
+// "reactions to expect" it wrote, then steps out and coaches the teacher's reply
+// against their own prep — their boundaries, their phrases to avoid — rather
+// than against generic advice. The step-out marker matters: a teacher who cannot
+// tell the parent from the coach is being confused, not trained.
+const PLAN_REHEARSE_SYSTEM_PROMPT = `You are running a spoken rehearsal with a K-12 teacher for a real conversation you already built a plan for. You play two parts and must always make clear which one is speaking.
+
+IN CHARACTER: play the other person in this conversation, drawing on the reactions the plan says to expect. Be realistic, not cartoonish — one to three sentences, the way a person actually talks. Prefix these lines with "THEM: ".
+
+AS THE COACH: after the teacher answers, step out and react to what they actually said, in two to four sentences. Prefix these with "COACH: ". Say what landed, then the one thing to change, and offer the better wording as a sentence they could say out loud — "try: ...". Judge their answer against their own plan: the boundaries they set, the phrases they decided to avoid, the responses they chose. Only fall back on general advice when the plan says nothing about it.
+
+Then go back in character with the other person's next line, so the rehearsal keeps moving. Stop and hand control back when the teacher has handled the hard part, or when they ask to stop.
+
+Never invent facts about the student, family or school beyond what the teacher and the plan have told you. Plain text only — no markdown.
 ${CORE_COACHING_RULES}`
 
 type PlanContent = {
@@ -252,12 +292,15 @@ conversationPlanRouter.post('/:id/chat', async (req, res) => {
   }
 
   const trimmed = message.trim()
+  const rehearsing = req.body?.mode === 'rehearse'
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 700,
       thinking: { type: 'disabled' },
-      system: PLAN_CHAT_SYSTEM_PROMPT,
+      system:
+        (rehearsing ? PLAN_REHEARSE_SYSTEM_PROMPT : PLAN_CHAT_SYSTEM_PROMPT) +
+        renderPlan(plan.planContent as PlanContent | null),
       messages: toClaudeMessages(existing, trimmed),
     })
     const reply = response.content

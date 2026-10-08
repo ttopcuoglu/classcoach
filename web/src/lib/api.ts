@@ -1550,8 +1550,18 @@ export function submitConversationPlan(input: SubmitConversationPlanInput): Prom
   return request('/api/conversation-plans', { method: 'POST', body: JSON.stringify(input) })
 }
 
-export function sendConversationPlanChat(id: string, message: string): Promise<ConversationPlan> {
-  return request(`/api/conversation-plans/${id}/chat`, { method: 'POST', body: JSON.stringify({ message }) })
+/// `mode: 'rehearse'` puts Coach in character as the other person, judging each
+/// reply against this plan's own boundaries and phrases-to-avoid. Same thread as
+/// the revision chat on purpose — preparing and rehearsing are one session.
+export function sendConversationPlanChat(
+  id: string,
+  message: string,
+  mode?: 'rehearse',
+): Promise<ConversationPlan> {
+  return request(`/api/conversation-plans/${id}/chat`, {
+    method: 'POST',
+    body: JSON.stringify(mode ? { message, mode } : { message }),
+  })
 }
 
 export function setConversationPlanSaved(id: string, saved: boolean): Promise<ConversationPlan> {
