@@ -120,6 +120,11 @@ export const MEETING_FORMATS: { label: string; value: MeetingFormat }[] = [
   { label: 'Formal meeting', value: 'formal_meeting' },
 ]
 
+/// How a one-to-one happens. No "Formal meeting" — that is the other branch of
+/// Prepare, and offering it to someone who said "a person" is offering them the
+/// button they did not press.
+export const PERSON_FORMATS = MEETING_FORMATS.filter((f) => f.value !== 'formal_meeting')
+
 export function meetingFormatLabel(value: string | null) {
   if (!value) return null
   return MEETING_FORMATS.find((f) => f.value === value)?.label ?? value
@@ -144,6 +149,11 @@ export const MEETING_TYPES: { label: string; value: MeetingType }[] = [
   { label: 'Difficult colleague conversation', value: 'difficult_colleague' },
   { label: 'Other', value: 'other' },
 ]
+
+/// What the meeting picker offers. "Difficult colleague conversation" is not a
+/// meeting, it is a person — Prepare asks that on the other branch. It stays in
+/// MEETING_TYPES above so plans already saved under it keep their label.
+export const MEETING_TYPE_CHOICES = MEETING_TYPES.filter((m) => m.value !== 'difficult_colleague')
 export function meetingTypeLabel(value: string | null) {
   if (!value) return null
   return MEETING_TYPES.find((m) => m.value === value)?.label ?? value

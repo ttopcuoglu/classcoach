@@ -13,8 +13,9 @@ import { ProgressRing } from '../components/ProgressRing'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import {
   MEETING_FORMATS,
+  PERSON_FORMATS,
   CONVERSATION_PERSON_TYPES,
-  MEETING_TYPES,
+  MEETING_TYPE_CHOICES,
   meetingFormatLabel,
   meetingTypeLabel,
   meetingTypeToRecipientType,
@@ -242,19 +243,6 @@ export default function PrepareConversation() {
         </PanelHeader>
         {!plan ? (
           <div className="flex flex-col gap-4">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-ink">What is going on?</span>
-              <textarea
-                value={situationText}
-                onChange={(e) => setSituationText(e.target.value)}
-                disabled={submitting}
-                rows={4}
-                placeholder="My co-teacher keeps correcting me in front of the class, and it is getting worse..."
-                className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
-              />
-            </label>
-
-
             {/* Two things a teacher prepares for, and they ask for different
                 details: a person has a role, a meeting has a kind and a room
                 full of people. One question up front beats one form carrying
@@ -269,7 +257,10 @@ export default function PrepareConversation() {
                   <button
                     key={value}
                     type="button"
-                    onClick={() => setPreparingFor(value)}
+                    onClick={() => {
+                      setPreparingFor(value)
+                      if (value === 'person' && meetingFormat === 'formal_meeting') setMeetingFormat(undefined)
+                    }}
                     disabled={submitting}
                     aria-pressed={preparingFor === value}
                     className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
@@ -311,7 +302,7 @@ export default function PrepareConversation() {
                   <label className="flex flex-col gap-1.5">
                     <span className="text-sm font-medium text-ink">What kind of meeting are you preparing for?</span>
                     <div className="flex flex-wrap gap-2">
-                      {MEETING_TYPES.map((m) => (
+                      {MEETING_TYPE_CHOICES.map((m) => (
                         <button
                           key={m.value}
                           type="button"
@@ -344,12 +335,16 @@ export default function PrepareConversation() {
               </>
             )}
 
-                  <label className="flex flex-col gap-1.5">
+                  {/* A one-to-one has no "Formal meeting" option: that is the other
+                branch, and offering it here offers the button they did not
+                press. Clearing a stale pick matters because switching branch
+                would otherwise leave it set and invisible. */}
+            <label className="flex flex-col gap-1.5">
                     <span className="text-sm font-medium text-ink">
                       How will it happen? <span className="font-normal text-ink-soft">(optional)</span>
                     </span>
                     <div className="flex flex-wrap gap-2">
-                      {MEETING_FORMATS.map((f) => (
+                      {(preparingFor === 'person' ? PERSON_FORMATS : MEETING_FORMATS).map((f) => (
                         <button
                           key={f.value}
                           type="button"
@@ -370,6 +365,23 @@ export default function PrepareConversation() {
                       ))}
                     </div>
                   </label>
+
+            {/* The prose comes after the fork, not before it. What are you
+                preparing for is the question that decides which others get
+                asked, so it goes first; describing it is easier once the
+                screen has settled into one shape. */}
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-ink">What is going on?</span>
+              <textarea
+                value={situationText}
+                onChange={(e) => setSituationText(e.target.value)}
+                disabled={submitting}
+                rows={4}
+                placeholder="My co-teacher keeps correcting me in front of the class, and it is getting worse..."
+                className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
+              />
+            </label>
+
 
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-ink">
