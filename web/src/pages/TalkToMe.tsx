@@ -32,7 +32,14 @@ import {
 } from '../lib/api'
 import { isExperienced } from '../lib/experience'
 import { endTurn, markTurn } from '../lib/turnTiming'
-import { createPlaybackQueue, loadFillers, primeAudioElement, type Fillers, type PlaybackQueue } from '../lib/voicePlayback'
+import {
+  askedAQuestion,
+  createPlaybackQueue,
+  loadFillers,
+  primeAudioElement,
+  type Fillers,
+  type PlaybackQueue,
+} from '../lib/voicePlayback'
 
 // Flipped to false: auto-starting the mic on open meant a teacher could
 // go through an entire hands-free conversation without ever tapping the
@@ -528,6 +535,10 @@ export default function TalkToMe() {
   // competing with a filler still trailing off underneath it.
   const FILLER_FADE_MS = 120
 
+  // Which pool the next filler comes from, decided from what the teacher
+  // just said rather than from nothing.
+  const askedRef = useRef(false)
+
   function startThinkingSound() {
     cancelThinkingSound()
     // Sometimes nothing at all: a person thinking does not make a noise
@@ -536,7 +547,9 @@ export default function TalkToMe() {
     const delay = FILLER_AFTER_MIN_MS + Math.random() * (FILLER_AFTER_MAX_MS - FILLER_AFTER_MIN_MS)
     fillerTimerRef.current = window.setTimeout(() => {
       const audio = fillerAudioRef.current
-      const clip = fillersRef.current?.nextStarter()
+      // A question gets a thinking sound; telling Coach something gets an
+      // acknowledgement. Agreeing with a question is the wrong noise.
+      const clip = askedRef.current ? fillersRef.current?.nextThinking() : fillersRef.current?.nextAcknowledgement()
       // Only into silence: once Coach is speaking, or the teacher is, a
       // thinking sound would be talking over one of them.
       if (!audio || !clip || !sessionActiveRef.current || phaseRef.current !== 'thinking') return
@@ -716,6 +729,7 @@ export default function TalkToMe() {
     setPhase('thinking')
 
     phaseRef.current = 'thinking'
+    askedRef.current = askedAQuestion(text)
     thinkingHandoffRef.current = null
     startThinkingSound()
 

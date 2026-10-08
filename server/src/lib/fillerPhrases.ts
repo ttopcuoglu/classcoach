@@ -35,6 +35,27 @@ export const FILLER_PHRASES = [
   "Okay, sure.",
 ]
 
+// And what Coach says when the teacher asked it something.
+//
+// An acknowledgement only fits when the teacher has TOLD Coach something.
+// Answering "What do you recommend?" with "Yeah." is the wrong noise — it
+// agrees with a question. Reported as "the filler sometimes doesn't make
+// sense with what I asked", and that is exactly when.
+//
+// So the pool is chosen by what the teacher just did: a question gets one of
+// these, anything else gets an acknowledgement. The client decides, since it
+// has the transcript and Claude has not seen it yet.
+export const THINKING_PHRASES = [
+  "Let me see...",
+  "Let me think...",
+  "Okay, let me think...",
+  "Let me take a moment...",
+  "Give me a second...",
+  "Let's think about this...",
+  "Okay, so...",
+  "Right, so...",
+]
+
 // The jokes that used to sit here are gone, and the reason is worth keeping.
 // A clip is chosen before Claude has read a word the teacher said, so a
 // recorded joke can only ever be generic — and rendered in exactly the same
@@ -48,7 +69,7 @@ export const FILLER_PHRASES = [
 // dead air honestly, which "Yeah." does without ever being mistaken for
 // advice.
 
-const lookup = new Set(FILLER_PHRASES.map((phrase) => phrase.toLowerCase()))
+const lookup = new Set([...FILLER_PHRASES, ...THINKING_PHRASES].map((phrase) => phrase.toLowerCase()))
 
 export function isFillerPhrase(text: string): boolean {
   return lookup.has(text.trim().toLowerCase())

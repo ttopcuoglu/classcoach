@@ -433,6 +433,29 @@ export const FILLER_PHRASES = [
 // an idea, and a second where the idea changes.
 export const SENTENCE_GAP_MS = 220
 
+// And what Coach says when the teacher asked it something.
+//
+// An acknowledgement only fits when the teacher has TOLD Coach something.
+// Answering "What do you recommend?" with "Yeah." agrees with a question,
+// which is the wrong noise — reported as "the filler sometimes doesn't make
+// sense with what I asked", and that is exactly when it doesn't.
+export const THINKING_PHRASES = [
+  'Let me see...',
+  'Let me think...',
+  'Okay, let me think...',
+  'Let me take a moment...',
+  'Give me a second...',
+  "Let's think about this...",
+  'Okay, so...',
+  'Right, so...',
+]
+
+/// Which pool fits what the teacher just said. The transcript is all there
+/// is to go on — Claude has not seen the turn yet.
+export function askedAQuestion(transcript: string): boolean {
+  return transcript.trim().endsWith('?')
+}
+
 // The third pool: the same gaps, with a joke in them.
 //
 // These are the one kind that has to be heard to the end — "...my words took
@@ -442,9 +465,11 @@ export const SENTENCE_GAP_MS = 220
 // Coach refuses to be interrupted out of is charming once a conversation
 // and wearing by the fourth time.
 export type Fillers = {
-  /// A clip that is not the one played last, so Coach does not say "Hmm"
-  /// twice in a row. Null when none loaded.
-  nextStarter: () => string | null
+  /// A clip for a turn where the teacher told Coach something, never the one
+  /// played last so it does not say "Yeah." twice running.
+  nextAcknowledgement: () => string | null
+  /// A clip for a turn where they asked Coach something.
+  nextThinking: () => string | null
   release: () => void
 }
 
@@ -481,12 +506,17 @@ export async function loadFillers(voice: TalkVoice | null): Promise<Fillers> {
     (await Promise.all(sample(phrases, count).map((phrase) => fetchSentenceAudio(phrase, voice)))).filter(
       (url): url is string => url !== null,
     )
-  const starters = await fetchPool(FILLER_PHRASES, CLIPS_PER_POOL)
+  const [acks, thinking] = await Promise.all([
+    fetchPool(FILLER_PHRASES, CLIPS_PER_POOL),
+    fetchPool(THINKING_PHRASES, CLIPS_PER_POOL),
+  ])
   return {
-    nextStarter: rotate(starters),
+    nextAcknowledgement: rotate(acks),
+    nextThinking: rotate(thinking),
     release() {
-      for (const url of starters) URL.revokeObjectURL(url)
-      starters.length = 0
+      for (const url of [...acks, ...thinking]) URL.revokeObjectURL(url)
+      acks.length = 0
+      thinking.length = 0
     },
   }
 }

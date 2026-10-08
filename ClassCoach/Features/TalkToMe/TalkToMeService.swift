@@ -134,7 +134,7 @@ enum TalkToMeService {
     /// version of that baking; bump it when the audio for an unchanged
     /// phrase changes. The server ignores it. Kept in step with
     /// SPEECH_REVISION in web/src/lib/api.ts.
-    static let speechRevision = "7"
+    static let speechRevision = "8"
 
     static func fetchSpeech(text: String, voice: String? = nil) async throws -> Data {
         var query = [URLQueryItem(name: "text", value: text), URLQueryItem(name: "rev", value: speechRevision)]

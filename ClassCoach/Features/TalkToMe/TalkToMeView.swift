@@ -959,7 +959,7 @@ struct TalkToMeView: View {
         let generation = replyGeneration
         // Coach thinks out loud while Claude writes, the way a colleague
         // would — silent when nobody is listening for it.
-        if !muted && !showTypeInput { player.startThinking() }
+        if !muted && !showTypeInput { player.startThinking(teacherSaid: text) }
         let spokenVoice = voice
         do {
             // A phone's connection drops; a reply that died before Coach said
@@ -997,7 +997,7 @@ struct TalkToMeView: View {
                     } catch {
                         guard attempt == 1, !heardAnything, isWorthRetrying(error) else { throw error }
                         phase = .thinking
-                        if !muted && !showTypeInput { player.startThinking() }
+                        if !muted && !showTypeInput { player.startThinking(teacherSaid: text) }
                     }
                 }
             }()

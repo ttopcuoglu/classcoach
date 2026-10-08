@@ -168,6 +168,18 @@ final class SpeechPlayer: NSObject, ObservableObject {
     /// long it runs. Which is also why they are rare: a joke Coach refuses
     /// to be interrupted out of is charming once and wearing by the fourth
     /// time.
+    /// And what Coach says when the teacher asked it something.
+    ///
+    /// An acknowledgement only fits when the teacher has TOLD Coach
+    /// something. Answering "What do you recommend?" with "Yeah." agrees
+    /// with a question, which is the wrong noise.
+    private static let thinkingPhrases = [
+        "Let me see...", "Let me think...",
+        "Okay, let me think...", "Let me take a moment...",
+        "Give me a second...", "Let's think about this...",
+        "Okay, so...", "Right, so...",
+    ]
+
     private static let fillerDelay: Duration = .milliseconds(250)
 
     /// For the opener, jittered rather than fixed: a hesitation that begins
@@ -195,6 +207,10 @@ final class SpeechPlayer: NSObject, ObservableObject {
     /// than one conversation will get through.
 
     private var starterClips: [Data] = []
+    private var thinkingClips: [Data] = []
+    private var lastThinking = -1
+    /// Whether the turn just ended on a question, which decides the pool.
+    private var asked = false
     private var lastStarter = -1
     /// Set for the rest of a turn when Coach's opener is sympathetic, and
     /// when a joke has just been told.
@@ -213,7 +229,9 @@ final class SpeechPlayer: NSObject, ObservableObject {
     func loadFillers(voice: String?) async {
         guard starterClips.isEmpty else { return }
         async let starters = Self.fetchAll(Self.shortFillers.shuffled().prefix(Self.clipsPerPool), voice: voice)
+        async let thinking = Self.fetchAll(Self.thinkingPhrases.shuffled().prefix(Self.clipsPerPool), voice: voice)
         starterClips = await starters
+        thinkingClips = await thinking
     }
 
     private static func fetchAll(_ phrases: some Sequence<String>, voice: String?) async -> [Data] {
@@ -233,8 +251,12 @@ final class SpeechPlayer: NSObject, ObservableObject {
     /// moment real speech plays. `teacherSaid` is what the teacher just
     /// said, which is the only thing available to judge whether this is a
     /// turn for a joke — Coach has not written a word yet.
-    func startThinking() {
+    /// `teacherSaid` decides which pool the filler comes from: a question
+    /// gets a thinking sound, telling Coach something gets an
+    /// acknowledgement.
+    func startThinking(teacherSaid: String? = nil) {
         cancelThinking()
+        asked = (teacherSaid ?? "").trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix("?")
         // Sometimes nothing at all: a person thinking does not make a noise
         // every time they think.
         guard Double.random(in: 0..<1) >= Self.silentTurnChance else { return }
@@ -306,13 +328,15 @@ final class SpeechPlayer: NSObject, ObservableObject {
         // Never over real speech: by the time a clip is due, the reply may
         // already have started.
         guard player?.isPlaying != true else { return }
-        guard !starterClips.isEmpty else { return }
-        var index = Int.random(in: 0..<starterClips.count)
-        if starterClips.count > 1, index == lastStarter { index = (index + 1) % starterClips.count }
-        lastStarter = index
+        let clips = asked ? thinkingClips : starterClips
+        guard !clips.isEmpty else { return }
+        var index = Int.random(in: 0..<clips.count)
+        let last = asked ? lastThinking : lastStarter
+        if clips.count > 1, index == last { index = (index + 1) % clips.count }
+        if asked { lastThinking = index } else { lastStarter = index }
         currentHold = Self.holdForFiller
         PlaybackSession.activate()
-        fillerPlayer = try? AVAudioPlayer(data: starterClips[index])
+        fillerPlayer = try? AVAudioPlayer(data: clips[index])
         fillerPlayer?.play()
     }
 }
