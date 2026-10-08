@@ -277,7 +277,7 @@ export default function TalkToMe() {
   const speculationRef = useRef<Speculation | null>(null)
 
   const { supported, level, fatalError, transcribing, start, close, watchForResume, watchWhileSpeaking } = useVoiceTurn(
-    handleTurnComplete,
+    handleSpokenTurn,
     { onSpeculate: handleSpeculate, onSpeculationStale: dropSpeculation },
   )
 
@@ -681,6 +681,19 @@ export default function TalkToMe() {
     spec.controller.abort()
   }
 
+  /// A turn that arrived from the microphone rather than the keyboard.
+  /// Speaking IS the request to be spoken to, so it also takes the
+  /// conversation out of chat mode — belt and braces with
+  /// handleOpenTypeInput above, which closes the same hole from the other
+  /// end.
+  function handleSpokenTurn(newText: string) {
+    if (chatRef.current) {
+      chatRef.current = false
+      setShowTypeInput(false)
+    }
+    void handleTurnComplete(newText)
+  }
+
   async function handleTurnComplete(newText: string) {
     // A turn that ended while the teacher was still mid-thought left its
     // words here; they belong to the same sentence, so they are sent as one.
@@ -935,14 +948,28 @@ export default function TalkToMe() {
   }
 
   function handleOpenTypeInput() {
-    // Typing is just another way of ending the current mic turn — release
-    // it first so an in-flight recording can't also fire a turn and race
-    // the typed one.
-    if (phase === 'listening') {
-      sessionActiveRef.current = false
-      close()
-      setPhase('idle')
-    }
+    // Typing is another way of ending the current mic turn, so release it
+    // first — an in-flight recording must not fire a turn and race the typed
+    // one.
+    //
+    // Unconditionally, which it was not before: this used to tear the
+    // session down only when the microphone happened to be LISTENING, so
+    // tapping it while Coach was speaking or thinking left the session
+    // voice-active and flagged as a chat at the same time. The microphone
+    // then came back by itself when the reply finished
+    // (resumeListeningIfActive does not check the chat flag), and from then
+    // on every turn was heard out loud and answered in text, for the rest of
+    // the conversation. Reported from a real conversation, and it had been
+    // there since the typing UI was added on 2026-09-03.
+    sessionActiveRef.current = false
+    close()
+    cancelThinkingSound()
+    // Coach stops talking, the way it would if they had interrupted out
+    // loud. The reply itself is still saved — see handleBargeIn.
+    queueRef.current?.cancel()
+    queueRef.current = null
+    audioRef.current?.pause()
+    setPhase('idle')
     setShowTypeInput(true)
   }
 
