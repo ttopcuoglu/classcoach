@@ -175,9 +175,14 @@ final class SpeechPlayer: NSObject, ObservableObject {
     /// with a question, which is the wrong noise.
     private static let thinkingPhrases = [
         "Let me see...", "Let me think...",
-        "Okay, let me think...", "Let me take a moment...",
-        "Give me a second...", "Let's think about this...",
+        "Okay, let me see...", "Okay, let me think...",
+        "Alright, let me think...", "Let me think it through...",
+        "Let me work through that...", "Let's think about this...",
+        "Let me think about that one...", "Give me a second...",
+        "Just a second...", "Give me a second here...",
+        "Let me take a moment...", "Let me sit with that a second...",
         "Okay, so...", "Right, so...",
+        "Well, now...",
     ]
 
     private static let fillerDelay: Duration = .milliseconds(250)

@@ -45,15 +45,30 @@ export const FILLER_PHRASES = [
 // So the pool is chosen by what the teacher just did: a question gets one of
 // these, anything else gets an acknowledgement. The client decides, since it
 // has the transcript and Claude has not seen it yet.
+// Grouped by what they actually do, because a list of "Let me X" variants
+// reads as one phrase in six wrappers. Sixteen phrases, five ideas.
 export const THINKING_PHRASES = [
+  // thinking about it
   "Let me see...",
   "Let me think...",
+  "Okay, let me see...",
   "Okay, let me think...",
-  "Let me take a moment...",
-  "Give me a second...",
+  "Alright, let me think...",
+  // working it out, which is a different claim from thinking about it
+  "Let me think it through...",
+  "Let me work through that...",
   "Let's think about this...",
+  "Let me think about that one...",
+  // asking for the time outright
+  "Give me a second...",
+  "Just a second...",
+  "Give me a second here...",
+  "Let me take a moment...",
+  "Let me sit with that a second...",
+  // turning towards the answer
   "Okay, so...",
   "Right, so...",
+  "Well, now...",
 ]
 
 // The jokes that used to sit here are gone, and the reason is worth keeping.

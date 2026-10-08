@@ -442,12 +442,21 @@ export const SENTENCE_GAP_MS = 220
 export const THINKING_PHRASES = [
   'Let me see...',
   'Let me think...',
+  'Okay, let me see...',
   'Okay, let me think...',
-  'Let me take a moment...',
-  'Give me a second...',
+  'Alright, let me think...',
+  'Let me think it through...',
+  'Let me work through that...',
   "Let's think about this...",
+  'Let me think about that one...',
+  'Give me a second...',
+  'Just a second...',
+  'Give me a second here...',
+  'Let me take a moment...',
+  'Let me sit with that a second...',
   'Okay, so...',
   'Right, so...',
+  'Well, now...',
 ]
 
 /// Which pool fits what the teacher just said. The transcript is all there
