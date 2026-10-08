@@ -12,7 +12,7 @@ struct RootTabView: View {
                 // Home, Coaching, Plan, You.
                 //
                 // There were seven tabs. A phone's TabView shows four and sweeps
-                // the rest into a system "More" list, so Lesson Planning,
+                // the rest into a system "More" list, so Planning Coach,
                 // Communication Coach and Profile were all buried in it — and
                 // Home had been growing extra cards to compensate for tools
                 // nobody could find. Grouping is what fixes that; deleting more

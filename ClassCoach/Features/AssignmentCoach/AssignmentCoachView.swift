@@ -50,7 +50,7 @@ private struct RedesignPrefill {
 }
 
 struct AssignmentCoachView: View {
-    /// Rendered as Lesson Planning's third chip, which supplies the navigation
+    /// Rendered as Planning Coach's fourth chip, which supplies the navigation
     /// title. Its own panel header stays either way: on that chip it is the only
     /// thing saying which of the three you are looking at.
     var embedded = false

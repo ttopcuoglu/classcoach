@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// "Review a Presentation" — mirrors the presentation tab of
+/// "Review Slides" — mirrors the slides tab of
 /// `web/src/pages/LessonPlanning.tsx`.
 ///
 /// Two steps on purpose: the upload reads the deck and reports how many slides
@@ -58,7 +58,7 @@ struct PresentationReviewContent: View {
             if extracting {
                 ProgressRing(active: true, estimatedSeconds: 8, label: "Reading your deck", hint: "Pulling the slides out — this only takes a moment.")
             } else if reviewing {
-                ProgressRing(active: true, estimatedSeconds: 20, label: "Reviewing your presentation", hint: "Looking at fit, visuals, length and how it would run.")
+                ProgressRing(active: true, estimatedSeconds: 20, label: "Reviewing your slides", hint: "Looking at fit, visuals, length and how it would run.")
             } else if let extracted {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(extracted.fileName)
@@ -112,7 +112,7 @@ struct PresentationReviewContent: View {
     private func resultView(plan: LessonPlan, review: LessonPlanPresentationReview) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(plan.fileName ?? "Your presentation")
+                Text(plan.fileName ?? "Your slides")
                     .font(.heading(.title3))
                     .foregroundStyle(AppTheme.forest)
                 if let slides = plan.slideCount {
@@ -141,7 +141,7 @@ struct PresentationReviewContent: View {
                     .foregroundStyle(AppTheme.forest)
             }
 
-            Button("Review another presentation") {
+            Button("Review other slides") {
                 self.plan = nil
                 self.extracted = nil
             }

@@ -90,9 +90,9 @@ struct HomeView: View {
                     NavigationLink { LessonPlanningView() } label: {
                         FeatureCard(
                             eyebrow: "Before Class",
-                            title: "Lesson Planning",
-                            description: "Strengthen a lesson you wrote, or generate ideas from a clear objective.",
-                            actionLabel: "Plan a lesson",
+                            title: "Planning Coach",
+                            description: "Build a lesson from a topic, or strengthen the one you wrote — then adapt it to the class you actually have.",
+                            actionLabel: "Build a lesson",
                             systemImage: "doc.text.fill",
                             iconTint: AppTheme.sage
                         )
@@ -100,8 +100,8 @@ struct HomeView: View {
                     .buttonStyle(.plain)
                     .padding(.horizontal)
 
-                    // No card for reviewing an assignment: it is one of Lesson
-                    // Planning's four chips, so a card here would be a second
+                    // No card for reviewing an assignment: it is one of Planning
+                    // Coach's four chips, so a card here would be a second
                     // Home tile opening the same screen a chip along. The web's
                     // Home has no assignment card either.
                 }

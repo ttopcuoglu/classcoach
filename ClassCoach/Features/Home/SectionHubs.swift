@@ -4,7 +4,7 @@ import SwiftUI
 /// the tools inside them.
 ///
 /// Why these exist: a phone's TabView shows four items and sweeps the rest into
-/// a system "More" list. There were seven tabs, so Lesson Planning,
+/// a system "More" list. There were seven tabs, so Planning Coach,
 /// Communication Coach and Profile were all buried in it — and Home had grown
 /// extra cards to compensate for tools nobody could find. The web settled on
 /// four slots, Home / Coaching / Plan / You, and that fits.
@@ -102,8 +102,8 @@ struct PlanHubView: View {
                     NavigationLink { LessonPlanningView() } label: {
                         HubRow(
                             index: 0,
-                            label: "Lesson Planning",
-                            subtitle: "plans, presentations & assignments",
+                            label: "Planning Coach",
+                            subtitle: "lessons, slides & assignments",
                             systemImage: "doc.text.fill"
                         )
                     }
