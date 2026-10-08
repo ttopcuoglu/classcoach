@@ -128,7 +128,14 @@ struct TagSpeakersView: View {
             let updated = try await AudioCoachingService.tagSpeakers(sessionId: session.id, rawSpeakerTags: Array(selected))
             onTagged(updated)
         } catch {
-            self.error = "Could not tag those speakers. Please try again."
+            // The work carries on server-side after a phone gives up waiting,
+            // so ask what actually happened before saying it failed —
+            // otherwise a teacher re-runs an analysis that already succeeded.
+            if let latest = try? await AudioCoachingService.getSession(id: session.id), latest.status == "analyzed" {
+                onTagged(latest)
+            } else {
+                self.error = "Could not tag those speakers. Please try again."
+            }
         }
         tagging = false
     }

@@ -723,17 +723,17 @@ audioSessionsRouter.post('/:id/tag-speaker', async (req, res) => {
     include: { segments: { orderBy: { startSec: 'asc' } } },
   })
 
-  // The written summary is part of the report, not something a client has to
-  // ask for. Best-effort: if it fails the teacher still gets every number and
-  // the Summary tab asks again on its own.
-  let withSummary = updated
-  try {
-    withSummary = (await writeClassSummary(req.user!.userId, updated, segments)) ?? updated
-  } catch (error) {
-    console.error('[audio-sessions] class summary during analysis failed:', error)
-  }
+  // The numbers go back now. The written summary and the five section
+  // paragraphs are one 5000-token call on top of the two transcript reads
+  // above, which pushed this request past a phone's 60-second timeout: the
+  // app gave up, the server finished anyway, and a teacher who pressed
+  // Analyze again paid for the whole thing a second time. It runs detached,
+  // and the Summary tab asks for it if it isn't there yet.
+  res.json(updated)
 
-  res.json(withSummary)
+  void writeClassSummary(req.user!.userId, updated, segments).catch((error) => {
+    console.error('[audio-sessions] class summary after analysis failed:', error)
+  })
 })
 
 audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {

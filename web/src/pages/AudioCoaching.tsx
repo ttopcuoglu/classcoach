@@ -882,6 +882,17 @@ function TagSpeakersPanel({
       const updated = await tagSpeakers(session.id, Array.from(selected))
       onUpdate(updated)
     } catch {
+      // The analysis carries on server-side after a client gives up waiting,
+      // so ask what actually happened before blaming the tagging.
+      try {
+        const latest = await getAudioSession(session.id)
+        if (latest.status === 'analyzed') {
+          onUpdate(latest)
+          return
+        }
+      } catch {
+        // fall through to the honest error below
+      }
       setError('Could not tag those speakers. Please try again.')
       setTagging(false)
     }
