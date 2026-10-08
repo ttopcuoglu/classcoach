@@ -36,7 +36,7 @@ import {
 // One printable report covering all four Communication Coach tools. They sit
 // on three different models, so the route carries the kind:
 //   message  — Write a Message (ParentMessage)
-//   meeting  — Prepare for a Meeting (ConversationPlan)
+//   meeting  — Prepare for a Conversation (ConversationPlan)
 //   practice — Practice a Conversation / Review My Communication
 //              (ConversationPrep, which distinguishes them by `source`)
 export default function CommunicationExport() {
@@ -63,7 +63,7 @@ export default function CommunicationExport() {
   const A = ACCENTS
   let n = 0
 
-  /* Prepare for a Meeting — the twelve-section plan. */
+  /* Prepare for a Conversation — the twelve-section plan. */
   if (kind === 'meeting') {
     if (!plan) return <ReportState text="Meeting plan not found." />
     const c = plan.planContent
@@ -71,7 +71,7 @@ export default function CommunicationExport() {
     return (
       <ReportShell backTo="/communications?tool=prepare">
         <ReportCover
-          eyebrow="Wivoza · Prepare for a Meeting"
+          eyebrow="Wivoza · Prepare for a Conversation"
           title={plan.title || meetingTypeLabel(plan.meetingType) || 'Meeting plan'}
           meta={formatReportDate(plan.createdAt)}
         />

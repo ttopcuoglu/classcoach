@@ -54,7 +54,7 @@ const LANES = [
   },
   {
     icon: ChecklistIcon,
-    name: 'Prepare for a Meeting',
+    name: 'Prepare for a Conversation',
     when: 'It’s on the calendar.',
     detail:
       'A full plan for a real upcoming meeting — conference, IEP or 504, post-observation, department, or a hard colleague conversation. Agenda, talking points, facts, likely reactions, and how to close.',
@@ -116,7 +116,7 @@ const STORY = [
   'She writes a reply immediately. It is, she knows even as she writes it, the wrong reply — three paragraphs defending the rubric.',
   'She pastes both the email and her draft into Review My Communication and asks for both feedback and a rewrite. The coaching is blunt about the problem: her second paragraph litigates the grade instead of opening a conversation, and a parent reading it will hear a wall.',
   'She takes the revised version, makes it slightly firmer than the suggestion, and schedules it for the morning rather than sending it at 9:52pm.',
-  'Then she opens Prepare for a Meeting, picks “Parent or family conference,” and gets an agenda, the facts worth bringing, the reactions she should expect, the phrases to avoid — and a straight answer on whether an administrator belongs in the room.',
+  'Then she opens Prepare for a Conversation, picks “Parent or family conference,” and gets an agenda, the facts worth bringing, the reactions she should expect, the phrases to avoid — and a straight answer on whether an administrator belongs in the room.',
   'Before Thursday she runs it once in Practice at “highly escalated,” which goes worse than the real meeting does. The real one isn’t pleasant. But nobody raises their voice, and it ends with a plan.',
 ]
 
@@ -166,7 +166,7 @@ function SamplePlanExcerpt() {
   ]
   return (
     <GuideSample
-      title="Prepare for a Meeting · Your plan"
+      title="Prepare for a Conversation · Your plan"
       caption="An illustration — four of the twelve sections a real plan returns, plus the pills naming what it was built from."
     >
       <div className="flex flex-wrap items-center gap-1.5">

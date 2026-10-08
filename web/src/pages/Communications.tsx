@@ -16,8 +16,8 @@ const TOOLS = [
   },
   {
     value: 'prepare',
-    label: 'Prepare for a Meeting',
-    description: 'Build an agenda, talking points, and a plan for an upcoming meeting.',
+    label: 'Prepare for a Conversation',
+    description: 'Any conversation you have to have — talking points, likely reactions, and the words to use.',
     icon: ChecklistIcon,
   },
   {

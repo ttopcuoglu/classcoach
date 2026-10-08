@@ -360,8 +360,8 @@ const MESSAGE_TOOLS: Feature[] = [
     id: 'prepare-conversation',
     icon: TargetIcon,
     tint: 'bg-peach-tint text-terracotta',
-    nav: 'Plan → Communication Coach → Prepare for a Meeting',
-    title: 'Prepare for a Meeting',
+    nav: 'Plan → Communication Coach → Prepare for a Conversation',
+    title: 'Prepare for a Conversation',
     intro: 'A full written plan for a real meeting that\'s already on the calendar.',
     specs: [
       { label: 'Input', body: 'the meeting type — parent or family conference, student conference, IEP or 504, team or department, with an administrator, post-observation, difficult colleague conversation, or other — and what the meeting is about, which is the only required field. How it will happen (in person, phone, video call, or formal meeting), who\'s attending, the outcome you\'re hoping for, and anything sensitive or difficult are all optional.' },

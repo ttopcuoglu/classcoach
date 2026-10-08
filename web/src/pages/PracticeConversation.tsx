@@ -67,10 +67,16 @@ export default function PracticeConversation() {
     (prefill?.difficulty as ConversationDifficulty | undefined) ?? undefined,
   )
 
-  // Which way in. A teacher who already has the conversation in front of them is
-  // not an edge case, so it is the first question rather than a button under the
-  // generate flow. A prefill — "Practice This Meeting" — is always a real one.
-  const [start, setStart] = useState<'real' | 'generated'>(prefill?.situationText ? 'real' : 'generated')
+  // Practice is hypothetical only: you set who, what and how hard, and Wivoza
+  // writes the scenario. A real conversation goes to Communication Coach, which
+  // takes it as prose and infers the rest — asking a teacher to classify a
+  // situation they just described, and to pick how difficult their actual
+  // colleague is, was work for no one's benefit.
+  //
+  // `real` survives for one caller: "Practice This Meeting" hands a real meeting
+  // over with its situation already written. There is no way to choose it on this
+  // screen. It goes when that rehearsal moves into Communication Coach.
+  const [start] = useState<'real' | 'generated'>(prefill?.situationText ? 'real' : 'generated')
   const [situationText, setSituationText] = useState<string | null>(null)
   const [customSituation, setCustomSituation] = useState(prefill?.situationText ?? '')
   const [responseText, setResponseText] = useState('')
@@ -192,49 +198,17 @@ export default function PracticeConversation() {
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Practice a conversation</p>
             <p className="mt-2 font-heading text-2xl font-bold text-cream">Ready when you are.</p>
             <p className="mt-1 text-sm text-cream/70">
-              Bring the conversation you are dreading, or let Wivoza write you one to practice cold.
+              Say who you are up against and how hard they push, and Wivoza writes you one to practice cold.
             </p>
           </>
         )}
         {!prep ? (
           <div className={setup ? 'mt-5 flex flex-col gap-4' : 'flex flex-col gap-4'}>
-            {/* The first question, because it changes what the rest of the screen
-                is for. It used to be a button below the generate flow, after three
-                rows of chips asking a teacher to classify a hypothetical they did
-                not want. */}
-            {setup && (
-              <div className="flex flex-col gap-3.5 rounded-2xl bg-cream/10 p-4">
-                <div>
-                  <p className={label}>Where do you want to start?</p>
-                  <div className="mt-1.5 flex flex-wrap gap-2">
-                    {([
-                      ['real', 'Something real'],
-                      ['generated', 'Build me one'],
-                    ] as const).map(([value, text]) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => setStart(value)}
-                        disabled={generating || submitting}
-                        aria-pressed={start === value}
-                        className={chip(start === value)}
-                      >
-                        {text}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="mt-2 text-xs text-cream/60">
-                    {start === 'real'
-                      ? 'Describe the conversation you are actually facing, then rehearse your side of it.'
-                      : 'Say who you are up against and Wivoza writes the scenario for you.'}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Outside every situation branch on purpose: when this lived inside
-                one, the first keystroke made activeSituation truthy and unmounted
-                the box being typed in. */}
+            {/* Only ever reached by "Practice This Meeting", which arrives with
+                the situation written. Editable because a teacher may want to
+                sharpen it before rehearsing. Outside every situation branch: when
+                this lived inside one, the first keystroke made activeSituation
+                truthy and unmounted the box being typed in. */}
             {start === 'real' && (
               <div
                 className={
@@ -242,7 +216,7 @@ export default function PracticeConversation() {
                 }
               >
                 <label className="flex flex-col gap-1.5">
-                  <span className={setup ? label : 'text-sm font-medium text-ink'}>What is going on</span>
+                  <span className={setup ? label : 'text-sm font-medium text-ink'}>The meeting you are rehearsing</span>
                   <textarea
                     value={customSituation}
                     onChange={(e) => setCustomSituation(e.target.value)}

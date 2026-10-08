@@ -55,7 +55,7 @@ const FEATURE_ROWS: { key: keyof AdminOverview['featureAdoption']; label: string
 // Communication Coach rather than as separate tools.
 const COMMUNICATIONS_TOOLS: { key: 'write' | 'prepare' | 'review'; label: string }[] = [
   { key: 'write', label: 'Write a Message' },
-  { key: 'prepare', label: 'Prepare for a Meeting' },
+  { key: 'prepare', label: 'Prepare for a Conversation' },
   { key: 'review', label: 'Review My Communication' },
 ]
 
