@@ -55,7 +55,7 @@ async function discardUpload(filePath: string | undefined) {
   }
 }
 
-const STATUSES = ['setup', 'recording', 'paused', 'transcribing', 'tagging', 'analyzed', 'locked']
+const STATUSES = ['setup', 'recording', 'paused', 'transcribing', 'tagging', 'analyzing', 'analyzed', 'locked']
 
 const REFLECT_SUMMARY_SYSTEM_PROMPT = `You are a warm, practical instructional coach. Below is the transcript of a reflective conversation you just had with a teacher about their own class recording. Summarize it into brief, specific draft notes the teacher can edit — ground every claim only in what was actually said in the conversation, never invent a detail that wasn't discussed.
 
@@ -495,6 +495,25 @@ async function markTranscriptionFailed(sessionId: string, message: string) {
 /// this is left alone.
 const ORPHANED_TRANSCRIPTION_MINUTES = 30
 
+/// An analysis is minutes of model time at the outside, so a row still
+/// "analyzing" long after that lost its process — a restart, or a crash. The
+/// speakers are already tagged, so it goes back to `tagging`, where the
+/// teacher's Analyze button is.
+const ORPHANED_ANALYSIS_MINUTES = 20
+
+export async function failOrphanedAnalyses() {
+  const cutoff = new Date(Date.now() - ORPHANED_ANALYSIS_MINUTES * 60 * 1000)
+  try {
+    const { count } = await prisma.audioSession.updateMany({
+      where: { status: 'analyzing', updatedAt: { lt: cutoff } },
+      data: { status: 'tagging', failureReason: 'The analysis did not finish. Please try again.' },
+    })
+    if (count > 0) console.log(`[audio-sessions] released ${count} interrupted analysis(es)`)
+  } catch (error) {
+    console.error('[audio-sessions] could not sweep interrupted analyses:', error)
+  }
+}
+
 export async function failOrphanedTranscriptions() {
   const cutoff = new Date(Date.now() - ORPHANED_TRANSCRIPTION_MINUTES * 60 * 1000)
   try {
@@ -685,6 +704,39 @@ audioSessionsRouter.post('/:id/tag-speaker', async (req, res) => {
     })
   ).map((s) => ({ speakerLabel: s.speakerLabel, startSec: s.startSec, endSec: s.endSec, text: s.text }))
 
+  // Clients that poll say so. The ones that don't are builds already in
+  // teachers' hands, which wait on the request exactly as they always have.
+  if (req.body?.mode === 'async') {
+    await prisma.audioSession.update({
+      where: { id: session.id },
+      data: { status: 'analyzing', failureReason: null },
+    })
+    res.status(202).json({ status: 'analyzing' })
+
+    void runAnalysis(session.id, req.user!.userId, segments).catch(async (error) => {
+      console.error('[audio-sessions] background analysis failed:', error)
+      // The transcript is safe and the speakers stay tagged, so this is
+      // retryable from the report: pressing Analyze again re-runs the reads.
+      await prisma.audioSession
+        .update({
+          where: { id: session.id },
+          data: { status: 'tagging', failureReason: 'The analysis did not finish. Please try again.' },
+        })
+        .catch(() => {})
+    })
+    return
+  }
+
+  const updated = await runAnalysis(session.id, req.user!.userId, segments)
+
+  res.json(updated)
+})
+
+/// The analysis itself: two reads of the transcript, the row, then the prose.
+/// Runs inside the request for clients that wait on it, and detached for the
+/// ones that poll — a 60-minute class is minutes of model time, which is
+/// longer than any phone will hold a request open.
+async function runAnalysis(sessionId: string, userId: string, segments: Segment[]) {
   // The phrase scan first, then Claude reads the transcript and overrides it —
   // both reads at once, since a teacher is waiting on this. Best-effort by
   // design: if either call fails the phrase answer stands, so a transcript is
@@ -700,9 +752,10 @@ audioSessionsRouter.post('/:id/tag-speaker', async (req, res) => {
   // (see reflect-summary below), so the teacher doesn't see two independent
   // AI-written takeaways derived from the same numbers.
   const updated = await prisma.audioSession.update({
-    where: { id: session.id },
+    where: { id: sessionId },
     data: {
       status: 'analyzed',
+      failureReason: null,
       teacherTalkPct: analysis.teacherTalkPct,
       studentTalkPct: analysis.studentTalkPct,
       questionCount: analysis.questionCount,
@@ -723,18 +776,14 @@ audioSessionsRouter.post('/:id/tag-speaker', async (req, res) => {
     include: { segments: { orderBy: { startSec: 'asc' } } },
   })
 
-  // The numbers go back now. The written summary and the five section
-  // paragraphs are one 5000-token call on top of the two transcript reads
-  // above, which pushed this request past a phone's 60-second timeout: the
-  // app gave up, the server finished anyway, and a teacher who pressed
-  // Analyze again paid for the whole thing a second time. It runs detached,
-  // and the Summary tab asks for it if it isn't there yet.
-  res.json(updated)
-
-  void writeClassSummary(req.user!.userId, updated, segments).catch((error) => {
+  // The report is complete without the prose: it is one 5000-token call, and
+  // the Summary tab asks for it when it isn't there yet.
+  void writeClassSummary(userId, updated, segments).catch((error) => {
     console.error('[audio-sessions] class summary after analysis failed:', error)
   })
-})
+
+  return updated
+}
 
 audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
   const { message, context, spoken } = req.body ?? {}

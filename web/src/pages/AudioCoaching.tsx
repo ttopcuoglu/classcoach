@@ -120,14 +120,14 @@ export default function AudioCoaching() {
   // A row that says "Processing" has to stop saying it without being asked.
   // Only while something is actually running, so an idle list makes no
   // requests at all.
-  const hasTranscribing = sessions.some((s) => s.status === 'transcribing')
+  const hasRunningJob = sessions.some((s) => s.status === 'transcribing' || s.status === 'analyzing')
   useEffect(() => {
-    if (!hasTranscribing) return
+    if (!hasRunningJob) return
     const poll = window.setInterval(() => {
       getAudioSessions().then(setSessions).catch(() => {})
     }, 5000)
     return () => window.clearInterval(poll)
-  }, [hasTranscribing])
+  }, [hasRunningJob])
 
   useEffect(() => {
     refreshHistory()
@@ -348,6 +348,15 @@ function SessionFlow({
           Back to sessions
         </button>
       </div>
+    )
+  }
+  if (session.status === 'analyzing') {
+    return (
+      <AnalyzingPanel
+        session={session}
+        onUpdate={onUpdate}
+        onFailed={(message) => onUpdate({ ...session, status: 'tagging', failureReason: message })}
+      />
     )
   }
   if (session.status === 'tagging') {
@@ -741,6 +750,58 @@ function RecordingPanel({
 /// not this component is mounted, so a teacher who closes the tab and comes
 /// back to a "Processing" row loses nothing. That is the whole point of the
 /// change — the percentage is company, not a leash.
+/// Waiting on the analysis, which runs server-side. Same shape as
+/// TranscribingPanel below and for the same reason: the job outlives the
+/// request that started it, so the page polls rather than holds a connection.
+function AnalyzingPanel({
+  session,
+  onUpdate,
+  onFailed,
+}: {
+  session: AudioSessionWithSegments
+  onUpdate: (s: AudioSessionWithSegments) => void
+  onFailed: (message: string) => void
+}) {
+  useEffect(() => {
+    let cancelled = false
+    const startedAt = Date.now()
+    const poll = window.setInterval(async () => {
+      try {
+        const latest = await getAudioSession(session.id)
+        if (cancelled || latest.status === 'analyzing') {
+          // The server's own sweep releases a job whose process died; this is
+          // only so a page left open overnight stops asking.
+          if (!cancelled && Date.now() - startedAt > 20 * 60 * 1000) {
+            window.clearInterval(poll)
+            onFailed('The analysis did not finish. Please try again.')
+          }
+          return
+        }
+        if (latest.status === 'analyzed' || latest.status === 'locked') onUpdate(latest)
+        else onFailed(latest.failureReason ?? 'The analysis did not finish. Please try again.')
+      } catch {
+        // A failed poll changes nothing — the job is server-side and the next
+        // tick picks the answer up.
+      }
+    }, 4000)
+    return () => {
+      cancelled = true
+      window.clearInterval(poll)
+    }
+  }, [session.id, onUpdate, onFailed])
+
+  return (
+    <div className="rounded-3xl bg-forest p-8 text-center text-cream">
+      <div className="flex justify-center text-gold">
+        <WorkingRing active estimatedMs={30000} label="Reading your lesson" hint="Usually under a minute." />
+      </div>
+      <p className="mt-5 text-sm text-cream/80">
+        You can close this page — the report keeps building, and it will be waiting for you here.
+      </p>
+    </div>
+  )
+}
+
 function TranscribingPanel({
   session,
   onUpdate,
@@ -879,14 +940,16 @@ function TagSpeakersPanel({
     setTagging(true)
     setError(null)
     try {
-      const updated = await tagSpeakers(session.id, Array.from(selected))
-      onUpdate(updated)
+      await tagSpeakers(session.id, Array.from(selected))
+      // Straight into the analyzing panel, which polls. The request only
+      // starts the work now, so there is nothing left to wait for here.
+      onUpdate({ ...session, status: 'analyzing', failureReason: null })
     } catch {
-      // The analysis carries on server-side after a client gives up waiting,
-      // so ask what actually happened before blaming the tagging.
+      // The tagging may still have landed before the connection broke, so ask
+      // what actually happened before blaming it.
       try {
         const latest = await getAudioSession(session.id)
-        if (latest.status === 'analyzed') {
+        if (latest.status !== 'tagging') {
           onUpdate(latest)
           return
         }
@@ -916,6 +979,7 @@ function TagSpeakersPanel({
   return (
     <div className="rounded-2xl border border-hairline bg-cream-card p-6">
       <h2 className="font-heading text-xl font-bold text-forest">Which voice is the teacher?</h2>
+      {session.failureReason && <p className="mt-2 text-sm text-terracotta-600">{session.failureReason}</p>}
       <p className="mt-1 text-sm text-ink-soft">
         Automatic diarization can tell voices apart, but it can't reliably tell who's the teacher — and it
         sometimes splits one teacher into two voices. The voice that spoke the most is picked for you, since
@@ -5668,9 +5732,11 @@ function SessionCard({
             }
           : session.status === 'failed'
             ? { label: "Couldn't process", className: 'bg-peach-tint text-terracotta-600' }
-            : session.status === 'tagging'
-              ? { label: 'Identify your voice', className: 'bg-gold-tint text-forest' }
-              : { label: 'In progress', className: 'bg-gold-tint text-forest' }
+            : session.status === 'analyzing'
+              ? { label: 'Building your report', className: 'bg-gold-tint text-forest' }
+              : session.status === 'tagging'
+                ? { label: 'Identify your voice', className: 'bg-gold-tint text-forest' }
+                : { label: 'In progress', className: 'bg-gold-tint text-forest' }
   return (
     <div className="group flex items-center justify-between gap-4 rounded-2xl border border-hairline bg-cream-card p-4 transition-colors hover:border-terracotta/40 sm:p-5">
       <button type="button" onClick={onOpen} className="flex flex-1 items-center gap-4 text-left">

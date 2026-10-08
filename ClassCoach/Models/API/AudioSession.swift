@@ -3,7 +3,8 @@ import Foundation
 /// Mirrors `web/src/lib/api.ts`'s Audio Coaching types. `status` drives
 /// which screen shows (see server/prisma/schema.prisma / AudioCoaching.tsx):
 /// setup/recording/paused → recording UI; transcribing → spinner;
-/// tagging → speaker picker; analyzed/locked → the six-tab report.
+/// tagging → speaker picker; analyzing → the wait while the server reads the
+/// transcript; analyzed/locked → the six-tab report.
 struct AudioHighlight: Decodable {
     let label: String
     let timestampSec: Double
@@ -304,6 +305,7 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
     var gradeLevel: String? { session.gradeLevel }
     var sessionDate: String { session.sessionDate }
     var durationSec: Double? { session.durationSec }
+    var failureReason: String? { session.failureReason }
     var teacherTalkPct: Double? { session.teacherTalkPct }
     var studentTalkPct: Double? { session.studentTalkPct }
     var questionCount: Int? { session.questionCount }

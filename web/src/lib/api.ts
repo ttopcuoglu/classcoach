@@ -672,6 +672,8 @@ export type AudioSessionStatus =
   | 'paused'
   | 'transcribing'
   | 'tagging'
+  // The two transcript reads, running server-side while the client polls.
+  | 'analyzing'
   | 'analyzed'
   // Transcription ended badly, or a restart killed it mid-flight. Carries a
   // `failureReason` the teacher can act on.
@@ -1947,10 +1949,14 @@ export function getSpeakerSamples(id: string): Promise<{ speakers: SpeakerSample
   return request(`/api/audio-sessions/${id}/speakers`)
 }
 
-export function tagSpeakers(id: string, rawSpeakerTags: string[]): Promise<AudioSessionWithSegments> {
+/// Tags the speakers and leaves the analysis running server-side: the row
+/// goes to `analyzing` and this answers 202, because the two transcript reads
+/// behind it are long enough on a full class period to outlast the request.
+/// Poll `getAudioSession` until the status moves off `analyzing`.
+export function tagSpeakers(id: string, rawSpeakerTags: string[]): Promise<{ status: string }> {
   return request(`/api/audio-sessions/${id}/tag-speaker`, {
     method: 'POST',
-    body: JSON.stringify({ rawSpeakerTags }),
+    body: JSON.stringify({ rawSpeakerTags, mode: 'async' }),
   })
 }
 

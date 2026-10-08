@@ -8,6 +8,12 @@ struct SessionFlowView: View {
     let onUpdate: (AudioSessionWithSegments) -> Void
     let onExit: () -> Void
 
+    /// Why the analysis we were waiting on never produced a report. Held here
+    /// rather than read off the row: when this phone is the one that gave up
+    /// waiting, the row still says "analyzing", and the teacher still needs
+    /// the cards and the Analyze button back.
+    @State private var analysisError: String?
+
     var body: some View {
         switch session.status {
         case "transcribing":
@@ -18,11 +24,89 @@ struct SessionFlowView: View {
             .frame(maxWidth: .infinity)
             .padding(40)
             .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 16))
-        case "tagging":
-            TagSpeakersView(session: session, speakers: speakers, onTagged: onUpdate)
+        case "analyzing" where analysisError == nil:
+            AnalyzingView(
+                sessionId: session.id,
+                onAnalyzed: { analysisError = nil; onUpdate($0) },
+                onFailed: { analysisError = $0 }
+            )
+        case "tagging", "analyzing":
+            // Pressing Analyze again starts a fresh wait, so the last run's
+            // reason goes with the tap that replaces it.
+            TagSpeakersView(
+                session: session,
+                speakers: speakers,
+                initialError: analysisError,
+                onTagged: { analysisError = nil; onUpdate($0) }
+            )
         default:
             ReportView(session: session, onUpdate: onUpdate, onExit: onExit)
         }
+    }
+}
+
+/// The wait while the server reads the transcript, and the poll that ends it.
+///
+/// Tagging the speakers used to answer with the finished report, which a long
+/// lesson simply outlasts (see `AudioCoachingService.tagSpeakers`). The row's
+/// status is what says when the report is ready now, so this asks for it —
+/// the same shape as the list's five-second refresh while a session
+/// transcribes.
+private struct AnalyzingView: View {
+    let sessionId: String
+    let onAnalyzed: (AudioSessionWithSegments) -> Void
+    let onFailed: (String) -> Void
+
+    /// Also what the server writes on the row when its own sweep finds an
+    /// analysis that lost its process.
+    private static let retryMessage = "The analysis did not finish. Please try again."
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ProgressRing(
+                active: true,
+                estimatedSeconds: 45,
+                label: "Reading your lesson",
+                hint: "Usually under a minute.",
+                size: 88
+            )
+            Text("This keeps going if you leave this screen — the report will be waiting under Past sessions.")
+                .font(.caption)
+                .foregroundStyle(AppTheme.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(40)
+        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+        // `.task` is cancelled when this view goes away, so leaving the screen
+        // stops the requests without stopping the analysis.
+        .task { await poll() }
+    }
+
+    /// Four seconds is soon enough that a short lesson doesn't feel stalled
+    /// and cheap enough for a fifty-minute one. The ceiling matches the
+    /// server's own orphan sweep (ORPHANED_ANALYSIS_MINUTES), so a wait this
+    /// long means the job is gone rather than slow — and the teacher gets the
+    /// retry instead of a ring that spins all afternoon.
+    private func poll() async {
+        let deadline = Date().addingTimeInterval(20 * 60)
+        while !Task.isCancelled, Date() < deadline {
+            try? await Task.sleep(for: .seconds(4))
+            if Task.isCancelled { return }
+            // A dropped request is just one missed poll — the analysis is not
+            // this phone's to lose.
+            guard let latest = try? await AudioCoachingService.getSession(id: sessionId) else { continue }
+            if latest.status == "analyzing" { continue }
+            if latest.status == "analyzed" || latest.status == "locked" {
+                onAnalyzed(latest)
+            } else {
+                // A failed analysis is put back to "tagging": the transcript
+                // and the tags survive, so Analyze can simply be pressed again.
+                onFailed(latest.failureReason ?? Self.retryMessage)
+            }
+            return
+        }
+        if !Task.isCancelled { onFailed(Self.retryMessage) }
     }
 }
 
@@ -38,6 +122,9 @@ struct TagSpeakersView: View {
     /// it is correcting.
     var preselected: Set<String> = []
     var confirmTitle = "Analyze session"
+    /// Why the last analysis came back empty-handed, when the teacher is here
+    /// because one did. Shown until they press Analyze again.
+    var initialError: String?
     let onTagged: (AudioSessionWithSegments) -> Void
 
     @State private var selected: Set<String> = []
@@ -106,7 +193,10 @@ struct TagSpeakersView: View {
                 Text(error).font(.footnote).foregroundStyle(AppTheme.terracotta600)
             }
         }
-        .onAppear(perform: preselect)
+        .onAppear {
+            preselect()
+            if error == nil { error = initialError }
+        }
     }
 
     /// One tap for the common case. The teacher who mis-tagged had to choose
@@ -125,13 +215,18 @@ struct TagSpeakersView: View {
         tagging = true
         error = nil
         do {
-            let updated = try await AudioCoachingService.tagSpeakers(sessionId: session.id, rawSpeakerTags: Array(selected))
-            onTagged(updated)
+            try await AudioCoachingService.tagSpeakers(sessionId: session.id, rawSpeakerTags: Array(selected))
+            // The 202 carries no session and the waiting panel is chosen by
+            // status, so read the row back — the server has already set it to
+            // "analyzing" by the time it answers.
+            onTagged(try await AudioCoachingService.getSession(id: session.id))
         } catch {
             // The work carries on server-side after a phone gives up waiting,
             // so ask what actually happened before saying it failed —
-            // otherwise a teacher re-runs an analysis that already succeeded.
-            if let latest = try? await AudioCoachingService.getSession(id: session.id), latest.status == "analyzed" {
+            // otherwise a teacher re-runs an analysis that already succeeded,
+            // or one that is running right now.
+            if let latest = try? await AudioCoachingService.getSession(id: session.id),
+               ["analyzing", "analyzed", "locked"].contains(latest.status) {
                 onTagged(latest)
             } else {
                 self.error = "Could not tag those speakers. Please try again."

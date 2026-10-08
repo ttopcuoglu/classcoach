@@ -34,8 +34,10 @@ struct AudioCoachingView: View {
     @State private var unfinished: Unfinished?
     @State private var recovering = false
 
-    private var hasTranscribing: Bool {
-        sessions.contains { $0.status == "transcribing" }
+    /// Anything the server is working on without this screen. Both waits end
+    /// on their own, so both have to stop saying so without being asked.
+    private var hasWorkInFlight: Bool {
+        sessions.contains { $0.status == "transcribing" || $0.status == "analyzing" }
     }
 
     private var isRecordingPhase: Bool {
@@ -96,8 +98,8 @@ struct AudioCoachingView: View {
             // A row that says "Processing" has to stop saying it without being
             // asked. Only while something is actually running, so an idle list
             // makes no requests at all.
-            .task(id: hasTranscribing) {
-                guard hasTranscribing else { return }
+            .task(id: hasWorkInFlight) {
+                guard hasWorkInFlight else { return }
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(5))
                     if Task.isCancelled { return }
@@ -276,7 +278,7 @@ struct AudioCoachingView: View {
             }
 
             switch byId[manifest.sessionId]?.status {
-            case "tagging", "analyzed", "locked":
+            case "tagging", "analyzing", "analyzed", "locked":
                 // Transcribed. The audio has done its job.
                 RecordingStore.discard(sessionId: manifest.sessionId)
             case "transcribing":
@@ -366,8 +368,10 @@ struct AudioCoachingView: View {
             let full = try await AudioCoachingService.getSession(id: session.id)
             // The cards used to arrive with the upload's response. Now the
             // upload returns long before they exist, so they are fetched when
-            // the teacher actually opens the session to tag.
-            if full.status == "tagging" {
+            // the teacher actually opens the session to tag. "analyzing" too:
+            // that analysis can still come back needing another go, and the
+            // cards have to already be here when it does.
+            if full.status == "tagging" || full.status == "analyzing" {
                 speakers = (try? await AudioCoachingService.speakers(sessionId: session.id)) ?? []
             }
             active = full
@@ -405,6 +409,10 @@ private struct SessionCardView: View {
         // teacher tapping it to pick their voice could land on either, and the
         // one they wanted was the only one that worked.
         case "tagging": return "Identify your voice"
+        // The analysis runs on the server now, so a teacher can leave this
+        // behind and come back to it — and "In progress" would read like the
+        // lesson was still being sent.
+        case "analyzing": return "Analyzing"
         default: return "In progress"
         }
     }

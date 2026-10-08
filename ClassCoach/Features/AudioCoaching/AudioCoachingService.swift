@@ -92,13 +92,31 @@ enum AudioCoachingService {
         return result.speakers
     }
 
-    private struct TagSpeakersBody: Encodable { let rawSpeakerTags: [String] }
+    private struct TagSpeakersBody: Encodable {
+        let rawSpeakerTags: [String]
+        /// Omitted, the server runs the analysis inside the request and
+        /// answers with the finished session — which is what builds already
+        /// in teachers' hands still do.
+        var mode: String?
+    }
 
-    static func tagSpeakers(sessionId: String, rawSpeakerTags: [String]) async throws -> AudioSessionWithSegments {
-        try await APIClient.shared.request(
+    /// Tags the speakers and leaves the analysis running on the server.
+    ///
+    /// The synchronous form held one HTTP request open for the whole
+    /// analysis. On a 22-minute lesson the two transcript reads alone took
+    /// 12.6s and the request also wrote the class summary, so a full class
+    /// period ran past URLSession's 60s timeout: the phone told the teacher
+    /// it had failed while the server was finishing successfully. The server
+    /// now answers 202 as soon as the row says "analyzing", so there is no
+    /// session here to decode — the report arrives by polling
+    /// `getSession(id:)` instead. Same `startTranscription` shape, where the
+    /// upload stopped waiting for the transcript.
+    static func tagSpeakers(sessionId: String, rawSpeakerTags: [String]) async throws {
+        struct EmptyResponse: Decodable {}
+        let _: EmptyResponse = try await APIClient.shared.request(
             "/api/audio-sessions/\(sessionId)/tag-speaker",
             method: "POST",
-            body: TagSpeakersBody(rawSpeakerTags: rawSpeakerTags)
+            body: TagSpeakersBody(rawSpeakerTags: rawSpeakerTags, mode: "async")
         )
     }
 

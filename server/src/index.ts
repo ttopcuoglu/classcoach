@@ -6,7 +6,7 @@ import express from 'express'
 import { adminRouter } from './routes/admin.ts'
 import { assignmentCoachRouter } from './routes/assignmentCoach.ts'
 import { attemptsRouter } from './routes/attempts.ts'
-import { audioSessionsRouter, failOrphanedTranscriptions } from './routes/audioSessions.ts'
+import { audioSessionsRouter, failOrphanedAnalyses, failOrphanedTranscriptions } from './routes/audioSessions.ts'
 import { authRouter } from './routes/auth.ts'
 import { billingRouter } from './routes/billing.ts'
 import { billingWebhookRouter } from './routes/billingWebhook.ts'
@@ -159,6 +159,7 @@ startRetentionSweeps()
 // those rows at boot so nobody is left watching a progress ring with no job
 // behind it.
 void failOrphanedTranscriptions()
+void failOrphanedAnalyses()
 
 // Talk It Through over Telegram; inert unless TELEGRAM_BOT_TOKEN is set.
 startTelegramBot()
