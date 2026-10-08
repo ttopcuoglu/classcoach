@@ -1,5 +1,4 @@
 import { SPEECH_WAV_SAMPLE_RATE, synthesizeSpeechStream } from './deepgram.ts'
-import { isWittyFillerPhrase } from './fillerPhrases.ts'
 import { DEFAULT_TALK_VOICE, isValidTalkVoice } from './talkVoices.ts'
 
 // Starts synthesizing a sentence before anyone asks for it.
@@ -146,31 +145,15 @@ export function takeSpeech(text: string, voice: string | undefined): SpeechStrea
 // bought again.
 const fillerClips = new Map<string, Promise<Buffer>>()
 
-// Aura cannot reliably say two interjections in one breath.
+// Every filler is now a single short utterance, which is where Aura is least
+// reliable: asked for "Yeah." three times it came back at 26%, 0% and 27% of
+// full scale, and a 0% draw is silence. Cached for the life of the process,
+// one bad draw silences that acknowledgement for days — so a draw is checked
+// before it is kept.
 //
-// Asked for "...hmm... alrighty...", four draws came back at 2.16s with
-// three bursts of sound, 2.08s with two, 1.40s with one and 1.44s with two —
-// and a one-burst draw is "hmm" with the second word missing. Rewording does
-// not help: commas, full stops and a single ellipsis all produced one-word
-// draws. Retrying does not fix it either; asking three times and keeping the
-// fullest answer still left seven of the twenty between-sentence phrases as
-// a single sound, every one of them a pair of short interjections ("...so...
-// yeah...", "...oh... well...").
-//
-// A clip is cached for the life of the process, so one bad draw means every
-// teacher on that instance hears "hmm" and nothing else for days. That is
-// what a teacher reported hearing.
-//
-// So these are not asked for as one phrase. Each word is synthesized on its
-// own — which Aura does perfectly well — and the pause between them is ours,
-// not Deepgram's. Deterministic, and it is the pause this feature wanted all
-// along rather than whatever Aura felt like putting there.
-const SEGMENT_PAUSE_MS = 200
-const SEGMENT_DRAWS = 2
-
-// Below this a draw is effectively silent. Aura produces them regularly for
-// one-word utterances, and they are indistinguishable from success without
-// looking at the samples.
+// The word-by-word splicing that used to live here went with the jokes: it
+// existed because Aura could not say two interjections in one breath, and
+// nothing asks it to any more.
 const MIN_AUDIBLE_PEAK = 2000
 const AUDIBLE_DRAWS = 4
 
@@ -197,46 +180,6 @@ async function drawAudible(text: string, voice: string | undefined): Promise<Buf
   return best
 }
 
-function splitSegments(phrase: string): string[] {
-  return phrase
-    .split(/\.{2,}|…/)
-    .map((part) => part.trim().replace(/^[,.\s]+|[,.\s]+$/g, ''))
-    .filter(Boolean)
-}
-
-/// One word of a multi-part filler, trimmed, with a couple of attempts in
-/// case a draw comes back empty.
-async function segmentAudio(segment: string, voice: string | undefined): Promise<Buffer | null> {
-  for (let draw = 0; draw < SEGMENT_DRAWS; draw++) {
-    const upstream = await synthesizeSpeechStream(`${segment}...`, voice, 'wav')
-    const audio = Buffer.from(await upstream.arrayBuffer())
-    const marker = audio.indexOf('data')
-    if (marker === -1) continue
-    const body = audio.subarray(marker + 8)
-    const count = Math.floor(body.length / 2)
-    if (count === 0) continue
-    const trimmed = trimLeadingSilence(body, count)
-    if (peakOf(trimmed, Math.floor(trimmed.length / 2)) > MIN_AUDIBLE_PEAK / 4) return trimmed
-  }
-  return null
-}
-
-/// A multi-part filler, built word by word with our own pauses between.
-async function splicedFiller(phrase: string, voice: string | undefined): Promise<Buffer> {
-  const segments = splitSegments(phrase)
-  const parts: Buffer[] = []
-  for (const segment of segments) {
-    const audio = await segmentAudio(segment, voice)
-    if (audio) parts.push(audio)
-  }
-  if (parts.length === 0) throw new Error('Deepgram returned no audio')
-  const pause = Buffer.alloc(Math.round((SPEECH_WAV_SAMPLE_RATE * SEGMENT_PAUSE_MS) / 1000) * 2)
-  const joined = Buffer.concat(parts.flatMap((part, i) => (i === 0 ? [part] : [pause, part])))
-  // The tail still wants the fade and the trailing silence every filler gets,
-  // and the inner pauses are already the length we chose, so no collapsing.
-  return softenEnding(wavFile(joined))
-}
-
 export function fillerAudio(text: string, voice: string | undefined): Promise<Buffer> {
   const key = keyFor(text.trim(), voice)
   const existing = fillerClips.get(key)
@@ -246,14 +189,8 @@ export function fillerAudio(text: string, voice: string | undefined): Promise<Bu
     const phrase = text.trim()
     // Anything made of several interjections is built word by word; a single
     // utterance ("Well, let me think...") Aura says reliably in one go.
-    if (splitSegments(phrase).length >= 2) return splicedFiller(phrase, voice)
-    // A single short utterance is where Aura is least reliable: asked for
-    // "Yeah." three times it came back at 26%, 0% and 27% of full scale, and
-    // the 0% draw is silence. Since the clip is then cached for the life of
-    // the process, one bad draw silences that acknowledgement for days — so
-    // the draw is checked before it is kept.
     const audio = await drawAudible(phrase, voice)
-    return softenEnding(audio, false, isWittyFillerPhrase(phrase))
+    return softenEnding(audio)
   })()
   // A failure must not be remembered as the answer forever.
   clip.catch(() => fillerClips.delete(key))
@@ -302,50 +239,7 @@ function trimLeadingSilence(pcm: Buffer, sampleCount: number): Buffer {
   return pcm.subarray(Math.max(0, first - keep) * 2, sampleCount * 2)
 }
 
-// The pauses BETWEEN the words of a gap filler are the whole character of
-// it — but Deepgram reads each "..." as a full breath's worth of silence,
-// which turns "...well... okay then..." into 3.6s, far longer than the gap
-// it is covering. Shortened to a beat, which keeps the hesitation and loses
-// the dead air.
-const MAX_INNER_PAUSE_MS = 220
-
-// And a ceiling, because Aura's pacing is not ours to set: the same phrase
-// came back at 1.7s on one run and 3.6s on another, and a client cannot plan
-// around that. Past this the clip is simply cut short and faded, which costs
-// a hesitation noise nobody was listening to the end of.
-const MAX_GAP_CLIP_MS = 2400
-
-// Except for the ones with a joke in them, where the ending is the point.
-const MAX_WITTY_CLIP_MS = 3000
-
-function collapseInnerPauses(pcm: Buffer): Buffer {
-  const sampleCount = Math.floor(pcm.length / 2)
-  const floor = silenceFloor(pcm, sampleCount)
-  const limit = Math.round((SPEECH_WAV_SAMPLE_RATE * MAX_INNER_PAUSE_MS) / 1000)
-  const out = Buffer.alloc(pcm.length)
-  let written = 0
-  let run = 0
-  for (let i = 0; i < sampleCount; i++) {
-    const sample = pcm.readInt16LE(i * 2)
-    if (Math.abs(sample) < floor) {
-      run += 1
-      if (run > limit) continue
-    } else {
-      run = 0
-    }
-    out.writeInt16LE(sample, written * 2)
-    written += 1
-  }
-  return out.subarray(0, written * 2)
-}
-
-function capLength(pcm: Buffer, witty: boolean): Buffer {
-  const ms = witty ? MAX_WITTY_CLIP_MS : MAX_GAP_CLIP_MS
-  const limit = Math.round((SPEECH_WAV_SAMPLE_RATE * ms) / 1000) * 2
-  return pcm.length > limit ? pcm.subarray(0, limit) : pcm
-}
-
-function softenEnding(wav: Buffer, collapse = false, witty = false): Buffer {
+function softenEnding(wav: Buffer): Buffer {
   // Deepgram streams its wav, so the header's declared sizes are a
   // placeholder; the samples are whatever follows the data chunk.
   const marker = wav.indexOf('data')
@@ -353,7 +247,7 @@ function softenEnding(wav: Buffer, collapse = false, witty = false): Buffer {
   const whole = wav.subarray(marker + 8)
   if (Math.floor(whole.length / 2) === 0) return wav
   const trimmed = trimLeadingSilence(whole, Math.floor(whole.length / 2))
-  const pcm = collapse ? capLength(collapseInnerPauses(trimmed), witty) : trimmed
+  const pcm = trimmed
   const sampleCount = Math.floor(pcm.length / 2)
   if (sampleCount === 0) return wav
 

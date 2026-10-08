@@ -32,16 +32,7 @@ import {
 } from '../lib/api'
 import { isExperienced } from '../lib/experience'
 import { endTurn, markTurn } from '../lib/turnTiming'
-import {
-  createPlaybackQueue,
-  loadFillers,
-  primeAudioElement,
-  soundsLikeAHardMoment,
-  soundsLikeAHardTurn,
-  WITTY_GAP_CHANCE,
-  type Fillers,
-  type PlaybackQueue,
-} from '../lib/voicePlayback'
+import { createPlaybackQueue, loadFillers, primeAudioElement, type Fillers, type PlaybackQueue } from '../lib/voicePlayback'
 
 // Flipped to false: auto-starting the mic on open meant a teacher could
 // go through an entire hands-free conversation without ever tapping the
@@ -241,17 +232,8 @@ export default function TalkToMe() {
   // waits on the same promise, so they still play in order.
   const thinkingHandoffRef = useRef<Promise<void> | null>(null)
   // How long the clip now playing may hold the floor once Coach's next
-  // sentence is ready. A joke gets to finish; everything else gets the
-  // ordinary beat.
+  // sentence is ready.
   const fillerHoldRef = useRef(0)
-  // Set for the rest of the turn when Coach's first sentence is sympathetic,
-  // and when a joke has just been told.
-  const noJokesRef = useRef(false)
-  // Whether the last thing Coach joked through was a joke — kept across
-  // turns, not reset with them, since a joke is drawn once per turn now.
-  const lastWasJokeRef = useRef(false)
-  const openingSentenceRef = useRef(true)
-  const jokePlayingRef = useRef(false)
   // The reply currently being streamed, whether or not it is still audible.
   // An interruption starts the next turn immediately, so that turn has to
   // wait for this to settle before it asks for anything — otherwise its
@@ -548,29 +530,17 @@ export default function TalkToMe() {
 
   function startThinkingSound() {
     cancelThinkingSound()
-    // The second after the teacher stops talking is the only gap that
-    // reliably opens, so it is the only place a joke is reliably heard.
-    //
-    // One roll decides all three outcomes, so the joke rate does not drop
-    // just because some turns are silent: a joke a quarter of the time, no
-    // sound a fifth of the time, an ordinary opener for the rest. When jokes
-    // are off for this turn their share becomes ordinary openers, and the
-    // silent share is the same either way.
-    const roll = Math.random()
-    if (roll >= 1 - SILENT_TURN_CHANCE) return
-    const joking = !noJokesRef.current && !lastWasJokeRef.current && roll < WITTY_GAP_CHANCE
+    // Sometimes nothing at all: a person thinking does not make a noise
+    // every time they think.
+    if (Math.random() < SILENT_TURN_CHANCE) return
     const delay = FILLER_AFTER_MIN_MS + Math.random() * (FILLER_AFTER_MAX_MS - FILLER_AFTER_MIN_MS)
     fillerTimerRef.current = window.setTimeout(() => {
       const audio = fillerAudioRef.current
-      const clip = joking ? fillersRef.current?.nextWitty() : fillersRef.current?.nextStarter()
+      const clip = fillersRef.current?.nextStarter()
       // Only into silence: once Coach is speaking, or the teacher is, a
       // thinking sound would be talking over one of them.
       if (!audio || !clip || !sessionActiveRef.current || phaseRef.current !== 'thinking') return
-      jokePlayingRef.current = joking
-      lastWasJokeRef.current = joking
-      // A punchline is never faded for a sentence that is ready. The teacher
-      // talking over it still cuts it off — that is barge-in.
-      fillerHoldRef.current = joking ? LET_THE_JOKE_FINISH_MS : HOLD_FOR_FILLER_MS
+      fillerHoldRef.current = HOLD_FOR_FILLER_MS
       audio.volume = 1
       audio.src = clip
       void audio.play().catch(() => {})
@@ -588,10 +558,6 @@ export default function TalkToMe() {
   // already heard Coach start thinking about.
   const HOLD_FOR_FILLER_MS = 1200
 
-  // Longer than any clip the server will produce (gap fillers are capped at
-  // 2.4s, the ones with a joke at 3.0s, both plus 0.3s of trailing silence),
-  // which is the point: a punchline is never faded.
-  const LET_THE_JOKE_FINISH_MS = 4000
 
 
   function cancelThinkingSound() {
@@ -637,17 +603,6 @@ export default function TalkToMe() {
 
   /// Every sentence goes through here so they stay in order behind a hold.
   function speak(queue: PlaybackQueue, sentence: string) {
-    // Coach's opener is where it reacts to what the teacher just said. If
-    // that reaction is a sympathetic one, this turn gets no jokes.
-    if (openingSentenceRef.current) {
-      openingSentenceRef.current = false
-      if (soundsLikeAHardMoment(sentence)) {
-        noJokesRef.current = true
-        // A joke already started over what turns out to be a hard moment:
-        // the reply does not wait for the punchline, it fades it out.
-        if (jokePlayingRef.current) fillerHoldRef.current = 0
-      }
-    }
     const handoff = thinkingHandoffRef.current ?? (thinkingHandoffRef.current = handOffFromThinkingSound())
     void handoff.then(() => queue.push(sentence))
   }
@@ -749,10 +704,6 @@ export default function TalkToMe() {
 
     phaseRef.current = 'thinking'
     thinkingHandoffRef.current = null
-    // A joke is decided before Coach has written anything, so the teacher's
-    // own words are the only thing to read the mood from.
-    noJokesRef.current = soundsLikeAHardTurn(text)
-    openingSentenceRef.current = true
     startThinkingSound()
 
     // After an interruption the previous reply may still be arriving. It

@@ -35,42 +35,21 @@ export const FILLER_PHRASES = [
   "Okay, sure.",
 ]
 
-// And a handful with a joke in them, for the same slot.
+// The jokes that used to sit here are gone, and the reason is worth keeping.
+// A clip is chosen before Claude has read a word the teacher said, so a
+// recorded joke can only ever be generic — and rendered in exactly the same
+// voice and tone as the advice that follows, it was heard as part of the
+// answer rather than as an aside. Judged as content, "the mental hamster is
+// running" is a weak line about nothing in particular.
 //
-// These are the one kind that must be heard to the end: "...my words took
-// the scenic route..." faded after "...my words took the..." is worse than
-// silence. So Coach's next sentence waits one out however long it runs,
-// which is also why they are rare — one turn in four — and never two
-// running. Never in a turn where the teacher's own words sounded hard,
-// either; the client checks that before it picks one.
-export const WITTY_FILLER_PHRASES = [
-  "...well... the wheels are turning...",
-  "...so... little mental pit stop...",
-  "...so... a little traffic upstairs...",
-  "...well... my words took the scenic route...",
-  "...so... the gears are warming up...",
-  "...well... just catching a wandering thought...",
-  "...well... one brain cell at a time...",
-  "...so... the mental hamster is running...",
-  "...well... my brain and mouth are negotiating...",
-]
+// So the humour moved into the reply itself, where Coach can be funny about
+// the actual class ("twenty-two of them and one glue stick, sure") and the
+// system prompt already says how. A filler's job is to cover a second of
+// dead air honestly, which "Yeah." does without ever being mistaken for
+// advice.
 
-// Nothing plays between Coach's own sentences any more. There was a pool of
-// twenty two-word phrases for that, and then a quiet hum, and both are gone:
-// a sound in that gap was asked for and then asked to be removed, and the
-// silence is what the recordings have there anyway. The gap itself stays —
-// see SENTENCE_GAP_MS in voicePlayback.ts.
-
-const lookup = new Set([...FILLER_PHRASES, ...WITTY_FILLER_PHRASES].map((phrase) => phrase.toLowerCase()))
+const lookup = new Set(FILLER_PHRASES.map((phrase) => phrase.toLowerCase()))
 
 export function isFillerPhrase(text: string): boolean {
   return lookup.has(text.trim().toLowerCase())
-}
-
-const wittyLookup = new Set(WITTY_FILLER_PHRASES.map((phrase) => phrase.toLowerCase()))
-
-/// A joke is allowed to run longer than a plain acknowledgement, since it is
-/// only worth playing if its ending is heard.
-export function isWittyFillerPhrase(text: string): boolean {
-  return wittyLookup.has(text.trim().toLowerCase())
 }

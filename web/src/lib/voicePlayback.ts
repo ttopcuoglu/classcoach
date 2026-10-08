@@ -441,111 +441,10 @@ export const SENTENCE_GAP_MS = 220
 // a teacher who starts talking. Which is also why they are rare: a joke
 // Coach refuses to be interrupted out of is charming once a conversation
 // and wearing by the fourth time.
-export const WITTY_FILLER_PHRASES = [
-  "...well... the wheels are turning...",
-  "...so... little mental pit stop...",
-  "...hmm... a little traffic upstairs...",
-  "...well... my words took the scenic route...",
-  "...so... the gears are warming up...",
-  "...hmm... just catching a wandering thought...",
-  "...well... one brain cell at a time...",
-  "...so... the mental hamster is running...",
-  "...well... my brain and mouth are negotiating...",
-]
-
-// Roughly one turn in four, and never two running. The rest of the time the
-// plain hesitation noises do the work.
-//
-// These are drawn mostly at the START of a turn, not between sentences,
-// which is the opposite of where they were first put. A gap between Coach's
-// sentences almost never opens: Claude writes a sentence in a few hundred
-// milliseconds and Coach takes three or four seconds to say one, so the
-// queue is never dry. The second of silence after the teacher stops talking
-// is the only reliable gap there is — and "the gears are warming up" is a
-// thinking-out-loud line anyway, so that is where it belongs.
-export const WITTY_GAP_CHANCE = 0.25
-
-// Coach has just reacted to something painful: "Ugh, that's rough." — and
-// then "the mental hamster is running" would be the worst thing this
-// feature could do. Checked against Coach's own first sentence, which is
-// where the prompt puts its sympathy, and it silences the jokes for the
-// rest of that turn. Kept in step with SpeechPlayer.swift.
-// At the start of a turn there is no reply yet to read the mood from, so the
-// teacher's own words are what decide. Deliberately broad: suppressing a
-// joke that would have been fine costs nothing, and telling one over a
-// teacher who just said they cried in their car is unforgivable.
-const HARD_MOMENT_MARKERS = [
-  'cried',
-  'crying',
-  'in tears',
-  'quit',
-  'quitting',
-  'resign',
-  'burnt out',
-  'burned out',
-  'exhausted',
-  'overwhelmed',
-  'breaking point',
-  'falling apart',
-  "can't do this",
-  'cant do this',
-  'at my limit',
-  'had enough',
-  'lost it',
-  'humiliated',
-  'awful',
-  'terrible',
-  'the worst',
-  'hate teaching',
-  'panic',
-  'anxiety',
-  'depressed',
-  'no idea what to do',
-  'helpless',
-  'hopeless',
-]
-
-/// Whether what the teacher just said rules out a joke this turn.
-export function soundsLikeAHardTurn(transcript: string): boolean {
-  const text = transcript.toLowerCase()
-  return HARD_MOMENT_MARKERS.some((marker) => text.includes(marker))
-}
-
-const SYMPATHY_MARKERS = [
-  'oof',
-  'ugh',
-  'oh no',
-  "i'm sorry",
-  'im sorry',
-  "that's rough",
-  "that's hard",
-  "that's awful",
-  "that's a lot",
-  "that's frustrating",
-  'sounds hard',
-  'sounds exhausting',
-  'long day',
-  'rough day',
-  'exhausting',
-  'overwhelming',
-  'in tears',
-  'crying',
-  'burnt out',
-  'burned out',
-]
-
-/// Whether Coach's own words mean this is not a moment for a joke.
-export function soundsLikeAHardMoment(sentence: string): boolean {
-  const text = sentence.toLowerCase()
-  return SYMPATHY_MARKERS.some((marker) => text.includes(marker))
-}
-
 export type Fillers = {
   /// A clip that is not the one played last, so Coach does not say "Hmm"
   /// twice in a row. Null when none loaded.
   nextStarter: () => string | null
-  /// One with a joke in it, for the rare turn that gets one.
-  nextWitty: () => string | null
   release: () => void
 }
 
@@ -555,9 +454,6 @@ export type Fillers = {
 // conversation can use, and a different handful next time.
 const CLIPS_PER_POOL = 6
 
-// Fewer still of these: they are drawn a quarter as often, and three is
-// already more than one conversation will get through.
-const WITTY_CLIPS = 3
 
 function sample<T>(items: readonly T[], count: number): T[] {
   const pool = items.slice()
@@ -585,17 +481,12 @@ export async function loadFillers(voice: TalkVoice | null): Promise<Fillers> {
     (await Promise.all(sample(phrases, count).map((phrase) => fetchSentenceAudio(phrase, voice)))).filter(
       (url): url is string => url !== null,
     )
-  const [starters, witty] = await Promise.all([
-    fetchPool(FILLER_PHRASES, CLIPS_PER_POOL),
-    fetchPool(WITTY_FILLER_PHRASES, WITTY_CLIPS),
-  ])
+  const starters = await fetchPool(FILLER_PHRASES, CLIPS_PER_POOL)
   return {
     nextStarter: rotate(starters),
-    nextWitty: rotate(witty),
     release() {
-      for (const url of [...starters, ...witty]) URL.revokeObjectURL(url)
+      for (const url of starters) URL.revokeObjectURL(url)
       starters.length = 0
-      witty.length = 0
     },
   }
 }
