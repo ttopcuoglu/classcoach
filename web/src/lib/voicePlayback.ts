@@ -1,4 +1,4 @@
-import { buildHesitationUrl, buildJoinSoundUrl, buildSpeechUrl, type TalkVoice } from './api'
+import { buildSpeechUrl, type TalkVoice } from './api'
 
 // Shared by Talk It Through and Lesson Debrief's Reflect tab — both need
 // the identical sentence-splitting/prefetch/playback behavior (including
@@ -89,19 +89,6 @@ export async function fetchSentenceAudio(sentence: string, voice: TalkVoice | nu
     return URL.createObjectURL(blob)
   } catch (err) {
     console.warn('[voicePlayback] TTS fetch threw', err)
-    return null
-  }
-}
-
-/// The short hum Coach makes between its own sentences, fetched once a
-/// conversation. In the teacher's own Coach voice, and the same clip every
-/// time, so both sides cache it.
-export async function loadJoinSound(voice: TalkVoice | null): Promise<string | null> {
-  try {
-    const res = await fetch(buildJoinSoundUrl(voice), { credentials: 'include' })
-    if (!res.ok) return null
-    return URL.createObjectURL(await res.blob())
-  } catch {
     return null
   }
 }
@@ -280,25 +267,10 @@ export type PlaybackQueue = {
   finished: Promise<void>
 }
 
-/// What the page does with a gap in the middle of a reply. `onOpen` is
-/// called when the queue runs dry and may start a sound; `onClose` is
-/// awaited before the next sentence plays, so a sound that is nearly
-/// finished can be allowed to end.
-export type GapHandler = {
-  onOpen: () => void
-  onClose: () => Promise<void>
-  /// Called after a sentence when the next one is already in hand, which is
-  /// where a person would hesitate. Awaited, so the hum and the beat after
-  /// it are heard before the next sentence starts — played underneath the
-  /// next sentence instead, it was simply buried.
-  onJoin: () => Promise<void>
-}
-
 export function createPlaybackQueue(
   audio: HTMLAudioElement,
   voice: TalkVoice | null,
   onFirstPlay?: () => void,
-  gap?: GapHandler,
 ): PlaybackQueue {
   const pending: Promise<Clip | null>[] = []
   const cancellation: Cancellation = { cancelled: false, onAbort: null }
@@ -321,50 +293,22 @@ export function createPlaybackQueue(
       if (played > 1) return
       onFirstPlay?.()
     }
-    // A gap is open from the moment the queue has nothing in hand until the
-    // next sentence is about to play. Both waits below count: Claude may not
-    // have written the sentence yet, or it may be written and still
-    // downloading. Never before the first sentence — that silence belongs to
-    // the thinking sound, and two of them at once is one too many.
-    let inGap = false
-    const openGap = () => {
-      if (!gap || inGap || played === 0) return
-      inGap = true
-      gap.onOpen()
-    }
-    const closeGap = async () => {
-      if (!inGap || !gap) return
-      inGap = false
-      await gap.onClose()
-    }
-    // Only when the next sentence is already here. If the queue has run dry
-    // the gap machinery owns that silence, and this would be fighting it for
-    // the same audio element.
-    const breatheIfMoreToCome = async () => {
-      if (!gap || cancellation.cancelled) return
-      if (i < pending.length) await gap.onJoin()
+    // A beat between Coach's own sentences, with nothing in it.
+    const sentenceGap = async () => {
+      if (cancellation.cancelled || i >= pending.length) return
+      await new Promise<void>((resolve) => window.setTimeout(resolve, SENTENCE_GAP_MS))
     }
 
     while (!cancellation.cancelled) {
       if (i >= pending.length) {
         if (closed) break
-        openGap()
         await new Promise<void>((resolve) => {
           wake = resolve
         })
         continue
       }
-      openGap()
       const clip = await pending[i++]
       if (!clip) continue // this segment failed to fetch — skip it, not fatal
-      if (cancellation.cancelled) {
-        release(clip)
-        break
-      }
-      // Nothing here schedules a sound itself: `onOpen` waits out its own
-      // delay, so a clip that was already in hand closes the gap again
-      // before anything was heard.
-      await closeGap()
       if (cancellation.cancelled) {
         release(clip)
         break
@@ -373,12 +317,12 @@ export function createPlaybackQueue(
       if (clip.kind === 'blob') {
         await playOne(audio, clip.url, cancellation, announce)
         release(clip)
-        await breatheIfMoreToCome()
+        await sentenceGap()
         continue
       }
       const result = await playDirect(audio, clip.url, cancellation, announce)
       if (result === 'played' || cancellation.cancelled) {
-        await breatheIfMoreToCome()
+        await sentenceGap()
         continue
       }
       // Nothing was heard — download it the slow way rather than skipping a
@@ -390,7 +334,7 @@ export function createPlaybackQueue(
       }
       await playOne(audio, fallback, cancellation, announce)
       URL.revokeObjectURL(fallback)
-      await breatheIfMoreToCome()
+      await sentenceGap()
     }
     // Anything fetched but never played still holds an object URL.
     for (; i < pending.length; i++) release(await pending[i].catch(() => null))
@@ -454,77 +398,40 @@ export async function playQueue(
 // These are fetched once per conversation and kept as blobs, so playing one
 // costs nothing and starts instantly. Fetching them per turn would reintroduce
 // exactly the delay they exist to cover.
-// One sound per pause, not a running commentary. A second, longer one for
-// slow turns was tried on 2026-10-06 and taken back out: it covered the
-// silence, but two thinking noises in a row sounded less like a colleague
-// considering something and more like a machine filling air. A single "hmm"
-// and then quiet is what a person actually does.
+// What Coach says in the second between a teacher finishing and Coach's own
+// first word arriving.
 //
-// All of them have to fit ANY turn, because they are recorded before anyone
-// knows what the teacher said. That rules out the reactions Coach uses in
-// its actual replies: "Oof" is right half the time and badly wrong the other
-// half, and "Oh..." or "Huh..." carry a read on news nobody has heard yet.
+// These used to be thinking noises — "Let me see...", "Well, let me
+// think...", and before that a wordless hum. Two recordings of conversations
+// that sound right settled it against all of them: what a real coach says
+// there is an ACKNOWLEDGEMENT. The gap is the same length either way and the
+// message is the opposite — one says "I heard you", the other says "wait".
 //
-// Two measured rules shaped this list, and the server keeps the same one in
-// fillerPhrases.ts so the audio can be kept forever:
-//
-//  - They start 250ms into the pause, Coach's first sentence lands around
-//    1.2s, and the reply waits for one with 1.2s or less left to finish. So
-//    anything up to ~2.15s plays in full; past that it fades mid-word, which
-//    is what made an earlier, wordier set sound chopped.
-//  - Ending in "..." rather than ".", which makes the voice trail off rather
-//    than stop.
+// They have to fit ANY turn, since the clip is chosen before Claude has read
+// a word the teacher said. So nothing that reads the news ("Classic.", "Oh,
+// that's rough.") however well it worked in a recording where the coach had
+// already heard them, and nothing from the assistant-tic list in the system
+// prompt. Kept in step with server/src/lib/fillerPhrases.ts.
 export const FILLER_PHRASES = [
-  'Let me see...',
-  "Well, let's see...",
-  "Okay, let's see...",
-  "Alright, let's see...",
-  "So, let's see...",
-  'Well, let me think...',
-  'Okay, let me think...',
-  'Hmm, let me think...',
-  'Let me take a moment...',
-  'Just a moment...',
-  'Give me a second...',
-  'Let me gather my thoughts...',
-  "Let's think about this...",
-  'Well, now...',
-  'Okay, so...',
-  'Alright, then...',
-  'Hmm, okay...',
+  'Yeah.',
+  'Right.',
+  'Okay.',
+  'Sure.',
+  'Got it.',
+  'I see.',
+  'Oh, okay.',
+  'Yeah, okay.',
+  'Right, yeah.',
+  'Ah, okay.',
+  'Okay, sure.',
 ]
 
-// The second pool: what Coach says between its own sentences, when Claude
-// has not finished writing the next one. A different job from an opener —
-// the teacher is already mid-answer, so "Let me think..." would sound like
-// Coach losing its place. These hold the floor instead of taking it.
-//
-// They lead with "..." deliberately: Coach comes in a beat late rather than
-// jumping into its own pause. The server trims the dead air that produces
-// and shortens the pauses between the words (speechCache.ts), so what
-// arrives here is between 0.7s and 2.5s.
-export const BETWEEN_FILLER_PHRASES = [
-  "...well... okay then...",
-  "...hmm... alrighty...",
-  "...so... yeah...",
-  "...okay... well, well...",
-  "...well... you know...",
-  "...I mean... yeah...",
-  "...hmm... okay, okay...",
-  "...alrighty... so...",
-  "...well... huh...",
-  "...okay-dokey...",
-  "...yeah... well...",
-  "...so... um... yeah...",
-  "...well... I mean...",
-  "...hmm... right...",
-  "...okay... well then...",
-  "...ah... okay...",
-  "...right... right...",
-  "...oh... well...",
-  "...okay... so, yeah...",
-  "...well... hmm...",
-]
+// Nothing plays between Coach's own sentences. There was a pool of twenty
+// two-word phrases for that, then a quiet hum, and both are gone — a sound
+// there was asked for and then asked to be removed. The gap itself stays,
+// because the recordings have one too: about 200ms between sentences inside
+// an idea, and a second where the idea changes.
+export const SENTENCE_GAP_MS = 220
 
 // The third pool: the same gaps, with a joke in them.
 //
@@ -633,21 +540,12 @@ export function soundsLikeAHardMoment(sentence: string): boolean {
   return SYMPATHY_MARKERS.some((marker) => text.includes(marker))
 }
 
-// How often Coach hums and pauses instead of saying a thinking phrase.
-// Often enough to be part of how it sounds, rarely enough that a teacher
-// still hears it think out loud most turns.
-export const HESITATION_CHANCE = 0.35
-
 export type Fillers = {
   /// A clip that is not the one played last, so Coach does not say "Hmm"
   /// twice in a row. Null when none loaded.
   nextStarter: () => string | null
-  /// The same, from the between-sentence pool.
-  nextGap: () => string | null
-  /// A gap filler with a joke in it, for the rare turn that gets one.
+  /// One with a joke in it, for the rare turn that gets one.
   nextWitty: () => string | null
-  /// The wordless one: a hum and a beat of thinking.
-  hesitation: () => string | null
   release: () => void
 }
 
@@ -687,30 +585,16 @@ export async function loadFillers(voice: TalkVoice | null): Promise<Fillers> {
     (await Promise.all(sample(phrases, count).map((phrase) => fetchSentenceAudio(phrase, voice)))).filter(
       (url): url is string => url !== null,
     )
-  const fetchOne = async (url: string) => {
-    try {
-      const res = await fetch(url, { credentials: 'include' })
-      return res.ok ? URL.createObjectURL(await res.blob()) : null
-    } catch {
-      return null
-    }
-  }
-  const [starters, gaps, witty, hesitation] = await Promise.all([
+  const [starters, witty] = await Promise.all([
     fetchPool(FILLER_PHRASES, CLIPS_PER_POOL),
-    fetchPool(BETWEEN_FILLER_PHRASES, CLIPS_PER_POOL),
     fetchPool(WITTY_FILLER_PHRASES, WITTY_CLIPS),
-    fetchOne(buildHesitationUrl(voice)),
   ])
   return {
     nextStarter: rotate(starters),
-    nextGap: rotate(gaps),
     nextWitty: rotate(witty),
-    hesitation: () => hesitation,
     release() {
-      for (const url of [...starters, ...gaps, ...witty]) URL.revokeObjectURL(url)
-      if (hesitation) URL.revokeObjectURL(hesitation)
+      for (const url of [...starters, ...witty]) URL.revokeObjectURL(url)
       starters.length = 0
-      gaps.length = 0
       witty.length = 0
     },
   }

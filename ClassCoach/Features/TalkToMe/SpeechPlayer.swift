@@ -106,7 +106,10 @@ final class SpeechPlayer: NSObject, ObservableObject {
                 // Only when the next sentence is already here. If the queue
                 // has run dry the gap machinery owns that silence, and this
                 // would be fighting it for the same moment.
-                if !self.pending.isEmpty { await self.playJoinSound() }
+                // A beat between Coach's own sentences, with nothing in it.
+                if !self.pending.isEmpty {
+                    try? await Task.sleep(for: .milliseconds(Self.sentenceGapMs))
+                }
             }
             if let self, gen == self.generation {
                 self.drainTask = nil
@@ -136,8 +139,6 @@ final class SpeechPlayer: NSObject, ObservableObject {
         pending.removeAll()
         drainTask = nil
         cancelThinking()
-        joinPlayer?.stop()
-        joinPlayer = nil
         player?.stop()
         continuation?.resume()
         continuation = nil
@@ -165,37 +166,21 @@ final class SpeechPlayer: NSObject, ObservableObject {
     // starts 250ms into the pause, the reply lands around 1.2s and then
     // waits out a filler with 1.2s or less left, and an ellipsis makes the
     // voice trail off where a full stop makes it stop dead. Kept in step
-    // with web/src/lib/voicePlayback.ts and the server's fillerPhrases.ts,
-    // which is also where the breath in front of the longer ones is added.
+    // Acknowledgements, not thinking noises: two recordings of conversations
+    // that sound right have the coach open with "Yeah." or "Right." there,
+    // and the message is the opposite of "wait". They must fit ANY turn,
+    // since the clip is picked before Claude has read a word the teacher
+    // said. Kept in step with web/src/lib/voicePlayback.ts and the server's
+    // fillerPhrases.ts.
     private static let shortFillers = [
-        "Let me see...", "Well, let's see...", "Okay, let's see...",
-        "Alright, let's see...", "So, let's see...", "Well, let me think...",
-        "Okay, let me think...", "Hmm, let me think...", "Let me take a moment...",
-        "Just a moment...", "Give me a second...", "Let me gather my thoughts...",
-        "Let's think about this...", "Well, now...", "Okay, so...",
-        "Alright, then...", "Hmm, okay...",
+        "Yeah.", "Right.", "Okay.",
+        "Sure.", "Got it.", "I see.",
+        "Oh, okay.", "Yeah, okay.", "Right, yeah.",
+        "Ah, okay.", "Okay, sure.",
     ]
-    /// And what Coach says BETWEEN its own sentences, when Claude has not
-    /// finished writing the next one. A different job from an opener: the
-    /// teacher is already mid-answer, so "Let me think..." would sound like
-    /// Coach losing its place. These hold the floor instead of taking it.
-    ///
-    /// The leading "..." is deliberate — Coach comes in a beat late rather
-    /// than jumping into its own pause. The server trims the dead air that
-    /// produces and shortens the pauses between the words, so what arrives
-    /// here runs 0.7s to 2.5s.
-    private static let betweenFillers = [
-        "...well... okay then...", "...hmm... alrighty...",
-        "...so... yeah...", "...okay... well, well...",
-        "...well... you know...", "...I mean... yeah...",
-        "...hmm... okay, okay...", "...alrighty... so...",
-        "...well... huh...", "...okay-dokey...",
-        "...yeah... well...", "...so... um... yeah...",
-        "...well... I mean...", "...hmm... right...",
-        "...okay... well then...", "...ah... okay...",
-        "...right... right...", "...oh... well...",
-        "...okay... so, yeah...", "...well... hmm...",
-    ]
+    // Nothing plays between Coach's own sentences. There was a pool of
+    // twenty two-word phrases for that, then a quiet hum, and both are
+    // gone — a sound there was asked for and then asked to be removed.
     /// The same gaps, with a joke in them.
     ///
     /// These are the one kind that has to be heard to the end — "...my words
@@ -207,20 +192,14 @@ final class SpeechPlayer: NSObject, ObservableObject {
     private static let wittyFillers = [
         "...well... the wheels are turning...",
         "...so... little mental pit stop...",
-        "...hmm... a little traffic upstairs...",
+        "...so... a little traffic upstairs...",
         "...well... my words took the scenic route...",
         "...so... the gears are warming up...",
-        "...hmm... just catching a wandering thought...",
+        "...well... just catching a wandering thought...",
         "...well... one brain cell at a time...",
         "...so... the mental hamster is running...",
         "...well... my brain and mouth are negotiating...",
     ]
-
-    /// How often Coach hums and pauses instead of saying a thinking phrase.
-    /// Often enough to be part of how it sounds, rarely enough that a
-    /// teacher still hears it think out loud most turns.
-    private static let hesitationChance = 0.35
-
     /// Roughly one turn in four, and never two running.
     ///
     /// Drawn mostly at the START of a turn, not between sentences, which is
@@ -270,6 +249,10 @@ final class SpeechPlayer: NSObject, ObservableObject {
     /// mid-reply, not deciding whether to speak.
     private static let fillerDelayRange = 180...400
 
+    /// The beat between Coach's own sentences. The recordings that sound
+    /// right have about this much silence between sentences inside an idea.
+    private static let sentenceGapMs = 220
+
     /// And sometimes Coach makes no sound at all. A person thinking does not
     /// hum every time they think, and a noise on every single turn became
     /// its own tell.
@@ -286,12 +269,8 @@ final class SpeechPlayer: NSObject, ObservableObject {
     private static let wittyClipCount = 3
 
     private var starterClips: [Data] = []
-    private var gapClips: [Data] = []
     private var wittyClips: [Data] = []
-    /// The wordless one: a hum and a beat of thinking. One clip, not a pool.
-    private var hesitationClip: Data?
     private var lastStarter = -1
-    private var lastGap = -1
     private var lastWitty = -1
     /// Set for the rest of a turn when Coach's opener is sympathetic, and
     /// when a joke has just been told.
@@ -305,9 +284,6 @@ final class SpeechPlayer: NSObject, ObservableObject {
     /// finish; everything else gets the ordinary beat.
     private var currentHold: TimeInterval = 0
     private var jokePlaying = false
-    /// The between-sentence hum, fetched once a conversation.
-    private var joinSound: Data?
-    private var joinPlayer: AVAudioPlayer?
     /// Sentences played in the current turn. A gap sound belongs between
     /// sentences, so nothing happens until Coach has said one.
     private var sentencesPlayed = 0
@@ -320,37 +296,11 @@ final class SpeechPlayer: NSObject, ObservableObject {
     /// Fetched once a conversation, in the teacher's own Coach voice. Doing
     /// this per turn would reintroduce exactly the delay they exist to cover.
     func loadFillers(voice: String?) async {
-        guard starterClips.isEmpty, gapClips.isEmpty else { return }
+        guard starterClips.isEmpty else { return }
         async let starters = Self.fetchAll(Self.shortFillers.shuffled().prefix(Self.clipsPerPool), voice: voice)
-        async let gaps = Self.fetchAll(Self.betweenFillers.shuffled().prefix(Self.clipsPerPool), voice: voice)
         async let witty = Self.fetchAll(Self.wittyFillers.shuffled().prefix(Self.wittyClipCount), voice: voice)
-        async let join = try? TalkToMeService.fetchJoinSound(voice: voice)
-        async let hesitation = try? TalkToMeService.fetchHesitation(voice: voice)
         starterClips = await starters
-        gapClips = await gaps
         wittyClips = await witty
-        joinSound = await join
-        hesitationClip = await hesitation
-    }
-
-    /// Played after a sentence when another is already in hand, which is
-    /// where a person would hesitate.
-    ///
-    /// Awaited, unlike the first version of this: played underneath Coach's
-    /// next sentence it was simply buried, audible only as a sound starting
-    /// and being cut off. The clip now carries its own beat and the reply
-    /// waits for it — about a third of a second per join, which is roughly
-    /// what a person takes between two sentences.
-    private func playJoinSound() async {
-        guard let joinSound else { return }
-        // A filler, or the tail of one, outranks this.
-        guard fillerPlayer?.isPlaying != true else { return }
-        guard let player = try? AVAudioPlayer(data: joinSound) else { return }
-        joinPlayer = player
-        player.play()
-        // Slept rather than awaited on a delegate: this player has no
-        // continuation of its own, and the clip's length is known.
-        try? await Task.sleep(for: .milliseconds(Int(player.duration * 1000)))
     }
 
     private static func fetchAll(_ phrases: some Sequence<String>, voice: String?) async -> [Data] {
@@ -366,8 +316,6 @@ final class SpeechPlayer: NSObject, ObservableObject {
         }
     }
 
-    /// Starts the thinking sounds for a turn. Cancelled automatically the
-    /// moment real speech plays.
     /// Starts the thinking sounds for a turn. Cancelled automatically the
     /// moment real speech plays. `teacherSaid` is what the teacher just
     /// said, which is the only thing available to judge whether this is a
@@ -389,12 +337,11 @@ final class SpeechPlayer: NSObject, ObservableObject {
         let joking = !noJokesThisTurn && !lastWasJoke && roll < Self.wittyGapChance
         // Wordless: a hum and then a beat. Coach is audibly thinking without
         // claiming to be doing anything in particular.
-        let humming = !joking && roll < Self.wittyGapChance + Self.hesitationChance
         let delay = Duration.milliseconds(Int.random(in: Self.fillerDelayRange))
         thinkingTask = Task { [weak self] in
             try? await Task.sleep(for: delay)
             guard !Task.isCancelled else { return }
-            await self?.playFiller(starter: true, joking: joking, humming: humming)
+            await self?.playFiller(starter: true, joking: joking)
         }
     }
 
@@ -473,31 +420,16 @@ final class SpeechPlayer: NSObject, ObservableObject {
         }
     }
 
-    private func playFiller(starter: Bool, joking: Bool = false, humming: Bool = false) {
+    private func playFiller(starter: Bool, joking: Bool = false) {
         // Never over real speech: by the time a clip is due, the reply may
         // already have started.
         guard player?.isPlaying != true else { return }
-        if humming, let hesitationClip {
-            lastWasJoke = false
-            jokePlaying = false
-            currentHold = Self.holdForFiller
-            PlaybackSession.activate()
-            fillerPlayer = try? AVAudioPlayer(data: hesitationClip)
-            fillerPlayer?.play()
-            return
-        }
-        let clips = joking ? wittyClips : (starter ? starterClips : gapClips)
+        let clips = joking ? wittyClips : starterClips
         guard !clips.isEmpty else { return }
         var index = Int.random(in: 0..<clips.count)
-        let last = joking ? lastWitty : (starter ? lastStarter : lastGap)
+        let last = joking ? lastWitty : lastStarter
         if clips.count > 1, index == last { index = (index + 1) % clips.count }
-        if joking {
-            lastWitty = index
-        } else if starter {
-            lastStarter = index
-        } else {
-            lastGap = index
-        }
+        if joking { lastWitty = index } else { lastStarter = index }
         lastWasJoke = joking
         jokePlaying = joking
         // A punchline is never faded for a sentence that is ready. A teacher

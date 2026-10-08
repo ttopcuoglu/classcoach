@@ -134,7 +134,7 @@ enum TalkToMeService {
     /// version of that baking; bump it when the audio for an unchanged
     /// phrase changes. The server ignores it. Kept in step with
     /// SPEECH_REVISION in web/src/lib/api.ts.
-    static let speechRevision = "6"
+    static let speechRevision = "7"
 
     static func fetchSpeech(text: String, voice: String? = nil) async throws -> Data {
         var query = [URLQueryItem(name: "text", value: text), URLQueryItem(name: "rev", value: speechRevision)]
@@ -150,11 +150,4 @@ enum TalkToMeService {
         return try await APIClient.shared.rawGet("/api/tts/hesitate", queryItems: query)
     }
 
-    /// The short hum Coach makes between its own sentences. No text — one
-    /// clip per voice, cached on both sides.
-    static func fetchJoinSound(voice: String?) async throws -> Data {
-        var query = [URLQueryItem(name: "rev", value: speechRevision)]
-        if let voice { query.append(URLQueryItem(name: "voice", value: voice)) }
-        return try await APIClient.shared.rawGet("/api/tts/join", queryItems: query)
-    }
 }

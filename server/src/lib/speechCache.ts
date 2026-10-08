@@ -1,5 +1,5 @@
 import { SPEECH_WAV_SAMPLE_RATE, synthesizeSpeechStream } from './deepgram.ts'
-import { isGapFillerPhrase, isWittyFillerPhrase } from './fillerPhrases.ts'
+import { isWittyFillerPhrase } from './fillerPhrases.ts'
 import { DEFAULT_TALK_VOICE, isValidTalkVoice } from './talkVoices.ts'
 
 // Starts synthesizing a sentence before anyone asks for it.
@@ -168,6 +168,35 @@ const fillerClips = new Map<string, Promise<Buffer>>()
 const SEGMENT_PAUSE_MS = 200
 const SEGMENT_DRAWS = 2
 
+// Below this a draw is effectively silent. Aura produces them regularly for
+// one-word utterances, and they are indistinguishable from success without
+// looking at the samples.
+const MIN_AUDIBLE_PEAK = 2000
+const AUDIBLE_DRAWS = 4
+
+async function drawAudible(text: string, voice: string | undefined): Promise<Buffer> {
+  let best: Buffer | null = null
+  let bestPeak = -1
+  for (let draw = 0; draw < AUDIBLE_DRAWS; draw++) {
+    const upstream = await synthesizeSpeechStream(text, voice, 'wav')
+    const audio = Buffer.from(await upstream.arrayBuffer())
+    const marker = audio.indexOf('data')
+    if (audio.length === 0 || marker === -1) continue
+    const body = audio.subarray(marker + 8)
+    const peak = peakOf(body, Math.floor(body.length / 2))
+    if (peak > bestPeak) {
+      best = audio
+      bestPeak = peak
+    }
+    if (bestPeak >= MIN_AUDIBLE_PEAK) break
+  }
+  if (!best) throw new Error('Deepgram returned no audio')
+  if (bestPeak < MIN_AUDIBLE_PEAK) {
+    console.warn(`[speech] "${text}" is barely audible after ${AUDIBLE_DRAWS} draws (peak ${bestPeak})`)
+  }
+  return best
+}
+
 function splitSegments(phrase: string): string[] {
   return phrase
     .split(/\.{2,}|…/)
@@ -187,7 +216,7 @@ async function segmentAudio(segment: string, voice: string | undefined): Promise
     const count = Math.floor(body.length / 2)
     if (count === 0) continue
     const trimmed = trimLeadingSilence(body, count)
-    if (peakOf(trimmed, Math.floor(trimmed.length / 2)) > MIN_USABLE_PEAK / 4) return trimmed
+    if (peakOf(trimmed, Math.floor(trimmed.length / 2)) > MIN_AUDIBLE_PEAK / 4) return trimmed
   }
   return null
 }
@@ -218,10 +247,13 @@ export function fillerAudio(text: string, voice: string | undefined): Promise<Bu
     // Anything made of several interjections is built word by word; a single
     // utterance ("Well, let me think...") Aura says reliably in one go.
     if (splitSegments(phrase).length >= 2) return splicedFiller(phrase, voice)
-    const upstream = await synthesizeSpeechStream(phrase, voice, 'wav')
-    const audio = Buffer.from(await upstream.arrayBuffer())
-    if (audio.length === 0) throw new Error('Deepgram returned no audio')
-    return softenEnding(audio)
+    // A single short utterance is where Aura is least reliable: asked for
+    // "Yeah." three times it came back at 26%, 0% and 27% of full scale, and
+    // the 0% draw is silence. Since the clip is then cached for the life of
+    // the process, one bad draw silences that acknowledgement for days — so
+    // the draw is checked before it is kept.
+    const audio = await drawAudible(phrase, voice)
+    return softenEnding(audio, false, isWittyFillerPhrase(phrase))
   })()
   // A failure must not be remembered as the answer forever.
   clip.catch(() => fillerClips.delete(key))
@@ -353,261 +385,13 @@ function wavFile(pcm: Buffer): Buffer {
   return Buffer.concat([header, pcm])
 }
 
-// ---------------------------------------------------------------------------
-// The hesitation in front of a thinking sound
-// ---------------------------------------------------------------------------
-//
-// A thinking sound that arrives out of nowhere still reads as a machine,
-// where the same sound after a hesitation reads as somebody gathering
-// themselves.
-//
-// This began as a synthesized inhale, which was the wrong instrument: noise
-// shaped to sound like breathing sounds like air, and the version that swept
-// a filter open sounded like a whoosh, because that is what a sweep is.
-// Coach's own voice can just hum, which is more convincing than any of it
-// and costs nothing after the first time — these are cached as hard as the
-// phrases themselves.
-//
-// Aura will not say the same thing twice. The identical request for
-// "Hmmm..." came back at 0.76s, then 0.36s, then 0.44s, with peaks of 6068,
-// 5088 and 10992 — and "Mm..." once came back at a peak of 371, which is
-// silence. So neither the length nor the level of a hesitation can be chosen
-// by choosing its spelling, and an earlier version of this that picked
-// between a "long" and a "short" hum was choosing between two draws of the
-// same dice.
-//
-// Instead: ask a few times and keep the usable ones. It happens once per
-// voice for the life of the process, so a handful of requests costs nothing,
-// it turns a lottery into clips we have actually looked at, and because the
-// draws differ Coach does not hum in exactly the same way every time.
-// Not a hum: "Well...", a word, because a hum was wrong twice over. It kept
-// coming out short and clipped however it was faded, and it was asked for by
-// name not to be used.
-//
-// It is also the only alternative Aura says reliably. Four draws each of
-// seven candidates: "Well..." came back at 0.60-0.80s with peaks of 32-51%
-// every time, while "Ah", "Oh", "So", "Right", "Okay" and "Uh" each produced
-// draws at 0-7% of full scale — silence — some as short as 0.20s. So this is
-// measurement, not taste.
-const LEAD_IN_SOUND = 'Well...'
-const LEAD_IN_DRAWS = 4
-// Below this a draw is effectively silent, and amplifying it just raises its
-// own noise.
-const MIN_USABLE_PEAK = 2000
-// And a long draw is as bad as a quiet one: a hesitation is a beat, not a
-// sigh. Four draws rather than three, because both hums now use the LONGEST
-// of them and a run of three short ones leaves nothing worth playing.
-const MAX_LEAD_IN_MS = 800
 
-// Aura's level for these is a lottery even among usable draws, so a
-// hesitation is scaled to a fixed share of the words it precedes rather than
-// trusted as recorded. Well under half: it should be felt rather than heard,
-// and a hum at conversational level sounds like Coach agreeing with itself.
-const HESITATION_LEVEL = 0.22
-// A cap on that scaling, so a quiet clip is left quiet rather than being
-// amplified into its own noise floor.
-const LEAD_IN_MAX_GAIN = 3
-
-// And rolled off, so what is left is the chest of the hum rather than the
-// front of it. Aura puts a bright attack on "Hmmm" that reads as a syllable;
-// without it the same clip reads as breath.
-const LEAD_IN_LOWPASS_HZ = 900
-
-// Then a real pause, and nothing else. This is the point of the whole
-// thing: a hum that runs straight into words is a mouth noise, where a hum
-// and then a beat of nothing is somebody thinking.
-//
-// It took two tries to get this right. The first version baked the hum onto
-// the FRONT of a spoken phrase — "Hmmm... [pause] Let me see..." — which
-// fails twice over. The clip budget then has to cover hum, pause and words
-// together, so only the shortest phrase in the list ever qualified. And
-// worse, Coach's reply is ready about 0.9s in, which lands inside the pause:
-// the clip is faded there, so the teacher heard the hum, a fraction of the
-// pause, and then the answer. The pause the hum exists to create was the
-// first thing thrown away.
-//
-// So the hesitation is its own clip, played INSTEAD of a spoken phrase. A
-// hum and a beat is about 1.2s, which means a reply ready at 0.9s has 0.3s
-// left to wait — inside the hold, so Coach waits it out and the pause is
-// heard in full. The pause is no longer competing with words for the budget;
-// it is what the clip is.
-const HESITATION_PAUSE_MS = 500
-// The longest draw rather than a random one, and faded out over its last
-// fifth, so it trails off into the pause instead of stopping in it.
-const HESITATION_FADE_MS = 180
-
-// A thinking sound only plays in full if it fits inside the beat before
-// Coach's reply: the clip starts about 250ms into the pause, the first
-// sentence is ready around 0.9s later, and a clip with 1.2s or less left is
-// then allowed to finish (HOLD_FOR_FILLER_MS). Past this it is faded
-// mid-word, and a hesitation that pushes it over the line has cost more than
-// it added.
-const CLIP_BUDGET_MS = 2100
-
+// peakOf stays because the splice path and the audible-draw check both use
+// it. Everything else that lived down here — the hum in front of a turn, the
+// hum between sentences, the draw-and-keep machinery that fed them, the
+// low-pass and the fade — went with the sounds themselves.
 function peakOf(pcm: Buffer, sampleCount: number): number {
   let peak = 0
   for (let i = 0; i < sampleCount; i++) peak = Math.max(peak, Math.abs(pcm.readInt16LE(i * 2)))
   return peak
-}
-
-/// The hesitation sounds for a voice: raw samples, trimmed of Deepgram's
-/// leading silence, the usable draws kept for good.
-const hesitations = new Map<string, Promise<Buffer[]>>()
-
-function hesitationDraws(voice: string | undefined): Promise<Buffer[]> {
-  const key = keyFor(LEAD_IN_SOUND, voice)
-  const existing = hesitations.get(key)
-  if (existing) return existing
-
-  const draws = (async () => {
-    const usable: Buffer[] = []
-    let loudest: Buffer | null = null
-    let loudestPeak = 0
-    for (let draw = 0; draw < LEAD_IN_DRAWS; draw++) {
-      const upstream = await synthesizeSpeechStream(LEAD_IN_SOUND, voice, 'wav')
-      const audio = Buffer.from(await upstream.arrayBuffer())
-      const marker = audio.indexOf('data')
-      if (marker === -1) continue
-      const whole = audio.subarray(marker + 8)
-      const trimmed = trimLeadingSilence(whole, Math.floor(whole.length / 2))
-      const count = Math.floor(trimmed.length / 2)
-      if (count === 0) continue
-      if ((count / SPEECH_WAV_SAMPLE_RATE) * 1000 > MAX_LEAD_IN_MS) continue
-      const peak = peakOf(trimmed, count)
-      if (peak > loudestPeak) {
-        loudest = trimmed
-        loudestPeak = peak
-      }
-      if (peak >= MIN_USABLE_PEAK) usable.push(trimmed)
-    }
-    // A draw that is merely quiet still beats no hesitation at all, since it
-    // is levelled against the words it precedes anyway.
-    if (usable.length === 0 && loudest) usable.push(loudest)
-    if (usable.length === 0) throw new Error('no usable hesitation came back')
-    return usable
-  })()
-  draws.catch(() => hesitations.delete(key))
-  hesitations.set(key, draws)
-  return draws
-}
-
-/// Fades the last `ms` of a clip to nothing, in place.
-///
-/// Both hums need this and only the join one had it, which is why the one at
-/// the start of a turn sounded cut: it stopped dead into its own pause.
-function fadeTail(pcm: Buffer, sampleCount: number, ms: number): Buffer {
-  const fade = Math.min(Math.round((SPEECH_WAV_SAMPLE_RATE * ms) / 1000), sampleCount)
-  for (let i = 0; i < fade; i++) {
-    const at = (sampleCount - 1 - i) * 2
-    pcm.writeInt16LE(Math.round(pcm.readInt16LE(at) * (i / fade)), at)
-  }
-  return pcm
-}
-
-/// Quieter and darker, in one pass: a one-pole roll-off takes the bright
-/// attack off the hum, and the gain puts it under the words.
-function soften(pcm: Buffer, sampleCount: number, gain: number): Buffer {
-  const coeff = Math.min(1, (2 * Math.PI * LEAD_IN_LOWPASS_HZ) / SPEECH_WAV_SAMPLE_RATE)
-  const out = Buffer.alloc(sampleCount * 2)
-  let y = 0
-  let peak = 0
-  const filtered = new Float64Array(sampleCount)
-  for (let i = 0; i < sampleCount; i++) {
-    y += coeff * (pcm.readInt16LE(i * 2) - y)
-    filtered[i] = y
-    peak = Math.max(peak, Math.abs(y))
-  }
-  // The roll-off costs level, so the gain is applied to what came out of it
-  // rather than to what went in.
-  const rawPeak = peakOf(pcm, sampleCount)
-  const correction = peak > 0 ? rawPeak / peak : 1
-  for (let i = 0; i < sampleCount; i++) {
-    out.writeInt16LE(Math.round(Math.max(-32767, Math.min(32767, filtered[i] * correction * gain))), i * 2)
-  }
-  return out
-}
-
-/// A hum and then a beat of silence: Coach thinking, with no words in it.
-/// Played in place of a spoken thinking sound, not in front of one.
-const hesitationClips = new Map<string, Promise<Buffer>>()
-
-export function hesitationClip(voice: string | undefined): Promise<Buffer> {
-  const key = keyFor('hesitate', voice)
-  const existing = hesitationClips.get(key)
-  if (existing) return existing
-  const clip = (async () => {
-    const draws = await hesitationDraws(voice)
-    // The longest of them: this is the whole sound, not a lead-in to words,
-    // so a 300ms draw reads as a click where a 600ms one reads as thinking.
-    const lead = draws.reduce((a, b) => (a.length >= b.length ? a : b))
-    const sampleCount = Math.floor(lead.length / 2)
-    const peak = peakOf(lead, sampleCount)
-    // Nothing to level it against here — it plays into silence rather than
-    // in front of words — so a fixed share of full scale, near enough to the
-    // level it had beside a phrase.
-    const gain = peak > 0 ? Math.min(LEAD_IN_MAX_GAIN, (32767 * HESITATION_LEVEL) / peak) : 1
-    const pause = Math.round((SPEECH_WAV_SAMPLE_RATE * HESITATION_PAUSE_MS) / 1000)
-    const out = Buffer.alloc((sampleCount + pause) * 2)
-    fadeTail(soften(lead, sampleCount, gain), sampleCount, HESITATION_FADE_MS).copy(out, 0)
-    return wavFile(out)
-  })()
-  clip.catch(() => hesitationClips.delete(key))
-  hesitationClips.set(key, clip)
-  return clip
-}
-
-// ---------------------------------------------------------------------------
-// The sound between sentences
-// ---------------------------------------------------------------------------
-//
-// A reply of three sentences is three separate clips played back to back,
-// and each one begins with about 100ms of Deepgram's own silence — so the
-// joins are quiet, even, and identical, which is what makes a long reply
-// sound assembled rather than spoken.
-//
-// The short hum goes there, softer and darker than the one in front of a
-// thinking sound.
-//
-// It first played on its own element WITHOUT lengthening the reply, which
-// meant it started underneath Coach's next sentence and was buried by it —
-// audible as a sound beginning and being cut off, with no pause at all. The
-// cost of that design was zero and so was the benefit.
-//
-// So the beat is part of the clip now, and the reply waits for it. Between
-// two sentences a person stops for about a third of a second; that is what
-// this buys, at the price of the same third of a second per join.
-const JOIN_LEVEL = 0.11
-// The longest of the draws rather than the shortest, faded out over its last
-// third so it trails off instead of stopping, and then a real silence. The
-// whole thing is about a second.
-//
-// That second is the point of it. A teacher has just been told something
-// they are meant to act on, and the next sentence arriving on top of it
-// leaves nowhere to put the first one — the pause is where the advice lands.
-// It costs a second per join, so a three-sentence reply is two seconds
-// longer than it would otherwise be.
-const JOIN_FADE_MS = 160
-const JOIN_PAUSE_MS = 550
-
-export async function joinSound(voice: string | undefined): Promise<Buffer> {
-  const draws = await hesitationDraws(voice)
-  // The longest of them, since this one is meant to be heard rather than
-  // tucked away.
-  const lead = draws.reduce((a, b) => (a.length >= b.length ? a : b))
-  const sampleCount = Math.floor(lead.length / 2)
-  const peak = peakOf(lead, sampleCount)
-  if (peak === 0) return wavFile(lead)
-  // Scaled to a fixed level rather than to its neighbours: there is nothing
-  // beside it to measure against, and it plays into a gap rather than under
-  // speech.
-  const gain = Math.min(LEAD_IN_MAX_GAIN, (32767 * JOIN_LEVEL) / peak)
-  // Faded rather than left to stop: a hum that ends abruptly into silence is
-  // the cut sound again, just with the silence after it instead of a
-  // sentence.
-  const hum = fadeTail(soften(lead, sampleCount, gain), sampleCount, JOIN_FADE_MS)
-
-  const pause = Math.round((SPEECH_WAV_SAMPLE_RATE * JOIN_PAUSE_MS) / 1000)
-  const out = Buffer.alloc((sampleCount + pause) * 2)
-  hum.copy(out, 0)
-  return wavFile(out)
 }

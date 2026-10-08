@@ -35,11 +35,9 @@ import { endTurn, markTurn } from '../lib/turnTiming'
 import {
   createPlaybackQueue,
   loadFillers,
-  loadJoinSound,
   primeAudioElement,
   soundsLikeAHardMoment,
   soundsLikeAHardTurn,
-  HESITATION_CHANCE,
   WITTY_GAP_CHANCE,
   type Fillers,
   type PlaybackQueue,
@@ -254,7 +252,6 @@ export default function TalkToMe() {
   const lastWasJokeRef = useRef(false)
   const openingSentenceRef = useRef(true)
   const jokePlayingRef = useRef(false)
-  const joinSoundRef = useRef<string | null>(null)
   // The reply currently being streamed, whether or not it is still audible.
   // An interruption starts the next turn immediately, so that turn has to
   // wait for this to settle before it asks for anything — otherwise its
@@ -363,8 +360,6 @@ export default function TalkToMe() {
       if (fillerTimerRef.current) window.clearTimeout(fillerTimerRef.current)
       fillersRef.current?.release()
       fillersRef.current = null
-      if (joinSoundRef.current) URL.revokeObjectURL(joinSoundRef.current)
-      joinSoundRef.current = null
       // A reply started during a pause is in flight on its own; leaving the
       // page has to stop it too, or it finishes and saves a turn into a
       // conversation the teacher has walked away from.
@@ -453,12 +448,6 @@ export default function TalkToMe() {
         else fillers.release()
       })
     }
-    if (!joinSoundRef.current) {
-      void loadJoinSound(talkVoiceRef.current).then((url) => {
-        if (url && sessionActiveRef.current) joinSoundRef.current = url
-        else if (url) URL.revokeObjectURL(url)
-      })
-    }
     setError(null)
     setPhase('listening')
     start()
@@ -496,7 +485,6 @@ export default function TalkToMe() {
         phaseRef.current = 'speaking'
         bargeIn.stop = watchWhileSpeaking(handleBargeIn)
       },
-      { onOpen: startGapSound, onClose: handOffFromThinkingSound, onJoin: playJoinSound },
     )
     queueRef.current = queue
     try {
@@ -542,15 +530,10 @@ export default function TalkToMe() {
   // they finish. Scheduled rather than immediate: a reply that arrives
   // quickly (a speculative one, usually) should just be spoken, with no
   // "hmm" in front of it.
-  // Sooner than it was: at 400ms the pause had already registered as silence
-  // before Coach made a sound, and starting earlier also leaves more of the
-  // ~1.2s before the reply for the clip to play in.
-  const FILLER_AFTER_MS = 250
-
-  // For the opener, jittered rather than fixed: a hesitation that begins at
-  // exactly the same instant every single turn is a machine keeping time. A
-  // gap filler keeps the flat delay — it is covering a hole mid-reply, not
-  // deciding whether to speak.
+  // Jittered rather than fixed: an acknowledgement that begins at exactly
+  // the same instant every single turn is a machine keeping time. Starting
+  // this early also leaves more of the ~1.2s before the reply for the clip
+  // to play in.
   const FILLER_AFTER_MIN_MS = 180
   const FILLER_AFTER_MAX_MS = 400
 
@@ -576,17 +559,10 @@ export default function TalkToMe() {
     const roll = Math.random()
     if (roll >= 1 - SILENT_TURN_CHANCE) return
     const joking = !noJokesRef.current && !lastWasJokeRef.current && roll < WITTY_GAP_CHANCE
-    // Wordless: a hum and then a beat. Coach is audibly thinking without
-    // claiming to be doing anything in particular.
-    const humming = !joking && roll < WITTY_GAP_CHANCE + HESITATION_CHANCE
     const delay = FILLER_AFTER_MIN_MS + Math.random() * (FILLER_AFTER_MAX_MS - FILLER_AFTER_MIN_MS)
     fillerTimerRef.current = window.setTimeout(() => {
       const audio = fillerAudioRef.current
-      const clip = joking
-        ? fillersRef.current?.nextWitty()
-        : humming
-          ? fillersRef.current?.hesitation()
-          : fillersRef.current?.nextStarter()
+      const clip = joking ? fillersRef.current?.nextWitty() : fillersRef.current?.nextStarter()
       // Only into silence: once Coach is speaking, or the teacher is, a
       // thinking sound would be talking over one of them.
       if (!audio || !clip || !sessionActiveRef.current || phaseRef.current !== 'thinking') return
@@ -617,70 +593,6 @@ export default function TalkToMe() {
   // which is the point: a punchline is never faded.
   const LET_THE_JOKE_FINISH_MS = 4000
 
-  // The join sound is about 1.1s. If 'ended' has not arrived by here,
-  // something is wrong with the element and the reply carries on regardless.
-  const JOIN_SOUND_GUARD_MS = 2200
-
-  /// The short hum between Coach's own sentences. Played on the filler
-  /// element and never awaited, so it tucks into the join that already
-  /// exists — every sentence clip opens with about 100ms of Deepgram's
-  /// silence — rather than making the reply longer.
-  function playJoinSound(): Promise<void> {
-    const audio = fillerAudioRef.current
-    const url = joinSoundRef.current
-    if (!audio || !url || !sessionActiveRef.current || bargedInRef.current) return Promise.resolve()
-    if (phaseRef.current !== 'speaking') return Promise.resolve()
-    // Something is already using the element: a gap filler, or the tail of
-    // a thinking sound. Either outranks this.
-    if (!audio.paused) return Promise.resolve()
-    fillerHoldRef.current = 0
-    audio.volume = 1
-    audio.src = url
-    // Resolved when the clip (hum plus its beat) has finished, so Coach's
-    // next sentence starts after it rather than over it. Guarded by a
-    // timeout: a clip that never fires 'ended' must not stall the reply.
-    return new Promise<void>((resolve) => {
-      let done = false
-      const finish = () => {
-        if (done) return
-        done = true
-        window.clearTimeout(guard)
-        audio.removeEventListener('ended', finish)
-        resolve()
-      }
-      const guard = window.setTimeout(finish, JOIN_SOUND_GUARD_MS)
-      audio.addEventListener('ended', finish, { once: true })
-      void audio.play().catch(finish)
-    })
-  }
-
-  /// The between-sentence sound. Coach has already started answering and
-  /// has run out of written sentences, so this holds the floor rather than
-  /// leaving a hole in the middle of the reply.
-  function startGapSound() {
-    cancelThinkingSound()
-    fillerTimerRef.current = window.setTimeout(() => {
-      const audio = fillerAudioRef.current
-      // A joke now and then, not every gap: often enough to be a character
-      // trait, rarely enough to stay funny. Never twice running, and never
-      // in a turn where Coach has just said "Ugh, that's rough."
-      const joking = !noJokesRef.current && !lastWasJokeRef.current && Math.random() < WITTY_GAP_CHANCE
-      const clip = joking ? fillersRef.current?.nextWitty() : fillersRef.current?.nextGap()
-      // Only while Coach is the one speaking. If the teacher has cut in, or
-      // the turn has ended, the gap this was covering no longer exists.
-      if (!audio || !clip || !sessionActiveRef.current || phaseRef.current !== 'speaking') return
-      if (bargedInRef.current) return
-      lastWasJokeRef.current = joking
-      jokePlayingRef.current = joking
-      // A joke is only worth telling if its ending is heard, so Coach's next
-      // sentence waits it out however long it runs. The teacher talking over
-      // it still cuts it off at once — that is barge-in, not the hand-off.
-      fillerHoldRef.current = joking ? LET_THE_JOKE_FINISH_MS : HOLD_FOR_FILLER_MS
-      audio.volume = 1
-      audio.src = clip
-      void audio.play().catch(() => {})
-    }, FILLER_AFTER_MS)
-  }
 
   function cancelThinkingSound() {
     if (fillerTimerRef.current) window.clearTimeout(fillerTimerRef.current)
@@ -911,7 +823,6 @@ export default function TalkToMe() {
         stopWatching()
         bargeIn.stop = watchWhileSpeaking(handleBargeIn)
       },
-      { onOpen: startGapSound, onClose: handOffFromThinkingSound, onJoin: playJoinSound },
     )
     queueRef.current = queue
 

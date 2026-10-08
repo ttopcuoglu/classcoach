@@ -1334,7 +1334,7 @@ export async function transcribeTalkToMeAudio(audioBlob: Blob): Promise<{ transc
 // Bump it whenever the audio for an unchanged phrase changes.
 //
 // The server ignores it. It exists purely to be part of the URL.
-export const SPEECH_REVISION = '6'
+export const SPEECH_REVISION = '7'
 
 export function buildSpeechUrl(text: string, voice?: TalkVoice | null): string {
   const query = new URLSearchParams({ text })
@@ -1345,19 +1345,6 @@ export function buildSpeechUrl(text: string, voice?: TalkVoice | null): string {
 
 /// The short hum Coach makes between its own sentences. No text — one clip
 /// per voice, cached hard on both sides.
-/// A hum and a beat of silence, played instead of a spoken thinking sound.
-export function buildHesitationUrl(voice?: TalkVoice | null): string {
-  const query = new URLSearchParams({ rev: SPEECH_REVISION })
-  if (voice) query.set('voice', voice)
-  return `${API_BASE_URL}/api/tts/hesitate?${query.toString()}`
-}
-
-export function buildJoinSoundUrl(voice?: TalkVoice | null): string {
-  const query = new URLSearchParams({ rev: SPEECH_REVISION })
-  if (voice) query.set('voice', voice)
-  return `${API_BASE_URL}/api/tts/join?${query.toString()}`
-}
-
 export function setDebriefSaved(id: string, saved: boolean): Promise<Debrief> {
   return request(`/api/debriefs/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) })
 }
