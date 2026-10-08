@@ -120,6 +120,8 @@ enum CommunicationsService {
     private struct SubmitPlanBody: Encodable {
         let situationText: String
         let recipientType: String?
+        let meetingType: String?
+        let attendees: String?
         let desiredOutcome: String?
         let concerns: String?
         let background: String?
@@ -129,6 +131,8 @@ enum CommunicationsService {
     static func submitConversationPlan(
         situationText: String,
         recipientType: String?,
+        meetingType: String?,
+        attendees: String?,
         desiredOutcome: String?,
         concerns: String?,
         background: String?,
@@ -138,14 +142,26 @@ enum CommunicationsService {
             "/api/conversation-plans",
             method: "POST",
             body: SubmitPlanBody(
-                situationText: situationText, recipientType: recipientType, desiredOutcome: desiredOutcome,
+                situationText: situationText, recipientType: recipientType, meetingType: meetingType,
+                attendees: attendees, desiredOutcome: desiredOutcome,
                 concerns: concerns, background: background, meetingFormat: meetingFormat
             )
         )
     }
 
-    static func sendConversationPlanChat(id: String, message: String) async throws -> ConversationPlan {
-        try await APIClient.shared.request("/api/conversation-plans/\(id)/chat", method: "POST", body: MessageBody(message: message))
+    private struct PlanChatBody: Encodable {
+        let message: String
+        /// "rehearse" puts Coach in character as the other person, judging each
+        /// reply against this plan's own boundaries and phrases-to-avoid.
+        let mode: String?
+    }
+
+    static func sendConversationPlanChat(id: String, message: String, mode: String? = nil) async throws -> ConversationPlan {
+        try await APIClient.shared.request(
+            "/api/conversation-plans/\(id)/chat",
+            method: "POST",
+            body: PlanChatBody(message: message, mode: mode)
+        )
     }
 
     static func setConversationPlanSaved(id: String, saved: Bool) async throws -> ConversationPlan {

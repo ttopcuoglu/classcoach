@@ -1,9 +1,13 @@
 import SwiftUI
 
 private let prepareRecipientChips: [(label: String, value: String?)] =
-    CommunicationOptions.recipientTypes.map { ($0.label, $0.value) }
+    CommunicationOptions.conversationPersonTypes.map { ($0.label, $0.value) }
+private let meetingTypeChips: [(label: String, value: String?)] =
+    CommunicationOptions.meetingTypeChoices.map { ($0.label, $0.value) }
 private let meetingFormatChips: [(label: String, value: String?)] =
     CommunicationOptions.meetingFormats.map { ($0.label, $0.value) }
+private let personFormatChips: [(label: String, value: String?)] =
+    CommunicationOptions.personFormats.map { ($0.label, $0.value) }
 
 private let planSectionsBeforeModel: [(key: KeyPath<ConversationPlanContent, String>, label: String)] = [
     (\.opening, "Suggested opening"),
@@ -29,9 +33,15 @@ struct PrepareConversationView: View {
     @State private var concerns = ""
     @State private var background = ""
     @State private var meetingFormat: String?
-    // Open only when there is a meeting to describe. Most hard conversations
-    // are not on anyone's calendar.
-    @State private var isScheduled = false
+    @State private var meetingType: String?
+    @State private var attendees = ""
+    // Two things a teacher prepares for, and they ask for different details: a
+    // person has a role, a meeting has a kind and a room full of people. One
+    // question up front beats one form carrying both sets.
+    @State private var isMeeting = false
+    // Once a rehearsal starts every reply is a line in it, not a question about
+    // the plan — Coach is in character and the teacher is answering a person.
+    @State private var rehearsing = false
 
     @State private var submitting = false
     @State private var error: String?
@@ -66,33 +76,45 @@ struct PrepareConversationView: View {
 
     private var form: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // The situation leads. "What happened?" also read as past tense on a
-            // screen whose job is mostly what has not happened yet.
-            labeledField("What is going on?", text: $situationText, minHeight: 100)
-
-            Text("Who you are speaking with").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
-            ChipRow(items: prepareRecipientChips, selection: recipientType) { recipientType = $0 }
-
-            // Format assumes a calendar invite, and most hard conversations are
-            // not on anyone's. Nothing here was ever required — the route has
-            // only ever needed situationText.
-            Button {
-                withAnimation { isScheduled.toggle() }
-            } label: {
-                Text(isScheduled ? "Hide meeting details" : "This is a scheduled meeting")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(AppTheme.terracotta600)
+            // The fork first: it decides which other questions get asked, so
+            // describing the situation is easier once the screen has settled
+            // into one shape.
+            Text("What are you preparing for?").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
+            ChipRow(
+                items: [("A person", "person"), ("A scheduled meeting", "meeting")],
+                selection: isMeeting ? "meeting" : "person"
+            ) { picked in
+                isMeeting = picked == "meeting"
+                // Switching to a person must not leave the other branch's format
+                // set and invisible.
+                if !isMeeting, meetingFormat == "formal_meeting" { meetingFormat = nil }
             }
-            .disabled(submitting)
 
-            if isScheduled {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Meeting format").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
-                    ChipRow(items: meetingFormatChips, selection: meetingFormat) { meetingFormat = $0 }
-                }
-                .padding(12)
-                .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+            if isMeeting {
+                Text("What kind of meeting?").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
+                ChipRow(items: meetingTypeChips, selection: meetingType) { meetingType = $0 }
+
+                labeledInput("Who will attend? (optional)", text: $attendees, placeholder: "e.g. Mom, Dad, the school counselor")
+            } else {
+                Text("Who is it with?").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
+                ChipRow(items: prepareRecipientChips, selection: recipientType) { recipientType = $0 }
             }
+
+            Text("How will it happen? (optional)").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
+            ChipRow(items: isMeeting ? meetingFormatChips : personFormatChips, selection: meetingFormat) { meetingFormat = $0 }
+
+            // "What happened?" read as past tense on a screen whose job is
+            // mostly what has not happened yet.
+            labeledField(
+                "What is going on?",
+                text: $situationText,
+                minHeight: 100,
+                placeholder: CommunicationOptions.situationPlaceholder(
+                    isMeeting: isMeeting,
+                    recipientType: recipientType,
+                    meetingType: meetingType
+                )
+            )
 
             labeledField("What outcome do you want? (optional)", text: $desiredOutcome, minHeight: 60)
             labeledField("What concerns do you have about the conversation? (optional)", text: $concerns, minHeight: 60)
@@ -115,13 +137,42 @@ struct PrepareConversationView: View {
         }
     }
 
-    private func labeledField(_ title: String, text: Binding<String>, minHeight: CGFloat) -> some View {
+    private func labeledField(
+        _ title: String,
+        text: Binding<String>,
+        minHeight: CGFloat,
+        placeholder: String? = nil
+    ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title).font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
-            TextEditor(text: text)
-                .scrollContentBackground(.hidden)
-                .frame(minHeight: minHeight)
-                .padding(8)
+            ZStack(alignment: .topLeading) {
+                // TextEditor has no placeholder of its own, and this one is the
+                // only thing on screen showing how much detail is worth giving.
+                if let placeholder, text.wrappedValue.isEmpty {
+                    Text(placeholder)
+                        .font(.body)
+                        .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 16)
+                        .allowsHitTesting(false)
+                }
+                TextEditor(text: text)
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: minHeight)
+                    .padding(8)
+                    .disabled(submitting)
+            }
+            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
+        }
+    }
+
+    private func labeledInput(_ title: String, text: Binding<String>, placeholder: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
+            TextField(placeholder, text: text)
+                .textFieldStyle(.plain)
+                .padding(12)
                 .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
                 .disabled(submitting)
@@ -185,14 +236,33 @@ struct PrepareConversationView: View {
 
     private func followUpChat(_ plan: ConversationPlan) -> some View {
         let followUps = plan.conversation.count > 2 ? Array(plan.conversation.dropFirst(2)) : []
-        return FollowUpChatView(
-            messages: followUps,
-            draft: $chatDraft,
-            sending: chatSending,
-            error: chatError,
-            placeholder: "Ask a follow-up, e.g. 'what if they deny it?'..."
-        ) {
-            Task { await sendChat(plan) }
+        return VStack(alignment: .leading, spacing: 12) {
+            // Rehearsing happens here rather than in Practice. Practice writes
+            // you a stranger to argue with; this one already knows the
+            // boundaries you set and the phrases you ruled out.
+            Button {
+                Task { await startRehearsal(plan) }
+            } label: {
+                Text(rehearsing ? "Rehearsing below" : "Rehearse this conversation")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(AppTheme.terracotta, in: Capsule())
+            }
+            .disabled(chatSending || rehearsing)
+
+            FollowUpChatView(
+                messages: followUps,
+                draft: $chatDraft,
+                sending: chatSending,
+                error: chatError,
+                placeholder: rehearsing
+                    ? "Say your next line, the way you would actually say it..."
+                    : "Ask a follow-up, e.g. 'what if they deny it?'..."
+            ) {
+                Task { await sendChat(plan) }
+            }
         }
     }
 
@@ -205,7 +275,11 @@ struct PrepareConversationView: View {
         do {
             plan = try await CommunicationsService.submitConversationPlan(
                 situationText: situationText.trimmingCharacters(in: .whitespacesAndNewlines),
-                recipientType: recipientType,
+                recipientType: isMeeting ? nil : recipientType,
+                meetingType: isMeeting ? meetingType : nil,
+                attendees: isMeeting && !attendees.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? attendees.trimmingCharacters(in: .whitespacesAndNewlines)
+                    : nil,
                 desiredOutcome: desiredOutcome.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : desiredOutcome,
                 concerns: concerns.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : concerns,
                 background: background.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : background,
@@ -226,10 +300,32 @@ struct PrepareConversationView: View {
         chatError = nil
         chatDraft = ""
         do {
-            plan = try await CommunicationsService.sendConversationPlanChat(id: target.id, message: trimmed)
+            plan = try await CommunicationsService.sendConversationPlanChat(
+                id: target.id,
+                message: trimmed,
+                mode: rehearsing ? "rehearse" : nil
+            )
         } catch {
             chatError = error.localizedDescription
             chatDraft = trimmed
+        }
+        chatSending = false
+    }
+
+    private func startRehearsal(_ target: ConversationPlan) async {
+        guard !chatSending else { return }
+        rehearsing = true
+        chatSending = true
+        chatError = nil
+        do {
+            plan = try await CommunicationsService.sendConversationPlanChat(
+                id: target.id,
+                message: "Let us rehearse this. Open as the other person, with their first line.",
+                mode: "rehearse"
+            )
+        } catch {
+            chatError = error.localizedDescription
+            rehearsing = false
         }
         chatSending = false
     }
