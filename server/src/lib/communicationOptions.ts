@@ -1,4 +1,7 @@
-export const RECIPIENT_TYPES = ['parent_caregiver', 'student', 'colleague', 'administrator'] as const
+// 'other' is for a conversation being prepared, where recording who it is
+// matters more than naming them precisely. Practice does not offer it — its
+// generator has to write a specific person.
+export const RECIPIENT_TYPES = ['parent_caregiver', 'student', 'colleague', 'administrator', 'other'] as const
 export type RecipientType = (typeof RECIPIENT_TYPES)[number]
 
 export const MESSAGE_PURPOSES = [

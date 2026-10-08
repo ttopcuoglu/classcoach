@@ -13,10 +13,12 @@ import { ProgressRing } from '../components/ProgressRing'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import {
   MEETING_FORMATS,
+  CONVERSATION_PERSON_TYPES,
   MEETING_TYPES,
   meetingFormatLabel,
   meetingTypeLabel,
   meetingTypeToRecipientType,
+  type RecipientType,
   type MeetingFormat,
   type MeetingType,
 } from '../lib/communicationOptions'
@@ -58,10 +60,14 @@ export default function PrepareConversation() {
     (prefill?.meetingFormat as MeetingFormat | undefined) ?? undefined,
   )
   const [situationText, setSituationText] = useState(prefill?.situationText ?? '')
-  // Open only when there is already a meeting to describe — a prefill from
-  // Recent work, or a teacher who says so. Most hard conversations are not on
-  // anyone's calendar.
-  const [isScheduled, setIsScheduled] = useState(Boolean(prefill?.meetingType))
+  const [recipientType, setRecipientType] = useState<RecipientType | undefined>(
+    (prefill?.recipientType as RecipientType | undefined) ?? undefined,
+  )
+  // A conversation with one person is the common case; a scheduled meeting is
+  // the specific one. A prefill carrying a meeting type is always the latter.
+  const [preparingFor, setPreparingFor] = useState<'person' | 'meeting'>(
+    prefill?.meetingType ? 'meeting' : 'person',
+  )
   const [attendees, setAttendees] = useState('')
   const [desiredOutcome, setDesiredOutcome] = useState(prefill?.desiredOutcome ?? '')
   const [concerns, setConcerns] = useState(prefill?.concerns ?? '')
@@ -106,9 +112,10 @@ export default function PrepareConversation() {
     try {
       const result = await submitConversationPlan({
         situationText: situationText.trim(),
-        meetingType,
+        meetingType: preparingFor === 'meeting' ? meetingType : undefined,
+        recipientType: preparingFor === 'person' ? recipientType : undefined,
         meetingFormat,
-        attendees: attendees.trim() || undefined,
+        attendees: preparingFor === 'meeting' ? attendees.trim() || undefined : undefined,
         desiredOutcome: desiredOutcome.trim() || undefined,
         concerns: concerns.trim() || undefined,
         background: background.trim() || undefined,
@@ -180,7 +187,12 @@ export default function PrepareConversation() {
     setWritePrefill({
       startingAction: 'new',
       incidentSummary: plan.situationText,
-      recipientType: meetingTypeToRecipientType(plan.meetingType as MeetingType | undefined),
+      // A person-branch plan knows who it is with outright; only a meeting has to
+      // infer it from its type. Reading the meeting type first would throw away
+      // the better answer.
+      recipientType:
+        (plan.recipientType as RecipientType | undefined) ??
+        meetingTypeToRecipientType(plan.meetingType as MeetingType | undefined),
     })
     navigate('/communications?tool=write')
   }
@@ -243,87 +255,121 @@ export default function PrepareConversation() {
             </label>
 
 
-            {/* Everything that assumes a calendar invite, behind the question
-                of whether there is one. Having to have a hard conversation is
-                the common case; a scheduled meeting is the specific one. The
-                form opened with the specific one and buried the situation
-                third. Nothing in here was ever required — the server has only
-                ever needed situationText. */}
+            {/* Two things a teacher prepares for, and they ask for different
+                details: a person has a role, a meeting has a kind and a room
+                full of people. One question up front beats one form carrying
+                both sets of fields and hoping you ignore half. */}
             <div className="flex flex-col gap-1.5">
-              <button
-                type="button"
-                onClick={() => setIsScheduled((v) => !v)}
-                aria-expanded={isScheduled}
-                disabled={submitting}
-                className="w-fit text-sm font-medium text-terracotta-600 hover:text-terracotta"
-              >
-                {isScheduled ? 'Hide meeting details' : 'This is a scheduled meeting'}
-              </button>
-              {isScheduled && (
-                <div className="flex flex-col gap-4 rounded-2xl border border-hairline bg-cream/60 p-4">
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-ink">What kind of meeting are you preparing for?</span>
-                  <div className="flex flex-wrap gap-2">
-                    {MEETING_TYPES.map((m) => (
-                      <button
-                        key={m.value}
-                        type="button"
-                        onClick={() => setMeetingType(m.value)}
-                        disabled={submitting}
-                        className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                          meetingType === m.value
-                            ? 'border-forest bg-forest text-cream'
-                            : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
-                        }`}
-                      >
-                        {m.label}
-                      </button>
-                    ))}
-                  </div>
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-ink">
-                    How will it happen? <span className="font-normal text-ink-soft">(optional)</span>
-                  </span>
-                  <div className="flex flex-wrap gap-2">
-                    {MEETING_FORMATS.map((f) => (
-                      <button
-                        key={f.value}
-                        type="button"
-                        // Unlike the meeting-type chips above, tapping the selected
-                        // one clears it — this field is optional, so a mistaken tap
-                        // shouldn't permanently commit the plan to phone guidance.
-                        onClick={() => setMeetingFormat((current) => (current === f.value ? undefined : f.value))}
-                        disabled={submitting}
-                        aria-pressed={meetingFormat === f.value}
-                        className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                          meetingFormat === f.value
-                            ? 'border-forest bg-forest text-cream'
-                            : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
-                        }`}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
-                  </div>
-                </label>
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-ink">
-                    Who will attend? <span className="font-normal text-ink-soft">(optional)</span>
-                  </span>
-                  <input
-                    type="text"
-                    value={attendees}
-                    onChange={(e) => setAttendees(e.target.value)}
+              <span className="text-sm font-medium text-ink">What are you preparing for?</span>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  ['person', 'A person'],
+                  ['meeting', 'A scheduled meeting'],
+                ] as const).map(([value, text]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setPreparingFor(value)}
                     disabled={submitting}
-                    placeholder="e.g. Mom, Dad, the school counselor"
-                    className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
-                  />
-                </label>
-                </div>
-              )}
+                    aria-pressed={preparingFor === value}
+                    className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+                      preparingFor === value
+                        ? 'border-forest bg-forest text-cream'
+                        : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
+                    }`}
+                  >
+                    {text}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {preparingFor === 'person' ? (
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium text-ink">Who is it with?</span>
+                <div className="flex flex-wrap gap-2">
+                  {CONVERSATION_PERSON_TYPES.map((r) => (
+                    <button
+                      key={r.value}
+                      type="button"
+                      onClick={() => setRecipientType(r.value)}
+                      disabled={submitting}
+                      aria-pressed={recipientType === r.value}
+                      className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                        recipientType === r.value
+                          ? 'border-forest bg-forest text-cream'
+                          : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              </label>
+            ) : (
+              <>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-ink">What kind of meeting are you preparing for?</span>
+                    <div className="flex flex-wrap gap-2">
+                      {MEETING_TYPES.map((m) => (
+                        <button
+                          key={m.value}
+                          type="button"
+                          onClick={() => setMeetingType(m.value)}
+                          disabled={submitting}
+                          className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                            meetingType === m.value
+                              ? 'border-forest bg-forest text-cream'
+                              : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
+                          }`}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-ink">
+                      Who will attend? <span className="font-normal text-ink-soft">(optional)</span>
+                    </span>
+                    <input
+                      type="text"
+                      value={attendees}
+                      onChange={(e) => setAttendees(e.target.value)}
+                      disabled={submitting}
+                      placeholder="e.g. Mom, Dad, the school counselor"
+                      className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
+                    />
+                  </label>
+              </>
+            )}
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-ink">
+                      How will it happen? <span className="font-normal text-ink-soft">(optional)</span>
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {MEETING_FORMATS.map((f) => (
+                        <button
+                          key={f.value}
+                          type="button"
+                          // Unlike the meeting-type chips above, tapping the selected
+                          // one clears it — this field is optional, so a mistaken tap
+                          // shouldn't permanently commit the plan to phone guidance.
+                          onClick={() => setMeetingFormat((current) => (current === f.value ? undefined : f.value))}
+                          disabled={submitting}
+                          aria-pressed={meetingFormat === f.value}
+                          className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                            meetingFormat === f.value
+                              ? 'border-forest bg-forest text-cream'
+                              : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                  </label>
 
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-ink">

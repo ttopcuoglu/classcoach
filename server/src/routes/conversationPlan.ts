@@ -15,6 +15,7 @@ const RECIPIENT_GUIDANCE: Record<string, string> = {
   student: "You're speaking with the student directly.",
   colleague: "You're speaking with a fellow teacher or staff member.",
   administrator: "You're speaking with a school administrator.",
+  other: "You're speaking with someone whose role the teacher hasn't named — read it from what they describe.",
 }
 
 const MEETING_FORMAT_GUIDANCE: Record<string, string> = {

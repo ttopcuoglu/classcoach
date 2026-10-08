@@ -1,9 +1,18 @@
-export type RecipientType = 'parent_caregiver' | 'student' | 'colleague' | 'administrator'
+export type RecipientType = 'parent_caregiver' | 'student' | 'colleague' | 'administrator' | 'other'
 export const RECIPIENT_TYPES: { label: string; value: RecipientType }[] = [
   { label: 'Parent or caregiver', value: 'parent_caregiver' },
   { label: 'Student', value: 'student' },
   { label: 'Colleague', value: 'colleague' },
   { label: 'Administrator', value: 'administrator' },
+]
+
+/// Preparing for a real conversation, where who it is may not fit four boxes and
+/// recording that is better than forcing a wrong one. Deliberately not in
+/// RECIPIENT_TYPES: Practice generates a person to argue with, and "someone
+/// else" gives its generator nothing to write.
+export const CONVERSATION_PERSON_TYPES: { label: string; value: RecipientType }[] = [
+  ...RECIPIENT_TYPES,
+  { label: 'Someone else', value: 'other' },
 ]
 export function recipientLabel(value: string | null) {
   if (!value) return null
