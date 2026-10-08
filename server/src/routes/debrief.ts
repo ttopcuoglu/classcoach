@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import multer from 'multer'
-import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
+import { anthropic, CLAUDE_MODEL, SPOKEN_MODEL } from '../lib/anthropic.ts'
 import { hasActivePlan, hasActivePlanFor, PLAN_USER_SELECT } from '../lib/billing.ts'
 import {
   persistMemoryUpdate,
@@ -458,6 +458,8 @@ debriefRouter.post('/talk/stream', async (req, res) => {
   await streamCoachReply(res, 'talk_start', {
     gateMs: Date.now() - gateStart,
     speak: { voice: user?.talkVoice ?? undefined },
+    // Spoken, so the teacher is waiting in silence for it.
+    model: SPOKEN_MODEL,
     system: cachedSystem(
       TALK_SYSTEM_PROMPT,
       memoryOn ? `${talkTail}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}` : talkTail,
@@ -562,6 +564,9 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
     gateMs: Date.now() - gateStart,
     // Only Talk It Through is spoken; Lesson Debrief's Reflect chat is read.
     speak: isTalk ? { voice: user?.talkVoice ?? undefined } : undefined,
+    // Only Talk It Through is spoken; Reflect's chat is read, and there half
+    // a second buys nothing while the reply is worth more.
+    model: isTalk ? SPOKEN_MODEL : undefined,
     system: cachedSystem(
       stablePrompt,
       memoryOn
