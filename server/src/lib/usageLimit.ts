@@ -78,6 +78,11 @@ export type UsageAction =
   | 'lesson_plan_presentation_review'
   | 'lesson_plan_presentation_generate'
   | 'lesson_plan_delivery_deck'
+  // Planning Coach. `adapt` drafts a Simplify / Add Challenge / Increase
+  // Participation / Adjust Time revision; `infer_context` reads an uploaded
+  // file for what it's about so the form can suggest a topic and subject.
+  | 'lesson_plan_adapt'
+  | 'lesson_plan_infer_context'
 
 // Every turn-based call in the two free-forever features. Kept as one list so
 // a future action in either area doesn't silently fall back into the flat cap.

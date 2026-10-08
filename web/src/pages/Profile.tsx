@@ -294,9 +294,9 @@ export default function Profile() {
             {plusAccess === 'admin'
               ? 'Platform admin — every feature is unlocked, with no limits.'
               : plusAccess === 'school'
-                ? `Included through ${organizationName ?? 'your school'} — unlimited Lesson Debrief, Lesson Planning, Messages, and Coach's memory.`
+                ? `Included through ${organizationName ?? 'your school'} — unlimited Lesson Debrief, Planning Coach, Messages, and Coach's memory.`
                 : hasPlus
-                  ? 'Unlimited Lesson Debrief, Lesson Planning, Messages, and Coach\'s memory.'
+                  ? 'Unlimited Lesson Debrief, Planning Coach, Messages, and Coach\'s memory.'
                   : 'Unlimited Talk It Through and Ask & Practice, 3 Lesson Debrief recordings a month.'}
           </p>
           {plusAccess === 'admin' || plusAccess === 'school' || plusAccess === 'demo' ? null : plan === 'plus' ? (

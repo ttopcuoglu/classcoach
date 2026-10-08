@@ -347,9 +347,9 @@ export default function Home() {
     if (!hasLessonPlans) {
       return {
         icon: LessonPlanIcon,
-        title: 'Try Lesson Planning',
-        description: "A tool you haven't opened yet — strengthen a lesson or get ideas from an objective.",
-        linkLabel: 'Open Lesson Planning',
+        title: 'Try Planning Coach',
+        description: "A tool you haven't opened yet — build a lesson from a topic, or strengthen one you wrote.",
+        linkLabel: 'Open Planning Coach',
         to: '/lesson-planning',
       }
     }

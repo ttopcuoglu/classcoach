@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 
 // Shared chrome for every printable report (Lesson Debrief, Talk It Through,
-// Ask & Practice, Lesson Planning, Assignment Coach, Communication Coach).
+// Ask & Practice, Planning Coach, Assignment Coach, Communication Coach).
 //
 // Two constraints drive all of it. It has to survive the printer: coloured
 // backgrounds only render because index.css sets print-color-adjust: exact

@@ -237,7 +237,7 @@ export default function App() {
               <Route path="communications" element={<Communications />} />
               <Route path="audio-coaching" element={<AudioCoaching />} />
               <Route path="lesson-planning" element={<LessonPlanning />} />
-              {/* Assignment Coach is a chip inside Lesson Planning now. The
+              {/* Assignment Coach is a chip inside Planning Coach now. The
                   route stays as a redirect: it is in the guide, in Home's cards
                   and in teachers' bookmarks. */}
               <Route path="assignment-coach" element={<Navigate to="/lesson-planning?tab=assignment" replace />} />

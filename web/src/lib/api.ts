@@ -409,7 +409,59 @@ export type LessonPlan = {
   fileName: string | null
   slideCount: number | null
   presentationReview: LessonPlanPresentationReview | null
+  // Planning Coach's Build a Lesson. planKind is null on every sample plan
+  // generated before it existed — those render from doNow/agenda/closure/
+  // hots/homework above and still do.
+  planKind: 'full' | 'ideas' | null
+  durationMinutes: number | null
+  additionalContext: string | null
+  sourceMaterial: string | null
+  approach: string | null
+  successCriteria: string | null
+  materials: string | null
+  sequence: LessonStep[] | null
+  checks: LessonCheck[] | null
+  misconceptions: LessonMisconception[] | null
+  exitTicket: LessonExitTicket | null
+  quickIdeas: QuickIdea[] | null
+  pendingAdaptation: PendingAdaptation | null
+  versionHistory: LessonVersion[] | null
 }
+
+export type LessonStep = { minutes: number | null; title: string; teacher: string | null; students: string | null }
+export type LessonCheck = { when: string; check: string; lookFor: string | null }
+// Likely for this content at this grade — never a claim about the teacher's
+// own students. See MISCONCEPTION_RULE in server/src/lib/lessonPlanModel.ts.
+export type LessonMisconception = { belief: string; surface: string | null; response: string | null }
+export type LessonExitTicket = { task: string; expected: string | null; signals: string | null; nextStep: string | null }
+export type QuickIdea = { title: string; how: string }
+
+export type LessonAdaptation = 'simplify' | 'challenge' | 'participation' | 'time'
+
+/// A revision Coach has drafted and the teacher has not applied. `sections`
+/// carries the rewritten lesson — the structured fields for a Planning Coach
+/// lesson, or `planText` for one the teacher brought themselves.
+export type PendingAdaptation = {
+  action: LessonAdaptation
+  label: string
+  summary: string | null
+  minutes: number | null
+  sections: LessonSections
+}
+
+export type LessonSections = {
+  objective?: string | null
+  successCriteria?: string | null
+  materials?: string | null
+  approach?: string | null
+  sequence?: LessonStep[] | null
+  checks?: LessonCheck[] | null
+  misconceptions?: LessonMisconception[] | null
+  exitTicket?: LessonExitTicket | null
+  planText?: string | null
+}
+
+export type LessonVersion = { label: string; savedAt: string; sections: LessonSections; durationMinutes?: number | null }
 
 export type LessonPlanDeliveryCoaching = {
   openingHook: string | null
@@ -443,6 +495,16 @@ export type SharedLessonPlan = {
   closure: string | null
   hots: string | null
   homework: string | null
+  planKind: 'full' | 'ideas' | null
+  durationMinutes: number | null
+  approach: string | null
+  successCriteria: string | null
+  materials: string | null
+  sequence: LessonStep[] | null
+  checks: LessonCheck[] | null
+  misconceptions: LessonMisconception[] | null
+  exitTicket: LessonExitTicket | null
+  quickIdeas: QuickIdea[] | null
   createdAt: string
 }
 
@@ -1694,6 +1756,16 @@ export type LessonPlanContext = {
   gradeLevel?: string
 }
 
+/// What Build a Lesson sends. Only one of `objective` and `sourceMaterial`
+/// has to carry anything — a teacher who uploaded their worksheet does not
+/// have to also type what it is about.
+export type BuildLessonRequest = LessonPlanContext & {
+  additionalContext?: string
+  sourceMaterial?: string
+  durationMinutes?: number
+  kind: 'full' | 'ideas'
+}
+
 export function getLessonPlans(params?: { saved?: boolean; mode?: LessonPlanMode }): Promise<LessonPlan[]> {
   const query = new URLSearchParams()
   if (params?.saved) query.set('saved', 'true')
@@ -1755,8 +1827,42 @@ export function submitPresentationReview(data: {
   return request('/api/lesson-plans/presentation-review', { method: 'POST', body: JSON.stringify(data) })
 }
 
-export function generateLessonPlan(context: LessonPlanContext): Promise<LessonPlan> {
+export function generateLessonPlan(context: BuildLessonRequest): Promise<LessonPlan> {
   return request('/api/lesson-plans/generate', { method: 'POST', body: JSON.stringify(context) })
+}
+
+/// Reads uploaded material for what it appears to be about. Suggestions the
+/// teacher sees and edits — never applied on their behalf. A failure here
+/// comes back as all-nulls rather than an error, because the teacher can
+/// always just type the topic.
+export function inferLessonContext(text: string): Promise<{
+  topic: string | null
+  subject: string | null
+  gradeLevel: string | null
+  followUp: string | null
+}> {
+  return request('/api/lesson-plans/infer-context', { method: 'POST', body: JSON.stringify({ text }) })
+}
+
+export function adaptLessonPlan(id: string, action: LessonAdaptation, targetMinutes?: number): Promise<LessonPlan> {
+  return request(`/api/lesson-plans/${id}/adapt`, {
+    method: 'POST',
+    body: JSON.stringify({ action, ...(targetMinutes ? { targetMinutes } : {}) }),
+  })
+}
+
+export function applyLessonAdaptation(id: string): Promise<LessonPlan> {
+  return request(`/api/lesson-plans/${id}/apply-adaptation`, { method: 'POST' })
+}
+
+export function discardLessonAdaptation(id: string): Promise<LessonPlan> {
+  return request(`/api/lesson-plans/${id}/discard-adaptation`, { method: 'POST' })
+}
+
+/// Back to the lesson as it was first drafted, however many adaptations have
+/// been applied since.
+export function revertLessonPlan(id: string): Promise<LessonPlan> {
+  return request(`/api/lesson-plans/${id}/revert`, { method: 'POST' })
 }
 
 export function setLessonPlanSaved(id: string, saved: boolean): Promise<LessonPlan> {

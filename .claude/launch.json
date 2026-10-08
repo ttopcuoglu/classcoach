@@ -4,14 +4,57 @@
     {
       "name": "web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "web"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "web"
+      ],
       "port": 5173
     },
     {
       "name": "server",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "server"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "server"
+      ],
       "port": 3001
+    },
+    {
+      "name": "masteryvox-api",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "export NVM_DIR=\"$HOME/.nvm\"; . \"$NVM_DIR/nvm.sh\"; cd /Users/tarkantopcuoglu/Documents/ClaudeCode/MasteryVox/server && npm run dev"
+      ],
+      "port": 3101
+    },
+    {
+      "name": "masteryvox-web",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "export NVM_DIR=\"$HOME/.nvm\"; . \"$NVM_DIR/nvm.sh\"; cd /Users/tarkantopcuoglu/Documents/ClaudeCode/MasteryVox/web && npm run dev -- --port 5190 --strictPort"
+      ],
+      "port": 5190
+    },
+    {
+      "name": "web-preview",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "web",
+        "--",
+        "--port",
+        "5180",
+        "--strictPort"
+      ],
+      "port": 5180
     }
   ]
 }

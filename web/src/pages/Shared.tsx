@@ -102,10 +102,105 @@ export default function Shared() {
         ) : content.type === 'lesson-plan' ? (
           <div className="mt-6 rounded-2xl border border-hairline bg-cream-card p-6">
             <span className="rounded-full bg-mint-tint/60 px-2.5 py-1 text-xs font-semibold text-forest">
-              {content.mode === 'generated' ? 'Sample lesson plan' : 'Lesson plan feedback'}
+              {content.mode !== 'generated'
+                ? 'Lesson plan feedback'
+                : content.planKind === 'ideas'
+                  ? 'Teaching ideas'
+                  : content.planKind === 'full'
+                    ? 'Lesson plan'
+                    : 'Sample lesson plan'}
             </span>
             <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-ink-soft">Objective</p>
             <p className="mt-1 text-sm text-ink">{content.objective}</p>
+            {[content.approach, content.durationMinutes ? `${content.durationMinutes} min` : null]
+              .filter(Boolean)
+              .length > 0 && (
+              <p className="mt-1 text-xs text-ink-soft">
+                {[content.approach, content.durationMinutes ? `${content.durationMinutes} min` : null]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            )}
+
+            {/* Planning Coach's own shape. A plan built before it shipped has
+                none of these and falls through to the five fields below. */}
+            {content.successCriteria && (
+              <>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-ink-soft">Success criteria</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{content.successCriteria}</p>
+              </>
+            )}
+            {content.materials && (
+              <>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-ink-soft">Materials</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{content.materials}</p>
+              </>
+            )}
+            {(content.sequence ?? []).length > 0 && (
+              <>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-forest">The lesson</p>
+                <ol className="mt-1 flex flex-col gap-3">
+                  {(content.sequence ?? []).map((step, i) => (
+                    <li key={i} className="rounded-xl border border-hairline bg-cream px-4 py-3">
+                      <p className="text-sm font-semibold text-forest">
+                        {i + 1}. {step.title}
+                        {step.minutes != null ? ` · ${step.minutes} min` : ''}
+                      </p>
+                      {step.teacher && <p className="mt-1 whitespace-pre-wrap text-sm text-ink">You: {step.teacher}</p>}
+                      {step.students && <p className="mt-1 whitespace-pre-wrap text-sm text-ink">Students: {step.students}</p>}
+                    </li>
+                  ))}
+                </ol>
+              </>
+            )}
+            {(content.checks ?? []).length > 0 && (
+              <>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-ink-soft">Checks for understanding</p>
+                <ul className="mt-1 flex flex-col gap-2">
+                  {(content.checks ?? []).map((check, i) => (
+                    <li key={i} className="text-sm text-ink">
+                      {check.when ? `${check.when}: ` : ''}
+                      {check.check}
+                      {check.lookFor ? ` — look for: ${check.lookFor}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {(content.misconceptions ?? []).length > 0 && (
+              <>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-ink-soft">Likely misconceptions</p>
+                <ul className="mt-1 flex flex-col gap-2">
+                  {(content.misconceptions ?? []).map((item, i) => (
+                    <li key={i} className="text-sm text-ink">
+                      {item.belief}
+                      {item.response ? ` — ${item.response}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {content.exitTicket && (
+              <>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-ink-soft">Exit ticket</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{content.exitTicket.task}</p>
+              </>
+            )}
+            {(content.quickIdeas ?? []).length > 0 && (
+              <>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-forest">Teaching ideas</p>
+                <ol className="mt-1 flex flex-col gap-3">
+                  {(content.quickIdeas ?? []).map((idea, i) => (
+                    <li key={i}>
+                      <p className="text-sm font-semibold text-forest">
+                        {i + 1}. {idea.title}
+                      </p>
+                      <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{idea.how}</p>
+                    </li>
+                  ))}
+                </ol>
+              </>
+            )}
 
             {content.planText && (
               <>

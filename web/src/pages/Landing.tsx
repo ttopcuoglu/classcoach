@@ -58,9 +58,9 @@ const MOMENTS = [
       {
         icon: LessonPlanIcon,
         tint: 'bg-lavender-tint text-[#6B5FA0]',
-        title: 'Lesson Planning',
+        title: 'Planning Coach',
         slug: 'lesson-planning',
-        description: 'Strengthen a lesson you wrote, or generate ideas from a clear objective — then turn a presentation review into a slide deck that keeps your own pictures.',
+        description: 'Build a lesson from a topic — or strengthen the one you wrote — then adapt it to simplify, add challenge, or fit the time you actually have.',
       },
       {
         icon: BookIcon,
@@ -177,8 +177,8 @@ const SAMPLES = [
     pdf: '/samples/redesign-ai.pdf',
   },
   {
-    feature: 'Lesson Planning',
-    eyebrow: 'Get feedback',
+    feature: 'Planning Coach',
+    eyebrow: 'Improve a lesson',
     title: 'Feedback that makes a good plan better',
     before: {
       label: 'Your plan',
@@ -825,7 +825,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                 </li>
                 <li className="flex items-start gap-2.5">
                   <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
-                  Lesson Planning
+                  Planning Coach
                 </li>
                 <li className="flex items-start gap-2.5">
                   <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />

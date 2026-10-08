@@ -35,9 +35,9 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       {
         to: '/lesson-planning',
-        label: 'Lesson Planning',
+        label: 'Planning Coach',
         icon: LessonPlanIcon,
-        subtitle: 'plans, presentations & assignments',
+        subtitle: 'lessons, slides & assignments',
       },
       { to: '/communications', label: 'Communication Coach', icon: MailIcon, subtitle: 'write, prepare & review' },
     ],
@@ -139,7 +139,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
           <div className="mx-3 mb-3 rounded-2xl bg-gold-tint p-4">
             <p className="text-sm font-semibold text-terracotta-600">Wivoza Plus</p>
             <p className="mt-1 text-xs text-forest/70">
-              Unlimited Lesson Debrief, Lesson Planning, Communication Coach, and Coach's memory.
+              Unlimited Lesson Debrief, Planning Coach, Communication Coach, and Coach's memory.
             </p>
             <Link
               to="/profile"

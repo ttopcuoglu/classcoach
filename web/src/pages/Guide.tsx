@@ -234,20 +234,69 @@ const LESSON_PLANNING: Feature = {
   id: 'lesson-planning',
   icon: LessonPlanIcon,
   tint: 'bg-peach-tint text-terracotta',
-  nav: 'Plan → Lesson Planning',
-  title: 'Lesson Planning',
+  nav: 'Plan → Planning Coach',
+  title: 'Planning Coach',
   guideTo: '/guide/lesson-planning',
-  intro: 'Three modes, depending on how much you\'ve already written — a blank page, a draft you want read, or a deck you\'ve already built.',
+  intro:
+    'Four tabs, depending on what you have in front of you — a topic, a draft you want read, slides you already built, or an assignment.',
   specs: [
-    { label: 'Generate Ideas — input', body: 'an objective is the only required field; subject, grade level, standard, unit name, and essential question are all optional extras.' },
-    { label: 'Generate Ideas — output', body: 'a sample single day modeled on a gradual-release template: Do Now, an I Do / We Do / You Do agenda with each part labeled and timed, Closure, a higher-order-thinking component, and Homework — explicitly framed as a starting point to adapt, not a script.' },
-    { label: 'Get Feedback — input', body: 'paste or write your own plan. Coach first works out whether it\'s a single lesson or a multi-day/weekly plan and changes its lens accordingly — internal structure for one day, pacing and coherence across the week for several. An objective is optional here: if the plan states or implies one, it coaches around that instead of just noting none was given.' },
-    { label: 'Get Feedback — output', body: 'coaching through a chat thread and a private growth rating; Coach can propose a full "Suggested Revision," shown separately with "Use this version" or "Dismiss" — never applied automatically.' },
-    { label: 'Review a Presentation — input', body: 'upload a .pptx or .pdf — export Google Slides or Keynote as PDF first. The file name and slide count show alongside the review.' },
-    { label: 'Review a Presentation — output', body: 'a read on grade-level fit, visuals, ideas, length, and implementation, plus the same follow-up chat and "Suggested Revision" as Get Feedback.' },
-    { label: 'Review a Presentation — create an improved deck', body: 'one tap builds a new, modern PowerPoint that applies every recommendation. Preview it first, then download. Attach the same file and your own pictures are copied onto the matching slides exactly as they were — nothing is swapped for a stock photo. Where a slide needs a picture you didn\'t have, Wivoza looks for a real, openly licensed one with a credit line, or leaves a clearly marked spot for you.' },
-    { label: 'Generate Ideas and Get Feedback also include', body: 'a "Presentation & Delivery" coaching pass on actually teaching it — opening hook, pacing & timing, engagement checkpoints, explaining the hard part, and closing. Delivery advice, never an edit to the plan itself. You can also turn that coaching into a classroom-ready PowerPoint, previewed before you download it.' },
-    { label: 'Any mode', body: 'save it, share it as a read-only link, or download it.' },
+    {
+      label: 'Build a Lesson — input',
+      body: 'a topic or learning goal is the only thing needed, and an informal one is fine ("introducing cells") — no SWBAT required. Grade level and subject come prefilled from your profile and stay editable; a profile listing several grades or subjects offers them as chips so you pick the one this lesson is for. Then how much time you have: 30, 45, 50, 60, 90 minutes, or a custom length. Standard, unit name, essential question, and anything else about student needs or available resources sit inside a collapsed "More details — optional," and none of them block generation.',
+    },
+    {
+      label: 'Build a Lesson — upload materials',
+      body: 'optional, and an alternative to typing the topic at all: slides, a reading, a worksheet, an activity, in any format Wivoza reads (.docx, .pdf, .pptx, .xlsx, .xls, .txt, .jpg, .png — scans go through OCR). Wivoza reads it, fills in the topic, subject and grade level it appears to be for as editable suggestions, asks one brief follow-up only if something essential is genuinely missing, and builds the lesson around your material rather than replacing it.',
+    },
+    {
+      label: 'Build a Lesson — Quick Ideas or Full Lesson',
+      body: 'one choice inside the tab. Quick Ideas gives 3-5 practical teaching ideas, each briefly explained. Full Lesson — the default — gives a complete, editable lesson. The button changes to match: "Generate Ideas" or "Build My Lesson."',
+    },
+    {
+      label: 'Build a Lesson — the planning approach',
+      body: 'the structure fits the learning goal, subject, grade and time rather than one fixed template: direct instruction and guided practice, discussion, inquiry, a lab or investigation, or collaborative learning. Gradual release where it genuinely helps, and not where it doesn\'t. The approach it chose is named on the result.',
+    },
+    {
+      label: 'Full Lesson — output',
+      body: 'a learning objective and student success criteria, a timed sequence of activities with what you say and what students do at each part, the materials needed, checks for understanding, likely misconceptions with a way to surface and address each, and an aligned exit ticket. The timings add up to the length you picked. An editable draft, not a script.',
+    },
+    {
+      label: 'Checks, misconceptions, and the exit ticket',
+      body: 'checks are written to reveal whether students are getting the learning goal, not whether they are busy. The exit ticket carries the student-facing task, the expected answer or success criteria, what different kinds of response would tell you, and one suggested next step. Misconceptions are the ones likely for that content at that grade — never stated as facts about your students. All three are concise and expandable inside the result.',
+    },
+    {
+      label: 'Adapting a lesson',
+      body: 'Simplify (clearer directions, smaller steps, scaffolds — same learning goal), Add Challenge (deeper reasoning, transfer, application), Increase Participation (more students contributing and showing their thinking), and Adjust Time, which offers "Shorten to 30 Minutes" when the lesson runs longer than that, plus any custom length. Each one drafts a real revision you read before anything replaces what you have, and your original is kept however many you apply — "go back to it" is always there.',
+    },
+    {
+      label: 'Improve a Lesson — input',
+      body: 'paste, write, or upload your own plan — a finished one, a partial one, or rough notes. Coach first works out whether it\'s a single lesson or a multi-day/weekly plan and changes its lens accordingly — internal structure for one day, pacing and coherence across the week for several. An objective is optional: if the plan states or implies one, it coaches around that instead of just noting none was given, and it keeps your learning goal and the parts that work.',
+    },
+    {
+      label: 'Improve a Lesson — output',
+      body: 'coaching through a chat thread and a private growth rating; Coach can propose a full "Suggested Revision," shown separately with "Use this version" or "Dismiss" — never applied automatically. The four adaptation actions work here too.',
+    },
+    {
+      label: 'Review Slides — input',
+      body: 'upload a .pptx or .pdf — export Google Slides or Keynote as PDF first. The file name and slide count show alongside the review.',
+    },
+    {
+      label: 'Review Slides — output',
+      body: 'a read on grade-level fit, visuals, ideas, length, and implementation, plus the same follow-up chat and "Suggested Revision" as Improve a Lesson.',
+    },
+    {
+      label: 'Review Slides — create improved slides',
+      body: 'one tap builds a new, modern PowerPoint that applies every recommendation. Preview it first, then download. Attach the same file and your own pictures are copied onto the matching slides exactly as they were — nothing is swapped for a stock photo. Where a slide needs a picture you didn\'t have, Wivoza looks for a real, openly licensed one with a credit line, or leaves a clearly marked spot for you.',
+    },
+    {
+      label: 'Review an Assignment',
+      body: 'Assignment Coach itself, as the fourth tab — the same review, the same AI redesign, and the same saved history, not a second copy of either. See its own entry below.',
+    },
+    {
+      label: 'Build a Lesson and Improve a Lesson also include',
+      body: 'a "Presentation & Delivery" coaching pass on actually teaching it — opening hook, pacing & timing, engagement checkpoints, explaining the hard part, and closing. Delivery advice, never an edit to the plan itself. You can also turn that coaching into a classroom-ready PowerPoint, previewed before you download it.',
+    },
+    { label: 'Any tab', body: 'save it, share it as a read-only link, or download it. Plans you built before Planning Coach are all still here and still open from your history.' },
   ],
 }
 

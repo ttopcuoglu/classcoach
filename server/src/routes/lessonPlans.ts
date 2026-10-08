@@ -2,12 +2,29 @@ import { Router } from 'express'
 import JSZip from 'jszip'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
+import { Prisma } from '../generated/prisma/client.ts'
 import { checkFeatureAccess, countUsageLogActionsThisMonth, LESSON_PLANNING_ACTIONS } from '../lib/billing.ts'
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
-import { CORE_COACHING_RULES, INSTRUCTION_PRIORITY_NOTICE } from '../lib/coachPersona.ts'
+import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { carryOriginalPictures, parseSlidesOutput, themeFromContext } from '../lib/exportModels.ts'
 import { extractTag, stripStructuralTags } from '../lib/extractTag.ts'
 import { findImage } from '../lib/imageSearch.ts'
+import {
+  ADAPTATION_LABEL,
+  adaptUserMessage,
+  buildAdaptPrompt,
+  buildFullLessonPrompt,
+  buildQuickIdeasPrompt,
+  INFER_CONTEXT_PROMPT,
+  isAdaptation,
+  isUsableLesson,
+  lessonAsText,
+  lessonMinutes,
+  parseFullLesson,
+  parseInferredContext,
+  parseQuickIdeas,
+  type LessonSections,
+} from '../lib/lessonPlanModel.ts'
 import { extractPdfImages, extractPptxImages, orderedSlideParts, type OriginalImage } from '../lib/originalImages.ts'
 import { prisma } from '../lib/prisma.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
@@ -62,42 +79,6 @@ The full plan or slide-by-slide text, reproduced in its entirety with the reques
 
 Omit <revised_plan> entirely when the teacher is just asking a question, reflecting, or hasn't asked for an edit.
 ${CORE_COACHING_RULES}`
-
-const GENERATE_SYSTEM_PROMPT = `You write sample single-day lesson plans for K-12 teachers, modeled on a standard gradual-release template, to give a teacher ideas — this is inspiration, not a plan they're required to follow.
-
-Structure:
-- Objective (SWBAT): what students will be able to do.
-- Do Now: a short warm-up/bell-ringer.
-- Agenda: the main lesson body, organized as I Do / We Do / You Do, moving students toward independence — each part labeled, with an approximate time in minutes.
-- Closure: a short wrap-up.
-- HOTS: one or two higher-order-thinking questions students will engage with, and where (discussion or writing).
-- Homework: a suggested task, or "None" if not appropriate for this lesson.
-
-Rules:
-- Ground everything in the given objective, subject, and grade level — don't invent a different topic.
-- Keep it concrete and realistic, not generic filler.
-- Write in plain text only — no markdown (no **bold**, no # headings).
-- Respond with exactly these six sections and nothing outside them:
-
-<objective>
-A clear, refined SWBAT-style objective based on what the teacher gave.
-</objective>
-<do_now>
-The warm-up activity, with a suggested time in minutes.
-</do_now>
-<agenda>
-The I Do / We Do / You Do sequence, each part labeled and timed, blank line between parts.
-</agenda>
-<closure>
-The wrap-up activity.
-</closure>
-<hots>
-The higher-order question(s) and where students engage with them.
-</hots>
-<homework>
-The homework suggestion, or "None".
-</homework>
-${INSTRUCTION_PRIORITY_NOTICE}`
 
 const DELIVERY_COACHING_SYSTEM_PROMPT = `You are a warm, practical instructional coach for K-12 teachers, giving feedback on HOW to actually deliver this lesson to students — not on whether the content itself is well built (that's covered elsewhere). Assume the content is what it is; focus entirely on delivery.
 
@@ -449,11 +430,11 @@ lessonPlansRouter.post('/:id/lesson-deck', async (req, res) => {
     res.status(400).json({ error: 'Get presentation & delivery feedback first.' })
     return
   }
-  const content =
-    plan.mode === 'feedback'
-      ? plan.planText
-      : [plan.doNow, plan.agenda, plan.closure, plan.hots, plan.homework].filter(Boolean).join('\n\n')
-  if (!content?.trim()) {
+  // Whatever shape this plan is in — a Planning Coach lesson, a plan the
+  // teacher wrote, or one of the old five-slot samples — read as the prose
+  // the deck builder works from.
+  const content = lessonAsText(plan)
+  if (!content.trim()) {
     res.status(400).json({ error: "This plan doesn't have content yet." })
     return
   }
@@ -805,11 +786,8 @@ lessonPlansRouter.post('/:id/presentation-feedback', async (req, res) => {
     return
   }
 
-  const content =
-    plan.mode === 'feedback'
-      ? plan.planText
-      : [plan.doNow, plan.agenda, plan.closure, plan.hots, plan.homework].filter(Boolean).join('\n\n')
-  if (!content?.trim()) {
+  const content = lessonAsText(plan)
+  if (!content.trim()) {
     res.status(400).json({ error: "This plan doesn't have content yet." })
     return
   }
@@ -860,11 +838,108 @@ lessonPlansRouter.post('/:id/presentation-feedback', async (req, res) => {
   }
 })
 
-lessonPlansRouter.post('/generate', async (req, res) => {
-  const context = readContext(req.body ?? {})
+// How long a class period the lesson is built for. Anything outside this is
+// not a class period, and a four-hour "lesson" would make the timings
+// meaningless.
+const MIN_LESSON_MINUTES = 5
+const MAX_LESSON_MINUTES = 240
+const DEFAULT_LESSON_MINUTES = 45
 
-  if (!context.objective) {
-    res.status(400).json({ error: 'objective is required' })
+function readMinutes(value: unknown, fallback: number | null = null): number | null {
+  const n = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10)
+  if (!Number.isFinite(n)) return fallback
+  const rounded = Math.round(n)
+  if (rounded < MIN_LESSON_MINUTES || rounded > MAX_LESSON_MINUTES) return fallback
+  return rounded
+}
+
+/// Everything Build a Lesson asks for. The topic is the only field a teacher
+/// has to fill in — unless they uploaded material, which can stand in for it
+/// entirely. Everything else sharpens the lesson without gating it.
+function readBuildContext(body: Record<string, unknown>) {
+  const str = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : null)
+  return {
+    objective: str(body.objective),
+    unitName: str(body.unitName),
+    essentialQuestion: str(body.essentialQuestion),
+    standard: str(body.standard),
+    subject: str(body.subject),
+    gradeLevel: str(body.gradeLevel),
+    additionalContext: str(body.additionalContext),
+    sourceMaterial: str(body.sourceMaterial),
+    durationMinutes: readMinutes(body.durationMinutes, DEFAULT_LESSON_MINUTES),
+    kind: body.kind === 'ideas' ? ('ideas' as const) : ('full' as const),
+  }
+}
+
+// What gets uploaded here is a whole worksheet or deck. Enough of it to plan
+// from, capped so one 80-page PDF can't blow out the prompt (or the bill).
+const MAX_SOURCE_MATERIAL_CHARS = 12000
+
+function buildUserMessage(context: ReturnType<typeof readBuildContext>): string {
+  const material = context.sourceMaterial?.slice(0, MAX_SOURCE_MATERIAL_CHARS)
+  return [
+    context.objective ? `Topic or learning goal: ${context.objective}` : null,
+    context.subject ? `Subject: ${context.subject}` : null,
+    context.gradeLevel ? `Grade level: ${context.gradeLevel}` : null,
+    `Lesson length: ${context.durationMinutes ?? DEFAULT_LESSON_MINUTES} minutes`,
+    context.standard ? `Standard: ${context.standard}` : null,
+    context.unitName ? `Unit: ${context.unitName}` : null,
+    context.essentialQuestion ? `Essential question: ${context.essentialQuestion}` : null,
+    context.additionalContext ? `Other context from the teacher:\n${context.additionalContext}` : null,
+    material ? `The teacher's own material, to build this around:\n${material}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+// Reads an uploaded file for what it's about, so the form can be filled in
+// with suggestions the teacher checks rather than making them retype what
+// their own worksheet already says. Suggestions only — nothing is saved here,
+// and the teacher edits every field before anything is generated.
+lessonPlansRouter.post('/infer-context', async (req, res) => {
+  const { text } = req.body ?? {}
+  if (typeof text !== 'string' || !text.trim()) {
+    res.status(400).json({ error: 'text is required' })
+    return
+  }
+
+  const denied = await checkAndLogUsage(req.user!.userId, 'lesson_plan_infer_context')
+  if (denied) {
+    res.status(429).json({ error: denied })
+    return
+  }
+
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 400,
+      thinking: { type: 'disabled' },
+      system: INFER_CONTEXT_PROMPT,
+      messages: [{ role: 'user', content: text.trim().slice(0, MAX_SOURCE_MATERIAL_CHARS) }],
+    })
+    const responseText = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+    res.json(parseInferredContext(responseText))
+  } catch (error) {
+    console.error('[lesson-plans] infer-context failed:', error)
+    // A failed guess is not a failed upload: the teacher still has their file
+    // and can type the topic themselves, so this reports nothing found rather
+    // than an error the form would have to block on.
+    res.json({ topic: null, subject: null, gradeLevel: null, followUp: null })
+  }
+})
+
+lessonPlansRouter.post('/generate', async (req, res) => {
+  const context = readBuildContext(req.body ?? {})
+
+  // A topic or a file — one of the two. The old route required a formally
+  // written objective; a teacher who has the worksheet in front of them
+  // shouldn't have to write a SWBAT to get a lesson built around it.
+  if (!context.objective && !context.sourceMaterial) {
+    res.status(400).json({ error: 'Tell us the topic, or upload the material you are starting from.' })
     return
   }
 
@@ -882,47 +957,69 @@ lessonPlansRouter.post('/generate', async (req, res) => {
     return
   }
 
+  const ideasOnly = context.kind === 'ideas'
   try {
-    const promptContext = [
-      `Objective: ${context.objective}`,
-      context.unitName ? `Unit: ${context.unitName}` : null,
-      context.essentialQuestion ? `Essential question: ${context.essentialQuestion}` : null,
-      context.standard ? `Standard: ${context.standard}` : null,
-      context.subject ? `Subject: ${context.subject}` : null,
-      context.gradeLevel ? `Grade level: ${context.gradeLevel}` : null,
-    ]
-      .filter(Boolean)
-      .join('\n')
-
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 1024,
+      // A full lesson is a sequence plus checks, misconceptions and an exit
+      // ticket — the old 1024 was sized for five short template slots and
+      // would truncate this one mid-sequence.
+      max_tokens: ideasOnly ? 1500 : 5000,
       thinking: { type: 'disabled' },
-      system: GENERATE_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: promptContext }],
+      system: ideasOnly ? buildQuickIdeasPrompt() : buildFullLessonPrompt(),
+      messages: [{ role: 'user', content: buildUserMessage(context) }],
     })
     const text = response.content
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('\n')
 
-    const refinedObjective = extractTag(text, 'objective') ?? context.objective
+    const common = {
+      userId: req.user!.userId,
+      mode: 'generated',
+      unitName: context.unitName,
+      essentialQuestion: context.essentialQuestion,
+      standard: context.standard,
+      subject: context.subject,
+      gradeLevel: context.gradeLevel,
+      additionalContext: context.additionalContext,
+      sourceMaterial: context.sourceMaterial,
+      durationMinutes: context.durationMinutes,
+    }
+
+    if (ideasOnly) {
+      const quickIdeas = parseQuickIdeas(text)
+      if (quickIdeas.length === 0) {
+        console.error('[lesson-plans] no ideas parsed — stop_reason:', response.stop_reason)
+        res.status(502).json({ error: 'Could not put together teaching ideas. Please try again.' })
+        return
+      }
+      const lessonPlan = await prisma.lessonPlan.create({
+        data: { ...common, planKind: 'ideas', objective: context.objective, quickIdeas },
+      })
+      res.status(201).json(lessonPlan)
+      return
+    }
+
+    const lesson = parseFullLesson(text)
+    if (!isUsableLesson(lesson)) {
+      console.error('[lesson-plans] no lesson sequence parsed — stop_reason:', response.stop_reason)
+      res.status(502).json({ error: 'Could not build the lesson. Please try again.' })
+      return
+    }
 
     const lessonPlan = await prisma.lessonPlan.create({
       data: {
-        userId: req.user!.userId,
-        mode: 'generated',
-        objective: refinedObjective,
-        unitName: context.unitName,
-        essentialQuestion: context.essentialQuestion,
-        standard: context.standard,
-        subject: context.subject,
-        gradeLevel: context.gradeLevel,
-        doNow: extractTag(text, 'do_now'),
-        agenda: extractTag(text, 'agenda'),
-        closure: extractTag(text, 'closure'),
-        hots: extractTag(text, 'hots'),
-        homework: extractTag(text, 'homework'),
+        ...common,
+        planKind: 'full',
+        objective: lesson.objective ?? context.objective,
+        approach: lesson.approach,
+        successCriteria: lesson.successCriteria,
+        materials: lesson.materials,
+        sequence: lesson.sequence,
+        checks: lesson.checks,
+        misconceptions: lesson.misconceptions,
+        exitTicket: lesson.exitTicket ?? undefined,
       },
     })
     res.status(201).json(lessonPlan)
@@ -930,6 +1027,260 @@ lessonPlansRouter.post('/generate', async (req, res) => {
     console.error('[lesson-plans] generation failed:', error)
     res.status(502).json({ error: 'Claude request failed' })
   }
+})
+
+// ---------------------------------------------------------------------------
+// Adaptations — Simplify, Add Challenge, Increase Participation, Adjust Time
+// ---------------------------------------------------------------------------
+
+/// The lesson's own content, in whichever shape it has, as the sections an
+/// adaptation rewrites. A Planning Coach full lesson gives the structured
+/// sections; a plan the teacher brought (Improve a Lesson) gives planText;
+/// one of the old five-slot samples is flattened into planText, so applying
+/// an adaptation to it produces a single revised plan rather than trying to
+/// put a lab back into a Do Now / Agenda / Closure template it never fit.
+function sectionsOf(plan: {
+  planKind: string | null
+  planText: string | null
+  objective: string | null
+  successCriteria: string | null
+  materials: string | null
+  approach: string | null
+  sequence: unknown
+  checks: unknown
+  misconceptions: unknown
+  exitTicket: unknown
+  doNow: string | null
+  agenda: string | null
+  closure: string | null
+  hots: string | null
+  homework: string | null
+}): { sections: LessonSections; structured: boolean } {
+  const steps = (plan.sequence as LessonSections['sequence']) ?? []
+  if (steps && steps.length > 0) {
+    return {
+      structured: true,
+      sections: {
+        objective: plan.objective,
+        successCriteria: plan.successCriteria,
+        materials: plan.materials,
+        approach: plan.approach,
+        sequence: steps,
+        checks: plan.checks as LessonSections['checks'],
+        misconceptions: plan.misconceptions as LessonSections['misconceptions'],
+        exitTicket: plan.exitTicket as LessonSections['exitTicket'],
+      },
+    }
+  }
+  return { structured: false, sections: { objective: plan.objective, planText: lessonAsText(plan) } }
+}
+
+lessonPlansRouter.post('/:id/adapt', async (req, res) => {
+  const { action, targetMinutes } = req.body ?? {}
+  if (!isAdaptation(action)) {
+    res.status(400).json({ error: 'Unknown adaptation' })
+    return
+  }
+
+  const plan = await prisma.lessonPlan.findFirst({ where: { id: req.params.id, userId: req.user!.userId } })
+  if (!plan) {
+    res.status(404).json({ error: 'Lesson plan not found' })
+    return
+  }
+  const { sections, structured } = sectionsOf(plan)
+  const currentMinutes = lessonMinutes(plan)
+  if (!structured && !sections.planText?.trim()) {
+    res.status(400).json({ error: "This plan doesn't have content yet." })
+    return
+  }
+  // The five-slot sample plans from before Planning Coach have no single
+  // field a prose revision could be written back to, and nothing renders one
+  // for them — so this refuses rather than spending a Claude call on a
+  // revision the teacher would never see. Build the lesson again to adapt it.
+  if (!structured && plan.mode === 'generated') {
+    res.status(400).json({ error: 'Build this lesson again to adapt it — this one predates the adaptation tools.' })
+    return
+  }
+
+  const minutes = action === 'time' ? readMinutes(targetMinutes) : null
+  if (action === 'time' && !minutes) {
+    res.status(400).json({ error: `Pick a length between ${MIN_LESSON_MINUTES} and ${MAX_LESSON_MINUTES} minutes.` })
+    return
+  }
+
+  const denied = await checkAndLogUsage(req.user!.userId, 'lesson_plan_adapt')
+  if (denied) {
+    res.status(429).json({ error: denied })
+    return
+  }
+
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 5000,
+      thinking: { type: 'disabled' },
+      system: buildAdaptPrompt(action, structured, minutes),
+      messages: [{ role: 'user', content: adaptUserMessage(sections, currentMinutes) }],
+    })
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+
+    const summary = extractTag(text, 'what_changed')
+    let revised: LessonSections
+    if (structured) {
+      const lesson = parseFullLesson(text)
+      if (!isUsableLesson(lesson)) {
+        console.error('[lesson-plans] adapt produced no sequence — stop_reason:', response.stop_reason)
+        res.status(502).json({ error: 'Could not revise the lesson. Please try again.' })
+        return
+      }
+      revised = {
+        objective: lesson.objective ?? plan.objective,
+        successCriteria: lesson.successCriteria,
+        materials: lesson.materials,
+        approach: lesson.approach ?? plan.approach,
+        sequence: lesson.sequence,
+        checks: lesson.checks,
+        misconceptions: lesson.misconceptions,
+        exitTicket: lesson.exitTicket,
+      }
+    } else {
+      const revisedPlan = extractTag(text, 'revised_plan')
+      if (!revisedPlan) {
+        console.error('[lesson-plans] adapt produced no revised plan — stop_reason:', response.stop_reason)
+        res.status(502).json({ error: 'Could not revise the lesson. Please try again.' })
+        return
+      }
+      revised = { planText: revisedPlan }
+    }
+
+    const updated = await prisma.lessonPlan.update({
+      where: { id: plan.id },
+      data: {
+        pendingAdaptation: {
+          action,
+          label: ADAPTATION_LABEL[action],
+          summary,
+          minutes: minutes ?? null,
+          sections: revised,
+        },
+      },
+    })
+    res.json(updated)
+  } catch (error) {
+    console.error('[lesson-plans] adapt failed:', error)
+    res.status(502).json({ error: 'Could not revise the lesson. Please try again.' })
+  }
+})
+
+type PendingAdaptation = { action: string; label: string; minutes: number | null; sections: LessonSections }
+
+/// Writes a drafted adaptation into the plan, keeping the version it replaced.
+/// versionHistory is append-only and index 0 is therefore always the original,
+/// which is what makes "revert" below honest after four adaptations rather
+/// than only after one.
+lessonPlansRouter.post('/:id/apply-adaptation', async (req, res) => {
+  const plan = await prisma.lessonPlan.findFirst({ where: { id: req.params.id, userId: req.user!.userId } })
+  if (!plan) {
+    res.status(404).json({ error: 'Lesson plan not found' })
+    return
+  }
+  const pending = plan.pendingAdaptation as PendingAdaptation | null
+  if (!pending?.sections) {
+    res.status(400).json({ error: 'No revision to apply' })
+    return
+  }
+
+  const { sections: current } = sectionsOf(plan)
+  const history = (plan.versionHistory as Prisma.InputJsonValue[] | null) ?? []
+  const s = pending.sections
+  const replaced = {
+    label: history.length === 0 ? 'Original' : `Before ${pending.label}`,
+    savedAt: new Date().toISOString(),
+    sections: current,
+    durationMinutes: plan.durationMinutes,
+  } as unknown as Prisma.InputJsonValue
+
+  const updated = await prisma.lessonPlan.update({
+    where: { id: plan.id },
+    data: {
+      versionHistory: [...history, replaced],
+      pendingAdaptation: Prisma.DbNull,
+      // Every section falls back to what the plan already had. A revision that
+      // came back missing one section is a parse that went short, not an
+      // instruction to delete the teacher's materials list.
+      ...(s.planText != null
+        ? { planText: s.planText }
+        : {
+            objective: s.objective ?? plan.objective,
+            approach: s.approach ?? plan.approach,
+            successCriteria: s.successCriteria ?? plan.successCriteria,
+            materials: s.materials ?? plan.materials,
+            sequence: s.sequence ?? undefined,
+            checks: s.checks ?? undefined,
+            misconceptions: s.misconceptions ?? undefined,
+            exitTicket: s.exitTicket ?? undefined,
+          }),
+      ...(pending.minutes ? { durationMinutes: pending.minutes } : {}),
+    },
+  })
+  res.json(updated)
+})
+
+lessonPlansRouter.post('/:id/discard-adaptation', async (req, res) => {
+  const { count } = await prisma.lessonPlan.updateMany({
+    where: { id: req.params.id, userId: req.user!.userId },
+    data: { pendingAdaptation: Prisma.DbNull },
+  })
+  if (count === 0) {
+    res.status(404).json({ error: 'Lesson plan not found' })
+    return
+  }
+  const lessonPlan = await prisma.lessonPlan.findUnique({ where: { id: req.params.id } })
+  res.json(lessonPlan)
+})
+
+/// Back to the lesson as it was first drafted. The adapted versions are not
+/// kept on top of it: a teacher reverting wants the original back, and
+/// keeping the discarded branch would only make "which one am I looking at"
+/// harder to answer.
+lessonPlansRouter.post('/:id/revert', async (req, res) => {
+  const plan = await prisma.lessonPlan.findFirst({ where: { id: req.params.id, userId: req.user!.userId } })
+  if (!plan) {
+    res.status(404).json({ error: 'Lesson plan not found' })
+    return
+  }
+  const history = (plan.versionHistory as { sections: LessonSections; durationMinutes?: number | null }[] | null) ?? []
+  const original = history[0]
+  if (!original?.sections) {
+    res.status(400).json({ error: 'This is the original version.' })
+    return
+  }
+  const s = original.sections
+
+  const updated = await prisma.lessonPlan.update({
+    where: { id: plan.id },
+    data: {
+      versionHistory: [],
+      pendingAdaptation: Prisma.DbNull,
+      ...(s.planText != null
+        ? { planText: s.planText }
+        : {
+            objective: s.objective ?? plan.objective,
+            approach: s.approach ?? null,
+            successCriteria: s.successCriteria ?? null,
+            materials: s.materials ?? null,
+            sequence: s.sequence ?? undefined,
+            checks: s.checks ?? undefined,
+            misconceptions: s.misconceptions ?? undefined,
+            exitTicket: s.exitTicket ?? undefined,
+          }),
+      ...(original.durationMinutes != null ? { durationMinutes: original.durationMinutes } : {}),
+    },
+  })
+  res.json(updated)
 })
 
 lessonPlansRouter.patch('/:id', async (req, res) => {

@@ -59,7 +59,7 @@ export const FEATURE_VIDEOS = [
   { slug: 'lesson-debrief', id: 'lLnZhrtiAIw', title: 'Lesson Debrief', blurb: 'Record a class, see what it sounded like.' },
   { slug: 'talk-it-through', id: '-Xhmj0F7n_o', title: 'Talk It Through', blurb: 'Process a rough lesson in five minutes.' },
   { slug: 'ask-practice', id: 'yyYz795vFRg', title: 'Ask & Practice', blurb: 'Get the words, or rehearse the hard part.' },
-  { slug: 'lesson-planning', id: '-LNj8wyhk2I', title: 'Lesson Planning', blurb: 'Beat the blank page.' },
+  { slug: 'lesson-planning', id: '-LNj8wyhk2I', title: 'Planning Coach', blurb: 'Beat the blank page.' },
   { slug: 'assignment-coach', id: 'HrlsBYrjmV4', title: 'Assignment Coach', blurb: 'What does your assignment really ask?' },
   { slug: 'communication-coach', id: '4fg0c7Q5CiY', title: 'Communication Coach', blurb: 'Say the hard thing without the edge.' },
 ]

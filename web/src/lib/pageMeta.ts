@@ -17,7 +17,7 @@ export const PUBLIC_PAGE_META: Record<string, Meta> = {
   '/guide': {
     title: 'The complete Wivoza guide — every feature, in full',
     description:
-      'Every field, tab, and button in every Wivoza tool: Talk It Through, Lesson Debrief, Ask & Practice, Lesson Planning, Assignment Coach, and Communication Coach.',
+      'Every field, tab, and button in every Wivoza tool: Talk It Through, Lesson Debrief, Ask & Practice, Planning Coach, Assignment Coach, and Communication Coach.',
   },
   '/faq': {
     title: 'Wivoza FAQ — privacy, evaluation, and how it works',
@@ -46,9 +46,11 @@ export const PUBLIC_PAGE_META: Record<string, Meta> = {
     title: 'Practice — a teacher’s guide | Wivoza',
     description: 'Rehearse a classroom moment or a hard conversation before it happens, and get practical, judgment-free coaching on the words you used.',
   },
+  // Route kept from when this surface was Lesson Planning; the page is
+  // Planning Coach now.
   '/guide/lesson-planning': {
-    title: 'Lesson Planning — a teacher’s guide | Wivoza',
-    description: 'Get feedback on a lesson plan you wrote, generate a sample plan for ideas, or get feedback on a presentation before you teach it.',
+    title: 'Planning Coach — a teacher’s guide | Wivoza',
+    description: 'Build a lesson from a topic or your own materials, strengthen a plan you already wrote, and adapt it before class.',
   },
   '/guide/assignment-coach': {
     title: 'Assignment Coach — a teacher’s guide | Wivoza',

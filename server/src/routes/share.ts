@@ -63,6 +63,19 @@ shareRouter.get('/lesson-plan/:token', async (req, res) => {
     closure: lessonPlan.closure,
     hots: lessonPlan.hots,
     homework: lessonPlan.homework,
+    // Planning Coach's own shape. A lesson built after Planning Coach shipped
+    // has these rather than the five fields above, and a shared link that
+    // showed only an objective would have been an empty page.
+    planKind: lessonPlan.planKind,
+    durationMinutes: lessonPlan.durationMinutes,
+    approach: lessonPlan.approach,
+    successCriteria: lessonPlan.successCriteria,
+    materials: lessonPlan.materials,
+    sequence: lessonPlan.sequence,
+    checks: lessonPlan.checks,
+    misconceptions: lessonPlan.misconceptions,
+    exitTicket: lessonPlan.exitTicket,
+    quickIdeas: lessonPlan.quickIdeas,
     createdAt: lessonPlan.createdAt,
   })
 })

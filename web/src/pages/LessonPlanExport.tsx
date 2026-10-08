@@ -16,13 +16,13 @@ import {
 } from '../components/report'
 import { getLessonPlan, type LessonPlan } from '../lib/api'
 
-// Printable report for all three Lesson Planning modes. They share a data
+// Printable report for all three Planning Coach modes. They share a data
 // model but produce genuinely different documents, so the sections are
 // chosen per mode rather than rendering empty shells for the others.
 const MODE_LABEL: Record<string, string> = {
-  generated: 'Generate Ideas',
-  feedback: 'Get Feedback',
-  presentation: 'Review a Presentation',
+  generated: 'Build a Lesson',
+  feedback: 'Improve a Lesson',
+  presentation: 'Review Slides',
 }
 
 // The extracted slide text is written for Claude, not for the teacher: image
@@ -64,13 +64,22 @@ export default function LessonPlanExport() {
   // Matches LessonPlanning.tsx, which slices the same two turns in-app.
   const seeded = plan.mode === 'feedback' || plan.mode === 'presentation'
   const chat = (plan.conversation ?? []).slice(seeded ? 2 : 0).filter((m) => m.text?.trim())
-  const context = [plan.subject, plan.gradeLevel, plan.unitName, plan.standard].filter(Boolean) as string[]
+  const isFullLesson = plan.mode === 'generated' && (plan.sequence?.length ?? 0) > 0
+  const isIdeas = plan.mode === 'generated' && (plan.quickIdeas?.length ?? 0) > 0
+  const context = [
+    plan.subject,
+    plan.gradeLevel,
+    plan.unitName,
+    plan.standard,
+    plan.approach,
+    plan.durationMinutes ? `${plan.durationMinutes} min` : null,
+  ].filter(Boolean) as string[]
   let n = 0
 
   return (
     <ReportShell backTo="/lesson-planning">
       <ReportCover
-        eyebrow={`Wivoza · ${MODE_LABEL[plan.mode] ?? 'Lesson Planning'}`}
+        eyebrow={`Wivoza · ${MODE_LABEL[plan.mode] ?? 'Planning Coach'}`}
         title={plan.objective || (isPresentation ? plan.fileName || 'Presentation review' : 'Lesson plan')}
         meta={[
           formatReportDate(plan.createdAt),
@@ -94,8 +103,87 @@ export default function LessonPlanExport() {
         </div>
       )}
 
-      {/* Generate Ideas — the sample day, one section per template part. */}
-      {plan.mode === 'generated' && (
+      {/* Build a Lesson, Full Lesson — the lesson as Planning Coach built it. */}
+      {isFullLesson && (
+        <>
+          {(plan.successCriteria || plan.materials) && (
+            <ReportSection n={++n} title="The Goal" blurb="What students will be able to do, and what you need ready." accent={A.mint}>
+              {plan.successCriteria && <Callout label="Students can show it when they" body={plan.successCriteria} accent={A.mint} />}
+              {plan.materials && <Callout label="Materials" body={plan.materials} accent={A.forest} />}
+            </ReportSection>
+          )}
+
+          <ReportSection n={++n} title="The Lesson" blurb="A draft to edit — not a script to follow." accent={A.terracotta}>
+            {(plan.sequence ?? []).map((step, i) => (
+              <Callout
+                key={i}
+                label={`${i + 1}. ${step.title}${step.minutes != null ? ` · ${step.minutes} min` : ''}`}
+                body={[step.teacher && `You: ${step.teacher}`, step.students && `Students: ${step.students}`]
+                  .filter(Boolean)
+                  .join('\n\n')}
+                accent={i % 2 === 0 ? A.terracotta : A.gold}
+              />
+            ))}
+          </ReportSection>
+
+          {(plan.checks ?? []).length > 0 && (
+            <ReportSection n={++n} title="Checks for Understanding" blurb="Where to find out whether they are getting it." accent={A.mint}>
+              {(plan.checks ?? []).map((check, i) => (
+                <Callout
+                  key={i}
+                  label={check.when || 'During the lesson'}
+                  body={[check.check, check.lookFor && `Look for: ${check.lookFor}`].filter(Boolean).join('\n\n')}
+                  accent={A.mint}
+                />
+              ))}
+            </ReportSection>
+          )}
+
+          {(plan.misconceptions ?? []).length > 0 && (
+            <ReportSection
+              n={++n}
+              title="Likely Misconceptions"
+              blurb="Common for this content at this grade — not a claim about your students."
+              accent={A.gold}
+            >
+              {(plan.misconceptions ?? []).map((item, i) => (
+                <Callout
+                  key={i}
+                  label={item.belief}
+                  body={[item.surface && `Surface it: ${item.surface}`, item.response && `Address it: ${item.response}`]
+                    .filter(Boolean)
+                    .join('\n\n')}
+                  accent={A.gold}
+                />
+              ))}
+            </ReportSection>
+          )}
+
+          {plan.exitTicket && (
+            <ReportSection n={++n} title="Exit Ticket" blurb="Aligned to the objective, with what the answers would tell you." accent={A.forest}>
+              <Callout label="For students" body={plan.exitTicket.task} accent={A.forest} />
+              {plan.exitTicket.expected && <Callout label="Expected answer" body={plan.exitTicket.expected} accent={A.mint} />}
+              {plan.exitTicket.signals && (
+                <Callout label="What different responses show" body={plan.exitTicket.signals} accent={A.gold} />
+              )}
+              {plan.exitTicket.nextStep && <Callout label="Suggested next step" body={plan.exitTicket.nextStep} accent={A.terracotta} />}
+            </ReportSection>
+          )}
+        </>
+      )}
+
+      {/* Build a Lesson, Quick Ideas. */}
+      {isIdeas && (
+        <ReportSection n={++n} title="Teaching Ideas" blurb="Ideas to pull into the plan you are writing." accent={A.gold}>
+          {(plan.quickIdeas ?? []).map((idea, i) => (
+            <Callout key={i} label={`${i + 1}. ${idea.title}`} body={idea.how} accent={i % 2 === 0 ? A.gold : A.mint} />
+          ))}
+        </ReportSection>
+      )}
+
+      {/* The five-slot sample plans generated before Planning Coach. Still in
+          teachers' histories, still printed exactly as they were. */}
+      {plan.mode === 'generated' && !isFullLesson && !isIdeas && (
         <>
           <ReportSection n={++n} title="The Lesson" blurb="A sample day to adapt — not a script to follow." accent={A.terracotta}>
             {plan.doNow && <Callout label="Do Now" body={plan.doNow} accent={A.terracotta} />}
@@ -112,7 +200,7 @@ export default function LessonPlanExport() {
         </>
       )}
 
-      {/* Get Feedback — the teacher's own plan, then the coaching on it. */}
+      {/* Improve a Lesson — the teacher's own plan, then the coaching on it. */}
       {plan.mode === 'feedback' && (
         <>
           {plan.planText && (
@@ -128,7 +216,7 @@ export default function LessonPlanExport() {
         </>
       )}
 
-      {/* Review a Presentation — five named reads. */}
+      {/* Review Slides — five named reads. */}
       {isPresentation && review && (
         <ReportSection n={++n} title="Presentation Review" blurb="Five reads on the deck you built." accent={A.terracotta}>
           {([
@@ -178,7 +266,12 @@ export default function LessonPlanExport() {
 
       {plan.mode === 'generated' && (
         <div className="mt-6 break-inside-avoid rounded-2xl bg-gold-tint/50 p-5 text-center">
-          <StatTile label="Remember" value="A starting point" hint="This is a sample for ideas. It has never met your class — adjust it." accent={A.gold} />
+          <StatTile
+            label="Remember"
+            value="A starting point"
+            hint="This is a draft. It has never met your class — adjust it."
+            accent={A.gold}
+          />
         </div>
       )}
 

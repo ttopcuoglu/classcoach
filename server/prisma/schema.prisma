@@ -531,6 +531,45 @@ model LessonPlan {
   // overwrites this field. Never auto-applied to planText/agenda/etc. —
   // delivery advice, not a content edit.
   deliveryCoaching Json?
+
+  // Planning Coach, "generated" mode — which of the two outputs Build a
+  // Lesson was asked for: "full" (a complete lesson draft, the default) or
+  // "ideas" (3-5 teaching ideas). Null on every plan generated before this
+  // choice existed; those are the gradual-release samples still living in
+  // doNow/agenda/closure/hots/homework above, and they still render.
+  planKind          String?
+  durationMinutes   Int? // the class period the lesson was built to fit
+  additionalContext String? // student needs, available resources, anything else
+  // The text of a file the teacher started from — slides, a reading, a
+  // worksheet, an activity. The lesson is built around it rather than from
+  // scratch, and it's what the topic/subject suggestions were inferred from.
+  sourceMaterial    String?
+
+  // planKind "full". The structure Claude chose for this lesson — direct
+  // instruction and guided practice, discussion, inquiry, a lab, or
+  // collaborative learning. A label on what it built, not a template it was
+  // handed: the sequence fits the learning goal, the grade and the time,
+  // rather than every lesson being forced through one shape.
+  approach          String?
+  successCriteria   String? // what a student who got there can show
+  materials         String?
+  sequence          Json? // [{ minutes, title, teacher, students }], in teaching order
+  checks            Json? // [{ when, check, lookFor }]
+  // [{ belief, surface, response }] — misconceptions that are LIKELY for this
+  // content, never claims about this teacher's actual students.
+  misconceptions    Json?
+  exitTicket        Json? // { task, expected, signals, nextStep }
+  quickIdeas        Json? // planKind "ideas" — [{ title, how }], 3-5 of them
+
+  // An adaptation (Simplify / Add Challenge / Increase Participation / Adjust
+  // Time) Claude has drafted and the teacher has not applied yet:
+  // { action, label, summary, minutes, sections } where sections mirrors the
+  // lesson fields above, or { planText } for a lesson the teacher brought
+  // themselves. Shown for review, never applied on its own.
+  pendingAdaptation Json?
+  // Every version an applied adaptation replaced, oldest first — so index 0
+  // is always the original and no adaptation can lose it.
+  versionHistory    Json?
 }
 
 // A recorded class period, transcribed once (never stored as audio) and

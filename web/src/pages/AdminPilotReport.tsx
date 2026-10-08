@@ -45,7 +45,7 @@ import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 const FEATURE_ROWS: { key: keyof AdminOverview['featureAdoption']; label: string; what: string; unit: string }[] = [
   { key: 'lessonDebrief', label: 'Lesson Debrief', what: 'Record a lesson, get private feedback on it', unit: 'lessons analyzed' },
   { key: 'practiceReflect', label: 'Practice', what: 'Rehearse a classroom moment or a hard conversation', unit: 'rehearsals and reflections' },
-  { key: 'lessonPlanning', label: 'Lesson Planning', what: 'Draft or improve lesson plans', unit: 'plans' },
+  { key: 'lessonPlanning', label: 'Planning Coach', what: 'Build or improve lessons', unit: 'plans' },
   { key: 'communications', label: 'Communication Coach', what: 'Messages home, meetings, and a second read', unit: 'messages, meeting preps and reviews' },
 ]
 

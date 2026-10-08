@@ -12,71 +12,63 @@ import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { Spinner } from '../components/Spinner'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import {
+  adaptLessonPlan,
+  applyLessonAdaptation,
   applyLessonPlanRevision,
+  discardLessonAdaptation,
   extractPresentationText,
   generateLessonDeck,
   generatePresentation,
   generateLessonPlan,
   getLessonPlans,
   getPresentationFeedback,
+  getProfile,
+  inferLessonContext,
+  revertLessonPlan,
   sendLessonPlanChat,
   setLessonPlanSaved,
   shareLessonPlan,
   extractAssignmentText,
   submitLessonPlanFeedback,
   submitPresentationReview,
+  type LessonAdaptation,
   type LessonPlan,
-  type LessonPlanContext,
   type LessonPlanDeliveryCoaching,
   type LessonPlanPresentationReview,
 } from '../lib/api'
 
-type ContextForm = {
-  objective: string
-  unitName: string
-  essentialQuestion: string
-  standard: string
-  subject: string
-  gradeLevel: string
-}
-
-const EMPTY_CONTEXT: ContextForm = {
-  objective: '',
-  unitName: '',
-  essentialQuestion: '',
-  standard: '',
-  subject: '',
-  gradeLevel: '',
-}
-
-function toApiContext(context: ContextForm): LessonPlanContext {
-  return {
-    objective: context.objective.trim(),
-    unitName: context.unitName.trim() || undefined,
-    essentialQuestion: context.essentialQuestion.trim() || undefined,
-    standard: context.standard.trim() || undefined,
-    subject: context.subject.trim() || undefined,
-    gradeLevel: context.gradeLevel.trim() || undefined,
-  }
-}
-
 // Assignment Coach is the fourth chip rather than a seventh menu item. Every
-// chip here is the same job — something you made, read back to you before
-// students see it — and a chip row puts them one tap apart instead of a tool
-// apart. The tab lives in the URL so /assignment-coach can redirect straight
-// into it and old links keep landing where a teacher expects.
+// chip here is one planning job — start a lesson, strengthen one you have,
+// read back something you already made — and a chip row puts them one tap
+// apart instead of a tool apart. The tab lives in the URL so
+// /assignment-coach can redirect straight into it and old links keep landing
+// where a teacher expects.
+//
+// The values are unchanged ('generate', 'feedback', 'presentation',
+// 'assignment') even though the labels are not: they are in links, redirects
+// and bookmarks, and renaming a tab is no reason to break a URL a teacher
+// saved.
 type PlanningTab = 'generate' | 'feedback' | 'presentation' | 'assignment'
 
 const TABS: { value: PlanningTab; label: string }[] = [
-  { value: 'generate', label: 'Generate Ideas' },
-  { value: 'feedback', label: 'Get Feedback' },
-  { value: 'presentation', label: 'Review a Presentation' },
+  { value: 'generate', label: 'Build a Lesson' },
+  { value: 'feedback', label: 'Improve a Lesson' },
+  { value: 'presentation', label: 'Review Slides' },
   { value: 'assignment', label: 'Review an Assignment' },
 ]
 
 function isPlanningTab(value: string | null): value is PlanningTab {
   return TABS.some((t) => t.value === value)
 }
+
+const INPUT_CLASS =
+  'rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60'
+const PRIMARY_BUTTON =
+  'rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft'
+// Every format the shared document reader handles — see
+// server/src/lib/documentText.ts. Scanned pages go through OCR.
+const MATERIAL_ACCEPT = '.docx,.pdf,.pptx,.xlsx,.xls,.txt,.jpg,.jpeg,.png'
+const MATERIAL_FORMATS = '.docx, .pdf, .pptx, .xlsx, .xls, .txt, .jpg, or .png'
 
 export default function LessonPlanning() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -93,11 +85,10 @@ export default function LessonPlanning() {
       <div className="flex flex-col gap-1">
         <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta-600">Wivoza · Plan</p>
         <h1 className="font-heading text-3xl font-extrabold text-forest md:text-4xl">
-          Lesson Planning<span className="text-gold">.</span>
+          Planning Coach<span className="text-gold">.</span>
         </h1>
         <p className="text-ink-soft">
-          Generate a plan for ideas, or have a plan, a presentation, or an assignment you already made read
-          back to you before students see it.
+          Create a lesson, strengthen an existing plan, or review your materials before class.
         </p>
         <Link
           to="/guide/lesson-planning"
@@ -124,9 +115,9 @@ export default function LessonPlanning() {
       </div>
 
       {tab === 'generate' ? (
-        <GeneratePanel />
+        <BuildPanel />
       ) : tab === 'feedback' ? (
-        <FeedbackPanel />
+        <ImprovePanel />
       ) : tab === 'presentation' ? (
         <PresentationPanel />
       ) : (
@@ -136,94 +127,49 @@ export default function LessonPlanning() {
   )
 }
 
-function ContextFields({
-  context,
-  onChange,
-  disabled,
-}: {
-  context: ContextForm
-  onChange: (next: ContextForm) => void
-  disabled?: boolean
-}) {
-  function set<K extends keyof ContextForm>(key: K, value: ContextForm[K]) {
-    onChange({ ...context, [key]: value })
-  }
-  const inputClass =
-    'rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60'
+// ---------------------------------------------------------------------------
+// Shared pieces
+// ---------------------------------------------------------------------------
 
+/// A section a teacher opens only when they want it. Checks, misconceptions
+/// and the exit ticket's answer key are all genuinely useful and all genuinely
+/// long — printed open, they bury the lesson they belong to.
+function Expandable({ summary, children }: { summary: string; children: React.ReactNode }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <label className="flex flex-col gap-1.5 sm:col-span-2">
-        <span className="text-sm font-medium text-ink">Objective (SWBAT)</span>
-        <input
-          value={context.objective}
-          onChange={(e) => set('objective', e.target.value)}
-          disabled={disabled}
-          placeholder="e.g. SWBAT analyze how word choice affects tone in a poem"
-          className={inputClass}
-        />
-      </label>
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-ink">Subject</span>
-        <input
-          value={context.subject}
-          onChange={(e) => set('subject', e.target.value)}
-          disabled={disabled}
-          placeholder="e.g. English"
-          className={inputClass}
-        />
-      </label>
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-ink">Grade level</span>
-        <input
-          value={context.gradeLevel}
-          onChange={(e) => set('gradeLevel', e.target.value)}
-          disabled={disabled}
-          placeholder="e.g. 9th grade"
-          className={inputClass}
-        />
-      </label>
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-ink">Standard</span>
-        <input
-          value={context.standard}
-          onChange={(e) => set('standard', e.target.value)}
-          disabled={disabled}
-          placeholder="e.g. CCSS.RL.9.4"
-          className={inputClass}
-        />
-      </label>
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-ink">Unit name</span>
-        <input
-          value={context.unitName}
-          onChange={(e) => set('unitName', e.target.value)}
-          disabled={disabled}
-          placeholder="e.g. Poetry Unit"
-          className={inputClass}
-        />
-      </label>
-      <label className="flex flex-col gap-1.5 sm:col-span-2">
-        <span className="text-sm font-medium text-ink">Essential question</span>
-        <input
-          value={context.essentialQuestion}
-          onChange={(e) => set('essentialQuestion', e.target.value)}
-          disabled={disabled}
-          placeholder="e.g. How does language shape meaning?"
-          className={inputClass}
-        />
-      </label>
+    <details className="group rounded-xl border border-hairline bg-cream/60 px-4 py-3">
+      <summary className="cursor-pointer list-none text-sm font-semibold text-forest marker:hidden">
+        <span className="mr-1.5 inline-block text-ink-soft transition-transform group-open:rotate-90">›</span>
+        {summary}
+      </summary>
+      <div className="mt-2.5 flex flex-col gap-2.5 text-sm leading-relaxed text-ink">{children}</div>
+    </details>
+  )
+}
+
+function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">{label}</p>
+      <div className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{children}</div>
     </div>
   )
 }
 
 function PlanHeader({ plan }: { plan: LessonPlan }) {
+  const minutes = lessonMinutes(plan)
+  const kindLabel =
+    plan.mode !== 'generated'
+      ? 'Feedback'
+      : plan.planKind === 'ideas'
+        ? 'Teaching ideas'
+        : plan.planKind === 'full'
+          ? 'Lesson'
+          : 'Sample plan'
+  const chips = [plan.subject, plan.gradeLevel, plan.approach, minutes].filter(Boolean)
   return (
     <div className="-mx-6 -mt-6 bg-forest px-6 py-6 text-cream sm:px-8">
       <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">
-        {plan.mode === 'generated' ? 'Sample plan' : 'Feedback'}
-        {plan.subject ? ` · ${plan.subject}` : ''}
-        {plan.gradeLevel ? ` · ${plan.gradeLevel}` : ''}
+        {[kindLabel, ...chips].join(' · ')}
       </p>
       {plan.objective && <p className="mt-2 font-heading text-xl font-bold leading-snug text-cream">{plan.objective}</p>}
       {plan.standard && <p className="mt-1 text-xs text-cream/70">Standard: {plan.standard}</p>}
@@ -231,7 +177,27 @@ function PlanHeader({ plan }: { plan: LessonPlan }) {
   )
 }
 
-// The sample plan's parts, in teaching order, each with what it's for.
+/// What the lesson actually runs to, said honestly: the steps' own minutes,
+/// and what the teacher asked for when the two drifted apart.
+function lessonMinutes(plan: LessonPlan): string | null {
+  const steps = plan.sequence ?? []
+  const total = steps.reduce((sum, step) => sum + (step.minutes ?? 0), 0)
+  if (!total) return plan.durationMinutes ? `${plan.durationMinutes} min` : null
+  if (plan.durationMinutes && plan.durationMinutes !== total) return `${total} min of ${plan.durationMinutes} planned`
+  return `${total} min`
+}
+
+/// The minutes an Adjust Time revision is working from — what the lesson runs
+/// to now, so "Shorten to 30 minutes" only appears when there is something to
+/// shorten.
+function currentMinutes(plan: LessonPlan): number | null {
+  const total = (plan.sequence ?? []).reduce((sum, step) => sum + (step.minutes ?? 0), 0)
+  return total || plan.durationMinutes || null
+}
+
+// The sample plan's parts, in teaching order, each with what it's for. Still
+// here because every sample plan generated before Planning Coach is still in
+// a teacher's history, still shareable, and still printed from these fields.
 const PLAN_PARTS: { key: 'doNow' | 'agenda' | 'closure' | 'hots' | 'homework'; title: string; subtitle: string }[] = [
   { key: 'doNow', title: 'Do Now', subtitle: 'How students start — the first few minutes' },
   { key: 'agenda', title: 'Agenda', subtitle: 'The main activities, in order' },
@@ -265,6 +231,390 @@ function PartSections({ parts, start = 1 }: { parts: Part[]; start?: number }) {
     </>
   )
 }
+
+// ---------------------------------------------------------------------------
+// A built lesson, on screen
+// ---------------------------------------------------------------------------
+
+/// The full lesson, section by section. Returns how many numbered sections it
+/// used so whatever follows (delivery coaching, a revision card) keeps
+/// counting rather than restarting at 1.
+function LessonSections({ plan, start = 1 }: { plan: LessonPlan; start?: number }) {
+  const steps = plan.sequence ?? []
+  const checks = plan.checks ?? []
+  const misconceptions = plan.misconceptions ?? []
+  const ticket = plan.exitTicket
+  let n = start - 1
+
+  return (
+    <>
+      {(plan.objective || plan.successCriteria) && (
+        <NumberedCard n={++n} title="What students will be able to do" subtitle="The learning goal, and how you'll know they got there">
+          <div className="flex flex-col gap-3">
+            {plan.objective && <Labeled label="Objective">{plan.objective}</Labeled>}
+            {plan.successCriteria && <Labeled label="Students can show it when they">{plan.successCriteria}</Labeled>}
+          </div>
+        </NumberedCard>
+      )}
+
+      {plan.materials && (
+        <AnswerSection n={++n} title="Materials" subtitle="What to have ready before class">
+          {plan.materials}
+        </AnswerSection>
+      )}
+
+      {steps.length > 0 && (
+        <NumberedCard n={++n} title="The lesson" subtitle="What happens, in order, with what you say and what students do">
+          <ol className="flex flex-col gap-3">
+            {steps.map((step, i) => (
+              <li key={i} className="rounded-xl border border-hairline bg-cream/60 px-4 py-3">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="font-heading text-sm font-bold text-forest">
+                    {i + 1}. {step.title}
+                  </p>
+                  {step.minutes != null && (
+                    <span className="rounded-full bg-gold-tint px-2.5 py-0.5 text-[11px] font-bold text-terracotta-600">
+                      {step.minutes} min
+                    </span>
+                  )}
+                </div>
+                <div className="mt-2 flex flex-col gap-2">
+                  {step.teacher && <Labeled label="You">{step.teacher}</Labeled>}
+                  {step.students && <Labeled label="Students">{step.students}</Labeled>}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </NumberedCard>
+      )}
+
+      {checks.length > 0 && (
+        <NumberedCard n={++n} title="Checks for understanding" subtitle="Where to find out whether they're getting it — not whether they're busy">
+          <div className="flex flex-col gap-2">
+            {checks.map((check, i) => (
+              <Expandable key={i} summary={check.when ? `${check.when} — ${check.check}` : check.check}>
+                {check.when && <Labeled label="When">{check.when}</Labeled>}
+                <Labeled label="The check">{check.check}</Labeled>
+                {check.lookFor && <Labeled label="What to look for">{check.lookFor}</Labeled>}
+              </Expandable>
+            ))}
+          </div>
+        </NumberedCard>
+      )}
+
+      {misconceptions.length > 0 && (
+        <NumberedCard n={++n} title="Likely misconceptions" subtitle="What students commonly bring to this content — and how to surface it">
+          <div className="flex flex-col gap-2">
+            {misconceptions.map((item, i) => (
+              <Expandable key={i} summary={item.belief}>
+                {item.surface && <Labeled label="How to surface it">{item.surface}</Labeled>}
+                {item.response && <Labeled label="How to address it">{item.response}</Labeled>}
+              </Expandable>
+            ))}
+            <p className="text-xs text-ink-soft">
+              These are common for this content at this grade. They are not a claim about your students — you'll find out
+              which ones are in the room when you ask.
+            </p>
+          </div>
+        </NumberedCard>
+      )}
+
+      {ticket && (
+        <NumberedCard n={++n} title="Exit ticket" subtitle="Aligned to the objective, with what the answers would tell you">
+          <div className="flex flex-col gap-3">
+            <div className="rounded-xl border border-hairline bg-white px-4 py-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">For students</p>
+              <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{ticket.task}</p>
+            </div>
+            {(ticket.expected || ticket.signals || ticket.nextStep) && (
+              <Expandable summary="What to look for in the answers">
+                {ticket.expected && <Labeled label="Expected answer">{ticket.expected}</Labeled>}
+                {ticket.signals && <Labeled label="What different responses show">{ticket.signals}</Labeled>}
+                {ticket.nextStep && <Labeled label="Suggested next step">{ticket.nextStep}</Labeled>}
+              </Expandable>
+            )}
+          </div>
+        </NumberedCard>
+      )}
+    </>
+  )
+}
+
+/// How many numbered sections LessonSections will render for this plan, so
+/// callers can number what comes after it without rendering it twice.
+function lessonSectionCount(plan: LessonPlan): number {
+  return (
+    (plan.objective || plan.successCriteria ? 1 : 0) +
+    (plan.materials ? 1 : 0) +
+    ((plan.sequence ?? []).length > 0 ? 1 : 0) +
+    ((plan.checks ?? []).length > 0 ? 1 : 0) +
+    ((plan.misconceptions ?? []).length > 0 ? 1 : 0) +
+    (plan.exitTicket ? 1 : 0)
+  )
+}
+
+function QuickIdeasSections({ plan, start = 1 }: { plan: LessonPlan; start?: number }) {
+  return (
+    <>
+      {(plan.quickIdeas ?? []).map((idea, i) => (
+        <AnswerSection key={i} n={start + i} title={idea.title} subtitle="A way to teach this">
+          {idea.how}
+        </AnswerSection>
+      ))}
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Adaptations
+// ---------------------------------------------------------------------------
+
+const ADAPTATIONS: { action: Exclude<LessonAdaptation, 'time'>; label: string; hint: string }[] = [
+  { action: 'simplify', label: 'Simplify', hint: 'Clearer directions, smaller steps, more scaffolds — same learning goal' },
+  { action: 'challenge', label: 'Add Challenge', hint: 'Deeper reasoning, transfer, application' },
+  { action: 'participation', label: 'Increase Participation', hint: 'More students contributing and showing their thinking' },
+]
+
+// A plain card rather than a numbered one: these are tools for working on the
+// lesson, not another part of it.
+function AdaptationTools({
+  plan,
+  busy,
+  onAdapt,
+}: {
+  plan: LessonPlan
+  busy: LessonAdaptation | null
+  onAdapt: (action: LessonAdaptation, targetMinutes?: number) => void
+}) {
+  const [timeOpen, setTimeOpen] = useState(false)
+  const [custom, setCustom] = useState('')
+  const minutes = currentMinutes(plan)
+  const chip =
+    'rounded-full border border-hairline bg-white px-3.5 py-2 text-sm font-semibold text-forest transition-colors hover:border-forest/50 hover:bg-cream disabled:opacity-60'
+
+  function pickTime(target: number) {
+    setTimeOpen(false)
+    setCustom('')
+    onAdapt('time', target)
+  }
+
+  const customMinutes = Number.parseInt(custom, 10)
+  const customValid = Number.isFinite(customMinutes) && customMinutes >= 5 && customMinutes <= 240
+
+  return (
+    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
+      <p className="font-heading text-base font-bold text-forest">Adapt it</p>
+      <p className="text-xs text-ink-soft">
+        Each one rewrites the lesson and shows you the result first — your current version stays until you apply it.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {ADAPTATIONS.map(({ action, label, hint }) => (
+          <button key={action} type="button" title={hint} onClick={() => onAdapt(action)} disabled={busy != null} className={chip}>
+            {busy === action ? (
+              <span className="flex items-center gap-2">
+                <Spinner /> {label}…
+              </span>
+            ) : (
+              label
+            )}
+          </button>
+        ))}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setTimeOpen((open) => !open)}
+            disabled={busy != null}
+            aria-expanded={timeOpen}
+            className={chip}
+          >
+            {busy === 'time' ? (
+              <span className="flex items-center gap-2">
+                <Spinner /> Adjust Time…
+              </span>
+            ) : (
+              'Adjust Time ▾'
+            )}
+          </button>
+          {timeOpen && busy == null && (
+            <div className="absolute left-0 top-full z-10 mt-2 w-60 rounded-xl border border-hairline bg-cream-card p-2 shadow-lg">
+              {minutes != null && minutes > 30 && (
+                <button
+                  type="button"
+                  onClick={() => pickTime(30)}
+                  className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-ink hover:bg-cream"
+                >
+                  Shorten to 30 minutes
+                </button>
+              )}
+              <div className="flex items-center gap-2 px-3 py-2">
+                <input
+                  type="number"
+                  min={5}
+                  max={240}
+                  value={custom}
+                  onChange={(e) => setCustom(e.target.value)}
+                  placeholder="Minutes"
+                  aria-label="Custom lesson length in minutes"
+                  className="w-24 rounded-lg border border-hairline bg-cream px-2.5 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
+                />
+                <button
+                  type="button"
+                  disabled={!customValid}
+                  onClick={() => pickTime(customMinutes)}
+                  className="rounded-full bg-terracotta px-3 py-1.5 text-xs font-semibold text-cream disabled:bg-hairline disabled:text-ink-soft"
+                >
+                  Rebuild
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      <WorkingRing active={busy != null} estimatedMs={18000} label="Revising the lesson" className="mt-3 text-forest" />
+    </div>
+  )
+}
+
+/// The drafted revision, read before it replaces anything. A structured
+/// lesson's revision is shown as the lesson it would become; a plan the
+/// teacher wrote themselves is shown as the rewritten plan.
+function PendingAdaptationCard({
+  n,
+  plan,
+  applying,
+  onApply,
+  onDiscard,
+}: {
+  n: number
+  plan: LessonPlan
+  applying: boolean
+  onApply: () => void
+  onDiscard: () => void
+}) {
+  const pending = plan.pendingAdaptation
+  if (!pending) return null
+  const s = pending.sections
+  const steps = s.sequence ?? []
+
+  return (
+    <NumberedCard
+      n={n}
+      title={`${pending.label} — suggested revision`}
+      subtitle="Read it, then use it or discard it. Nothing changes until you do."
+    >
+      {pending.summary && (
+        <div className="rounded-xl border border-hairline bg-white px-4 py-3">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">What changed</p>
+          <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{pending.summary}</p>
+        </div>
+      )}
+
+      <div className="mt-3">
+        <Expandable summary="See the revised lesson">
+          {s.planText ? (
+            <p className="whitespace-pre-wrap text-sm text-ink">{s.planText}</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {s.objective && <Labeled label="Objective">{s.objective}</Labeled>}
+              {s.successCriteria && <Labeled label="Success criteria">{s.successCriteria}</Labeled>}
+              {steps.map((step, i) => (
+                <Labeled key={i} label={`${i + 1}. ${step.title}${step.minutes != null ? ` · ${step.minutes} min` : ''}`}>
+                  {[step.teacher && `You: ${step.teacher}`, step.students && `Students: ${step.students}`]
+                    .filter(Boolean)
+                    .join('\n')}
+                </Labeled>
+              ))}
+              {s.exitTicket && <Labeled label="Exit ticket">{s.exitTicket.task}</Labeled>}
+            </div>
+          )}
+        </Expandable>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={onApply}
+          disabled={applying}
+          className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+        >
+          {applying ? (
+            <span className="flex items-center gap-2">
+              <Spinner /> Applying…
+            </span>
+          ) : (
+            'Use this version'
+          )}
+        </button>
+        <button type="button" onClick={onDiscard} disabled={applying} className="text-sm font-medium text-ink-soft hover:text-ink">
+          Discard
+        </button>
+      </div>
+    </NumberedCard>
+  )
+}
+
+function RevertNote({ plan, onRevert, reverting }: { plan: LessonPlan; onRevert: () => void; reverting: boolean }) {
+  const count = plan.versionHistory?.length ?? 0
+  if (count === 0) return null
+  return (
+    <p className="text-xs text-ink-soft">
+      {count === 1 ? 'One adaptation applied.' : `${count} adaptations applied.`} Your original is kept —{' '}
+      <button type="button" onClick={onRevert} disabled={reverting} className="font-semibold text-terracotta-600 underline underline-offset-2 disabled:opacity-60">
+        {reverting ? 'going back…' : 'go back to it'}
+      </button>
+      .
+    </p>
+  )
+}
+
+/// The adapt / apply / discard / revert cycle, shared by the two panels that
+/// own a lesson — generated and the teacher's own. Panels differ in what they
+/// render; none of them differ in what these four calls do.
+function useAdaptation(plan: LessonPlan | null, onUpdated: (plan: LessonPlan) => void) {
+  const [busy, setBusy] = useState<LessonAdaptation | null>(null)
+  const [applying, setApplying] = useState(false)
+  const [reverting, setReverting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function run(work: () => Promise<LessonPlan>, done: (busy: boolean) => void) {
+    setError(null)
+    done(true)
+    try {
+      onUpdated(await work())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not revise the lesson. Please try again.')
+    } finally {
+      done(false)
+    }
+  }
+
+  return {
+    busy,
+    applying,
+    reverting,
+    error,
+    adapt: (action: LessonAdaptation, targetMinutes?: number) => {
+      if (!plan || busy) return
+      void run(() => adaptLessonPlan(plan.id, action, targetMinutes), (active) => setBusy(active ? action : null))
+    },
+    apply: () => {
+      if (!plan || applying) return
+      void run(() => applyLessonAdaptation(plan.id), setApplying)
+    },
+    discard: () => {
+      if (!plan) return
+      void run(() => discardLessonAdaptation(plan.id), () => {})
+    },
+    revert: () => {
+      if (!plan || reverting) return
+      void run(() => revertLessonPlan(plan.id), setReverting)
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Result-page furniture shared by every panel
+// ---------------------------------------------------------------------------
 
 // Builds the lesson as a classroom-ready deck that follows the delivery
 // coaching: preview first, then download as PowerPoint.
@@ -307,14 +657,7 @@ function DeliveryCoachingCard({ n, coaching, planId }: { n: number; coaching: Le
   return (
     <NumberedCard n={n} title="Presentation & delivery" subtitle="How to teach it — opening, pacing, engagement and closing">
       <div className="flex flex-col gap-3">
-        {rows.map(([label, value]) =>
-          value ? (
-            <div key={label}>
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">{label}</p>
-              <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{value}</p>
-            </div>
-          ) : null,
-        )}
+        {rows.map(([label, value]) => (value ? <Labeled key={label} label={label}>{value}</Labeled> : null))}
         <p className="text-xs text-ink-soft">Turn this into a slide deck you can project: your hook first, a timed agenda, checks for understanding, and your delivery notes in the speaker notes.</p>
         <LessonDeckButton planId={planId} />
       </div>
@@ -418,6 +761,27 @@ function ShareButton({ onShare }: { onShare: () => Promise<{ shareToken: string 
   )
 }
 
+function DeliveryFeedbackButton({ plan, loading, onClick }: { plan: LessonPlan; loading: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={loading}
+      className="text-sm font-medium text-ink-soft hover:text-terracotta-600 disabled:opacity-60"
+    >
+      {loading ? (
+        <span className="flex items-center gap-2">
+          <Spinner /> Getting feedback...
+        </span>
+      ) : plan.deliveryCoaching ? (
+        'Regenerate ↻'
+      ) : (
+        'Get presentation & delivery feedback'
+      )}
+    </button>
+  )
+}
+
 function toPastItem(plan: LessonPlan): PastItem {
   return {
     id: plan.id,
@@ -428,12 +792,123 @@ function toPastItem(plan: LessonPlan): PastItem {
   }
 }
 
-function GeneratePanel() {
-  const [context, setContext] = useState<ContextForm>(EMPTY_CONTEXT)
+/// Toggling "saved" is the same four lines in every panel: optimistic, with
+/// the flip put back if the write fails.
+function useSavedToggle(
+  setPlans: React.Dispatch<React.SetStateAction<LessonPlan[]>>,
+  setPlan: React.Dispatch<React.SetStateAction<LessonPlan | null>>,
+) {
+  return async function toggle(target: LessonPlan) {
+    const nextSaved = !target.saved
+    const flip = (saved: boolean) => {
+      setPlans((prev) => prev.map((p) => (p.id === target.id ? { ...p, saved } : p)))
+      setPlan((prev) => (prev && prev.id === target.id ? { ...prev, saved } : prev))
+    }
+    flip(nextSaved)
+    try {
+      await setLessonPlanSaved(target.id, nextSaved)
+    } catch {
+      flip(!nextSaved)
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Build a Lesson
+// ---------------------------------------------------------------------------
+
+type BuildForm = {
+  topic: string
+  subject: string
+  gradeLevel: string
+  durationMinutes: number
+  standard: string
+  unitName: string
+  essentialQuestion: string
+  additionalContext: string
+  kind: 'full' | 'ideas'
+}
+
+const DEFAULT_DURATION = 45
+const DURATION_CHOICES = [30, 45, 50, 60, 90]
+
+const EMPTY_BUILD: BuildForm = {
+  topic: '',
+  subject: '',
+  gradeLevel: '',
+  durationMinutes: DEFAULT_DURATION,
+  standard: '',
+  unitName: '',
+  essentialQuestion: '',
+  additionalContext: '',
+  kind: 'full',
+}
+
+/// A profile field like "7th,8th" is a list of what this teacher teaches.
+/// One value prefills; several become chips, because guessing which of a
+/// teacher's three preps a lesson is for is exactly the guess that makes a
+/// prefilled form worse than an empty one.
+function profileList(value: string | null | undefined): string[] {
+  return (value ?? '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+}
+
+function ChoiceChips({
+  label,
+  options,
+  value,
+  onPick,
+  disabled,
+}: {
+  label: string
+  options: string[]
+  value: string
+  onPick: (next: string) => void
+  disabled?: boolean
+}) {
+  if (options.length < 2) return null
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-soft">{label}</span>
+      {options.map((option) => (
+        <button
+          key={option}
+          type="button"
+          disabled={disabled}
+          onClick={() => onPick(option)}
+          aria-pressed={value === option}
+          className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+            value === option ? 'bg-forest text-cream' : 'bg-cream text-ink-soft hover:text-ink'
+          }`}
+        >
+          {option}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function BuildPanel() {
+  const [form, setForm] = useState<BuildForm>(EMPTY_BUILD)
+  const [customDuration, setCustomDuration] = useState(false)
+  const [gradeOptions, setGradeOptions] = useState<string[]>([])
+  const [subjectOptions, setSubjectOptions] = useState<string[]>([])
+
   const [plan, setPlan] = useState<LessonPlan | null>(null)
   const [generating, setGenerating] = useState(false)
-  const generateProgress = useSimulatedProgress(generating, 12000)
+  const generateProgress = useSimulatedProgress(generating, form.kind === 'ideas' ? 10000 : 22000)
   const [error, setError] = useState<string | null>(null)
+
+  // Optional starting material: slides, a reading, a worksheet, an activity.
+  const [material, setMaterial] = useState<{ name: string; text: string } | null>(null)
+  const [reading, setReading] = useState(false)
+  const [readMs, setReadMs] = useState(5000)
+  const readProgress = useSimulatedProgress(reading, readMs)
+  const [materialError, setMaterialError] = useState<string | null>(null)
+  const [suggested, setSuggested] = useState<string[]>([])
+  const [followUp, setFollowUp] = useState<string | null>(null)
 
   const [allPlans, setAllPlans] = useState<LessonPlan[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
@@ -441,12 +916,91 @@ function GeneratePanel() {
   const [deliveryLoading, setDeliveryLoading] = useState(false)
   const [deliveryError, setDeliveryError] = useState<string | null>(null)
 
+  const adaptation = useAdaptation(plan, (updated) => {
+    setPlan(updated)
+    setAllPlans((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+  })
+  const toggleSaved = useSavedToggle(setAllPlans, setPlan)
+
   useEffect(() => {
     getLessonPlans({ mode: 'generated' })
       .then(setAllPlans)
       .catch(() => {})
       .finally(() => setHistoryLoading(false))
   }, [])
+
+  // Grade and subject come from the profile so the common case is already
+  // filled in — both stay editable, and a teacher with several assignments
+  // picks rather than being picked for.
+  useEffect(() => {
+    getProfile()
+      .then((profile) => {
+        const grades = profileList(profile.gradeLevels)
+        const subjects = profileList(profile.subjects)
+        setGradeOptions(grades)
+        setSubjectOptions(subjects)
+        setForm((prev) => ({
+          ...prev,
+          gradeLevel: prev.gradeLevel || grades[0] || '',
+          subject: prev.subject || subjects[0] || '',
+        }))
+      })
+      .catch(() => {})
+  }, [])
+
+  function set<K extends keyof BuildForm>(key: K, value: BuildForm[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  async function handleMaterial(file: File) {
+    setMaterial(null)
+    setSuggested([])
+    setFollowUp(null)
+    setMaterialError(null)
+    setReadMs(Math.min(20000, 3000 + (file.size / 1_048_576) * 1500))
+    setReading(true)
+    try {
+      const { text } = await extractAssignmentText(file)
+      setMaterial({ name: file.name, text })
+
+      // What the file appears to be about, offered as a filled-in field the
+      // teacher can change — not an assumption applied behind their back, and
+      // never overwriting something they already typed.
+      const inferred = await inferLessonContext(text).catch(() => null)
+      if (inferred) {
+        const filled: string[] = []
+        setForm((prev) => {
+          const next = { ...prev }
+          if (inferred.topic && !prev.topic.trim()) {
+            next.topic = inferred.topic
+            filled.push('topic')
+          }
+          if (inferred.subject && !prev.subject.trim()) {
+            next.subject = inferred.subject
+            filled.push('subject')
+          }
+          if (inferred.gradeLevel && !prev.gradeLevel.trim()) {
+            next.gradeLevel = inferred.gradeLevel
+            filled.push('grade level')
+          }
+          return next
+        })
+        setSuggested(filled)
+        setFollowUp(inferred.followUp)
+      }
+    } catch (e) {
+      setMaterialError(e instanceof Error ? e.message : 'Could not read that file. You can still type the topic instead.')
+    } finally {
+      setReading(false)
+    }
+  }
+
+  function removeMaterial() {
+    setMaterial(null)
+    setSuggested([])
+    setFollowUp(null)
+    setMaterialError(null)
+  }
 
   async function handlePresentationFeedback() {
     if (!plan || deliveryLoading) return
@@ -463,16 +1017,29 @@ function GeneratePanel() {
     }
   }
 
+  const canGenerate = !!form.topic.trim() || !!material
+
   async function handleGenerate() {
-    if (!context.objective.trim() || generating) return
+    if (!canGenerate || generating) return
     setGenerating(true)
     setError(null)
     try {
-      const result = await generateLessonPlan(toApiContext(context))
+      const result = await generateLessonPlan({
+        objective: form.topic.trim(),
+        subject: form.subject.trim() || undefined,
+        gradeLevel: form.gradeLevel.trim() || undefined,
+        standard: form.standard.trim() || undefined,
+        unitName: form.unitName.trim() || undefined,
+        essentialQuestion: form.essentialQuestion.trim() || undefined,
+        additionalContext: form.additionalContext.trim() || undefined,
+        sourceMaterial: material?.text,
+        durationMinutes: form.durationMinutes,
+        kind: form.kind,
+      })
       setPlan(result)
       setAllPlans((prev) => [result, ...prev])
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not generate a sample plan. Please try again.')
+      setError(e instanceof Error ? e.message : 'Could not build the lesson. Please try again.')
     } finally {
       setGenerating(false)
     }
@@ -484,7 +1051,7 @@ function GeneratePanel() {
     setDeliveryError(null)
   }
 
-  // Reopens an earlier plan in full, with everything that came after it.
+  // Reopens an earlier lesson in full, with everything that came after it.
   function handleOpenPast(id: string) {
     const past = allPlans.find((p) => p.id === id)
     if (!past) return
@@ -494,59 +1061,336 @@ function GeneratePanel() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  async function handleToggleSaved(target: LessonPlan) {
-    const nextSaved = !target.saved
-    const apply = (p: LessonPlan) => (p.id === target.id ? { ...p, saved: nextSaved } : p)
-    setAllPlans((prev) => prev.map(apply))
-    if (plan?.id === target.id) setPlan((prev) => (prev ? { ...prev, saved: nextSaved } : prev))
-    try {
-      await setLessonPlanSaved(target.id, nextSaved)
-    } catch {
-      setAllPlans((prev) => prev.map((p) => (p.id === target.id ? { ...p, saved: !nextSaved } : p)))
-      if (plan?.id === target.id) setPlan((prev) => (prev ? { ...prev, saved: !nextSaved } : prev))
-    }
-  }
-
-  const planParts = plan ? presentParts(PLAN_PARTS.map((part) => ({ ...part, body: plan[part.key] }))) : []
+  const ideas = form.kind === 'ideas'
+  // Three shapes can come back here: a Planning Coach lesson, a list of
+  // teaching ideas, and — reopened from history — one of the old five-slot
+  // sample plans.
+  const legacyParts = plan ? presentParts(PLAN_PARTS.map((part) => ({ ...part, body: plan[part.key] }))) : []
+  const isFullLesson = !!plan && (plan.sequence?.length ?? 0) > 0
+  const isIdeas = !!plan && (plan.quickIdeas?.length ?? 0) > 0
+  let sections = 0
+  if (plan) sections = isFullLesson ? lessonSectionCount(plan) : isIdeas ? (plan.quickIdeas ?? []).length : legacyParts.length
 
   return (
     <div className="flex flex-col gap-6">
       <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6">
         {!plan ? (
           <div className="flex flex-col gap-4">
-            <PanelHeader eyebrow="Lesson Planning" title="Generate ideas">
-              Give a clear objective and any context you have — get a sample single-day plan modeled on a
-              gradual-release template, for ideas. Not a plan you have to follow.
+            <PanelHeader eyebrow="Planning Coach" title="Build a lesson">
+              Start with a topic, or the material you already have. Everything else is optional.
             </PanelHeader>
-            <ContextFields context={context} onChange={setContext} disabled={generating} />
+
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-ink">Topic or learning goal</span>
+              <span className="text-xs text-ink-soft">
+                What are you teaching? Enter a topic, learning goal, or paste material.
+              </span>
+              <textarea
+                value={form.topic}
+                onChange={(e) => set('topic', e.target.value)}
+                disabled={generating}
+                rows={3}
+                placeholder="e.g. introducing cells"
+                className={INPUT_CLASS}
+              />
+            </label>
+
+            {/* Starting material — slides, a reading, a worksheet, an activity. */}
+            {reading ? (
+              <div className="flex justify-center rounded-2xl border-2 border-dashed border-terracotta/30 bg-peach-tint/30 px-4 py-8">
+                <ProgressRing
+                  progress={readProgress}
+                  size={84}
+                  label="Reading your file"
+                  hint="Pulling the text out, then filling in what it's about."
+                  className="text-forest"
+                />
+              </div>
+            ) : material ? (
+              <div className="flex flex-col gap-2 rounded-xl border border-hairline bg-cream px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-peach-tint text-terracotta-600">
+                      <ClipboardIcon className="h-4.5 w-4.5" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-ink">{material.name}</p>
+                      <p className="text-xs text-ink-soft">The lesson will be built around this.</p>
+                    </div>
+                  </div>
+                  <button type="button" onClick={removeMaterial} aria-label="Remove file" className="shrink-0 text-ink-soft hover:text-forest">
+                    <CloseIcon className="h-4 w-4" />
+                  </button>
+                </div>
+                {suggested.length > 0 && (
+                  <p className="text-xs text-forest">
+                    Filled in the {suggested.join(', ')} from your file — change anything that isn't right.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <label className="flex cursor-pointer items-start gap-2 self-start text-left hover:text-forest">
+                <UploadIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-soft" />
+                <span className="flex flex-col">
+                  <span className="text-xs font-semibold text-ink-soft">
+                    Upload materials — start from slides, a reading, a worksheet or an activity
+                  </span>
+                  <span className="text-[11px] text-ink-soft/80">{MATERIAL_FORMATS}</span>
+                </span>
+                <input
+                  type="file"
+                  accept={MATERIAL_ACCEPT}
+                  className="hidden"
+                  onChange={(e) => {
+                    const selected = e.target.files?.[0]
+                    if (selected) void handleMaterial(selected)
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+            )}
+            {materialError && <p className="text-sm text-terracotta">{materialError}</p>}
+            {followUp && (
+              <p className="rounded-xl border border-gold/40 bg-gold-tint/50 px-4 py-3 text-sm text-ink">
+                <span className="font-semibold text-terracotta-600">One question: </span>
+                {followUp}
+              </p>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium text-ink">Grade level</span>
+                <ChoiceChips
+                  label="Yours"
+                  options={gradeOptions}
+                  value={form.gradeLevel}
+                  onPick={(next) => set('gradeLevel', next)}
+                  disabled={generating}
+                />
+                <input
+                  value={form.gradeLevel}
+                  onChange={(e) => set('gradeLevel', e.target.value)}
+                  disabled={generating}
+                  placeholder="e.g. 7th grade"
+                  className={INPUT_CLASS}
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium text-ink">Subject</span>
+                <ChoiceChips
+                  label="Yours"
+                  options={subjectOptions}
+                  value={form.subject}
+                  onPick={(next) => set('subject', next)}
+                  disabled={generating}
+                />
+                <input
+                  value={form.subject}
+                  onChange={(e) => set('subject', e.target.value)}
+                  disabled={generating}
+                  placeholder="e.g. Science"
+                  className={INPUT_CLASS}
+                />
+              </label>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-ink">How much time do you have?</span>
+              <div className="flex flex-wrap items-center gap-2">
+                {DURATION_CHOICES.map((minutes) => (
+                  <button
+                    key={minutes}
+                    type="button"
+                    disabled={generating}
+                    onClick={() => {
+                      setCustomDuration(false)
+                      set('durationMinutes', minutes)
+                    }}
+                    aria-pressed={!customDuration && form.durationMinutes === minutes}
+                    className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                      !customDuration && form.durationMinutes === minutes
+                        ? 'bg-forest text-cream'
+                        : 'bg-cream text-ink-soft hover:text-ink'
+                    }`}
+                  >
+                    {minutes} min
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  disabled={generating}
+                  onClick={() => setCustomDuration(true)}
+                  aria-pressed={customDuration}
+                  className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                    customDuration ? 'bg-forest text-cream' : 'bg-cream text-ink-soft hover:text-ink'
+                  }`}
+                >
+                  Custom
+                </button>
+                {customDuration && (
+                  <span className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={5}
+                      max={240}
+                      value={form.durationMinutes}
+                      aria-label="Lesson length in minutes"
+                      onChange={(e) => set('durationMinutes', Math.max(5, Math.min(240, Number(e.target.value) || DEFAULT_DURATION)))}
+                      disabled={generating}
+                      className="w-24 rounded-xl border border-hairline bg-cream px-3 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
+                    />
+                    <span className="text-sm text-ink-soft">minutes</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <details className="rounded-2xl border border-hairline bg-cream/60 px-4 py-3">
+              <summary className="cursor-pointer list-none text-sm font-semibold text-forest marker:hidden">
+                More details — optional
+              </summary>
+              <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-ink">Standard</span>
+                  <input
+                    value={form.standard}
+                    onChange={(e) => set('standard', e.target.value)}
+                    disabled={generating}
+                    placeholder="e.g. MS-LS1-1"
+                    className={INPUT_CLASS}
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-ink">Unit name</span>
+                  <input
+                    value={form.unitName}
+                    onChange={(e) => set('unitName', e.target.value)}
+                    disabled={generating}
+                    placeholder="e.g. Cells & Systems"
+                    className={INPUT_CLASS}
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5 sm:col-span-2">
+                  <span className="text-sm font-medium text-ink">Essential question</span>
+                  <input
+                    value={form.essentialQuestion}
+                    onChange={(e) => set('essentialQuestion', e.target.value)}
+                    disabled={generating}
+                    placeholder="e.g. What makes something alive?"
+                    className={INPUT_CLASS}
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5 sm:col-span-2">
+                  <span className="text-sm font-medium text-ink">Anything else</span>
+                  <span className="text-xs text-ink-soft">Student needs, what you have in the room, where the class is coming from.</span>
+                  <textarea
+                    value={form.additionalContext}
+                    onChange={(e) => set('additionalContext', e.target.value)}
+                    disabled={generating}
+                    rows={3}
+                    placeholder="e.g. six students on IEPs, no lab space this week"
+                    className={INPUT_CLASS}
+                  />
+                </label>
+              </div>
+            </details>
+
+            {/* Two genuinely different outputs, one tab. Full Lesson is the
+                default because it is what most teachers opening this page
+                want; Quick Ideas is for the plan they are already writing. */}
+            <fieldset className="flex flex-col gap-2">
+              <legend className="text-sm font-medium text-ink">What do you want back?</legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {([
+                  ['full', 'Full Lesson', 'A complete lesson you can teach and edit'],
+                  ['ideas', 'Quick Ideas', '3-5 practical teaching ideas, briefly explained'],
+                ] as const).map(([value, label, hint]) => (
+                  <label
+                    key={value}
+                    className={`flex cursor-pointer gap-3 rounded-2xl border px-4 py-3 transition-colors ${
+                      form.kind === value ? 'border-forest bg-mint-tint/40' : 'border-hairline bg-cream hover:border-forest/40'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="lesson-output"
+                      value={value}
+                      checked={form.kind === value}
+                      onChange={() => set('kind', value)}
+                      disabled={generating}
+                      className="mt-1 h-4 w-4 shrink-0 accent-[#C4663A]"
+                    />
+                    <span className="flex flex-col">
+                      <span className="text-sm font-semibold text-forest">{label}</span>
+                      <span className="text-xs text-ink-soft">{hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
             {generating && (
               <div className="flex justify-center py-1 text-forest">
-                <ProgressRing progress={generateProgress} label="Drafting a sample day" hint="Usually about fifteen seconds." />
+                <ProgressRing
+                  progress={generateProgress}
+                  label={ideas ? 'Putting together ideas' : 'Building your lesson'}
+                  hint={ideas ? 'Usually about ten seconds.' : 'Usually about twenty seconds.'}
+                />
               </div>
             )}
-            <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={generating || !context.objective.trim()}
-              className="self-end rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
-            >
+            <button type="button" onClick={handleGenerate} disabled={generating || !canGenerate} className={`self-end ${PRIMARY_BUTTON}`}>
               {generating ? (
                 <span className="flex items-center gap-2">
-                  <Spinner /> Generating...
+                  <Spinner /> {ideas ? 'Generating...' : 'Building...'}
                 </span>
+              ) : ideas ? (
+                'Generate Ideas'
               ) : (
-                'Generate Sample Plan'
+                'Build My Lesson'
               )}
             </button>
           </div>
         ) : (
           <div className="flex flex-col gap-4">
             <PlanHeader plan={plan} />
-            <PartSections parts={planParts} />
+            {isFullLesson ? (
+              <LessonSections plan={plan} />
+            ) : isIdeas ? (
+              <QuickIdeasSections plan={plan} />
+            ) : (
+              <PartSections parts={legacyParts} />
+            )}
 
-            <p className="text-xs text-ink-soft">This is a sample for ideas — adjust it to fit your class.</p>
+            <p className="text-xs text-ink-soft">
+              {isIdeas
+                ? 'Ideas to pull into the plan you are writing — take the ones that fit your class.'
+                : 'A draft to edit, not a script. You know your class; change whatever needs changing.'}
+            </p>
 
-            {plan.deliveryCoaching && <DeliveryCoachingCard n={planParts.length + 1} coaching={plan.deliveryCoaching} planId={plan.id} />}
+            {isFullLesson && (
+              <>
+                <AdaptationTools plan={plan} busy={adaptation.busy} onAdapt={adaptation.adapt} />
+                <RevertNote plan={plan} onRevert={adaptation.revert} reverting={adaptation.reverting} />
+                {adaptation.error && <p className="text-sm text-terracotta-600">{adaptation.error}</p>}
+                {plan.pendingAdaptation && (
+                  <PendingAdaptationCard
+                    n={sections + 1}
+                    plan={plan}
+                    applying={adaptation.applying}
+                    onApply={adaptation.apply}
+                    onDiscard={adaptation.discard}
+                  />
+                )}
+              </>
+            )}
+
+            {plan.deliveryCoaching && (
+              <DeliveryCoachingCard
+                n={sections + (plan.pendingAdaptation ? 2 : 1)}
+                coaching={plan.deliveryCoaching}
+                planId={plan.id}
+              />
+            )}
             <WorkingRing
               active={deliveryLoading}
               estimatedMs={14000}
@@ -556,9 +1400,9 @@ function GeneratePanel() {
             />
             {deliveryError && <p className="text-sm text-terracotta-600">{deliveryError}</p>}
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <SaveButton plan={plan} onToggle={handleToggleSaved} />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-4">
+                <SaveButton plan={plan} onToggle={toggleSaved} />
                 <ShareButton onShare={() => shareLessonPlan(plan.id)} />
                 <Link
                   to={`/lesson-planning/${plan.id}/export`}
@@ -566,29 +1410,10 @@ function GeneratePanel() {
                 >
                   Download
                 </Link>
-                <button
-                  type="button"
-                  onClick={handlePresentationFeedback}
-                  disabled={deliveryLoading}
-                  className="text-sm font-medium text-ink-soft hover:text-terracotta-600 disabled:opacity-60"
-                >
-                  {deliveryLoading ? (
-                    <span className="flex items-center gap-2">
-                      <Spinner /> Getting feedback...
-                    </span>
-                  ) : plan.deliveryCoaching ? (
-                    'Regenerate ↻'
-                  ) : (
-                    'Get presentation & delivery feedback'
-                  )}
-                </button>
+                {!isIdeas && <DeliveryFeedbackButton plan={plan} loading={deliveryLoading} onClick={handlePresentationFeedback} />}
               </div>
-              <button
-                type="button"
-                onClick={handleNew}
-                className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90"
-              >
-                New Sample Plan
+              <button type="button" onClick={handleNew} className={PRIMARY_BUTTON}>
+                {isIdeas ? 'New Ideas' : 'New Lesson'}
               </button>
             </div>
           </div>
@@ -601,18 +1426,22 @@ function GeneratePanel() {
       </div>
 
       <PastList
-        title="Your sample plans"
+        title="Your lessons"
         items={allPlans.map(toPastItem)}
         activeId={plan?.id ?? null}
         loading={historyLoading}
-        emptyText="Sample plans you generate will show up here."
+        emptyText="Lessons and ideas you build will show up here."
         onOpen={handleOpenPast}
       />
     </div>
   )
 }
 
-function FeedbackPanel() {
+// ---------------------------------------------------------------------------
+// Improve a Lesson
+// ---------------------------------------------------------------------------
+
+function ImprovePanel() {
   const [planText, setPlanText] = useState('')
   const [plan, setPlan] = useState<LessonPlan | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -639,6 +1468,12 @@ function FeedbackPanel() {
 
   const [deliveryLoading, setDeliveryLoading] = useState(false)
   const [deliveryError, setDeliveryError] = useState<string | null>(null)
+
+  const adaptation = useAdaptation(plan, (updated) => {
+    setPlan(updated)
+    setAllPlans((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+  })
+  const toggleSaved = useSavedToggle(setAllPlans, setPlan)
 
   useEffect(() => {
     getLessonPlans({ mode: 'feedback' })
@@ -761,19 +1596,6 @@ function FeedbackPanel() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  async function handleToggleSaved(target: LessonPlan) {
-    const nextSaved = !target.saved
-    const apply = (p: LessonPlan) => (p.id === target.id ? { ...p, saved: nextSaved } : p)
-    setAllPlans((prev) => prev.map(apply))
-    if (plan?.id === target.id) setPlan((prev) => (prev ? { ...prev, saved: nextSaved } : prev))
-    try {
-      await setLessonPlanSaved(target.id, nextSaved)
-    } catch {
-      setAllPlans((prev) => prev.map((p) => (p.id === target.id ? { ...p, saved: !nextSaved } : p)))
-      if (plan?.id === target.id) setPlan((prev) => (prev ? { ...prev, saved: !nextSaved } : prev))
-    }
-  }
-
   const feedbackParts = plan
     ? presentParts([
         { title: 'Your plan', subtitle: 'What you shared', body: plan.planText },
@@ -781,14 +1603,16 @@ function FeedbackPanel() {
       ])
     : []
   const showRevision = !!plan?.suggestedRevision && !revisionDismissed
+  let n = feedbackParts.length
 
   return (
     <div className="flex flex-col gap-6">
       <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6">
         {!plan ? (
           <div className="flex flex-col gap-4">
-            <PanelHeader eyebrow="Lesson Planning" title="Get feedback">
-              Paste or write a plan you already have, or upload a file, and get coaching feedback on it.
+            <PanelHeader eyebrow="Planning Coach" title="Improve a lesson">
+              Paste or upload a plan you already have — a finished one, a partial one, or rough notes. Your learning
+              goal and the parts that work stay as they are.
             </PanelHeader>
 
             {extracting ? (
@@ -814,7 +1638,7 @@ function FeedbackPanel() {
                     Replace
                     <input
                       type="file"
-                      accept=".docx,.pdf,.pptx,.xlsx,.xls,.txt,.jpg,.jpeg,.png"
+                      accept={MATERIAL_ACCEPT}
                       className="hidden"
                       onChange={(e) => {
                         const selected = e.target.files?.[0]
@@ -833,23 +1657,24 @@ function FeedbackPanel() {
             {!extracting && !fileName && (
               <label className="flex flex-col gap-1.5">
                 <span className="text-sm font-medium text-ink">Your lesson plan</span>
+                <span className="text-xs text-ink-soft">A full plan, a half-written one, or the notes you were going to teach from.</span>
                 <textarea
                   value={planText}
                   onChange={(e) => setPlanText(e.target.value)}
                   disabled={submitting}
                   rows={8}
-                  placeholder="Paste or write your plan — Do Now, main activities, closure, etc."
-                  className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
+                  placeholder="Paste or write your plan — activities, questions, timings, whatever you have."
+                  className={INPUT_CLASS}
                 />
               </label>
             )}
             {!extracting && !fileName && (
               <label className="flex cursor-pointer items-center gap-1.5 self-start text-xs font-semibold text-ink-soft hover:text-forest">
                 <UploadIcon className="h-3.5 w-3.5" />
-                Or upload a .docx, .pdf, .pptx, .xlsx, .xls, .txt, .jpg, or .png file
+                Or upload a {MATERIAL_FORMATS} file
                 <input
                   type="file"
-                  accept=".docx,.pdf,.pptx,.xlsx,.xls,.txt,.jpg,.jpeg,.png"
+                  accept={MATERIAL_ACCEPT}
                   className="hidden"
                   onChange={(e) => {
                     const selected = e.target.files?.[0]
@@ -867,7 +1692,7 @@ function FeedbackPanel() {
                   onChange={(e) => setPlanText(e.target.value)}
                   disabled={submitting}
                   rows={8}
-                  className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
+                  className={INPUT_CLASS}
                 />
               </label>
             )}
@@ -879,19 +1704,13 @@ function FeedbackPanel() {
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={submitting || !canSubmit}
-
-              className="self-end rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
-            >
+            <button type="button" onClick={handleSubmit} disabled={submitting || !canSubmit} className={`self-end ${PRIMARY_BUTTON}`}>
               {submitting ? (
                 <span className="flex items-center gap-2">
-                  <Spinner /> Getting feedback...
+                  <Spinner /> Reading your plan...
                 </span>
               ) : (
-                'Get Feedback'
+                'Improve My Lesson'
               )}
             </button>
           </div>
@@ -899,6 +1718,20 @@ function FeedbackPanel() {
           <div className="flex flex-col gap-4">
             <PlanHeader plan={plan} />
             <PartSections parts={feedbackParts} />
+
+            <AdaptationTools plan={plan} busy={adaptation.busy} onAdapt={adaptation.adapt} />
+            <RevertNote plan={plan} onRevert={adaptation.revert} reverting={adaptation.reverting} />
+            {adaptation.error && <p className="text-sm text-terracotta-600">{adaptation.error}</p>}
+            {plan.pendingAdaptation && (
+              <PendingAdaptationCard
+                n={++n}
+                plan={plan}
+                applying={adaptation.applying}
+                onApply={adaptation.apply}
+                onDiscard={adaptation.discard}
+              />
+            )}
+
             <CoachingChat
               messages={plan.conversation.slice(2)}
               sending={chatSending}
@@ -910,16 +1743,14 @@ function FeedbackPanel() {
             />
             {showRevision && plan.suggestedRevision && (
               <SuggestedRevisionCard
-                n={feedbackParts.length + 1}
+                n={++n}
                 text={plan.suggestedRevision}
                 applying={applyingRevision}
                 onApply={handleApplyRevision}
                 onDismiss={() => setRevisionDismissed(true)}
               />
             )}
-            {plan.deliveryCoaching && (
-              <DeliveryCoachingCard n={feedbackParts.length + (showRevision ? 2 : 1)} coaching={plan.deliveryCoaching} planId={plan.id} />
-            )}
+            {plan.deliveryCoaching && <DeliveryCoachingCard n={++n} coaching={plan.deliveryCoaching} planId={plan.id} />}
             <WorkingRing
               active={deliveryLoading}
               estimatedMs={14000}
@@ -928,9 +1759,9 @@ function FeedbackPanel() {
               className="text-forest"
             />
             {deliveryError && <p className="text-sm text-terracotta-600">{deliveryError}</p>}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <SaveButton plan={plan} onToggle={handleToggleSaved} />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-4">
+                <SaveButton plan={plan} onToggle={toggleSaved} />
                 <ShareButton onShare={() => shareLessonPlan(plan.id)} />
                 <Link
                   to={`/lesson-planning/${plan.id}/export`}
@@ -938,28 +1769,9 @@ function FeedbackPanel() {
                 >
                   Download
                 </Link>
-                <button
-                  type="button"
-                  onClick={handlePresentationFeedback}
-                  disabled={deliveryLoading}
-                  className="text-sm font-medium text-ink-soft hover:text-terracotta-600 disabled:opacity-60"
-                >
-                  {deliveryLoading ? (
-                    <span className="flex items-center gap-2">
-                      <Spinner /> Getting feedback...
-                    </span>
-                  ) : plan.deliveryCoaching ? (
-                    'Regenerate ↻'
-                  ) : (
-                    'Get presentation & delivery feedback'
-                  )}
-                </button>
+                <DeliveryFeedbackButton plan={plan} loading={deliveryLoading} onClick={handlePresentationFeedback} />
               </div>
-              <button
-                type="button"
-                onClick={handleNew}
-                className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90"
-              >
+              <button type="button" onClick={handleNew} className={PRIMARY_BUTTON}>
                 New Plan
               </button>
             </div>
@@ -973,16 +1785,20 @@ function FeedbackPanel() {
       </div>
 
       <PastList
-        title="Your plan feedback"
+        title="Plans you've improved"
         items={allPlans.map(toPastItem)}
         activeId={plan?.id ?? null}
         loading={historyLoading}
-        emptyText="Plans you get feedback on will show up here."
+        emptyText="Plans you bring here will show up in this list."
         onOpen={handleOpenPast}
       />
     </div>
   )
 }
+
+// ---------------------------------------------------------------------------
+// Review Slides
+// ---------------------------------------------------------------------------
 
 function PresentationPanel() {
   const [file, setFile] = useState<File | null>(null)
@@ -1015,6 +1831,8 @@ function PresentationPanel() {
   const [originalFile, setOriginalFile] = useState<{ planId: string; file: File } | null>(null)
   const [applyingRevision, setApplyingRevision] = useState(false)
   const [revisionDismissed, setRevisionDismissed] = useState(false)
+
+  const toggleSaved = useSavedToggle(setAllPlans, setPlan)
 
   useEffect(() => {
     getLessonPlans({ mode: 'presentation' })
@@ -1069,7 +1887,7 @@ function PresentationPanel() {
       setChatDraft('')
       setChatError(null)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not review this presentation. Please try again.')
+      setError(e instanceof Error ? e.message : 'Could not review these slides. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -1124,7 +1942,7 @@ function PresentationPanel() {
     setRevisionDismissed(false)
   }
 
-  // Reopens an earlier plan in full, follow-up conversation included.
+  // Reopens an earlier review in full, follow-up conversation included.
   function handleOpenPast(id: string) {
     const past = allPlans.find((p) => p.id === id)
     if (!past) return
@@ -1134,19 +1952,6 @@ function PresentationPanel() {
     setChatError(null)
     setRevisionDismissed(false)
     window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  async function handleToggleSaved(target: LessonPlan) {
-    const nextSaved = !target.saved
-    const apply = (p: LessonPlan) => (p.id === target.id ? { ...p, saved: nextSaved } : p)
-    setAllPlans((prev) => prev.map(apply))
-    if (plan?.id === target.id) setPlan((prev) => (prev ? { ...prev, saved: nextSaved } : prev))
-    try {
-      await setLessonPlanSaved(target.id, nextSaved)
-    } catch {
-      setAllPlans((prev) => prev.map((p) => (p.id === target.id ? { ...p, saved: !nextSaved } : p)))
-      if (plan?.id === target.id) setPlan((prev) => (prev ? { ...prev, saved: !nextSaved } : prev))
-    }
   }
 
   const originalForPlan = plan && originalFile?.planId === plan.id ? originalFile.file : null
@@ -1159,9 +1964,9 @@ function PresentationPanel() {
       <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6">
         {!plan ? (
           <div className="flex flex-col gap-4">
-            <PanelHeader eyebrow="Lesson Planning" title="Review a presentation">
-              Upload a presentation you've already built — get feedback on grade-level fit, visuals, ideas, length,
-              and how to actually run it in class.
+            <PanelHeader eyebrow="Planning Coach" title="Review slides">
+              Upload slides you've already built — get feedback on grade-level fit, visuals, ideas, length,
+              and how to actually run them in class.
             </PanelHeader>
 
             {!extractedText ? (
@@ -1170,7 +1975,7 @@ function PresentationPanel() {
                   <ProgressRing
                     progress={extractProgress}
                     size={84}
-                    label="Reading your presentation"
+                    label="Reading your slides"
                     hint="Pulling the text and slide images out — this only takes a moment."
                     className="text-forest"
                   />
@@ -1221,7 +2026,7 @@ function PresentationPanel() {
                   onChange={(e) => setGradeLevel(e.target.value)}
                   disabled={submitting}
                   placeholder="e.g. 9th grade"
-                  className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
+                  className={INPUT_CLASS}
                 />
               </label>
               <label className="flex flex-col gap-1.5">
@@ -1232,41 +2037,35 @@ function PresentationPanel() {
                   onChange={(e) => setSubject(e.target.value)}
                   disabled={submitting}
                   placeholder="e.g. Biology"
-                  className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
+                  className={INPUT_CLASS}
                 />
               </label>
             </div>
             <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-ink">What's this presentation about? (optional)</span>
+              <span className="text-sm font-medium text-ink">What are these slides about? (optional)</span>
               <input
                 type="text"
                 value={objective}
                 onChange={(e) => setObjective(e.target.value)}
                 disabled={submitting}
                 placeholder="e.g. Introducing photosynthesis"
-                className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
+                className={INPUT_CLASS}
               />
             </label>
 
             {submitting && (
               <div className="flex justify-center py-1 text-forest">
-                <ProgressRing progress={reviewProgress} label="Reading your presentation" hint="Usually about twenty seconds." />
+                <ProgressRing progress={reviewProgress} label="Reading your slides" hint="Usually about twenty seconds." />
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={submitting || !extractedText}
-
-              className="self-end rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
-            >
+            <button type="button" onClick={handleSubmit} disabled={submitting || !extractedText} className={`self-end ${PRIMARY_BUTTON}`}>
               {submitting ? (
                 <span className="flex items-center gap-2">
                   <Spinner /> Reviewing...
                 </span>
               ) : (
-                'Review Presentation'
+                'Review My Slides'
               )}
             </button>
           </div>
@@ -1274,12 +2073,12 @@ function PresentationPanel() {
           <div className="flex flex-col gap-4">
             <div className="-mx-6 -mt-6 bg-forest px-6 py-6 text-cream sm:px-8">
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">
-                Presentation review
+                Slide review
                 {plan.subject ? ` · ${plan.subject}` : ''}
                 {plan.gradeLevel ? ` · ${plan.gradeLevel}` : ''}
               </p>
               <p className="mt-2 font-heading text-xl font-bold leading-snug text-cream">
-                {plan.objective || plan.fileName || 'Your presentation'}
+                {plan.objective || plan.fileName || 'Your slides'}
               </p>
               {plan.slideCount != null && (
                 <p className="mt-1 text-xs text-cream/70">
@@ -1292,11 +2091,11 @@ function PresentationPanel() {
 
             <NumberedCard
               n={reviewParts.length + 1}
-              title="Create an improved presentation"
-              subtitle="Apply every recommendation above and build it as a new deck"
+              title="Create improved slides"
+              subtitle="Apply every recommendation above and build them as a new deck"
             >
               <p className="text-sm leading-relaxed text-ink-soft">
-                Wivoza rebuilds your presentation with the clearer wording, visuals, pacing checks, and length changes recommended
+                Wivoza rebuilds your slides with the clearer wording, visuals, pacing checks, and length changes recommended
                 above, in a design that fits your subject. You'll preview it before you download.
               </p>
               {plan && originalForPlan ? (
@@ -1327,7 +2126,7 @@ function PresentationPanel() {
                 className="mt-3 flex items-center gap-2.5 rounded-xl border border-hairline bg-white px-4 py-2.5 text-sm font-semibold text-forest shadow-sm transition-colors hover:border-forest/50 hover:bg-cream"
               >
                 <span className="flex h-7 min-w-7 items-center justify-center rounded-md bg-[#D24726] px-1 text-[11px] font-extrabold text-white">P</span>
-                Create improved presentation
+                Create improved slides
               </button>
             </NumberedCard>
 
@@ -1350,9 +2149,9 @@ function PresentationPanel() {
               />
             )}
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <SaveButton plan={plan} onToggle={handleToggleSaved} />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-4">
+                <SaveButton plan={plan} onToggle={toggleSaved} />
                 <ShareButton onShare={() => shareLessonPlan(plan.id)} />
                 <Link
                   to={`/lesson-planning/${plan.id}/export`}
@@ -1361,12 +2160,8 @@ function PresentationPanel() {
                   Download
                 </Link>
               </div>
-              <button
-                type="button"
-                onClick={handleNew}
-                className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90"
-              >
-                New Presentation
+              <button type="button" onClick={handleNew} className={PRIMARY_BUTTON}>
+                New Slides
               </button>
             </div>
           </div>
@@ -1390,11 +2185,11 @@ function PresentationPanel() {
       )}
 
       <PastList
-        title="Your presentation reviews"
+        title="Your slide reviews"
         items={allPlans.map(toPastItem)}
         activeId={plan?.id ?? null}
         loading={historyLoading}
-        emptyText="Presentations you review will show up here."
+        emptyText="Slides you review will show up here."
         onOpen={handleOpenPast}
       />
     </div>

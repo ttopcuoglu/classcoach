@@ -22,7 +22,7 @@ import {
   GuideShell,
 } from '../components/featureGuide'
 
-// Teacher's guide to Lesson Planning. Layout and section order come from
+// Teacher's guide to Planning Coach. Layout and section order come from
 // components/featureGuide.tsx; everything below is content only.
 
 const BENEFITS = [
@@ -30,9 +30,11 @@ const BENEFITS = [
   { title: 'Get a second read before your students give you one', body: 'Tuesday’s class is a rough place to discover the gap.' },
   { title: 'Find where it’ll wobble', body: 'Usually a transition, the timing, or the part that’s genuinely hard to explain.' },
   { title: 'Get the delivery, not just the plan', body: 'Opening hook, pacing, engagement checkpoints, how to close it.' },
+  { title: 'Adapt it without rewriting it', body: 'Simplify, add challenge, get more students talking, or fit the forty minutes you actually have.' },
   { title: 'See a revision without committing to it', body: 'A rewritten version sits beside yours until you choose to use it.' },
   { title: 'Keep the objective in frame', body: 'Give it your standard and objective and everything comes back tied to them.' },
   { title: 'Plan in the time you actually have', body: 'Ten minutes at a desk, not a protected planning period you never get.' },
+  { title: 'Start from what you already made', body: 'Upload the slides, the reading, or the worksheet and the lesson is built around it.' },
 ]
 
 const MOMENTS = [
@@ -40,6 +42,7 @@ const MOMENTS = [
   'You wrote a plan at 10pm and you’re not sure about it',
   'This lesson flopped last year and it’s coming back around',
   'You have the objective and the standard but no shape yet',
+  'An assembly cut the period to thirty minutes and the lesson was built for fifty',
   'You built a deck for a class that hasn’t seen it yet',
   'It’s a new prep, or a grade level you haven’t taught',
   'You need sub plans that will actually hold',
@@ -48,21 +51,21 @@ const MOMENTS = [
 const LANES = [
   {
     icon: SparkleIcon,
-    name: 'Generate Ideas',
-    when: 'You’re starting from nothing.',
+    name: 'Build a Lesson',
+    when: 'You’re starting from a topic, or from material you already have.',
     detail:
-      'Give it an objective and get back a sample single day: Do Now, Agenda, Closure, a higher-order-thinking component, and Homework — plus coaching on how to deliver it.',
+      'Say what you’re teaching — “introducing cells” is enough — and how long you have. Get back a full lesson: objective and success criteria, a timed sequence with what you say and what students do, materials, checks for understanding, likely misconceptions, and an exit ticket. Or ask for Quick Ideas instead: three to five practical moves, briefly explained.',
   },
   {
     icon: ChecklistIcon,
-    name: 'Get Feedback',
-    when: 'You already wrote something.',
+    name: 'Improve a Lesson',
+    when: 'You already wrote something — finished, half-done, or rough notes.',
     detail:
-      'Paste or write your plan and get coaching on it, an open follow-up chat, and — if you want one — a full Suggested Revision you can use or dismiss.',
+      'Paste or upload your plan and get coaching on it, an open follow-up chat, and — if you want one — a full Suggested Revision you can use or dismiss. Your learning goal and the parts that work stay as they are.',
   },
   {
     icon: UploadIcon,
-    name: 'Review a Presentation',
+    name: 'Review Slides',
     when: 'The slides are built.',
     detail:
       'Upload a .pptx or .pdf and get a read on grade-level fit, visuals, ideas, length, and implementation. Export Google Slides or Keynote as PDF first.',
@@ -75,12 +78,20 @@ const STEPS = [
     body: 'Blank page, written draft, or finished deck. All three live behind the same tab and you can move between them.',
   },
   {
-    title: 'Give it an objective',
-    body: 'That’s the only required field anywhere. Unit name, essential question, standard, subject, and grade level are all optional — but every one you add makes what comes back more specific to your class.',
+    title: 'Say what you’re teaching, and how long you have',
+    body: 'A topic is enough — no formally written objective required. Grade level and subject come prefilled from your profile and stay editable. Standard, unit, essential question and anything else sit behind “More details — optional,” and none of them block anything.',
+  },
+  {
+    title: 'Or upload what you already have',
+    body: 'Slides, a reading, a worksheet, an activity. Wivoza reads it, fills in what it appears to be about for you to check, and builds the lesson around your material rather than replacing it.',
   },
   {
     title: 'Read it as a colleague’s draft, not an answer key',
     body: 'A generated plan says so on the card: it’s a sample for ideas, meant to be adjusted. Feedback names what’s working before what isn’t, and you can keep asking follow-ups until it’s useful.',
+  },
+  {
+    title: 'Adapt it to the class you actually have',
+    body: 'Simplify, Add Challenge, Increase Participation, or Adjust Time. Each one rewrites the lesson and shows you the result first; your current version stays until you choose it, and your original is kept however many adaptations you apply.',
   },
   {
     title: 'Take the parts that fit',
@@ -88,7 +99,7 @@ const STEPS = [
   },
   {
     title: 'Turn it into a presentation',
-    body: 'Review a Presentation can build an improved PowerPoint that applies every recommendation, and the delivery coaching on a plan can become a classroom-ready deck. Preview it, then download. Attach your original file and your own pictures stay on their slides.',
+    body: 'Review Slides can build an improved PowerPoint that applies every recommendation, and the delivery coaching on a plan can become a classroom-ready deck. Preview it, then download. Attach your original file and your own pictures stay on their slides.',
   },
 ]
 
@@ -96,7 +107,7 @@ const DELIVERY = ['Opening hook', 'Pacing & timing', 'Engagement checkpoints', '
 
 const STORY = [
   'Ms. Park writes Tuesday’s ELA plan on Sunday night: symbolism in the novel they’re halfway through. It looks fine. She can’t say why it doesn’t feel finished.',
-  'She pastes it into Get Feedback. The coaching names something she hadn’t seen — her We Do does almost all of the analytical work, and then the You Do asks students to find and defend a symbol on their own. The jump between them is bigger than one class period.',
+  'She pastes it into Improve a Lesson. The coaching names something she hadn’t seen — her We Do does almost all of the analytical work, and then the You Do asks students to find and defend a symbol on their own. The jump between them is bigger than one class period.',
   'In the follow-up chat she asks for a revision. It comes back as a Suggested Revision beside her plan: split the You Do, give students one identified symbol to defend before asking them to find their own.',
   'She takes that part. She dismisses the rest — the suggested closure is generic, and hers ties back to a discussion the class had in September that no model could know about.',
   'Tuesday goes better, and specifically at the seam the coaching flagged. Students who’d have stalled at the independent step had a rung to stand on first.',
@@ -127,32 +138,38 @@ const DEBRIEF_ACTIONS = [
 function SamplePlan() {
   return (
     <GuideSample
-      title="Generate Ideas · Sample plan"
-      caption="An illustration of a generated single day. It&apos;s a starting point to adapt — the card says so in the app too."
+      title="Build a Lesson · 45 minutes, guided practice"
+      caption="An illustration of a built lesson. It&apos;s a draft to edit — the card says so in the app too."
     >
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Do Now</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Objective</p>
         <p className="mt-1.5 text-sm text-ink">
-          Three review questions on yesterday&apos;s vocabulary, projected as students enter. 5 minutes.
+          Students will be able to solve two-step equations and explain why each step keeps the equation balanced.
         </p>
       </div>
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Agenda</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-forest">The lesson</p>
         <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">
-          {'I Do (10 min) — model one worked example, thinking aloud at each decision.' +
-            '\nWe Do (12 min) — a second example together, students calling out the next step.' +
-            '\nYou Do (15 min) — pairs work three problems; you circulate and check.'}
+          {'1. Warm-up (5 min) — three one-step equations on the board as students enter.' +
+            '\n2. Model one (10 min) — You: work one example aloud, naming the question at each step. Students: copy and annotate why.' +
+            '\n3. Together (12 min) — You: take the next step from the room. Students: call the move before you make it.' +
+            '\n4. On their own (13 min) — Students: three problems in pairs, then one alone. You: circulate.' +
+            '\n5. Exit ticket (5 min).'}
         </p>
       </div>
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-forest">Higher-order thinking</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Likely misconception</p>
         <p className="mt-1.5 text-sm text-ink">
-          Ask students to find the step where a common mistake happens, and explain why it&apos;s tempting.
+          Students often undo the operations in the order they appear rather than in reverse. Put a worked
+          wrong answer on the board and ask which step broke the balance.
         </p>
       </div>
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Closure</p>
-        <p className="mt-1.5 text-sm text-ink">Exit ticket: one problem, plus a sentence on which step was hardest.</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Exit ticket</p>
+        <p className="mt-1.5 text-sm text-ink">
+          One problem, plus a sentence on which step was hardest. A strong answer names the step and why;
+          an answer that only gives the number tells you to model the reasoning again tomorrow.
+        </p>
       </div>
       <div className="rounded-xl border border-hairline bg-cream p-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-forest">Presentation &amp; Delivery</p>
@@ -170,9 +187,9 @@ export default function GuideLessonPlanning() {
     <GuideShell appTo="/lesson-planning">
       <GuideHero
         icon={LessonPlanIcon}
-        title="Lesson Planning"
+        title="Planning Coach"
         paragraphs={[
-          'A blank page and a plan you’re unsure about are two different problems. Lesson Planning has a tool for each — and a third for the slides you already built.',
+          'A blank page and a plan you’re unsure about are two different problems. Planning Coach has a tool for each — and a third for the slides you already built.',
           'None of it writes your lessons for you. It gives you something to react to when you’re stuck, an honest read when you’re not sure, and a revision you can take or leave. The plan stays yours.',
         ]}
       />
@@ -281,7 +298,7 @@ export default function GuideLessonPlanning() {
           </div>
 
           <div className="mt-8 flex flex-col items-start gap-3">
-            <GuidePrimaryButton to="/lesson-planning">Plan a Lesson</GuidePrimaryButton>
+            <GuidePrimaryButton to="/lesson-planning">Open Planning Coach</GuidePrimaryButton>
             <p className="text-xs text-ink-soft">
               Nothing is ever applied to your plan automatically. Save, share as a read-only link, or download
               any of it.
@@ -332,7 +349,7 @@ export default function GuideLessonPlanning() {
                 {
                   icon: ChecklistIcon,
                   title: 'Already wrote it? Start there',
-                  body: 'Get Feedback on your own plan is more useful than generating a new one you’ll have to rewrite anyway.',
+                  body: 'Improve a Lesson on your own plan is more useful than building a new one you’ll have to rewrite anyway.',
                 },
                 {
                   icon: TargetIcon,
@@ -361,7 +378,7 @@ export default function GuideLessonPlanning() {
             </p>
 
             <div className="mt-7 border-t border-hairline pt-6">
-              <GuidePrimaryButton to="/lesson-planning">Plan a Lesson</GuidePrimaryButton>
+              <GuidePrimaryButton to="/lesson-planning">Open Planning Coach</GuidePrimaryButton>
             </div>
           </div>
         </GuideSection>
@@ -437,7 +454,7 @@ export default function GuideLessonPlanning() {
         title="Somebody should read it before your students do."
         body="Ten minutes of honest feedback on Sunday is worth more than an hour of rewriting on Tuesday."
         ctaTo="/lesson-planning"
-        ctaLabel="Plan a Lesson"
+        ctaLabel="Open Planning Coach"
       />
     </GuideShell>
   )
