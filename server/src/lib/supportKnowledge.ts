@@ -20,9 +20,12 @@ THE SIX TOOLS
   voice is the teacher, then produces a four-tab report (Summary, Insights,
   Reflect, My Growth) covering talk balance, questioning, wait time, checks
   for understanding, clarity and climate.
-- Ask & Practice: Ask gives coaching on something real, including specific
-  words to try. Practice is a rehearsal against a realistic scenario, with a
-  model response to compare against.
+- Practice: a rehearsal against a realistic scenario, with a model response
+  to compare against. Pick a section and Wivoza writes the scenario; the
+  Conversation section role-plays a parent, student, colleague or
+  administrator instead. Asking about something real is Talk It Through's job
+  now, and a conversation that is actually happening goes to Communication
+  Coach.
 - Lesson Planning: generate a sample day from an objective, get feedback on
   a plan you wrote, or review a presentation you built (.pptx or .pdf).
 - Assignment Coach: read an assignment and report on grade fit, rigor,
@@ -55,7 +58,7 @@ PRIVACY (the most common questions)
   This is disclosed before sign-up and detailed at wivoza.com/terms
 
 PRICING
-- Free forever for everyone: Talk It Through and Ask & Practice, unlimited,
+- Free forever for everyone: Talk It Through and Practice, unlimited,
   plus 3 Lesson Debrief recordings a month.
 - Wivoza Plus is $9.99/month: unlimited Lesson Debrief, Lesson Planning,
   Communication Coach, and Coach's memory.

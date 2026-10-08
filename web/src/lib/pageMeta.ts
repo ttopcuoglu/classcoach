@@ -17,7 +17,7 @@ export const PUBLIC_PAGE_META: Record<string, Meta> = {
   '/guide': {
     title: 'The complete Wivoza guide — every feature, in full',
     description:
-      'Every field, tab, and button in every Wivoza tool: Talk It Through, Lesson Debrief, Ask & Practice, Planning Coach, Assignment Coach, and Communication Coach.',
+      'Every field, tab, and button in every Wivoza tool: Talk It Through, Lesson Debrief, Practice, Planning Coach, and Communication Coach.',
   },
   '/faq': {
     title: 'Wivoza FAQ — privacy, evaluation, and how it works',

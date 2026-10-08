@@ -20,7 +20,7 @@ const OFFER = [
     badge: 'bg-terracotta text-cream',
     card: 'bg-peach-tint/50',
     title: 'Every teacher gets Plus',
-    body: 'Unlimited Lesson Debrief, Planning Coach, Communication Coach, and Coach’s memory — on top of Talk It Through and Ask & Practice. Each teacher’s account stays their own, even if they change schools.',
+    body: 'Unlimited Lesson Debrief, Planning Coach, Communication Coach, and Coach’s memory — on top of Talk It Through and Practice. Each teacher’s account stays their own, even if they change schools.',
   },
   {
     icon: ChartBarIcon,

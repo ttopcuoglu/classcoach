@@ -28,7 +28,7 @@ const PAID_MONTHLY_LIMITS: Record<FeatureArea, number> = {
 const UPGRADE_MESSAGES: Record<FeatureArea, string> = {
   lesson_debrief: "You've used your 3 free Lesson Debrief recordings this month. Upgrade to Wivoza Plus in Profile & Settings for unlimited recordings.",
   lesson_planning: 'Lesson Planning is part of Wivoza Plus. Upgrade in Profile & Settings to unlock it.',
-  communications: 'Messages is part of Wivoza Plus. Upgrade in Profile & Settings to unlock it.',
+  communications: 'Communication Coach is part of Wivoza Plus. Upgrade in Profile & Settings to unlock it.',
 }
 
 // A paid teacher who reaches the soft ceiling must never be told to upgrade —
@@ -41,7 +41,7 @@ const PAID_CEILING_MESSAGES: Record<FeatureArea, string> = {
   lesson_planning:
     "You've used this month's Lesson Planning sessions. This resets on the 1st — get in touch if you need more before then.",
   communications:
-    "You've used this month's Messages. This resets on the 1st — get in touch if you need more before then.",
+    "You've used this month's Communication Coach. This resets on the 1st — get in touch if you need more before then.",
 }
 
 export function startOfCurrentMonth(): Date {

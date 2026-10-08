@@ -92,7 +92,7 @@ const MOMENTS = [
     ],
   },
   {
-    // Not "Communicate": Ask & Practice is mostly about classroom moments —
+    // Not "Communicate": Practice is mostly about classroom moments —
     // resistance, disruption, disengagement — not messages to adults.
     moment: 'Handle the hard moments',
     when: 'When it gets difficult — find the words, then practice them.',
@@ -100,9 +100,9 @@ const MOMENTS = [
       {
         icon: ChatBubbleIcon,
         tint: 'bg-mint-tint text-forest',
-        title: 'Ask & Practice',
+        title: 'Practice',
         slug: 'ask-practice',
-        description: 'Ask a straight question or rehearse a hard moment, judgment-free.',
+        description: 'Rehearse a hard moment — a classroom situation or a conversation — judgment-free.',
       },
       {
         icon: MailIcon,
@@ -789,7 +789,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                 </li>
                 <li className="flex items-start gap-2.5">
                   <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-forest" />
-                  Unlimited Ask &amp; Practice
+                  Unlimited Practice
                 </li>
                 <li className="flex items-start gap-2.5">
                   <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-forest" />

@@ -461,7 +461,7 @@ function FilterBar({
       {(gradeBand || subject) && (
         <p className="-mt-2 text-xs text-ink-soft">
           Grade band and subject filters only apply to Lesson Debrief data — usage counts elsewhere (Try It Out,
-          Communications, Ask &amp; Practice) don&rsquo;t have a grade/subject dimension to filter by.
+          Communications, Practice) don&rsquo;t have a grade/subject dimension to filter by.
         </p>
       )}
 
