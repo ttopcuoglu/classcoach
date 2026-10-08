@@ -28,7 +28,8 @@ import type { ChatMessage } from '../lib/coachingChat.ts'
 import { buildExperienceContextBlock } from '../lib/experience.ts'
 import { extractTag, stripTag } from '../lib/extractTag.ts'
 import { buildFollowUpContextBlock, checkInQuestionFor, nextCheckInDate } from '../lib/followUps.ts'
-import { TALK_SYSTEM_PROMPT, TALK_TAKEAWAY_SYSTEM_PROMPT, trimIfTruncated } from '../routes/debrief.ts'
+import { trimIfTruncated } from '../lib/coachStream.ts'
+import { TALK_SYSTEM_PROMPT, TALK_TAKEAWAY_SYSTEM_PROMPT } from '../routes/debrief.ts'
 
 const EXPERIENCE_LEVEL = 'established'
 let truncatedCoachReplies = 0

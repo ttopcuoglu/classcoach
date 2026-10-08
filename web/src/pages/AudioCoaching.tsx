@@ -20,7 +20,7 @@ import {
   getAudioSession,
   getAudioSessions,
   getProfile,
-  sendReflectMessage,
+  streamReflectMessage,
   summarizeReflectConversation,
   tagSpeakers,
   startTranscription,
@@ -2280,6 +2280,9 @@ function ReportPanel({
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reflectSending, setReflectSending] = useState(false)
+  // Coach's reply as it is written, so the teacher reads the first sentence
+  // while the rest is still coming instead of watching an indicator.
+  const [reflectStreaming, setReflectStreaming] = useState<string | null>(null)
   const [reflectError, setReflectError] = useState<{ kind: ReflectChatErrorKind; message: string } | null>(null)
   const [reflectDraft, setReflectDraft] = useState('')
   const [summarizing, setSummarizing] = useState(false)
@@ -2332,13 +2335,16 @@ function ReportPanel({
     setReflectError(null)
     try {
       const context = focus ? [`Start the conversation by asking about ${focus}.`, ...reflectContext] : reflectContext
-      const updated = await sendReflectMessage(session.id, { context, spoken })
+      const updated = await streamReflectMessage(session.id, { context, spoken }, (sentence) =>
+        setReflectStreaming((prev) => (prev ? `${prev} ${sentence}` : sentence)),
+      )
       onUpdate({ ...session, ...updated })
     } catch (err) {
       const kind = (err as { kind?: ReflectChatErrorKind })?.kind ?? 'other'
       setReflectError({ kind, message: (err as Error).message })
     } finally {
       setReflectSending(false)
+      setReflectStreaming(null)
     }
   }
 
@@ -2353,11 +2359,11 @@ function ReportPanel({
     setReflectError(null)
     if (!usingOverride) setReflectDraft('')
     try {
-      const updated = await sendReflectMessage(session.id, {
-        message: trimmed,
-        context: [...extraContext, ...reflectContext],
-        spoken,
-      })
+      const updated = await streamReflectMessage(
+        session.id,
+        { message: trimmed, context: [...extraContext, ...reflectContext], spoken },
+        (sentence) => setReflectStreaming((prev) => (prev ? `${prev} ${sentence}` : sentence)),
+      )
       onUpdate({ ...session, ...updated })
     } catch (err) {
       const kind = (err as { kind?: ReflectChatErrorKind })?.kind ?? 'other'
@@ -2365,6 +2371,7 @@ function ReportPanel({
       if (!usingOverride) setReflectDraft(trimmed)
     } finally {
       setReflectSending(false)
+      setReflectStreaming(null)
     }
   }
 
@@ -2739,6 +2746,7 @@ function ReportPanel({
           redirectionMetric={redirectionMetric}
           conversation={session.reflectConversation}
           sending={reflectSending}
+          streamingReply={reflectStreaming}
           reflectError={reflectError}
           draft={reflectDraft}
           onDraftChange={setReflectDraft}
@@ -3469,6 +3477,7 @@ function ReflectTab({
   redirectionMetric,
   conversation,
   sending,
+  streamingReply,
   reflectError,
   draft,
   onDraftChange,
@@ -3502,6 +3511,8 @@ function ReflectTab({
   redirectionMetric: { state: string }
   conversation: AudioReflectMessage[] | null
   sending: boolean
+  /// Coach's reply as it is being written, before the saved turn replaces it.
+  streamingReply: string | null
   reflectError: { kind: ReflectChatErrorKind; message: string } | null
   draft: string
   onDraftChange: (v: string) => void
@@ -4156,13 +4167,15 @@ function ReflectTab({
                   <p className="mt-1">{userTranscript}</p>
                 </div>
               )}
-              {lastAssistant && (
+              {(streamingReply ?? lastAssistant?.text) && (
                 <div className="rounded-xl border border-hairline bg-cream px-4 py-2.5 text-sm whitespace-pre-wrap text-ink">
                   <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Coach</p>
-                  <p className="mt-1">{lastAssistant.text}</p>
+                  <p className="mt-1">{streamingReply ?? lastAssistant?.text}</p>
                 </div>
               )}
-              <ThinkingIndicator active={sending} />
+              {/* Only until the first sentence lands — after that the words
+                  themselves are the progress. */}
+              <ThinkingIndicator active={sending && !streamingReply} />
 
               {lastAssistant && !sending && (
                 <div className="flex flex-wrap items-center gap-2">

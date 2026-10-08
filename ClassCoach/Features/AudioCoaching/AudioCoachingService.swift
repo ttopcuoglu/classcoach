@@ -146,6 +146,53 @@ enum AudioCoachingService {
         )
     }
 
+    private struct ReflectStreamFrame: Decodable {
+        let type: String
+        let text: String?
+        let session: AudioSession?
+        let error: String?
+    }
+
+    /// The same turn, streamed a sentence at a time — mirrors
+    /// `streamReflectMessage` in `web/src/lib/api.ts` and
+    /// `TalkToMeService.streamReply`. Reflect made the teacher watch a
+    /// progress ring until the whole reply existed while Talk It Through was
+    /// already reading its first sentence aloud; the sentences handed to
+    /// `onSentence` are exactly the text that ends up saved on the returned
+    /// session. A locked report, the turn cap and the daily limit are all
+    /// rejected before the stream starts, so they still arrive as the same
+    /// status codes `sendReflectMessage` throws.
+    static func streamReflectMessage(
+        sessionId: String,
+        message: String?,
+        context: [String],
+        spoken: Bool = false,
+        onSentence: @MainActor @escaping (String) -> Void
+    ) async throws -> AudioSession {
+        var result: AudioSession?
+        try await APIClient.shared.streamLines(
+            "/api/audio-sessions/\(sessionId)/reflect-chat/stream",
+            body: ReflectBody(message: message, context: context, spoken: spoken)
+        ) { line in
+            guard let data = line.data(using: .utf8),
+                  let frame = try? JSONDecoder().decode(ReflectStreamFrame.self, from: data) else { return }
+            switch frame.type {
+            case "sentence":
+                if let text = frame.text { await onSentence(text) }
+            case "done":
+                result = frame.session
+            case "error":
+                throw APIError.server(status: 502, message: frame.error ?? "Could not reach Coach. Please try again.")
+            default:
+                break
+            }
+        }
+        guard let result else {
+            throw APIError.server(status: 502, message: "Could not reach Coach. Please try again.")
+        }
+        return result
+    }
+
     struct ReflectSummary: Decodable {
         let strengths: String?
         let growthAreas: String?

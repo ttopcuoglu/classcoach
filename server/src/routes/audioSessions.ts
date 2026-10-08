@@ -13,6 +13,7 @@ import {
   MEMORY_UPDATE_TOKEN_BUFFER,
   shouldWriteMemory,
 } from '../lib/coachMemory.ts'
+import { streamCoachReply } from '../lib/coachStream.ts'
 import { buildExperienceContextBlock } from '../lib/experience.ts'
 import { CORE_COACHING_RULES, firstNameOf, TRANSCRIPT_RELIABILITY_NOTICE } from '../lib/coachPersona.ts'
 import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
@@ -240,6 +241,14 @@ and more hopeful about their own practice, not scrutinized. Be encouraging and s
 light touch of humor is welcome where it genuinely fits (a dry aside, a playful observation about the
 chaos of a classroom) — never at the teacher's expense, and never forced into a reply where it doesn't
 belong; a straight, warm reply beats a joke that doesn't land.
+
+Sound like a person talking, not a report being read out. Often, but not every time, start with a brief, genuine reaction to what they just said — a few words at most, then straight to the substance. Reach for whichever kind actually fits:
+- just taking it in: "Mm-hmm." "I see." "Yeah." "Right." "Got it."
+- feeling it with them: "Oof." "Ugh, that's rough." "Yeah, that's frustrating."
+- genuinely pleased: "Oh, nice!" "Okay, that's a win."
+- landing on something together: "Yeah, exactly." "Right, that tracks."
+- easing into the idea: "Okay, so..." "Honestly..." "Here's a thought."
+Better than any stock phrase is a reaction to the specific thing they said, in their own words — "Third period again, huh." "Twenty minutes on one slide? Oof." Use one of those when you can. Generic warm-ups ("That's a great question", "I hear you") are not reactions; they are padding, and they don't count toward your sentence limit either way. Contractions and everyday phrasing throughout, and let punctuation carry the rhythm.
 
 You're in Reflect mode: help the teacher notice and interpret what happened, don't prescribe a fix, and
 end with one genuine, open question. When you offer an interpretation rather than a plain fact, label it
@@ -893,6 +902,115 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
     console.error('[audio-sessions] reflect chat failed:', error)
     res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
   }
+})
+
+// The same conversation, streamed sentence by sentence. The route above stays
+// because builds already in teachers' hands call it; this one exists because
+// Reflect made the teacher watch a progress ring for the whole reply while
+// Talk It Through — the same Coach — has shown words as they were written for
+// weeks. See lib/coachStream.ts for the NDJSON framing and for why an
+// abandoned turn leaves nothing behind.
+//
+// Every guard the non-streaming route has runs here too, and all of them
+// before streamCoachReply writes the first byte: once the stream has begun
+// the status code is already sent and can no longer say 403, 409 or 429.
+audioSessionsRouter.post('/:id/reflect-chat/stream', async (req, res) => {
+  const gateStart = Date.now()
+  const { message, context, spoken } = req.body ?? {}
+  const safeContext: string[] = Array.isArray(context) ? context.filter((c) => typeof c === 'string') : []
+
+  const session = await prisma.audioSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  if (session.status === 'locked') {
+    res.status(403).json({ error: 'This report is locked and can no longer be edited.' })
+    return
+  }
+
+  const existing = (session.reflectConversation as unknown as ReflectMessage[] | null) ?? []
+  const isStart = existing.length === 0 && typeof message !== 'string'
+
+  if (!isStart && (typeof message !== 'string' || !message.trim())) {
+    res.status(400).json({ error: 'message is required' })
+    return
+  }
+
+  const userTurnCount = existing.filter((m) => m.role === 'user').length
+  if (!isStart && userTurnCount >= REFLECT_TURN_CAP) {
+    res.status(409).json({ error: "You've reached today's reflection limit for this session." })
+    return
+  }
+
+  const denied = await checkAndLogUsage(req.user!.userId, 'reflect_chat')
+  if (denied) {
+    res.status(429).json({ error: denied })
+    return
+  }
+
+  const trimmedMessage = typeof message === 'string' ? message.trim() : ''
+  const isSpoken = spoken === true
+
+  const user = await prisma.user.findUnique({
+    where: { id: req.user!.userId },
+    select: { coachMemory: true, coachMemoryEnabled: true, experienceLevel: true, name: true, talkVoice: true },
+  })
+  const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
+  // Memory is read every turn but rewritten only on some — see shouldWriteMemory.
+  // A start turn has no teacher message yet, so it has nothing to remember.
+  const writeMemory = memoryOn && shouldWriteMemory(isStart ? 0 : userTurnCount + 1)
+  // Same fallback as the non-streaming route: iOS never sent a teacher name,
+  // so the account's own name stands in.
+  const teacherName = firstNameOf(session.teacherName ?? user?.name)
+  const reflectPrompt = buildReflectSystemPrompt(safeContext, teacherName, isSpoken, isStart)
+
+  await streamCoachReply(res, 'reflect_chat', {
+    gateMs: Date.now() - gateStart,
+    // A spoken Reflect turn gets the same sentence-at-a-time synthesis Talk It
+    // Through gets, keyed on the teacher's own voice choice — there is one
+    // Coach, so it should not sound like two.
+    speak: isSpoken ? { voice: user?.talkVoice ?? undefined } : undefined,
+    system: cachedSystem(
+      reflectPrompt.stable,
+      memoryOn
+        ? `${reflectPrompt.volatile}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
+        : `${reflectPrompt.volatile}${buildExperienceContextBlock(user?.experienceLevel)}`,
+    ),
+    maxTokens: writeMemory ? 300 + MEMORY_UPDATE_TOKEN_BUFFER : 300,
+    // No word budget, matching the non-streaming route: Reflect's length is
+    // set by its prompt, and this reply is read on screen as well as heard.
+    messages: [
+      ...existing.map((m) => ({ role: m.role, content: m.text })),
+      { role: 'user' as const, content: isStart ? REFLECT_START_MESSAGE : trimmedMessage },
+    ],
+    safetyLabel: 'audioSessions.reflectChat',
+    // The saved record is an audio session, not a debrief.
+    recordKey: 'session',
+    persist: (reply) => {
+      // One timestamp for the pair, exactly as the non-streaming route writes
+      // it, and the teacher's turn is only stored alongside a reply they
+      // actually saw — an abandoned stream never reaches here.
+      const now = new Date().toISOString()
+      const newTurns: ReflectMessage[] = isStart
+        ? [{ role: 'assistant', text: reply, createdAt: now }]
+        : [
+            { role: 'user', text: trimmedMessage, createdAt: now },
+            { role: 'assistant', text: reply, createdAt: now },
+          ]
+      return prisma.audioSession.update({
+        where: { id: session.id },
+        data: { reflectConversation: [...existing, ...newTurns] },
+      })
+    },
+    afterPersist: writeMemory
+      ? async (rawText) => {
+          await persistMemoryUpdate(req.user!.userId, extractTag(rawText, 'memory_update'), user!.coachMemory)
+        }
+      : undefined,
+  })
 })
 
 audioSessionsRouter.post('/:id/reflect-summary', async (req, res) => {

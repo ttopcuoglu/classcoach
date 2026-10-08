@@ -23,6 +23,15 @@ struct ReflectTab: View {
     @State private var conversation: [AudioReflectMessage]
     @State private var draft = ""
     @State private var sending = false
+    /// Coach's reply as it is being written, sentence by sentence. The saved
+    /// conversation only arrives with the stream's last frame, so without
+    /// these two the teacher would sit behind the progress ring until the
+    /// whole reply existed — which is the difference they noticed against
+    /// Talk It Through.
+    @State private var streamingReply: String?
+    /// The turn they just sent, shown in its place above the reply rather
+    /// than appearing with the server's answer.
+    @State private var pendingUserTurn: String?
     @State private var error: String?
 
     @State private var strengths: String
@@ -52,7 +61,13 @@ struct ReflectTab: View {
 
     private var userTurnCount: Int { conversation.filter { $0.role == "user" }.count }
     private var turnCapHit: Bool { userTurnCount >= AudioInsights.reflectTurnCap }
-    private var started: Bool { !conversation.isEmpty }
+    /// A first reply that is still streaming counts as started, so the
+    /// opening sentence replaces the start screen the moment it lands.
+    private var started: Bool { !conversation.isEmpty || streamingReply != nil || pendingUserTurn != nil }
+    /// A turn still in flight. `sending` now ends at Coach's first sentence,
+    /// so it can no longer be what keeps a second turn from being sent on top
+    /// of a reply that is still arriving.
+    private var replying: Bool { sending || streamingReply != nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -127,7 +142,7 @@ struct ReflectTab: View {
                                     .overlay(Capsule().strokeBorder(AppTheme.textSecondary.opacity(0.4)))
                             }
                         }
-                        .disabled(sending)
+                        .disabled(replying)
 
                         ProgressRing(active: sending, estimatedSeconds: 8, label: "Starting your debrief")
                     }
@@ -137,13 +152,16 @@ struct ReflectTab: View {
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array(conversation.enumerated()), id: \.offset) { _, message in
-                        Text(message.text)
-                            .font(.subheadline)
-                            .foregroundStyle(message.role == "user" ? AppTheme.cream : AppTheme.textPrimary)
-                            .padding(12)
-                            .background(message.role == "user" ? AppTheme.forest : AppTheme.mintTint.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
-                            .frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
+                        bubble(role: message.role, text: message.text)
                     }
+                    if let pendingUserTurn {
+                        bubble(role: "user", text: pendingUserTurn)
+                    }
+                    if let streamingReply {
+                        bubble(role: "assistant", text: streamingReply)
+                    }
+                    // Only until Coach's first sentence lands; after that the
+                    // words arriving are the progress.
                     ProgressRing(active: sending, estimatedSeconds: 8, label: "Wivoza is thinking…", size: 44)
                 }
 
@@ -161,9 +179,9 @@ struct ReflectTab: View {
                     HStack {
                         TextField("Say what's on your mind...", text: $draft)
                             .textFieldStyle(.roundedBorder)
-                            .disabled(sending)
+                            .disabled(replying)
                         Button("Send") { Task { await sendMessage() } }
-                            .disabled(sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .disabled(replying || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                     Button {
                         voiceMode = true
@@ -179,6 +197,15 @@ struct ReflectTab: View {
         .padding()
         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 20))
         .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(AppTheme.hairline))
+    }
+
+    private func bubble(role: String, text: String) -> some View {
+        Text(text)
+            .font(.subheadline)
+            .foregroundStyle(role == "user" ? AppTheme.cream : AppTheme.textPrimary)
+            .padding(12)
+            .background(role == "user" ? AppTheme.forest : AppTheme.mintTint.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
+            .frame(maxWidth: .infinity, alignment: role == "user" ? .trailing : .leading)
     }
 
     // MARK: - Voice
@@ -260,31 +287,15 @@ struct ReflectTab: View {
             listen()
             return
         }
-        let before = conversation.count
         draft = text
-        await sendMessage()
-        guard conversation.count > before else {
-            // The send failed (the error is already showing) — don't re-read
-            // the previous reply as if it were new.
+        // Speaking the reply and reopening the mic are part of the turn now —
+        // each sentence is spoken as it is written, not after the whole reply.
+        guard await sendMessage() else {
+            // The send failed (the error is already showing) — leave the mic
+            // closed rather than walking the next turn into the same failure.
             voicePaused = true
             return
         }
-        await speakLatestReply()
-    }
-
-    /// Reads Coach's latest reply aloud, then reopens the mic.
-    private func speakLatestReply() async {
-        guard voiceMode, !voicePaused else { return }
-        if !muted, let reply = conversation.last(where: { $0.role == "assistant" })?.text {
-            speaking = true
-            let voice = authManager.currentUser?.talkVoice
-            for sentence in splitIntoSentences(reply) {
-                player.enqueue(sentence, voice: voice)
-            }
-            await player.waitUntilDone()
-            speaking = false
-        }
-        listen()
     }
 
     /// Which note is being edited, so losing focus can save it — the
@@ -391,19 +402,15 @@ struct ReflectTab: View {
         if started {
             voiceMode = true
             voicePaused = false
-            let before = conversation.count
-            await sendMessage(
+            // Same guard `handleVoiceTurn` needs: after a failed send the mic
+            // stays closed instead of taking another turn into it.
+            guard await sendMessage(
                 overrideText: "Let's discuss this: \(pending.label)",
                 extraContext: ["The teacher just switched to a new topic: \(pending.label).\(measured)"]
-            )
-            // Same guard `handleVoiceTurn` needs: a failed send would
-            // otherwise have Coach read its previous reply aloud as though it
-            // were an answer to the topic the teacher just chose.
-            guard conversation.count > before else {
+            ) else {
                 voicePaused = true
                 return
             }
-            await speakLatestReply()
         } else if let detail = pending.detail {
             await startReflect(
                 voice: true,
@@ -415,49 +422,82 @@ struct ReflectTab: View {
     }
 
     private func startReflect(voice: Bool, focus openWith: String? = nil) async {
-        sending = true
-        error = nil
         voiceMode = voice
         voicePaused = false
-        do {
-            // Prepended as one more plain-fact line ahead of the same context
-            // array, so Claude's own opening question leads with it. The route
-            // already accepts an arbitrary context, so nothing changes on the
-            // server.
-            let context = openWith.map { ["Start the conversation by asking about \($0)."] + reflectContext } ?? reflectContext
-            let updated = try await AudioCoachingService.sendReflectMessage(
-                sessionId: session.id, message: nil, context: context, spoken: voice
-            )
-            conversation = updated.reflectConversation ?? []
-            onUpdate(AudioSessionWithSegments(session: updated, segments: session.segments))
-            sending = false
-            if voice { await speakLatestReply() }
-        } catch {
-            self.error = error.localizedDescription
-            sending = false
-            stopVoice()
-        }
+        // Prepended as one more plain-fact line ahead of the same context
+        // array, so Claude's own opening question leads with it. The route
+        // already accepts an arbitrary context, so nothing changes on the
+        // server.
+        let context = openWith.map { ["Start the conversation by asking about \($0)."] + reflectContext } ?? reflectContext
+        let opened = await streamTurn(message: nil, context: context, spoken: voice)
+        if !opened { stopVoice() }
     }
 
     /// `overrideText` lets a topic switch send its own turn without going
     /// through the draft field, the same way voice mode submits a transcript.
-    private func sendMessage(overrideText: String? = nil, extraContext: [String] = []) async {
+    @discardableResult
+    private func sendMessage(overrideText: String? = nil, extraContext: [String] = []) async -> Bool {
         let trimmed = (overrideText ?? draft).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty else { return false }
         if overrideText == nil { draft = "" }
+        // Their own words go up straight away, since the reply they belong
+        // with now arrives in pieces rather than all at once.
+        pendingUserTurn = trimmed
+        let sent = await streamTurn(message: trimmed, context: extraContext + reflectContext, spoken: voiceMode)
+        if !sent, overrideText == nil { draft = trimmed }
+        return sent
+    }
+
+    /// One turn of the conversation, read as Coach writes it.
+    ///
+    /// The teacher used to watch a progress ring until the entire reply
+    /// existed, and in voice mode heard nothing until then either — while
+    /// Talk It Through, on the same server, had been speaking its first
+    /// sentence seconds earlier. Each sentence now lands in the transcript as
+    /// it is written and, when they are talking rather than typing, is
+    /// queued for playback the moment it lands. Returns false if the turn
+    /// failed, so a voice caller knows not to reopen the mic.
+    private func streamTurn(message: String?, context: [String], spoken: Bool) async -> Bool {
         sending = true
         error = nil
+        streamingReply = nil
+        let voice = authManager.currentUser?.talkVoice
         do {
-            let updated = try await AudioCoachingService.sendReflectMessage(
-                sessionId: session.id, message: trimmed, context: extraContext + reflectContext, spoken: voiceMode
-            )
+            let updated = try await AudioCoachingService.streamReflectMessage(
+                sessionId: session.id, message: message, context: context, spoken: spoken
+            ) { sentence in
+                streamingReply = streamingReply.map { "\($0) \(sentence)" } ?? sentence
+                // The words are the progress indicator from here.
+                sending = false
+                // Silent while muted or paused, as Coach has always been;
+                // everything written is still kept.
+                if spoken, !muted, !voicePaused {
+                    speaking = true
+                    player.enqueue(sentence, voice: voice)
+                }
+            }
             conversation = updated.reflectConversation ?? []
+            streamingReply = nil
+            pendingUserTurn = nil
+            sending = false
             onUpdate(AudioSessionWithSegments(session: updated, segments: session.segments))
+            if spoken {
+                await player.waitUntilDone()
+                speaking = false
+                listen()
+            }
+            return true
         } catch {
             self.error = error.localizedDescription
-            if overrideText == nil { draft = trimmed }
+            // A half-written reply is dropped rather than left on screen as
+            // though Coach had stopped mid-thought.
+            streamingReply = nil
+            pendingUserTurn = nil
+            sending = false
+            speaking = false
+            player.stop()
+            return false
         }
-        sending = false
     }
 
     /// Finishing a conversation writes the debrief AND saves it.

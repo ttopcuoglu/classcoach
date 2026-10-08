@@ -1987,6 +1987,63 @@ export async function sendReflectMessage(
   return res.json()
 }
 
+/// The same turn, streamed: each sentence arrives as Coach writes it, so the
+/// teacher reads the first line while the rest is still being written instead
+/// of watching a ring until the whole reply exists. Talk It Through has worked
+/// this way for a while; Reflect sat behind one blocking request.
+export async function streamReflectMessage(
+  id: string,
+  data: { message?: string; context: string[]; spoken?: boolean },
+  onSentence: (sentence: string) => void,
+  signal?: AbortSignal,
+): Promise<AudioSession> {
+  const res = await fetch(`${API_BASE_URL}/api/audio-sessions/${id}/reflect-chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(data),
+    signal,
+  })
+  // Turn cap, locked report and the daily limit are all rejected before the
+  // stream starts, so they still arrive as status codes the caller can act on.
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    const kind: ReflectChatErrorKind =
+      res.status === 403 ? 'locked' : res.status === 409 ? 'turn_cap' : res.status === 429 ? 'daily_limit' : 'other'
+    throw Object.assign(new Error(body?.error ?? `Request failed with status ${res.status}`), { kind })
+  }
+  if (!res.body) throw Object.assign(new Error('Could not reach your coach. Please try again.'), { kind: 'other' })
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let session: AudioSession | null = null
+
+  // Newline-delimited frames, and a chunk can split one anywhere, so only
+  // whole lines are parsed and the remainder carries to the next read.
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    let newline: number
+    while ((newline = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, newline).trim()
+      buffer = buffer.slice(newline + 1)
+      if (!line) continue
+      const frame = JSON.parse(line) as
+        | { type: 'sentence'; text: string }
+        | { type: 'done'; session: AudioSession }
+        | { type: 'error'; error: string }
+      if (frame.type === 'sentence') onSentence(frame.text)
+      else if (frame.type === 'done') session = frame.session
+      else throw Object.assign(new Error(frame.error), { kind: 'other' as ReflectChatErrorKind })
+    }
+  }
+
+  if (!session) throw Object.assign(new Error('Could not reach your coach. Please try again.'), { kind: 'other' })
+  return session
+}
+
 export function summarizeReflectConversation(
   id: string,
 ): Promise<{ strengths: string | null; growthAreas: string | null; nextStep: string | null }> {

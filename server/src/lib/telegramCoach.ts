@@ -14,8 +14,9 @@
 
 import { randomBytes } from 'node:crypto'
 import type { CoachFollowUp, Debrief } from '../generated/prisma/client.ts'
-import { generateTalkTakeaway, trimIfTruncated } from '../routes/debrief.ts'
+import { generateTalkTakeaway } from '../routes/debrief.ts'
 import { anthropic, CLAUDE_MODEL } from './anthropic.ts'
+import { trimIfTruncated } from './coachStream.ts'
 import { hasActivePlanFor, PLAN_USER_SELECT } from './billing.ts'
 import { appendTurn, countUserTurns, TALK_TURN_CAP, toClaudeMessages, type ChatMessage } from './coachingChat.ts'
 import { buildMemoryContextBlock, MEMORY_UPDATE_INSTRUCTION, MEMORY_UPDATE_TOKEN_BUFFER, persistMemoryUpdate, shouldWriteMemory } from './coachMemory.ts'
