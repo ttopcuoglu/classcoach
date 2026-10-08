@@ -154,6 +154,54 @@ export const MEETING_TYPES: { label: string; value: MeetingType }[] = [
 /// meeting, it is a person — Prepare asks that on the other branch. It stays in
 /// MEETING_TYPES above so plans already saved under it keep their label.
 export const MEETING_TYPE_CHOICES = MEETING_TYPES.filter((m) => m.value !== 'difficult_colleague')
+
+/// The example in "What is going on?" follows what the teacher just picked. A
+/// co-teacher example under "Parent or family conference" is noise, and a blank
+/// box is worse — the placeholder is the only thing on the screen showing how
+/// much detail is worth giving.
+const PERSON_EXAMPLES: Record<string, string> = {
+  parent_caregiver:
+    "A parent emailed saying I am picking on their son. I have to answer today and I do not want to make it worse...",
+  student:
+    "He has stopped handing anything in and shrugs when I ask why. I want to get somewhere without it becoming a lecture...",
+  colleague:
+    'My co-teacher keeps correcting me in front of the class, and it is getting worse...',
+  administrator:
+    'I need to tell my principal the new schedule is not working for my inclusion students, and I expect pushback...',
+  other: 'Who it is with, what has been happening, and what makes it hard to say...',
+}
+
+const MEETING_EXAMPLES: Record<string, string> = {
+  parent_family:
+    'Conference is Thursday. Her grade has dropped since October and I do not think the family knows yet...',
+  student:
+    'I want to sit down with him about the missing work before it turns into a failing quarter...',
+  iep_504:
+    'His plan says extended time, he is still not finishing, and I think the accommodations need revisiting...',
+  team_department:
+    'I want to raise that our common assessment does not match what we are actually teaching, without it sounding like a complaint...',
+  administrator:
+    'I am asking for a different duty assignment, and I know the answer is probably no...',
+  post_observation:
+    'The group work stretch went badly while she was in the room, and I want to talk about what she saw...',
+  other: 'What the meeting is about, and what makes it hard...',
+}
+
+export function situationPlaceholder(
+  preparingFor: 'person' | 'meeting',
+  recipientType: string | undefined,
+  meetingType: string | undefined,
+): string {
+  const picked =
+    preparingFor === 'person'
+      ? recipientType && PERSON_EXAMPLES[recipientType]
+      : meetingType && MEETING_EXAMPLES[meetingType]
+  if (picked) return picked
+  // Nothing chosen yet, so the example cannot name anyone without guessing.
+  return preparingFor === 'person'
+    ? 'Who it is with, what has been happening, and what makes it hard to say...'
+    : 'What the meeting is about, and what makes it hard...'
+}
 export function meetingTypeLabel(value: string | null) {
   if (!value) return null
   return MEETING_TYPES.find((m) => m.value === value)?.label ?? value

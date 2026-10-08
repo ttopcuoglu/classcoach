@@ -14,6 +14,7 @@ import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import {
   MEETING_FORMATS,
   PERSON_FORMATS,
+  situationPlaceholder,
   CONVERSATION_PERSON_TYPES,
   MEETING_TYPE_CHOICES,
   meetingFormatLabel,
@@ -377,7 +378,7 @@ export default function PrepareConversation() {
                 onChange={(e) => setSituationText(e.target.value)}
                 disabled={submitting}
                 rows={4}
-                placeholder="My co-teacher keeps correcting me in front of the class, and it is getting worse..."
+                placeholder={situationPlaceholder(preparingFor, recipientType, meetingType)}
                 className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
             </label>
