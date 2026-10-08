@@ -1,15 +1,15 @@
 import SwiftUI
 
-/// The two nav sections — Coaching and Plan — as tabs whose root is a list of
-/// the tools inside them.
+/// The two nav sections — Grow and Plan — as tabs whose root is a list of the
+/// tools inside them.
 ///
 /// Why these exist: a phone's TabView shows four items and sweeps the rest into
 /// a system "More" list. There were seven tabs, so Planning Coach,
 /// Communication Coach and Profile were all buried in it — and Home had grown
 /// extra cards to compensate for tools nobody could find. The web settled on
-/// four slots, Home / Coaching / Plan / You, and that fits.
+/// slots, Home / Talk / Grow / Plan / You, and that fits.
 ///
-/// The web's phone bar makes Coaching and Plan menus rather than pages: tapping
+/// The web's phone bar makes Grow and Plan menus rather than pages: tapping
 /// one opens a short list of its tools. This is the same information
 /// architecture in the idiom that suits iOS — a section is a tab, and its tools
 /// push from a list. Labels and subtitles are the web's, verbatim.
@@ -48,15 +48,15 @@ private struct HubRow: View {
     }
 }
 
-struct CoachingHubView: View {
+struct GrowHubView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     PanelHeader(
-                        eyebrow: "Wivoza · Coaching",
-                        title: "Coaching",
-                        subtitle: "Reflect on a lesson you taught, talk something through, or rehearse it first."
+                        eyebrow: "Wivoza · Grow",
+                        title: "Grow",
+                        subtitle: "Reflect on a lesson you taught, or rehearse a moment before it happens."
                     )
                     .padding(.bottom, 4)
 
@@ -65,20 +65,15 @@ struct CoachingHubView: View {
                     }
                     .buttonStyle(.plain)
 
-                    NavigationLink { TalkToMeView() } label: {
-                        HubRow(index: 1, label: "Talk It Through", subtitle: "live voice check-in", systemImage: "waveform.circle.fill")
-                    }
-                    .buttonStyle(.plain)
-
                     NavigationLink { PracticeView() } label: {
-                        HubRow(index: 2, label: "Practice", subtitle: "rehearse a moment", systemImage: "bubble.left.and.bubble.right.fill")
+                        HubRow(index: 1, label: "Practice", subtitle: "rehearse a moment", systemImage: "bubble.left.and.bubble.right.fill")
                     }
                     .buttonStyle(.plain)
                 }
                 .padding()
             }
             .background(AppTheme.background)
-            .navigationTitle("Coaching")
+            .navigationTitle("Grow")
             .navigationBarTitleDisplayMode(.inline)
         }
     }
@@ -128,5 +123,5 @@ struct PlanHubView: View {
     }
 }
 
-#Preview("Coaching") { CoachingHubView().environmentObject(AuthManager.shared) }
+#Preview("Grow") { GrowHubView().environmentObject(AuthManager.shared) }
 #Preview("Plan") { PlanHubView().environmentObject(AuthManager.shared) }

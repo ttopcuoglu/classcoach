@@ -19,13 +19,30 @@ type IconComponent = (props: { className?: string }) => React.ReactElement
 type NavItem = { to: string; label: string; icon: IconComponent; subtitle?: string }
 type NavGroup = { label: string; icon: IconComponent; items: NavItem[] }
 
+// Talk It Through sits beside Home, above the groups.
+//
+// It is the only catch-all here: any problem, no format, nothing to set up
+// first. The other four need a teacher to already know what they want — a
+// recording, a scenario, a lesson, a message. Putting the "I just need to think
+// out loud" door one level down, behind a group label, works against the thing
+// they reach for when they are stuck at 3:40.
+const TALK_IT_THROUGH: NavItem = {
+  to: '/talk-to-me',
+  label: 'Talk It Through',
+  icon: WaveformIcon,
+  subtitle: 'live voice check-in',
+}
+
 const NAV_GROUPS: NavGroup[] = [
   {
-    label: 'Coaching',
+    // Not "Coaching": every tool in this sidebar is coaching, including both of
+    // the ones under Plan, which are literally named Coach. A label the whole
+    // product answers to cannot sort half of it. These three are what a teacher
+    // does to get better; the two below are what they make for a class.
+    label: 'Grow',
     icon: MicIcon,
     items: [
       { to: '/audio-coaching', label: 'Lesson Debrief', icon: MicIcon, subtitle: 'recorded-lesson report' },
-      { to: '/talk-to-me', label: 'Talk It Through', icon: WaveformIcon, subtitle: 'live voice check-in' },
       { to: '/coach-chat', label: 'Practice', icon: ChatBubbleIcon, subtitle: 'rehearse a moment' },
     ],
   },
@@ -97,10 +114,19 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
           <p className="text-[11px] text-cream/50">Practice. Reflect. Grow.</p>
         </div>
         <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 pb-4">
-          <NavLink to="/" end className={({ isActive }) => navLinkClasses(isActive)}>
-            <HomeIcon className="h-5 w-5" />
-            Home
-          </NavLink>
+          <div className="flex flex-col gap-1">
+            <NavLink to="/" end className={({ isActive }) => navLinkClasses(isActive)}>
+              <HomeIcon className="h-5 w-5" />
+              Home
+            </NavLink>
+            <NavLink to={TALK_IT_THROUGH.to} className={({ isActive }) => navLinkClasses(isActive)}>
+              <TALK_IT_THROUGH.icon className="h-5 w-5 shrink-0" />
+              <span className="flex flex-col leading-tight">
+                <span>{TALK_IT_THROUGH.label}</span>
+                <span className="text-xs font-normal text-cream/50">{TALK_IT_THROUGH.subtitle}</span>
+              </span>
+            </NavLink>
+          </div>
 
           {NAV_GROUPS.map((group) => (
             <div key={group.label}>
@@ -223,6 +249,13 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
           <NavLink to="/" end className={({ isActive }) => mobileNavClasses(isActive)}>
             <HomeIcon className="h-5 w-5" />
             Home
+          </NavLink>
+
+          {/* "Talk" rather than the full name — this bar has five slots now and
+              the label has to survive a narrow phone. */}
+          <NavLink to={TALK_IT_THROUGH.to} className={({ isActive }) => mobileNavClasses(isActive)}>
+            <TALK_IT_THROUGH.icon className="h-5 w-5" />
+            Talk
           </NavLink>
 
           {NAV_GROUPS.map((group) => {
