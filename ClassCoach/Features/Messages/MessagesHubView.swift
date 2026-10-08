@@ -9,7 +9,7 @@ private struct MessagesTool: Identifiable {
 
 private let tools: [MessagesTool] = [
     MessagesTool(label: "Write a Message", description: "Create a professional message or response.", systemImage: "envelope.fill"),
-    MessagesTool(label: "Prepare for a Meeting", description: "Build an agenda, talking points, and a plan for an upcoming meeting.", systemImage: "checklist"),
+    MessagesTool(label: "Prepare for a Conversation", description: "Any conversation you have to have — talking points, likely reactions, and the words to use.", systemImage: "checklist"),
     MessagesTool(label: "Review My Communication", description: "Get feedback on something already written.", systemImage: "bubble.left.and.text.bubble.right.fill"),
 ]
 
@@ -67,7 +67,7 @@ struct MessagesHubView: View {
     private func destination(for tool: MessagesTool) -> some View {
         switch tool.label {
         case "Write a Message": WriteMessageView()
-        case "Prepare for a Meeting": PrepareConversationView()
+        case "Prepare for a Conversation": PrepareConversationView()
         default: ReviewCommunicationView()
         }
     }

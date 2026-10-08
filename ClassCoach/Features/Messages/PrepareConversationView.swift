@@ -29,6 +29,9 @@ struct PrepareConversationView: View {
     @State private var concerns = ""
     @State private var background = ""
     @State private var meetingFormat: String?
+    // Open only when there is a meeting to describe. Most hard conversations
+    // are not on anyone's calendar.
+    @State private var isScheduled = false
 
     @State private var submitting = false
     @State private var error: String?
@@ -43,7 +46,7 @@ struct PrepareConversationView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                PanelHeader(eyebrow: "Wivoza · Communication Coach", title: "Prepare for a Meeting", subtitle: "Build an agenda, talking points, and a plan for an upcoming meeting.")
+                PanelHeader(eyebrow: "Wivoza · Communication Coach", title: "Prepare for a Conversation", subtitle: "Describe the conversation you have to have, and get talking points, likely reactions, and the words to use — whether or not it is on a calendar.")
                 if let plan {
                     resultView(plan)
                 } else {
@@ -57,22 +60,43 @@ struct PrepareConversationView: View {
             .padding()
         }
         .background(AppTheme.background)
-        .navigationTitle("Prepare for a Meeting")
+        .navigationTitle("Prepare for a Conversation")
         .navigationBarTitleDisplayMode(.inline)
     }
 
     private var form: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Who are you speaking with?").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
+            // The situation leads. "What happened?" also read as past tense on a
+            // screen whose job is mostly what has not happened yet.
+            labeledField("What is going on?", text: $situationText, minHeight: 100)
+
+            Text("Who you are speaking with").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
             ChipRow(items: prepareRecipientChips, selection: recipientType) { recipientType = $0 }
 
-            labeledField("What happened?", text: $situationText, minHeight: 80)
+            // Format assumes a calendar invite, and most hard conversations are
+            // not on anyone's. Nothing here was ever required — the route has
+            // only ever needed situationText.
+            Button {
+                withAnimation { isScheduled.toggle() }
+            } label: {
+                Text(isScheduled ? "Hide meeting details" : "This is a scheduled meeting")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(AppTheme.terracotta600)
+            }
+            .disabled(submitting)
+
+            if isScheduled {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Meeting format").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
+                    ChipRow(items: meetingFormatChips, selection: meetingFormat) { meetingFormat = $0 }
+                }
+                .padding(12)
+                .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+            }
+
             labeledField("What outcome do you want? (optional)", text: $desiredOutcome, minHeight: 60)
             labeledField("What concerns do you have about the conversation? (optional)", text: $concerns, minHeight: 60)
             labeledField("Relevant background or evidence (optional)", text: $background, minHeight: 60)
-
-            Text("Meeting format").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
-            ChipRow(items: meetingFormatChips, selection: meetingFormat) { meetingFormat = $0 }
 
             ProgressRing(active: submitting, estimatedSeconds: 16, label: "Building your meeting plan", hint: "Twelve sections — usually about twenty seconds.")
 

@@ -15,16 +15,19 @@ struct PracticeConversationView: View {
     @State private var gradeBand = "6-8"
     @State private var difficulty: String?
 
-    @State private var useCustom = false
     @State private var situationText: String?
-    @State private var customSituation = ""
     @State private var responseText = ""
     @State private var prep: ConversationPrep?
     @State private var generating = false
     @State private var submitting = false
     @State private var error: String?
 
-    private var activeSituation: String? { useCustom ? customSituation : situationText }
+    // Practice is hypothetical, end to end: you set who, what and how hard, and
+    // Wivoza writes the scenario. A conversation that is actually happening goes
+    // to Communication Coach, which takes it as prose instead of asking a teacher
+    // to classify what they just described — and to pick how difficult their real
+    // colleague is, which is a person, not a dial.
+    private var activeSituation: String? { situationText }
     private var canGenerate: Bool { challenge != nil && !generating }
     private var canSubmit: Bool {
         !(activeSituation ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -34,7 +37,7 @@ struct PracticeConversationView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                PanelHeader(eyebrow: "Practice a conversation", title: "Ready when you are", subtitle: "Pick who you're facing and how hard they push, then let Wivoza build the conversation.")
+                PanelHeader(eyebrow: "Practice a conversation", title: "Ready when you are", subtitle: "Say who you are up against and how hard they push, and Wivoza writes you one to practice cold.")
                 if let prep, let report = prep.coachingReport {
                     reportView(prep, report)
                 } else {
@@ -108,8 +111,6 @@ struct PracticeConversationView: View {
                 HStack {
                     Button("Try a different scenario") {
                         situationText = nil
-                        customSituation = ""
-                        useCustom = false
                         responseText = ""
                     }
                     .font(.subheadline.weight(.medium))
@@ -147,17 +148,6 @@ struct PracticeConversationView: View {
                         }
                         .disabled(!canGenerate)
 
-                        Button("Or enter your own situation") { useCustom = true }
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-                    if useCustom {
-                        TextEditor(text: $customSituation)
-                            .scrollContentBackground(.hidden)
-                            .frame(minHeight: 80)
-                            .padding(8)
-                            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
-                            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -268,7 +258,6 @@ struct PracticeConversationView: View {
     private func practiceAgain() {
         prep = nil
         situationText = nil
-        customSituation = ""
         responseText = ""
         error = nil
     }
