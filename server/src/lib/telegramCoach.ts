@@ -19,7 +19,14 @@ import { anthropic, CLAUDE_MODEL } from './anthropic.ts'
 import { trimIfTruncated } from './coachStream.ts'
 import { hasActivePlanFor, PLAN_USER_SELECT } from './billing.ts'
 import { appendTurn, countUserTurns, TALK_TURN_CAP, toClaudeMessages, type ChatMessage } from './coachingChat.ts'
-import { BETTER_TOOL_INSTRUCTION, BETTER_TOOL_TOKEN_BUFFER, readBetterTool, type HandoffDetails, type ToolOffer } from './betterTool.ts'
+import {
+  BETTER_TOOL_INSTRUCTION,
+  BETTER_TOOL_TOKEN_BUFFER,
+  readBetterTool,
+  type HandoffDetails,
+  type ToolKey,
+  type ToolOffer,
+} from './betterTool.ts'
 import { createHandoff } from './coachHandoff.ts'
 import { buildMemoryContextBlock, MEMORY_UPDATE_INSTRUCTION, MEMORY_UPDATE_TOKEN_BUFFER, persistMemoryUpdate, shouldWriteMemory } from './coachMemory.ts'
 import { CORE_COACHING_RULES } from './coachPersona.ts'
@@ -164,22 +171,65 @@ function toolOfferButton(
       // Telegram allows one keyboard per message, so a message carrying this
       // offer can't also carry the Wrap up / New topic keyboard. On a client
       // where that keyboard is collapsed, an offer with nothing beside it
-      // reads as the only way forward — so the way out rides along with it.
-      [{ text: WRAP_UP_BUTTON, callback_data: `wrap:${debriefId}` }],
+      // reads as the only way forward — so the message carries the same two
+      // exits the chat always has, saying the same things.
+      //
+      // Both, not one. After being handed a lesson, the usual next move is
+      // "done with that, now the parent thing" — which is New topic, and
+      // costs nothing. Wrap up writes a takeaway and schedules a check-in,
+      // which is right for a conversation worth remembering and wrong for
+      // an errand.
+      [
+        { text: NEW_TOPIC_BUTTON, callback_data: 'new' },
+        { text: WRAP_UP_BUTTON, callback_data: `wrap:${debriefId}` },
+      ],
     ],
   }
 }
 
-// Coach may offer another tool once per conversation — see betterTool.ts.
-// A button under every reply is a nag: the teacher came here to think, not
-// to be routed. In memory rather than a column, like the menu button above:
-// losing the record on a deploy costs one extra offer, which is cheaper
-// than a migration.
-const toolOffered = new Set<string>()
+// How often Coach has offered each tool in a conversation — see
+// betterTool.ts. A button under every reply would be a nag: the teacher
+// came here to think, not to be routed.
+//
+// Counted per tool, not per conversation, because one conversation really
+// does change subject: a teacher handed a lesson says "different thing,
+// this parent emailed me" in the same breath, and one offer for the whole
+// conversation leaves the second half of what they said with no door.
+//
+// Twice each, because the second time is usually the teacher saying yes.
+// They answer "go on then", Coach asks how long the period is, and the
+// button it can hand them now is better than the one further up the chat
+// — and a reply agreeing to build something, with nothing to tap, is the
+// dead end this was supposed to fix. What two stops is Coach pressing a
+// tool the teacher has twice declined to take.
+//
+// In memory rather than a column, like the menu button above: losing the
+// record on a deploy costs one extra offer, which is cheaper than a
+// migration.
+const MAX_OFFERS_PER_TOOL = 2
+// A ceiling on carrying the instruction at all, so a long wandering
+// conversation stops paying ~250 tokens a turn for a door it keeps not
+// taking.
+const MAX_OFFERS_PER_CONVERSATION = 4
+const offersByConversation = new Map<string, Map<ToolKey, number>>()
 
-function rememberToolOffer(debriefId: string) {
-  toolOffered.add(debriefId)
-  if (toolOffered.size > 500) toolOffered.delete(toolOffered.values().next().value!)
+function offersMade(debriefId: string | null | undefined): Map<ToolKey, number> {
+  return (debriefId && offersByConversation.get(debriefId)) || new Map<ToolKey, number>()
+}
+
+function offerTotal(debriefId: string | null | undefined): number {
+  let total = 0
+  for (const count of offersMade(debriefId).values()) total += count
+  return total
+}
+
+function rememberToolOffer(debriefId: string, tool: ToolKey) {
+  const made = offersByConversation.get(debriefId) ?? new Map<ToolKey, number>()
+  made.set(tool, (made.get(tool) ?? 0) + 1)
+  offersByConversation.set(debriefId, made)
+  if (offersByConversation.size > 500) {
+    offersByConversation.delete(offersByConversation.keys().next().value!)
+  }
 }
 
 const MINI_APP_HELP = MINI_APP_AVAILABLE
@@ -351,8 +401,7 @@ async function handleMessage(chatId: string, rawText: string | undefined, firstN
       await reply(chatId, HELP_TEXT)
       return
     case 'new':
-      await prisma.user.update({ where: { id: user.id }, data: { telegramDebriefId: null } })
-      await reply(chatId, "Fresh start. What's on your mind?")
+      await startNewTopic(chatId, user.id)
       return
     case 'done':
       await finishConversation(chatId, user, user.telegramDebriefId)
@@ -373,6 +422,14 @@ async function handleMessage(chatId: string, rawText: string | undefined, firstN
   await coachReply(chatId, user, text)
 }
 
+// Closes the current conversation without a takeaway: nothing to sum up,
+// nothing to check in about, just a different subject. Shared by the
+// command, the keyboard button and the one under a tool offer.
+async function startNewTopic(chatId: string, userId: string) {
+  await prisma.user.update({ where: { id: userId }, data: { telegramDebriefId: null } })
+  await reply(chatId, "Fresh start. What's on your mind?")
+}
+
 function plainWordCommand(text: string): 'done' | 'new' | null {
   const t = text.replace(/[.!]+$/, '').trim().toLowerCase()
   if (text === WRAP_UP_BUTTON || t === 'done' || t === 'wrap up' || t === 'wrap it up') return 'done'
@@ -390,6 +447,7 @@ async function handleButtonTap(chatId: string, tap: { id: string; data?: string;
   const [action, id] = (tap.data ?? '').split(':')
   if (action === 'wrap') await finishConversation(chatId, user, id)
   else if (action === 'nowrap') await reply(chatId, 'No problem. Tap "Wrap up" whenever you\'re ready.')
+  else if (action === 'new') await startNewTopic(chatId, user.id)
   else if (action === 'later' || action === 'skip') await answerCheckIn(chatId, user.id, action, id)
 }
 
@@ -464,7 +522,7 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
   // went, and a button changing the subject is the wrong answer to it.
   // Not twice in one conversation either — so once an offer is made, the
   // instruction leaves the prompt and Coach stops looking for one.
-  const offerAllowed = MINI_APP_AVAILABLE && !followUp && !(debrief && toolOffered.has(debrief.id))
+  const offerAllowed = MINI_APP_AVAILABLE && !followUp && offerTotal(debrief?.id) < MAX_OFFERS_PER_CONVERSATION
   const basePrompt = `${TALK_TEXT_SYSTEM_PROMPT}${buildExperienceContextBlock(user.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${offerAllowed ? BETTER_TOOL_INSTRUCTION : ''}`
 
   const stopTyping = keepTyping(chatId)
@@ -514,9 +572,10 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
   // colleague's answer and the routing stays optional. The persistent
   // Wrap up / New topic keyboard is unaffected — an inline button sits with
   // the message, not above the typing box.
-  const button = offer ? toolOfferButton(offer, details, user.id, saved.id) : undefined
+  const spent = offer != null && (offersMade(saved.id).get(offer.key) ?? 0) >= MAX_OFFERS_PER_TOOL
+  const button = offer && !spent ? toolOfferButton(offer, details, user.id, saved.id) : undefined
   await sendMessage(chatId, coachText, button ?? MAIN_KEYBOARD)
-  if (button) rememberToolOffer(saved.id)
+  if (button && offer) rememberToolOffer(saved.id, offer.key)
 
   // Bookkeeping for the next turn, after the teacher already has this one.
   if (writeMemory) {
