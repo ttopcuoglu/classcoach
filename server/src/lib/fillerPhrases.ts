@@ -19,20 +19,20 @@
 // a win. It also rules out "I hear you", which the system prompt lists as an
 // assistant tic to avoid.
 //
-// Kept in step with ACKNOWLEDGEMENTS in web/src/lib/voicePlayback.ts and
-// SpeechPlayer.swift.
+// Trimmed to five on request, and the four bare single words went first —
+// "Yeah.", "Right.", "Okay.", "Sure." Which is the same set Aura renders
+// least reliably and the same set the prompt had to forbid Coach from
+// opening with, so the three constraints agreed for once.
+//
+// Kept in step with web/src/lib/voicePlayback.ts, SpeechPlayer.swift, and
+// the opener rule in TALK_SYSTEM_PROMPT — if a phrase is not played here,
+// Coach should not be banned from saying it.
 export const FILLER_PHRASES = [
-  "Yeah.",
-  "Right.",
-  "Okay.",
-  "Sure.",
   "Got it.",
   "I see.",
   "Oh, okay.",
   "Yeah, okay.",
   "Right, yeah.",
-  "Ah, okay.",
-  "Okay, sure.",
 ]
 
 // And what Coach says when the teacher asked it something.

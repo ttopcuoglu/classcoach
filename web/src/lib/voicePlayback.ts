@@ -413,17 +413,11 @@ export async function playQueue(
 // already heard them, and nothing from the assistant-tic list in the system
 // prompt. Kept in step with server/src/lib/fillerPhrases.ts.
 export const FILLER_PHRASES = [
-  'Yeah.',
-  'Right.',
-  'Okay.',
-  'Sure.',
   'Got it.',
   'I see.',
   'Oh, okay.',
   'Yeah, okay.',
   'Right, yeah.',
-  'Ah, okay.',
-  'Okay, sure.',
 ]
 
 // Nothing plays between Coach's own sentences. There was a pool of twenty

@@ -152,10 +152,9 @@ final class SpeechPlayer: NSObject, ObservableObject {
     // said. Kept in step with web/src/lib/voicePlayback.ts and the server's
     // fillerPhrases.ts.
     private static let shortFillers = [
-        "Yeah.", "Right.", "Okay.",
-        "Sure.", "Got it.", "I see.",
-        "Oh, okay.", "Yeah, okay.", "Right, yeah.",
-        "Ah, okay.", "Okay, sure.",
+        "Got it.", "I see.",
+        "Oh, okay.", "Yeah, okay.",
+        "Right, yeah.",
     ]
     // Nothing plays between Coach's own sentences. There was a pool of
     // twenty two-word phrases for that, then a quiet hum, and both are
