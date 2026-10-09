@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import AssignmentCoach from './AssignmentCoach'
 import AnswerSection, { NumberedCard } from '../components/AnswerSection'
@@ -892,10 +892,17 @@ function ChoiceChips({
 }
 
 function BuildPanel() {
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [form, setForm] = useState<BuildForm>(EMPTY_BUILD)
   // Which fields Coach filled in from a chat, named for the teacher.
   const [fromChat, setFromChat] = useState<string[]>([])
+  // The latest form, for the arriving handoff below: it merges onto
+  // whatever the profile defaults have already put there, without having to
+  // wait for a render.
+  const formRef = useRef(form)
+  useEffect(() => {
+    formRef.current = form
+  }, [form])
   const [customDuration, setCustomDuration] = useState(false)
   const [gradeOptions, setGradeOptions] = useState<string[]>([])
   const [subjectOptions, setSubjectOptions] = useState<string[]>([])
@@ -1021,6 +1028,48 @@ function BuildPanel() {
     }
   }
 
+  const canGenerate = !!form.topic.trim() || !!material
+
+  function handleGenerate() {
+    if (!canGenerate) return
+    void generateFrom(form)
+  }
+
+  // Takes the values explicitly rather than reading `form`, so the arriving
+  // handoff below can build from what it just filled in without waiting for
+  // a render to land first.
+  async function generateFrom(values: BuildForm) {
+    if (generating || (!values.topic.trim() && !material)) return
+    setGenerating(true)
+    setError(null)
+    try {
+      const result = await generateLessonPlan({
+        objective: values.topic.trim(),
+        subject: values.subject.trim() || undefined,
+        gradeLevel: values.gradeLevel.trim() || undefined,
+        standard: values.standard.trim() || undefined,
+        unitName: values.unitName.trim() || undefined,
+        essentialQuestion: values.essentialQuestion.trim() || undefined,
+        additionalContext: values.additionalContext.trim() || undefined,
+        sourceMaterial: material?.text,
+        durationMinutes: values.durationMinutes,
+        kind: values.kind,
+      })
+      setPlan(result)
+      setAllPlans((prev) => [result, ...prev])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not build the lesson. Please try again.')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  function handleNew() {
+    setPlan(null)
+    setError(null)
+    setDeliveryError(null)
+  }
+
   // Coach offered Planning Coach in a chat and the teacher tapped "Build
   // this lesson" — fill in what they already told it, rather than making
   // them say it a second time. Suggestions exactly like an uploaded file's:
@@ -1028,6 +1077,13 @@ function BuildPanel() {
   // Build. The id is left in the URL so a reload refills rather than
   // emptying the form.
   const handoffId = searchParams.get('handoff')
+  // The teacher tapped a button that said "Build this lesson", so build it
+  // — the tap is the answer to a question Coach asked in the chat, and
+  // making them tap a second button here would make a liar of the first.
+  const buildOnArrival = searchParams.get('build') === '1'
+  // Survives React's double-invoke in development, so one arrival can never
+  // mean two generations.
+  const built = useRef(false)
   useEffect(() => {
     if (!handoffId) return
     let cancelled = false
@@ -1052,8 +1108,20 @@ function BuildPanel() {
           if (!DURATION_CHOICES.includes(details.durationMinutes)) setCustomDuration(true)
         }
         if (details.kind) patch.kind = details.kind
-        setForm((prev) => ({ ...prev, ...patch }))
+        const next = { ...formRef.current, ...patch }
+        setForm(next)
         setFromChat(filled)
+        if (buildOnArrival && !built.current) {
+          built.current = true
+          // Out of the URL before it runs: a reload is a reload, not a
+          // second lesson billed to the same tap. The plan itself is saved
+          // server-side, so it is in Your lessons either way.
+          const params = new URLSearchParams(searchParams)
+          params.delete('handoff')
+          params.delete('build')
+          setSearchParams(params, { replace: true })
+          void generateFrom(next)
+        }
       })
       // An expired handoff needs no apology: the form in front of them
       // works, it is just empty.
@@ -1061,41 +1129,11 @@ function BuildPanel() {
     return () => {
       cancelled = true
     }
+    // Only the arriving id should re-run this: everything else is read
+    // once, as it lands, and re-running on a keystroke would refill the
+    // form under the teacher's hands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handoffId])
-
-  const canGenerate = !!form.topic.trim() || !!material
-
-  async function handleGenerate() {
-    if (!canGenerate || generating) return
-    setGenerating(true)
-    setError(null)
-    try {
-      const result = await generateLessonPlan({
-        objective: form.topic.trim(),
-        subject: form.subject.trim() || undefined,
-        gradeLevel: form.gradeLevel.trim() || undefined,
-        standard: form.standard.trim() || undefined,
-        unitName: form.unitName.trim() || undefined,
-        essentialQuestion: form.essentialQuestion.trim() || undefined,
-        additionalContext: form.additionalContext.trim() || undefined,
-        sourceMaterial: material?.text,
-        durationMinutes: form.durationMinutes,
-        kind: form.kind,
-      })
-      setPlan(result)
-      setAllPlans((prev) => [result, ...prev])
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not build the lesson. Please try again.')
-    } finally {
-      setGenerating(false)
-    }
-  }
-
-  function handleNew() {
-    setPlan(null)
-    setError(null)
-    setDeliveryError(null)
-  }
 
   // Reopens an earlier lesson in full, with everything that came after it.
   function handleOpenPast(id: string) {

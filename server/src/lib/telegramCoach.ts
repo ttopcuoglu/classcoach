@@ -146,10 +146,28 @@ function ensureMiniAppMenuButton(chatId: string) {
 // (lib/coachHandoff.ts) and says so — "Build this lesson", not "Open
 // Planning Coach" — because landing on a filled-in form is a different
 // promise from landing on an empty one.
-function toolOfferButton(offer: ToolOffer, details: HandoffDetails | null, userId: string): ReplyMarkup | undefined {
-  if (!details || !offer.prefillLabel) return openInAppButton(offer.label, offer.path)
-  const id = createHandoff(userId, offer.key, details)
-  return openInAppButton(offer.prefillLabel, `${offer.path}${offer.path.includes('?') ? '&' : '?'}handoff=${id}`)
+function toolOfferButton(
+  offer: ToolOffer,
+  details: HandoffDetails | null,
+  userId: string,
+  debriefId: string,
+): ReplyMarkup | undefined {
+  const prefill = details && offer.prefillLabel
+  const path = prefill
+    ? `${offer.path}${offer.path.includes('?') ? '&' : '?'}handoff=${createHandoff(userId, offer.key, details)}&build=1`
+    : offer.path
+  const url = miniAppUrl(path)
+  if (!url) return undefined
+  return {
+    inline_keyboard: [
+      [{ text: prefill ? offer.prefillLabel! : offer.label, web_app: { url } }],
+      // Telegram allows one keyboard per message, so a message carrying this
+      // offer can't also carry the Wrap up / New topic keyboard. On a client
+      // where that keyboard is collapsed, an offer with nothing beside it
+      // reads as the only way forward — so the way out rides along with it.
+      [{ text: WRAP_UP_BUTTON, callback_data: `wrap:${debriefId}` }],
+    ],
+  }
 }
 
 // Coach may offer another tool once per conversation — see betterTool.ts.
@@ -496,7 +514,7 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
   // colleague's answer and the routing stays optional. The persistent
   // Wrap up / New topic keyboard is unaffected — an inline button sits with
   // the message, not above the typing box.
-  const button = offer ? toolOfferButton(offer, details, user.id) : undefined
+  const button = offer ? toolOfferButton(offer, details, user.id, saved.id) : undefined
   await sendMessage(chatId, coachText, button ?? MAIN_KEYBOARD)
   if (button) rememberToolOffer(saved.id)
 
