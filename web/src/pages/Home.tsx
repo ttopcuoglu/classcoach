@@ -164,9 +164,49 @@ const MOOD_RESPONSES: Record<Mood, { text: string; talk: boolean }> = {
   overwhelmed: { text: "You don't have to sort it all out alone. A few minutes with Coach can help you find the one next thing.", talk: true },
 }
 
-const MOOD_SUGGESTED_CATEGORY: Partial<Record<Mood, string>> = {
-  stressed: 'disruption',
-  overwhelmed: 'transitions',
+type ToolKey = 'debrief' | 'talk' | 'practice' | 'planning' | 'communication'
+
+// Once a teacher has opened everything, "Keep the momentum going — practice
+// another scenario" was the card they saw from then on, forever, whatever they
+// had or hadn't touched. These are the same five tools said as an invitation
+// rather than a discovery, and the quietest one gets it — so using the tool it
+// names is what moves the card on to another.
+const TOOL_NUDGES: Record<ToolKey, NextStep> = {
+  debrief: {
+    icon: MicIcon,
+    title: 'Record another lesson',
+    description: 'It has been a while since your last one. See what has changed in your room since.',
+    linkLabel: 'Record a lesson',
+    to: '/audio-coaching',
+  },
+  talk: {
+    icon: HeadsetIcon,
+    title: 'Talk something through',
+    description: 'Something on your mind from this week? Think out loud about it — five minutes is enough.',
+    linkLabel: 'Start talking',
+    to: '/talk-to-me',
+  },
+  practice: {
+    icon: PlayIcon,
+    title: 'Practice a scenario',
+    description: 'Rehearse a moment and get coaching on your words, before it happens for real.',
+    linkLabel: 'Practice now',
+    to: '/coach-chat',
+  },
+  planning: {
+    icon: LessonPlanIcon,
+    title: 'Plan what is coming up',
+    description: 'Build a lesson from a topic, strengthen one you wrote, or review slides and assignments.',
+    linkLabel: 'Open Planning Coach',
+    to: '/lesson-planning',
+  },
+  communication: {
+    icon: MailIcon,
+    title: 'Get ahead of a conversation',
+    description: 'Write a message, prepare for a meeting, or get a second read on a draft.',
+    linkLabel: 'Open Communication Coach',
+    to: '/communications',
+  },
 }
 
 const ACTION_CARDS = [
@@ -289,9 +329,12 @@ export default function Home() {
   // so reading only the first of those told a teacher who had reviewed an
   // assignment that they had never opened the tool — the same undercount the
   // admin panel carried until the tools were counted the way the nav has them.
-  const [hasPlanningActivity, setHasPlanningActivity] = useState(false)
-  const [hasTalkItThrough, setHasTalkItThrough] = useState(false)
-  const [hasConversationPlans, setHasConversationPlans] = useState(false)
+  // When each tool was last used. Answers both questions the "next step" card
+  // asks — whether a tool has ever been opened, and, once they all have, which
+  // one has gone quietest — where three booleans could only answer the first.
+  // Lesson Debrief is missing here and filled in below from allSessions, which
+  // a different request loads.
+  const [lastUsedAt, setLastUsedAt] = useState<Partial<Record<ToolKey, number>>>({})
   // Newest createdAt across attempts/debriefs/lesson plans/assignment
   // sessions/conversation plans — combined with allSessions' own newest
   // timestamp below to get the true overall last-activity time.
@@ -345,11 +388,17 @@ export default function Home() {
         combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         setActivity(combined.slice(0, RECENT_WORK_LIMIT))
 
-        setHasPlanningActivity(lessonPlans.length > 0 || assignmentSessions.length > 0)
-        // source is what tells the two Debrief-backed tools apart; anything
-        // that isn't a Talk It Through row belongs to the old ask flow.
-        setHasTalkItThrough(debriefs.some((d) => d.source === 'talk_to_me'))
-        setHasConversationPlans(conversationPlans.length > 0)
+        const newest = (rows: { createdAt: string }[]): number | undefined =>
+          rows.length > 0 ? Math.max(...rows.map((r) => new Date(r.createdAt).getTime())) : undefined
+        setLastUsedAt({
+          // source is what tells the two Debrief-backed tools apart; anything
+          // that isn't a Talk It Through row belongs to the old ask flow.
+          talk: newest(debriefs.filter((d) => d.source === 'talk_to_me')),
+          practice: newest(attempts),
+          // One tool, two tables — Review an Assignment is a tab of it.
+          planning: newest([...lessonPlans, ...assignmentSessions]),
+          communication: newest(conversationPlans),
+        })
 
         // combined is every non-recording source, newest first, so its head is
         // already the answer this used to assemble from four separate lists.
@@ -368,12 +417,13 @@ export default function Home() {
     updateFollowUp(current.id, action).catch(() => setCheckIn(current))
   }
 
+  // The card's own answer on a hard day is Talk It Through, whose coach is
+  // there for exactly that. It used to also set a Practice category behind the
+  // teacher's back — classroom management, on the day they said they were
+  // overwhelmed — for a tool the card does not offer and may never be opened.
   function handleMoodSelect(value: Mood) {
     setMood(value)
     setTip(pickDailyTip(value))
-    const suggested = MOOD_SUGGESTED_CATEGORY[value]
-    if (suggested) sessionStorage.setItem('classcoach.suggestedCategory', suggested)
-    else sessionStorage.removeItem('classcoach.suggestedCategory')
   }
 
   const today = new Date()
@@ -408,6 +458,12 @@ export default function Home() {
   // COACHING_PATH above) — this only ever names one concrete next action.
   const completedSessions = allSessions.filter((s) => s.status === 'analyzed' || s.status === 'locked')
   const latestCompletedSession = completedSessions[0] ?? null
+  // The whole record, with the one tool whose rows arrive on a different
+  // request folded in.
+  const toolsLastUsed: Partial<Record<ToolKey, number>> = {
+    ...lastUsedAt,
+    debrief: latestCompletedSession ? new Date(latestCompletedSession.createdAt).getTime() : undefined,
+  }
   const latestSessionUnreflected =
     latestCompletedSession != null &&
     (!latestCompletedSession.reflectConversation || latestCompletedSession.reflectConversation.length === 0)
@@ -459,7 +515,7 @@ export default function Home() {
     // nav moved up beside Home. It used to be missing from this list
     // entirely, which left the catch-all tool as the only one Home never
     // pointed a teacher at.
-    if (!hasTalkItThrough) {
+    if (toolsLastUsed.talk == null) {
       return {
         icon: HeadsetIcon,
         title: 'Try Talk It Through',
@@ -471,7 +527,7 @@ export default function Home() {
     // One step for Planning Coach, not one per tab. Review an Assignment is a
     // tab inside it rather than the separate tool this card used to name, and
     // Home names tools everywhere else.
-    if (!hasPlanningActivity) {
+    if (toolsLastUsed.planning == null) {
       return {
         icon: LessonPlanIcon,
         title: 'Try Planning Coach',
@@ -481,7 +537,7 @@ export default function Home() {
         to: '/lesson-planning',
       }
     }
-    if (!hasConversationPlans) {
+    if (toolsLastUsed.communication == null) {
       return {
         icon: MailIcon,
         title: 'Try Communication Coach',
@@ -490,15 +546,13 @@ export default function Home() {
         to: '/communications',
       }
     }
-    // Already touched every tool — a safe, encouraging fallback rather than
-    // no recommendation at all.
-    return {
-      icon: PlayIcon,
-      title: 'Keep the momentum going',
-      description: 'Practice another scenario to stay sharp.',
-      linkLabel: 'Practice now',
-      to: '/coach-chat',
-    }
+    // Already touched every tool, so there is nothing left to discover and the
+    // useful thing to name is whatever has gone quietest. Every tool above has
+    // a timestamp by the time this line is reached, so the sort is total.
+    const quietest = (Object.keys(TOOL_NUDGES) as ToolKey[]).reduce((a, b) =>
+      (toolsLastUsed[a] ?? 0) <= (toolsLastUsed[b] ?? 0) ? a : b,
+    )
+    return TOOL_NUDGES[quietest]
   }
 
   const nextStep = computeNextStep()

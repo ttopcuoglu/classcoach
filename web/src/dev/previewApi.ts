@@ -395,7 +395,10 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
           status: 'completed',
           conversation: [],
           saved: false,
-          createdAt: daysAgo(7),
+          // Planning Coach is the quietest tool in this fixture, so it is what
+          // the all-tools-used card names. `freshplan` makes it the newest
+          // instead, which is how that card is shown to rotate.
+          createdAt: tools.has('freshplan') ? daysAgo(0) : daysAgo(7),
         }]
       : []
   }

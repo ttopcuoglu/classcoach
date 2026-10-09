@@ -114,9 +114,9 @@ export default function TryItOut({
       })
       .catch(() => {})
       .finally(() => setHistoryLoading(false))
-
-    const suggested = sessionStorage.getItem('classcoach.suggestedCategory')
-    if (suggested) setCategory(suggested)
+    // Home's mood check-in used to leave a category in sessionStorage for this
+    // to pick up, on a card that sends the teacher to Talk It Through instead.
+    // Nothing writes that key now, so nothing reads it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

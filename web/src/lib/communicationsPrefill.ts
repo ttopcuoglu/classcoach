@@ -1,7 +1,7 @@
 // Cross-tool prefill handoff (Prepare → Write's "Convert to a message", and
-// Recent Work's "Duplicate") — same sessionStorage-handoff pattern already
-// used by onboarding's `classcoach.suggestedCategory`. Each tool reads and
-// clears its own key on mount.
+// Recent Work's "Duplicate"). Each tool reads and clears its own key on mount,
+// and every one of these carries something the teacher asked to move from one
+// tool to another — never a guess made quietly on their behalf.
 export type WritePrefill = {
   startingAction?: 'new' | 'respond' | 'improve'
   incidentSummary?: string
