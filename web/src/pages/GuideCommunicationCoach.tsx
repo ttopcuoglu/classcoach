@@ -64,7 +64,7 @@ const LANES = [
     name: 'Practice a Conversation',
     when: 'You’re dreading it. — now in Practice',
     detail:
-      'Role-play it first: choose who you’re facing, the kind of challenge, and how hard they push — supportive, concerned, resistant, or highly escalated. This lives in Coaching → Practice now, under Conversation, beside the rest of your rehearsals.',
+      'Role-play it first: choose who you’re facing, the kind of challenge, and how hard they push — supportive, concerned, resistant, or highly escalated. This lives in Grow → Practice now, under Conversation, beside the rest of your rehearsals.',
   },
   {
     icon: ChatBubbleIcon,

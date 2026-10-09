@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  BookIcon,
   BrainIcon,
   ChatBubbleIcon,
   HeadsetIcon,
@@ -129,17 +128,22 @@ const COACHING_PATH = [
   { label: 'Reflect', description: 'See what changed, and what to try next.' },
 ]
 
-// "From Tuesday" reads better than a date for something a few days old.
-function checkInAge(createdAt: string): string {
-  const created = new Date(createdAt)
+// "Tuesday" reads better than a date for something a few days old.
+function relativeDay(when: string): string {
+  const date = new Date(when)
   const startOfToday = new Date()
   startOfToday.setHours(0, 0, 0, 0)
-  if (created >= startOfToday) return 'from earlier today'
+  if (date >= startOfToday) return 'today'
   // Calendar days, not 24-hour periods — last night is "yesterday".
-  const days = Math.ceil((startOfToday.getTime() - created.getTime()) / DAY_MS)
-  if (days <= 1) return 'from yesterday'
-  if (days < 7) return `from ${new Date(createdAt).toLocaleDateString(undefined, { weekday: 'long' })}`
-  return `from ${new Date(createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+  const days = Math.ceil((startOfToday.getTime() - date.getTime()) / DAY_MS)
+  if (days <= 1) return 'yesterday'
+  if (days < 7) return date.toLocaleDateString(undefined, { weekday: 'long' })
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+function checkInAge(createdAt: string): string {
+  const day = relativeDay(createdAt)
+  return day === 'today' ? 'from earlier today' : `from ${day}`
 }
 
 function Donut({ pct }: { pct: number }) {
@@ -181,8 +185,13 @@ export default function Home() {
   // reflected on), separate from `sessions` above which is filtered/sorted
   // for the classroom-pulse chart.
   const [allSessions, setAllSessions] = useState<AudioSession[]>([])
-  const [hasLessonPlans, setHasLessonPlans] = useState(false)
-  const [hasAssignmentSessions, setHasAssignmentSessions] = useState(false)
+  // Planning Coach is one tool in the nav and one flag here. Its first three
+  // tabs write LessonPlan rows and Review an Assignment writes its own table,
+  // so reading only the first of those told a teacher who had reviewed an
+  // assignment that they had never opened the tool — the same undercount the
+  // admin panel carried until the tools were counted the way the nav has them.
+  const [hasPlanningActivity, setHasPlanningActivity] = useState(false)
+  const [hasTalkItThrough, setHasTalkItThrough] = useState(false)
   const [hasConversationPlans, setHasConversationPlans] = useState(false)
   // Newest createdAt across attempts/debriefs/lesson plans/assignment
   // sessions/conversation plans — combined with allSessions' own newest
@@ -231,8 +240,10 @@ export default function Home() {
         combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         setActivity(combined.slice(0, 4))
 
-        setHasLessonPlans(lessonPlans.length > 0)
-        setHasAssignmentSessions(assignmentSessions.length > 0)
+        setHasPlanningActivity(lessonPlans.length > 0 || assignmentSessions.length > 0)
+        // source is what tells the two Debrief-backed tools apart; anything
+        // that isn't a Talk It Through row belongs to the old ask flow.
+        setHasTalkItThrough(debriefs.some((d) => d.source === 'talk_to_me'))
         setHasConversationPlans(conversationPlans.length > 0)
 
         const timestamps = [
@@ -344,22 +355,31 @@ export default function Home() {
         to: '/audio-coaching',
       }
     }
-    if (!hasLessonPlans) {
+    // Nothing to set up and no format to pick, so it is the cheapest of the
+    // "you haven't opened this yet" suggestions to act on — and the one the
+    // nav moved up beside Home. It used to be missing from this list
+    // entirely, which left the catch-all tool as the only one Home never
+    // pointed a teacher at.
+    if (!hasTalkItThrough) {
+      return {
+        icon: HeadsetIcon,
+        title: 'Try Talk It Through',
+        description: "A tool you haven't opened yet — think out loud about anything on your mind, and your coach listens.",
+        linkLabel: 'Open Talk It Through',
+        to: '/talk-to-me',
+      }
+    }
+    // One step for Planning Coach, not one per tab. Review an Assignment is a
+    // tab inside it rather than the separate tool this card used to name, and
+    // Home names tools everywhere else.
+    if (!hasPlanningActivity) {
       return {
         icon: LessonPlanIcon,
         title: 'Try Planning Coach',
-        description: "A tool you haven't opened yet — build a lesson from a topic, or strengthen one you wrote.",
+        description:
+          "A tool you haven't opened yet — build a lesson from a topic, strengthen one you wrote, or review slides and assignments.",
         linkLabel: 'Open Planning Coach',
         to: '/lesson-planning',
-      }
-    }
-    if (!hasAssignmentSessions) {
-      return {
-        icon: BookIcon,
-        title: 'Try Assignment Coach',
-        description: "A tool you haven't opened yet — review or redesign an assignment.",
-        linkLabel: 'Open Assignment Coach',
-        to: '/lesson-planning?tab=assignment',
       }
     }
     if (!hasConversationPlans) {
@@ -531,7 +551,13 @@ export default function Home() {
         </div>
 
         <div className="rounded-3xl bg-mint-tint/50 p-6">
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">This week</p>
+          {/* Not "This week": nothing here is filtered to one. The donut is the
+              most recent analyzed lesson whenever it was recorded, so the
+              label says which lesson rather than claiming a window the data
+              never had. */}
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">
+            {latest?.studentTalkPct == null ? 'Your lessons' : `Latest lesson · ${relativeDay(latest.sessionDate)}`}
+          </p>
           <h2 className="mt-1 font-heading text-lg font-bold text-forest">Your classroom pulse</h2>
           {latest?.studentTalkPct == null ? (
             <p className="mt-6 text-sm text-ink-soft">

@@ -167,7 +167,7 @@ const TALK_IT_THROUGH: Feature = {
   id: 'talk-it-through',
   icon: WaveformIcon,
   tint: 'bg-mint-tint text-forest',
-  nav: 'Coaching → Talk It Through',
+  nav: 'Talk It Through',
   title: 'Talk It Through',
   guideTo: '/guide/talk-it-through',
   intro: 'A live, spoken back-and-forth with Coach — tap Start Talking (or one of the example prompts) and just talk. Prefer to type? Type instead is always one tap away.',
@@ -201,7 +201,7 @@ const LESSON_DEBRIEF: Feature = {
   id: 'lesson-debrief',
   icon: MicIcon,
   tint: 'bg-mint-tint text-forest',
-  nav: 'Coaching → Lesson Debrief',
+  nav: 'Grow → Lesson Debrief',
   title: 'Lesson Debrief',
   guideTo: '/guide/lesson-debrief',
   intro: 'Record a real class period; Wivoza transcribes it, asks you which voice is the teacher, and turns it into a four-tab report — no audio is ever kept, only the text and what it shows.',
@@ -217,7 +217,7 @@ const ASK_PRACTICE: Feature = {
   id: 'ask-practice',
   icon: ChatBubbleIcon,
   tint: 'bg-mint-tint text-forest',
-  nav: 'Coaching → Practice',
+  nav: 'Grow → Practice',
   title: 'Practice',
   guideTo: '/guide/ask-practice',
   intro: 'A rehearsal space: take a realistic classroom moment, respond to it badly as many times as you need, and get coaching on the words you actually used.',
@@ -304,7 +304,7 @@ const ASSIGNMENT_COACH: Feature = {
   id: 'assignment-coach',
   icon: BookIcon,
   tint: 'bg-peach-tint text-terracotta',
-  nav: 'Plan → Assignment Coach',
+  nav: 'Plan → Planning Coach → Review an Assignment',
   title: 'Assignment Coach',
   guideTo: '/guide/assignment-coach',
   intro: 'Two paths for the work you hand students — an honest read on an assignment you already wrote, or a rebuild so it still means something now that students have AI.',
@@ -326,7 +326,7 @@ const PRACTICE_CONVERSATION: Feature = {
   id: 'practice-conversation',
   icon: ScenarioIcon,
   tint: 'bg-mint-tint text-forest',
-  nav: 'Coaching → Practice → Conversation',
+  nav: 'Grow → Practice → Conversation',
   title: 'Practice a Conversation',
   intro: 'The same rehearsal, pointed at a person instead of a classroom: pick Conversation and Practice role-plays a parent, student, colleague, or administrator who pushes back.',
   specs: [
@@ -385,17 +385,20 @@ const MESSAGE_TOOLS: Feature[] = [
   },
 ]
 
-const GROW: Chapter = {
-  id: 'grow',
-  label: 'Grow',
+// Not "Grow" any more: the sidebar now has a Grow group, and it means Lesson
+// Debrief and Practice — the section below. One word naming both this and that
+// in the same guide is worse than a duller name here.
+const ACCOUNT: Chapter = {
+  id: 'your-account',
+  label: 'Your account',
   tint: 'bg-lavender-tint text-[#6B5FA0]',
-  intro: 'The tools that build on everything else you\'ve done in Wivoza.',
+  intro: 'Everything that is yours rather than a tool — your profile, your plan, and your data.',
   features: [
     {
       id: 'profile',
       icon: UserIcon,
       tint: 'bg-lavender-tint text-[#6B5FA0]',
-      nav: 'Grow → Profile & Settings',
+      nav: 'Your name, at the bottom of the sidebar',
       title: 'Profile & Settings',
       intro: 'Everything about your account and your data, in one place.',
       specs: [
@@ -462,7 +465,7 @@ export default function Guide() {
       {/* Quick nav */}
       <nav className="border-y border-hairline bg-cream-card">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap justify-center gap-2 px-6 py-4">
-          {['Videos', 'Getting started', 'Coaching', 'Plan', 'Grow', 'Across the app', 'Privacy', 'For schools'].map((label) => (
+          {['Videos', 'Getting started', 'Grow', 'Plan', 'Your account', 'Across the app', 'Privacy', 'For schools'].map((label) => (
             <a
               key={label}
               href={`#${label.toLowerCase().replace(/\s+/g, '-')}`}
@@ -497,13 +500,16 @@ export default function Guide() {
           </div>
         </section>
 
-        {/* Coaching */}
-        <section id="coaching" className="scroll-mt-20 border-b border-hairline py-16">
-          <SectionLabel n={3} label="Coaching" />
+        {/* Grow */}
+        <section id="grow" className="scroll-mt-20 border-b border-hairline py-16">
+          <SectionLabel n={3} label="Grow" />
           <p className="mt-4 max-w-xl text-lg text-ink-soft">
             Three ways to get real coaching, from a full recorded lesson to a thirty-second check-in.
+            Talk It Through comes first here because it comes first in the sidebar — it sits beside Home,
+            above the groups, as the one that needs nothing set up before you start.
           </p>
           <div className="mt-8 flex flex-col gap-5">
+            <FeatureBlock feature={TALK_IT_THROUGH} />
             <FeatureBlock feature={LESSON_DEBRIEF} />
 
             <div className="rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
@@ -521,7 +527,6 @@ export default function Guide() {
               </div>
             </div>
 
-            <FeatureBlock feature={TALK_IT_THROUGH} />
             <FeatureBlock feature={ASK_PRACTICE} />
             <FeatureBlock feature={PRACTICE_CONVERSATION} />
           </div>
@@ -562,12 +567,12 @@ export default function Guide() {
           </div>
         </section>
 
-        {/* Grow */}
-        <section id={GROW.id} className="scroll-mt-20 border-b border-hairline py-16">
-          <SectionLabel n={5} label={GROW.label} />
-          <p className="mt-4 max-w-xl text-lg text-ink-soft">{GROW.intro}</p>
+        {/* Your account */}
+        <section id={ACCOUNT.id} className="scroll-mt-20 border-b border-hairline py-16">
+          <SectionLabel n={5} label={ACCOUNT.label} />
+          <p className="mt-4 max-w-xl text-lg text-ink-soft">{ACCOUNT.intro}</p>
           <div className="mt-8 flex flex-col gap-5">
-            {GROW.features.map((f) => (
+            {ACCOUNT.features.map((f) => (
               <FeatureBlock key={f.id} feature={f} />
             ))}
           </div>

@@ -190,6 +190,67 @@ const FEEDBACK: Json = lesson({
   ],
 })
 
+// Home's "Your next step" is a priority list, and only one rule fires at a
+// time, so a single fixture can only ever show one of them. `?home=` names
+// which tools the preview teacher has already used, and everything Home reads
+// answers from that — `?preview=1&home=talk,planning` is a teacher who has
+// used those two and nothing else. Empty means a brand-new teacher.
+function homeTools(): Set<string> {
+  const raw = new URLSearchParams(window.location.search).get('home')
+  return new Set((raw ?? '').split(',').map((t) => t.trim()).filter(Boolean))
+}
+
+function daysAgo(n: number): string {
+  return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString()
+}
+
+// A recorded lesson that finished analysis. `reflect` is what Home's
+// "reflect on your last lesson" rule looks for.
+function audioSession(id: string, studentTalkPct: number, days: number, reflected: boolean): Json {
+  return {
+    id,
+    teacherName: 'Preview Teacher',
+    classSubject: 'Science',
+    period: '3',
+    gradeLevel: '7th',
+    sessionDate: daysAgo(days),
+    consentConfirmed: true,
+    status: 'analyzed',
+    durationSec: 2700,
+    teacherTalkPct: 100 - studentTalkPct,
+    studentTalkPct,
+    questionCount: 14,
+    higherOrderPct: 36,
+    avgWaitTimeSec: 2.4,
+    cfuCount: 5,
+    metricsDetail: null,
+    highlights: null,
+    phases: null,
+    questionLog: null,
+    cfuLog: null,
+    feedbackLog: null,
+    reflectConversation: reflected ? [{ role: 'coach', text: 'What stood out?' }] : [],
+    createdAt: daysAgo(days),
+    updatedAt: daysAgo(days),
+  }
+}
+
+function debrief(id: string, source: string, text: string, days: number): Json {
+  return {
+    id,
+    incidentText: text,
+    focusArea: null,
+    category: null,
+    gradeBand: null,
+    subject: null,
+    course: null,
+    source,
+    saved: false,
+    createdAt: daysAgo(days),
+    updatedAt: daysAgo(days),
+  }
+}
+
 // Canned answers, matched longest-path-first so '/api/lesson-plans/x/adapt'
 // does not get answered by '/api/lesson-plans'.
 function answer(path: string, method: string, body: Json): Json | Json[] | null {
@@ -258,10 +319,54 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
     // A GET with an id is one plan (the printable report); without one it is
     // the history list.
     const id = path.replace('/api/lesson-plans', '').split('?')[0].replace(/^\//, '')
-    if (!id) return []
+    if (!id) return homeTools().has('planning') ? [{ ...lesson(), createdAt: daysAgo(8) }] : []
     return id === 'preview-ideas' ? IDEAS : id === 'preview-feedback' ? FEEDBACK : lesson()
   }
-  if (path.startsWith('/api/assignment-coach')) return []
+
+  // --- Home ---
+  const tools = homeTools()
+  if (path.startsWith('/api/follow-ups/due')) {
+    return tools.has('checkin')
+      ? [{ id: 'preview-followup', checkInQuestion: 'How did the seating change go with 3rd period?', createdAt: daysAgo(2) }]
+      : []
+  }
+  if (path.startsWith('/api/audio-sessions')) {
+    if (!tools.has('debrief')) return []
+    // Five analyzed lessons so the sparkline draws, with the newest either
+    // reflected on or not depending on whether the reflect rule is wanted.
+    const reflected = !tools.has('unreflected')
+    return [
+      audioSession('preview-a1', 18, 40, true),
+      audioSession('preview-a2', 21, 31, true),
+      audioSession('preview-a3', 19, 24, true),
+      audioSession('preview-a4', 26, 11, true),
+      audioSession('preview-a5', 29, 4, reflected),
+    ]
+  }
+  if (path.startsWith('/api/attempts')) {
+    return tools.has('practice')
+      ? [{
+          id: 'preview-attempt',
+          scenario: { id: 'preview-scenario', text: 'A student refuses to put their phone away and the class is watching.', category: 'disruption' },
+          rating: 4,
+          createdAt: daysAgo(6),
+        }]
+      : []
+  }
+  if (path.startsWith('/api/debriefs')) {
+    const rows: Json[] = []
+    if (tools.has('talk')) rows.push(debrief('preview-talk', 'talk_to_me', 'I have a parent who keeps emailing about their child\u2019s grade.', 3))
+    if (tools.has('ask')) rows.push(debrief('preview-ask', 'ask_tab', 'What do I do about a student who will not start the work?', 9))
+    return rows
+  }
+  if (path.startsWith('/api/conversation-plans')) {
+    return tools.has('communication') ? [{ id: 'preview-plan', createdAt: daysAgo(5) }] : []
+  }
+  if (path.startsWith('/api/assignment-coach')) {
+    // The whole point of the Planning Coach fix: assignment rows alone mean
+    // the tool has been opened.
+    return tools.has('assignment') ? [{ id: 'preview-assignment', createdAt: daysAgo(7) }] : []
+  }
   return null
 }
 
