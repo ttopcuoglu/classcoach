@@ -511,15 +511,31 @@ async function computeOverview(req: Request, res: Response) {
   // counts so the same query also powers Engagement's adoption-breadth
   // stat (how many distinct teachers have tried each feature at least
   // once) with no extra round trips.
-  const [allPrepUsers, lessonPlanUsers, parentMessageUsers, conversationPlanUsers, debriefAllUsers] =
-    await Promise.all([
+  const [
+    allPrepUsers,
+    lessonPlanUsers,
+    assignmentUsers,
+    parentMessageUsers,
+    conversationPlanUsers,
+    debriefAllUsers,
+  ] = await Promise.all([
       // source decides which product a row belongs to. One table, two features
       // since the rehearsal moved into Practice.
       prisma.conversationPrep.findMany({ where: relatedUserScope, select: { userId: true, source: true } }),
-      prisma.lessonPlan.findMany({ where: relatedUserScope, select: { userId: true } }),
+      // mode is Planning Coach's first three tabs: 'generated' = Build a
+      // Lesson, 'feedback' = Improve a Lesson, 'presentation' = Review Slides.
+      prisma.lessonPlan.findMany({ where: relatedUserScope, select: { userId: true, mode: true } }),
+      // Review an Assignment is Planning Coach's fourth tab and writes its own
+      // table. It was counted nowhere, so a teacher who only reviews
+      // assignments read as never having opened Planning Coach at all.
+      prisma.assignmentCoachSession.findMany({ where: relatedUserScope, select: { userId: true } }),
       prisma.parentMessage.findMany({ where: relatedUserScope, select: { userId: true } }),
       prisma.conversationPlan.findMany({ where: relatedUserScope, select: { userId: true } }),
-      prisma.debrief.findMany({ where: relatedUserScope, select: { userId: true } }),
+      // Same story as conversationPrep: one table, two tools, told apart by
+      // source. 'talk_to_me' is Talk It Through (app or Telegram); anything
+      // else, including the null rows written before the column existed, is
+      // Practice's ask flow.
+      prisma.debrief.findMany({ where: relatedUserScope, select: { userId: true, source: true } }),
     ])
   // Rehearsing a conversation is Practice's, not Communication Coach's. Counting
   // every prep as Communications made this report overstate the tool these
@@ -530,19 +546,34 @@ async function computeOverview(req: Request, res: Response) {
   const rehearsalPreps = allPrepUsers.filter((p) => p.source === 'practice')
   const reviewPreps = allPrepUsers.filter((p) => p.source !== 'practice')
 
+  // Talk It Through is its own tool, not a Practice rehearsal. It sits beside
+  // Home in the nav now, and folding its conversations into Practice both
+  // overstated the tool these numbers are used to judge and left the one a
+  // principal is most often told to demo with no number at all. Split the same
+  // way the rehearsal was split out of Communications above: on source, with
+  // everything that is not a Talk It Through row staying where it was counted
+  // before — null included, which the ask flow has always treated as its own.
+  const talkDebriefs = debriefAllUsers.filter((d) => d.source === 'talk_to_me')
+  const askDebriefs = debriefAllUsers.filter((d) => d.source !== 'talk_to_me')
+
+  // Planning Coach is its four tabs, and one of them lives in another table.
+  const planningRows = [...lessonPlanUsers, ...assignmentUsers]
+
   const featureActivity = {
     lessonDebrief: audioSessions.length,
-    lessonPlanning: lessonPlanUsers.length,
+    talkItThrough: talkDebriefs.length,
+    lessonPlanning: planningRows.length,
     communications: reviewPreps.length + parentMessageUsers.length + conversationPlanUsers.length,
-    practiceReflect: attempts.length + debriefAllUsers.length + rehearsalPreps.length,
+    practiceReflect: attempts.length + askDebriefs.length + rehearsalPreps.length,
   }
 
   const distinctTeacherCount = (rows: { userId: string }[]): number => new Set(rows.map((r) => r.userId)).size
   const featureAdoption = {
     lessonDebrief: distinctTeacherCount(audioSessions),
-    lessonPlanning: distinctTeacherCount(lessonPlanUsers),
+    talkItThrough: distinctTeacherCount(talkDebriefs),
+    lessonPlanning: distinctTeacherCount(planningRows),
     communications: distinctTeacherCount([...reviewPreps, ...parentMessageUsers, ...conversationPlanUsers]),
-    practiceReflect: distinctTeacherCount([...attempts, ...debriefAllUsers, ...rehearsalPreps]),
+    practiceReflect: distinctTeacherCount([...attempts, ...askDebriefs, ...rehearsalPreps]),
   }
 
   // Communication Coach is three separate tools wearing one number, which is no
@@ -553,6 +584,21 @@ async function computeOverview(req: Request, res: Response) {
     write: { activity: parentMessageUsers.length, teachers: distinctTeacherCount(parentMessageUsers) },
     prepare: { activity: conversationPlanUsers.length, teachers: distinctTeacherCount(conversationPlanUsers) },
     review: { activity: reviewPreps.length, teachers: distinctTeacherCount(reviewPreps) },
+  }
+
+  // Planning Coach's four tabs, counted apart for the same reason — "plans" as
+  // one number cannot say whether slide review or assignment review is the
+  // half that earns its place. Modes other than the three known ones (older
+  // rows) fall into build, which is where they were drafted.
+  const improvePlans = lessonPlanUsers.filter((p) => p.mode === 'feedback')
+  const slidePlans = lessonPlanUsers.filter((p) => p.mode === 'presentation')
+  const buildPlans = lessonPlanUsers.filter((p) => p.mode !== 'feedback' && p.mode !== 'presentation')
+  const toolStat = (rows: { userId: string }[]) => ({ activity: rows.length, teachers: distinctTeacherCount(rows) })
+  const planningByTool = {
+    build: toolStat(buildPlans),
+    improve: toolStat(improvePlans),
+    slides: toolStat(slidePlans),
+    assignment: toolStat(assignmentUsers),
   }
 
   // Staff-wide averages for the same underlying numbers each session's own
@@ -753,6 +799,7 @@ async function computeOverview(req: Request, res: Response) {
     featureActivity,
     featureAdoption,
     communicationsByTool,
+    planningByTool,
     categoryTally: categoryTally.toJSON(),
     challengeTally: challengeTally.toJSON(),
     messagePurposeTally: messagePurposeTally.toJSON(),

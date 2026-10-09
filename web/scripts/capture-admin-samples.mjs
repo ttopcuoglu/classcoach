@@ -34,8 +34,18 @@ const FIXTURES = {
     scope: 'organization', organizationName: 'Maple Ridge Academy', totalTeachers: 24, activatedAccounts: 21,
     activeThisWeek: 17, returningUsers: 13, activitiesThisWeek: 64, activitiesPriorWeek: 51,
     periodStart: '2026-09-12T00:00:00Z', periodEnd: '2026-09-18T00:00:00Z',
-    featureActivity: { lessonDebrief: 76, lessonPlanning: 22, communications: 30, practiceReflect: 70 },
-    featureAdoption: { lessonDebrief: 21, lessonPlanning: 12, communications: 18, practiceReflect: 19 },
+    featureActivity: { lessonDebrief: 76, talkItThrough: 28, lessonPlanning: 31, communications: 30, practiceReflect: 42 },
+    featureAdoption: { lessonDebrief: 21, talkItThrough: 16, lessonPlanning: 14, communications: 18, practiceReflect: 17 },
+    // The sub-rows under the two features that are really several tools. Each
+    // set adds up to its parent's featureActivity above, and no tool's teacher
+    // count exceeds the parent's.
+    communicationsByTool: {
+      write: { activity: 14, teachers: 11 }, prepare: { activity: 9, teachers: 7 }, review: { activity: 7, teachers: 5 },
+    },
+    planningByTool: {
+      build: { activity: 12, teachers: 9 }, improve: { activity: 6, teachers: 5 },
+      slides: { activity: 4, teachers: 3 }, assignment: { activity: 9, teachers: 6 },
+    },
     categoryTally: { transitions: T(22, 12), disruption: T(17, 8), defiance: T(10, 8), disengagement: T(8, 5), peer_conflict: T(4, 3), technology_misuse: T(3, 3) },
     challengeTally: { behavior_concern: T(4, 3), angry_accusatory: T(3, 3), grade_dispute: T(2, 2) },
     messagePurposeTally: { behavior_concern: T(8, 6), academic_concern: T(6, 6), positive_update: T(5, 5), attendance_concern: T(2, 2) },

@@ -551,7 +551,8 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub: st
 
 const FEATURE_ACTIVITY_META: Record<keyof AdminOverview['featureActivity'], { label: string; sub: string }> = {
   lessonDebrief: { label: 'Lesson Debrief', sub: 'Analyzed classroom recordings' },
-  lessonPlanning: { label: 'Planning Coach', sub: 'Lessons built or reviewed' },
+  talkItThrough: { label: 'Talk It Through', sub: 'Live voice check-ins' },
+  lessonPlanning: { label: 'Planning Coach', sub: 'Lessons, slides and assignments' },
   communications: { label: 'Communications', sub: 'Messages, meeting prep, and second reads' },
   practiceReflect: { label: 'Practice', sub: 'Scenario and conversation rehearsals' },
 }

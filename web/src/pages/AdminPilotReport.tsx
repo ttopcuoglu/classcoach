@@ -44,19 +44,27 @@ import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 
 const FEATURE_ROWS: { key: keyof AdminOverview['featureAdoption']; label: string; what: string; unit: string }[] = [
   { key: 'lessonDebrief', label: 'Lesson Debrief', what: 'Record a lesson, get private feedback on it', unit: 'lessons analyzed' },
+  { key: 'talkItThrough', label: 'Talk It Through', what: 'Talk a problem out loud with the coach, any time', unit: 'conversations' },
   { key: 'practiceReflect', label: 'Practice', what: 'Rehearse a classroom moment or a hard conversation', unit: 'rehearsals and reflections' },
-  { key: 'lessonPlanning', label: 'Planning Coach', what: 'Build or improve lessons', unit: 'plans' },
+  { key: 'lessonPlanning', label: 'Planning Coach', what: 'Build or improve lessons, slides and assignments', unit: 'plans, slide reviews and assignment reviews' },
   { key: 'communications', label: 'Communication Coach', what: 'Messages home, meetings, and a second read', unit: 'messages, meeting preps and reviews' },
 ]
 
-// Communication Coach is three tools under one number, and the number keeps
-// being used to decide whether one of them is worth keeping. Shown as sub-rows
-// rather than top-level features, because a teacher reaches them through
-// Communication Coach rather than as separate tools.
+// Communication Coach and Planning Coach are each several tools under one
+// number, and the number keeps being used to decide whether one of them is
+// worth keeping. Shown as sub-rows rather than top-level features, because a
+// teacher reaches them through the parent tool rather than as separate tools.
 const COMMUNICATIONS_TOOLS: { key: 'write' | 'prepare' | 'review'; label: string }[] = [
   { key: 'write', label: 'Write a Message' },
   { key: 'prepare', label: 'Prepare for a Conversation' },
   { key: 'review', label: 'Review My Communication' },
+]
+
+const PLANNING_TOOLS: { key: 'build' | 'improve' | 'slides' | 'assignment'; label: string }[] = [
+  { key: 'build', label: 'Build a Lesson' },
+  { key: 'improve', label: 'Improve a Lesson' },
+  { key: 'slides', label: 'Review Slides' },
+  { key: 'assignment', label: 'Review an Assignment' },
 ]
 
 function formatRange(start: string, end: string): string {
@@ -75,6 +83,32 @@ function pct(part: number, whole: number): string {
 
 function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`
+}
+
+// The indented tool rows under a feature that is really several tools, for
+// Planning Coach and Communication Coach alike.
+function SubToolRows<K extends string>({
+  tools,
+  stats,
+}: {
+  tools: { key: K; label: string }[]
+  stats: Record<K, { activity: number; teachers: number }>
+}) {
+  return (
+    <div className="border-t border-hairline bg-cream/40 px-5 py-2">
+      {tools.map((tool) => {
+        const stat = stats[tool.key]
+        return (
+          <div key={tool.key} className="flex items-center justify-between gap-4 py-1 text-xs text-ink-soft">
+            <span className="pl-3">{tool.label}</span>
+            <span>
+              {plural(stat.teachers, 'teacher', 'teachers')} · {stat.activity}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 // A number the data can't support yet prints as a dash with its reason,
@@ -211,20 +245,19 @@ export default function AdminPilotReport() {
                 {overview.featureActivity[row.key]} {row.unit}
               </span>
             </div>,
+            row.key === 'lessonPlanning' ? (
+              <SubToolRows
+                key="planning-tools"
+                tools={PLANNING_TOOLS}
+                stats={overview.planningByTool}
+              />
+            ) : null,
             row.key === 'communications' ? (
-              <div key="communications-tools" className="border-t border-hairline bg-cream/40 px-5 py-2">
-                {COMMUNICATIONS_TOOLS.map((tool) => {
-                  const stat = overview.communicationsByTool[tool.key]
-                  return (
-                    <div key={tool.key} className="flex items-center justify-between gap-4 py-1 text-xs text-ink-soft">
-                      <span className="pl-3">{tool.label}</span>
-                      <span>
-                        {plural(stat.teachers, 'teacher', 'teachers')} · {stat.activity}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
+              <SubToolRows
+                key="communications-tools"
+                tools={COMMUNICATIONS_TOOLS}
+                stats={overview.communicationsByTool}
+              />
             ) : null,
           ])}
         </div>

@@ -220,12 +220,14 @@ export type AdminOverview = {
   periodEnd: string
   featureActivity: {
     lessonDebrief: number
+    talkItThrough: number
     lessonPlanning: number
     communications: number
     practiceReflect: number
   }
   featureAdoption: {
     lessonDebrief: number
+    talkItThrough: number
     lessonPlanning: number
     communications: number
     practiceReflect: number
@@ -237,6 +239,14 @@ export type AdminOverview = {
     write: { activity: number; teachers: number }
     prepare: { activity: number; teachers: number }
     review: { activity: number; teachers: number }
+  }
+  /// Planning Coach's four tabs, counted apart for the same reason. 'build'
+  /// carries the older plan rows whose mode predates the three known ones.
+  planningByTool: {
+    build: { activity: number; teachers: number }
+    improve: { activity: number; teachers: number }
+    slides: { activity: number; teachers: number }
+    assignment: { activity: number; teachers: number }
   }
   categoryTally: Record<string, TallyEntry>
   challengeTally: Record<string, TallyEntry>
