@@ -413,17 +413,11 @@ export async function playQueue(
 // already heard them, and nothing from the assistant-tic list in the system
 // prompt. Kept in step with server/src/lib/fillerPhrases.ts.
 export const FILLER_PHRASES = [
-  'Yeah.',
-  'Right.',
-  'Okay.',
-  'Sure.',
   'Got it.',
   'I see.',
   'Oh, okay.',
   'Yeah, okay.',
   'Right, yeah.',
-  'Ah, okay.',
-  'Okay, sure.',
 ]
 
 // Nothing plays between Coach's own sentences. There was a pool of twenty
@@ -442,18 +436,188 @@ export const SENTENCE_GAP_MS = 220
 export const THINKING_PHRASES = [
   'Let me see...',
   'Let me think...',
+  'Okay, let me see...',
   'Okay, let me think...',
-  'Let me take a moment...',
-  'Give me a second...',
+  'Alright, let me think...',
+  'Let me think it through...',
+  'Let me work through that...',
   "Let's think about this...",
+  'Let me think about that one...',
+  'Give me a second...',
+  'Just a second...',
+  'Give me a second here...',
+  'Let me take a moment...',
+  'Let me sit with that a second...',
   'Okay, so...',
   'Right, so...',
+  'Well, now...',
+]
+
+// Two more pools, for the turns where neither an acknowledgement nor a
+// thinking sound is right. "Got it." after "I cried in my car at lunch" is
+// cold; after "it finally went well" it is flat.
+export const HARD_TURN_PHRASES = [
+  "Oh, that's a lot.",
+  "Yeah, that's hard.",
+  "That sounds rough.",
+  "Ugh, that's a lot.",
+  "Oh, that's rough.",
+  "Yeah, that's a lot.",
+]
+
+export const GLAD_TURN_PHRASES = [
+  "Oh, nice.",
+  "That's a win.",
+  "Oh, good.",
+  "Nice one.",
+  "Oh, that's good.",
 ]
 
 /// Which pool fits what the teacher just said. The transcript is all there
 /// is to go on — Claude has not seen the turn yet.
-export function askedAQuestion(transcript: string): boolean {
-  return transcript.trim().endsWith('?')
+///
+/// Kept in step with moodOf() in server/src/lib/turnMood.ts, which is where
+/// the word lists and the reasoning live.
+export type TurnMood = 'hard' | 'glad' | 'asked' | 'neutral'
+
+const HARD_WORDS = [
+  "i'm tired",
+  "im tired",
+  "i am tired",
+  "so tired",
+  "really tired",
+  "exhausted",
+  "exhausting",
+  "wiped out",
+  "running on empty",
+  "no energy left",
+  "i'm done",
+  "im done",
+  "i am done",
+  "i'm over it",
+  "had enough",
+  "at my limit",
+  "can't keep",
+  "cant keep",
+  "can't do this",
+  "cant do this",
+  "can't anymore",
+  "cant anymore",
+  "i give up",
+  "about to quit",
+  "thinking of quitting",
+  "want to quit",
+  "breaking point",
+  "falling apart",
+  "burnt out",
+  "burned out",
+  "i'm burning out",
+  "brutal",
+  "awful",
+  "horrible",
+  "worst day",
+  "worst week",
+  "rough day",
+  "rough week",
+  "long day",
+  "long week",
+  "hard day",
+  "hard week",
+  "terrible day",
+  "was just a lot",
+  "been a lot",
+  "it's too much",
+  "its too much",
+  "this is too much",
+  "too much for me",
+  "called in sick",
+  "i'm struggling",
+  "im struggling",
+  "i am struggling",
+  "i'm failing",
+  "failing them",
+  "i feel like a failure",
+  "not good enough",
+  "i cried",
+  "in tears",
+  "close to tears",
+  "humiliated",
+  "embarrassed myself",
+  "i lost it",
+  "i hate",
+  "i dread",
+  "dreading",
+  "overwhelmed",
+  "no idea what to do",
+  "don't know what to do",
+  "dont know what to do",
+  "at a loss",
+  "hopeless",
+  "helpless",
+  "losing my mind",
+  "losing it",
+]
+
+const GLAD_WORDS = [
+  "went really well",
+  "went well",
+  "went great",
+  "went brilliantly",
+  "it worked",
+  "finally worked",
+  "really worked",
+  "it did work",
+  "that did work",
+  "definitely worked",
+  "that worked",
+  "actually worked",
+  "worked really well",
+  "worked perfectly",
+  "nailed it",
+  "was a win",
+  "huge win",
+  "small win",
+  "a good day",
+  "good day today",
+  "they got it",
+  "finally got it",
+  "they did great",
+  "did really well",
+  "did so well",
+  "they loved",
+  "loved it",
+  "so engaged",
+  "really engaged",
+  "fully engaged",
+  "hands up",
+  "all participating",
+  "they surprised me",
+  "surprised me",
+  "best lesson",
+  "proud of them",
+  "so proud",
+  "i was proud",
+  "really pleased",
+  "so pleased",
+  "happy with how",
+  "pleased with how",
+  "it was great",
+  "was fantastic",
+  "so much better",
+  "much better",
+  "better than last",
+  "turned a corner",
+  "finally clicked",
+  "it clicked",
+  "breakthrough",
+]
+
+export function moodOf(transcript: string): TurnMood {
+  const text = transcript.toLowerCase()
+  if (HARD_WORDS.some((w) => text.includes(w))) return 'hard'
+  if (GLAD_WORDS.some((w) => text.includes(w))) return 'glad'
+  if (transcript.trim().endsWith('?')) return 'asked'
+  return 'neutral'
 }
 
 // The third pool: the same gaps, with a joke in them.
@@ -470,6 +634,10 @@ export type Fillers = {
   nextAcknowledgement: () => string | null
   /// A clip for a turn where they asked Coach something.
   nextThinking: () => string | null
+  /// For a turn that was plainly hard for them.
+  nextHard: () => string | null
+  /// And for one that plainly went well.
+  nextGlad: () => string | null
   release: () => void
 }
 
@@ -506,17 +674,25 @@ export async function loadFillers(voice: TalkVoice | null): Promise<Fillers> {
     (await Promise.all(sample(phrases, count).map((phrase) => fetchSentenceAudio(phrase, voice)))).filter(
       (url): url is string => url !== null,
     )
-  const [acks, thinking] = await Promise.all([
+  // The mood pools are smaller: most turns are neither, so three of each is
+  // all a conversation will reach.
+  const [acks, thinking, hard, glad] = await Promise.all([
     fetchPool(FILLER_PHRASES, CLIPS_PER_POOL),
     fetchPool(THINKING_PHRASES, CLIPS_PER_POOL),
+    fetchPool(HARD_TURN_PHRASES, 3),
+    fetchPool(GLAD_TURN_PHRASES, 3),
   ])
   return {
     nextAcknowledgement: rotate(acks),
     nextThinking: rotate(thinking),
+    nextHard: rotate(hard),
+    nextGlad: rotate(glad),
     release() {
-      for (const url of [...acks, ...thinking]) URL.revokeObjectURL(url)
+      for (const url of [...acks, ...thinking, ...hard, ...glad]) URL.revokeObjectURL(url)
       acks.length = 0
       thinking.length = 0
+      hard.length = 0
+      glad.length = 0
     },
   }
 }

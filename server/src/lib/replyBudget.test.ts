@@ -60,3 +60,29 @@ test('admitsSentence is the per-sentence form of the same rule', () => {
   assert.ok(admitsSentence(30, words(30), 60), 'exactly on the budget fits')
   assert.ok(!admitsSentence(30, words(31), 60), 'one word over does not')
 })
+
+test('a short closing line survives, because it is the point of the turn', () => {
+  // Measured: 52 words of advice, then a 12-word offer to rehearse, which
+  // the budget used to delete whole.
+  const advice = words(52)
+  const offer = "Would you like to practise how you'd say that to his mum?"
+  const kept = sentencesWithinBudget([advice, offer], TALK_REPLY_WORD_BUDGET)
+  assert.equal(kept.length, 2, 'the offer is spoken')
+  assert.ok(kept[1].includes('practise'))
+})
+
+test('the grace is one sentence, not a licence', () => {
+  const kept = sentencesWithinBudget([words(55), words(10), words(10)], TALK_REPLY_WORD_BUDGET)
+  assert.equal(kept.length, 2, 'the second short one is refused after the first overshoot')
+})
+
+test('a long closing line is still refused', () => {
+  const kept = sentencesWithinBudget([words(55), words(40)], TALK_REPLY_WORD_BUDGET)
+  assert.equal(kept.length, 1)
+})
+
+test('the grace cannot rescue a reply already past the budget', () => {
+  // The first sentence alone blew it; nothing may follow.
+  const kept = sentencesWithinBudget([words(80), words(5)], TALK_REPLY_WORD_BUDGET)
+  assert.equal(kept.length, 1)
+})

@@ -13,6 +13,19 @@
 // 5.8 characters per word and 18.2 characters per second.
 export const TALK_REPLY_WORD_BUDGET = 60
 
+/// A short closing line is allowed to overshoot the budget.
+///
+/// The budget exists to stop a 120-word monologue, not to shave a 12-word
+/// closer — and the closer is usually the most functional part of the turn:
+/// the question that hands the conversation back, or the offer to rehearse
+/// what was just suggested. Measured, exactly that happened: Coach wrote 52
+/// words of advice and then "Would you like to practise how you'd say that
+/// to his mum?", and the budget deleted the offer whole. The teacher heard
+/// advice and no invitation, which is the opposite of the intent.
+///
+/// So one overshoot is allowed, by this much, and nothing may follow it.
+const CLOSING_GRACE_WORDS = 15
+
 export function countWords(text: string): number {
   const trimmed = text.trim()
   return trimmed ? trimmed.split(/\s+/).length : 0
@@ -28,7 +41,12 @@ export function countWords(text: string): number {
 export function admitsSentence(wordsSoFar: number, sentence: string, budget: number | undefined): boolean {
   if (budget === undefined) return true
   if (wordsSoFar === 0) return true
-  return wordsSoFar + countWords(sentence) <= budget
+  if (wordsSoFar + countWords(sentence) <= budget) return true
+  // Over the line — but a short sentence gets through once, while the reply
+  // is still inside the budget on its own. Anything after it is refused,
+  // because `sentencesWithinBudget` and the streaming loop both stop at the
+  // first refusal.
+  return wordsSoFar <= budget && countWords(sentence) <= CLOSING_GRACE_WORDS
 }
 
 /// The same rule applied to a whole reply at once — what the teacher ends up

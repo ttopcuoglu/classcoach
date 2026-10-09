@@ -152,10 +152,9 @@ final class SpeechPlayer: NSObject, ObservableObject {
     // said. Kept in step with web/src/lib/voicePlayback.ts and the server's
     // fillerPhrases.ts.
     private static let shortFillers = [
-        "Yeah.", "Right.", "Okay.",
-        "Sure.", "Got it.", "I see.",
-        "Oh, okay.", "Yeah, okay.", "Right, yeah.",
-        "Ah, okay.", "Okay, sure.",
+        "Got it.", "I see.",
+        "Oh, okay.", "Yeah, okay.",
+        "Right, yeah.",
     ]
     // Nothing plays between Coach's own sentences. There was a pool of
     // twenty two-word phrases for that, then a quiet hum, and both are
@@ -175,9 +174,32 @@ final class SpeechPlayer: NSObject, ObservableObject {
     /// with a question, which is the wrong noise.
     private static let thinkingPhrases = [
         "Let me see...", "Let me think...",
-        "Okay, let me think...", "Let me take a moment...",
-        "Give me a second...", "Let's think about this...",
+        "Okay, let me see...", "Okay, let me think...",
+        "Alright, let me think...", "Let me think it through...",
+        "Let me work through that...", "Let's think about this...",
+        "Let me think about that one...", "Give me a second...",
+        "Just a second...", "Give me a second here...",
+        "Let me take a moment...", "Let me sit with that a second...",
         "Okay, so...", "Right, so...",
+        "Well, now...",
+    ]
+
+    /// Two more pools, for turns where neither an acknowledgement nor a
+    /// thinking sound is right. "Got it." after "I cried in my car at lunch"
+    /// is cold, and after "it finally went well" it is flat. Which pool
+    /// plays is decided by moodFor below, which errs towards the plain
+    /// acknowledgement whenever it is unsure. Kept in step with
+    /// server/src/lib/turnMood.ts.
+    private static let hardTurnPhrases = [
+        "Oh, that's a lot.", "Yeah, that's hard.",
+        "That sounds rough.", "Ugh, that's a lot.",
+        "Oh, that's rough.", "Yeah, that's a lot.",
+    ]
+
+    private static let gladTurnPhrases = [
+        "Oh, nice.", "That's a win.",
+        "Oh, good.", "Nice one.",
+        "Oh, that's good.",
     ]
 
     private static let fillerDelay: Duration = .milliseconds(250)
@@ -208,9 +230,159 @@ final class SpeechPlayer: NSObject, ObservableObject {
 
     private var starterClips: [Data] = []
     private var thinkingClips: [Data] = []
+    private var hardClips: [Data] = []
+    private var gladClips: [Data] = []
     private var lastThinking = -1
-    /// Whether the turn just ended on a question, which decides the pool.
-    private var asked = false
+    private var lastHard = -1
+    private var lastGlad = -1
+
+    enum TurnMood { case hard, glad, asked, neutral }
+
+    /// What the teacher just said, as far as a transcript can tell.
+    private var mood: TurnMood = .neutral
+
+    private static let hardWords = [
+        "i'm tired",
+        "im tired",
+        "i am tired",
+        "so tired",
+        "really tired",
+        "exhausted",
+        "exhausting",
+        "wiped out",
+        "running on empty",
+        "no energy left",
+        "i'm done",
+        "im done",
+        "i am done",
+        "i'm over it",
+        "had enough",
+        "at my limit",
+        "can't keep",
+        "cant keep",
+        "can't do this",
+        "cant do this",
+        "can't anymore",
+        "cant anymore",
+        "i give up",
+        "about to quit",
+        "thinking of quitting",
+        "want to quit",
+        "breaking point",
+        "falling apart",
+        "burnt out",
+        "burned out",
+        "i'm burning out",
+        "brutal",
+        "awful",
+        "horrible",
+        "worst day",
+        "worst week",
+        "rough day",
+        "rough week",
+        "long day",
+        "long week",
+        "hard day",
+        "hard week",
+        "terrible day",
+        "was just a lot",
+        "been a lot",
+        "it's too much",
+        "its too much",
+        "this is too much",
+        "too much for me",
+        "called in sick",
+        "i'm struggling",
+        "im struggling",
+        "i am struggling",
+        "i'm failing",
+        "failing them",
+        "i feel like a failure",
+        "not good enough",
+        "i cried",
+        "in tears",
+        "close to tears",
+        "humiliated",
+        "embarrassed myself",
+        "i lost it",
+        "i hate",
+        "i dread",
+        "dreading",
+        "overwhelmed",
+        "no idea what to do",
+        "don't know what to do",
+        "dont know what to do",
+        "at a loss",
+        "hopeless",
+        "helpless",
+        "losing my mind",
+        "losing it",
+    ]
+
+    private static let gladWords = [
+        "went really well",
+        "went well",
+        "went great",
+        "went brilliantly",
+        "it worked",
+        "finally worked",
+        "really worked",
+        "it did work",
+        "that did work",
+        "definitely worked",
+        "that worked",
+        "actually worked",
+        "worked really well",
+        "worked perfectly",
+        "nailed it",
+        "was a win",
+        "huge win",
+        "small win",
+        "a good day",
+        "good day today",
+        "they got it",
+        "finally got it",
+        "they did great",
+        "did really well",
+        "did so well",
+        "they loved",
+        "loved it",
+        "so engaged",
+        "really engaged",
+        "fully engaged",
+        "hands up",
+        "all participating",
+        "they surprised me",
+        "surprised me",
+        "best lesson",
+        "proud of them",
+        "so proud",
+        "i was proud",
+        "really pleased",
+        "so pleased",
+        "happy with how",
+        "pleased with how",
+        "it was great",
+        "was fantastic",
+        "so much better",
+        "much better",
+        "better than last",
+        "turned a corner",
+        "finally clicked",
+        "it clicked",
+        "breakthrough",
+    ]
+
+    private static func moodFor(_ transcript: String) -> TurnMood {
+        let text = transcript.lowercased()
+        // Distress outranks the question mark: a teacher who says "I'm
+        // exhausted, what do I do?" wants to be heard before being thought
+        // about. Good news outranks it for the same reason in reverse.
+        if hardWords.contains(where: text.contains) { return .hard }
+        if gladWords.contains(where: text.contains) { return .glad }
+        if transcript.trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix("?") { return .asked }
+        return .neutral
+    }
     private var lastStarter = -1
     /// Set for the rest of a turn when Coach's opener is sympathetic, and
     /// when a joke has just been told.
@@ -230,8 +402,14 @@ final class SpeechPlayer: NSObject, ObservableObject {
         guard starterClips.isEmpty else { return }
         async let starters = Self.fetchAll(Self.shortFillers.shuffled().prefix(Self.clipsPerPool), voice: voice)
         async let thinking = Self.fetchAll(Self.thinkingPhrases.shuffled().prefix(Self.clipsPerPool), voice: voice)
+        // Smaller: most turns are neither, so three of each is all a
+        // conversation will reach.
+        async let hard = Self.fetchAll(Self.hardTurnPhrases.shuffled().prefix(3), voice: voice)
+        async let glad = Self.fetchAll(Self.gladTurnPhrases.shuffled().prefix(3), voice: voice)
         starterClips = await starters
         thinkingClips = await thinking
+        hardClips = await hard
+        gladClips = await glad
     }
 
     private static func fetchAll(_ phrases: some Sequence<String>, voice: String?) async -> [Data] {
@@ -256,7 +434,7 @@ final class SpeechPlayer: NSObject, ObservableObject {
     /// acknowledgement.
     func startThinking(teacherSaid: String? = nil) {
         cancelThinking()
-        asked = (teacherSaid ?? "").trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix("?")
+        mood = Self.moodFor(teacherSaid ?? "")
         // Sometimes nothing at all: a person thinking does not make a noise
         // every time they think.
         guard Double.random(in: 0..<1) >= Self.silentTurnChance else { return }
@@ -328,12 +506,23 @@ final class SpeechPlayer: NSObject, ObservableObject {
         // Never over real speech: by the time a clip is due, the reply may
         // already have started.
         guard player?.isPlaying != true else { return }
-        let clips = asked ? thinkingClips : starterClips
+        let clips: [Data]
+        let last: Int
+        switch mood {
+        case .hard: (clips, last) = (hardClips, lastHard)
+        case .glad: (clips, last) = (gladClips, lastGlad)
+        case .asked: (clips, last) = (thinkingClips, lastThinking)
+        case .neutral: (clips, last) = (starterClips, lastStarter)
+        }
         guard !clips.isEmpty else { return }
         var index = Int.random(in: 0..<clips.count)
-        let last = asked ? lastThinking : lastStarter
         if clips.count > 1, index == last { index = (index + 1) % clips.count }
-        if asked { lastThinking = index } else { lastStarter = index }
+        switch mood {
+        case .hard: lastHard = index
+        case .glad: lastGlad = index
+        case .asked: lastThinking = index
+        case .neutral: lastStarter = index
+        }
         currentHold = Self.holdForFiller
         PlaybackSession.activate()
         fillerPlayer = try? AVAudioPlayer(data: clips[index])

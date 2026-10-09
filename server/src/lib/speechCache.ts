@@ -157,6 +157,38 @@ const fillerClips = new Map<string, Promise<Buffer>>()
 const MIN_AUDIBLE_PEAK = 2000
 const AUDIBLE_DRAWS = 4
 
+// And then the level is set here rather than accepted from Aura, because
+// retrying is not enough. Measured through this very path, "Let me see..."
+// came back at 5% of full scale after all FOUR draws — Aura is simply bad at
+// that phrase, and a teacher on that server instance would hear almost
+// nothing for days. Other fillers landed anywhere between 12% and 50%.
+//
+// So every clip is brought to the same loudness: well under Coach's own
+// speech, which measures 37-49%, and comfortably audible. The gain is capped
+// so a near-silent draw is lifted without its noise floor coming with it.
+const FILLER_TARGET_PEAK = 0.3
+const MAX_NORMALISE_GAIN = 8
+
+function normalise(wav: Buffer): Buffer {
+  const marker = wav.indexOf('data')
+  if (marker === -1) return wav
+  const pcm = wav.subarray(marker + 8)
+  const sampleCount = Math.floor(pcm.length / 2)
+  const peak = peakOf(pcm, sampleCount)
+  if (peak === 0) return wav
+  const wanted = (32767 * FILLER_TARGET_PEAK) / peak
+  // Only ever lifted, never pushed down: a clip that came back loud is a
+  // clip Aura meant to be loud.
+  if (wanted <= 1) return wav
+  const gain = Math.min(MAX_NORMALISE_GAIN, wanted)
+  const out = Buffer.alloc(sampleCount * 2)
+  for (let i = 0; i < sampleCount; i++) {
+    const scaled = pcm.readInt16LE(i * 2) * gain
+    out.writeInt16LE(Math.round(Math.max(-32767, Math.min(32767, scaled))), i * 2)
+  }
+  return wavFile(out)
+}
+
 async function drawAudible(text: string, voice: string | undefined): Promise<Buffer> {
   let best: Buffer | null = null
   let bestPeak = -1
@@ -190,7 +222,7 @@ export function fillerAudio(text: string, voice: string | undefined): Promise<Bu
     // Anything made of several interjections is built word by word; a single
     // utterance ("Well, let me think...") Aura says reliably in one go.
     const audio = await drawAudible(phrase, voice)
-    return softenEnding(audio)
+    return softenEnding(normalise(audio))
   })()
   // A failure must not be remembered as the answer forever.
   clip.catch(() => fillerClips.delete(key))

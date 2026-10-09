@@ -1408,7 +1408,7 @@ export async function transcribeTalkToMeAudio(audioBlob: Blob): Promise<{ transc
 // Bump it whenever the audio for an unchanged phrase changes.
 //
 // The server ignores it. It exists purely to be part of the URL.
-export const SPEECH_REVISION = '8'
+export const SPEECH_REVISION = '9'
 
 export function buildSpeechUrl(text: string, voice?: TalkVoice | null): string {
   const query = new URLSearchParams({ text })

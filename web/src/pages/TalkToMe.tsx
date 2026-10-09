@@ -33,9 +33,9 @@ import {
 import { isExperienced } from '../lib/experience'
 import { endTurn, markTurn } from '../lib/turnTiming'
 import {
-  askedAQuestion,
   createPlaybackQueue,
   loadFillers,
+  moodOf,
   primeAudioElement,
   type Fillers,
   type PlaybackQueue,
@@ -535,9 +535,10 @@ export default function TalkToMe() {
   // competing with a filler still trailing off underneath it.
   const FILLER_FADE_MS = 120
 
-  // Which pool the next filler comes from, decided from what the teacher
-  // just said rather than from nothing.
-  const askedRef = useRef(false)
+  // Which pool the next filler comes from, read off what the teacher just
+  // said. Four kinds, because "Got it." is cold after "I cried in my car"
+  // and flat after "it finally went well" — see moodOf.
+  const moodRef = useRef<'hard' | 'glad' | 'asked' | 'neutral'>('neutral')
 
   function startThinkingSound() {
     cancelThinkingSound()
@@ -547,9 +548,17 @@ export default function TalkToMe() {
     const delay = FILLER_AFTER_MIN_MS + Math.random() * (FILLER_AFTER_MAX_MS - FILLER_AFTER_MIN_MS)
     fillerTimerRef.current = window.setTimeout(() => {
       const audio = fillerAudioRef.current
-      // A question gets a thinking sound; telling Coach something gets an
-      // acknowledgement. Agreeing with a question is the wrong noise.
-      const clip = askedRef.current ? fillersRef.current?.nextThinking() : fillersRef.current?.nextAcknowledgement()
+      // A question gets a thinking sound, a hard turn gets sympathy, a win
+      // gets pleasure, and everything else gets a plain acknowledgement.
+      const fillers = fillersRef.current
+      const clip =
+        moodRef.current === 'hard'
+          ? fillers?.nextHard()
+          : moodRef.current === 'glad'
+            ? fillers?.nextGlad()
+            : moodRef.current === 'asked'
+              ? fillers?.nextThinking()
+              : fillers?.nextAcknowledgement()
       // Only into silence: once Coach is speaking, or the teacher is, a
       // thinking sound would be talking over one of them.
       if (!audio || !clip || !sessionActiveRef.current || phaseRef.current !== 'thinking') return
@@ -729,7 +738,7 @@ export default function TalkToMe() {
     setPhase('thinking')
 
     phaseRef.current = 'thinking'
-    askedRef.current = askedAQuestion(text)
+    moodRef.current = moodOf(text)
     thinkingHandoffRef.current = null
     startThinkingSound()
 

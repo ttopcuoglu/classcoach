@@ -54,6 +54,9 @@ export function trimIfTruncated(text: string, stopReason: string | null): string
 // the status code is already sent and can no longer say 429.
 export type StreamOptions = {
   system: SystemPrompt
+  /// Defaults to CLAUDE_MODEL. The spoken path passes SPOKEN_MODEL, which is
+  /// about half a second faster to its first sentence.
+  model?: string
   /// Stop sending sentences once this many words have gone out. A sentence
   /// that would cross the budget is held back, so the limit is never met by
   /// cutting one in half.
@@ -128,7 +131,7 @@ export async function streamCoachReply(res: Response, label: string, opts: Strea
 
   try {
     const stream = anthropic.messages.stream({
-      model: CLAUDE_MODEL,
+      model: opts.model ?? CLAUDE_MODEL,
       max_tokens: opts.maxTokens,
       thinking: { type: 'disabled' },
       system: opts.system,
