@@ -118,7 +118,25 @@ function setMiniAppMenuButton(chatId: string) {
 }
 
 function resetMenuButton(chatId: string) {
+  menuButtonSet.delete(chatId)
   void setChatMenuButton(chatId, { type: 'commands' }).catch(() => {})
+}
+
+// Chats whose button has been set since this process started. Telegram has
+// no cheap way to ask whether it's already set, and setting it is harmless
+// and idempotent — but not worth a round trip on every message, so: once per
+// chat per deploy, on whatever the teacher sends next. That also fixes up a
+// chat that connected before the Mini App existed without waiting for the
+// one command they might never send.
+//
+// Marked before the call, not after: a chat whose button genuinely can't be
+// set should be logged once, not retried on every message.
+const menuButtonSet = new Set<string>()
+
+function ensureMiniAppMenuButton(chatId: string) {
+  if (menuButtonSet.has(chatId)) return
+  menuButtonSet.add(chatId)
+  setMiniAppMenuButton(chatId)
 }
 
 const MINI_APP_HELP = MINI_APP_AVAILABLE
@@ -194,7 +212,7 @@ async function linkChat(chatId: string, code: string, firstName: string | undefi
       },
     }),
   ])
-  setMiniAppMenuButton(chatId)
+  ensureMiniAppMenuButton(chatId)
   const name = user.name?.split(' ')[0] || firstName
   await reply(chatId, `You're connected${name ? `, ${name}` : ''}! Your conversations here are saved to Talk It Through in Wivoza.\n\n${HELP_TEXT}`)
 }
@@ -280,14 +298,13 @@ async function handleMessage(chatId: string, rawText: string | undefined, firstN
     return
   }
 
+  ensureMiniAppMenuButton(chatId)
+
   // The buttons send their own label; plain "done" / "new" work too.
   const word = command ?? plainWordCommand(text)
   switch (word) {
     case 'start':
     case 'help':
-      // Also how a teacher who connected before the Mini App existed gets
-      // the "Open Wivoza" button: /help is the one command they do send.
-      setMiniAppMenuButton(chatId)
       await reply(chatId, HELP_TEXT)
       return
     case 'new':
