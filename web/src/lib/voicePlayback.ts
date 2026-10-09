@@ -453,10 +453,54 @@ export const THINKING_PHRASES = [
   'Well, now...',
 ]
 
+// Two more pools, for the turns where neither an acknowledgement nor a
+// thinking sound is right. "Got it." after "I cried in my car at lunch" is
+// cold; after "it finally went well" it is flat.
+export const HARD_TURN_PHRASES = [
+  "Oh, that's a lot.",
+  "Yeah, that's hard.",
+  "That sounds rough.",
+  "Ugh, that's a lot.",
+  "Oh, that's rough.",
+  "Yeah, that's a lot.",
+]
+
+export const GLAD_TURN_PHRASES = [
+  "Oh, nice.",
+  "That's a win.",
+  "Oh, good.",
+  "Nice one.",
+  "Oh, that's good.",
+]
+
 /// Which pool fits what the teacher just said. The transcript is all there
 /// is to go on — Claude has not seen the turn yet.
-export function askedAQuestion(transcript: string): boolean {
-  return transcript.trim().endsWith('?')
+///
+/// Kept in step with moodOf() in server/src/lib/turnMood.ts, which is where
+/// the word lists and the reasoning live.
+export type TurnMood = 'hard' | 'glad' | 'asked' | 'neutral'
+
+const HARD_WORDS = [
+  'exhausted', 'exhausting', 'overwhelmed', 'burnt out', 'burned out', 'i cried', 'in tears',
+  'breaking point', 'falling apart', "can't do this", 'cant do this', 'at my limit', 'had enough',
+  'lost it', 'humiliated', 'i hate', 'dreading', 'i give up', 'no idea what to do',
+  "don't know what to do", 'at a loss', 'worst day', 'rough day', 'long day', 'awful', 'horrible',
+  'hopeless', 'helpless',
+]
+
+const GLAD_WORDS = [
+  'went really well', 'went well', 'went great', 'it worked', 'they got it', 'so proud',
+  'i was proud', 'really pleased', 'so pleased', 'best lesson', 'first time', 'finally',
+  'nailed it', 'loved it', 'they loved', 'was a win', 'huge win', 'surprised me', 'better than',
+  'turned a corner',
+]
+
+export function moodOf(transcript: string): TurnMood {
+  const text = transcript.toLowerCase()
+  if (HARD_WORDS.some((w) => text.includes(w))) return 'hard'
+  if (GLAD_WORDS.some((w) => text.includes(w))) return 'glad'
+  if (transcript.trim().endsWith('?')) return 'asked'
+  return 'neutral'
 }
 
 // The third pool: the same gaps, with a joke in them.
@@ -473,6 +517,10 @@ export type Fillers = {
   nextAcknowledgement: () => string | null
   /// A clip for a turn where they asked Coach something.
   nextThinking: () => string | null
+  /// For a turn that was plainly hard for them.
+  nextHard: () => string | null
+  /// And for one that plainly went well.
+  nextGlad: () => string | null
   release: () => void
 }
 
@@ -509,17 +557,25 @@ export async function loadFillers(voice: TalkVoice | null): Promise<Fillers> {
     (await Promise.all(sample(phrases, count).map((phrase) => fetchSentenceAudio(phrase, voice)))).filter(
       (url): url is string => url !== null,
     )
-  const [acks, thinking] = await Promise.all([
+  // The mood pools are smaller: most turns are neither, so three of each is
+  // all a conversation will reach.
+  const [acks, thinking, hard, glad] = await Promise.all([
     fetchPool(FILLER_PHRASES, CLIPS_PER_POOL),
     fetchPool(THINKING_PHRASES, CLIPS_PER_POOL),
+    fetchPool(HARD_TURN_PHRASES, 3),
+    fetchPool(GLAD_TURN_PHRASES, 3),
   ])
   return {
     nextAcknowledgement: rotate(acks),
     nextThinking: rotate(thinking),
+    nextHard: rotate(hard),
+    nextGlad: rotate(glad),
     release() {
-      for (const url of [...acks, ...thinking]) URL.revokeObjectURL(url)
+      for (const url of [...acks, ...thinking, ...hard, ...glad]) URL.revokeObjectURL(url)
       acks.length = 0
       thinking.length = 0
+      hard.length = 0
+      glad.length = 0
     },
   }
 }

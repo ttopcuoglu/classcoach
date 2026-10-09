@@ -45,6 +45,32 @@ export const FILLER_PHRASES = [
 // So the pool is chosen by what the teacher just did: a question gets one of
 // these, anything else gets an acknowledgement. The client decides, since it
 // has the transcript and Claude has not seen it yet.
+// And two pools for the turns where neither an acknowledgement nor a
+// thinking sound is the right noise.
+//
+// "Got it." after "I cried in my car at lunch" is cold, and after "the essay
+// finally went well" it is flat. Both are statements, so the question-mark
+// test could not tell them apart. These mirror two of the reactions the
+// system prompt already offers Coach — feeling it with them, and genuinely
+// pleased — and which pool plays is decided by moodOf() in turnMood.ts,
+// which errs towards the neutral acknowledgement whenever it is unsure.
+export const HARD_TURN_PHRASES = [
+  "Oh, that's a lot.",
+  "Yeah, that's hard.",
+  "That sounds rough.",
+  "Ugh, that's a lot.",
+  "Oh, that's rough.",
+  "Yeah, that's a lot.",
+]
+
+export const GLAD_TURN_PHRASES = [
+  "Oh, nice.",
+  "That's a win.",
+  "Oh, good.",
+  "Nice one.",
+  "Oh, that's good.",
+]
+
 // Grouped by what they actually do, because a list of "Let me X" variants
 // reads as one phrase in six wrappers. Sixteen phrases, five ideas.
 export const THINKING_PHRASES = [
@@ -84,7 +110,9 @@ export const THINKING_PHRASES = [
 // dead air honestly, which "Yeah." does without ever being mistaken for
 // advice.
 
-const lookup = new Set([...FILLER_PHRASES, ...THINKING_PHRASES].map((phrase) => phrase.toLowerCase()))
+const lookup = new Set(
+  [...FILLER_PHRASES, ...THINKING_PHRASES, ...HARD_TURN_PHRASES, ...GLAD_TURN_PHRASES].map((p) => p.toLowerCase()),
+)
 
 export function isFillerPhrase(text: string): boolean {
   return lookup.has(text.trim().toLowerCase())
