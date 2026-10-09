@@ -20,6 +20,7 @@ import {
   generateLessonDeck,
   generatePresentation,
   generateLessonPlan,
+  getCoachHandoff,
   getLessonPlans,
   getPresentationFeedback,
   getProfile,
@@ -891,7 +892,10 @@ function ChoiceChips({
 }
 
 function BuildPanel() {
+  const [searchParams] = useSearchParams()
   const [form, setForm] = useState<BuildForm>(EMPTY_BUILD)
+  // Which fields Coach filled in from a chat, named for the teacher.
+  const [fromChat, setFromChat] = useState<string[]>([])
   const [customDuration, setCustomDuration] = useState(false)
   const [gradeOptions, setGradeOptions] = useState<string[]>([])
   const [subjectOptions, setSubjectOptions] = useState<string[]>([])
@@ -1017,6 +1021,48 @@ function BuildPanel() {
     }
   }
 
+  // Coach offered Planning Coach in a chat and the teacher tapped "Build
+  // this lesson" — fill in what they already told it, rather than making
+  // them say it a second time. Suggestions exactly like an uploaded file's:
+  // every field stays editable, and nothing is generated until they tap
+  // Build. The id is left in the URL so a reload refills rather than
+  // emptying the form.
+  const handoffId = searchParams.get('handoff')
+  useEffect(() => {
+    if (!handoffId) return
+    let cancelled = false
+    getCoachHandoff(handoffId)
+      .then(({ details }) => {
+        if (cancelled || !details?.topic) return
+        const patch: Partial<BuildForm> = { topic: details.topic }
+        const filled = ['topic']
+        if (details.subject) {
+          patch.subject = details.subject
+          filled.push('subject')
+        }
+        if (details.gradeLevel) {
+          patch.gradeLevel = details.gradeLevel
+          filled.push('grade level')
+        }
+        if (details.durationMinutes) {
+          patch.durationMinutes = details.durationMinutes
+          filled.push('length')
+          // A length that isn't one of the chips has to show in the box, or
+          // the form would say 45 while the plan is built for 55.
+          if (!DURATION_CHOICES.includes(details.durationMinutes)) setCustomDuration(true)
+        }
+        if (details.kind) patch.kind = details.kind
+        setForm((prev) => ({ ...prev, ...patch }))
+        setFromChat(filled)
+      })
+      // An expired handoff needs no apology: the form in front of them
+      // works, it is just empty.
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [handoffId])
+
   const canGenerate = !!form.topic.trim() || !!material
 
   async function handleGenerate() {
@@ -1079,6 +1125,12 @@ function BuildPanel() {
             <PanelHeader eyebrow="Planning Coach" title="Build a lesson">
               Start with a topic, or the material you already have. Everything else is optional.
             </PanelHeader>
+
+            {fromChat.length > 0 && (
+              <p className="rounded-2xl bg-peach-tint/40 px-4 py-3 text-xs text-forest">
+                Filled in the {fromChat.join(', ')} from your chat with Coach — change anything that isn't right, then build it.
+              </p>
+            )}
 
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-ink">Topic or learning goal</span>

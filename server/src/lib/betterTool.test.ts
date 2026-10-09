@@ -48,3 +48,58 @@ test('the instruction names every tool the parser accepts', () => {
     assert.ok(readBetterTool(`x\n<better_tool>${key}</better_tool>`).offer, `${key} is not parsed`)
   }
 })
+
+// The prefill block. A mangled line here should cost one field, never the
+// whole handoff and never a wrong number in a teacher's form.
+
+const TAGGED_PLAN = `Monday's workable — what have you got already?
+<better_tool>planning_coach</better_tool>
+<tool_details>
+topic: photosynthesis
+subject: Science
+grade: 7th
+minutes: 45
+kind: full
+</tool_details>`
+
+test('a full details block fills every field and leaves no markup', () => {
+  const { offer, details, text } = readBetterTool(TAGGED_PLAN)
+  assert.equal(offer?.prefillLabel, 'Build this lesson')
+  assert.deepEqual(details, {
+    topic: 'photosynthesis',
+    subject: 'Science',
+    gradeLevel: '7th',
+    durationMinutes: 45,
+    kind: 'full',
+  })
+  assert.equal(text, "Monday's workable — what have you got already?")
+})
+
+test('details with only a topic are still worth having', () => {
+  const { details } = readBetterTool('Sure.\n<better_tool>planning_coach</better_tool>\n<tool_details>\ntopic: long division\n</tool_details>')
+  assert.deepEqual(details, { topic: 'long division', subject: undefined, gradeLevel: undefined, durationMinutes: undefined, kind: undefined })
+})
+
+test('a details block with no topic is dropped — an empty form is the same as none', () => {
+  const { offer, details } = readBetterTool('Sure.\n<better_tool>planning_coach</better_tool>\n<tool_details>\nsubject: Science\n</tool_details>')
+  assert.ok(offer)
+  assert.equal(details, null)
+})
+
+test('a length no lesson has is dropped, and the rest survives', () => {
+  const { details } = readBetterTool('x\n<better_tool>planning_coach</better_tool>\n<tool_details>\ntopic: mitosis\nminutes: 4\nkind: sideways\n</tool_details>')
+  assert.equal(details?.topic, 'mitosis')
+  assert.equal(details?.durationMinutes, undefined)
+  assert.equal(details?.kind, undefined)
+})
+
+test('a tool with no prefill of its own still offers its plain button', () => {
+  const { offer } = readBetterTool('x\n<better_tool>lesson_debrief</better_tool>')
+  assert.equal(offer?.key, 'lesson_debrief')
+  assert.equal(offer?.prefillLabel, undefined)
+})
+
+test('the details block never reaches the teacher, even cut off mid-write', () => {
+  const { text } = readBetterTool('Here you go.\n<better_tool>planning_coach</better_tool>\n<tool_details>\ntopic: pho')
+  assert.equal(text, 'Here you go.')
+})

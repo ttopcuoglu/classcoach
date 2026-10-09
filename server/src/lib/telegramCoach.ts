@@ -19,7 +19,8 @@ import { anthropic, CLAUDE_MODEL } from './anthropic.ts'
 import { trimIfTruncated } from './coachStream.ts'
 import { hasActivePlanFor, PLAN_USER_SELECT } from './billing.ts'
 import { appendTurn, countUserTurns, TALK_TURN_CAP, toClaudeMessages, type ChatMessage } from './coachingChat.ts'
-import { BETTER_TOOL_INSTRUCTION, BETTER_TOOL_TOKEN_BUFFER, readBetterTool } from './betterTool.ts'
+import { BETTER_TOOL_INSTRUCTION, BETTER_TOOL_TOKEN_BUFFER, readBetterTool, type HandoffDetails, type ToolOffer } from './betterTool.ts'
+import { createHandoff } from './coachHandoff.ts'
 import { buildMemoryContextBlock, MEMORY_UPDATE_INSTRUCTION, MEMORY_UPDATE_TOKEN_BUFFER, persistMemoryUpdate, shouldWriteMemory } from './coachMemory.ts'
 import { CORE_COACHING_RULES } from './coachPersona.ts'
 import { flagIfUnsafe } from './coachSafetyCheck.ts'
@@ -138,6 +139,17 @@ function ensureMiniAppMenuButton(chatId: string) {
   if (menuButtonSet.has(chatId)) return
   menuButtonSet.add(chatId)
   setMiniAppMenuButton(chatId)
+}
+
+// The button under a reply that offers another tool. When Coach collected
+// enough to fill that tool's form, the button carries a one-time id for it
+// (lib/coachHandoff.ts) and says so — "Build this lesson", not "Open
+// Planning Coach" — because landing on a filled-in form is a different
+// promise from landing on an empty one.
+function toolOfferButton(offer: ToolOffer, details: HandoffDetails | null, userId: string): ReplyMarkup | undefined {
+  if (!details || !offer.prefillLabel) return openInAppButton(offer.label, offer.path)
+  const id = createHandoff(userId, offer.key, details)
+  return openInAppButton(offer.prefillLabel, `${offer.path}${offer.path.includes('?') ? '&' : '?'}handoff=${id}`)
 }
 
 // Coach may offer another tool once per conversation — see betterTool.ts.
@@ -440,7 +452,8 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
   const stopTyping = keepTyping(chatId)
   let raw: string
   let coachText: string
-  let offer: ReturnType<typeof readBetterTool>['offer'] = null
+  let offer: ToolOffer | null = null
+  let details: HandoffDetails | null = null
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -459,6 +472,7 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
     flagIfUnsafe(raw, debrief ? 'telegram.talk.chat' : 'telegram.talk')
     const read = readBetterTool(stripTag(raw, 'memory_update'))
     offer = read.offer
+    details = read.details
     coachText = trimIfTruncated(read.text, response.stop_reason)
   } finally {
     stopTyping()
@@ -482,7 +496,7 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
   // colleague's answer and the routing stays optional. The persistent
   // Wrap up / New topic keyboard is unaffected — an inline button sits with
   // the message, not above the typing box.
-  const button = offer ? openInAppButton(offer.label, offer.path) : undefined
+  const button = offer ? toolOfferButton(offer, details, user.id) : undefined
   await sendMessage(chatId, coachText, button ?? MAIN_KEYBOARD)
   if (button) rememberToolOffer(saved.id)
 

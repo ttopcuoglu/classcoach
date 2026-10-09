@@ -903,6 +903,24 @@ export function getWsToken(): Promise<{ token: string; url: string | null }> {
   return request('/api/auth/ws-token', { method: 'POST' })
 }
 
+// What Coach collected in a chat before handing off to a tool — see
+// server/src/lib/coachHandoff.ts. The details never travel in the URL; the
+// button Coach sends carries only this id.
+export type CoachHandoff = {
+  tool: string
+  details: {
+    topic: string
+    subject?: string
+    gradeLevel?: string
+    durationMinutes?: number
+    kind?: 'full' | 'ideas'
+  }
+}
+
+export function getCoachHandoff(id: string): Promise<CoachHandoff> {
+  return request(`/api/coach-handoff/${id}`)
+}
+
 // Mini App sign-in: trades the blob Telegram signed for a session cookie,
 // so opening the app from the bot's chat needs no password. See
 // lib/telegramWebApp.ts for where the blob comes from.
