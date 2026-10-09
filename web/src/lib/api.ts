@@ -903,6 +903,13 @@ export function getWsToken(): Promise<{ token: string; url: string | null }> {
   return request('/api/auth/ws-token', { method: 'POST' })
 }
 
+// Mini App sign-in: trades the blob Telegram signed for a session cookie,
+// so opening the app from the bot's chat needs no password. See
+// lib/telegramWebApp.ts for where the blob comes from.
+export function signInWithTelegramWebApp(initData: string): Promise<UserProfile> {
+  return request('/api/auth/telegram-webapp', { method: 'POST', body: JSON.stringify({ initData }) })
+}
+
 export function signInWithGoogle(credential: string): Promise<UserProfile> {
   return request('/api/auth/google', { method: 'POST', body: JSON.stringify({ credential }) })
 }

@@ -8,6 +8,7 @@ import { withPlusAccess } from '../lib/billing.ts'
 import { resolveSignInRole } from '../lib/organization.ts'
 import { sendNoPasswordEmail, sendPasswordResetEmail } from '../lib/authEmail.ts'
 import { prisma } from '../lib/prisma.ts'
+import { verifyWebAppInitData } from '../lib/telegramWebApp.ts'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MIN_PASSWORD_LENGTH = 8
@@ -211,6 +212,67 @@ authRouter.post('/apple', async (req, res) => {
     console.error('[auth] Apple sign-in failed:', error)
     res.status(401).json({ error: 'Could not verify Apple credential' })
   }
+})
+
+// Mini App sign-in. Telegram's own browser opens the site from the bot —
+// the "Open Wivoza" menu button, or a button under a takeaway — and hands
+// the page a blob signed with the bot token (see lib/telegramWebApp.ts).
+// That chat was tied to one Wivoza account when the teacher connected it
+// from Profile, so a blob that verifies is enough to sign them in without a
+// password. Opening the app from the chat is the whole point: a takeaway
+// that says "it's saved in Wivoza" is a dead end on a phone otherwise.
+authRouter.post('/telegram-webapp', async (req, res) => {
+  const { initData } = req.body ?? {}
+  if (typeof initData !== 'string') {
+    res.status(400).json({ error: 'initData is required' })
+    return
+  }
+
+  const ip = req.ip ?? 'unknown'
+  if (!checkLoginRateLimit(`telegram-webapp:${ip}`)) {
+    res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' })
+    return
+  }
+
+  const identity = verifyWebAppInitData(initData)
+  if (!identity) {
+    res.status(401).json({ error: 'Telegram could not confirm who you are. Close this page and open it again from the chat.' })
+    return
+  }
+
+  let user = await prisma.user.findUnique({
+    where: { telegramChatId: identity.telegramUserId },
+    omit: SAFE_USER_OMIT,
+    include: USER_INCLUDE_ORG,
+  })
+  // A real Telegram user, but no Wivoza account has claimed that chat (they
+  // unlinked, or the bot's menu button outlived the connection). 404 rather
+  // than 401 so the client can fall through to the ordinary sign-in page
+  // instead of looking broken.
+  if (!user) {
+    res.status(404).json({ error: 'This Telegram chat is not connected to a Wivoza account yet. Sign in below, then tap "Connect Telegram" in Profile.' })
+    return
+  }
+  if (user.suspendedAt) {
+    res.status(403).json({ error: 'This account has been suspended. Contact your administrator.' })
+    return
+  }
+
+  // The same role refresh every other sign-in does, so a teacher who became
+  // a school admin since their last sign-in doesn't land here as a teacher.
+  const { role, organizationId } = await resolveSignInRole(user.email, ADMIN_EMAILS.has(user.email), user)
+  if (role !== user.role || (organizationId && organizationId !== user.organizationId)) {
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { role, organizationId },
+      omit: SAFE_USER_OMIT,
+      include: USER_INCLUDE_ORG,
+    })
+  }
+
+  const token = signSession({ userId: user.id, role: user.role })
+  res.cookie(SESSION_COOKIE, token, COOKIE_OPTIONS)
+  res.json({ ...(await withPlusAccess(user)), token })
 })
 
 authRouter.post('/signup', async (req, res) => {

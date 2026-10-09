@@ -37,7 +37,11 @@ async function call<T>(method: string, body?: unknown, signal?: AbortSignal): Pr
 // only guards against a pathological one failing to send at all.
 const MAX_MESSAGE_CHARS = 4096
 
-export type InlineButton = { text: string; callback_data: string }
+// A button under a message: one that sends a callback_query back, or one
+// that opens the Mini App (the site in Telegram's own browser, signed in
+// from the chat — see telegramWebApp.ts). A web_app button is only allowed
+// in a private chat, which is the only kind this bot talks in.
+export type InlineButton = { text: string; callback_data: string } | { text: string; web_app: { url: string } }
 
 // Buttons that go with a message: a keyboard that stays above the typing box
 // (tapping a button just sends its text), inline buttons under the message
@@ -78,6 +82,16 @@ export function sendTyping(chatId: string): Promise<unknown> {
 
 export function setMyCommands(commands: { command: string; description: string }[]): Promise<unknown> {
   return call('setMyCommands', { commands })
+}
+
+// What the button left of the typing box does in ONE chat. 'commands' is
+// Telegram's default (the ☰ list of /commands); 'web_app' replaces it with
+// a labelled button that opens the Mini App. Set per chat on purpose: only
+// a teacher whose chat is connected to an account has an app to open.
+export type MenuButton = { type: 'commands' } | { type: 'web_app'; text: string; web_app: { url: string } }
+
+export function setChatMenuButton(chatId: string, menuButton: MenuButton): Promise<unknown> {
+  return call('setChatMenuButton', { chat_id: chatId, menu_button: menuButton })
 }
 
 export function setWebhook(url: string, secretToken: string): Promise<unknown> {

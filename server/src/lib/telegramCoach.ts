@@ -34,6 +34,7 @@ import {
   removeInlineButtons,
   sendMessage,
   sendTyping,
+  setChatMenuButton,
   setMyCommands,
   setWebhook,
   telegramEnabled,
@@ -78,11 +79,57 @@ function reply(chatId: string, text: string) {
   return sendMessage(chatId, text, MAIN_KEYBOARD)
 }
 
+// ---------------------------------------------------------------------------
+// The Mini App: Wivoza itself, opened in Telegram's own browser
+// ---------------------------------------------------------------------------
+//
+// A takeaway that ends "it's saved in Wivoza" is a dead end on a phone — it
+// means leaving Telegram, finding the site and signing in. These buttons
+// open the real app inside Telegram instead, already signed in: Telegram
+// hands the page a blob signed with the bot token, and the server trades it
+// for a session (lib/telegramWebApp.ts, POST /api/auth/telegram-webapp).
+//
+// Telegram only opens an https URL this way, so in local development, where
+// APP_URL is http://localhost, none of these buttons exist.
+const MINI_APP_AVAILABLE = APP_URL.startsWith('https://')
+
+function miniAppUrl(path: string): string | null {
+  return MINI_APP_AVAILABLE ? `${APP_URL.replace(/\/$/, '')}${path}` : null
+}
+
+// A button under a message that opens the app at one page.
+function openInAppButton(text: string, path: string): ReplyMarkup | undefined {
+  const url = miniAppUrl(path)
+  return url ? { inline_keyboard: [[{ text, web_app: { url } }]] } : undefined
+}
+
+// Puts "Open Wivoza" in place of the ☰ commands list beside the typing box,
+// for this chat only: a chat with no account behind it has no app to open,
+// and would just land on the sign-in page.
+//
+// Fire and forget on purpose — a cosmetic button is not worth failing a
+// teacher's message over, and every takeaway offers the same door anyway.
+function setMiniAppMenuButton(chatId: string) {
+  const url = miniAppUrl('/')
+  if (!url) return
+  void setChatMenuButton(chatId, { type: 'web_app', text: 'Open Wivoza', web_app: { url } }).catch((error) =>
+    console.error('[telegram] setting the menu button failed:', error),
+  )
+}
+
+function resetMenuButton(chatId: string) {
+  void setChatMenuButton(chatId, { type: 'commands' }).catch(() => {})
+}
+
+const MINI_APP_HELP = MINI_APP_AVAILABLE
+  ? '\n\nTap "Open Wivoza" beside the typing box to open your account right here — this conversation once it\'s wrapped up, and the rest of your tools.'
+  : ''
+
 const HELP_TEXT = `Talk to me like you'd talk to a colleague after class. Tell me what happened and what's on your mind, and we'll figure out a next step together.
 
 When you're finished, tap "Wrap up" below for your takeaway, and I'll check in a few days later to see how it went. Tap "New topic" to start fresh.
 
-One ask: please leave out students' full names. "A student in 3rd period" works great.
+One ask: please leave out students' full names. "A student in 3rd period" works great.${MINI_APP_HELP}
 
 (To unlink this chat from your Wivoza account, send /disconnect.)`
 
@@ -112,6 +159,7 @@ export async function unlinkTelegram(userId: string): Promise<void> {
     data: { telegramChatId: null, telegramLinkedAt: null, telegramDebriefId: null },
   })
   if (user?.telegramChatId) {
+    resetMenuButton(user.telegramChatId)
     await sendMessage(
       user.telegramChatId,
       `This chat is no longer connected to Wivoza. You can reconnect any time from Profile at ${APP_URL}.`,
@@ -146,6 +194,7 @@ async function linkChat(chatId: string, code: string, firstName: string | undefi
       },
     }),
   ])
+  setMiniAppMenuButton(chatId)
   const name = user.name?.split(' ')[0] || firstName
   await reply(chatId, `You're connected${name ? `, ${name}` : ''}! Your conversations here are saved to Talk It Through in Wivoza.\n\n${HELP_TEXT}`)
 }
@@ -236,6 +285,9 @@ async function handleMessage(chatId: string, rawText: string | undefined, firstN
   switch (word) {
     case 'start':
     case 'help':
+      // Also how a teacher who connected before the Mini App existed gets
+      // the "Open Wivoza" button: /help is the one command they do send.
+      setMiniAppMenuButton(chatId)
       await reply(chatId, HELP_TEXT)
       return
     case 'new':
@@ -442,9 +494,14 @@ async function finishConversation(chatId: string, user: BotUser, debriefId: stri
   const checkInLine = result.followUp
     ? `\n\nI'll check in on ${weekdayName(result.followUp.dueAt)} to see how it went.`
     : ''
-  await reply(
+  // Opens straight to this conversation in the app, signed in — the one
+  // moment a teacher might actually want to look at what's saved. The
+  // persistent Wrap up / New topic keyboard stays where it is; an inline
+  // button sits under the message and doesn't replace it.
+  await sendMessage(
     chatId,
     `Here's your takeaway.\n\nWhat we talked about\n${takeaway.explored}\n\nTry next\n${takeaway.tryNext}\n\nNotice\n${takeaway.notice}${checkInLine}\n\nIt's saved in Wivoza under Talk It Through.`,
+    openInAppButton('Open in Wivoza', `/talk-to-me?open=${debrief.id}`) ?? MAIN_KEYBOARD,
   )
 }
 

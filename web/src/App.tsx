@@ -5,6 +5,7 @@ import Layout from './components/Layout'
 import Landing from './pages/Landing'
 import { getMe, type UserProfile } from './lib/api'
 import { applyPageMeta } from './lib/pageMeta'
+import { signInFromTelegram } from './lib/telegramWebApp'
 
 // Landing and Layout stay eager — Landing is the first thing every signed-out
 // visitor sees (rendered directly by RequireAuth below, not just its own
@@ -123,7 +124,18 @@ export default function App() {
 
   useEffect(() => {
     const cameFromCheckout = new URLSearchParams(window.location.search).get('upgraded') === 'true'
-    refreshUser(cameFromCheckout ? 3 : 0)
+    // Inside Telegram the chat itself proves who this is, so trade its
+    // signed blob for a session before falling back to asking for one.
+    // Returns null immediately anywhere else, including on a reload in
+    // Telegram — where the session cookie from the first load takes over.
+    void signInFromTelegram().then((profile) => {
+      if (profile) {
+        setUser(profile)
+        setLoading(false)
+        return
+      }
+      void refreshUser(cameFromCheckout ? 3 : 0)
+    })
   }, [])
 
   function handleLogout() {
