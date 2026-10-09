@@ -19,6 +19,7 @@ import { anthropic, CLAUDE_MODEL } from './anthropic.ts'
 import { trimIfTruncated } from './coachStream.ts'
 import { hasActivePlanFor, PLAN_USER_SELECT } from './billing.ts'
 import { appendTurn, countUserTurns, TALK_TURN_CAP, toClaudeMessages, type ChatMessage } from './coachingChat.ts'
+import { BETTER_TOOL_INSTRUCTION, BETTER_TOOL_TOKEN_BUFFER, readBetterTool } from './betterTool.ts'
 import { buildMemoryContextBlock, MEMORY_UPDATE_INSTRUCTION, MEMORY_UPDATE_TOKEN_BUFFER, persistMemoryUpdate, shouldWriteMemory } from './coachMemory.ts'
 import { CORE_COACHING_RULES } from './coachPersona.ts'
 import { flagIfUnsafe } from './coachSafetyCheck.ts'
@@ -137,6 +138,18 @@ function ensureMiniAppMenuButton(chatId: string) {
   if (menuButtonSet.has(chatId)) return
   menuButtonSet.add(chatId)
   setMiniAppMenuButton(chatId)
+}
+
+// Coach may offer another tool once per conversation — see betterTool.ts.
+// A button under every reply is a nag: the teacher came here to think, not
+// to be routed. In memory rather than a column, like the menu button above:
+// losing the record on a deploy costs one extra offer, which is cheaper
+// than a migration.
+const toolOffered = new Set<string>()
+
+function rememberToolOffer(debriefId: string) {
+  toolOffered.add(debriefId)
+  if (toolOffered.size > 500) toolOffered.delete(toolOffered.values().next().value!)
 }
 
 const MINI_APP_HELP = MINI_APP_AVAILABLE
@@ -417,15 +430,24 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
   const memoryOn = user.coachMemoryEnabled && hasActivePlanFor(user)
   // Memory is read every turn but rewritten only on some — see shouldWriteMemory.
   const writeMemory = memoryOn && shouldWriteMemory(countUserTurns(existing) + 1)
-  const basePrompt = `${TALK_TEXT_SYSTEM_PROMPT}${buildExperienceContextBlock(user.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}`
+  // Not on a reply to a check-in: that turn is Coach asking how something
+  // went, and a button changing the subject is the wrong answer to it.
+  // Not twice in one conversation either — so once an offer is made, the
+  // instruction leaves the prompt and Coach stops looking for one.
+  const offerAllowed = MINI_APP_AVAILABLE && !followUp && !(debrief && toolOffered.has(debrief.id))
+  const basePrompt = `${TALK_TEXT_SYSTEM_PROMPT}${buildExperienceContextBlock(user.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${offerAllowed ? BETTER_TOOL_INSTRUCTION : ''}`
 
   const stopTyping = keepTyping(chatId)
   let raw: string
   let coachText: string
+  let offer: ReturnType<typeof readBetterTool>['offer'] = null
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: writeMemory ? REPLY_MAX_TOKENS + MEMORY_UPDATE_TOKEN_BUFFER : REPLY_MAX_TOKENS,
+      max_tokens:
+        REPLY_MAX_TOKENS +
+        (writeMemory ? MEMORY_UPDATE_TOKEN_BUFFER : 0) +
+        (offerAllowed ? BETTER_TOOL_TOKEN_BUFFER : 0),
       thinking: { type: 'disabled' },
       system: memoryOn ? `${basePrompt}${buildMemoryContextBlock(user.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}` : basePrompt,
       messages: toClaudeMessages(existing, text),
@@ -435,7 +457,9 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
       .map((block) => block.text)
       .join('\n')
     flagIfUnsafe(raw, debrief ? 'telegram.talk.chat' : 'telegram.talk')
-    coachText = trimIfTruncated(stripTag(raw, 'memory_update'), response.stop_reason)
+    const read = readBetterTool(stripTag(raw, 'memory_update'))
+    offer = read.offer
+    coachText = trimIfTruncated(read.text, response.stop_reason)
   } finally {
     stopTyping()
   }
@@ -454,7 +478,13 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
     await prisma.coachFollowUp.update({ where: { id: followUp.id }, data: { status: 'talked', respondedDebriefId: saved.id } })
   }
 
-  await reply(chatId, coachText)
+  // The offer rides under the reply as a button, so the words stay a
+  // colleague's answer and the routing stays optional. The persistent
+  // Wrap up / New topic keyboard is unaffected — an inline button sits with
+  // the message, not above the typing box.
+  const button = offer ? openInAppButton(offer.label, offer.path) : undefined
+  await sendMessage(chatId, coachText, button ?? MAIN_KEYBOARD)
+  if (button) rememberToolOffer(saved.id)
 
   // Bookkeeping for the next turn, after the teacher already has this one.
   if (writeMemory) {
