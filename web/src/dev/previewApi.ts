@@ -319,7 +319,7 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
     // A GET with an id is one plan (the printable report); without one it is
     // the history list.
     const id = path.replace('/api/lesson-plans', '').split('?')[0].replace(/^\//, '')
-    if (!id) return homeTools().has('planning') ? [{ ...lesson(), createdAt: daysAgo(8) }] : []
+    if (!id) return homeTools().has('planning') ? [lesson({ createdAt: daysAgo(8) })] : []
     return id === 'preview-ideas' ? IDEAS : id === 'preview-feedback' ? FEEDBACK : lesson()
   }
 
@@ -355,17 +355,49 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
   }
   if (path.startsWith('/api/debriefs')) {
     const rows: Json[] = []
-    if (tools.has('talk')) rows.push(debrief('preview-talk', 'talk_to_me', 'I have a parent who keeps emailing about their child\u2019s grade.', 3))
+    // A busy Talk It Through week on purpose: four rows close together is the
+    // case that used to fill every slot in the list.
+    if (tools.has('talk')) {
+      rows.push(debrief('preview-talk-1', 'talk_to_me', 'A student told me to remove the grades from my grading book and I said no.', 1))
+      rows.push(debrief('preview-talk-2', 'talk_to_me', 'I have a parent who keeps complaining no matter how much support I offer.', 2))
+      rows.push(debrief('preview-talk-3', 'talk_to_me', 'A student cursed at a classmate and I had to take him out of class.', 3))
+      rows.push(debrief('preview-talk-4', 'talk_to_me', 'A co-teacher keeps telling me what to do and I don\u2019t want to hurt his feelings.', 12))
+    }
     if (tools.has('ask')) rows.push(debrief('preview-ask', 'ask_tab', 'What do I do about a student who will not start the work?', 9))
     return rows
   }
   if (path.startsWith('/api/conversation-plans')) {
-    return tools.has('communication') ? [{ id: 'preview-plan', createdAt: daysAgo(5) }] : []
+    return tools.has('communication')
+      ? [{
+          id: 'preview-conv-plan',
+          recipientType: 'parent',
+          situationText: 'A parent has asked for a meeting about their child\u2019s grade in my class.',
+          title: null,
+          planContent: null,
+          saved: false,
+          conversation: [],
+          createdAt: daysAgo(5),
+        }]
+      : []
   }
   if (path.startsWith('/api/assignment-coach')) {
     // The whole point of the Planning Coach fix: assignment rows alone mean
     // the tool has been opened.
-    return tools.has('assignment') ? [{ id: 'preview-assignment', createdAt: daysAgo(7) }] : []
+    // No title, so Recent work falls through to the objective — the fallback
+    // chain is the point of showing this one here.
+    return tools.has('assignment')
+      ? [{
+          id: 'preview-assignment',
+          mode: 'review',
+          title: null,
+          objective: 'A lab write-up on diffusion that students can\u2019t finish with a chatbot.',
+          originalText: null,
+          status: 'completed',
+          conversation: [],
+          saved: false,
+          createdAt: daysAgo(7),
+        }]
+      : []
   }
   return null
 }

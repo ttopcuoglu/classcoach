@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  BookIcon,
   BrainIcon,
   ChatBubbleIcon,
   HeadsetIcon,
@@ -19,8 +20,11 @@ import {
   getLessonPlans,
   getProfile,
   updateFollowUp,
+  type AssignmentCoachSession,
   type AudioSession,
   type CoachFollowUp,
+  type ConversationPlan,
+  type LessonPlan,
   type ExperienceLevel,
   type Debrief,
   type ScenarioAttempt,
@@ -48,6 +52,14 @@ const WELCOME_BACK_THRESHOLD_DAYS = 14
 type Activity =
   | { type: 'scenario'; id: string; createdAt: string; attempt: ScenarioAttempt }
   | { type: 'ask'; id: string; createdAt: string; debrief: Debrief }
+  | { type: 'lessonPlan'; id: string; createdAt: string; plan: LessonPlan }
+  | { type: 'assignment'; id: string; createdAt: string; session: AssignmentCoachSession }
+  | { type: 'conversationPlan'; id: string; createdAt: string; plan: ConversationPlan }
+
+// How many rows "Pick up where you left off" shows. Six rather than four
+// because the list draws on five tools now, and four slots were filled by a
+// single busy week in one of them.
+const RECENT_WORK_LIMIT = 6
 
 // Ask and Talk It Through conversations are both Debrief rows; only the
 // source says which feature a teacher would expect to land back in.
@@ -55,13 +67,83 @@ function isTalkItThrough(item: Activity): boolean {
   return item.type === 'ask' && item.debrief.source === 'talk_to_me'
 }
 
-// Straight to the conversation itself, not just the feature's start screen.
+// Straight to the thing itself, not the feature's start screen. Practice and
+// Talk It Through reopen in place; the rest have no "open this one" parameter
+// on their tool page, so they go to the same saved report their own history
+// lists link to.
 function activityLink(item: Activity): string {
-  if (item.type === 'scenario') return `/coach-chat?tab=practice&open=${item.id}`
-  // Ask is gone as a surface, but the answers a teacher saved under it are
-  // still theirs. Their report page still loads them, so Recent work opens that
-  // rather than a tab that no longer exists.
-  return isTalkItThrough(item) ? `/talk-to-me?open=${item.id}` : `/ask-practice/ask/${item.id}/export`
+  switch (item.type) {
+    case 'scenario':
+      return `/coach-chat?tab=practice&open=${item.id}`
+    // Ask is gone as a surface, but the answers a teacher saved under it are
+    // still theirs. Their report page still loads them, so Recent work opens
+    // that rather than a tab that no longer exists.
+    case 'ask':
+      return isTalkItThrough(item) ? `/talk-to-me?open=${item.id}` : `/ask-practice/ask/${item.id}/export`
+    case 'lessonPlan':
+      return `/lesson-planning/${item.id}/export`
+    case 'assignment':
+      return `/assignment-coach/${item.id}/export`
+    case 'conversationPlan':
+      return `/communications/meeting/${item.id}/export`
+  }
+}
+
+// The tool as the nav names it. Review an Assignment is a tab of Planning
+// Coach, so it says Planning Coach; the old ask flow is not a tool any more,
+// so its rows say what they are instead of naming a surface that is gone.
+function activityTool(item: Activity): string {
+  switch (item.type) {
+    case 'scenario':
+      return 'Practice'
+    case 'ask':
+      return isTalkItThrough(item) ? 'Talk It Through' : 'Saved answer'
+    case 'lessonPlan':
+    case 'assignment':
+      return 'Planning Coach'
+    case 'conversationPlan':
+      return 'Communication Coach'
+  }
+}
+
+function activityIcon(item: Activity): IconComponent {
+  switch (item.type) {
+    case 'scenario':
+      return BrainIcon
+    case 'ask':
+      return isTalkItThrough(item) ? MicIcon : ChatBubbleIcon
+    case 'lessonPlan':
+      return LessonPlanIcon
+    case 'assignment':
+      return BookIcon
+    case 'conversationPlan':
+      return MailIcon
+  }
+}
+
+// Every row needs a line a teacher recognizes. The plan tools store their own
+// title inconsistently — a lesson plan has an objective, an assignment or a
+// meeting may carry a title the teacher typed — so each falls back through
+// what it has before settling for naming the kind of thing it is.
+function activityText(item: Activity): string {
+  switch (item.type) {
+    case 'scenario':
+      return item.attempt.scenario.text
+    case 'ask':
+      return item.debrief.incidentText
+    case 'lessonPlan':
+      return (
+        item.plan.objective ||
+        item.plan.unitName ||
+        item.plan.essentialQuestion ||
+        [item.plan.gradeLevel, item.plan.subject].filter(Boolean).join(' · ') ||
+        'A lesson you worked on'
+      )
+    case 'assignment':
+      return item.session.title || item.session.objective || item.session.originalText || 'An assignment you reviewed'
+    case 'conversationPlan':
+      return item.plan.title || item.plan.situationText
+  }
 }
 
 const MOODS: { label: string; value: Mood }[] = [
@@ -115,6 +197,23 @@ const ACTION_CARDS = [
     description:
       'Rehearse a real classroom moment — behavior, a parent, a hard conversation — and get coaching on the words you used.',
     linkLabel: 'Practice a scenario',
+  },
+]
+
+// The Plan group, in the nav's order and with the nav's own subtitles, so the
+// two pages Home never had a door to are named the same way in both places.
+const PLAN_CARDS = [
+  {
+    to: '/lesson-planning',
+    icon: LessonPlanIcon,
+    title: 'Planning Coach',
+    description: 'Lessons, slides & assignments',
+  },
+  {
+    to: '/communications',
+    icon: MailIcon,
+    title: 'Communication Coach',
+    description: 'Write, prepare & review',
   },
 ]
 
@@ -233,12 +332,18 @@ export default function Home() {
       getConversationPlans(),
     ])
       .then(([attempts, debriefs, lessonPlans, assignmentSessions, conversationPlans]) => {
+        // Recorded lessons are deliberately not here: card 01, the pulse card
+        // and Your growth all already point at them, and a fourth door to the
+        // same page would crowd out the tools that only have this one.
         const combined: Activity[] = [
           ...attempts.map((a): Activity => ({ type: 'scenario', id: a.id, createdAt: a.createdAt, attempt: a })),
           ...debriefs.map((d): Activity => ({ type: 'ask', id: d.id, createdAt: d.createdAt, debrief: d })),
+          ...lessonPlans.map((p): Activity => ({ type: 'lessonPlan', id: p.id, createdAt: p.createdAt, plan: p })),
+          ...assignmentSessions.map((a): Activity => ({ type: 'assignment', id: a.id, createdAt: a.createdAt, session: a })),
+          ...conversationPlans.map((p): Activity => ({ type: 'conversationPlan', id: p.id, createdAt: p.createdAt, plan: p })),
         ]
         combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        setActivity(combined.slice(0, 4))
+        setActivity(combined.slice(0, RECENT_WORK_LIMIT))
 
         setHasPlanningActivity(lessonPlans.length > 0 || assignmentSessions.length > 0)
         // source is what tells the two Debrief-backed tools apart; anything
@@ -246,15 +351,9 @@ export default function Home() {
         setHasTalkItThrough(debriefs.some((d) => d.source === 'talk_to_me'))
         setHasConversationPlans(conversationPlans.length > 0)
 
-        const timestamps = [
-          combined[0]?.createdAt,
-          lessonPlans[0]?.createdAt,
-          assignmentSessions[0]?.createdAt,
-          conversationPlans[0]?.createdAt,
-        ]
-          .filter((d): d is string => Boolean(d))
-          .map((d) => new Date(d).getTime())
-        setLatestOtherActivityAt(timestamps.length > 0 ? Math.max(...timestamps) : null)
+        // combined is every non-recording source, newest first, so its head is
+        // already the answer this used to assemble from four separate lists.
+        setLatestOtherActivityAt(combined[0] ? new Date(combined[0].createdAt).getTime() : null)
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -522,6 +621,34 @@ export default function Home() {
         ))}
       </div>
 
+      {/* The three cards above are what a teacher reaches for to get better;
+          these two are what they make for a class. Smaller on purpose — all
+          five tools have a door on Home now without the page losing which
+          three it is pointing at first. */}
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Plan</p>
+        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+          {PLAN_CARDS.map(({ to, icon: Icon, title, description }) => (
+            <Link
+              key={to}
+              to={to}
+              className="group flex items-center gap-4 rounded-2xl border border-hairline bg-cream-card p-4 transition-all hover:-translate-y-0.5 hover:border-terracotta/40 hover:shadow-md"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-forest text-gold">
+                <Icon className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="font-heading text-base font-bold text-forest">{title}</p>
+                <p className="text-xs text-ink-soft">{description}</p>
+              </div>
+              <span className="ml-auto shrink-0 text-sm font-semibold text-terracotta-600 transition-transform group-hover:translate-x-0.5">
+                →
+              </span>
+            </Link>
+          ))}
+        </div>
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <div className="rounded-3xl border border-hairline bg-cream-card p-6">
           <div className="flex items-center justify-between">
@@ -655,33 +782,35 @@ export default function Home() {
         {loading ? (
           <p className="mt-3 text-center text-sm text-ink-soft">Loading...</p>
         ) : activity.length === 0 ? (
-          <p className="mt-2 text-sm text-ink-soft">Nothing yet — completed scenarios and saved answers will show up here.</p>
+          <p className="mt-2 text-sm text-ink-soft">Nothing yet — your conversations, rehearsals, plans and reviews will show up here.</p>
         ) : (
           <div className="mt-3 flex flex-col gap-2">
-            {activity.map((item) => (
-              <Link
-                key={item.id}
-                to={activityLink(item)}
-                className="flex items-start gap-3 rounded-2xl border border-hairline bg-cream-card p-4 transition-colors hover:border-terracotta/40"
-              >
-                <span
-                  className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
-                    item.type === 'scenario' ? 'bg-gold text-forest' : 'bg-forest text-gold'
-                  }`}
+            {activity.map((item) => {
+              const RowIcon = activityIcon(item)
+              return (
+                <Link
+                  key={`${item.type}-${item.id}`}
+                  to={activityLink(item)}
+                  className="flex items-start gap-3 rounded-2xl border border-hairline bg-cream-card p-4 transition-colors hover:border-terracotta/40"
                 >
-                  {item.type === 'scenario' ? (
-                    <BrainIcon className="h-3.5 w-3.5" />
-                  ) : isTalkItThrough(item) ? (
-                    <MicIcon className="h-3.5 w-3.5" />
-                  ) : (
-                    <ChatBubbleIcon className="h-3.5 w-3.5" />
-                  )}
-                </span>
-                <p className="line-clamp-2 text-sm text-ink">
-                  {item.type === 'scenario' ? item.attempt.scenario.text : item.debrief.incidentText}
-                </p>
-              </Link>
-            ))}
+                  <span
+                    className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
+                      item.type === 'scenario' ? 'bg-gold text-forest' : 'bg-forest text-gold'
+                    }`}
+                  >
+                    <RowIcon className="h-3.5 w-3.5" />
+                  </span>
+                  <div className="min-w-0">
+                    {/* Which tool and when. Four unlabelled paragraphs from the
+                        same busy week were indistinguishable from each other. */}
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-soft">
+                      {activityTool(item)} · {relativeDay(item.createdAt)}
+                    </p>
+                    <p className="mt-0.5 line-clamp-2 text-sm text-ink">{activityText(item)}</p>
+                  </div>
+                </Link>
+              )
+            })}
           </div>
         )}
       </div>
