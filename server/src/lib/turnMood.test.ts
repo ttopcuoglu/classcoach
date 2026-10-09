@@ -44,3 +44,50 @@ test('empty and whitespace are neutral, never a mood', () => {
   assert.equal(moodOf(''), 'neutral')
   assert.equal(moodOf('   '), 'neutral')
 })
+
+// The second list was written from how teachers actually talk, after the
+// first missed fifteen of these. They are here so it cannot happen again.
+test('the ways a teacher actually says it is hard', () => {
+  for (const said of [
+    "I'm so tired.",
+    "I'm just really tired this week.",
+    'Today was just a lot.',
+    "I'm done. I can't keep doing this.",
+    'This is too much right now.',
+    "I feel like I'm failing them.",
+    "It's been a brutal week.",
+    'I almost called in sick just to get a break.',
+    "Honestly I'm struggling.",
+    'I dread fifth period.',
+  ]) {
+    assert.equal(moodOf(said), 'hard', said)
+  }
+})
+
+test('the ways a teacher actually says it went well', () => {
+  for (const said of [
+    'That actually worked!',
+    'They were so engaged, I could not believe it.',
+    'I was really happy with how it went.',
+    'It was so much better today.',
+    'They did great on the essay.',
+    'It finally clicked for them.',
+  ]) {
+    assert.equal(moodOf(said), 'glad', said)
+  }
+})
+
+test('and none of the widening reaches the students instead of the teacher', () => {
+  // Every one of these contains a word from a mood list, about someone else.
+  for (const said of [
+    'They are tired after lunch.',
+    "They're struggling with the concept.",
+    'The test was hard for them.',
+    'It is a hard chapter to teach.',
+    'They find fractions hard.',
+    'I hope it goes well tomorrow.',
+    'Maybe it will work next time.',
+  ]) {
+    assert.equal(moodOf(said), 'neutral', said)
+  }
+})
