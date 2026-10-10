@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PanelHeader } from '../components/PanelHeader'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import AnswerSection, { NumberedCard } from '../components/AnswerSection'
 import CoachingChat from '../components/CoachingChat'
 import PastList from '../components/PastList'
@@ -28,6 +28,7 @@ import {
   type StartingAction,
 } from '../lib/communicationOptions'
 import { takeWritePrefill } from '../lib/communicationsPrefill'
+import { getCoachHandoff } from '../lib/api'
 import {
   draftParentMessage,
   getParentMessages,
@@ -62,6 +63,10 @@ const TRANSLATE_LANGUAGES = [
 ]
 
 export default function WriteMessage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  // True once Coach's details have been applied, so the form can say where
+  // they came from.
+  const [fromChat, setFromChat] = useState(false)
   const [prefill] = useState(() => takeWritePrefill())
   const [startingAction, setStartingAction] = useState<StartingAction>(
     (prefill?.startingAction as StartingAction | undefined) ?? 'new',
@@ -105,22 +110,30 @@ export default function WriteMessage() {
   const inputText = startingAction === 'respond' ? receivedMessage : startingAction === 'improve' ? existingDraft : incidentSummary
   const canDraft = inputText.trim().length > 0 && !drafting
 
-  async function handleDraft() {
+  function handleDraft() {
     if (!canDraft) return
+    void draftFrom({
+      startingAction,
+      incidentSummary: startingAction === 'new' ? incidentSummary.trim() : undefined,
+      receivedMessage: startingAction === 'respond' ? receivedMessage.trim() : undefined,
+      contextNotes: startingAction === 'respond' ? contextNotes.trim() || undefined : undefined,
+      existingDraft: startingAction === 'improve' ? existingDraft.trim() : undefined,
+      recipientType,
+      purpose,
+      format,
+      tone,
+    })
+  }
+
+  // Takes the request explicitly rather than reading state, so the arriving
+  // handoff below can draft from what it just filled in without waiting for
+  // a render to land first.
+  async function draftFrom(request: Parameters<typeof draftParentMessage>[0]) {
+    if (drafting) return
     setDrafting(true)
     setError(null)
     try {
-      const message = await draftParentMessage({
-        startingAction,
-        incidentSummary: startingAction === 'new' ? incidentSummary.trim() : undefined,
-        receivedMessage: startingAction === 'respond' ? receivedMessage.trim() : undefined,
-        contextNotes: startingAction === 'respond' ? contextNotes.trim() || undefined : undefined,
-        existingDraft: startingAction === 'improve' ? existingDraft.trim() : undefined,
-        recipientType,
-        purpose,
-        format,
-        tone,
-      })
+      const message = await draftParentMessage(request)
       setCurrent(message)
       setChatDraft('')
       setChatError(null)
@@ -130,6 +143,62 @@ export default function WriteMessage() {
       setDrafting(false)
     }
   }
+
+  // Coach collected this in a chat and the teacher tapped "Write this
+  // message" — fill the form in and draft it, rather than making them type
+  // out again what they just finished explaining. The tap is the answer to
+  // a question Coach asked, so arriving writes the draft; every field is
+  // still on screen above it, and the revise chat is right there.
+  const handoffId = searchParams.get('handoff')
+  const draftOnArrival = searchParams.get('build') === '1'
+  // Survives React's double-invoke in development, so one arrival can never
+  // mean two drafts.
+  const drafted = useRef(false)
+  useEffect(() => {
+    if (!handoffId) return
+    let cancelled = false
+    getCoachHandoff(handoffId)
+      .then(({ details }) => {
+        // A handoff meant for another tool isn't ours to read.
+        if (cancelled || !details || !('situation' in details)) return
+        const action = details.startingAction
+        setStartingAction(action)
+        if (action === 'respond') setReceivedMessage(details.situation)
+        else setIncidentSummary(details.situation)
+        if (details.recipient) setRecipientType(details.recipient)
+        if (details.purpose) setPurpose(details.purpose)
+        if (details.tone) setTone(details.tone)
+        if (details.format) setFormat(details.format)
+        setFromChat(true)
+        if (!draftOnArrival || drafted.current) return
+        drafted.current = true
+        // Out of the URL before it runs: a reload is a reload, not a second
+        // draft billed to the same tap. The message is saved either way.
+        const params = new URLSearchParams(searchParams)
+        params.delete('handoff')
+        params.delete('build')
+        setSearchParams(params, { replace: true })
+        void draftFrom({
+          startingAction: action,
+          incidentSummary: action === 'new' ? details.situation : undefined,
+          receivedMessage: action === 'respond' ? details.situation : undefined,
+          recipientType: details.recipient,
+          purpose: details.purpose,
+          format: details.format,
+          // The form's own default, since the API requires one.
+          tone: details.tone ?? 'warm',
+        })
+      })
+      // An expired handoff needs no apology: the form in front of them
+      // works, it is just empty.
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // Only the arriving id should re-run this: everything else is read once,
+    // as it lands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handoffId])
 
   async function sendChatMessage(text: string) {
     if (!current || chatSending) return
@@ -229,6 +298,11 @@ export default function WriteMessage() {
         </PanelHeader>
         {!current ? (
           <div className="flex flex-col gap-4">
+            {fromChat && (
+              <p className="rounded-2xl bg-peach-tint/40 px-4 py-3 text-xs text-forest">
+                Filled in from your chat with Coach — change anything that isn't right, then draft it again.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
               {STARTING_ACTIONS.map((a) => (
                 <button

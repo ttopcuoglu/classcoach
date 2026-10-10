@@ -1,3 +1,5 @@
+import type { MessageFormat, MessagePurpose, MessageTone, RecipientType } from './communicationOptions'
+
 // A follow-up coaching chat thread, appended below a one-shot result.
 // Seeded with the original submission + first reply, grown by follow-up
 // turns. Same shape as Audio Coaching's AudioReflectMessage.
@@ -908,13 +910,18 @@ export function getWsToken(): Promise<{ token: string; url: string | null }> {
 // button Coach sends carries only this id.
 export type CoachHandoff = {
   tool: string
-  details: {
-    topic: string
-    subject?: string
-    gradeLevel?: string
-    durationMinutes?: number
-    kind?: 'full' | 'ideas'
-  }
+  // One shape per tool whose form Coach can fill; `tool` says which, and
+  // the field that is always there tells them apart.
+  details:
+    | { topic: string; subject?: string; gradeLevel?: string; durationMinutes?: number; kind?: 'full' | 'ideas' }
+    | {
+        situation: string
+        startingAction: 'new' | 'respond'
+        recipient?: RecipientType
+        purpose?: MessagePurpose
+        tone?: MessageTone
+        format?: MessageFormat
+      }
 }
 
 export function getCoachHandoff(id: string): Promise<CoachHandoff> {

@@ -1089,7 +1089,8 @@ function BuildPanel() {
     let cancelled = false
     getCoachHandoff(handoffId)
       .then(({ details }) => {
-        if (cancelled || !details?.topic) return
+        // A handoff from another tool's offer isn't ours to read.
+        if (cancelled || !details || !('topic' in details) || !details.topic) return
         const patch: Partial<BuildForm> = { topic: details.topic }
         const filled = ['topic']
         if (details.subject) {

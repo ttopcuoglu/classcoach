@@ -160,9 +160,13 @@ function toolOfferButton(
   debriefId: string,
 ): ReplyMarkup | undefined {
   const prefill = details && offer.prefillLabel
+  // A prefilled offer may land somewhere more specific than the tool's
+  // front door — Communication Coach's hub has three tools behind it, and
+  // only the writing one takes what Coach collected.
+  const base = prefill ? (offer.prefillPath ?? offer.path) : offer.path
   const path = prefill
-    ? `${offer.path}${offer.path.includes('?') ? '&' : '?'}handoff=${createHandoff(userId, offer.key, details)}&build=1`
-    : offer.path
+    ? `${base}${base.includes('?') ? '&' : '?'}handoff=${createHandoff(userId, offer.key, details)}&build=1`
+    : base
   const url = miniAppUrl(path)
   if (!url) return undefined
   return {

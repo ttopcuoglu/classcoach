@@ -14,6 +14,20 @@
 // The tag never replaces the reply. Coach still answers; the offer is a
 // button underneath it.
 
+import {
+  isValidMessageFormat,
+  isValidMessagePurpose,
+  isValidMessageTone,
+  isValidRecipientType,
+  MESSAGE_FORMATS,
+  MESSAGE_PURPOSES,
+  MESSAGE_TONES,
+  RECIPIENT_TYPES,
+  type MessageFormat,
+  type MessagePurpose,
+  type MessageTone,
+  type RecipientType,
+} from './communicationOptions.ts'
 import { extractTag, stripTag } from './extractTag.ts'
 
 const TAG = 'better_tool'
@@ -21,12 +35,16 @@ const DETAILS_TAG = 'tool_details'
 
 export type ToolKey = 'lesson_debrief' | 'practice' | 'planning_coach' | 'assignment_coach' | 'communication_coach'
 
-export type ToolOffer = { key: ToolKey; label: string; prefillLabel?: string; path: string }
+export type ToolOffer = { key: ToolKey; label: string; prefillLabel?: string; path: string; prefillPath?: string }
 
 /// What Coach already knows about what the teacher wants to make, for
-/// filling in the tool's form. Deliberately the fields Build a Lesson asks
-/// for (see readBuildContext in routes/lessonPlans.ts) and no more.
-export type HandoffDetails = {
+/// filling in the tool's form. One shape per tool that has a form Coach
+/// can fill; the tool key stored beside it says which one this is.
+///
+/// Deliberately the fields each form actually asks for and no more — see
+/// readBuildContext in routes/lessonPlans.ts and buildContext in
+/// routes/parentMessage.ts.
+export type PlanningDetails = {
   topic: string
   subject?: string
   gradeLevel?: string
@@ -34,9 +52,22 @@ export type HandoffDetails = {
   kind?: 'full' | 'ideas'
 }
 
+export type MessageDetails = {
+  // What happened and what they need to say — or, when answering, what the
+  // other person said. Goes in the one field the form requires.
+  situation: string
+  startingAction: 'new' | 'respond'
+  recipient?: RecipientType
+  purpose?: MessagePurpose
+  tone?: MessageTone
+  format?: MessageFormat
+}
+
+export type HandoffDetails = PlanningDetails | MessageDetails
+
 // `when` is prompt-facing: it is what Claude reads to decide. `label` is the
 // button a teacher taps, `path` where it opens in the app.
-const TOOLS: Record<ToolKey, { label: string; prefillLabel?: string; path: string; when: string }> = {
+const TOOLS: Record<ToolKey, { label: string; prefillLabel?: string; path: string; prefillPath?: string; when: string }> = {
   lesson_debrief: {
     label: 'Open Lesson Debrief',
     path: '/audio-coaching',
@@ -62,7 +93,12 @@ const TOOLS: Record<ToolKey, { label: string; prefillLabel?: string; path: strin
   },
   communication_coach: {
     label: 'Open Communication Coach',
+    // Only the writing half of this tool has a form Coach can fill from a
+    // conversation; preparing for a face-to-face meeting asks for things a
+    // chat hasn't established, so that still opens the hub.
+    prefillLabel: 'Write this message',
     path: '/communications',
+    prefillPath: '/communications?tool=write',
     when: 'they have to write a message, or walk into a real conversation with a parent, student, colleague or administrator, and want help with the wording or with how to go in.',
   },
 }
@@ -91,7 +127,9 @@ Rules for the tag:
 - Most replies should have no tag. A reply with no tag is the normal case.
 - When you tag planning_coach, make your reply a real choice rather than a handover: they can have the lesson built out now, or work out the shape of it with you here first. Ask which they'd rather, in your own words.
 
-When — and only when — you tag planning_coach, also pass on what the teacher has already told you about the lesson, so the tool opens with its form filled in instead of empty. Put this after the tag, one field per line, leaving out any line you don't know:
+When you tag planning_coach or communication_coach, also pass on what the teacher has already told you, so the tool opens with its form filled in instead of empty. Put this after the tag, one field per line, leaving out any line you don't know.
+
+For planning_coach:
 
 <tool_details>
 topic: what they're teaching, in their own words
@@ -101,7 +139,18 @@ minutes: how long the lesson is, digits only
 kind: full for a whole lesson plan, ideas for a handful of activities
 </tool_details>
 
-Only the topic line matters. Fill the rest in from what they have ALREADY said — never ask a run of questions to complete it, and never put down a grade, subject or length they haven't mentioned. You still ask at most one question per reply, exactly as before.`
+For communication_coach — but only when it's something they have to write or answer, not when they're preparing to talk to someone face to face:
+
+<tool_details>
+situation: what happened and what they need to get across, written the way they would type it into a form — or, if you have the other person's actual words, those words themselves
+action: respond only when you have what the other person actually wrote, word for word, because that field is read as their message. Otherwise new, even when the thing they're writing IS a reply — then say so in the situation.
+recipient: ${RECIPIENT_TYPES.join(' | ')}
+purpose: ${MESSAGE_PURPOSES.join(' | ')}
+tone: ${MESSAGE_TONES.join(' | ')}
+format: ${MESSAGE_FORMATS.join(' | ')}
+</tool_details>
+
+Only the first line of each — topic, or situation — actually matters. Fill the rest in from what they have ALREADY said: never ask a run of questions to complete it, and never put down a grade, a subject, a length or a tone they haven't given you. You still ask at most one question per reply, exactly as before. Leave names out of all of it, the same as everywhere else.`
 
 // Room for the tag so that adding one cannot cost the teacher a sentence.
 export const BETTER_TOOL_TOKEN_BUFFER = 20
@@ -117,8 +166,14 @@ export function readBetterTool(raw: string): { offer: ToolOffer | null; details:
   if (!key || !Object.hasOwn(TOOLS, key)) return { offer: null, details: null, text }
   const tool = TOOLS[key as ToolKey]
   return {
-    offer: { key: key as ToolKey, label: tool.label, prefillLabel: tool.prefillLabel, path: tool.path },
-    details: readToolDetails(raw),
+    offer: {
+      key: key as ToolKey,
+      label: tool.label,
+      prefillLabel: tool.prefillLabel,
+      path: tool.path,
+      prefillPath: tool.prefillPath,
+    },
+    details: readToolDetails(raw, key as ToolKey),
     text,
   }
 }
@@ -127,37 +182,65 @@ export function readBetterTool(raw: string): { offer: ToolOffer | null; details:
 // than it mangles lines, and a mangled line costs one field rather than the
 // whole prefill. Unknown keys are ignored; a value that doesn't make sense
 // is dropped, never passed through.
-const DETAIL_KEYS = ['topic', 'subject', 'grade', 'minutes', 'kind'] as const
-
+const MAX_SITUATION_CHARS = 1500
 const MAX_TOPIC_CHARS = 300
 const MAX_SHORT_CHARS = 60
 
-function readToolDetails(raw: string): HandoffDetails | null {
-  const block = extractTag(raw, DETAILS_TAG)
-  if (!block) return null
-
+function readLines(block: string): Map<string, string> {
   const found = new Map<string, string>()
   for (const line of block.split('\n')) {
     const match = line.match(/^\s*([a-z_]+)\s*:\s*(.+?)\s*$/i)
-    if (!match) continue
-    const key = match[1].toLowerCase()
-    if ((DETAIL_KEYS as readonly string[]).includes(key)) found.set(key, match[2])
+    if (match) found.set(match[1].toLowerCase(), match[2])
+  }
+  return found
+}
+
+function short(value: string | undefined): string | undefined {
+  return value?.slice(0, MAX_SHORT_CHARS).trim() || undefined
+}
+
+function readToolDetails(raw: string, tool: ToolKey): HandoffDetails | null {
+  const block = extractTag(raw, DETAILS_TAG)
+  if (!block) return null
+  const found = readLines(block)
+
+  if (tool === 'planning_coach') {
+    // Without a topic there is nothing to prefill: the form's one required
+    // field would still be empty, which is the problem this exists to fix.
+    const topic = found.get('topic')?.slice(0, MAX_TOPIC_CHARS).trim()
+    if (!topic) return null
+    const minutes = Number.parseInt(found.get('minutes') ?? '', 10)
+    const kind = found.get('kind')?.trim().toLowerCase()
+    return {
+      topic,
+      subject: short(found.get('subject')),
+      gradeLevel: short(found.get('grade')),
+      // A lesson is not 4 minutes and not 9 hours; anything outside that is
+      // a misread, and the form's own default beats a wrong number.
+      durationMinutes: Number.isInteger(minutes) && minutes >= 10 && minutes <= 180 ? minutes : undefined,
+      kind: kind === 'ideas' || kind === 'full' ? kind : undefined,
+    }
   }
 
-  // Without a topic there is nothing to prefill: the form's own one required
-  // field would still be empty, which is the problem this exists to fix.
-  const topic = found.get('topic')?.slice(0, MAX_TOPIC_CHARS).trim()
-  if (!topic) return null
-
-  const minutes = Number.parseInt(found.get('minutes') ?? '', 10)
-  const kind = found.get('kind')?.trim().toLowerCase()
-  return {
-    topic,
-    subject: found.get('subject')?.slice(0, MAX_SHORT_CHARS).trim() || undefined,
-    gradeLevel: found.get('grade')?.slice(0, MAX_SHORT_CHARS).trim() || undefined,
-    // A lesson is not 4 minutes and not 9 hours; anything outside that is a
-    // misread, and the form's own default is better than a wrong number.
-    durationMinutes: Number.isInteger(minutes) && minutes >= 10 && minutes <= 180 ? minutes : undefined,
-    kind: kind === 'ideas' || kind === 'full' ? kind : undefined,
+  if (tool === 'communication_coach') {
+    const situation = found.get('situation')?.slice(0, MAX_SITUATION_CHARS).trim()
+    if (!situation) return null
+    const action = found.get('action')?.trim().toLowerCase()
+    const recipient = found.get('recipient')?.trim().toLowerCase()
+    const purpose = found.get('purpose')?.trim().toLowerCase()
+    const tone = found.get('tone')?.trim().toLowerCase()
+    const format = found.get('format')?.trim().toLowerCase()
+    return {
+      situation,
+      // 'improve' needs a draft the teacher already wrote, which a chat
+      // doesn't have — so a message from here is one of the other two.
+      startingAction: action === 'respond' ? 'respond' : 'new',
+      recipient: isValidRecipientType(recipient) ? recipient : undefined,
+      purpose: isValidMessagePurpose(purpose) ? purpose : undefined,
+      tone: isValidMessageTone(tone) ? tone : undefined,
+      format: isValidMessageFormat(format) ? format : undefined,
+    }
   }
+
+  return null
 }
