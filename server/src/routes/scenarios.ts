@@ -4,6 +4,7 @@ import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { getCuratedFallback } from '../lib/curatedFallback.ts'
 import { TEACHING_AND_LEARNING, findFocusArea, focusAreaForSubCategory } from '../lib/focusAreas.ts'
 import { scenarioAreaBlock, teachingContextBlock } from '../lib/focusAreaPrompt.ts'
+import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { prisma } from '../lib/prisma.ts'
 import { pickDifficulty } from '../lib/scenarioCategories.ts'
 import {
@@ -152,7 +153,11 @@ scenariosRouter.post('/generate', async (req, res) => {
     console.error('[scenarios] generate failed, falling back to curated bank:', error)
     const fallback = await getCuratedFallback(chosenArea.value, chosenCategory, chosenGradeBand, chosenDifficulty)
     if (!fallback) {
-      res.status(502).json({ error: 'Claude request failed' })
+      // The curated bank had nothing for this combination either, so the
+      // teacher gets no scenario at all and the reason is worth getting right.
+      const failure = classifyModelError(error, 'Could not build that scenario')
+      logModelFailure('[scenarios] generate failed with no fallback:', failure, error)
+      res.status(failure.status).json({ error: failure.message })
       return
     }
     res.json({ ...fallback, fallback: true })

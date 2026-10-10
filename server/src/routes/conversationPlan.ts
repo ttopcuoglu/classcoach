@@ -5,6 +5,7 @@ import { isValidMeetingFormat, isValidMeetingType, isValidRecipientType } from '
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { extractTag } from '../lib/extractTag.ts'
+import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { prisma } from '../lib/prisma.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
@@ -260,8 +261,9 @@ conversationPlanRouter.post('/', async (req, res) => {
     })
     res.status(201).json(plan)
   } catch (error) {
-    console.error('[conversation-plan] generation failed:', error)
-    res.status(502).json({ error: 'Claude request failed' })
+    const failure = classifyModelError(error, 'Could not reach your coach')
+    logModelFailure('[conversation-plan] generation failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -321,8 +323,9 @@ conversationPlanRouter.post('/:id/chat', async (req, res) => {
     })
     res.json(updated)
   } catch (error) {
-    console.error('[conversation-plan] chat failed:', error)
-    res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
+    const failure = classifyModelError(error, 'Could not reach your coach')
+    logModelFailure('[conversation-plan] chat failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 

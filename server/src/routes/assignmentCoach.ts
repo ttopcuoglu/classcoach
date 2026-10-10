@@ -13,6 +13,7 @@ import { carryOriginalPictures, parseDocOutput, parseSlidesOutput, sanitizeDeck,
 import { readOriginalPictures, type OriginalImage, type OriginalPicture } from '../lib/originalImages.ts'
 import { buildPdf } from '../lib/pdfBuilder.ts'
 import { buildPptx, THEME_GUIDE } from '../lib/slidesPptx.ts'
+import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { prisma } from '../lib/prisma.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
@@ -645,8 +646,9 @@ assignmentCoachRouter.post('/', async (req, res) => {
     })
     res.status(201).json(session)
   } catch (error) {
-    console.error('[assignment-coach] start failed:', error)
-    res.status(502).json({ error: 'Claude request failed' })
+    const failure = classifyModelError(error, 'Could not reach your coach')
+    logModelFailure('[assignment-coach] start failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -704,8 +706,9 @@ assignmentCoachRouter.post('/:id/chat', async (req, res) => {
     })
     res.json(updated)
   } catch (error) {
-    console.error('[assignment-coach] chat failed:', error)
-    res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
+    const failure = classifyModelError(error, 'Could not reach your coach')
+    logModelFailure('[assignment-coach] chat failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -757,8 +760,9 @@ assignmentCoachRouter.post('/:id/review', async (req, res) => {
     })
     res.json(updated)
   } catch (error) {
-    console.error('[assignment-coach] review failed:', error)
-    res.status(502).json({ error: 'Could not put together a review. Please try again.' })
+    const failure = classifyModelError(error, 'Could not put together a review')
+    logModelFailure('[assignment-coach] review failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -815,8 +819,9 @@ assignmentCoachRouter.post('/:id/ai-resistant', async (req, res) => {
     })
     res.json(updated)
   } catch (error) {
-    console.error('[assignment-coach] ai-resistant failed:', error)
-    res.status(502).json({ error: 'Could not put this together. Please try again.' })
+    const failure = classifyModelError(error, 'Could not put this together')
+    logModelFailure('[assignment-coach] ai-resistant failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -951,8 +956,9 @@ assignmentCoachRouter.post('/:id/revise', async (req, res) => {
       .slice(0, 5)
     res.json({ ...updated, revisionSummary })
   } catch (error) {
-    console.error('[assignment-coach] revise failed:', error)
-    res.status(502).json({ error: 'Could not revise the assignment. Please try again.' })
+    const failure = classifyModelError(error, 'Could not revise the assignment')
+    logModelFailure('[assignment-coach] revise failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -1032,8 +1038,9 @@ assignmentCoachRouter.post('/:id/export-preview', upload.single('file'), async (
     }
     res.json({ kind, model })
   } catch (error) {
-    console.error('[assignment-coach] export preview failed:', error)
-    res.status(502).json({ error: 'Could not lay this out. Please try again.' })
+    const failure = classifyModelError(error, 'Could not lay this out')
+    logModelFailure('[assignment-coach] export preview failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -1168,8 +1175,9 @@ assignmentCoachRouter.post('/:id/refine', async (req, res) => {
     })
     res.json(updated)
   } catch (error) {
-    console.error('[assignment-coach] refine failed:', error)
-    res.status(502).json({ error: 'Could not refine this. Please try again.' })
+    const failure = classifyModelError(error, 'Could not refine this')
+    logModelFailure('[assignment-coach] refine failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 

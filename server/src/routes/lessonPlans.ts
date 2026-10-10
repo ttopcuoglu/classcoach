@@ -26,6 +26,7 @@ import {
   type LessonSections,
 } from '../lib/lessonPlanModel.ts'
 import { extractPdfImages, extractPptxImages, orderedSlideParts, type OriginalImage } from '../lib/originalImages.ts'
+import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { prisma } from '../lib/prisma.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
 import { THEME_GUIDE, type SlideDeck } from '../lib/slidesPptx.ts'
@@ -412,8 +413,9 @@ lessonPlansRouter.post('/:id/presentation-generate', presentationUpload.single('
     await finishDeck(deck, plan.subject, plan.gradeLevel, originals)
     res.json({ kind: 'slides', model: deck })
   } catch (error) {
-    console.error('[lesson-plans] presentation-generate failed:', error)
-    res.status(502).json({ error: 'Could not build the presentation. Please try again.' })
+    const failure = classifyModelError(error, 'Could not build the presentation')
+    logModelFailure('[lesson-plans] presentation-generate failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -474,8 +476,9 @@ lessonPlansRouter.post('/:id/lesson-deck', async (req, res) => {
     await finishDeck(deck, plan.subject, plan.gradeLevel)
     res.json({ kind: 'slides', model: deck })
   } catch (error) {
-    console.error('[lesson-plans] lesson-deck failed:', error)
-    res.status(502).json({ error: 'Could not build the presentation. Please try again.' })
+    const failure = classifyModelError(error, 'Could not build the presentation')
+    logModelFailure('[lesson-plans] lesson-deck failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -550,8 +553,9 @@ lessonPlansRouter.post('/presentation-review', async (req, res) => {
     })
     res.status(201).json(lessonPlan)
   } catch (error) {
-    console.error('[lesson-plans] presentation-review failed:', error)
-    res.status(502).json({ error: 'Could not review this presentation. Please try again.' })
+    const failure = classifyModelError(error, 'Could not review this presentation')
+    logModelFailure('[lesson-plans] presentation-review failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -693,8 +697,9 @@ lessonPlansRouter.post('/feedback', async (req, res) => {
     const content = `${header}\n\nLesson plan:\n${planText.trim()}`
     await runFeedback(res, req.user!.userId, context, planText.trim(), content)
   } catch (error) {
-    console.error('[lesson-plans] feedback generation failed:', error)
-    res.status(502).json({ error: 'Claude request failed' })
+    const failure = classifyModelError(error, 'Could not reach your coach')
+    logModelFailure('[lesson-plans] feedback generation failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -753,8 +758,9 @@ lessonPlansRouter.post('/:id/chat', async (req, res) => {
     })
     res.json(updated)
   } catch (error) {
-    console.error('[lesson-plans] chat failed:', error)
-    res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
+    const failure = classifyModelError(error, 'Could not reach your coach')
+    logModelFailure('[lesson-plans] chat failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -833,8 +839,9 @@ lessonPlansRouter.post('/:id/presentation-feedback', async (req, res) => {
     })
     res.json(updated)
   } catch (error) {
-    console.error('[lesson-plans] presentation-feedback failed:', error)
-    res.status(502).json({ error: 'Could not put together delivery feedback. Please try again.' })
+    const failure = classifyModelError(error, 'Could not put together delivery feedback')
+    logModelFailure('[lesson-plans] presentation-feedback failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -1024,8 +1031,9 @@ lessonPlansRouter.post('/generate', async (req, res) => {
     })
     res.status(201).json(lessonPlan)
   } catch (error) {
-    console.error('[lesson-plans] generation failed:', error)
-    res.status(502).json({ error: 'Claude request failed' })
+    const failure = classifyModelError(error, 'Could not reach your coach')
+    logModelFailure('[lesson-plans] generation failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -1170,8 +1178,9 @@ lessonPlansRouter.post('/:id/adapt', async (req, res) => {
     })
     res.json(updated)
   } catch (error) {
-    console.error('[lesson-plans] adapt failed:', error)
-    res.status(502).json({ error: 'Could not revise the lesson. Please try again.' })
+    const failure = classifyModelError(error, 'Could not revise the lesson')
+    logModelFailure('[lesson-plans] adapt failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 

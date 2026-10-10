@@ -10,6 +10,7 @@ import {
 import { checkFeatureAccess, COMMUNICATIONS_ACTIONS, countUsageLogActionsThisMonth } from '../lib/billing.ts'
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
+import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { prisma } from '../lib/prisma.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
@@ -175,8 +176,9 @@ parentMessageRouter.post('/', async (req, res) => {
     })
     res.status(201).json(message)
   } catch (error) {
-    console.error('[parentMessage] draft generation failed:', error)
-    res.status(502).json({ error: 'Claude request failed' })
+    const failure = classifyModelError(error, 'Could not draft that message')
+    logModelFailure('[parentMessage] draft generation failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -233,8 +235,9 @@ parentMessageRouter.post('/:id/chat', async (req, res) => {
     })
     res.json(updated)
   } catch (error) {
-    console.error('[parentMessage] chat failed:', error)
-    res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
+    const failure = classifyModelError(error, 'Could not reach your coach')
+    logModelFailure('[parentMessage] chat failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 

@@ -6,6 +6,7 @@ import { buildExperienceContextBlock } from '../lib/experience.ts'
 import { extractTag, stripStructuralTags } from '../lib/extractTag.ts'
 import { findFocusArea, focusAreaForSubCategory, type FocusArea } from '../lib/focusAreas.ts'
 import { coachIdentity, ratingStandard, teachingContextBlock } from '../lib/focusAreaPrompt.ts'
+import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { prisma } from '../lib/prisma.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
@@ -108,7 +109,9 @@ attemptsRouter.post('/', async (req, res) => {
     // in their history that can never be recovered.
     if (!text.trim()) {
       console.error('[attempts] empty completion; stop_reason:', response.stop_reason)
-      res.status(502).json({ error: 'Claude request failed' })
+      // A reply that came back blank rather than a call that failed, so this
+      // genuinely is worth another go — unlike most of what used to say so.
+      res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
       return
     }
 
@@ -127,8 +130,9 @@ attemptsRouter.post('/', async (req, res) => {
     })
     res.status(201).json(attempt)
   } catch (error) {
-    console.error('[attempts] feedback generation failed:', error)
-    res.status(502).json({ error: 'Claude request failed' })
+    const failure = classifyModelError(error, 'Could not reach your coach')
+    logModelFailure('[attempts] feedback generation failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -187,8 +191,9 @@ attemptsRouter.post('/:id/chat', async (req, res) => {
     })
     res.json(updated)
   } catch (error) {
-    console.error('[attempts] chat failed:', error)
-    res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
+    const failure = classifyModelError(error, 'Could not reach your coach')
+    logModelFailure('[attempts] chat failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 

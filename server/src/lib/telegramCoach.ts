@@ -37,6 +37,7 @@ import { buildExperienceContextBlock } from './experience.ts'
 import { buildRoomContextBlock } from './teachingContext.ts'
 import { buildFollowUpContextBlock, snoozedCheckInDate } from './followUps.ts'
 import { extractTag, stripTag } from './extractTag.ts'
+import { classifyModelError, logModelFailure } from './modelErrors.ts'
 import { prisma } from './prisma.ts'
 import {
   answerButtonTap,
@@ -259,6 +260,13 @@ const NOT_LINKED_TEXT = `Hi! I'm Coach from Wivoza. To talk with me here, connec
 
 const ERROR_TEXT = "Sorry, I couldn't come up with a reply just now. Please try sending that again."
 
+/// What Coach says when the failure is ours and resending cannot fix it. A
+/// teacher texting from a corridor between lessons will otherwise send the
+/// same message four times and get the same apology every time, which is how
+/// this chat behaved for the whole of an account outage.
+const UNAVAILABLE_TEXT =
+  "Sorry — I can't reply just now. Something's broken at our end rather than with your message, so resending won't help. Please try again later."
+
 // ---------------------------------------------------------------------------
 // Linking (called from routes/telegram.ts)
 // ---------------------------------------------------------------------------
@@ -349,8 +357,9 @@ export function dispatchUpdate(update: TelegramUpdate): void {
   const next: Promise<void> = previous
     .then(() => (tap ? handleButtonTap(chatId, tap) : handleIncoming(chatId, update.message!)))
     .catch(async (error) => {
-      console.error('[telegram] handling a message failed:', error)
-      await sendMessage(chatId, ERROR_TEXT).catch(() => {})
+      const failure = classifyModelError(error, 'Could not reply')
+      logModelFailure('[telegram] handling a message failed:', failure, error)
+      await sendMessage(chatId, failure.retryable ? ERROR_TEXT : UNAVAILABLE_TEXT).catch(() => {})
     })
     .finally(() => {
       if (chatQueues.get(chatId) === next) chatQueues.delete(chatId)

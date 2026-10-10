@@ -27,6 +27,7 @@ import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
 import { transcribeAudio } from '../lib/deepgram.ts'
 import { extractTag, stripStructuralTags, stripTag } from '../lib/extractTag.ts'
 import type { CoachFollowUp, Debrief } from '../generated/prisma/client.ts'
+import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { prisma } from '../lib/prisma.ts'
 import { buildDigestFor } from '../lib/coachDigest.ts'
 import { cachedSystem } from '../lib/promptCache.ts'
@@ -89,8 +90,9 @@ debriefRouter.post('/transcribe', upload.single('audio'), async (req, res) => {
     timing.end({ bytes: req.file.size, chars: transcript.length })
     res.json({ transcript })
   } catch (error) {
-    console.error('[debrief] transcription failed:', error)
-    res.status(502).json({ error: 'Could not transcribe the recording. Please try again.' })
+    const failure = classifyModelError(error, 'Could not transcribe the recording')
+    logModelFailure('[debrief] transcription failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -442,8 +444,9 @@ debriefRouter.post('/', async (req, res) => {
 
     res.status(201).json(debrief)
   } catch (error) {
-    console.error('[debrief] feedback generation failed:', error)
-    res.status(502).json({ error: 'Claude request failed' })
+    const failure = classifyModelError(error, 'Could not reach Coach')
+    logModelFailure('[debrief] feedback generation failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -696,8 +699,9 @@ debriefRouter.post('/talk', async (req, res) => {
 
     res.status(201).json(debrief)
   } catch (error) {
-    console.error('[debrief] talk-to-me start failed:', error)
-    res.status(502).json({ error: 'Claude request failed' })
+    const failure = classifyModelError(error, 'Could not reach Coach')
+    logModelFailure('[debrief] talk-to-me start failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -793,8 +797,9 @@ debriefRouter.post('/:id/chat', async (req, res) => {
 
     res.json(updated)
   } catch (error) {
-    console.error('[debrief] chat failed:', error)
-    res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
+    const failure = classifyModelError(error, 'Could not reach your coach')
+    logModelFailure('[debrief] chat failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -917,8 +922,9 @@ debriefRouter.post('/:id/takeaway', async (req, res) => {
     }
     res.json(result.debrief)
   } catch (error) {
-    console.error('[debrief] takeaway failed:', error)
-    res.status(502).json({ error: 'Could not summarize this conversation. Please try again.' })
+    const failure = classifyModelError(error, 'Could not summarize this conversation')
+    logModelFailure('[debrief] takeaway failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 

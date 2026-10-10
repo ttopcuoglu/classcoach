@@ -1,5 +1,6 @@
 import type { Response } from 'express'
 import { anthropic, CLAUDE_MODEL } from './anthropic.ts'
+import { classifyModelError, logModelFailure } from './modelErrors.ts'
 import { flagIfUnsafe } from './coachSafetyCheck.ts'
 import { stripTag } from './extractTag.ts'
 import { cacheStats, type SystemPrompt } from './promptCache.ts'
@@ -186,6 +187,8 @@ export async function streamCoachReply(res: Response, label: string, opts: Strea
     const reply = trimIfTruncated(stripTag(text, 'memory_update'), message.stop_reason)
 
     if (!reply) {
+      // A reply that came back empty rather than a call that failed, so this
+      // one really is worth retrying.
       send({ type: 'error', error: 'Could not reach Coach. Please try again.' })
       res.end()
       return
@@ -239,10 +242,14 @@ export async function streamCoachReply(res: Response, label: string, opts: Strea
     // An aborted stream throws on the way out; that is this turn being
     // withdrawn, not a failure worth logging or answering.
     if (abandoned) return
-    console.error(`[coach-stream] ${label} failed:`, error)
-    // Headers are long gone, so this cannot be a 502 — the client treats a
-    // terminal error frame the same way it treats a failed request.
-    send({ type: 'error', error: 'Could not reach Coach. Please try again.' })
+    // Headers are long gone, so this cannot carry a status — the client
+    // treats a terminal error frame the same way it treats a failed request,
+    // which is exactly why the frame has to carry honest words. A spoken
+    // Coach telling a teacher in a car to try again, over and over, while
+    // the account is the thing that's broken, is the worst version of this.
+    const failure = classifyModelError(error, 'Could not reach Coach')
+    logModelFailure(`[coach-stream] ${label} failed:`, failure, error)
+    send({ type: 'error', error: failure.message })
     res.end()
   }
 }

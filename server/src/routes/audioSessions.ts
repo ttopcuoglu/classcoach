@@ -38,6 +38,7 @@ import {
   unaccountedSections,
   type HardLookResult,
 } from '../lib/hardLook.ts'
+import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const audioSessionsRouter = Router()
@@ -660,8 +661,9 @@ audioSessionsRouter.post('/:id/transcribe', upload.single('audio'), async (req, 
 
     res.json({ speakers: speakerSamplesFrom(segments) })
   } catch (error) {
-    console.error('[audio-sessions] transcription failed:', error)
-    res.status(502).json({ error: 'Transcription failed. Please try again.' })
+    const failure = classifyModelError(error, 'Transcription failed')
+    logModelFailure('[audio-sessions] transcription failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   } finally {
     // The scratch copy is gone before this request is, on every path.
     await discardUpload(audioPath)
@@ -908,8 +910,9 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
 
     res.json(updated)
   } catch (error) {
-    console.error('[audio-sessions] reflect chat failed:', error)
-    res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
+    const failure = classifyModelError(error, 'Could not reach your coach')
+    logModelFailure('[audio-sessions] reflect chat failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -1081,8 +1084,9 @@ audioSessionsRouter.post('/:id/reflect-summary', async (req, res) => {
 
     res.json({ strengths, growthAreas, nextStep })
   } catch (error) {
-    console.error('[audio-sessions] reflect summary failed:', error)
-    res.status(502).json({ error: 'Could not summarize your conversation. Please try again.' })
+    const failure = classifyModelError(error, 'Could not summarize your conversation')
+    logModelFailure('[audio-sessions] reflect summary failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -1154,8 +1158,9 @@ audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
     })
     res.json(updated)
   } catch (error) {
-    console.error('[audio-sessions] content notes failed:', error)
-    res.status(502).json({ error: 'Could not generate content notes. Please try again.' })
+    const failure = classifyModelError(error, 'Could not generate content notes')
+    logModelFailure('[audio-sessions] content notes failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -1248,8 +1253,9 @@ audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
     })
     res.json(updated)
   } catch (error) {
-    console.error('[audio-sessions] rubric lens failed:', error)
-    res.status(502).json({ error: 'Could not build the rubric lens. Please try again.' })
+    const failure = classifyModelError(error, 'Could not build the rubric lens')
+    logModelFailure('[audio-sessions] rubric lens failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
@@ -1388,8 +1394,9 @@ audioSessionsRouter.post('/:id/hard-look', async (req, res) => {
     })
     res.json(updated)
   } catch (error) {
-    console.error('[audio-sessions] hard look failed:', error)
-    res.status(502).json({ error: 'Could not finish the hard look. Please try again.' })
+    const failure = classifyModelError(error, 'Could not finish the hard look')
+    logModelFailure('[audio-sessions] hard look failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
