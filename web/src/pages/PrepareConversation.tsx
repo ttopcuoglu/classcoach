@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PanelHeader } from '../components/PanelHeader'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import AnswerSection from '../components/AnswerSection'
 import CoachingChat from '../components/CoachingChat'
 import PastList from '../components/PastList'
@@ -27,6 +27,7 @@ import {
 import { setWritePrefill, takePreparePrefill } from '../lib/communicationsPrefill'
 import {
   extractAssignmentText,
+  getCoachHandoff,
   getConversationPlans,
   sendConversationPlanChat,
   setConversationPlanSaved,
@@ -54,6 +55,10 @@ const PLAN_SECTIONS: { key: keyof ConversationPlanContent; title: string; subtit
 
 export default function PrepareConversation() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  // True once Coach's details have been applied, so the form can say where
+  // they came from.
+  const [fromChat, setFromChat] = useState(false)
   const [prefill] = useState(() => takePreparePrefill())
   const [meetingType, setMeetingType] = useState<MeetingType | undefined>(
     (prefill?.meetingType as MeetingType | undefined) ?? undefined,
@@ -107,21 +112,29 @@ export default function PrepareConversation() {
     }
   }
 
-  async function handleSubmit() {
+  function handleSubmit() {
     if (!canSubmit) return
+    void planFrom({
+      situationText: situationText.trim(),
+      meetingType: preparingFor === 'meeting' ? meetingType : undefined,
+      recipientType: preparingFor === 'person' ? recipientType : undefined,
+      meetingFormat,
+      attendees: preparingFor === 'meeting' ? attendees.trim() || undefined : undefined,
+      desiredOutcome: desiredOutcome.trim() || undefined,
+      concerns: concerns.trim() || undefined,
+      background: background.trim() || undefined,
+    })
+  }
+
+  // Takes the request explicitly rather than reading state, so the arriving
+  // handoff below can plan from what it just filled in without waiting for
+  // a render to land first.
+  async function planFrom(request: Parameters<typeof submitConversationPlan>[0]) {
+    if (submitting) return
     setSubmitting(true)
     setError(null)
     try {
-      const result = await submitConversationPlan({
-        situationText: situationText.trim(),
-        meetingType: preparingFor === 'meeting' ? meetingType : undefined,
-        recipientType: preparingFor === 'person' ? recipientType : undefined,
-        meetingFormat,
-        attendees: preparingFor === 'meeting' ? attendees.trim() || undefined : undefined,
-        desiredOutcome: desiredOutcome.trim() || undefined,
-        concerns: concerns.trim() || undefined,
-        background: background.trim() || undefined,
-      })
+      const result = await submitConversationPlan(request)
       setPlan(result)
       setChatDraft('')
       setChatError(null)
@@ -131,6 +144,63 @@ export default function PrepareConversation() {
       setSubmitting(false)
     }
   }
+
+  // Coach collected this in a chat and the teacher tapped "Get ready for
+  // this" — fill the form in and build the plan, rather than making them
+  // describe again what they just finished describing. The tap answers a
+  // question Coach asked, so arriving plans it; every field is still on
+  // screen, and the plan can be talked through underneath.
+  const handoffId = searchParams.get('handoff')
+  const planOnArrival = searchParams.get('build') === '1'
+  // Survives React's double-invoke in development, so one arrival can never
+  // mean two plans.
+  const planned = useRef(false)
+  useEffect(() => {
+    if (!handoffId) return
+    let cancelled = false
+    getCoachHandoff(handoffId)
+      .then(({ details }) => {
+        // A handoff meant for another form isn't ours to read — Write's
+        // carries a situation too.
+        if (cancelled || !details || !('mode' in details) || details.mode !== 'meeting') return
+        // A meeting type means several people sitting down; otherwise this
+        // is one person, which is the form's own default branch.
+        const branch = details.meetingType ? 'meeting' : 'person'
+        setPreparingFor(branch)
+        setSituationText(details.situation)
+        if (details.meetingType) setMeetingType(details.meetingType)
+        if (details.recipient) setRecipientType(details.recipient)
+        if (details.meetingFormat) setMeetingFormat(details.meetingFormat)
+        if (details.desiredOutcome) setDesiredOutcome(details.desiredOutcome)
+        if (details.concerns) setConcerns(details.concerns)
+        setFromChat(true)
+        if (!planOnArrival || planned.current) return
+        planned.current = true
+        // Out of the URL before it runs: a reload is a reload, not a second
+        // plan billed to the same tap. The plan is saved either way.
+        const params = new URLSearchParams(searchParams)
+        params.delete('handoff')
+        params.delete('build')
+        setSearchParams(params, { replace: true })
+        void planFrom({
+          situationText: details.situation,
+          meetingType: branch === 'meeting' ? details.meetingType : undefined,
+          recipientType: branch === 'person' ? details.recipient : undefined,
+          meetingFormat: details.meetingFormat,
+          desiredOutcome: details.desiredOutcome,
+          concerns: details.concerns,
+        })
+      })
+      // An expired handoff needs no apology: the form in front of them
+      // works, it is just empty.
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // Only the arriving id should re-run this: everything else is read once,
+    // as it lands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handoffId])
 
   // Once a rehearsal has started every reply is a line in it, not a question
   // about the plan — Coach is in character and the teacher is answering a person.
@@ -244,6 +314,11 @@ export default function PrepareConversation() {
         </PanelHeader>
         {!plan ? (
           <div className="flex flex-col gap-4">
+            {fromChat && (
+              <p className="rounded-2xl bg-peach-tint/40 px-4 py-3 text-xs text-forest">
+                Filled in from your chat with Coach — change anything that isn't right, then build it again.
+              </p>
+            )}
             {/* Two things a teacher prepares for, and they ask for different
                 details: a person has a role, a meeting has a kind and a room
                 full of people. One question up front beats one form carrying

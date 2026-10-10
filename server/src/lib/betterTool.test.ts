@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { BETTER_TOOL_INSTRUCTION, readBetterTool, type MessageDetails, type PlanningDetails } from './betterTool.ts'
+import { BETTER_TOOL_INSTRUCTION, prefillTarget, readBetterTool, type MeetingDetails, type MessageDetails, type PlanningDetails } from './betterTool.ts'
 
 // The risk here is not a missed suggestion — it is markup reaching a
 // teacher's chat, or a button that goes nowhere because Claude invented a
@@ -64,7 +64,8 @@ kind: full
 
 test('a full details block fills every field and leaves no markup', () => {
   const { offer, details, text } = readBetterTool(TAGGED_PLAN)
-  assert.equal(offer?.prefillLabel, 'Build this lesson')
+  assert.equal(offer?.key, 'planning_coach')
+  assert.deepEqual(prefillTarget(details), { label: 'Build this lesson', path: '/lesson-planning' })
   assert.deepEqual(details, {
     topic: 'photosynthesis',
     subject: 'Science',
@@ -95,9 +96,9 @@ test('a length no lesson has is dropped, and the rest survives', () => {
 })
 
 test('a tool with no prefill of its own still offers its plain button', () => {
-  const { offer } = readBetterTool('x\n<better_tool>lesson_debrief</better_tool>')
+  const { offer, details } = readBetterTool('x\n<better_tool>lesson_debrief</better_tool>')
   assert.equal(offer?.key, 'lesson_debrief')
-  assert.equal(offer?.prefillLabel, undefined)
+  assert.equal(prefillTarget(details), null)
 })
 
 test('the details block never reaches the teacher, even cut off mid-write', () => {
@@ -122,9 +123,9 @@ tone: warm
 format: email
 </tool_details>`,
   )
-  assert.equal(offer?.prefillLabel, 'Write this message')
-  assert.equal(offer?.prefillPath, '/communications?tool=write')
+  assert.deepEqual(prefillTarget(details), { label: 'Write this message', path: '/communications?tool=write' })
   assert.deepEqual(details as MessageDetails, {
+    mode: 'message',
     situation: 'a parent says their son is being singled out after a seat change',
     startingAction: 'respond',
     recipient: 'parent_caregiver',
@@ -147,7 +148,59 @@ test('an option Claude improvised is dropped, and the situation survives', () =>
   assert.equal(message?.tone, undefined)
 })
 
-test('planning details under a message tag are not read as a message', () => {
-  const { details } = readBetterTool('x\n<better_tool>communication_coach</better_tool>\n<tool_details>\ntopic: photosynthesis\n</tool_details>')
+test('when the tag and the details disagree, the details win', () => {
+  // The button has to match the form the teacher is about to be shown, and
+  // the details are what fills that form.
+  const { offer, details } = readBetterTool('x\n<better_tool>communication_coach</better_tool>\n<tool_details>\ntopic: photosynthesis\n</tool_details>')
+  assert.equal(offer?.key, 'planning_coach')
+  assert.equal((details as PlanningDetails | null)?.topic, 'photosynthesis')
+})
+
+test('a details block that lost its tag still offers the right tool', () => {
+  // Seen from the real model: the words and the two blocks are written
+  // separately, and the tag line can go missing. That used to strip down
+  // to a blank message with no button at all.
+  const { offer, details } = readBetterTool('Got it.\n<tool_details>\nmode: message\nsituation: missing homework\n</tool_details>')
+  assert.equal(offer?.key, 'communication_coach')
+  assert.equal((details as MessageDetails | null)?.situation, 'missing homework')
+})
+
+test('a block with neither a topic nor a situation offers nothing', () => {
+  const { offer, details } = readBetterTool('Got it.\n<tool_details>\ntone: warm\n</tool_details>')
+  assert.equal(offer, null)
   assert.equal(details, null)
+})
+
+test('a meeting block goes to Prepare, not to Write', () => {
+  const { details } = readBetterTool(
+    `Dreading that makes sense.
+<better_tool>communication_coach</better_tool>
+<tool_details>
+mode: meeting
+situation: an IEP meeting with a parent who thinks we aren't doing enough
+meeting_type: iep_504
+setting: formal_meeting
+outcome: her leaving believing we have a plan
+worry: that it turns into a list of complaints
+</tool_details>`,
+  )
+  assert.deepEqual(prefillTarget(details), { label: 'Get ready for this', path: '/communications?tool=prepare' })
+  assert.deepEqual(details as MeetingDetails, {
+    mode: 'meeting',
+    situation: "an IEP meeting with a parent who thinks we aren't doing enough",
+    recipient: undefined,
+    meetingType: 'iep_504',
+    meetingFormat: 'formal_meeting',
+    desiredOutcome: 'her leaving believing we have a plan',
+    concerns: 'that it turns into a list of complaints',
+  })
+})
+
+test('a mode nobody recognises writes a message rather than booking a meeting', () => {
+  // The safe default: the writing tool drafts something the teacher reads
+  // before it goes anywhere.
+  const { details } = readBetterTool(
+    'x\n<better_tool>communication_coach</better_tool>\n<tool_details>\nmode: telepathy\nsituation: the thing\n</tool_details>',
+  )
+  assert.equal((details as MessageDetails | null)?.mode, 'message')
 })

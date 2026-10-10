@@ -28,9 +28,9 @@ import {
   type StartingAction,
 } from '../lib/communicationOptions'
 import { takeWritePrefill } from '../lib/communicationsPrefill'
-import { getCoachHandoff } from '../lib/api'
 import {
   draftParentMessage,
+  getCoachHandoff,
   getParentMessages,
   sendParentMessageChat,
   setParentMessageSaved,
@@ -159,8 +159,9 @@ export default function WriteMessage() {
     let cancelled = false
     getCoachHandoff(handoffId)
       .then(({ details }) => {
-        // A handoff meant for another tool isn't ours to read.
-        if (cancelled || !details || !('situation' in details)) return
+        // A handoff meant for another form isn't ours to read — Prepare's
+        // carries a situation too.
+        if (cancelled || !details || !('mode' in details) || details.mode !== 'message') return
         const action = details.startingAction
         setStartingAction(action)
         if (action === 'respond') setReceivedMessage(details.situation)

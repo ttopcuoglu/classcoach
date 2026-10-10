@@ -1,4 +1,4 @@
-import type { MessageFormat, MessagePurpose, MessageTone, RecipientType } from './communicationOptions'
+import type { MeetingFormat, MeetingType, MessageFormat, MessagePurpose, MessageTone, RecipientType } from './communicationOptions'
 
 // A follow-up coaching chat thread, appended below a one-shot result.
 // Seeded with the original submission + first reply, grown by follow-up
@@ -915,12 +915,22 @@ export type CoachHandoff = {
   details:
     | { topic: string; subject?: string; gradeLevel?: string; durationMinutes?: number; kind?: 'full' | 'ideas' }
     | {
+        mode: 'message'
         situation: string
         startingAction: 'new' | 'respond'
         recipient?: RecipientType
         purpose?: MessagePurpose
         tone?: MessageTone
         format?: MessageFormat
+      }
+    | {
+        mode: 'meeting'
+        situation: string
+        recipient?: RecipientType
+        meetingType?: MeetingType
+        meetingFormat?: MeetingFormat
+        desiredOutcome?: string
+        concerns?: string
       }
 }
 

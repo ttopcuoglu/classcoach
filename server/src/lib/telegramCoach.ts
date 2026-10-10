@@ -22,6 +22,7 @@ import { appendTurn, countUserTurns, TALK_TURN_CAP, toClaudeMessages, type ChatM
 import {
   BETTER_TOOL_INSTRUCTION,
   BETTER_TOOL_TOKEN_BUFFER,
+  prefillTarget,
   readBetterTool,
   type HandoffDetails,
   type ToolKey,
@@ -153,40 +154,31 @@ function ensureMiniAppMenuButton(chatId: string) {
 // (lib/coachHandoff.ts) and says so — "Build this lesson", not "Open
 // Planning Coach" — because landing on a filled-in form is a different
 // promise from landing on an empty one.
-function toolOfferButton(
-  offer: ToolOffer,
-  details: HandoffDetails | null,
-  userId: string,
-  debriefId: string,
-): ReplyMarkup | undefined {
-  const prefill = details && offer.prefillLabel
-  // A prefilled offer may land somewhere more specific than the tool's
-  // front door — Communication Coach's hub has three tools behind it, and
-  // only the writing one takes what Coach collected.
-  const base = prefill ? (offer.prefillPath ?? offer.path) : offer.path
+function toolOfferButton(offer: ToolOffer, details: HandoffDetails | null, userId: string): ReplyMarkup | undefined {
+  // A prefilled offer lands somewhere more specific than the tool's front
+  // door — Communication Coach's hub has three tools behind it, and which
+  // one depends on what Coach collected, not on the tool it tagged.
+  const prefill = prefillTarget(details)
   const path = prefill
-    ? `${base}${base.includes('?') ? '&' : '?'}handoff=${createHandoff(userId, offer.key, details)}&build=1`
-    : base
+    ? `${prefill.path}${prefill.path.includes('?') ? '&' : '?'}handoff=${createHandoff(userId, offer.key, details!)}&build=1`
+    : offer.path
   const url = miniAppUrl(path)
   if (!url) return undefined
   return {
     inline_keyboard: [
-      [{ text: prefill ? offer.prefillLabel! : offer.label, web_app: { url } }],
-      // Telegram allows one keyboard per message, so a message carrying this
-      // offer can't also carry the Wrap up / New topic keyboard. On a client
-      // where that keyboard is collapsed, an offer with nothing beside it
-      // reads as the only way forward — so the message carries the same two
-      // exits the chat always has, saying the same things.
+      [{ text: prefill ? prefill.label : offer.label, web_app: { url } }],
+      // Telegram allows one keyboard per message, so a message carrying
+      // this offer can't also carry the Wrap up / New topic keyboard. On a
+      // client where that keyboard is collapsed, an offer with nothing
+      // beside it reads as the only way forward — so the way on rides with
+      // it.
       //
-      // Both, not one. After being handed a lesson, the usual next move is
-      // "done with that, now the parent thing" — which is New topic, and
-      // costs nothing. Wrap up writes a takeaway and schedules a check-in,
-      // which is right for a conversation worth remembering and wrong for
-      // an errand.
-      [
-        { text: NEW_TOPIC_BUTTON, callback_data: 'new' },
-        { text: WRAP_UP_BUTTON, callback_data: `wrap:${debriefId}` },
-      ],
+      // Only New topic. Wrapping up writes a takeaway and schedules a
+      // check-in, which is right for a conversation worth remembering and
+      // wrong for an errand — and after being handed a lesson the next
+      // move is "done with that, now the parent thing". Wrap up is still on
+      // the keyboard, and still a command, for the conversations it fits.
+      [{ text: NEW_TOPIC_BUTTON, callback_data: 'new' }],
     ],
   }
 }
@@ -557,6 +549,11 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
   } finally {
     stopTyping()
   }
+  // Claude occasionally answers a plain "yes, do it" with nothing but the
+  // tag, which strips down to an empty message — and the teacher would get
+  // an apology where their button should be. The offer is the substance of
+  // that turn; one line is enough to carry it.
+  if (!coachText && offer) coachText = 'Here you go.'
   if (!coachText) {
     await reply(chatId, ERROR_TEXT)
     return
@@ -577,7 +574,7 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
   // Wrap up / New topic keyboard is unaffected — an inline button sits with
   // the message, not above the typing box.
   const spent = offer != null && (offersMade(saved.id).get(offer.key) ?? 0) >= MAX_OFFERS_PER_TOOL
-  const button = offer && !spent ? toolOfferButton(offer, details, user.id, saved.id) : undefined
+  const button = offer && !spent ? toolOfferButton(offer, details, user.id) : undefined
   await sendMessage(chatId, coachText, button ?? MAIN_KEYBOARD)
   if (button && offer) rememberToolOffer(saved.id, offer.key)
 
