@@ -57,6 +57,7 @@ export type UsageAction =
   | 'reflect_chat'
   | 'content_notes'
   | 'rubric_lens'
+  | 'hard_look'
   | 'attempt_chat'
   | 'debrief_chat'
   | 'conversation_prep_chat'

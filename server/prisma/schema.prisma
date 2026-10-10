@@ -650,6 +650,13 @@ model AudioSession {
   // until the teacher asks for it — never generated automatically.
   rubricLens       Json?
 
+  // The Hard Look: the least generous honest reading of the same evidence
+  // (see lib/hardLook.ts's HardLookResult). Null until the teacher asks for
+  // it — never generated automatically, and never shown without being asked
+  // for, because a teacher who has not chosen this moment should not walk
+  // into it.
+  hardLook         Json?
+
   // Claude-generated summary of what the class covered + a genuine
   // strength, auto-generated once on the teacher's first Summary view and
   // cached forever after. Null = not yet attempted, or the one retryable

@@ -166,6 +166,7 @@ struct ReportView: View {
     @State private var tab: ReportTab = .summary
     @State private var section: InsightsSection = .talk
     @State private var rubricOpen = false
+    @State private var hardLookOpen = false
     @State private var focusMetric: FocusMetric?
     /// Set by a Discuss footer and consumed by Reflect on arrival.
     @State private var reflectFocus: ReflectFocus?
@@ -340,6 +341,8 @@ struct ReportView: View {
 
             rubricLensRow
 
+            hardLookRow
+
             InsightsSectionHeader(section: section)
 
             Group {
@@ -404,6 +407,39 @@ struct ReportView: View {
 
             if rubricOpen {
                 RubricLensTab(session: session, locked: locked, onUpdate: onUpdate)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
+    }
+
+    /// The other lens over the same four sections: the least generous reading
+    /// rather than the framework's. Second, and closed, on purpose — a teacher
+    /// should arrive at an unsparing critique of their own lesson by choosing
+    /// it on a day they can use it, not by scrolling past it on any other.
+    private var hardLookRow: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                withAnimation { hardLookOpen.toggle() }
+            } label: {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("The Hard Look")
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
+                        Text("The least generous honest reading of what the mic caught. For when you want it straight.")
+                            .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 8)
+                    Text(hardLookOpen ? "Hide" : "Show")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
+                }
+            }
+
+            if hardLookOpen {
+                HardLookTab(session: session, locked: locked, onUpdate: onUpdate)
             }
         }
         .padding(14)

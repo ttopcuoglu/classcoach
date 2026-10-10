@@ -29,6 +29,15 @@ import {
   RUBRIC_FRAMEWORKS,
   type RubricLensResult,
 } from '../lib/rubricLens.ts'
+import {
+  buildHardLookEvidence,
+  buildHardLookSystemPrompt,
+  HARD_LOOK_SECTIONS,
+  parseHardLook,
+  sectionEligibility,
+  unaccountedSections,
+  type HardLookResult,
+} from '../lib/hardLook.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const audioSessionsRouter = Router()
@@ -1241,6 +1250,146 @@ audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
   } catch (error) {
     console.error('[audio-sessions] rubric lens failed:', error)
     res.status(502).json({ error: 'Could not build the rubric lens. Please try again.' })
+  }
+})
+
+// The Hard Look holds itself to a stricter bar than Rubric Lens, which
+// organises evidence and can afford to be thin. This one makes a case against
+// a lesson, and a case made on two quotes is an opinion with a quote stapled
+// to it. Twice the floor, and a hard refusal on short recordings: criticising
+// a teacher on a ten-minute snapshot of a lesson is not demanding, it is
+// unfair, and unfair is the one thing that would make a teacher stop
+// believing the rest of the report.
+const MIN_HARD_LOOK_EVIDENCE_ITEMS = 8
+const HARD_LOOK_SHORT_SESSION_SEC = 10 * 60
+const NOT_ENOUGH_HARD_LOOK_EVIDENCE_ERROR =
+  "There isn't enough in this recording to be fair about. A hard look needs a fuller lesson than this one captured — otherwise it would just be guessing at you."
+
+audioSessionsRouter.post('/:id/hard-look', async (req, res) => {
+  const session = await prisma.audioSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+    include: { segments: true },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  if (session.status === 'locked') {
+    res.status(403).json({ error: 'This report is locked and can no longer be edited.' })
+    return
+  }
+  // Written once and kept, like Rubric Lens and Content Notes. It matters
+  // more here than there: a teacher who could re-roll a hard look until it
+  // said something kinder (or harsher) would be reading a slot machine, not
+  // a reading of their lesson.
+  if (session.hardLook) {
+    res.json(await prisma.audioSession.findFirst({
+      where: { id: session.id },
+      include: { segments: { orderBy: { startSec: 'asc' } } },
+    }))
+    return
+  }
+  if ((session.durationSec ?? 0) < HARD_LOOK_SHORT_SESSION_SEC) {
+    res.status(400).json({ error: NOT_ENOUGH_HARD_LOOK_EVIDENCE_ERROR })
+    return
+  }
+
+  // The same evidence Rubric Lens reads, on purpose — see lib/hardLook.ts.
+  // A harsher voice over a wider net would be a different feature, and a
+  // worse one.
+  const evidence = buildHardLookEvidence({
+    ...session,
+    segments: session.segments.map((s) => ({
+      speakerLabel: s.speakerLabel,
+      startSec: s.startSec,
+      endSec: s.endSec,
+      text: s.text,
+    })),
+  })
+  if (evidence.items.length < MIN_HARD_LOOK_EVIDENCE_ITEMS) {
+    res.status(400).json({ error: NOT_ENOUGH_HARD_LOOK_EVIDENCE_ERROR })
+    return
+  }
+
+  // Which sections the evidence can actually carry a criticism about. The rest
+  // never reach the model — see `sectionEligibility` for what happened when
+  // they did. With none left there is nothing to ask, and saying so beats
+  // spending a call to be told the same.
+  const { eligible, withheld } = sectionEligibility(session)
+  if (eligible.length === 0) {
+    res.status(400).json({ error: NOT_ENOUGH_HARD_LOOK_EVIDENCE_ERROR })
+    return
+  }
+
+  const denied = await checkAndLogUsage(req.user!.userId, 'hard_look')
+  if (denied) {
+    res.status(429).json({ error: denied })
+    return
+  }
+
+  const system = buildHardLookSystemPrompt(
+    evidence,
+    eligible,
+    `${CORE_COACHING_RULES}\n${TRANSCRIPT_RELIABILITY_NOTICE}`,
+  )
+
+  try {
+    // A section the model skipped is not a section with nothing wrong in it.
+    // Showing it as clear would be a false all-clear — the same invention
+    // this feature is built to avoid, pointing the other way. Gating the
+    // sections first made this rare rather than routine, but one lesson in six
+    // still dropped one, so it gets the same single retry classroomMoves gives
+    // an empty read before giving up.
+    let parsed: ReturnType<typeof parseHardLook> | null = null
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await anthropic.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 2500,
+        // Same reason as classroomMoves' and lessonObjective's: adaptive
+        // thinking draws from this budget, and left on it spent all 2500
+        // tokens here and returned a reply with no text blocks in it at all.
+        thinking: { type: 'disabled' },
+        system,
+        messages: [{ role: 'user', content: 'Write the hard look now.' }],
+      })
+      const text = response.content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
+        .join('\n')
+      flagIfUnsafe(text, 'audioSessions.hardLook')
+
+      const candidate = parseHardLook(text, evidence.items)
+      if (unaccountedSections(candidate, eligible).length === 0) {
+        parsed = candidate
+        break
+      }
+    }
+    if (!parsed) {
+      res.status(502).json({ error: 'Could not finish the hard look. Please try again.' })
+      return
+    }
+
+    const hardLook: HardLookResult = {
+      generatedAt: new Date().toISOString(),
+      critiques: parsed.critiques,
+      // Our own withheld reasons alongside the model's own clears, in the
+      // sections' order, so the teacher reads one list of everything that was
+      // looked at and not pressed on rather than two kinds of silence.
+      cleared: [...parsed.cleared, ...withheld].sort(
+        (a, b) =>
+          HARD_LOOK_SECTIONS.findIndex((s) => s.key === a.section) -
+          HARD_LOOK_SECTIONS.findIndex((s) => s.key === b.section),
+      ),
+    }
+    const updated = await prisma.audioSession.update({
+      where: { id: session.id },
+      data: { hardLook },
+      include: { segments: { orderBy: { startSec: 'asc' } } },
+    })
+    res.json(updated)
+  } catch (error) {
+    console.error('[audio-sessions] hard look failed:', error)
+    res.status(502).json({ error: 'Could not finish the hard look. Please try again.' })
   }
 })
 

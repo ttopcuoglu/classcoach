@@ -211,6 +211,10 @@ enum AudioCoachingService {
         try await APIClient.shared.request("/api/audio-sessions/\(sessionId)/rubric-lens", method: "POST")
     }
 
+    static func generateHardLook(sessionId: String) async throws -> AudioSessionWithSegments {
+        try await APIClient.shared.request("/api/audio-sessions/\(sessionId)/hard-look", method: "POST")
+    }
+
     /// The written summary and the four Insights narratives. The server now
     /// writes these at the end of analysis, so this only fires for a report
     /// made before it did — without it, those older sessions read differently

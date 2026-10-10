@@ -16,6 +16,7 @@ import {
   createAudioSession,
   deleteAudioSession,
   generateClassSummary,
+  generateHardLook,
   generateRubricLens,
   getAudioSession,
   getAudioSessions,
@@ -37,6 +38,7 @@ import {
   type AudioQuestionLogEntry,
   type AudioReflectMessage,
   type AudioRedirectionLogEntry,
+  type AudioHardLook,
   type AudioRubricLens,
   type AudioSession,
   type AudioSessionWithSegments,
@@ -2270,6 +2272,7 @@ function ReportPanel({
   const [tab, setTab] = useState<ReportTab>('summary')
   const [insightsSection, setInsightsSection] = useState<InsightsSection>('talk')
   const [rubricOpen, setRubricOpen] = useState(false)
+  const [hardLookOpen, setHardLookOpen] = useState(false)
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null)
   const locked = session.status === 'locked'
   const [strengths, setStrengths] = useState(session.strengths ?? '')
@@ -2291,6 +2294,8 @@ function ReportPanel({
   const [contentNotesError, setContentNotesError] = useState<string | null>(null)
   const [rubricLensSending, setRubricLensSending] = useState(false)
   const [rubricLensError, setRubricLensError] = useState<string | null>(null)
+  const [hardLookSending, setHardLookSending] = useState(false)
+  const [hardLookError, setHardLookError] = useState<string | null>(null)
   const [classSummarySending, setClassSummarySending] = useState(false)
   // Re-tagging an analyzed report: null until the teacher asks for it.
   const [retagSpeakers, setRetagSpeakers] = useState<SpeakerSample[] | null>(null)
@@ -2430,6 +2435,19 @@ function ReportPanel({
       setRubricLensError((err as Error).message || 'Could not build the rubric lens. Please try again.')
     } finally {
       setRubricLensSending(false)
+    }
+  }
+
+  async function handleGenerateHardLook() {
+    setHardLookSending(true)
+    setHardLookError(null)
+    try {
+      const updated = await generateHardLook(session.id)
+      onUpdate({ ...session, ...updated })
+    } catch (err) {
+      setHardLookError((err as Error).message || 'Could not finish the hard look. Please try again.')
+    } finally {
+      setHardLookSending(false)
     }
   }
 
@@ -2819,6 +2837,35 @@ function ReportPanel({
                   sending={rubricLensSending}
                   error={rubricLensError}
                   onGenerate={handleGenerateRubricLens}
+                />
+              )}
+            </div>
+            {/* The other lens over the same four sections: the least generous
+                reading rather than the framework's. Second, and collapsed, on
+                purpose — a teacher should arrive at this one by choosing it. */}
+            <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-4">
+              <button
+                type="button"
+                onClick={() => setHardLookOpen((open) => !open)}
+                className="flex items-center justify-between gap-3 text-left"
+              >
+                <span>
+                  <span className="text-sm font-semibold text-forest">The Hard Look</span>
+                  <span className="ml-2 text-xs text-ink-soft">
+                    The least generous honest reading of what the mic caught. For when you want it straight.
+                  </span>
+                </span>
+                <span className="shrink-0 text-sm font-semibold text-terracotta-600">
+                  {hardLookOpen ? 'Hide' : 'Show'}
+                </span>
+              </button>
+              {hardLookOpen && (
+                <HardLookTab
+                  hardLook={session.hardLook}
+                  locked={locked}
+                  sending={hardLookSending}
+                  error={hardLookError}
+                  onGenerate={handleGenerateHardLook}
                 />
               )}
             </div>
@@ -4720,6 +4767,135 @@ function RubricLensTab({
             ))}
         </section>
       ))}
+    </div>
+  )
+}
+
+// On demand only, and written once (see the /:id/hard-look route). The
+// teacher asked for the unsentimental version, so this does not soften what
+// it found — but it also shows, by name, every section where it could not
+// make a case. That second half is the point: a critic who always finds
+// something is a generator, and a teacher works that out fast.
+function HardLookTab({
+  hardLook,
+  locked,
+  sending,
+  error,
+  onGenerate,
+}: {
+  hardLook: AudioHardLook | null
+  locked: boolean
+  sending: boolean
+  error: string | null
+  onGenerate: () => void
+}) {
+  const sectionLabel = (key: AudioHardLook['critiques'][number]['section']) =>
+    INSIGHTS_SECTIONS.find((s) => s.key === key)?.label ?? key
+
+  if (!hardLook) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+          <p className="font-heading text-lg font-bold text-forest">Ask for the version that doesn't go easy on you</p>
+          <p className="mt-2 text-sm text-ink">
+            The rest of this report is written to be useful on a hard day. This one isn't. It goes back through the same
+            four sections as a demanding reader looking for what could have been better, and says it plainly.
+          </p>
+          <ul className="mt-3 flex flex-col gap-1 text-sm text-ink-soft">
+            <li>· Every criticism has to point at something you actually said. No evidence, no criticism.</li>
+            <li>· It can come back with nothing. Sections it can't make a case against are named as such.</li>
+            <li>· Only you see it. It reaches no evaluator and changes nothing in your report.</li>
+            <li>· Written once and kept, so it can't be re-rolled into a kinder answer.</li>
+          </ul>
+          {locked ? (
+            <p className="mt-5 text-sm text-ink-soft">This report is locked, so a hard look can't be added to it.</p>
+          ) : (
+            <div className="mt-5 flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={onGenerate}
+                disabled={sending}
+                className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+              >
+                {sending ? 'Taking the hard look...' : 'Give it to me straight'}
+              </button>
+              <WorkingRing active={sending} estimatedMs={30000} label="Looking for what could be better" className="text-forest" />
+            </div>
+          )}
+        </div>
+        {error && <p className="text-sm text-terracotta-600">{error}</p>}
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="rounded-xl border border-dashed border-hairline p-4 text-xs text-ink-soft">
+        The hardest reading these recordings support. It only presses on things it can point at, so a quiet section
+        means the audio didn't carry a case — not that the lesson was flawless, and not that it was poor.
+      </div>
+
+      {hardLook.critiques.length === 0 ? (
+        <div className="rounded-2xl border border-hairline bg-mint-tint/40 p-5">
+          <p className="font-heading text-base font-bold text-forest">Nothing here it can make a hard case against.</p>
+          <p className="mt-2 text-sm text-ink">
+            Four sections, and on what the microphone caught, none of them support a criticism worth your time. That is
+            a real result, and it is the reason to trust this section on a lesson where it does find something.
+          </p>
+        </div>
+      ) : (
+        hardLook.critiques.map((critique) => (
+          <div key={critique.section} className="rounded-2xl border border-hairline bg-cream-card p-5">
+            <div className="flex items-center gap-3">
+              <span aria-hidden="true" className="h-7 w-1.5 shrink-0 rounded-full bg-terracotta" />
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                {sectionLabel(critique.section)}
+              </p>
+            </div>
+            <p className="mt-3 font-heading text-lg font-bold leading-snug text-forest">{critique.headline}</p>
+            <p className="mt-2 text-sm text-ink">{critique.critique}</p>
+            {critique.evidence.length > 0 && (
+              <div className="mt-4 flex flex-col gap-2">
+                {critique.evidence.map((item, i) => (
+                  <div key={i} className="border-l-2 border-terracotta/50 pl-3">
+                    <p className="text-sm text-ink">"{item.text}"</p>
+                    <p className="mt-0.5 text-xs text-ink-soft">
+                      {formatTime(item.timestampSec)} · {item.kind}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {critique.likelyCost && (
+              <div className="mt-4 rounded-xl bg-cream p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">What it likely cost</p>
+                <p className="mt-1 text-sm text-ink">{critique.likelyCost}</p>
+              </div>
+            )}
+          </div>
+        ))
+      )}
+
+      {/* Shown whenever anything was cleared, including alongside criticisms:
+          a teacher reading two hard paragraphs deserves to know the other two
+          sections were looked at just as hard and came back empty. Shown on an
+          all-clear too, because "this looks fine" and "I couldn't hear enough
+          to judge" are different results and the reason says which. */}
+      {hardLook.cleared.length > 0 && (
+        <div className="rounded-2xl border border-hairline p-5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+            Looked at just as hard, no case to make
+          </p>
+          <div className="mt-3 flex flex-col gap-3">
+            {hardLook.cleared.map((cleared) => (
+              <div key={cleared.section}>
+                <p className="text-sm font-semibold text-forest">{sectionLabel(cleared.section)}</p>
+                <p className="text-sm text-ink-soft">{cleared.reason}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

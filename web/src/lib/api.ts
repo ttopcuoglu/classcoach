@@ -767,6 +767,25 @@ export type AudioRubricLens = {
   notObservable: { code: string; name: string; domain: string; reason: string }[]
 }
 
+// The Hard Look — the least generous honest reading of the same evidence
+// Rubric Lens organises. Every section comes back as either a criticism with
+// quotes behind it or an explicit clear; a clear is a real result, not a
+// blank, and the UI shows it as one.
+export type AudioHardLookSection = 'talk' | 'questions' | 'content' | 'routines'
+export type AudioHardLookCritique = {
+  section: AudioHardLookSection
+  headline: string
+  critique: string
+  likelyCost: string
+  evidence: AudioRubricEvidence[]
+}
+export type AudioHardLookClear = { section: AudioHardLookSection; reason: string }
+export type AudioHardLook = {
+  generatedAt: string
+  critiques: AudioHardLookCritique[]
+  cleared: AudioHardLookClear[]
+}
+
 export type AudioSession = {
   id: string
   teacherName: string | null
@@ -807,6 +826,7 @@ export type AudioSession = {
   lessonContent: AudioLessonContent | null
   contentNotes: AudioContentNotes | null
   rubricLens: AudioRubricLens | null
+  hardLook: AudioHardLook | null
   classSummary: string | null
   strengths: string | null
   growthAreas: string | null
@@ -2120,6 +2140,10 @@ export function generateContentNotes(id: string): Promise<AudioSession> {
 
 export function generateRubricLens(id: string): Promise<AudioSessionWithSegments> {
   return request(`/api/audio-sessions/${id}/rubric-lens`, { method: 'POST' })
+}
+
+export function generateHardLook(id: string): Promise<AudioSessionWithSegments> {
+  return request(`/api/audio-sessions/${id}/hard-look`, { method: 'POST' })
 }
 
 export function generateClassSummary(id: string): Promise<AudioSession> {

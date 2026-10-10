@@ -355,6 +355,14 @@ export default function AudioCoachingExport() {
           </ReportSection>
         )}
 
+        {/* The Hard Look is deliberately NOT printed here, and should not be
+            added. This page is the one a teacher brings to an evaluation
+            conversation, and the Hard Look's own invitation promises them it
+            reaches no evaluator and changes nothing in their report. A teacher
+            will only ask for an unsparing critique of their own lesson while
+            that stays true; printing it into the shareable report is how the
+            feature stops being used. It lives on screen, for them, only. */}
+
         {/* Moments */}
         {session.highlights && session.highlights.length > 0 && (
           <ReportSection n={++n} title="Moments Worth Revisiting" blurb="Specific points in the recording, with timestamps." accent={A.gold}>

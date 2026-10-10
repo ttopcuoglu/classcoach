@@ -161,6 +161,31 @@ struct AudioRubricLens: Decodable {
     let notObservable: [AudioRubricNotObservable]
 }
 
+/// Mirrors `web/src/lib/api.ts`'s `AudioHardLook` — the least generous honest
+/// reading of the same evidence Rubric Lens organises. Each of the four
+/// sections comes back as either a criticism with quotes behind it or an
+/// explicit clear, and a clear is a real result rather than a blank.
+struct AudioHardLookCritique: Decodable, Identifiable {
+    var id: String { section }
+    let section: String
+    let headline: String
+    let critique: String
+    let likelyCost: String
+    let evidence: [AudioRubricEvidence]
+}
+
+struct AudioHardLookClear: Decodable, Identifiable {
+    var id: String { section }
+    let section: String
+    let reason: String
+}
+
+struct AudioHardLook: Decodable {
+    let generatedAt: String
+    let critiques: [AudioHardLookCritique]
+    let cleared: [AudioHardLookClear]
+}
+
 struct AudioSession: Decodable, Identifiable {
     let id: String
     let teacherName: String?
@@ -198,6 +223,8 @@ struct AudioSession: Decodable, Identifiable {
         return withFraction.date(from: transcribeStartedAt) ?? ISO8601DateFormatter().date(from: transcribeStartedAt)
     }
     let rubricLens: AudioRubricLens?
+    /// Null unless the teacher has asked for it — never generated with the report.
+    let hardLook: AudioHardLook?
     /// A plain-language "Lesson at a glance" paragraph, generated after analysis.
     let classSummary: String?
     /// Narrative for the Checks & Feedback section, written in the same model
@@ -221,7 +248,7 @@ struct AudioSession: Decodable, Identifiable {
              durationSec, transcribeStartedAt, failureReason,
              teacherTalkPct, studentTalkPct, questionCount, higherOrderPct, avgWaitTimeSec,
              cfuCount, metricsDetail, highlights, phases, questionLog, reflectConversation, lessonContent,
-             contentNotes, rubricLens, classSummary, checksNarrative, climateNarrative, contentNarrative, talkNarrative, questionsNarrative, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
+             contentNotes, rubricLens, hardLook, classSummary, checksNarrative, climateNarrative, contentNarrative, talkNarrative, questionsNarrative, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -262,6 +289,7 @@ struct AudioSession: Decodable, Identifiable {
         contentNotes = try container.decodeIfPresent(AudioContentNotes.self, forKey: .contentNotes)
         // try? so an unexpected shape hides the lens instead of dropping the whole session.
         rubricLens = try? container.decodeIfPresent(AudioRubricLens.self, forKey: .rubricLens)
+        hardLook = try? container.decodeIfPresent(AudioHardLook.self, forKey: .hardLook)
         classSummary = try? container.decodeIfPresent(String.self, forKey: .classSummary)
         checksNarrative = try? container.decodeIfPresent(String.self, forKey: .checksNarrative)
         climateNarrative = try? container.decodeIfPresent(String.self, forKey: .climateNarrative)
@@ -323,6 +351,7 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
     var displayTitle: String { session.displayTitle }
     var contentNotes: AudioContentNotes? { session.contentNotes }
     var rubricLens: AudioRubricLens? { session.rubricLens }
+    var hardLook: AudioHardLook? { session.hardLook }
     var classSummary: String? { session.classSummary }
     var strengths: String? { session.strengths }
     var growthAreas: String? { session.growthAreas }
