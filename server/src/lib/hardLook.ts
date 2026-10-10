@@ -57,7 +57,7 @@ export const HARD_LOOK_SECTIONS: HardLookSectionDef[] = [
     // reached for the unreliable half and faulted a teacher because students
     // "barely registered" — which is a sentence about a microphone.
     pushOn:
-      'how much of the airtime the teacher took and how long their longest unbroken stretch of talk ran. Both are measured from the microphone sitting with the teacher, so both are solid and you can press on them hard. The students\' own share of the talk is the least reliable number in this report and you must never build a criticism on it: a low student percentage means the microphone did not reach them, not that they said nothing. Press on the teacher\'s own talk; never on how little the students\' registered',
+      'how much of the airtime the teacher took and how long their longest unbroken stretch of talk ran, and — when the counts below say what the student talk was about — whether the talk the teacher did leave room for went anywhere. Both are measured from the microphone sitting with the teacher, so both are solid and you can press on them hard. The students\' own share of the talk is the least reliable number in this report and you must never build a criticism on it: a low student percentage means the microphone did not reach them, not that they said nothing. Press on the teacher\'s own talk; never on how little the students\' registered',
   },
   {
     key: 'questions',
@@ -233,12 +233,27 @@ export function readsAsSpeech(text: string): boolean {
 /// quote at someone. Rubric Lens keeps the unfiltered set deliberately — it
 /// organises evidence rather than building a case from it, so a rough quote
 /// there is context, not an accusation.
-export function buildHardLookEvidence(session: Parameters<typeof buildRubricEvidence>[0]): {
-  items: RubricEvidenceItem[]
-  facts: string[]
-} {
+export function buildHardLookEvidence(
+  session: Parameters<typeof buildRubricEvidence>[0] & { studentTalkFocus?: unknown },
+): { items: RubricEvidenceItem[]; facts: string[] } {
   const evidence = buildRubricEvidence(session)
-  return { ...evidence, items: evidence.items.filter((item) => readsAsSpeech(item.text)) }
+  const focus = session.studentTalkFocus as
+    | { classified?: number; onTopic?: number; procedural?: number; offTopic?: number; unclear?: number }
+    | null
+    | undefined
+
+  // Without this, a criticism about airtime is made blind: it faults a
+  // teacher for holding 68% of the floor with no idea whether the other 32%
+  // was a discussion or a room that had got away from them.
+  const facts =
+    focus && (focus.classified ?? 0) > 0
+      ? [
+          ...evidence.facts,
+          `Of ${focus.classified} audible student turns, ${focus.onTopic ?? 0} were about the lesson's content, ${focus.procedural ?? 0} about how to do the work, ${focus.offTopic ?? 0} about something else, and ${focus.unclear ?? 0} too unclear or garbled to place. A high "unclear" count is the microphone, not the students.`,
+        ]
+      : evidence.facts
+
+  return { facts, items: evidence.items.filter((item) => readsAsSpeech(item.text)) }
 }
 
 /// Where the longest unbroken stretch of teacher talk began.

@@ -96,7 +96,11 @@ export const RUBRIC_FRAMEWORKS: Record<string, RubricFramework> = {
         name: 'Engaging Students in Learning',
         domain: LEARNING_EXPERIENCES,
         audibility: 'partial',
-        listensFor: 'how much and how often students spoke, and what the spoken tasks asked them to do',
+        // "How much students spoke" is not engagement, and this component is
+        // where that confusion is most tempting: a room talking over itself
+        // raises the same number a good discussion does. The scope says so.
+        listensFor:
+          'how much and how often students spoke, and what the spoken tasks asked them to do — but never treat a high student share as evidence of engagement on its own, because a recording cannot tell a discussion from a room talking over itself',
       },
       {
         code: '3d',

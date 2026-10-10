@@ -163,8 +163,14 @@ enum AudioInsights {
             return "Talk time was fairly balanced today — you at \(Int(t))%, students at \(Int(s))%."
         case .teacherHeavy(let t, _):
             return "You did most of the talking today (\(Int(t))%) — look for a moment to hand the floor to students."
-        case .studentHeavy(_, let s):
-            return "Students had a strong share of the talk time today (\(Int(s))%) — that's a lot of real student voice in the room."
+        case .studentHeavy(let t, let s):
+            // A microphone cannot tell a discussion from a room talking over
+            // itself: both raise the student share. This used to read "that's
+            // a lot of real student voice in the room", which praised the
+            // loud, unmanaged case most readily of all — students only
+            // out-talk a teacher on the recording when they are close and
+            // loud enough to register. Reported, not appraised.
+            return "Students had \(Int(s))% of the talk time today, against your \(Int(t))% — a recording can't tell discussion from people talking over each other, so this is a share, not a verdict."
         case .studentZero(let t):
             return "You talked about \(Int(t))% of the time; no student talk was separately detected this session."
         case .studentUnmeasured(let t):
@@ -302,13 +308,9 @@ enum AudioInsights {
             session.highlights, label: "Follow-up / probing question", id: "highlight-followup", weight: 3,
             whyItMatters: "Following up on a student answer pushes their thinking further instead of stopping at the first response."
         )
-        if case .studentHeavy(_, let s) = Confidence.judgeTalkBalance(teacherPct: session.teacherTalkPct, studentPct: session.studentTalkPct) {
-            candidates.append(NoticeCandidate(
-                id: "talk-balance", observation: "Students had \(Int(s))% of the talk time today",
-                whyItMatters: "That's a lot of real student voice in the room — a strong sign of student-centered discussion.",
-                timestampSec: nil, excerpt: nil, durationSec: nil, weight: 1, focusMetric: .talkRatio
-            ))
-        }
+        // A high student share is deliberately NOT offered as something that
+        // went well — see the note on `studentHeavy` above. It stays on the
+        // Talk & Participation page as a measurement.
         if let higherOrderRatio, higherOrderRatio.state == .measured, let pct = session.higherOrderPct, pct >= 40 {
             candidates.append(NoticeCandidate(
                 id: "questioning", observation: "\(Int(pct))% of your questions were higher-order",

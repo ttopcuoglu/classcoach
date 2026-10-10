@@ -185,6 +185,25 @@ struct AudioHardLookClear: Decodable, Identifiable {
     let reason: String
 }
 
+/// What the audible student talk was about — the only signal in this report
+/// that can tell a discussion from a room talking over itself, since both
+/// produce the same student talk share. Null means not measured, never zero.
+struct AudioStudentTurnFocus: Decodable {
+    let timestampSec: Double
+    let text: String
+    let kind: String
+}
+
+struct AudioStudentTalkFocus: Decodable {
+    let classified: Int
+    let sampled: Bool
+    let onTopic: Int
+    let procedural: Int
+    let offTopic: Int
+    let unclear: Int
+    let examples: [AudioStudentTurnFocus]
+}
+
 struct AudioHardLook: Decodable {
     let generatedAt: String
     let critiques: [AudioHardLookCritique]
@@ -230,6 +249,8 @@ struct AudioSession: Decodable, Identifiable {
     let rubricLens: AudioRubricLens?
     /// Null unless the teacher has asked for it — never generated with the report.
     let hardLook: AudioHardLook?
+    /// Null unless the lesson had enough audible student turns to characterise.
+    let studentTalkFocus: AudioStudentTalkFocus?
     /// A plain-language "Lesson at a glance" paragraph, generated after analysis.
     let classSummary: String?
     /// Narrative for the Checks & Feedback section, written in the same model
@@ -253,7 +274,7 @@ struct AudioSession: Decodable, Identifiable {
              durationSec, transcribeStartedAt, failureReason,
              teacherTalkPct, studentTalkPct, questionCount, higherOrderPct, avgWaitTimeSec,
              cfuCount, metricsDetail, highlights, phases, questionLog, reflectConversation, lessonContent,
-             contentNotes, rubricLens, hardLook, classSummary, checksNarrative, climateNarrative, contentNarrative, talkNarrative, questionsNarrative, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
+             contentNotes, rubricLens, hardLook, studentTalkFocus, classSummary, checksNarrative, climateNarrative, contentNarrative, talkNarrative, questionsNarrative, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -295,6 +316,7 @@ struct AudioSession: Decodable, Identifiable {
         // try? so an unexpected shape hides the lens instead of dropping the whole session.
         rubricLens = try? container.decodeIfPresent(AudioRubricLens.self, forKey: .rubricLens)
         hardLook = try? container.decodeIfPresent(AudioHardLook.self, forKey: .hardLook)
+        studentTalkFocus = try? container.decodeIfPresent(AudioStudentTalkFocus.self, forKey: .studentTalkFocus)
         classSummary = try? container.decodeIfPresent(String.self, forKey: .classSummary)
         checksNarrative = try? container.decodeIfPresent(String.self, forKey: .checksNarrative)
         climateNarrative = try? container.decodeIfPresent(String.self, forKey: .climateNarrative)
@@ -357,6 +379,7 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
     var contentNotes: AudioContentNotes? { session.contentNotes }
     var rubricLens: AudioRubricLens? { session.rubricLens }
     var hardLook: AudioHardLook? { session.hardLook }
+    var studentTalkFocus: AudioStudentTalkFocus? { session.studentTalkFocus }
     var classSummary: String? { session.classSummary }
     var strengths: String? { session.strengths }
     var growthAreas: String? { session.growthAreas }

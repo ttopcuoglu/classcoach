@@ -788,6 +788,26 @@ export type AudioHardLook = {
   cleared: AudioHardLookClear[]
 }
 
+// What the audible student talk was about — the only signal in this report
+// that can tell a discussion from a room talking over itself, since both
+// produce the same student talk share. Null means not measured (too few
+// audible student turns), never zero.
+export type AudioStudentTurnFocus = {
+  timestampSec: number
+  text: string
+  kind: 'on_topic' | 'procedural' | 'off_topic' | 'unclear'
+}
+export type AudioStudentTalkFocus = {
+  generatedAt: string
+  classified: number
+  sampled: boolean
+  onTopic: number
+  procedural: number
+  offTopic: number
+  unclear: number
+  examples: AudioStudentTurnFocus[]
+}
+
 export type AudioSession = {
   id: string
   teacherName: string | null
@@ -829,6 +849,7 @@ export type AudioSession = {
   contentNotes: AudioContentNotes | null
   rubricLens: AudioRubricLens | null
   hardLook: AudioHardLook | null
+  studentTalkFocus: AudioStudentTalkFocus | null
   classSummary: string | null
   strengths: string | null
   growthAreas: string | null

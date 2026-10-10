@@ -58,11 +58,76 @@ struct DiscourseDetailsTab: View {
     private var m: OverviewMetrics { OverviewMetrics(session) }
     private var recordedSec: Double { m.coverage.recordedSec }
 
+    private var focusRows: [StudentTalkFocusRow] {
+        guard let f = session.studentTalkFocus else { return [] }
+        return [
+            StudentTalkFocusRow(kind: "on_topic", label: "About the lesson", value: f.onTopic, color: AppTheme.forest),
+            StudentTalkFocusRow(kind: "procedural", label: "About how to do the work", value: f.procedural, color: AppTheme.gold),
+            StudentTalkFocusRow(kind: "off_topic", label: "About something else", value: f.offTopic, color: AppTheme.terracotta),
+            StudentTalkFocusRow(kind: "unclear", label: "Too unclear to place", value: f.unclear, color: AppTheme.hairline),
+        ]
+    }
+
+    @ViewBuilder
+    private var studentTalkFocusCard: some View {
+        if let focus = session.studentTalkFocus, focus.classified > 0 {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("WHAT STUDENTS TALKED ABOUT")
+                    .font(.caption.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
+                Text("Of \(focus.classified) audible student turn\(focus.classified == 1 ? "" : "s")\(focus.sampled ? " sampled across the lesson" : ""):")
+                    .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(focusRows) { row in
+                    HStack(spacing: 10) {
+                        RoundedRectangle(cornerRadius: 3).fill(row.color).frame(width: 12, height: 12)
+                        Text(row.label).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                        Spacer(minLength: 8)
+                        Text("\(row.value)").font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
+                    }
+                }
+                Text(focusCaveat(focus))
+                    .font(.caption2).foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !focus.examples.isEmpty {
+                    DisclosureGroup("Show examples") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(Array(focus.examples.enumerated()), id: \.offset) { _, example in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("\"\(example.text)\"").font(.footnote).foregroundStyle(AppTheme.textPrimary)
+                                    Text("\(ReportConfidence.formatDuration(example.timestampSec)) · \(focusRows.first { $0.kind == example.kind }?.label ?? example.kind)")
+                                        .font(.caption2).foregroundStyle(AppTheme.textSecondary)
+                                }
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                        .padding(.top, 6)
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .tint(AppTheme.forest)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 20))
+            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(AppTheme.hairline))
+        }
+    }
+
+    private func focusCaveat(_ focus: AudioStudentTalkFocus) -> String {
+        var text = "This is the only thing here that can tell a discussion from a room talking over itself — the talk-time split reads the same either way. It isn't a score, and there's no correct number: off-topic talk can be the task's fault as easily as anyone's, and a tangent is sometimes the best part of a lesson."
+        if focus.unclear > 0 {
+            text += " The \(focus.unclear) unclear turn\(focus.unclear == 1 ? " is" : "s are") the microphone, not the students: it sits with you and hears the room poorly, so a distant voice often arrives garbled. Audio from a video played in class can land here too."
+        }
+        return text
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             switch part {
             case .talk:
                 PacingTimelineView(segments: session.segments, durationSec: session.durationSec)
+                studentTalkFocusCard
                 talkSection
             case .questions:
                 if let count = session.questionCount, count > 0 {
@@ -266,6 +331,25 @@ private struct QuestioningMixView: View {
             .frame(height: 8)
         }
     }
+}
+
+/// What the audible student talk was about.
+///
+/// Every other number on this page is a duration, and a duration cannot tell
+/// a discussion from a room talking over itself — both produce a high student
+/// share and many short turns, and the recording cannot separate them, since
+/// diarization assigns each slice of time to one speaker and simultaneous
+/// speech arrives as tidy alternating turns. This is the one thing on the page
+/// that speaks to the difference, so it sits above the percentages.
+///
+/// Counts rather than percentages, deliberately: "54% on topic" is a score,
+/// and there is no correct figure here.
+private struct StudentTalkFocusRow: Identifiable {
+    var id: String { kind }
+    let kind: String
+    let label: String
+    let value: Int
+    let color: Color
 }
 
 private struct PacingTimelineView: View {

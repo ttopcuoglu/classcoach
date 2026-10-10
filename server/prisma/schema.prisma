@@ -657,6 +657,13 @@ model AudioSession {
   // into it.
   hardLook         Json?
 
+  // What the audible student talk was ABOUT — see lib/studentTalkFocus.ts.
+  // The only signal in this report that can tell a discussion from a room
+  // talking over itself, since both produce the same student talk share.
+  // Null when there were too few audible student turns to characterise, which
+  // is common and is not zero.
+  studentTalkFocus Json?
+
   // Claude-generated summary of what the class covered + a genuine
   // strength, auto-generated once on the teacher's first Summary view and
   // cached forever after. Null = not yet attempted, or the one retryable

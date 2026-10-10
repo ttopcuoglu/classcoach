@@ -39,6 +39,7 @@ import {
   type AudioReflectMessage,
   type AudioRedirectionLogEntry,
   type AudioHardLook,
+  type AudioStudentTalkFocus,
   type AudioRubricLens,
   type AudioSession,
   type AudioSessionWithSegments,
@@ -1464,6 +1465,18 @@ function buildFollowUpExchange(
 // (reportConfidence.ts) so "balanced" can never be said when student talk is
 // a confirmed zero — the old version here branched only on teacherTalkPct
 // and could say "fairly balanced... students at 0%."
+// A microphone cannot tell a discussion from a room talking over itself.
+// Both raise the student share and both produce many short student turns, and
+// for a while this file read the second as proof of the first: a loud,
+// unmanaged class was told it had "a lot of real student voice in the room"
+// and "real back-and-forth". The praise fired most readily in exactly the case
+// it should not, because students only out-talk a teacher on the recording
+// when they are loud enough and close enough to register.
+//
+// So talk time is reported here and never appraised. What the share means
+// needs to know whether the talk was about the lesson, which is what
+// studentTalkFocus answers; until that is present, the honest sentence states
+// the split and stops.
 function buildVoiceBalanceCaption(judgment: TalkBalanceJudgment | null): string | null {
   if (!judgment) return null
   switch (judgment.kind) {
@@ -1474,7 +1487,7 @@ function buildVoiceBalanceCaption(judgment: TalkBalanceJudgment | null): string 
     case 'teacher-heavy':
       return `You did most of the talking today (${judgment.teacherPct}%) — look for a moment to hand the floor to students.`
     case 'student-heavy':
-      return `Students had a strong share of the talk time today (${judgment.studentPct}%) — that's a lot of real student voice in the room.`
+      return `Students had ${judgment.studentPct}% of the talk time today, against your ${judgment.teacherPct}% — a recording can't tell discussion from people talking over each other, so this is a share, not a verdict.`
     case 'student-zero':
       return `You talked about ${judgment.teacherPct}% of the time; no student talk was separately detected this session.`
     case 'student-unmeasured':
@@ -1492,7 +1505,7 @@ function buildTalkInsight(
   if (studentSegmentsMetric.state === 'measured') {
     const count = Number(studentSegmentsMetric.display)
     if (Number.isFinite(count) && count > 0) {
-      sentence = `${sentence ?? ''} Students spoke up in ${count} separate moment${count === 1 ? '' : 's'} today — that's real back-and-forth, even beyond the raw talk-time split.`.trim()
+      sentence = `${sentence ?? ''} Students were audible in ${count} separate moment${count === 1 ? '' : 's'}.`.trim()
     }
   } else if (studentSegmentsMetric.state === 'confirmed_none' && sentence) {
     sentence += ' No separately identifiable student voice was captured this session.'
@@ -1826,19 +1839,12 @@ function buildStrengthCandidates(
   const hasEnoughDurationForTalkBalance =
     session.durationSec != null && session.durationSec >= MIN_DURATION_FOR_TALK_BALANCE_CANDIDATE_SEC
 
-  const balance = judgeTalkBalance(session.teacherTalkPct, session.studentTalkPct)
-  if (hasEnoughDurationForTalkBalance && balance?.kind === 'student-heavy') {
-    candidates.push({
-      id: 'talk-balance',
-      observation: `Students had ${balance.studentPct}% of the talk time today`,
-      whyItMatters: "That's a lot of real student voice in the room — a strong sign of student-centered discussion.",
-      timestampSec: null,
-      excerpt: null,
-      durationSec: null,
-      weight: 1,
-      focusMetric: 'talkRatio',
-    })
-  }
+  // A high student share is deliberately NOT offered here as something that
+  // went well. It is the one number in this report that reads identically
+  // whether the lesson was a strong discussion or a room that got away from
+  // the teacher, so listing it among things worth noticing endorsed one
+  // reading of it. It stays on the Talk & Participation page, as a
+  // measurement rather than a compliment.
 
   if (
     higherOrderRatio &&
@@ -5263,6 +5269,79 @@ function TranscriptEvidenceCard({
   )
 }
 
+/// What the audible student talk was about.
+///
+/// Every other number on this page is a duration, and a duration cannot tell
+/// a discussion from a room talking over itself — both produce a high student
+/// share and many short turns, and the recording cannot separate them
+/// (diarization assigns each slice of time to one speaker, so simultaneous
+/// speech arrives as tidy alternating turns). This is the one thing on the
+/// page that speaks to the difference, which is why it sits above the
+/// percentages rather than below them.
+///
+/// Counts rather than percentages, deliberately: "54% on topic" is a score,
+/// and there is no correct figure here.
+function StudentTalkFocusCard({ focus }: { focus: AudioStudentTalkFocus | null }) {
+  if (!focus || focus.classified === 0) return null
+
+  const rows = [
+    { label: 'About the lesson', value: focus.onTopic, kind: 'on_topic' as const, band: 'bg-forest' },
+    { label: 'About how to do the work', value: focus.procedural, kind: 'procedural' as const, band: 'bg-gold' },
+    { label: 'About something else', value: focus.offTopic, kind: 'off_topic' as const, band: 'bg-terracotta' },
+    { label: 'Too unclear to place', value: focus.unclear, kind: 'unclear' as const, band: 'bg-hairline' },
+  ]
+
+  return (
+    <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">What students talked about</h2>
+      <p className="mt-2 text-sm text-ink">
+        Of {focus.classified} audible student turn{focus.classified === 1 ? '' : 's'}
+        {focus.sampled ? ' sampled across the lesson' : ''}:
+      </p>
+      <div className="mt-3 flex flex-col gap-2">
+        {rows.map((row) => (
+          <div key={row.kind} className="flex items-center gap-3">
+            <span aria-hidden="true" className={`h-3 w-3 shrink-0 rounded-sm ${row.band}`} />
+            <span className="flex-1 text-sm text-ink">{row.label}</span>
+            <span className="text-sm font-semibold text-forest">{row.value}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-4 text-xs text-ink-soft">
+        This is the only thing here that can tell a discussion from a room talking over itself — the talk-time split
+        reads the same either way. It isn't a score, and there's no correct number: off-topic talk can be the task's
+        fault as easily as anyone's, and a tangent is sometimes the best part of a lesson.
+        {focus.unclear > 0 && (
+          <>
+            {' '}
+            The {focus.unclear} unclear turn{focus.unclear === 1 ? '' : 's'}{' '}
+            {focus.unclear === 1 ? 'is' : 'are'} the microphone, not the students: it sits with you and hears the room
+            poorly, so a distant voice often arrives garbled. Audio from a video played in class can land here too.
+          </>
+        )}
+      </p>
+      {focus.examples.length > 0 && (
+        <details className="mt-3">
+          <summary className="cursor-pointer text-sm font-medium text-forest hover:text-terracotta-600">
+            Show examples
+          </summary>
+          <div className="mt-3 flex flex-col gap-2">
+            {focus.examples.map((example, i) => (
+              <div key={i} className="border-l-2 border-hairline pl-3">
+                <p className="text-sm text-ink">"{example.text}"</p>
+                <p className="mt-0.5 text-xs text-ink-soft">
+                  {formatTime(example.timestampSec)} ·{' '}
+                  {rows.find((r) => r.kind === example.kind)?.label ?? example.kind}
+                </p>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  )
+}
+
 function TalkParticipationTab({
   session,
   teacherTalkMetric,
@@ -5312,6 +5391,8 @@ function TalkParticipationTab({
       {talkInsight && <CoachNote text={talkInsight} />}
 
       <PacingTimeline segments={session.segments} durationSec={session.durationSec} />
+
+      <StudentTalkFocusCard focus={session.studentTalkFocus} />
 
       {/* Talk distribution — the stats and the bar used to show the same
           three percentages twice, once as text and once as a bar+legend. */}

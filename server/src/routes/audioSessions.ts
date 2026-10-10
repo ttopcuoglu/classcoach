@@ -20,6 +20,7 @@ import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
 import { transcribeAudioFile } from '../lib/deepgram.ts'
 import { unlink } from 'node:fs/promises'
 import { extractTag, stripTag } from '../lib/extractTag.ts'
+import { Prisma } from '../generated/prisma/client.ts'
 import { prisma } from '../lib/prisma.ts'
 import {
   buildRubricEvidence,
@@ -40,6 +41,7 @@ import {
   type HardLookResult,
 } from '../lib/hardLook.ts'
 import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
+import { readStudentTalkFocus } from '../lib/studentTalkFocus.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const audioSessionsRouter = Router()
@@ -768,6 +770,18 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
     enrichLessonContent(detectLessonContent(segments, scanned.phases), segments),
   ])
 
+  // What the student talk was ABOUT, which needs the objective and so cannot
+  // run alongside the two reads above. It is the only thing in this report
+  // that can tell a discussion from a room talking over itself — every other
+  // student-talk number is a duration, and both rooms produce the same
+  // durations. Best-effort like the rest: null means not measured, and the
+  // report says so rather than filling it in.
+  const studentTalkFocus = await readStudentTalkFocus(segments, {
+    objective: lessonContent.statedObjective?.quote ?? null,
+    summary: lessonContent.summary ?? null,
+    subject: lessonContent.subject ?? null,
+  })
+
   // Notes are no longer auto-generated from raw metrics here — they're
   // populated later from the Reflect tab's actual coaching conversation
   // (see reflect-summary below), so the teacher doesn't see two independent
@@ -793,6 +807,10 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
       toneLog: analysis.toneLog,
       redirectionLog: analysis.redirectionLog,
       lessonContent,
+      // Prisma's Json columns distinguish "SQL NULL" from "JSON null"; the
+      // former is what "not measured" means here, and what every reader
+      // treats as absent.
+      studentTalkFocus: studentTalkFocus ?? Prisma.DbNull,
     },
     include: { segments: { orderBy: { startSec: 'asc' } } },
   })
@@ -1429,6 +1447,10 @@ export type ClassSummaryMetrics = {
   avgWaitTimeSec: number | null
   cfuCount: number | null
   studentVoiceDetected: boolean
+  /// What the audible student talk was about (lib/studentTalkFocus.ts), so the
+  /// talk note can say whether the student share meant a discussion or a room
+  /// talking over itself. Null is "not measured", which is common.
+  studentTalkFocus?: unknown
   /// The actual moments, so the checks narrative can talk about when they
   /// happened and what was said rather than restating a count the teacher is
   /// already looking at.
@@ -1548,6 +1570,15 @@ ${
       : 'No redirections were heard.'
   }
 Student names: ${metrics?.nameMentions ?? 'not measured'} mentions across ${metrics?.uniqueNames ?? 'not measured'} names.
+${(() => {
+    const f = metrics?.studentTalkFocus as
+      | { classified?: number; onTopic?: number; procedural?: number; offTopic?: number; unclear?: number }
+      | null
+      | undefined
+    return f && (f.classified ?? 0) > 0
+      ? `What the student talk was about: of ${f.classified} audible student turns, ${f.onTopic ?? 0} engaged the lesson's content, ${f.procedural ?? 0} were about how to do the work, ${f.offTopic ?? 0} were about something else, and ${f.unclear ?? 0} were too unclear or garbled to place. A high unclear count is the microphone, not the students.`
+      : 'What the student talk was about: not measured for this lesson (too few audible student turns to characterise).'
+  })()}
 
 Then THE TALK NOTE: one paragraph about who was heard and for how long,
 covering both the shape of the teacher's talk and where students got
@@ -1556,9 +1587,19 @@ The numbers — teacher talk, student talk, silence — are on that screen, so d
 not restate them. Say what they cannot: where the long teacher stretches fell
 and what they were doing (explaining, setting up, recapping), where students
 got the floor, and whether the shape changed across the lesson. The caveat
-governs this section more than any other: a room microphone hears the teacher
-clearly and students poorly, so a low student number may be a quiet room or a
-mic that could not reach it, and a teacher must not read it as a verdict.
+governs this section more than any other, and it cuts both ways. A room
+microphone hears the teacher clearly and students poorly, so a low student
+number may be a quiet room or a mic that could not reach it. And a HIGH
+student number is not praise either: a recording cannot tell a discussion from
+a room talking over itself, since both raise the student share and both
+produce many short student turns. Never call a high student share strong
+participation, real back-and-forth, or student-centred on the strength of the
+number alone. The one thing that does separate those two rooms is what the
+student talk was ABOUT, and when that is given above you may use it: say so
+plainly, in proportions rather than percentages, and treat a large unclear
+share as the microphone's limit rather than the students'. When it is not
+given, say what was audible and leave the reading of it to the teacher, who
+was in the room.
 
 Then THE QUESTIONS NOTE: one paragraph about the questioning, covering both
 what was asked and what happened after it was asked. Again the
@@ -1677,6 +1718,7 @@ async function writeClassSummary(
     redirectionLog: unknown
     metricsDetail: unknown
     lessonContent: unknown
+    studentTalkFocus?: unknown
   },
   segments: Segment[],
 ) {
@@ -1712,6 +1754,7 @@ async function writeClassSummary(
       avgWaitTimeSec: session.avgWaitTimeSec,
       cfuCount: session.cfuCount,
       studentVoiceDetected: segments.some((s) => s.speakerLabel === 'Student'),
+      studentTalkFocus: session.studentTalkFocus ?? null,
       cfuMoments: ((session.cfuLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 12),
       feedbackMoments: ((session.feedbackLog ?? []) as { kind: string; timestampSec: number; text: string }[]).slice(0, 12),
       directionMoments: ((session.directiveLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 10),
