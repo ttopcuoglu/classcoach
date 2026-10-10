@@ -124,12 +124,19 @@ export function deleteWebhook(): Promise<unknown> {
 // only thing that says how long a clip is before downloading it.
 export type TelegramVoice = { file_id: string; duration: number; mime_type?: string; file_size?: number }
 
+// Telegram re-encodes every photo to JPEG and offers it at several sizes,
+// smallest first; the last entry is the biggest it kept.
+export type TelegramPhotoSize = { file_id: string; width: number; height: number; file_size?: number }
+
 export type TelegramMessage = {
   message_id: number
   chat: { id: number; type: string }
   from?: { first_name?: string }
   text?: string
   voice?: TelegramVoice
+  photo?: TelegramPhotoSize[]
+  // What the teacher typed under a photo, if anything.
+  caption?: string
 }
 
 export type TelegramUpdate = {

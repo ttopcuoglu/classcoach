@@ -923,6 +923,8 @@ export type CoachHandoff = {
         tone?: MessageTone
         format?: MessageFormat
       }
+    // Lifted off a photo by the server, not collected in the chat.
+    | { originalText: string }
     | {
         mode: 'meeting'
         situation: string

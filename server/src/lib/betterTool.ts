@@ -83,7 +83,13 @@ export type MeetingDetails = {
   concerns?: string
 }
 
-export type HandoffDetails = PlanningDetails | MessageDetails | MeetingDetails
+// Not written by Claude in a <tool_details> block like the others — an
+// assignment's text is far too long for a chat reply's budget. The server
+// fills this in itself, by reading the photo a second time once Coach has
+// said that's what it is. See telegramCoach.ts.
+export type AssignmentDetails = { originalText: string }
+
+export type HandoffDetails = PlanningDetails | MessageDetails | MeetingDetails | AssignmentDetails
 
 /// Where a prefilled offer should land and what its button should say.
 ///
@@ -92,6 +98,7 @@ export type HandoffDetails = PlanningDetails | MessageDetails | MeetingDetails
 /// one the teacher is heading for. Null when there is nothing to prefill.
 export function prefillTarget(details: HandoffDetails | null): { label: string; path: string } | null {
   if (!details) return null
+  if ('originalText' in details) return { label: 'Review this assignment', path: '/lesson-planning?tab=assignment' }
   if ('topic' in details) return { label: 'Build this lesson', path: '/lesson-planning' }
   if (details.mode === 'meeting') return { label: 'Get ready for this', path: '/communications?tool=prepare' }
   return { label: 'Write this message', path: '/communications?tool=write' }

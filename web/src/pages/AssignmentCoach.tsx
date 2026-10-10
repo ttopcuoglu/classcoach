@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import ExportModal, { ExportButtons, guessFormat } from '../components/ExportModal'
 import AnswerSection, { NumberedCard } from '../components/AnswerSection'
 import CoachingChat from '../components/CoachingChat'
@@ -28,6 +28,7 @@ import {
   deleteAssignmentCoachSession,
   extractAssignmentText,
   getAssignmentCoachSessions,
+  getCoachHandoff,
   refineAssignmentCoach,
   reviewAssignmentCoach,
   reviseAssignmentCoach,
@@ -133,7 +134,12 @@ function modeLabel(mode: AssignmentCoachMode): string {
 const HISTORY_SHOWN_AT_FIRST = 8
 
 export default function AssignmentCoach({ embedded = false }: { embedded?: boolean } = {}) {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [pendingMode, setPendingMode] = useState<'review' | 'redesign_ai' | null>(null)
+  // An assignment Coach read off a photo in Telegram, carried here rather
+  // than making the teacher find the file and upload the same sheet again.
+  const [fromPhoto, setFromPhoto] = useState<string | null>(null)
+  const [reviewOnArrival, setReviewOnArrival] = useState(false)
   const [session, setSession] = useState<AssignmentCoachSession | null>(null)
 
   const [sessions, setSessions] = useState<AssignmentCoachSession[]>([])
@@ -150,6 +156,40 @@ export default function AssignmentCoach({ embedded = false }: { embedded?: boole
       .catch(() => {})
       .finally(() => setHistoryLoading(false))
   }, [])
+
+  // Arriving from "Review this assignment" in Telegram: the text was read
+  // off the teacher's photo, so open Review with it already in and run it.
+  // The tap answers a question Coach asked; it shouldn't need a second one.
+  const handoffId = searchParams.get('handoff')
+  const buildOnArrival = searchParams.get('build') === '1'
+  useEffect(() => {
+    if (!handoffId) return
+    let cancelled = false
+    getCoachHandoff(handoffId)
+      .then(({ details }) => {
+        // A handoff meant for one of the other forms isn't ours to read.
+        if (cancelled || !details || !('originalText' in details) || !details.originalText) return
+        setFromPhoto(details.originalText)
+        setReviewOnArrival(buildOnArrival)
+        setPendingMode('review')
+        if (!buildOnArrival) return
+        // Out of the URL before the review runs: a reload is a reload, not
+        // a second review billed to the same tap.
+        const params = new URLSearchParams(searchParams)
+        params.delete('handoff')
+        params.delete('build')
+        setSearchParams(params, { replace: true })
+      })
+      // An expired handoff needs no apology: Assignment Coach works, it
+      // just starts empty.
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // Only the arriving id should re-run this: everything else is read once,
+    // as it lands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handoffId])
 
   function handleExit() {
     setSession(null)
@@ -211,6 +251,8 @@ export default function AssignmentCoach({ embedded = false }: { embedded?: boole
     return (
       <AddAssignmentScreen
         mode={pendingMode}
+        prefillText={fromPhoto}
+        startOnArrival={reviewOnArrival}
         onBack={() => setPendingMode(null)}
         onStarted={(started, file) => {
           setOriginalFile(file ? { sessionId: started.id, file } : null)
@@ -434,10 +476,15 @@ const REDESIGN_PREVIEW_PILLS = ['Grade fit', 'AI use level', 'Redesign strategie
 // applied here too so the whole Assignment Coach flow reads as one piece.
 function AddAssignmentScreen({
   mode,
+  prefillText,
+  startOnArrival,
   onBack,
   onStarted,
 }: {
   mode: 'review' | 'redesign_ai'
+  // An assignment already in hand — read off a photo sent to Coach.
+  prefillText?: string | null
+  startOnArrival?: boolean
   onBack: () => void
   onStarted: (session: AssignmentCoachSession, originalFile: File | null) => void
 }) {
@@ -464,6 +511,9 @@ function AddAssignmentScreen({
   // review's own findings, not shown to the teacher here) rides along to
   // the backend on submit.
   const [carriedOver, setCarriedOver] = useState(false)
+  // Which route put the text here: a Review session's "make this AI-ready"
+  // banner, or a photo Coach read in Telegram.
+  const [carriedFrom, setCarriedFrom] = useState<'review' | 'photo'>('review')
   const [extraNote, setExtraNote] = useState<string | undefined>(undefined)
   useEffect(() => {
     if (mode !== 'redesign_ai') return
@@ -475,6 +525,25 @@ function AddAssignmentScreen({
     setExtraNote(prefill.extraNote)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Survives React's double-invoke in development, so one arrival can never
+  // mean two reviews.
+  const started = useRef(false)
+  useEffect(() => {
+    if (!prefillText) return
+    setText(prefillText)
+    // Same as a carried-over redesign: the upload and paste chrome has
+    // nothing left to do, and the teacher sees a plain confirmation rather
+    // than a wall of transcribed worksheet.
+    setFileReady(true)
+    setCarriedOver(true)
+    setCarriedFrom('photo')
+    if (!startOnArrival || started.current) return
+    started.current = true
+    void analyzeText(prefillText)
+    // Only the arriving text should re-run this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillText])
 
   const canSubmit = text.trim().length > 0 && (mode === 'review' || aiUseLevel !== '' || letWivozaRecommend)
   const analyzingSteps = mode === 'review' ? REVIEW_ANALYZING_STEPS : REDESIGN_ANALYZING_STEPS
@@ -525,8 +594,15 @@ function AddAssignmentScreen({
     setExtraNote(undefined)
   }
 
-  async function handleAnalyze() {
+  function handleAnalyze() {
     if (!canSubmit || starting) return
+    void analyzeText(text)
+  }
+
+  // Takes the text explicitly rather than reading state, so an arriving
+  // assignment can be reviewed without waiting for a render to land first.
+  async function analyzeText(assignment: string) {
+    if (starting || !assignment.trim()) return
     setStarting(true)
     setError(null)
     try {
@@ -534,7 +610,7 @@ function AddAssignmentScreen({
         mode,
         aiUseLevel: mode === 'redesign_ai' && !letWivozaRecommend ? (aiUseLevel as AssignmentAiUseLevel) : undefined,
         letWivozaChooseAiUseLevel: mode === 'redesign_ai' && letWivozaRecommend ? true : undefined,
-        originalText: text.trim(),
+        originalText: assignment.trim(),
         extraNote,
       })
       onStarted(session, pickedFile)
@@ -587,7 +663,11 @@ function AddAssignmentScreen({
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-terracotta/20 text-terracotta">
                   <ClipboardIcon className="h-4.5 w-4.5" />
                 </span>
-                <p className="text-sm font-semibold text-cream">Carried over from your review — no need to re-add it.</p>
+                <p className="text-sm font-semibold text-cream">
+                  {carriedFrom === 'photo'
+                    ? 'Read from the photo you sent Coach — no need to re-add it.'
+                    : 'Carried over from your review — no need to re-add it.'}
+                </p>
               </div>
               <button type="button" onClick={handleRemoveFile} className="shrink-0 text-xs font-semibold text-cream/60 hover:text-cream">
                 Remove

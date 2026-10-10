@@ -52,6 +52,7 @@ import {
   telegramEnabled,
   type ReplyMarkup,
   type TelegramMessage,
+  type TelegramPhotoSize,
   type TelegramUpdate,
   type TelegramVoice,
 } from './telegram.ts'
@@ -240,7 +241,7 @@ const HELP_TEXT = `Talk to me like you'd talk to a colleague after class. Tell m
 
 When you're finished, tap "Wrap up" below for your takeaway, and I'll check in a few days later to see how it went. Tap "New topic" to start fresh.
 
-Typing isn't always possible, so you can hold the microphone and talk to me instead — a voice note works the same as a message.
+Typing isn't always possible, so you can hold the microphone and talk to me instead — a voice note works the same as a message. You can send a photo too: a worksheet you're about to hand out, what's on the board, the seating chart you keep rearranging.
 
 One ask: please leave out students' full names. "A student in 3rd period" works great.${MINI_APP_HELP}
 
@@ -360,9 +361,69 @@ const USER_SELECT = {
 } as const
 
 function handleIncoming(chatId: string, message: TelegramMessage): Promise<void> {
-  return message.voice
-    ? handleVoiceNote(chatId, message.voice, message.from?.first_name)
-    : handleMessage(chatId, message.text, message.from?.first_name)
+  if (message.voice) return handleVoiceNote(chatId, message.voice, message.from?.first_name)
+  if (message.photo?.length) return handlePhoto(chatId, message.photo, message.caption)
+  return handleMessage(chatId, message.text, message.from?.first_name)
+}
+
+// ---------------------------------------------------------------------------
+// Photos
+// ---------------------------------------------------------------------------
+//
+// A worksheet, an anchor chart, a seating chart, the pile of exit tickets
+// on the desk — the things a teacher would photograph are the things they
+// would otherwise have to describe. Coach looks at the picture and answers
+// whatever they wrote under it.
+//
+// And when it turns out to be an assignment, the full review is one tap
+// away with the text already lifted off the photo — the point being that a
+// two-second picture replaces finding the file and uploading it.
+
+export type CoachImage = { data: string; mediaType: 'image/jpeg' }
+
+// Claude's own per-image ceiling. Telegram's largest kept size is normally
+// a few hundred KB, so this is a guard rather than a limit anyone meets.
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024
+
+// What Claude is told when the teacher sent a picture and said nothing.
+const BARE_PHOTO_TEXT = '(sent you this picture, with no message)'
+
+async function handlePhoto(chatId: string, photos: TelegramPhotoSize[], caption: string | undefined) {
+  // Checked before anything is downloaded or looked at: both cost money,
+  // and an unlinked chat has no account to bill them to.
+  const user = await prisma.user.findUnique({ where: { telegramChatId: chatId }, select: USER_SELECT })
+  if (!user) {
+    await sendMessage(chatId, NOT_LINKED_TEXT, NO_KEYBOARD)
+    return
+  }
+  if (user.suspendedAt) {
+    await sendMessage(chatId, "This Wivoza account isn't active right now.", NO_KEYBOARD)
+    return
+  }
+
+  const largest = photos[photos.length - 1]
+  if (!largest) return
+  if ((largest.file_size ?? 0) > MAX_PHOTO_BYTES) {
+    await reply(chatId, "That picture is bigger than I can take in. Try sending it as a photo rather than a file, or a smaller one.")
+    return
+  }
+
+  const stopTyping = keepTyping(chatId)
+  let image: CoachImage
+  try {
+    const bytes = await downloadFile(largest.file_id)
+    // Held for the one request and never written down, the same as a voice
+    // note's audio.
+    image = { data: bytes.toString('base64'), mediaType: 'image/jpeg' }
+  } catch (error) {
+    console.error('[telegram] downloading a photo failed:', error)
+    await reply(chatId, "I couldn't open that picture, sorry. Try sending it again?")
+    return
+  } finally {
+    stopTyping()
+  }
+
+  await coachReply(chatId, user, caption?.trim() || BARE_PHOTO_TEXT, image)
 }
 
 // ---------------------------------------------------------------------------
@@ -438,7 +499,7 @@ async function handleVoiceNote(chatId: string, voice: TelegramVoice, firstName: 
 
 async function handleMessage(chatId: string, rawText: string | undefined, firstName: string | undefined) {
   if (rawText === undefined) {
-    await sendMessage(chatId, "I can read messages and voice notes — a photo or a file isn't something I can open yet. Type it out or record it and I'm all yours.")
+    await sendMessage(chatId, "I can read messages, voice notes and photos — a file isn't something I can open yet. Send it one of those ways and I'm all yours.")
     return
   }
   const text = rawText.trim()
@@ -559,6 +620,79 @@ function findSentCheckIn(userId: string) {
   })
 }
 
+type ClaudeMessages = Parameters<typeof anthropic.messages.create>[0]['messages']
+
+// Puts the picture in front of the words on the turn it arrived, leaving
+// every earlier turn as plain text — the image is gone by the next one.
+function withImage(messages: ClaudeMessages, image: CoachImage | undefined): ClaudeMessages {
+  if (!image) return messages
+  const last = messages[messages.length - 1]
+  if (!last || typeof last.content !== 'string') return messages
+  return [
+    ...messages.slice(0, -1),
+    {
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.data } },
+        { type: 'text', text: last.content },
+      ],
+    },
+  ]
+}
+
+// Reading an assignment off a photograph, for Assignment Coach's form.
+// Deliberately a transcription and not a summary: the form's whole job is
+// to judge the assignment, so it has to receive the assignment.
+const ASSIGNMENT_FROM_PHOTO_PROMPT = `You are reading a photograph of something a teacher is giving their students. Write out everything on the page as plain text, in order: the title, the instructions, every question or prompt, and point values where they are shown. Transcribe, don't summarise, don't comment, and don't add anything that isn't on the page. If what you can read is too little or too blurred to be usable, or the picture isn't an assignment at all, reply with exactly NOT_AN_ASSIGNMENT and nothing else.`
+
+const ASSIGNMENT_FROM_PHOTO_MAX_TOKENS = 1500
+
+async function offerPhotographedAssignment(chatId: string, userId: string, image: CoachImage, debriefId: string) {
+  const stopTyping = keepTyping(chatId)
+  let originalText = ''
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: ASSIGNMENT_FROM_PHOTO_MAX_TOKENS,
+      thinking: { type: 'disabled' },
+      system: ASSIGNMENT_FROM_PHOTO_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: [{ type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.data } }],
+        },
+      ],
+    })
+    originalText = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+      .trim()
+  } catch (error) {
+    console.error('[telegram] reading an assignment off a photo failed:', error)
+    return
+  } finally {
+    stopTyping()
+  }
+
+  // Nothing worth reviewing came back. Said nowhere: Coach has already
+  // answered them about the picture, and a teacher who wanted a review
+  // and didn't get an offer is no worse off than before this existed.
+  if (!originalText || originalText.includes('NOT_AN_ASSIGNMENT')) return
+
+  const details = { originalText }
+  const target = prefillTarget(details)
+  const button = target
+    ? openInAppButton(
+        target.label,
+        `${target.path}${target.path.includes('?') ? '&' : '?'}handoff=${createHandoff(userId, 'assignment_coach', details)}&build=1`,
+      )
+    : undefined
+  if (!button) return
+  await sendMessage(chatId, "I've got the assignment itself off that photo, if you want the full read on it.", button)
+  rememberToolOffer(debriefId, 'assignment_coach')
+}
+
 // Keeps "typing…" showing while Claude writes; Telegram drops it after ~5s.
 function keepTyping(chatId: string): () => void {
   void sendTyping(chatId).catch(() => {})
@@ -566,7 +700,7 @@ function keepTyping(chatId: string): () => void {
   return () => clearInterval(timer)
 }
 
-async function coachReply(chatId: string, user: BotUser, text: string) {
+async function coachReply(chatId: string, user: BotUser, text: string, image?: CoachImage) {
   let debrief = await findOpenConversation(user)
 
   // A reply to a check-in Coach sent starts its own conversation, with the
@@ -616,7 +750,7 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
         (offerAllowed ? BETTER_TOOL_TOKEN_BUFFER : 0),
       thinking: { type: 'disabled' },
       system: memoryOn ? `${basePrompt}${buildMemoryContextBlock(user.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}` : basePrompt,
-      messages: toClaudeMessages(existing, text),
+      messages: withImage(toClaudeMessages(existing, text), image),
     })
     raw = response.content
       .filter((block) => block.type === 'text')
@@ -640,10 +774,15 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
     return
   }
 
+  // The picture itself is never stored, so the saved turn says one was
+  // sent — otherwise the history reads as a reply to nothing. It also
+  // means Coach can't see the photo again on later turns; it has only
+  // what it said about it.
+  const turnText = image ? (text === BARE_PHOTO_TEXT ? '[photo]' : `[photo] ${text}`) : text
   const saved = debrief
-    ? await prisma.debrief.update({ where: { id: debrief.id }, data: { conversation: appendTurn(existing, text, coachText) } })
+    ? await prisma.debrief.update({ where: { id: debrief.id }, data: { conversation: appendTurn(existing, turnText, coachText) } })
     : await prisma.debrief.create({
-        data: { userId: user.id, incidentText: text, source: 'talk_to_me', channel: 'telegram', conversation: appendTurn([], text, coachText) },
+        data: { userId: user.id, incidentText: turnText, source: 'talk_to_me', channel: 'telegram', conversation: appendTurn([], turnText, coachText) },
       })
   await prisma.user.update({ where: { id: user.id }, data: { telegramDebriefId: saved.id } })
   if (followUp) {
@@ -655,9 +794,15 @@ async function coachReply(chatId: string, user: BotUser, text: string) {
   // Wrap up / New topic keyboard is unaffected — an inline button sits with
   // the message, not above the typing box.
   const spent = offer != null && (offersMade(saved.id).get(offer.key) ?? 0) >= MAX_OFFERS_PER_TOOL
-  const button = offer && !spent ? toolOfferButton(offer, details, user.id) : undefined
+  // An assignment in a photo can't be handed over as a photo — the form
+  // takes text. Reading it out takes another pass over the picture and the
+  // best part of a minute, which is far too long to hold up the reply, so
+  // that offer follows on its own once the text is out.
+  const liftFromPhoto = image != null && offer?.key === 'assignment_coach' && !spent
+  const button = offer && !spent && !liftFromPhoto ? toolOfferButton(offer, details, user.id) : undefined
   await sendMessage(chatId, coachText, button ?? MAIN_KEYBOARD)
   if (button && offer) rememberToolOffer(saved.id, offer.key)
+  if (liftFromPhoto) await offerPhotographedAssignment(chatId, user.id, image!, saved.id)
 
   // Bookkeeping for the next turn, after the teacher already has this one.
   if (writeMemory) {
