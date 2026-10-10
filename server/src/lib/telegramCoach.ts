@@ -189,6 +189,13 @@ function toolOfferButton(offer: ToolOffer, details: HandoffDetails | null, userI
   }
 }
 
+// Offered under a reply to a single, finished reflection — see
+// isCompleteReflection. One button: ignoring it is the other answer, and
+// "Not now" would only add a message saying nothing happened.
+function wrapUpOfferButton(debriefId: string): ReplyMarkup {
+  return { inline_keyboard: [[{ text: '✅ Wrap this up', callback_data: `wrap:${debriefId}` }]] }
+}
+
 // How often Coach has offered each tool in a conversation — see
 // betterTool.ts. A button under every reply would be a nag: the teacher
 // came here to think, not to be routed.
@@ -796,6 +803,8 @@ async function coachReply(chatId: string, user: BotUser, text: string, image?: C
   // colleague's answer and the routing stays optional. The persistent
   // Wrap up / New topic keyboard is unaffected — an inline button sits with
   // the message, not above the typing box.
+  // A photo isn't a reflection, and its own follow-up may still be coming.
+  const wrapUpNow = !image && isCompleteReflection(text, countUserTurns(existing))
   const spent = offer != null && (offersMade(saved.id).get(offer.key) ?? 0) >= MAX_OFFERS_PER_TOOL
   // An assignment in a photo can't be handed over as a photo — the form
   // takes text. Reading it out takes another pass over the picture and the
@@ -803,8 +812,19 @@ async function coachReply(chatId: string, user: BotUser, text: string, image?: C
   // that offer follows on its own once the text is out.
   const liftFromPhoto = image != null && offer?.key === 'assignment_coach' && !spent
   const button = offer && !spent && !liftFromPhoto ? toolOfferButton(offer, details, user.id) : undefined
-  await sendMessage(chatId, coachText, button ?? MAIN_KEYBOARD)
+  // One keyboard per message, so these can't both ride on this reply. A
+  // tool offer wins: it answers something the teacher just asked for,
+  // where wrapping up only ends what they said — and the sweep will come
+  // round for the wrap-up anyway once this conversation has two exchanges.
+  const wrapUp = !button && wrapUpNow ? wrapUpOfferButton(saved.id) : undefined
+  await sendMessage(chatId, coachText, button ?? wrapUp ?? MAIN_KEYBOARD)
   if (button && offer) rememberToolOffer(saved.id, offer.key)
+  // Marked as offered, so the 30-minute sweep doesn't ask a second time.
+  // This IS that offer; it just arrives while they still have the phone in
+  // their hand.
+  if (wrapUp) {
+    await prisma.debrief.update({ where: { id: saved.id }, data: { telegramWrapUpOfferedAt: new Date() } })
+  }
   if (liftFromPhoto) await offerPhotographedAssignment(chatId, user.id, image!, saved.id)
 
   // Bookkeeping for the next turn, after the teacher already has this one.
@@ -969,6 +989,27 @@ export async function sendDueCheckIns(now = new Date()): Promise<number> {
 const WRAP_UP_OFFER_AFTER_MS = 30 * 60 * 1000
 const WRAP_UP_OFFER_WITHIN_MS = 3 * 24 * 60 * 60 * 1000
 const WRAP_UP_MIN_EXCHANGES = 2
+
+/// Is this one message a finished reflection rather than an opening line?
+///
+/// The sweep above waits for two exchanges, because in a typed chat one
+/// message usually IS an opener — "my 3rd period was a disaster today" is
+/// the start of a conversation, not the whole of one. But a voice note
+/// held for a minute, or a long message typed after the last bell, is the
+/// whole thing: the teacher has said what happened and moved on. Those
+/// never reached two exchanges, so they never got a takeaway or a
+/// check-in, and the one reflection most worth keeping quietly became
+/// nothing.
+///
+/// Length is the signal, and deliberately a dumb one: no extra model call
+/// to decide something the word count already says. Roughly half a minute
+/// of speech, which nobody types as a greeting. The cost of being wrong is
+/// an offer the teacher ignores.
+export function isCompleteReflection(text: string, userTurnsBefore: number): boolean {
+  return userTurnsBefore === 0 && text.trim().length >= COMPLETE_REFLECTION_CHARS
+}
+
+const COMPLETE_REFLECTION_CHARS = 400
 
 export async function sendWrapUpOffers(now = new Date()): Promise<number> {
   if (!inSendWindow(now)) return 0
