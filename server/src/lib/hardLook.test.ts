@@ -19,10 +19,18 @@ const items: RubricEvidenceItem[] = [
   { kind: 'Redirection', timestampSec: 180, text: 'Eyes up here.' },
 ]
 
-function critiqueBlock(section: string, evidence: string, body = 'The case, at length.') {
+/// The headline has to vary per block: two findings with the same headline
+/// are the same finding, and the parser is meant to collapse them.
+function critiqueBlock(
+  section: string,
+  evidence: string,
+  body = 'The case, at length.',
+  headline = `A blunt line about ${section}.`,
+) {
   return `<critique><section>${section}</section><evidence>${evidence}</evidence>` +
-    `<headline>A blunt line.</headline><case>${body}</case>` +
-    `<likely_cost>Probably cost something.</likely_cost></critique>`
+    `<headline>${headline}</headline><case>${body}</case>` +
+    `<likely_cost>Probably cost something.</likely_cost>` +
+    `<next_step>Try the other thing next time.</next_step></critique>`
 }
 
 test('a criticism quoting a moment keeps the quote, by number', () => {
@@ -156,4 +164,54 @@ test('withholding a section also removes it from what the model must account for
   )
   // `questions` was never asked about, so its silence is not a failure.
   assert.deepEqual(unaccountedSections(parsed, eligible), [])
+})
+
+// --- several findings per section
+//
+// The first version allowed exactly one, which on a real 21-minute lesson
+// produced three paragraphs against the Rubric Lens's nine components.
+
+test('a section can carry several distinct findings, in the model\u2019s order', () => {
+  const text =
+    critiqueBlock('questions', '1', 'First case, with 1 figure.', 'Wait time collapsed on three questions.') +
+    critiqueBlock('questions', '2', 'Second case, with 2 figures.', 'Praise named nothing specific.')
+  const parsed = parseHardLook(text, items)
+  assert.equal(parsed.critiques.length, 2)
+  assert.deepEqual(parsed.critiques.map((c) => c.headline), [
+    'Wait time collapsed on three questions.',
+    'Praise named nothing specific.',
+  ])
+})
+
+test('the same complaint reworded twice counts once', () => {
+  const text =
+    critiqueBlock('questions', '1', 'A case.', 'Wait time collapsed on three questions.') +
+    critiqueBlock('questions', '2', 'Another case.', 'Wait time collapsed on three questions!')
+  assert.equal(parseHardLook(text, items).critiques.length, 1)
+})
+
+test('a section is capped, so one topic cannot crowd out the lesson', () => {
+  const text = Array.from({ length: 7 }, (_, i) =>
+    critiqueBlock('talk', '1', `Case ${i} with a figure.`, `Distinct finding number ${i}.`),
+  ).join('')
+  assert.equal(parseHardLook(text, items).critiques.length, 4)
+})
+
+test('every finding carries a next step', () => {
+  const parsed = parseHardLook(critiqueBlock('questions', '1'), items)
+  assert.equal(parsed.critiques[0].nextStep, 'Try the other thing next time.')
+})
+
+test('a clear is ignored for a section that already has a finding', () => {
+  const text =
+    critiqueBlock('routines', '3') +
+    '<clear><section>routines</section><reason>Actually fine.</reason></clear>'
+  const parsed = parseHardLook(text, items)
+  assert.equal(parsed.critiques.length, 1)
+  assert.deepEqual(parsed.cleared, [])
+})
+
+test('one finding in a section is enough to account for it', () => {
+  const parsed = parseHardLook(critiqueBlock('talk', '', 'Held the floor for 6 minutes.'), items)
+  assert.deepEqual(unaccountedSections(parsed, [HARD_LOOK_SECTIONS[0]]), [])
 })

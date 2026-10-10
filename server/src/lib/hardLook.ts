@@ -25,6 +25,7 @@
 // teacher sees it as such. A Hard Look that finds nothing in a section is what
 // buys the sections where it does find something their authority.
 
+import type { Segment } from './audioAnalysis.ts'
 import { extractTag } from './extractTag.ts'
 import {
   buildRubricEvidence,
@@ -176,6 +177,15 @@ export type HardLookCritique = {
   /// What it plausibly cost students. Phrased as a likely consequence, never
   /// as an observed fact — the microphone did not watch anyone learn.
   likelyCost: string
+  /// One concrete thing to try instead.
+  ///
+  /// The first version had no such field, deliberately: a criticism that
+  /// landed and stopped seemed truer to what was asked for. Read against the
+  /// Rubric Lens on the same lesson, it was plainly the weaker document —
+  /// nine components with seven next steps against three complaints with
+  /// nowhere to go. Being unsparing is a tone, not a reason to withhold the
+  /// useful half.
+  nextStep: string
   evidence: RubricEvidenceItem[]
 }
 
@@ -200,19 +210,115 @@ function isSectionKey(value: string | null | undefined): value is HardLookSectio
   return value != null && SECTION_KEYS.has(value)
 }
 
-export { buildRubricEvidence as buildHardLookEvidence }
+/// Transcript lines too mangled to show a teacher as their own words.
+///
+/// The quote a teacher reads is this array's text, not the model's writing —
+/// the model only picks moment numbers — so no prompt rule can keep a garbled
+/// line off the page, and asking for one did not. One real report quoted
+/// "anybody can think of stat out how it develops modern Europe?" at a
+/// teacher, attached to a criticism.
+///
+/// This only catches the cheap, certain signal: an immediately repeated word,
+/// as in "she she got it bed". It does NOT catch a line that is grammatical
+/// nonsense made of real words, which is most of them — that needs meaning,
+/// not a pattern. So this narrows the problem rather than solving it, and the
+/// report says out loud that quotes come from automatic transcription.
+const DOUBLED_WORD = /\b([a-z]{2,})\s+\1\b/i
+
+export function readsAsSpeech(text: string): boolean {
+  return !DOUBLED_WORD.test(text)
+}
+
+/// The Hard Look's evidence: the shared set, minus anything too garbled to
+/// quote at someone. Rubric Lens keeps the unfiltered set deliberately — it
+/// organises evidence rather than building a case from it, so a rough quote
+/// there is context, not an accusation.
+export function buildHardLookEvidence(session: Parameters<typeof buildRubricEvidence>[0]): {
+  items: RubricEvidenceItem[]
+  facts: string[]
+} {
+  const evidence = buildRubricEvidence(session)
+  return { ...evidence, items: evidence.items.filter((item) => readsAsSpeech(item.text)) }
+}
+
+/// Where the longest unbroken stretch of teacher talk began.
+///
+/// `metricsDetail` keeps how long it ran but not when, so the model could say
+/// "you held the floor for seven minutes" and had nothing to point at — which
+/// is how the talk criticism came back on three real lessons with no quote
+/// behind it at all, restating a percentage the Summary page already showed.
+/// Recomputed from the segments rather than added to the stored metrics, so
+/// it works on reports that already exist.
+export function longestTeacherStretch(
+  segments: Segment[],
+): { startSec: number; durationSec: number; opening: string } | null {
+  let best: { startSec: number; durationSec: number; opening: string } | null = null
+  let runStart: number | null = null
+  // Summed speaking time, NOT wall-clock from first to last segment.
+  //
+  // This has to match `audioAnalysis`'s own monologue measurement exactly,
+  // and the first version did not: it measured wall-clock, which includes
+  // every pause, and reported 9.5 minutes where the report's own metric said
+  // 6. Handed both numbers for the same stretch, the model reasonably read
+  // them as two different stretches and wrote a criticism about a "second
+  // six-minute run" that never happened. One fact, one number.
+  let spokenSec = 0
+  let opening = ''
+  const close = () => {
+    if (runStart == null) return
+    if (!best || spokenSec > best.durationSec) best = { startSec: runStart, durationSec: spokenSec, opening }
+    runStart = null
+    spokenSec = 0
+  }
+  for (const segment of [...segments].sort((a, b) => a.startSec - b.startSec)) {
+    if (segment.speakerLabel === 'Teacher') {
+      if (runStart == null) {
+        runStart = segment.startSec
+        opening = segment.text.trim().slice(0, 80)
+      }
+      spokenSec += Math.max(0, segment.endSec - segment.startSec)
+    } else if (segment.text.trim()) {
+      // Only an audible student turn breaks the stretch, same as
+      // `audioAnalysis` — a blank segment is the transcriber, not an
+      // interruption.
+      close()
+    }
+  }
+  close()
+  return best
+}
+
+/// How many findings to aim for across the whole lesson, and the ceiling per
+/// section. The first version allowed exactly one per section, which on a real
+/// 21-minute lesson produced three paragraphs and a clear — a sixth of what
+/// the Rubric Lens on the same recording gave, and the teacher said so.
+const TARGET_FINDINGS = '8 to 10'
+const MAX_PER_SECTION = 4
 
 export function buildHardLookSystemPrompt(
   evidence: { items: RubricEvidenceItem[]; facts: string[] },
   /// Only the sections whose evidence can carry an answer — see
   /// `sectionEligibility`. The others are never put to the model at all.
   sections: HardLookSectionDef[],
+  /// The topics set aside, with the reason. Named rather than silently
+  /// omitted: told only which sections to write about, the model kept filing
+  /// a criticism about a withheld topic under a neighbouring section — a
+  /// complaint about questioning appeared under Clarity & Content, because it
+  /// had nowhere else to put a thought it did not know was off-limits.
+  withheld: HardLookClear[],
+  /// Where the longest unbroken teacher stretch was, when there was one, so a
+  /// criticism about it can point somewhere.
+  stretch: { startSec: number; durationSec: number; opening: string } | null,
   sharedRules: string,
 ): string {
   const sectionLines = sections
     .map((s) => `${s.key} (${s.label}): you may press on ${s.pushOn}.`)
     .join('\n')
   const keyList = sections.map((s) => s.key).join(', ')
+  const withheldList =
+    withheld.length > 0
+      ? `: ${withheld.map((w) => `${w.section} (${w.reason})`).join('; ')}`
+      : ''
 
   return `You are the most demanding reader this teacher's lesson will ever get. They have read the supportive version of this report already and have deliberately asked for the other one: a hard, specific, unsentimental read of what could have been better. Give them that. This is for their own private reflection — nobody else sees it, it reaches no evaluator, and it affects nothing.
 
@@ -223,9 +329,13 @@ What you must not do is manufacture. You have an automatic audio transcript and 
 Therefore:
 - Every criticism must be traceable to a numbered moment below or to a listed count. If you cannot point at one, you do not have a criticism, you have a suspicion, and you leave it out.
 - Some of the strongest criticisms available here live in the counts rather than in any one sentence — a share of the airtime, a six-minute unbroken stretch, zero follow-ups across seven questions. Those are fully legitimate. When a criticism rests on a count rather than a quote, leave <evidence> empty and state the actual number in <case>. A criticism with neither a quoted moment nor a figure in it is thrown away, so never write one of those.
+- Never write a criticism that concludes nothing is wrong. If a section's honest answer is that the evidence shows no problem, that is a <clear> and must be written as one — a <critique> whose cost is "none" or whose next step is "no change needed" is a clear wearing the wrong tag, and it is thrown away.
+- But a bare number the teacher has already read on another page of this report is not a finding. "You took 68% of the airtime" tells them nothing they did not know. Say what it meant in this lesson: when the long stretch happened, what it was spent on, what was going on either side of it. If a figure is all you have for a point and you cannot say anything about it beyond restating it, that point is not worth one of your findings.
 - Silence in the evidence is never a criticism. "No check for understanding was detected" is a limit of the microphone, not a finding about the lesson. Never argue from something's absence.
 - Never criticise anything you would need to see rather than hear.
 - Do not stack hedges to make a weak point survivable. Either the evidence carries the criticism or you drop it.
+- Some topics have been set aside before you saw this, because their evidence could not carry a criticism fairly${withheldList}. Those topics are closed. Do not criticise them, and do not move a criticism about one into a section that IS listed — a complaint about questioning does not become a complaint about clarity by being filed there. If a thought belongs to a closed topic, drop it.
+- Quote only lines that read as English. Automatic transcription garbles speech, and a mangled line shown back to a teacher as their own words reads as nonsense they never said — one real report quoted "anybody can think of stat out how it develops modern Europe?" at a teacher. If the best evidence for a point is garbled, describe the moment in your own words instead, or pick a different point.
 - A section you are not ALLOWED to criticise is still a section you must account for. When the only honest thing to say is that the recording did not catch enough of this to judge it fairly — a very low share of audible talk, for instance, means the microphone missed most of the room, not that the room was silent — write a clear that says exactly that. That is a correct and expected answer, not a dodge, and it is much better than either a criticism you cannot support or saying nothing at all.
 
 A section where the audible evidence does not support a criticism is a NORMAL and EXPECTED result, and saying so is part of doing this job well — not a failure to find something. You are not required to produce a criticism per section, and a hard look that invents one is worth less than a hard look that comes back half empty. If all four sections are clear, write four clears.
@@ -236,10 +346,25 @@ ${sectionLines}
 Automatic counts from this recording (estimates, safe to cite):
 ${evidence.facts.length > 0 ? evidence.facts.map((f) => `- ${f}`).join('\n') : '- None available.'}
 
+${
+    stretch && stretch.durationSec >= 90
+      ? `That longest unbroken stretch of teacher talk counted above began around ${Math.floor(stretch.startSec / 60)}:${String(Math.round(stretch.startSec % 60)).padStart(2, '0')}, opening "${stretch.opening}". This is the SAME stretch the count above refers to, not a second one — there is exactly one longest stretch. A criticism about holding the floor should point at where it was and what it was spent on, rather than only at a percentage.\n`
+      : ''
+  }
 Numbered moments from the recording, each an exact quote:
 ${evidence.items.map((item, i) => `[${i + 1}] (${item.kind}) ${item.text}`).join('\n')}
 
-Your reply must contain EXACTLY ${sections.length} BLOCK${sections.length === 1 ? '' : 'S'} — one for each section listed above, in this order: ${keyList}. Those are the only sections you write about; anything not on that list has already been set aside and is not yours to comment on. Omitting a section is the one mistake you cannot make here. If you have nothing to say about a section, including because the recording gave you too little to judge it fairly, that is a <clear> block and not a silence. A missing section is read as a failure and the whole thing is thrown away and asked for again, so count your blocks before you finish.
+Write about ONLY these sections, in this order: ${keyList}.
+
+Aim for ${TARGET_FINDINGS} findings across the whole lesson — not one per section. A section can carry several genuinely distinct criticisms and should, when the evidence is there: at most ${MAX_PER_SECTION} per section, each about a different thing. Two findings that are the same complaint reworded count as one and waste a slot, so if you catch yourself restating, drop one and look for something else.
+
+What you must NOT do is pad to reach a number. ${TARGET_FINDINGS} is what a lesson with real material in it should yield; it is a target, not a quota, and a finding you had to reach for is worse than a short list. Six sharp findings beat ten with four guesses in them, and a thin lesson honestly yields four.
+
+Padding has a shape, so check for it — but only where it lives. It lives in findings built on a COUNT. One real report faulted a teacher for a "full minute" of unbroken talk and told them to break up any explanation over thirty seconds, which is not a standard anybody teaches to. So before writing a finding that rests on a figure, ask whether that figure would trouble an experienced teacher: a minute of explaining is normal and six is a lecture; three recall questions in a row is worth noting and one is a Tuesday. An unremarkable figure is padding, and you drop it.
+
+A finding built on a MOMENT is different, and this caution does not apply to it. A term used before it was defined, a wrong answer closed down without repair, a question asked and then answered by the teacher — the moment itself is the evidence and needs no impressive number beside it. These are usually the most useful findings in the whole document, and there are normally several in any lesson of reasonable length. Look hard for them, and do not talk yourself out of one because it only happened once: once is where teaching actually goes wrong.
+
+Every listed section must be accounted for: either at least one criticism, or ONE <clear> block saying why there is none. A section you say nothing at all about is read as a failure and the whole reply is thrown away and asked for again, so check each one before you finish. Never write both a criticism and a clear for the same section.
 
 For each section write EXACTLY ONE block, either a criticism:
 <critique>
@@ -248,6 +373,7 @@ For each section write EXACTLY ONE block, either a criticism:
 <headline>The criticism in one blunt line, 12 words at most. No hedging, no preamble.</headline>
 <case>2-3 sentences (65 words at most) making the case, grounded in the cited moments and counts. Say what happened and why it falls short of what this teacher could do.</case>
 <likely_cost>One sentence (30 words at most): what this plausibly cost students. Phrase it as a likely consequence — "students who were unsure probably stayed unsure" — never as something you observed.</likely_cost>
+<next_step>One sentence (35 words at most): one concrete, specific thing to do differently, small enough to try in the next lesson. Name the move, not the principle — "ask the question, then count to five before taking a hand" rather than "increase wait time". No preamble and no encouragement; this is the practical half of the criticism, not a consolation for it.</next_step>
 </critique>
 
 or a clear:
@@ -256,7 +382,7 @@ or a clear:
 <reason>One sentence (30 words at most) saying why there is no defensible criticism here: either the audible evidence genuinely looks fine, or there was not enough of it to judge. Say which.</reason>
 </clear>
 
-Pick the single strongest criticism per section. Do not write two critiques for one section, and do not write both a critique and a clear for the same section. ${sections.length} section${sections.length === 1 ? '' : 's'}, ${sections.length} block${sections.length === 1 ? '' : 's'}, each one either a <critique> or a <clear>.
+Order the criticisms within each section strongest first.
 
 The numbering above is ours and the teacher never sees it. Use a moment number only inside <evidence>; in every other field, never write "moment 4", "[4]" or any reference to a number — describe the moment in words or quote it. Don't invent a moment, a number, or a detail.
 
@@ -268,15 +394,24 @@ export function parseHardLook(
   text: string,
   items: RubricEvidenceItem[],
 ): { critiques: HardLookCritique[]; cleared: HardLookClear[] } {
-  const critiques = new Map<HardLookSectionKey, HardLookCritique>()
+  const bySection = new Map<HardLookSectionKey, HardLookCritique[]>()
   const cleared = new Map<HardLookSectionKey, HardLookClear>()
+  /// Deduped on the claim rather than the section, now that a section may
+  /// carry several. Two findings that are the same complaint reworded are one
+  /// finding, and the prompt says so — this is what makes that true.
+  const seenHeadlines = new Set<string>()
 
   for (const block of text.match(/<critique>[\s\S]*?<\/critique>/g) ?? []) {
     const section = extractTag(block, 'section')?.trim().toLowerCase()
     const headline = extractTag(block, 'headline')
     const critique = extractTag(block, 'case')
     if (!isSectionKey(section) || !headline || !critique) continue
-    if (critiques.has(section)) continue
+
+    const fingerprint = headline.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim()
+    if (seenHeadlines.has(fingerprint)) continue
+
+    const existing = bySection.get(section) ?? []
+    if (existing.length >= MAX_PER_SECTION) continue
 
     const seen = new Set<number>()
     const evidence: RubricEvidenceItem[] = []
@@ -304,13 +439,19 @@ export function parseHardLook(
     if (evidence.length === 0 && !/\d/.test(critique)) continue
 
     const likelyCost = extractTag(block, 'likely_cost')
-    critiques.set(section, {
-      section,
-      headline: stripMomentReferences(headline),
-      critique: stripMomentReferences(critique),
-      likelyCost: likelyCost ? stripMomentReferences(likelyCost) : '',
-      evidence,
-    })
+    const nextStep = extractTag(block, 'next_step')
+    seenHeadlines.add(fingerprint)
+    bySection.set(section, [
+      ...existing,
+      {
+        section,
+        headline: stripMomentReferences(headline),
+        critique: stripMomentReferences(critique),
+        likelyCost: likelyCost ? stripMomentReferences(likelyCost) : '',
+        nextStep: nextStep && nextStep.toLowerCase() !== 'none' ? stripMomentReferences(nextStep) : '',
+        evidence,
+      },
+    ])
   }
 
   for (const block of text.match(/<clear>[\s\S]*?<\/clear>/g) ?? []) {
@@ -318,17 +459,15 @@ export function parseHardLook(
     const reason = extractTag(block, 'reason')
     if (!isSectionKey(section) || !reason) continue
     // A section it already criticised cannot also be clear.
-    if (critiques.has(section) || cleared.has(section)) continue
+    if (bySection.has(section) || cleared.has(section)) continue
     cleared.set(section, { section, reason: stripMomentReferences(reason) })
   }
 
   // Returned in the sections' own order, so the overlay reads down the page
-  // in the same order as the tabs it sits above.
+  // in the same order as the tabs it sits above, with each section's own
+  // findings kept in the order the model ranked them.
   return {
-    critiques: HARD_LOOK_SECTIONS.flatMap((s) => {
-      const found = critiques.get(s.key)
-      return found ? [found] : []
-    }),
+    critiques: HARD_LOOK_SECTIONS.flatMap((s) => bySection.get(s.key) ?? []),
     cleared: HARD_LOOK_SECTIONS.flatMap((s) => {
       const found = cleared.get(s.key)
       return found ? [found] : []

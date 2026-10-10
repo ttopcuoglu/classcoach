@@ -33,6 +33,7 @@ import {
   buildHardLookEvidence,
   buildHardLookSystemPrompt,
   HARD_LOOK_SECTIONS,
+  longestTeacherStretch,
   parseHardLook,
   sectionEligibility,
   unaccountedSections,
@@ -1336,6 +1337,15 @@ audioSessionsRouter.post('/:id/hard-look', async (req, res) => {
   const system = buildHardLookSystemPrompt(
     evidence,
     eligible,
+    withheld,
+    longestTeacherStretch(
+      session.segments.map((s) => ({
+        speakerLabel: s.speakerLabel,
+        startSec: s.startSec,
+        endSec: s.endSec,
+        text: s.text,
+      })),
+    ),
     `${CORE_COACHING_RULES}\n${TRANSCRIPT_RELIABILITY_NOTICE}`,
   )
 
@@ -1350,7 +1360,9 @@ audioSessionsRouter.post('/:id/hard-look', async (req, res) => {
     for (let attempt = 0; attempt < 2; attempt++) {
       const response = await anthropic.messages.create({
         model: CLAUDE_MODEL,
-        max_tokens: 2500,
+        // Eight to ten findings, each with a case, a cost and a next step,
+        // plus a clear for any section that has none — 2500 ran this short.
+        max_tokens: 4000,
         // Same reason as classroomMoves' and lessonObjective's: adaptive
         // thinking draws from this budget, and left on it spent all 2500
         // tokens here and returned a reply with no text blocks in it at all.

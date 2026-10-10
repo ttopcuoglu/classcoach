@@ -4832,47 +4832,65 @@ function HardLookTab({
     <div className="flex flex-col gap-5">
       <div className="rounded-xl border border-dashed border-hairline p-4 text-xs text-ink-soft">
         The hardest reading these recordings support. It only presses on things it can point at, so a quiet section
-        means the audio didn't carry a case — not that the lesson was flawless, and not that it was poor.
+        means the audio didn't carry a case — not that the lesson was flawless, and not that it was poor. Quotes come
+        from automatic transcription, so a line may be garbled even when the point behind it holds.
       </div>
 
       {hardLook.critiques.length === 0 ? (
         <div className="rounded-2xl border border-hairline bg-mint-tint/40 p-5">
           <p className="font-heading text-base font-bold text-forest">Nothing here it can make a hard case against.</p>
           <p className="mt-2 text-sm text-ink">
-            Four sections, and on what the microphone caught, none of them support a criticism worth your time. That is
-            a real result, and it is the reason to trust this section on a lesson where it does find something.
+            On what the microphone caught, none of these sections support a criticism worth your time. That is a real
+            result, and it is the reason to trust this section on a lesson where it does find something.
           </p>
         </div>
       ) : (
-        hardLook.critiques.map((critique) => (
-          <div key={critique.section} className="rounded-2xl border border-hairline bg-cream-card p-5">
+        /* Grouped by section rather than one flat list: a section now carries
+           several findings, and repeating its name above each one read as a
+           pile of complaints rather than a reading of that part of the lesson. */
+        INSIGHTS_SECTIONS.filter((section) =>
+          hardLook.critiques.some((c) => c.section === section.key),
+        ).map((section) => (
+          <section key={section.key} className="flex flex-col gap-3">
             <div className="flex items-center gap-3">
               <span aria-hidden="true" className="h-7 w-1.5 shrink-0 rounded-full bg-terracotta" />
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                {sectionLabel(critique.section)}
-              </p>
+              <h3 className="font-heading text-lg font-bold leading-tight text-forest">{section.label}</h3>
             </div>
-            <p className="mt-3 font-heading text-lg font-bold leading-snug text-forest">{critique.headline}</p>
-            <p className="mt-2 text-sm text-ink">{critique.critique}</p>
-            {critique.evidence.length > 0 && (
-              <div className="mt-4 flex flex-col gap-2">
-                {critique.evidence.map((item, i) => (
-                  <div key={i} className="border-l-2 border-terracotta/50 pl-3">
-                    <p className="text-sm text-ink">"{item.text}"</p>
-                    <p className="mt-0.5 text-xs text-ink-soft">
-                      {formatTime(item.timestampSec)} · {item.kind}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-            {critique.likelyCost && (
-              <div className="mt-4 rounded-xl bg-cream p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">What it likely cost</p>
-                <p className="mt-1 text-sm text-ink">{critique.likelyCost}</p>
-              </div>
-            )}
-          </div>
+            {hardLook.critiques
+              .filter((c) => c.section === section.key)
+              .map((critique, i) => (
+                <div key={`${critique.section}-${i}`} className="rounded-2xl border border-hairline bg-cream-card p-5">
+                  <p className="font-heading text-base font-bold leading-snug text-forest">{critique.headline}</p>
+                  <p className="mt-2 text-sm text-ink">{critique.critique}</p>
+                  {critique.evidence.length > 0 && (
+                    <div className="mt-4 flex flex-col gap-2">
+                      {critique.evidence.map((item, j) => (
+                        <div key={j} className="border-l-2 border-terracotta/50 pl-3">
+                          <p className="text-sm text-ink">"{item.text}"</p>
+                          <p className="mt-0.5 text-xs text-ink-soft">
+                            {formatTime(item.timestampSec)} · {item.kind}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {critique.likelyCost && (
+                    <div className="mt-4 rounded-xl bg-cream p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">What it likely cost</p>
+                      <p className="mt-1 text-sm text-ink">{critique.likelyCost}</p>
+                    </div>
+                  )}
+                  {critique.nextStep && (
+                    <div className="mt-2 rounded-xl bg-gold-tint/50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">
+                        Try instead
+                      </p>
+                      <p className="mt-1 text-sm text-ink">{critique.nextStep}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+          </section>
         ))
       )}
 

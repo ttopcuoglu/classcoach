@@ -78,7 +78,7 @@ struct HardLookTab: View {
 
     @ViewBuilder
     private func resultView(_ hardLook: AudioHardLook) -> some View {
-        Text("The hardest reading these recordings support. It only presses on things it can point at, so a quiet section means the audio didn't carry a case — not that the lesson was flawless, and not that it was poor.")
+        Text("The hardest reading these recordings support. It only presses on things it can point at, so a quiet section means the audio didn't carry a case — not that the lesson was flawless, and not that it was poor. Quotes come from automatic transcription, so a line may be garbled even when the point behind it holds.")
             .font(.caption2).foregroundStyle(AppTheme.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
             .padding(12)
@@ -89,7 +89,7 @@ struct HardLookTab: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Nothing here it can make a hard case against.")
                     .font(.subheadline.weight(.bold)).foregroundStyle(AppTheme.forest)
-                Text("Four sections, and on what the microphone caught, none of them support a criticism worth your time. That is a real result, and it is the reason to trust this section on a lesson where it does find something.")
+                Text("On what the microphone caught, none of these sections support a criticism worth your time. That is a real result, and it is the reason to trust this section on a lesson where it does find something.")
                     .font(.footnote).foregroundStyle(AppTheme.textPrimary)
             }
             .fixedSize(horizontal: false, vertical: true)
@@ -97,8 +97,25 @@ struct HardLookTab: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(AppTheme.mintTint.opacity(0.4), in: RoundedRectangle(cornerRadius: 18))
         } else {
-            ForEach(hardLook.critiques) { critique in
-                critiqueCard(critique)
+            // Grouped by section rather than one flat list: a section now
+            // carries several findings, and repeating its name above each one
+            // read as a pile of complaints rather than a reading of that part
+            // of the lesson.
+            ForEach(InsightsSection.allCases.filter { section in
+                hardLook.critiques.contains { $0.section == section.rawValue }
+            }) { section in
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 10) {
+                        Rectangle().fill(AppTheme.terracotta)
+                            .frame(width: 3, height: 18)
+                            .clipShape(Capsule())
+                        Text(section.title)
+                            .font(.heading(.subheadline)).foregroundStyle(AppTheme.forest)
+                    }
+                    ForEach(hardLook.critiques.filter { $0.section == section.rawValue }) { critique in
+                        critiqueCard(critique)
+                    }
+                }
             }
         }
 
@@ -125,16 +142,8 @@ struct HardLookTab: View {
 
     private func critiqueCard(_ critique: AudioHardLookCritique) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                Rectangle().fill(AppTheme.terracotta)
-                    .frame(width: 3, height: 18)
-                    .clipShape(Capsule())
-                Text(label(for: critique.section).uppercased())
-                    .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
-            }
-
             Text(critique.headline)
-                .font(.heading(.headline)).foregroundStyle(AppTheme.forest)
+                .font(.heading(.subheadline)).foregroundStyle(AppTheme.forest)
                 .fixedSize(horizontal: false, vertical: true)
             Text(critique.critique)
                 .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
@@ -163,6 +172,19 @@ struct HardLookTab: View {
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+            }
+
+            if !critique.nextStep.isEmpty {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("TRY INSTEAD")
+                        .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.terracotta600)
+                    Text(critique.nextStep)
+                        .font(.footnote).foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppTheme.goldTint.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
             }
         }
         .padding(14)

@@ -777,6 +777,8 @@ export type AudioHardLookCritique = {
   headline: string
   critique: string
   likelyCost: string
+  /// One concrete thing to try instead. Empty when the model left it out.
+  nextStep: string
   evidence: AudioRubricEvidence[]
 }
 export type AudioHardLookClear = { section: AudioHardLookSection; reason: string }

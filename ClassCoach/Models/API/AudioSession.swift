@@ -166,11 +166,16 @@ struct AudioRubricLens: Decodable {
 /// sections comes back as either a criticism with quotes behind it or an
 /// explicit clear, and a clear is a real result rather than a blank.
 struct AudioHardLookCritique: Decodable, Identifiable {
-    var id: String { section }
+    /// The headline, not the section: a section carries several findings now,
+    /// and keying on it gave every finding in a section the same id, which
+    /// SwiftUI resolves by rendering one of them.
+    var id: String { "\(section)|\(headline)" }
     let section: String
     let headline: String
     let critique: String
     let likelyCost: String
+    /// One concrete thing to try instead. Empty when the model left it out.
+    let nextStep: String
     let evidence: [AudioRubricEvidence]
 }
 

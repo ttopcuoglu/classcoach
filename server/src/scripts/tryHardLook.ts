@@ -4,6 +4,7 @@ import { CORE_COACHING_RULES, TRANSCRIPT_RELIABILITY_NOTICE } from '../lib/coach
 import {
   buildHardLookEvidence,
   buildHardLookSystemPrompt,
+  longestTeacherStretch,
   parseHardLook,
   sectionEligibility,
   unaccountedSections,
@@ -119,12 +120,17 @@ async function main() {
   for (const w of withheld) console.log(`  withheld [${w.section}] ${w.reason}`)
   if (eligible.length === 0) return
 
-  const system = buildHardLookSystemPrompt(evidence, eligible, `${CORE_COACHING_RULES}\n${TRANSCRIPT_RELIABILITY_NOTICE}`)
+  const stretch = longestTeacherStretch(segments)
+  if (stretch) {
+    console.log(`  longest teacher stretch: ${Math.round(stretch.durationSec)}s from ${Math.floor(stretch.startSec / 60)}:${String(Math.round(stretch.startSec % 60)).padStart(2, '0')}`)
+  }
+
+  const system = buildHardLookSystemPrompt(evidence, eligible, withheld, stretch, `${CORE_COACHING_RULES}\n${TRANSCRIPT_RELIABILITY_NOTICE}`)
 
   for (let run = 1; run <= runs; run++) {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 2500,
+      max_tokens: 4000,
       // Same reason as classroomMoves' and lessonObjective's: adaptive
       // thinking draws from this budget, and left on it spent all 2500 tokens
       // here and returned a reply with no text blocks in it at all.
@@ -145,6 +151,7 @@ async function main() {
       console.log(`\n  [${c.section}] ${c.headline}`)
       console.log(`    ${c.critique}`)
       console.log(`    cost: ${c.likelyCost || '(none)'}`)
+      console.log(`    next: ${c.nextStep || '(NONE — missing)'}`)
       for (const e of c.evidence) console.log(`    · ${Math.floor(e.timestampSec / 60)}:${String(Math.round(e.timestampSec % 60)).padStart(2, '0')} "${e.text.slice(0, 90)}"`)
     }
     for (const c of parsed.cleared) console.log(`\n  [${c.section}] CLEAR — ${c.reason}`)
