@@ -17,6 +17,7 @@ import type { CoachFollowUp, Debrief } from '../generated/prisma/client.ts'
 import { generateTalkTakeaway } from '../routes/debrief.ts'
 import { anthropic, CLAUDE_MODEL } from './anthropic.ts'
 import { trimIfTruncated } from './coachStream.ts'
+import { transcribeAudio } from './deepgram.ts'
 import { hasActivePlanFor, PLAN_USER_SELECT } from './billing.ts'
 import { appendTurn, countUserTurns, TALK_TURN_CAP, toClaudeMessages, type ChatMessage } from './coachingChat.ts'
 import {
@@ -39,6 +40,7 @@ import { prisma } from './prisma.ts'
 import {
   answerButtonTap,
   deleteWebhook,
+  downloadFile,
   getUpdates,
   isChatGone,
   removeInlineButtons,
@@ -49,7 +51,9 @@ import {
   setWebhook,
   telegramEnabled,
   type ReplyMarkup,
+  type TelegramMessage,
   type TelegramUpdate,
+  type TelegramVoice,
 } from './telegram.ts'
 import { checkUsage, logUsage } from './usageLimit.ts'
 
@@ -236,6 +240,8 @@ const HELP_TEXT = `Talk to me like you'd talk to a colleague after class. Tell m
 
 When you're finished, tap "Wrap up" below for your takeaway, and I'll check in a few days later to see how it went. Tap "New topic" to start fresh.
 
+Typing isn't always possible, so you can hold the microphone and talk to me instead — a voice note works the same as a message.
+
 One ask: please leave out students' full names. "A student in 3rd period" works great.${MINI_APP_HELP}
 
 (To unlink this chat from your Wivoza account, send /disconnect.)`
@@ -332,9 +338,7 @@ export function dispatchUpdate(update: TelegramUpdate): void {
 
   const previous = chatQueues.get(chatId) ?? Promise.resolve()
   const next: Promise<void> = previous
-    .then(() =>
-      tap ? handleButtonTap(chatId, tap) : handleMessage(chatId, update.message!.text, update.message!.from?.first_name),
-    )
+    .then(() => (tap ? handleButtonTap(chatId, tap) : handleIncoming(chatId, update.message!)))
     .catch(async (error) => {
       console.error('[telegram] handling a message failed:', error)
       await sendMessage(chatId, ERROR_TEXT).catch(() => {})
@@ -355,9 +359,86 @@ const USER_SELECT = {
   telegramDebriefId: true,
 } as const
 
+function handleIncoming(chatId: string, message: TelegramMessage): Promise<void> {
+  return message.voice
+    ? handleVoiceNote(chatId, message.voice, message.from?.first_name)
+    : handleMessage(chatId, message.text, message.from?.first_name)
+}
+
+// ---------------------------------------------------------------------------
+// Voice notes
+// ---------------------------------------------------------------------------
+//
+// The drive home is when a teacher actually reflects, and it is the one
+// time they can't type. A held-to-record note is transcribed and then goes
+// through exactly the same door a typed message does — so "wrap up" said
+// out loud still wraps up, and a spoken answer to a check-in still answers
+// it.
+//
+// This is not Lesson Debrief and can't become it: that reads a recording of
+// a class, which is far past the 20MB a bot may download, and its numbers
+// come from diarised classroom audio rather than one person thinking aloud.
+
+// Long enough for the drive home, short enough that one note can't run up a
+// transcription bill on its own. Deepgram bills by the minute.
+const MAX_VOICE_SECONDS = 5 * 60
+
+async function handleVoiceNote(chatId: string, voice: TelegramVoice, firstName: string | undefined) {
+  // Checked before anything is downloaded or transcribed: both cost money,
+  // and an unlinked chat has no account to bill them to or save them
+  // against.
+  const user = await prisma.user.findUnique({
+    where: { telegramChatId: chatId },
+    select: { id: true, suspendedAt: true },
+  })
+  if (!user) {
+    await sendMessage(chatId, NOT_LINKED_TEXT, NO_KEYBOARD)
+    return
+  }
+  if (user.suspendedAt) {
+    await sendMessage(chatId, "This Wivoza account isn't active right now.", NO_KEYBOARD)
+    return
+  }
+  if (voice.duration > MAX_VOICE_SECONDS) {
+    await reply(
+      chatId,
+      `That one's about ${Math.round(voice.duration / 60)} minutes — longer than I can listen to in one go. Send it in a couple of pieces and I'll follow along.`,
+    )
+    return
+  }
+
+  const stopTyping = keepTyping(chatId)
+  let transcript: string
+  try {
+    const audio = await downloadFile(voice.file_id)
+    // Held in memory for the one request and never written down — see the
+    // note at the top of deepgram.ts.
+    const utterances = await transcribeAudio(audio, voice.mime_type ?? 'audio/ogg')
+    transcript = utterances
+      .slice()
+      .sort((a, b) => a.start - b.start)
+      .map((utterance) => utterance.transcript)
+      .join(' ')
+      .trim()
+  } catch (error) {
+    console.error('[telegram] transcribing a voice note failed:', error)
+    await reply(chatId, "I couldn't get that one to play back, sorry. Try sending it again, or type it out.")
+    return
+  } finally {
+    stopTyping()
+  }
+
+  if (!transcript) {
+    await reply(chatId, "I couldn't make out anything in that one — too quiet, or too much going on around it. Try again, or type it?")
+    return
+  }
+
+  await handleMessage(chatId, transcript, firstName)
+}
+
 async function handleMessage(chatId: string, rawText: string | undefined, firstName: string | undefined) {
   if (rawText === undefined) {
-    await sendMessage(chatId, "I can only read text messages for now. Type it out and I'm all yours.")
+    await sendMessage(chatId, "I can read messages and voice notes — a photo or a file isn't something I can open yet. Type it out or record it and I'm all yours.")
     return
   }
   const text = rawText.trim()

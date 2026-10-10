@@ -94,6 +94,24 @@ export function setChatMenuButton(chatId: string, menuButton: MenuButton): Promi
   return call('setChatMenuButton', { chat_id: chatId, menu_button: menuButton })
 }
 
+// Telegram hands out a short-lived path, then serves the bytes from a
+// different host prefix. Both halves need the bot token, so this stays
+// here rather than in a caller.
+//
+// Bots may only download files up to 20MB — Telegram's limit, not ours. A
+// voice note is a fraction of that (Opus is a few hundred KB a minute);
+// a lesson recording is far over it, which is why Lesson Debrief can
+// never be fed through this chat.
+export async function downloadFile(fileId: string): Promise<Buffer> {
+  const { file_path: filePath } = await call<{ file_path?: string }>('getFile', { file_id: fileId })
+  if (!filePath) throw new TelegramError('Telegram returned no path for that file', 0)
+  const response = await fetch(`${API_BASE}/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${filePath}`)
+  if (!response.ok) {
+    throw new TelegramError(`Downloading a Telegram file failed with status ${response.status}`, response.status)
+  }
+  return Buffer.from(await response.arrayBuffer())
+}
+
 export function setWebhook(url: string, secretToken: string): Promise<unknown> {
   return call('setWebhook', { url, secret_token: secretToken, allowed_updates: ['message', 'callback_query'] })
 }
@@ -102,14 +120,21 @@ export function deleteWebhook(): Promise<unknown> {
   return call('deleteWebhook', {})
 }
 
+// A held-to-record voice note. `duration` is in whole seconds, and is the
+// only thing that says how long a clip is before downloading it.
+export type TelegramVoice = { file_id: string; duration: number; mime_type?: string; file_size?: number }
+
+export type TelegramMessage = {
+  message_id: number
+  chat: { id: number; type: string }
+  from?: { first_name?: string }
+  text?: string
+  voice?: TelegramVoice
+}
+
 export type TelegramUpdate = {
   update_id: number
-  message?: {
-    message_id: number
-    chat: { id: number; type: string }
-    from?: { first_name?: string }
-    text?: string
-  }
+  message?: TelegramMessage
   // A tap on one of the inline buttons under a message.
   callback_query?: {
     id: string
