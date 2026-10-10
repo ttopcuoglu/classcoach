@@ -159,3 +159,25 @@ export const CLASS_MAKEUP_GUIDANCE: Record<string, string> = {
     'This room includes English learners at a range of proficiencies. They are learning the content and the language at once, so the barrier is usually access to the language of the task rather than the thinking behind it — never treat limited English as limited ability, and never treat it as a disability. Useful moves: front-load the vocabulary the task actually requires, make input comprehensible with visuals and demonstration, allow a home language for thinking and drafting, give real wait time, and assess the content rather than the English it is expressed in. English proficiency and content ability are independent of each other: this room contains English learners who are AHEAD of their English-fluent peers in the subject, ones who are average, and ones who are behind, exactly as it does for every other student. Do not default to casting the English learner as the one who is struggling, quiet, or behind — a teacher who only ever rehearses that version learns a stereotype. An English learner is as likely to be the student who spots the flaw in your explanation, finishes first, or already met this content in another language and another curriculum.',
 }
 
+/// The room a teacher works in, from their profile, for a surface that
+/// never asks.
+///
+/// Ask and Practice collect a grade band, subject, course and makeup with
+/// every question, which is why everything above exists. A chat collects
+/// none of it — so without this, "can I use this with my class?" gets
+/// answered about a generic classroom, which is the one answer that helps
+/// nobody.
+///
+/// Free text on purpose: this is what Profile stores, and a teacher may
+/// have written "6-8", "7th and 8th" or "7". Handing it over as they wrote
+/// it is better than guessing at a band.
+export function buildRoomContextBlock(
+  gradeLevels: string | null | undefined,
+  subjects: string | null | undefined,
+): string {
+  const grades = gradeLevels?.trim()
+  const subject = subjects?.trim()
+  if (!grades && !subject) return ''
+  const described = [grades ? `grade ${grades}` : null, subject].filter(Boolean).join(', ')
+  return `\n\nThe teacher's profile says they teach: ${described}. Use it whenever it bears on the answer — judging whether something is pitched right for their students, for instance — rather than reasoning about a classroom in general. It describes what they teach overall, not which class they're asking about this minute: if that distinction matters and they could mean more than one, ask which before answering.\n`
+}

@@ -34,6 +34,7 @@ import { buildMemoryContextBlock, MEMORY_UPDATE_INSTRUCTION, MEMORY_UPDATE_TOKEN
 import { CORE_COACHING_RULES } from './coachPersona.ts'
 import { flagIfUnsafe } from './coachSafetyCheck.ts'
 import { buildExperienceContextBlock } from './experience.ts'
+import { buildRoomContextBlock } from './teachingContext.ts'
 import { buildFollowUpContextBlock, snoozedCheckInDate } from './followUps.ts'
 import { extractTag, stripTag } from './extractTag.ts'
 import { prisma } from './prisma.ts'
@@ -357,6 +358,8 @@ const USER_SELECT = {
   coachMemory: true,
   coachMemoryEnabled: true,
   experienceLevel: true,
+  gradeLevels: true,
+  subjects: true,
   telegramDebriefId: true,
 } as const
 
@@ -734,7 +737,7 @@ async function coachReply(chatId: string, user: BotUser, text: string, image?: C
   // Not twice in one conversation either — so once an offer is made, the
   // instruction leaves the prompt and Coach stops looking for one.
   const offerAllowed = MINI_APP_AVAILABLE && !followUp && offerTotal(debrief?.id) < MAX_OFFERS_PER_CONVERSATION
-  const basePrompt = `${TALK_TEXT_SYSTEM_PROMPT}${buildExperienceContextBlock(user.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${offerAllowed ? BETTER_TOOL_INSTRUCTION : ''}`
+  const basePrompt = `${TALK_TEXT_SYSTEM_PROMPT}${buildRoomContextBlock(user.gradeLevels, user.subjects)}${buildExperienceContextBlock(user.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${offerAllowed ? BETTER_TOOL_INSTRUCTION : ''}`
 
   const stopTyping = keepTyping(chatId)
   let raw: string
