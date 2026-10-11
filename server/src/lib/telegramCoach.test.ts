@@ -32,3 +32,31 @@ test('a long message mid-conversation is left to the sweep', () => {
 test('whitespace is not substance', () => {
   assert.equal(isCompleteReflection(`${OPENER}${' '.repeat(500)}`, 0), false)
 })
+
+// Which button an offer becomes. Three branches, and the difference is
+// what the teacher is promised: a thing arriving here, a form opening
+// filled in, or a tool opening empty.
+
+import { toolOfferButton } from './telegramCoach.ts'
+
+function labelsOf(markup: ReturnType<typeof toolOfferButton>): string[] {
+  const rows = markup && 'inline_keyboard' in markup ? markup.inline_keyboard : []
+  return rows.flat().map((button) => button.text)
+}
+
+const PLANNING = { key: 'planning_coach' as const, label: 'Open Planning Coach', path: '/lesson-planning' }
+
+test('a few activities are made here, so the button says so', () => {
+  const markup = toolOfferButton(PLANNING, { topic: 'photosynthesis', kind: 'ideas' }, 'user-1')
+  assert.deepEqual(labelsOf(markup), ['Send me a few ideas', '🆕 New topic'])
+})
+
+test('a full lesson opens the form instead', () => {
+  const markup = toolOfferButton(PLANNING, { topic: 'photosynthesis', kind: 'full' }, 'user-1')
+  assert.deepEqual(labelsOf(markup), ['Build this lesson', '🆕 New topic'])
+})
+
+test('with nothing collected, the tool just opens', () => {
+  const markup = toolOfferButton(PLANNING, null, 'user-1')
+  assert.deepEqual(labelsOf(markup), ['Open Planning Coach', '🆕 New topic'])
+})

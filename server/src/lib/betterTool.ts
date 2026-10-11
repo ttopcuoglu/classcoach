@@ -171,6 +171,8 @@ minutes: how long the lesson is, digits only
 kind: full for a whole lesson plan, ideas for a handful of activities
 </tool_details>
 
+With kind: ideas the activities come back to them right here in the chat, and they can have them as a printable PDF — so when they ask for something to print, the answer is yes. A full lesson opens in Wivoza instead, where they can print it from the page.
+
 For communication_coach, when it's something they have to write or answer:
 
 <tool_details>

@@ -164,7 +164,10 @@ function ensureMiniAppMenuButton(chatId: string) {
 // (lib/coachHandoff.ts) and says so — "Build this lesson", not "Open
 // Planning Coach" — because landing on a filled-in form is a different
 // promise from landing on an empty one.
-function toolOfferButton(offer: ToolOffer, details: HandoffDetails | null, userId: string): ReplyMarkup | undefined {
+/// Exported so the rule can be tested and rehearsed rather than
+/// re-implemented: a harness that guessed at this showed the wrong button
+/// twice, and reported a bug that wasn't there and missed one that was.
+export function toolOfferButton(offer: ToolOffer, details: HandoffDetails | null, userId: string): ReplyMarkup | undefined {
   // Three to five activities is a chat-sized answer: a teacher at 3:40
   // wants to read them, not open a web page to read them. So this one is
   // made here and sent back, and the button is the teacher saying yes
