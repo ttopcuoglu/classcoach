@@ -425,7 +425,7 @@ struct ReportView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("The Hard Look")
                             .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
-                        Text("The least generous honest reading of what the mic caught. For when you want it straight.")
+                        Text("The least generous honest reading of the whole lesson. For when you want it straight.")
                             .font(.caption).foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
