@@ -9,7 +9,7 @@ import { spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { NoTextFoundError, UnsupportedFileError } from './extractErrors.ts'
-import { imageMediaType, MAX_IMAGE_BYTES, readImageText } from './imageText.ts'
+import { imageMediaType, MAX_IMAGE_BYTES, readImageText, sniffImage } from './imageText.ts'
 
 export class ExtractionTooHeavyError extends Error {}
 export class ExtractionTimeoutError extends Error {}
@@ -58,7 +58,16 @@ function containerLimitMb(): number | null {
 
 export type Extracted = { text: string; pageCount: number | null }
 
-async function readPhoto(buffer: Buffer, mediaType: 'image/jpeg' | 'image/png'): Promise<Extracted> {
+async function readPhoto(buffer: Buffer, named: 'image/jpeg' | 'image/png'): Promise<Extracted> {
+  // The bytes win over the name: the iOS app posts an iPhone photo as
+  // "assignment-photo.jpg" and iPhone photos are HEIC.
+  const sniffed = sniffImage(buffer)
+  if (sniffed === 'heic') {
+    throw new UnsupportedFileError(
+      "That photo is in Apple's HEIC format, which I can't read yet. Taking it from the web app, or exporting it as a JPEG, works.",
+    )
+  }
+  const mediaType = sniffed ?? named
   // Far larger than any phone photo, and the uploads allow 25MB, so this
   // is a real case rather than a guard against nothing.
   if (buffer.byteLength > MAX_IMAGE_BYTES) {
