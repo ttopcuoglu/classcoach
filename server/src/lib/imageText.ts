@@ -1,0 +1,60 @@
+// Reading what is on a photograph, with the model that can actually see.
+//
+// This used to be OCR (tesseract), which is the right tool for a clean
+// scan and the wrong one for what teachers actually send: a page shot at
+// an angle on a desk, handwriting, a worksheet where the layout is half
+// the meaning. The model reads those; OCR guesses at them, slowly — the
+// upload screens budget eighteen seconds for a photo against six for a
+// document, and most of that is tesseract.
+//
+// It also takes a parser out of a container that has had memory trouble:
+// a network call needs no heap ceiling and no child process.
+//
+// OCR still runs for a scanned PDF, where there are many pages and the
+// cost of looking at each one is a different trade.
+
+import { anthropic, CLAUDE_MODEL } from './anthropic.ts'
+
+export const IMAGE_MEDIA_TYPES: Record<string, 'image/jpeg' | 'image/png'> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+}
+
+export function imageMediaType(fileName: string): 'image/jpeg' | 'image/png' | null {
+  const dot = fileName.lastIndexOf('.')
+  return dot === -1 ? null : (IMAGE_MEDIA_TYPES[fileName.slice(dot).toLowerCase()] ?? null)
+}
+
+/// Claude's own ceiling for one image. The upload routes allow far larger
+/// files, so this is checked by the caller, which owns the wording.
+export const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+const READ_PROMPT = `You are reading a photograph of something from a teacher's classroom — a worksheet, a handout, a page of notes, what is written on the board. Write out everything on it as plain text, in order: titles, instructions, every question or prompt, point values where they are shown. Keep the structure readable, with each question on its own line.
+
+Transcribe, don't summarise, don't comment, and never add anything that isn't there. If the page is too blurred, too dark or too small in frame to read with confidence, reply with exactly NOTHING_READABLE and nothing else — a wrong transcription is worse than none, because everything downstream will treat it as what the teacher wrote.`
+
+const MAX_TOKENS = 1500
+const UNREADABLE = 'NOTHING_READABLE'
+
+/// The text on an image, or '' when there is nothing readable on it.
+export async function readImageText(image: Buffer, mediaType: 'image/jpeg' | 'image/png'): Promise<string> {
+  const response = await anthropic.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: MAX_TOKENS,
+    thinking: { type: 'disabled' },
+    system: READ_PROMPT,
+    messages: [
+      {
+        role: 'user',
+        content: [{ type: 'image', source: { type: 'base64', media_type: mediaType, data: image.toString('base64') } }],
+      },
+    ],
+  })
+  const text = response.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n')
+    .trim()
+  return text.includes(UNREADABLE) ? '' : text
+}

@@ -19,6 +19,7 @@ import { generateAssignmentReview, reviewDocBlocks } from '../routes/assignmentC
 import { generateConversationPlan, planDocBlocks } from '../routes/conversationPlan.ts'
 import { generateMessageDraft } from '../routes/parentMessage.ts'
 import { generateFullLesson, generateQuickIdeas } from '../routes/lessonPlans.ts'
+import { readImageText } from './imageText.ts'
 import { lessonDocBlocks } from './lessonPlanModel.ts'
 import { buildPdf } from './pdfBuilder.ts'
 import { anthropic, CLAUDE_MODEL } from './anthropic.ts'
@@ -1046,34 +1047,14 @@ function withImage(messages: ClaudeMessages, image: CoachImage | undefined): Cla
   ]
 }
 
-// Reading an assignment off a photograph, for Assignment Coach's form.
-// Deliberately a transcription and not a summary: the form's whole job is
-// to judge the assignment, so it has to receive the assignment.
-const ASSIGNMENT_FROM_PHOTO_PROMPT = `You are reading a photograph of something a teacher is giving their students. Write out everything on the page as plain text, in order: the title, the instructions, every question or prompt, and point values where they are shown. Transcribe, don't summarise, don't comment, and don't add anything that isn't on the page. If what you can read is too little or too blurred to be usable, or the picture isn't an assignment at all, reply with exactly NOT_AN_ASSIGNMENT and nothing else.`
-
-const ASSIGNMENT_FROM_PHOTO_MAX_TOKENS = 1500
-
 async function offerPhotographedAssignment(chatId: string, userId: string, image: CoachImage, debriefId: string) {
   const stopTyping = keepTyping(chatId)
   let originalText = ''
   try {
-    const response = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: ASSIGNMENT_FROM_PHOTO_MAX_TOKENS,
-      thinking: { type: 'disabled' },
-      system: ASSIGNMENT_FROM_PHOTO_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: [{ type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.data } }],
-        },
-      ],
-    })
-    originalText = response.content
-      .filter((block) => block.type === 'text')
-      .map((block) => block.text)
-      .join('\n')
-      .trim()
+    // The same reader the web's uploads use now — one transcription path,
+    // so a photographed worksheet gets the same read whichever door it
+    // came through.
+    originalText = await readImageText(Buffer.from(image.data, 'base64'), image.mediaType)
   } catch (error) {
     console.error('[telegram] reading an assignment off a photo failed:', error)
     return
@@ -1081,10 +1062,10 @@ async function offerPhotographedAssignment(chatId: string, userId: string, image
     stopTyping()
   }
 
-  // Nothing worth reviewing came back. Said nowhere: Coach has already
-  // answered them about the picture, and a teacher who wanted a review
-  // and didn't get an offer is no worse off than before this existed.
-  if (!originalText || originalText.includes('NOT_AN_ASSIGNMENT')) return
+  // Nothing readable came back. Said nowhere: Coach has already answered
+  // them about the picture, and a teacher who wanted a review and didn't
+  // get an offer is no worse off than before this existed.
+  if (!originalText) return
 
   const details = { originalText }
   const target = prefillTarget(details)

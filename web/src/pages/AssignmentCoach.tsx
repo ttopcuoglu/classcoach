@@ -3,21 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import ExportModal, { ExportButtons, guessFormat } from '../components/ExportModal'
 import AnswerSection, { NumberedCard } from '../components/AnswerSection'
 import CoachingChat from '../components/CoachingChat'
-import {
-  ArrowRightIcon,
-  ChatBubbleIcon,
-  CheckIcon,
-  ChecklistIcon,
-  ClipboardIcon,
-  ClockIcon,
-  CloseIcon,
-  GraduationCapIcon,
-  KebabIcon,
-  ShieldIcon,
-  SparkleIcon,
-  StarIcon,
-  UploadIcon,
-} from '../components/icons'
+import { ArrowRightIcon, CameraIcon, ChatBubbleIcon, CheckIcon, ChecklistIcon, ClipboardIcon, ClockIcon, CloseIcon, GraduationCapIcon, KebabIcon, ShieldIcon, SparkleIcon, StarIcon, UploadIcon } from '../components/icons'
 import { ProgressRing, WorkingRing } from '../components/ProgressRing'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { UpgradeMessage } from '../components/UpgradeMessage'
@@ -503,6 +489,7 @@ function AddAssignmentScreen({
   const [analyzingStep, setAnalyzingStep] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
 
   // Carried over from a Review session's "Make this assignment AI-ready"
   // banner — pre-fills the assignment text so the teacher never has to
@@ -563,9 +550,10 @@ function AddAssignmentScreen({
   }, [starting])
 
   async function handleFile(file: File) {
-    // Photos go through OCR, which takes noticeably longer than parsing a
-    // document — scale the estimate so the ring's pace looks honest.
-    setExtractMs(/\.(jpe?g|png)$/i.test(file.name) ? 18000 : 6000)
+    // Photos used to go through OCR and take ~18s; they are read by the
+    // model now and come back in about three. The ring is paced to what
+    // actually happens — an honest estimate is the whole point of it.
+    setExtractMs(/\.(jpe?g|png)$/i.test(file.name) ? 4000 : 6000)
     setExtracting(true)
     setError(null)
     setFileReady(false)
@@ -755,7 +743,7 @@ function AddAssignmentScreen({
                   </span>
                 </div>
                 <p className={`font-heading text-lg font-semibold text-cream ${extracting ? 'hidden' : ''}`}>Add your assignment</p>
-                <p className={`text-sm text-cream/60 ${extracting ? 'hidden' : ''}`}>Drag a file here, or paste the text below.</p>
+                <p className={`text-sm text-cream/60 ${extracting ? 'hidden' : ''}`}>Photograph it, drag a file here, or paste the text below.</p>
                 <div className={`mt-1 flex flex-wrap items-center justify-center gap-2 ${extracting ? 'hidden' : ''}`}>
                   <button
                     type="button"
@@ -774,6 +762,33 @@ function AddAssignmentScreen({
                     <UploadIcon className="h-4 w-4" />
                     Choose file
                   </button>
+                  {/* Its own input, because `capture` belongs on an
+                      image-only one: putting it on the file picker above
+                      would take the documents away. On a phone this opens
+                      the camera; on a laptop the attribute is ignored and
+                      it behaves like any other picker, which is why it can
+                      just always be here. */}
+                  <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    disabled={extracting}
+                    className="flex items-center gap-1.5 rounded-xl border border-cream/15 bg-cream/5 px-4 py-2.5 text-sm font-semibold text-cream/90 hover:bg-cream/10 disabled:opacity-50"
+                  >
+                    <CameraIcon className="h-4 w-4" />
+                    Take a photo
+                  </button>
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) handleFile(file)
+                      e.target.value = ''
+                    }}
+                  />
                 </div>
                 <p className={`text-xs text-cream/50 ${extracting ? 'hidden' : ''}`}>PDF, Word, PowerPoint, image, or plain text</p>
               </div>

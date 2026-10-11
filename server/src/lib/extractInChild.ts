@@ -9,6 +9,7 @@ import { spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { NoTextFoundError, UnsupportedFileError } from './extractErrors.ts'
+import { imageMediaType, MAX_IMAGE_BYTES, readImageText } from './imageText.ts'
 
 export class ExtractionTooHeavyError extends Error {}
 export class ExtractionTimeoutError extends Error {}
@@ -57,7 +58,31 @@ function containerLimitMb(): number | null {
 
 export type Extracted = { text: string; pageCount: number | null }
 
+async function readPhoto(buffer: Buffer, mediaType: 'image/jpeg' | 'image/png'): Promise<Extracted> {
+  // Far larger than any phone photo, and the uploads allow 25MB, so this
+  // is a real case rather than a guard against nothing.
+  if (buffer.byteLength > MAX_IMAGE_BYTES) {
+    throw new ExtractionTooHeavyError(
+      'That picture is larger than I can take in. A photo straight from a phone camera is usually fine — a very high-resolution scan may need exporting smaller.',
+    )
+  }
+  const text = await readImageText(buffer, mediaType)
+  if (!text) {
+    throw new NoTextFoundError(
+      "I couldn't read that one clearly enough to use — if it's a photo, more light and a straighter angle usually does it.",
+    )
+  }
+  return { text, pageCount: null }
+}
+
 export function extractInChild(buffer: Buffer, fileName: string): Promise<Extracted> {
+  // A photograph doesn't go to a parser at all — it goes to the model that
+  // can see it (imageText.ts). No child process for that: the ceiling here
+  // protects against a parser eating the container, and a network call
+  // can't. It also means the teacher stops waiting on OCR.
+  const mediaType = imageMediaType(fileName)
+  if (mediaType) return readPhoto(buffer, mediaType)
+
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
