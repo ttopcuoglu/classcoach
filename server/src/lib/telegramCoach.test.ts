@@ -51,9 +51,11 @@ test('a few activities are made here, so the button says so', () => {
   assert.deepEqual(labelsOf(markup), ['Send me a few ideas', '🆕 New topic'])
 })
 
-test('a full lesson opens the form instead', () => {
+test('a full lesson offers both doors: open it, or just have the file', () => {
+  // Too long to read as a message, which is not a reason to withhold it —
+  // a document is read on paper, not in the chat.
   const markup = toolOfferButton(PLANNING, { topic: 'photosynthesis', kind: 'full' }, 'user-1')
-  assert.deepEqual(labelsOf(markup), ['Build this lesson', '🆕 New topic'])
+  assert.deepEqual(labelsOf(markup), ['Build this lesson', '📄 Send a PDF', '🆕 New topic'])
 })
 
 test('with nothing collected, the tool just opens', () => {

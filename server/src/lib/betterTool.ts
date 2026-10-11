@@ -199,7 +199,11 @@ worry: what they're afraid will happen
 
 Use recipient or meeting_type, not both: recipient for one person, meeting_type when several people are sitting down together.
 
-Only the first line of each — topic, or situation — actually matters. Fill the rest in from what they have ALREADY said: never ask a run of questions to complete it, and never put down a grade, a subject, a length or a tone they haven't given you. You still ask at most one question per reply, exactly as before. Leave names out of all of it, the same as everywhere else.`
+Only the first line of each — topic, or situation — is required to offer at all.
+
+For planning_coach, though, find out what would actually change the lesson before you offer to have it made: how long they have, and what they've already got or already covered. A lesson built from a topic and nothing else is the generic one they could have found anywhere. One question per reply as always, and no more than two of them — they can change anything afterwards, so stop asking and offer once you know enough to be useful.
+
+Everything else is filled in only from what they have ALREADY said: never put down a grade, a subject, a length or a tone they haven't given you. Leave names out of all of it, the same as everywhere else.`
 
 // Room for the tag so that adding one cannot cost the teacher a sentence.
 export const BETTER_TOOL_TOKEN_BUFFER = 20

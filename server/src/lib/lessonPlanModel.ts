@@ -9,6 +9,7 @@
 // have ended up hundreds of lines apart.
 
 import { CORE_COACHING_RULES, INSTRUCTION_PRIORITY_NOTICE } from './coachPersona.ts'
+import type { DocBlock } from './exportModels.ts'
 import { extractTag } from './extractTag.ts'
 
 export type LessonStep = { minutes: number | null; title: string; teacher: string | null; students: string | null }
@@ -437,4 +438,64 @@ export function parseInferredContext(text: string): {
     gradeLevel: clean(extractTag(text, 'inferred_grade')),
     followUp: clean(extractTag(text, 'follow_up')),
   }
+}
+
+/// A lesson as printable blocks, for the PDF the chat sends.
+///
+/// `lessonAsText` above is for a prompt — one string, read by a model.
+/// This is for a teacher holding a page at 7.40am, so the sequence gets
+/// to be a sequence: a heading per step with its minutes, and what the
+/// teacher and the students are each doing underneath.
+///
+/// The web's export builds its own model client-side. Converging the two
+/// would be worth doing the day they disagree; today only this one has to
+/// survive having no browser.
+export function lessonDocBlocks(plan: {
+  objective?: string | null
+  successCriteria?: string | null
+  approach?: string | null
+  materials?: string | null
+  sequence?: unknown
+  checks?: unknown
+  misconceptions?: unknown
+  exitTicket?: unknown
+}): DocBlock[] {
+  const blocks: DocBlock[] = []
+  if (plan.objective) blocks.push({ type: 'callout', label: 'Objective', text: plan.objective })
+  if (plan.successCriteria) blocks.push({ type: 'heading', text: 'Success criteria' }, { type: 'paragraph', text: plan.successCriteria })
+  if (plan.materials) blocks.push({ type: 'heading', text: 'Materials' }, { type: 'paragraph', text: plan.materials })
+
+  const steps = (plan.sequence as LessonStep[] | null) ?? []
+  for (const [i, step] of steps.entries()) {
+    blocks.push({ type: 'heading', text: `${i + 1}. ${step.title}${step.minutes ? ` — ${step.minutes} min` : ''}` })
+    if (step.teacher) blocks.push({ type: 'paragraph', text: `You: ${step.teacher}` })
+    if (step.students) blocks.push({ type: 'paragraph', text: `Students: ${step.students}` })
+  }
+
+  const checks = (plan.checks as LessonCheck[] | null) ?? []
+  if (checks.length) {
+    blocks.push({ type: 'heading', text: 'Checking they have it' })
+    blocks.push({
+      type: 'bullets',
+      items: checks.map((c) => `${c.when ? `${c.when}: ` : ''}${c.check}${c.lookFor ? ` (look for: ${c.lookFor})` : ''}`),
+    })
+  }
+
+  const misconceptions = (plan.misconceptions as LessonMisconception[] | null) ?? []
+  if (misconceptions.length) {
+    blocks.push({ type: 'heading', text: 'Where they usually go wrong' })
+    blocks.push({
+      type: 'bullets',
+      items: misconceptions.map((m) => [m.belief, m.surface && `Surface it: ${m.surface}`, m.response && `Address it: ${m.response}`].filter(Boolean).join(' — ')),
+    })
+  }
+
+  const ticket = (plan.exitTicket as LessonExitTicket | null) ?? null
+  if (ticket) {
+    blocks.push({ type: 'heading', text: 'Exit ticket' }, { type: 'paragraph', text: ticket.task })
+    if (ticket.expected) blocks.push({ type: 'paragraph', text: `Expected: ${ticket.expected}` })
+    if (ticket.nextStep) blocks.push({ type: 'paragraph', text: `If they miss it: ${ticket.nextStep}` })
+  }
+
+  return blocks
 }

@@ -900,6 +900,89 @@ function buildUserMessage(context: ReturnType<typeof readBuildContext>): string 
     .join('\n')
 }
 
+/// A full lesson with no HTTP request around it, for the chat's "send me
+/// a PDF" — see generateQuickIdeas below for why these mirror /generate
+/// rather than sharing with it.
+///
+/// A full lesson is pages, so the chat never prints it as a message; what
+/// it does is hand over the file. Saved like any other, so the teacher
+/// can open it in Planning Coach afterwards and adapt it.
+export async function generateFullLesson(
+  userId: string,
+  context: {
+    objective: string
+    subject?: string | null
+    gradeLevel?: string | null
+    durationMinutes?: number | null
+    additionalContext?: string | null
+  },
+): Promise<{ plan: LessonPlan } | { error: string }> {
+  const access = await checkFeatureAccess(userId, 'lesson_planning', () =>
+    countUsageLogActionsThisMonth(userId, LESSON_PLANNING_ACTIONS),
+  )
+  if (!access.allowed) return { error: access.upgradeMessage ?? "Planning Coach isn't included on your plan right now." }
+
+  const denied = await checkAndLogUsage(userId, 'lesson_plan_generate')
+  if (denied) return { error: denied }
+
+  const full = {
+    objective: context.objective,
+    unitName: null,
+    essentialQuestion: null,
+    standard: null,
+    subject: context.subject ?? null,
+    gradeLevel: context.gradeLevel ?? null,
+    additionalContext: context.additionalContext ?? null,
+    sourceMaterial: null,
+    durationMinutes: context.durationMinutes ?? DEFAULT_LESSON_MINUTES,
+    kind: 'full' as const,
+  }
+
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 5000,
+      thinking: { type: 'disabled' },
+      system: buildFullLessonPrompt(),
+      messages: [{ role: 'user', content: buildUserMessage(full) }],
+    })
+    const lesson = parseFullLesson(
+      response.content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
+        .join('\n'),
+    )
+    if (!isUsableLesson(lesson)) {
+      console.error('[lesson-plans] no sequence parsed for chat — stop_reason:', response.stop_reason)
+      return { error: 'Could not build the lesson. Please try again.' }
+    }
+    const plan = await prisma.lessonPlan.create({
+      data: {
+        userId,
+        mode: 'generated',
+        planKind: 'full',
+        subject: full.subject,
+        gradeLevel: full.gradeLevel,
+        additionalContext: full.additionalContext,
+        durationMinutes: full.durationMinutes,
+        objective: lesson.objective ?? full.objective,
+        approach: lesson.approach,
+        successCriteria: lesson.successCriteria,
+        materials: lesson.materials,
+        sequence: lesson.sequence,
+        checks: lesson.checks,
+        misconceptions: lesson.misconceptions,
+        exitTicket: lesson.exitTicket ?? undefined,
+      },
+    })
+    return { plan }
+  } catch (error) {
+    const failure = classifyModelError(error, 'Could not reach your coach')
+    logModelFailure('[lesson-plans] building a lesson for chat failed:', failure, error)
+    return { error: failure.message }
+  }
+}
+
 /// Quick Ideas with no HTTP request around it, so the Telegram Coach can
 /// produce the same thing Build a Lesson's form does — the precedent is
 /// generateTalkTakeaway in debrief.ts. The plan is saved exactly as the

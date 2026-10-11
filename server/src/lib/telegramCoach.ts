@@ -15,7 +15,8 @@
 import { randomBytes } from 'node:crypto'
 import type { CoachFollowUp, Debrief } from '../generated/prisma/client.ts'
 import { generateTalkTakeaway } from '../routes/debrief.ts'
-import { generateQuickIdeas } from '../routes/lessonPlans.ts'
+import { generateFullLesson, generateQuickIdeas } from '../routes/lessonPlans.ts'
+import { lessonDocBlocks } from './lessonPlanModel.ts'
 import { buildPdf } from './pdfBuilder.ts'
 import { anthropic, CLAUDE_MODEL } from './anthropic.ts'
 import { trimIfTruncated } from './coachStream.ts'
@@ -181,6 +182,24 @@ export function toolOfferButton(offer: ToolOffer, details: HandoffDetails | null
     }
   }
 
+  // A full lesson is pages — wrong as a message, fine as a file. So the
+  // teacher gets both doors: open it where it can be adapted, or just
+  // have the thing to print. A document sidesteps the length problem
+  // that keeps the lesson itself out of the chat.
+  if (details && 'topic' in details) {
+    const target = prefillTarget(details)
+    const open = target && miniAppUrl(`${target.path}${target.path.includes('?') ? '&' : '?'}handoff=${createHandoff(userId, offer.key, details)}&build=1`)
+    return {
+      inline_keyboard: [
+        ...(open && target ? [[{ text: target.label, web_app: { url: open } }]] : []),
+        [
+          { text: '📄 Send a PDF', callback_data: `lesson:${createHandoff(userId, offer.key, details)}` },
+          { text: NEW_TOPIC_BUTTON, callback_data: 'new' },
+        ],
+      ],
+    }
+  }
+
   // Everything else lands somewhere more specific than the tool's front
   // door — Communication Coach's hub has three tools behind it, and which
   // one depends on what Coach collected, not on the tool it tagged.
@@ -262,6 +281,58 @@ async function sendQuickIdeas(chatId: string, userId: string, handoffId: string 
   })
 }
 
+async function sendLessonPdf(chatId: string, userId: string, handoffId: string | undefined) {
+  const handoff = handoffId ? readHandoff(handoffId, userId) : null
+  const details = handoff?.details
+  if (!details || !('topic' in details)) {
+    await reply(chatId, "That one's gone stale, sorry — tell me the topic again and I'll put it together.")
+    return
+  }
+
+  // Twenty seconds or so for a full lesson, which is a long time to watch
+  // "typing…" with nothing said. Better to say what is happening.
+  await reply(chatId, "Building it now — give me a minute and I'll send the file.")
+  const stopTyping = keepTyping(chatId)
+  let result: Awaited<ReturnType<typeof generateFullLesson>>
+  try {
+    result = await generateFullLesson(userId, {
+      objective: details.topic,
+      subject: details.subject,
+      gradeLevel: details.gradeLevel,
+      durationMinutes: details.durationMinutes,
+    })
+  } finally {
+    stopTyping()
+  }
+
+  if ('error' in result) {
+    await reply(chatId, result.error)
+    return
+  }
+
+  const plan = result.plan
+  try {
+    const pdf = await buildPdf({
+      title: plan.objective ? plan.objective[0].toUpperCase() + plan.objective.slice(1) : 'Lesson plan',
+      subtitle:
+        [plan.gradeLevel, plan.subject, plan.durationMinutes ? `${plan.durationMinutes} minutes` : null]
+          .filter(Boolean)
+          .join(' · ') || null,
+      blocks: lessonDocBlocks(plan),
+    })
+    await sendDocument(chatId, `${pdfName(plan.objective)}.pdf`, pdf, 'application/pdf', "It's in Wivoza too, under Planning Coach, if you want to change anything.")
+  } catch (error) {
+    console.error('[telegram] building the lesson PDF failed:', error)
+    await reply(chatId, "I built the lesson but couldn't turn it into a PDF. It's saved in Wivoza under Planning Coach — you can print it from there.")
+  }
+}
+
+// A filename a teacher can find again in their downloads, not a cuid.
+function pdfName(objective: string | null): string {
+  const name = (objective ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50)
+  return name || 'lesson-plan'
+}
+
 async function sendIdeasPdf(chatId: string, userId: string, planId: string | undefined) {
   const plan = planId ? await prisma.lessonPlan.findFirst({ where: { id: planId, userId } }) : null
   if (!plan) {
@@ -285,9 +356,7 @@ async function sendIdeasPdf(chatId: string, userId: string, planId: string | und
         { type: 'paragraph' as const, text: idea.how },
       ]),
     })
-    // A filename a teacher can find again in their downloads, not a cuid.
-    const name = (plan.objective ?? 'teaching-ideas').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50)
-    await sendDocument(chatId, `${name || 'teaching-ideas'}.pdf`, pdf, 'application/pdf')
+    await sendDocument(chatId, `${pdfName(plan.objective)}.pdf`, pdf, 'application/pdf')
   } catch (error) {
     console.error('[telegram] building the ideas PDF failed:', error)
     await reply(chatId, "I couldn't turn that into a PDF, sorry. It's saved in Wivoza, and you can print it from there.")
@@ -700,6 +769,7 @@ async function handleButtonTap(chatId: string, tap: { id: string; data?: string;
   else if (action === 'new') await startNewTopic(chatId, user.id)
   else if (action === 'ideas') await sendQuickIdeas(chatId, user.id, id)
   else if (action === 'pdf') await sendIdeasPdf(chatId, user.id, id)
+  else if (action === 'lesson') await sendLessonPdf(chatId, user.id, id)
   else if (action === 'later' || action === 'skip') await answerCheckIn(chatId, user.id, action, id)
 }
 
