@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { canTakePhoto } from '../lib/device'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import ExportModal, { ExportButtons, guessFormat } from '../components/ExportModal'
 import AnswerSection, { NumberedCard } from '../components/AnswerSection'
@@ -769,10 +770,10 @@ function AddAssignmentScreen({
                   </button>
                   {/* Its own input, because `capture` belongs on an
                       image-only one: putting it on the file picker above
-                      would take the documents away. On a phone this opens
-                      the camera; on a laptop the attribute is ignored and
-                      it behaves like any other picker, which is why it can
-                      just always be here. */}
+                      would take the documents away. Shown only where it
+                      does something — see canTakePhoto. */}
+                  {canTakePhoto() && (
+                  <>
                   <button
                     type="button"
                     onClick={() => cameraInputRef.current?.click()}
@@ -794,6 +795,8 @@ function AddAssignmentScreen({
                       e.target.value = ''
                     }}
                   />
+                  </>
+                  )}
                 </div>
                 <p className={`text-xs text-cream/50 ${extracting ? 'hidden' : ''}`}>PDF, Word, PowerPoint, image, or plain text</p>
               </div>

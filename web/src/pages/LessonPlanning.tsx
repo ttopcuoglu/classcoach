@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { canTakePhoto } from '../lib/device'
 import { Link, useSearchParams } from 'react-router-dom'
 import AssignmentCoach from './AssignmentCoach'
 import AnswerSection, { NumberedCard } from '../components/AnswerSection'
@@ -1242,8 +1243,9 @@ function BuildPanel() {
                 </label>
                 {/* Its own input: `capture` belongs on an image-only one,
                     since putting it on the picker above would take the
-                    documents away. On a phone this opens the camera; a
-                    laptop ignores the attribute and shows a picker. */}
+                    documents away. Shown only where it does something —
+                    see canTakePhoto. */}
+                {canTakePhoto() && (
                 <label className="flex cursor-pointer items-center gap-2 text-left hover:text-forest">
                   <CameraIcon className="h-3.5 w-3.5 shrink-0 text-ink-soft" />
                   <span className="text-xs font-semibold text-ink-soft">
@@ -1261,6 +1263,7 @@ function BuildPanel() {
                     }}
                   />
                 </label>
+                )}
               </div>
             )}
             {materialError && <p className="text-sm text-terracotta">{materialError}</p>}
