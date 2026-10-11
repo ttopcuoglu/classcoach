@@ -283,6 +283,11 @@ export default function AssignmentCoach({ embedded = false }: { embedded?: boole
             Get coaching feedback on clarity, rigor, student thinking, accessibility, differentiation, and
             assessment alignment.
           </p>
+          {/* The intake is a tap behind this card, so the card has to say
+              what it will ask for — a teacher holding the worksheet went
+              looking for a camera here and found two paragraphs about
+              coaching feedback. */}
+          <p className="mt-2 text-xs text-ink-soft/80">Photograph it, upload a file, or paste the text.</p>
           <span className="mt-4 text-sm font-semibold text-terracotta-600">
             Start review <ArrowRightIcon className="inline h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </span>
