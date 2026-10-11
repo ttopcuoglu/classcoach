@@ -307,6 +307,7 @@ private struct AssignmentIntakeView: View {
     @State private var extracting = false
     @State private var showImporter = false
     @State private var photoItem: PhotosPickerItem?
+    @State private var showCamera = false
     @State private var aiUseLevel: String?
     @State private var letWivozaRecommend = false
     @State private var starting = false
@@ -380,6 +381,13 @@ private struct AssignmentIntakeView: View {
                 carriedOver = true
             }
         }
+        .sheet(isPresented: $showCamera) {
+            CameraCapture { image in
+                guard let image else { return }
+                Task { await extractCapturedPhoto(image) }
+            }
+            .ignoresSafeArea()
+        }
         .fileImporter(isPresented: $showImporter, allowedContentTypes: importTypes) { result in
             if case .success(let url) = result { Task { await extractFile(url) } }
         }
@@ -408,6 +416,12 @@ private struct AssignmentIntakeView: View {
                         Text("Add your assignment").font(.heading(.headline)).foregroundStyle(AppTheme.forest)
                         HStack(spacing: 8) {
                             Button { showImporter = true } label: { pill("Choose file", "square.and.arrow.up") }
+                            // Absent on a simulator and on any device with
+                            // no camera, where the button would open
+                            // nothing.
+                            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                                Button { showCamera = true } label: { pill("Camera", "camera") }
+                            }
                             PhotosPicker(selection: $photoItem, matching: .images) { pill("Photo", "photo") }
                             Button { inputMode = "paste" } label: { pill("Paste text", "doc.on.clipboard") }
                         }
@@ -535,6 +549,12 @@ private struct AssignmentIntakeView: View {
     /// upload time in a school corridor for nothing.
     static func jpegForUpload(_ data: Data, maxDimension: CGFloat = 2000, quality: CGFloat = 0.85) -> Data? {
         guard let image = UIImage(data: data) else { return nil }
+        return jpegForUpload(image, maxDimension: maxDimension, quality: quality)
+    }
+
+    /// The same, for a photo that arrived as an image rather than as
+    /// bytes — the camera hands back a UIImage.
+    static func jpegForUpload(_ image: UIImage, maxDimension: CGFloat = 2000, quality: CGFloat = 0.85) -> Data? {
         let longest = max(image.size.width, image.size.height)
         guard longest > maxDimension else { return image.jpegData(compressionQuality: quality) }
 
@@ -548,6 +568,20 @@ private struct AssignmentIntakeView: View {
             image.draw(in: CGRect(origin: .zero, size: size))
         }
         return resized.jpegData(compressionQuality: quality)
+    }
+
+    private func extractCapturedPhoto(_ image: UIImage) async {
+        guard let jpeg = Self.jpegForUpload(image) else {
+            error = "Could not read that photo. Please try again, or paste the text instead."
+            return
+        }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("assignment-photo.jpg")
+        do {
+            try jpeg.write(to: url, options: .atomic)
+            await extract(url: url, displayName: "Photo of assignment")
+        } catch {
+            self.error = "Could not read that photo. Please try again, or paste the text instead."
+        }
     }
 
     private func extract(url: URL, displayName: String) async {
@@ -591,6 +625,59 @@ private struct AssignmentIntakeView: View {
                 self.error = error.localizedDescription
             }
             starting = false
+        }
+    }
+}
+
+/// The system camera, as a sheet.
+///
+/// UIImagePickerController rather than AVFoundation: a worksheet on a desk
+/// wants tap-to-focus, the flash, and the retake screen, and all of that
+/// is free here. PHPickerViewController replaced this class for the photo
+/// library only — the camera source is not deprecated.
+///
+/// Lives in this file because the project lists every source file in
+/// project.pbxproj by hand, so a new one is a manual edit of that rather
+/// than a new file.
+struct CameraCapture: UIViewControllerRepresentable {
+    /// Nil when the teacher backed out without taking anything.
+    let onCapture: (UIImage?) -> Void
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.cameraCaptureMode = .photo
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ picker: UIImagePickerController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(onCapture: onCapture) }
+
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        private let onCapture: (UIImage?) -> Void
+        // The sheet dismisses itself on either path, so the callback fires
+        // exactly once and the caller never has to guess which happened.
+        private var answered = false
+
+        init(onCapture: @escaping (UIImage?) -> Void) { self.onCapture = onCapture }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            guard !answered else { return }
+            answered = true
+            picker.dismiss(animated: true)
+            onCapture(info[.originalImage] as? UIImage)
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            guard !answered else { return }
+            answered = true
+            picker.dismiss(animated: true)
+            onCapture(nil)
         }
     }
 }

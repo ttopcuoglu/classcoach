@@ -15,6 +15,8 @@
 	<false/>
 	<key>GIDClientID</key>
 	<string>998364891076-c5dea8qji8kujo4paevmhf2k1ns6ljfg.apps.googleusercontent.com</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Wivoza uses the camera so you can photograph a worksheet or what's on the board instead of typing it out. The photo is read for its text and is never saved.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Wivoza records your class period to generate a transcript-based coaching report. Audio itself is never saved — only the text transcript.</string>
 	<key>UIBackgroundModes</key>
