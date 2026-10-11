@@ -171,7 +171,12 @@ function ensureMiniAppMenuButton(chatId: string) {
 /// Exported so the rule can be tested and rehearsed rather than
 /// re-implemented: a harness that guessed at this showed the wrong button
 /// twice, and reported a bug that wasn't there and missed one that was.
-export function toolOfferButton(offer: ToolOffer, details: HandoffDetails | null, userId: string): ReplyMarkup | undefined {
+export function toolOfferButton(
+  offer: ToolOffer,
+  details: HandoffDetails | null,
+  userId: string,
+  forwarded?: string,
+): ReplyMarkup | undefined {
   // Three to five activities is a chat-sized answer: a teacher at 3:40
   // wants to read them, not open a web page to read them. So this one is
   // made here and sent back, and the button is the teacher saying yes
@@ -190,11 +195,15 @@ export function toolOfferButton(offer: ToolOffer, details: HandoffDetails | null
   // sends them from their own mail. So the chat comes first here and the
   // app second — the reverse of everything else.
   if (details && 'mode' in details && details.mode === 'message') {
-    const target = prefillTarget(details)
-    const open = target && miniAppUrl(`${target.path}&handoff=${createHandoff(userId, offer.key, details)}`)
+    // When the teacher forwarded the thing they're answering, the draft
+    // should answer THAT — the exact words, not Coach's paraphrase of
+    // them. This is the whole reason "respond" mode was being withheld.
+    const message = forwarded ? { ...details, situation: forwarded, startingAction: 'respond' as const } : details
+    const target = prefillTarget(message)
+    const open = target && miniAppUrl(`${target.path}&handoff=${createHandoff(userId, offer.key, message)}`)
     return {
       inline_keyboard: [
-        [{ text: '✍️ Draft it here', callback_data: `draft:${createHandoff(userId, offer.key, details)}` }],
+        [{ text: '✍️ Draft it here', callback_data: `draft:${createHandoff(userId, offer.key, message)}` }],
         ...(open ? [[{ text: 'Open in Wivoza', web_app: { url: open } }]] : []),
         [{ text: NEW_TOPIC_BUTTON, callback_data: 'new' }],
       ],
@@ -709,7 +718,52 @@ const USER_SELECT = {
 function handleIncoming(chatId: string, message: TelegramMessage): Promise<void> {
   if (message.voice) return handleVoiceNote(chatId, message.voice, message.from?.first_name)
   if (message.photo?.length) return handlePhoto(chatId, message.photo, message.caption)
+  const forwarded = (message.forward_origin != null || message.forward_date != null) && message.text?.trim()
+  if (forwarded) return handleForwarded(chatId, forwarded)
   return handleMessage(chatId, message.text, message.from?.first_name)
+}
+
+// ---------------------------------------------------------------------------
+// Forwarded messages
+// ---------------------------------------------------------------------------
+//
+// The forward button is the best inbox any of these surfaces will get: it
+// is one tap, at the moment a teacher is angry enough to need help, and it
+// carries the other person's words exactly rather than a summary of them.
+// Coach asked for those words and until now had no way to receive them.
+//
+// What arrives is stored the same way the web already stores it — Write a
+// Message's "respond" mode keeps a pasted email verbatim in
+// ParentMessage.receivedMessage. Same posture, different door. Said out
+// loud once per chat all the same, because forwarding is one tap and
+// pasting is a decision.
+
+const FORWARD_FRAMING =
+  "They forwarded you this message. These are someone else's words, written to the teacher — not the teacher's own:"
+
+const forwardNoticeSent = new Set<string>()
+
+async function handleForwarded(chatId: string, text: string) {
+  const user = await prisma.user.findUnique({ where: { telegramChatId: chatId }, select: USER_SELECT })
+  if (!user) {
+    await sendMessage(chatId, NOT_LINKED_TEXT, NO_KEYBOARD)
+    return
+  }
+  if (user.suspendedAt) {
+    await sendMessage(chatId, "This Wivoza account isn't active right now.", NO_KEYBOARD)
+    return
+  }
+
+  if (!forwardNoticeSent.has(chatId)) {
+    forwardNoticeSent.add(chatId)
+    if (forwardNoticeSent.size > 500) forwardNoticeSent.delete(forwardNoticeSent.values().next().value!)
+    await reply(
+      chatId,
+      'Just so you know: anything you forward is saved with the draft in Wivoza, the same as if you had pasted it in there.',
+    )
+  }
+
+  await coachReply(chatId, user, `${FORWARD_FRAMING}\n\n${text}`, { forwarded: text })
 }
 
 // ---------------------------------------------------------------------------
@@ -769,7 +823,7 @@ async function handlePhoto(chatId: string, photos: TelegramPhotoSize[], caption:
     stopTyping()
   }
 
-  await coachReply(chatId, user, caption?.trim() || BARE_PHOTO_TEXT, image)
+  await coachReply(chatId, user, caption?.trim() || BARE_PHOTO_TEXT, { image })
 }
 
 // ---------------------------------------------------------------------------
@@ -1056,7 +1110,14 @@ function keepTyping(chatId: string): () => void {
   return () => clearInterval(timer)
 }
 
-async function coachReply(chatId: string, user: BotUser, text: string, image?: CoachImage) {
+/// `extras` is what came with the turn but isn't part of what Coach
+/// reads: the picture it is looking at, and the verbatim text of a
+/// forwarded message, which the server carries so neither has to be
+/// retyped into a tag.
+type TurnExtras = { image?: CoachImage; forwarded?: string }
+
+async function coachReply(chatId: string, user: BotUser, text: string, extras: TurnExtras = {}) {
+  const { image, forwarded } = extras
   let debrief = await findOpenConversation(user)
 
   // A reply to a check-in Coach sent starts its own conversation, with the
@@ -1134,7 +1195,13 @@ async function coachReply(chatId: string, user: BotUser, text: string, image?: C
   // sent — otherwise the history reads as a reply to nothing. It also
   // means Coach can't see the photo again on later turns; it has only
   // what it said about it.
-  const turnText = image ? (text === BARE_PHOTO_TEXT ? '[photo]' : `[photo] ${text}`) : text
+  const turnText = image
+    ? text === BARE_PHOTO_TEXT
+      ? '[photo]'
+      : `[photo] ${text}`
+    : forwarded
+      ? `[forwarded] ${forwarded}`
+      : text
   const saved = debrief
     ? await prisma.debrief.update({ where: { id: debrief.id }, data: { conversation: appendTurn(existing, turnText, coachText) } })
     : await prisma.debrief.create({
@@ -1157,7 +1224,7 @@ async function coachReply(chatId: string, user: BotUser, text: string, image?: C
   // best part of a minute, which is far too long to hold up the reply, so
   // that offer follows on its own once the text is out.
   const liftFromPhoto = image != null && offer?.key === 'assignment_coach' && !spent
-  const button = offer && !spent && !liftFromPhoto ? toolOfferButton(offer, details, user.id) : undefined
+  const button = offer && !spent && !liftFromPhoto ? toolOfferButton(offer, details, user.id, forwarded) : undefined
   // One keyboard per message, so these can't both ride on this reply. A
   // tool offer wins: it answers something the teacher just asked for,
   // where wrapping up only ends what they said — and the sweep will come

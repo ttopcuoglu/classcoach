@@ -78,3 +78,45 @@ test('a meeting plan is offered as a page to carry in', () => {
   const markup = toolOfferButton(COMMS, { mode: 'meeting', situation: 'an IEP meeting' }, 'user-1')
   assert.deepEqual(labelsOf(markup), ['Get ready for this', '📄 Send a PDF', '🆕 New topic'])
 })
+
+// Forwarding is how the parent's own words reach Coach. The draft has to
+// answer those, not Coach's paraphrase of them — which is why "respond"
+// mode existed and was being withheld.
+
+import { readHandoff } from './coachHandoff.ts'
+
+const PARENT_EMAIL =
+  "I am frankly appalled that my son received a zero on an assignment he tells me he handed in, and that nobody thought to tell me he was behind until now."
+
+function handoffBehind(markup: ReturnType<typeof toolOfferButton>, prefix: string, userId: string) {
+  const rows = markup && 'inline_keyboard' in markup ? markup.inline_keyboard : []
+  const button = rows.flat().find((b) => 'callback_data' in b && b.callback_data.startsWith(`${prefix}:`))
+  const id = button && 'callback_data' in button ? button.callback_data.split(':')[1] : ''
+  return readHandoff(id, userId)
+}
+
+test('a forwarded message is answered word for word, not paraphrased', () => {
+  const markup = toolOfferButton(
+    COMMS,
+    { mode: 'message', situation: 'a parent is upset about a zero', startingAction: 'new', recipient: 'parent_caregiver' },
+    'user-2',
+    PARENT_EMAIL,
+  )
+  const details = handoffBehind(markup, 'draft', 'user-2')?.details
+  assert.ok(details && 'situation' in details)
+  assert.equal(details.situation, PARENT_EMAIL)
+  assert.equal('startingAction' in details && details.startingAction, 'respond')
+  // Everything Coach worked out about it survives.
+  assert.equal('recipient' in details && details.recipient, 'parent_caregiver')
+})
+
+test('with nothing forwarded, Coach\'s own summary stands', () => {
+  const markup = toolOfferButton(
+    COMMS,
+    { mode: 'message', situation: 'a parent is upset about a zero', startingAction: 'new' },
+    'user-3',
+  )
+  const details = handoffBehind(markup, 'draft', 'user-3')?.details
+  assert.equal(details && 'situation' in details && details.situation, 'a parent is upset about a zero')
+  assert.equal(details && 'startingAction' in details && details.startingAction, 'new')
+})

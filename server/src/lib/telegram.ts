@@ -161,6 +161,12 @@ export type TelegramMessage = {
   photo?: TelegramPhotoSize[]
   // What the teacher typed under a photo, if anything.
   caption?: string
+  // Present when the message was forwarded from somewhere else, which is
+  // how a parent's email reaches Coach in the words the parent used.
+  // `forward_date` is the older field; both are read so the bot doesn't
+  // depend on which one Telegram sends.
+  forward_origin?: unknown
+  forward_date?: number
 }
 
 export type TelegramUpdate = {

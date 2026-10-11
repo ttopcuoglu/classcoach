@@ -179,6 +179,8 @@ For communication_coach, when it's something they have to write or answer:
 mode: message
 situation: what happened and what they need to get across, written the way they would type it into a form — or, if you have the other person's actual words, those words themselves
 action: respond only when you have what the other person actually wrote, word for word, because that field is read as their message. Otherwise new, even when the thing they're writing IS a reply — then say so in the situation.
+
+When a message has been forwarded to you, you already have those words and they are carried across for you — so don't ask for them, and don't copy them out again. Put a line of your own in situation saying what the teacher needs to do about it.
 recipient: ${RECIPIENT_TYPES.join(' | ')}
 purpose: ${MESSAGE_PURPOSES.join(' | ')}
 tone: ${MESSAGE_TONES.join(' | ')}
