@@ -15,6 +15,7 @@
 import { randomBytes } from 'node:crypto'
 import type { CoachFollowUp, Debrief } from '../generated/prisma/client.ts'
 import { generateTalkTakeaway } from '../routes/debrief.ts'
+import { generateAssignmentReview, reviewDocBlocks } from '../routes/assignmentCoach.ts'
 import { generateConversationPlan, planDocBlocks } from '../routes/conversationPlan.ts'
 import { generateMessageDraft } from '../routes/parentMessage.ts'
 import { generateFullLesson, generateQuickIdeas } from '../routes/lessonPlans.ts'
@@ -402,6 +403,47 @@ async function sendMeetingPdf(chatId: string, userId: string, handoffId: string 
     console.error('[telegram] building the conversation PDF failed:', error)
     await reply(chatId, "I built the plan but couldn't turn it into a PDF. It's saved in Wivoza under Communication Coach.")
   }
+}
+
+async function sendReviewPdf(chatId: string, userId: string, handoffId: string | undefined) {
+  const handoff = handoffId ? readHandoff(handoffId, userId) : null
+  const details = handoff?.details
+  if (!details || !('originalText' in details)) {
+    await reply(chatId, "That one's gone stale, sorry — send the photo again and I'll take another look.")
+    return
+  }
+
+  await reply(chatId, "Reading it properly now — a minute, and I'll send the write-up.")
+  const stopTyping = keepTyping(chatId)
+  let result: Awaited<ReturnType<typeof generateAssignmentReview>>
+  try {
+    result = await generateAssignmentReview(userId, details.originalText)
+  } finally {
+    stopTyping()
+  }
+
+  if ('error' in result) {
+    await reply(chatId, result.error)
+    return
+  }
+
+  const { session, clarifying } = result
+  try {
+    const pdf = await buildPdf({
+      title: session.title ?? 'Assignment review',
+      subtitle: [session.gradeLevel, session.subject, session.estimatedTime].filter(Boolean).join(' · ') || null,
+      blocks: reviewDocBlocks(session),
+    })
+    await sendDocument(chatId, `${pdfName(session.title ?? 'assignment-review')}.pdf`, pdf, 'application/pdf')
+  } catch (error) {
+    console.error('[telegram] building the review PDF failed:', error)
+    await reply(chatId, "I read it but couldn't turn the write-up into a PDF. It's saved in Wivoza under Planning Coach.")
+    return
+  }
+
+  // The one thing the review itself wanted to know. On the web it is a
+  // question on screen; here it would otherwise be thrown away.
+  if (clarifying) await reply(chatId, `One thing that would sharpen that: ${clarifying}`)
 }
 
 async function sendLessonPdf(chatId: string, userId: string, handoffId: string | undefined) {
@@ -895,6 +937,7 @@ async function handleButtonTap(chatId: string, tap: { id: string; data?: string;
   else if (action === 'lesson') await sendLessonPdf(chatId, user.id, id)
   else if (action === 'draft') await sendMessageDraft(chatId, user.id, id)
   else if (action === 'meeting') await sendMeetingPdf(chatId, user.id, id)
+  else if (action === 'review') await sendReviewPdf(chatId, user.id, id)
   else if (action === 'later' || action === 'skip') await answerCheckIn(chatId, user.id, action, id)
 }
 
@@ -991,14 +1034,18 @@ async function offerPhotographedAssignment(chatId: string, userId: string, image
 
   const details = { originalText }
   const target = prefillTarget(details)
-  const button = target
-    ? openInAppButton(
-        target.label,
-        `${target.path}${target.path.includes('?') ? '&' : '?'}handoff=${createHandoff(userId, 'assignment_coach', details)}&build=1`,
-      )
-    : undefined
-  if (!button) return
-  await sendMessage(chatId, "I've got the assignment itself off that photo, if you want the full read on it.", button)
+  const open =
+    target &&
+    miniAppUrl(
+      `${target.path}${target.path.includes('?') ? '&' : '?'}handoff=${createHandoff(userId, 'assignment_coach', details)}&build=1`,
+    )
+  if (!open || !target) return
+  await sendMessage(chatId, "I've got the assignment itself off that photo, if you want the full read on it.", {
+    inline_keyboard: [
+      [{ text: target.label, web_app: { url: open } }],
+      [{ text: '📄 Send a PDF', callback_data: `review:${createHandoff(userId, 'assignment_coach', details)}` }],
+    ],
+  })
   rememberToolOffer(debriefId)
 }
 

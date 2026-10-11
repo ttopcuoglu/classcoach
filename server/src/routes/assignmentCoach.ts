@@ -7,6 +7,7 @@ import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, t
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
 import { NoTextFoundError, UnsupportedFileError } from '../lib/extractErrors.ts'
 import { ExtractionTimeoutError, ExtractionTooHeavyError, extractInChild } from '../lib/extractInChild.ts'
+import type { DocBlock } from '../lib/exportModels.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { buildDocx } from '../lib/docxBuilder.ts'
 import { carryOriginalPictures, parseDocOutput, parseSlidesOutput, sanitizeDeck, sanitizeDocModel, themeFromContext } from '../lib/exportModels.ts'
@@ -312,9 +313,30 @@ type ReviewSnapshot = {
   mainOpportunity: { title: string | null; description: string | null }
 }
 
+// Every tag this prompt writes, so a section that loses its closing tag
+// stops at the next one instead of swallowing it — see extractTag.
+// `purpose` is a single word, which nothing can recognise as ours.
+const REVIEW_TAGS = [
+  'reply',
+  'purpose',
+  'grade_fit_rating',
+  'grade_fit_explanation',
+  'rigor_label',
+  'rigor_explanation',
+  'meaningful_work_rating',
+  'meaningful_work_explanation',
+  'meaningful_work_suggestion',
+  'ai_risk_rating',
+  'ai_risk_explanation',
+  'ai_risk_reasons',
+  'workload_summary',
+  'main_opportunity_title',
+  'main_opportunity_description',
+] as const
+
 export function parseReviewSnapshot(text: string): ReviewSnapshot {
   return {
-    purpose: extractTag(text, 'purpose'),
+    purpose: extractTag(text, 'purpose', REVIEW_TAGS),
     gradeFit: { rating: extractTag(text, 'grade_fit_rating'), explanation: extractTag(text, 'grade_fit_explanation') },
     rigor: { label: extractTag(text, 'rigor_label'), explanation: extractTag(text, 'rigor_explanation') },
     meaningfulWork: {
@@ -651,6 +673,139 @@ assignmentCoachRouter.post('/', async (req, res) => {
     res.status(failure.status).json({ error: failure.message })
   }
 })
+
+/// A review with no HTTP request around it, so the Telegram Coach can
+/// send the file — the precedent is generateTalkTakeaway in debrief.ts.
+///
+/// One Claude call, like the route: the detection, the reply and the
+/// whole snapshot come back together. The clarifying question rides
+/// along as a field and gates nothing, which is why this works as a
+/// one-shot at all — it is returned so the chat can pass it on rather
+/// than quietly drop it.
+export async function generateAssignmentReview(
+  userId: string,
+  originalText: string,
+): Promise<{ session: Awaited<ReturnType<typeof prisma.assignmentCoachSession.create>>; clarifying: string | null } | { error: string }> {
+  const access = await checkFeatureAccess(userId, 'lesson_planning', () =>
+    countUsageLogActionsThisMonth(userId, LESSON_PLANNING_ACTIONS),
+  )
+  if (!access.allowed) return { error: access.upgradeMessage ?? "Assignment Coach isn't included on your plan right now." }
+
+  const denied = await checkAndLogUsage(userId, 'assignment_coach')
+  if (denied) return { error: denied }
+
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 8192,
+      thinking: { type: 'disabled' },
+      system: buildReviewStartPrompt(originalText, undefined),
+      messages: [{ role: 'user', content: START_MESSAGE }],
+    })
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+
+    const reviewSnapshot = parseReviewSnapshot(text)
+    if (isReviewSnapshotEmpty(reviewSnapshot)) {
+      console.error('[assignment-coach] empty review for chat — stop_reason:', response.stop_reason)
+      return { error: 'Could not put together a review. Please try again.' }
+    }
+    const { detected, clarifyingQuestion } = parseDetection(text)
+    const reply = extractTag(text, 'reply')
+
+    const session = await prisma.assignmentCoachSession.create({
+      data: {
+        userId,
+        mode: 'review',
+        aiUseLevel: null,
+        title: detected.title,
+        assignmentType: detected.assignmentType,
+        gradeLevel: detected.gradeLevel,
+        subject: detected.subject,
+        estimatedTime: detected.estimatedTime,
+        objective: detected.objective,
+        originalText,
+        liveAssignmentText: originalText,
+        conversation: reply ? [{ role: 'assistant' as const, text: reply, createdAt: new Date().toISOString() }] : [],
+        reviewSnapshot,
+        clarifyingQuestion: clarifyingQuestion ?? undefined,
+      },
+    })
+    return { session, clarifying: clarifyingQuestion?.question ?? null }
+  } catch (error) {
+    const failure = classifyModelError(error, 'Could not put together a review')
+    logModelFailure('[assignment-coach] review for chat failed:', failure, error)
+    return { error: failure.message }
+  }
+}
+
+// The model answers these three with machine values, and the printed
+// page said "Learning value — some_repetition". The web has the same map
+// (twice: AssignmentCoach.tsx and AssignmentCoachExport.tsx) because
+// nothing is shared across the two projects; a fourth copy is the price
+// of the PDF being built where there is no browser. Change them together.
+const GRADE_FIT_LABELS: Record<string, string> = {
+  below: 'likely below the intended level',
+  appropriate: 'appears grade-level appropriate',
+  above: 'may be above the intended level',
+  need_more_context: 'more context needed',
+}
+const MEANINGFUL_WORK_LABELS: Record<string, string> = {
+  clear_value: 'clear learning value',
+  some_repetition: 'some low-value repetition',
+  purpose_unclear: 'purpose needs clarification',
+  mostly_completion: 'mostly completion-focused',
+}
+const AI_RISK_LABELS: Record<string, string> = { high: 'high', moderate: 'moderate', low: 'low' }
+
+// A value we don't have a label for is still better read than hidden —
+// shown as words rather than as an identifier.
+function ratingLabel(value: string | null, labels: Record<string, string>): string | null {
+  if (!value) return null
+  return labels[value] ?? value.replace(/_/g, ' ')
+}
+
+/// The review as printable blocks, for the PDF the chat sends.
+export function reviewDocBlocks(session: {
+  objective: string | null
+  estimatedTime: string | null
+  reviewSnapshot: unknown
+}): DocBlock[] {
+  const review = session.reviewSnapshot as ReviewSnapshot | null
+  if (!review) return []
+  const blocks: DocBlock[] = []
+  if (review.purpose) blocks.push({ type: 'callout', label: 'What it is really asking of them', text: review.purpose })
+
+  const rated = (label: string, rating: string | null, body: (string | null)[]) => {
+    const text = body.filter(Boolean).join(' ')
+    if (!rating && !text) return
+    blocks.push({ type: 'heading', text: rating ? `${label} — ${rating}` : label })
+    if (text) blocks.push({ type: 'paragraph', text })
+  }
+
+  rated('Grade fit', ratingLabel(review.gradeFit.rating, GRADE_FIT_LABELS), [review.gradeFit.explanation])
+  rated('Thinking and rigour', review.rigor.label, [review.rigor.explanation])
+  rated('Learning value', ratingLabel(review.meaningfulWork.rating, MEANINGFUL_WORK_LABELS), [
+    review.meaningfulWork.explanation,
+    review.meaningfulWork.suggestion,
+  ])
+  rated('How much a chatbot could do', ratingLabel(review.aiRisk.rating, AI_RISK_LABELS), [
+    review.aiRisk.explanation,
+    review.aiRisk.reasons,
+  ])
+
+  if (review.workloadSummary) blocks.push({ type: 'heading', text: 'Workload' }, { type: 'paragraph', text: review.workloadSummary })
+  if (review.mainOpportunity.title || review.mainOpportunity.description) {
+    blocks.push({
+      type: 'callout',
+      label: review.mainOpportunity.title ?? 'The one thing worth changing',
+      text: review.mainOpportunity.description ?? '',
+    })
+  }
+  return blocks
+}
 
 assignmentCoachRouter.post('/:id/chat', async (req, res) => {
   const { message } = req.body ?? {}
