@@ -30,7 +30,18 @@ export function stripStructuralTags(text: string): string {
   return text.replace(STRUCTURAL_TAG, '').trim()
 }
 
-export function extractTag(text: string, tag: string): string | null {
+/// `siblings` is the other field names the same prompt writes, which only
+/// the caller knows. They become boundaries for the fallback below: a
+/// plan whose </agenda> went missing used to swallow the whole <opening>
+/// section — tags and all — and print it inside the agenda AND again in
+/// its own section. A single-word tag can't be recognised generically,
+/// because <code> and <title> have to survive, but a parser always knows
+/// its own schema.
+export function extractTag(text: string, tag: string, siblings: readonly string[] = []): string | null {
+  const boundary =
+    siblings.length > 0
+      ? new RegExp(`${STRUCTURAL_TAG_ONCE.source}|<\\/?(?:${siblings.filter((s) => s !== tag).join('|')})>`)
+      : STRUCTURAL_TAG_ONCE
   const match = text.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`))
   if (match) {
     return match[1]
@@ -48,7 +59,7 @@ export function extractTag(text: string, tag: string): string | null {
   const open = text.indexOf(`<${tag}>`)
   if (open === -1) return null
   const rest = text.slice(open + tag.length + 2)
-  const next = rest.search(STRUCTURAL_TAG_ONCE)
+  const next = rest.search(boundary)
   const body = (next === -1 ? rest : rest.slice(0, next)).trim()
   return body ? stripStructuralTags(body) : null
 }

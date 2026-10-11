@@ -1,3 +1,4 @@
+import type { DocBlock } from '../lib/exportModels.ts'
 import { Router } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { checkFeatureAccess, COMMUNICATIONS_ACTIONS, countUsageLogActionsThisMonth } from '../lib/billing.ts'
@@ -107,6 +108,35 @@ function renderPlan(plan: PlanContent | null): string {
   return parts.length ? `\n\nThe plan you already wrote for this teacher:\n\n${parts.join('\n\n')}` : ''
 }
 
+/// The same plan as printable blocks, for the PDF the chat sends.
+///
+/// renderPlan above is for a prompt — one string, read by a model. This
+/// is for a teacher holding a page outside a meeting room, so each
+/// section is a heading they can find with a thumb. The model response
+/// is included here and not there: a script is what you want in your
+/// hand, and noise in a system prompt.
+export function planDocBlocks(plan: PlanContent | null): DocBlock[] {
+  if (!plan) return []
+  const sections: [string, string | undefined][] = [
+    ['Suggested agenda', plan.agenda],
+    ['How to open', plan.opening],
+    ['The main concern to land', plan.mainConcern],
+    ['Facts worth bringing', plan.facts],
+    ['Questions to ask', plan.questions],
+    ['Reactions to expect', plan.reactions],
+    ['Recommended responses', plan.recommendedResponses],
+    ['Phrases to avoid', plan.phrasesToAvoid],
+    ['Boundaries to hold', plan.boundaries],
+    ['If you need the words', plan.modelResponse],
+    ['How to close', plan.closing],
+    ['Next steps', plan.nextSteps],
+    ['On involving an administrator', plan.adminInvolvement],
+  ]
+  return sections.flatMap(([label, body]): DocBlock[] =>
+    body?.trim() ? [{ type: 'heading', text: label }, { type: 'paragraph', text: body.trim() }] : [],
+  )
+}
+
 const PLAN_CHAT_SYSTEM_PROMPT = `You are a warm, practical communication coach continuing to help a K-12 teacher prepare for a real, upcoming conversation you already built a plan for. This is a live revision/discussion — if the teacher asks a specific question (e.g. "what if they deny it?"), answer it directly and practically in 2-4 sentences. If they ask you to change the plan (e.g. "give me a stronger opening"), revise the plan and say so briefly. Stay grounded in what they've told you; never invent details.
 ${CORE_COACHING_RULES}`
 
@@ -142,21 +172,42 @@ type PlanContent = {
   adminInvolvement: string
 }
 
+// Every section this prompt writes. Passed to each extraction so a
+// section that loses its closing tag stops at the next one rather than
+// swallowing it — see extractTag. Most are single words, which nothing
+// can recognise as ours from the outside.
+const PLAN_TAGS = [
+  'agenda',
+  'opening',
+  'main_concern',
+  'facts',
+  'questions',
+  'reactions',
+  'responses',
+  'phrases_to_avoid',
+  'boundaries',
+  'closing',
+  'model_response',
+  'next_steps',
+  'admin_involvement',
+] as const
+
 export function parsePlan(text: string): PlanContent | null {
+  const section = (tag: string) => extractTag(text, tag, PLAN_TAGS) ?? ''
   const plan: PlanContent = {
-    agenda: extractTag(text, 'agenda') ?? '',
-    opening: extractTag(text, 'opening') ?? '',
-    mainConcern: extractTag(text, 'main_concern') ?? '',
-    facts: extractTag(text, 'facts') ?? '',
-    questions: extractTag(text, 'questions') ?? '',
-    reactions: extractTag(text, 'reactions') ?? '',
-    recommendedResponses: extractTag(text, 'responses') ?? '',
-    phrasesToAvoid: extractTag(text, 'phrases_to_avoid') ?? '',
-    boundaries: extractTag(text, 'boundaries') ?? '',
-    closing: extractTag(text, 'closing') ?? '',
-    modelResponse: extractTag(text, 'model_response') ?? '',
-    nextSteps: extractTag(text, 'next_steps') ?? '',
-    adminInvolvement: extractTag(text, 'admin_involvement') ?? '',
+    agenda: section('agenda'),
+    opening: section('opening'),
+    mainConcern: section('main_concern'),
+    facts: section('facts'),
+    questions: section('questions'),
+    reactions: section('reactions'),
+    recommendedResponses: section('responses'),
+    phrasesToAvoid: section('phrases_to_avoid'),
+    boundaries: section('boundaries'),
+    closing: section('closing'),
+    modelResponse: section('model_response'),
+    nextSteps: section('next_steps'),
+    adminInvolvement: section('admin_involvement'),
   }
   const hasContent = Object.values(plan).some(Boolean)
   return hasContent ? plan : null
@@ -196,6 +247,70 @@ conversationPlanRouter.get('/', async (req, res) => {
   })
   res.json(plans)
 })
+
+/// A conversation plan with no HTTP request around it, so the Telegram
+/// Coach can hand over the file — the precedent is generateTalkTakeaway
+/// in debrief.ts.
+///
+/// Thirteen sections, including a full model response: far too long to
+/// read as a message, and exactly the thing a teacher wants on paper
+/// walking into the room. Saved like any other, so it can be opened and
+/// talked through afterwards.
+export async function generateConversationPlan(
+  userId: string,
+  input: Record<string, unknown>,
+): Promise<{ plan: Awaited<ReturnType<typeof prisma.conversationPlan.create>> } | { error: string }> {
+  const { context, error: contextError } = buildContext(input)
+  if (contextError) return { error: contextError }
+
+  const access = await checkFeatureAccess(userId, 'communications', () =>
+    countUsageLogActionsThisMonth(userId, COMMUNICATIONS_ACTIONS),
+  )
+  if (!access.allowed) {
+    return { error: access.upgradeMessage ?? "Communication Coach isn't included on your plan right now." }
+  }
+
+  const denied = await checkAndLogUsage(userId, 'conversation_plan_feedback')
+  if (denied) return { error: denied }
+
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 2800,
+      thinking: { type: 'disabled' },
+      system: PLAN_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: context }],
+    })
+    const planContent = parsePlan(
+      response.content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
+        .join('\n'),
+    )
+    if (!planContent) return { error: 'Could not generate a plan. Please try again.' }
+
+    const plan = await prisma.conversationPlan.create({
+      data: {
+        userId,
+        recipientType: isValidRecipientType(input.recipientType) ? input.recipientType : null,
+        meetingType: isValidMeetingType(input.meetingType) ? input.meetingType : null,
+        attendees: null,
+        situationText: (input.situationText as string).trim(),
+        desiredOutcome: typeof input.desiredOutcome === 'string' ? input.desiredOutcome.trim() : null,
+        concerns: typeof input.concerns === 'string' ? input.concerns.trim() : null,
+        background: null,
+        meetingFormat: isValidMeetingFormat(input.meetingFormat) ? input.meetingFormat : null,
+        planContent,
+        conversation: appendTurn([], context, `Opening: ${planContent.opening}\n\nMain concern: ${planContent.mainConcern}`),
+      },
+    })
+    return { plan }
+  } catch (error) {
+    const failure = classifyModelError(error, 'Could not reach your coach')
+    logModelFailure('[conversation-plan] building for chat failed:', failure, error)
+    return { error: failure.message }
+  }
+}
 
 conversationPlanRouter.post('/', async (req, res) => {
   const body = (req.body ?? {}) as Record<string, unknown>
