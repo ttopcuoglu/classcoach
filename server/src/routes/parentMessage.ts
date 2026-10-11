@@ -99,6 +99,72 @@ export function buildContext(body: Record<string, unknown>): { context: string; 
   return { context: lines.join('\n'), error: null }
 }
 
+/// A draft with no HTTP request around it, so the Telegram Coach can
+/// hand one straight back in the chat — the precedent is
+/// generateTalkTakeaway in debrief.ts.
+///
+/// A message is the one deliverable that is already the right size for a
+/// chat: a teacher reads it, copies it, and sends it from their own mail.
+/// Making them open a web page to collect three sentences was the wrong
+/// shape. It is saved as a ParentMessage either way, so the revise chat
+/// and the translations are still there.
+export async function generateMessageDraft(
+  userId: string,
+  input: Record<string, unknown>,
+): Promise<{ message: Awaited<ReturnType<typeof prisma.parentMessage.create>> } | { error: string }> {
+  const tone = isValidMessageTone(input.tone) ? input.tone : 'warm'
+  const { context, error: contextError } = buildContext(input)
+  if (contextError) return { error: contextError }
+
+  const access = await checkFeatureAccess(userId, 'communications', () =>
+    countUsageLogActionsThisMonth(userId, COMMUNICATIONS_ACTIONS),
+  )
+  if (!access.allowed) {
+    return { error: access.upgradeMessage ?? "Communication Coach isn't included on your plan right now." }
+  }
+
+  const denied = await checkAndLogUsage(userId, 'parent_message')
+  if (denied) return { error: denied }
+
+  try {
+    const fullContext = `${context}\n\nDesired tone: ${TONE_INSTRUCTIONS[tone]}`
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 700,
+      thinking: { type: 'disabled' },
+      system: MESSAGE_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: fullContext }],
+    })
+    const draftText = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+      .trim()
+    if (!draftText) return { error: 'Could not draft a message. Please try again.' }
+
+    const startingAction = isValidStartingAction(input.startingAction) ? input.startingAction : 'new'
+    const message = await prisma.parentMessage.create({
+      data: {
+        userId,
+        startingAction,
+        incidentSummary: typeof input.incidentSummary === 'string' ? input.incidentSummary.trim() : null,
+        receivedMessage: typeof input.receivedMessage === 'string' ? input.receivedMessage.trim() : null,
+        existingDraft: null,
+        recipientType: isValidRecipientType(input.recipientType) ? input.recipientType : null,
+        purpose: isValidMessagePurpose(input.purpose) ? input.purpose : null,
+        format: isValidMessageFormat(input.format) ? input.format : null,
+        tone,
+        draftText,
+        conversation: appendTurn([], fullContext, draftText),
+      },
+    })
+    return { message }
+  } catch (error) {
+    console.error('[parentMessage] drafting for chat failed:', error)
+    return { error: 'Could not draft a message. Please try again.' }
+  }
+}
+
 parentMessageRouter.get('/', async (req, res) => {
   const { saved } = req.query
   const messages = await prisma.parentMessage.findMany({

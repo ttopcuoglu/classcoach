@@ -15,6 +15,8 @@
 import { randomBytes } from 'node:crypto'
 import type { CoachFollowUp, Debrief } from '../generated/prisma/client.ts'
 import { generateTalkTakeaway } from '../routes/debrief.ts'
+import { generateConversationPlan, planDocBlocks } from '../routes/conversationPlan.ts'
+import { generateMessageDraft } from '../routes/parentMessage.ts'
 import { generateFullLesson, generateQuickIdeas } from '../routes/lessonPlans.ts'
 import { lessonDocBlocks } from './lessonPlanModel.ts'
 import { buildPdf } from './pdfBuilder.ts'
@@ -182,6 +184,38 @@ export function toolOfferButton(offer: ToolOffer, details: HandoffDetails | null
     }
   }
 
+  // A message is the one thing these tools make that is already the right
+  // size for a chat: the teacher reads three sentences, copies them, and
+  // sends them from their own mail. So the chat comes first here and the
+  // app second — the reverse of everything else.
+  if (details && 'mode' in details && details.mode === 'message') {
+    const target = prefillTarget(details)
+    const open = target && miniAppUrl(`${target.path}&handoff=${createHandoff(userId, offer.key, details)}`)
+    return {
+      inline_keyboard: [
+        [{ text: '✍️ Draft it here', callback_data: `draft:${createHandoff(userId, offer.key, details)}` }],
+        ...(open ? [[{ text: 'Open in Wivoza', web_app: { url: open } }]] : []),
+        [{ text: NEW_TOPIC_BUTTON, callback_data: 'new' }],
+      ],
+    }
+  }
+
+  // Thirteen sections including a script: the same shape as a lesson, and
+  // the same two doors. A teacher walks into the room holding this one.
+  if (details && 'mode' in details && details.mode === 'meeting') {
+    const target = prefillTarget(details)
+    const open = target && miniAppUrl(`${target.path}&handoff=${createHandoff(userId, offer.key, details)}&build=1`)
+    return {
+      inline_keyboard: [
+        ...(open && target ? [[{ text: target.label, web_app: { url: open } }]] : []),
+        [
+          { text: '📄 Send a PDF', callback_data: `meeting:${createHandoff(userId, offer.key, details)}` },
+          { text: NEW_TOPIC_BUTTON, callback_data: 'new' },
+        ],
+      ],
+    }
+  }
+
   // A full lesson is pages — wrong as a message, fine as a file. So the
   // teacher gets both doors: open it where it can be adapted, or just
   // have the thing to print. A document sidesteps the length problem
@@ -279,6 +313,95 @@ async function sendQuickIdeas(chatId: string, userId: string, handoffId: string 
         : []),
     ],
   })
+}
+
+async function sendMessageDraft(chatId: string, userId: string, handoffId: string | undefined) {
+  const handoff = handoffId ? readHandoff(handoffId, userId) : null
+  const details = handoff?.details
+  if (!details || !('mode' in details) || details.mode !== 'message') {
+    await reply(chatId, "That one's gone stale, sorry — tell me again what you need to say and I'll draft it.")
+    return
+  }
+
+  const stopTyping = keepTyping(chatId)
+  let result: Awaited<ReturnType<typeof generateMessageDraft>>
+  try {
+    result = await generateMessageDraft(userId, {
+      startingAction: details.startingAction,
+      incidentSummary: details.startingAction === 'new' ? details.situation : undefined,
+      receivedMessage: details.startingAction === 'respond' ? details.situation : undefined,
+      recipientType: details.recipient,
+      purpose: details.purpose,
+      format: details.format,
+      tone: details.tone ?? 'warm',
+    })
+  } finally {
+    stopTyping()
+  }
+
+  if ('error' in result) {
+    await reply(chatId, result.error)
+    return
+  }
+
+  // The draft alone in its own message, with nothing wrapped around it:
+  // forwarding it forwards the message and not Coach's commentary, and a
+  // long press copies exactly what goes in the email.
+  const url = miniAppUrl('/communications?tool=write')
+  await sendMessage(
+    chatId,
+    result.message.draftText,
+    url ? { inline_keyboard: [[{ text: 'Change it in Wivoza', web_app: { url } }]] } : MAIN_KEYBOARD,
+  )
+}
+
+async function sendMeetingPdf(chatId: string, userId: string, handoffId: string | undefined) {
+  const handoff = handoffId ? readHandoff(handoffId, userId) : null
+  const details = handoff?.details
+  if (!details || !('mode' in details) || details.mode !== 'meeting') {
+    await reply(chatId, "That one's gone stale, sorry — tell me again what the conversation is and I'll put a plan together.")
+    return
+  }
+
+  await reply(chatId, "Working it out now — a minute, and I'll send you something you can take in with you.")
+  const stopTyping = keepTyping(chatId)
+  let result: Awaited<ReturnType<typeof generateConversationPlan>>
+  try {
+    result = await generateConversationPlan(userId, {
+      situationText: details.situation,
+      recipientType: details.recipient,
+      meetingType: details.meetingType,
+      meetingFormat: details.meetingFormat,
+      desiredOutcome: details.desiredOutcome,
+      concerns: details.concerns,
+    })
+  } finally {
+    stopTyping()
+  }
+
+  if ('error' in result) {
+    await reply(chatId, result.error)
+    return
+  }
+
+  const plan = result.plan
+  try {
+    const pdf = await buildPdf({
+      title: 'Before the conversation',
+      subtitle: plan.situationText.slice(0, 120),
+      blocks: planDocBlocks(plan.planContent as Parameters<typeof planDocBlocks>[0]),
+    })
+    await sendDocument(
+      chatId,
+      `${pdfName(plan.situationText)}.pdf`,
+      pdf,
+      'application/pdf',
+      "It's in Wivoza too, under Communication Coach, if you want to talk any of it through.",
+    )
+  } catch (error) {
+    console.error('[telegram] building the conversation PDF failed:', error)
+    await reply(chatId, "I built the plan but couldn't turn it into a PDF. It's saved in Wivoza under Communication Coach.")
+  }
 }
 
 async function sendLessonPdf(chatId: string, userId: string, handoffId: string | undefined) {
@@ -770,6 +893,8 @@ async function handleButtonTap(chatId: string, tap: { id: string; data?: string;
   else if (action === 'ideas') await sendQuickIdeas(chatId, user.id, id)
   else if (action === 'pdf') await sendIdeasPdf(chatId, user.id, id)
   else if (action === 'lesson') await sendLessonPdf(chatId, user.id, id)
+  else if (action === 'draft') await sendMessageDraft(chatId, user.id, id)
+  else if (action === 'meeting') await sendMeetingPdf(chatId, user.id, id)
   else if (action === 'later' || action === 'skip') await answerCheckIn(chatId, user.id, action, id)
 }
 

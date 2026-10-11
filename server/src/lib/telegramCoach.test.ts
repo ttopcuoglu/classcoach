@@ -62,3 +62,19 @@ test('with nothing collected, the tool just opens', () => {
   const markup = toolOfferButton(PLANNING, null, 'user-1')
   assert.deepEqual(labelsOf(markup), ['Open Planning Coach', '🆕 New topic'])
 })
+
+const COMMS = { key: 'communication_coach' as const, label: 'Open Communication Coach', path: '/communications' }
+
+test('a message is offered here first, because that is where it gets copied', () => {
+  const markup = toolOfferButton(
+    COMMS,
+    { mode: 'message', situation: 'missing homework', startingAction: 'new' },
+    'user-1',
+  )
+  assert.deepEqual(labelsOf(markup), ['✍️ Draft it here', 'Open in Wivoza', '🆕 New topic'])
+})
+
+test('a meeting plan is offered as a page to carry in', () => {
+  const markup = toolOfferButton(COMMS, { mode: 'meeting', situation: 'an IEP meeting' }, 'user-1')
+  assert.deepEqual(labelsOf(markup), ['Get ready for this', '📄 Send a PDF', '🆕 New topic'])
+})
