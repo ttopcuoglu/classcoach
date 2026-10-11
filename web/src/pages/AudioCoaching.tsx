@@ -1089,7 +1089,7 @@ function sessionTitle(session: { lessonContent?: AudioLessonContent | null; clas
   return session.classSubject || session.lessonContent?.subject || session.period || 'Untitled lesson'
 }
 
-type ReportTab = 'summary' | 'insights' | 'reflect' | 'growth'
+type ReportTab = 'summary' | 'insights' | 'rubric' | 'reflect' | 'growth'
 // Four sections, organised by how much a microphone can actually hear.
 // Everything the teacher says is captured well; everything that depends on
 // students answering out loud is not. Questioning and checking were two
@@ -1142,6 +1142,12 @@ const REFLECT_PATH_CARDS: {
 const REPORT_TABS: { key: ReportTab; label: string }[] = [
   { key: 'summary', label: 'Summary' },
   { key: 'insights', label: 'Insights' },
+  // A whole-report view, like every tab here except Insights — which is why it
+  // sits at this level. It spent a while at the foot of the Insights column,
+  // where a report-scoped thing repeated under all four sections and belonged
+  // to none of them, and a teacher who came looking for it had to scroll a
+  // section to the end to find it.
+  { key: 'rubric', label: 'Rubric lens' },
   { key: 'reflect', label: 'Reflect' },
   { key: 'growth', label: 'My Growth' },
 ]
@@ -2277,7 +2283,6 @@ function ReportPanel({
   // TEMPORARY preview params — removed before commit.
   const [tab, setTab] = useState<ReportTab>('summary')
   const [insightsSection, setInsightsSection] = useState<InsightsSection>('talk')
-  const [rubricOpen, setRubricOpen] = useState(false)
   const [hardLookOpen, setHardLookOpen] = useState(false)
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null)
   const locked = session.status === 'locked'
@@ -2967,42 +2972,24 @@ function ReportPanel({
               }
             />
             </SectionAccentContext.Provider>
-
-            {/* Whole-report rather than per-section — Danielson's components do
-                not map onto these four — so it stays one block, at the foot,
-                where a teacher reaches for it on purpose before an evaluation
-                conversation rather than scrolling past it every time. */}
-            <div className="mt-8 border-t border-hairline pt-6">
-              <div className="flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-4">
-                <button
-                  type="button"
-                  onClick={() => setRubricOpen((open) => !open)}
-                  className="flex items-center justify-between gap-3 text-left"
-                >
-                  <span>
-                    <span className="text-sm font-semibold text-forest">Rubric lens</span>
-                    <span className="ml-2 text-xs text-ink-soft">
-                      This lesson seen through your evaluation framework. Evidence, not a rating.
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-sm font-semibold text-terracotta-600">
-                    {rubricOpen ? 'Hide' : 'Show'}
-                  </span>
-                </button>
-                {rubricOpen && (
-                  <RubricLensTab
-                    rubricLens={session.rubricLens}
-                    locked={locked}
-                    isShort={coverage.isShort}
-                    sending={rubricLensSending}
-                    error={rubricLensError}
-                    onGenerate={handleGenerateRubricLens}
-                  />
-                )}
-              </div>
-            </div>
           </div>
         </div>
+      )}
+
+      {/* Its own tab rather than a card inside Insights: it reads the whole
+          lesson against a framework whose nine components do not map onto the
+          four sections, so unlike the Hard Look it cannot be split across
+          them. Nothing is collapsed here — a teacher who opened this tab has
+          already said what they want. */}
+      {tab === 'rubric' && (
+        <RubricLensTab
+          rubricLens={session.rubricLens}
+          locked={locked}
+          isShort={coverage.isShort}
+          sending={rubricLensSending}
+          error={rubricLensError}
+          onGenerate={handleGenerateRubricLens}
+        />
       )}
 
       <div className="rounded-xl border border-dashed border-hairline p-4 text-xs text-ink-soft">

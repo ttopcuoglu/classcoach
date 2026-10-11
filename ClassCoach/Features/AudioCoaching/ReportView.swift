@@ -1,12 +1,18 @@
 import SwiftUI
 
 enum ReportTab: String, CaseIterable {
-    case summary, insights, reflect, myGrowth
+    /// `rubric` is a whole-report view, like every tab here except `insights`
+    /// — which is why it sits at this level. It spent a while as a card at the
+    /// foot of the Insights column, where a report-scoped thing repeated under
+    /// all four sections and belonged to none of them, and a teacher who came
+    /// looking for it had to scroll a section to the end to find it.
+    case summary, insights, rubric, reflect, myGrowth
 
     var label: String {
         switch self {
         case .summary: return "Summary"
         case .insights: return "Insights"
+        case .rubric: return "Rubric lens"
         case .reflect: return "Reflect"
         case .myGrowth: return "My Growth"
         }
@@ -22,8 +28,8 @@ enum ReportTab: String, CaseIterable {
 /// answering out loud is not. Questions & Thinking and Checks & Feedback were
 /// two sections that failed together whenever the room was quiet, so a teacher
 /// read two apologies for one cause — they are one section with two labelled
-/// halves now, and Rubric Lens is a lens over the whole report (see
-/// `ReportView.rubricLensRow`) rather than a section competing with them.
+/// halves now, and Rubric Lens is a whole-report view with its own tab rather
+/// than a section competing with them.
 enum InsightsSection: String, CaseIterable, Identifiable {
     case talk, questions, content, routines
 
@@ -211,6 +217,10 @@ struct ReportView: View {
                     )
                 case .insights:
                     insights
+                case .rubric:
+                    // Nothing collapsed here — a teacher who opened this tab
+                    // has already said what they want.
+                    RubricLensTab(session: session, locked: locked, onUpdate: onUpdate)
                 case .reflect:
                     ReflectTab(session: session, locked: locked, focus: $reflectFocus, onUpdate: onUpdate)
                 case .myGrowth:
@@ -376,15 +386,6 @@ struct ReportView: View {
 
             DiscussFooter { discuss(.forSection(section, in: session)) }
 
-            // Whole-report rather than per-section — Danielson's components do
-            // not map onto these four — so it stays one block, at the foot,
-            // where a teacher reaches for it on purpose before an evaluation
-            // conversation rather than scrolling past it every time.
-            VStack(alignment: .leading, spacing: 0) {
-                Divider().overlay(AppTheme.hairline)
-                rubricLensRow.padding(.top, 20)
-            }
-            .padding(.top, 12)
         }
     }
 
@@ -409,39 +410,6 @@ struct ReportView: View {
                 DiscourseDetailsTab(session: session, part: .understanding)
             }
         }
-    }
-
-    /// A lens over the whole report rather than a section of its own: it
-    /// rearranges evidence the four sections already hold, so it sat badly in
-    /// the picker as a fifth peer. Closed by default — a teacher reaches for
-    /// their evaluation framework on purpose, not on the way past.
-    private var rubricLensRow: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Button {
-                withAnimation { rubricOpen.toggle() }
-            } label: {
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Rubric lens")
-                            .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
-                        Text("This lesson seen through your evaluation framework. Evidence, not a rating.")
-                            .font(.caption).foregroundStyle(AppTheme.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 8)
-                    Text(rubricOpen ? "Hide" : "Show")
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
-                }
-            }
-
-            if rubricOpen {
-                RubricLensTab(session: session, locked: locked, onUpdate: onUpdate)
-            }
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
     }
 
     /// The other lens over the same four sections: the least generous reading
