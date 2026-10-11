@@ -339,11 +339,19 @@ struct ReportView: View {
                 }
             }
 
-            rubricLensRow
-
-            hardLookRow
-
+            // Heading first, always. The two lenses used to sit above it, so
+            // choosing "Talk & Participation" showed two unrelated cards and
+            // then, fourth down the page, the heading for the thing you had
+            // just chosen — with its name already printed in the picker above.
+            // Lenses now come after the content they are lenses on.
             InsightsSectionHeader(section: section)
+
+            // One front door, on the first section only, for the whole-lesson
+            // read: the per-section blocks below are easy to find while
+            // reading but say nothing about the feature existing.
+            if section == .talk {
+                hardLookRow
+            }
 
             Group {
                 switch section {
@@ -355,7 +363,28 @@ struct ReportView: View {
             }
             .environment(\.reportAccent, section.accent)
 
+            // The hard read of THIS section, under the evidence it was drawn
+            // from. Its findings are grouped by section, so holding them all in
+            // one card at the top meant reading a section and then scrolling
+            // back past the page to find the half about it.
+            SectionHardLook(
+                section: section,
+                session: session,
+                locked: locked,
+                onUpdate: onUpdate
+            )
+
             DiscussFooter { discuss(.forSection(section, in: session)) }
+
+            // Whole-report rather than per-section — Danielson's components do
+            // not map onto these four — so it stays one block, at the foot,
+            // where a teacher reaches for it on purpose before an evaluation
+            // conversation rather than scrolling past it every time.
+            VStack(alignment: .leading, spacing: 0) {
+                Divider().overlay(AppTheme.hairline)
+                rubricLensRow.padding(.top, 20)
+            }
+            .padding(.top, 12)
         }
     }
 

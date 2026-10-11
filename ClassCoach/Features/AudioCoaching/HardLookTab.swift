@@ -205,3 +205,165 @@ struct HardLookTab: View {
         generating = false
     }
 }
+
+/// The hard read of one section, shown under that section's own evidence.
+///
+/// The findings are grouped by section already, so a teacher who had just read
+/// Questioning & Checking had to scroll back up the page to a collapsed card
+/// and find the questioning group inside it. This puts each section's
+/// criticism directly beneath the numbers and quotes it was drawn from.
+///
+/// Collapsed by default, like the whole-lesson entry: a teacher who has not
+/// chosen this should not meet it on the way past. Opening it before one
+/// exists offers to build it, so any section is a way in — it is one call and
+/// one document either way.
+struct SectionHardLook: View {
+    let section: InsightsSection
+    let session: AudioSessionWithSegments
+    let locked: Bool
+    let onUpdate: (AudioSessionWithSegments) -> Void
+
+    @State private var open = false
+    @State private var generating = false
+    @State private var error: String?
+
+    private var critiques: [AudioHardLookCritique] {
+        (session.hardLook?.critiques ?? []).filter { $0.section == section.rawValue }
+    }
+
+    private var clearedReason: String? {
+        (session.hardLook?.cleared ?? []).first { $0.section == section.rawValue }?.reason
+    }
+
+    private var subtitle: String {
+        guard session.hardLook != nil else {
+            return "The least generous honest reading of this part of the lesson."
+        }
+        if critiques.isEmpty { return "Nothing here it could make a case against." }
+        return "\(critiques.count) thing\(critiques.count == 1 ? "" : "s") a demanding reader would press on."
+    }
+
+    var body: some View {
+        // Nothing to offer and nothing to show: a locked report can't gain one.
+        if locked && session.hardLook == nil {
+            EmptyView()
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                Button {
+                    withAnimation { open.toggle() }
+                } label: {
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("The hard look on \(section.title)")
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
+                            Text(subtitle)
+                                .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 8)
+                        Text(open ? "Hide" : "Show")
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
+                    }
+                }
+
+                if open, session.hardLook == nil {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("This reads the same evidence again as a demanding reader looking for what could have been better, across the whole lesson. Every criticism has to point at something you actually said, it can come back with nothing, and only you see it.")
+                            .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button(generating ? "Taking the hard look..." : "Give it to me straight") {
+                            Task { await generate() }
+                        }
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 16).padding(.vertical, 9)
+                        .background(generating ? AppTheme.textSecondary : AppTheme.terracotta, in: Capsule())
+                        .disabled(generating)
+                        ProgressRing(active: generating, estimatedSeconds: 30, label: "Looking for what could be better")
+                        if let error {
+                            Text(error).font(.footnote).foregroundStyle(AppTheme.terracotta600)
+                        }
+                    }
+                }
+
+                if open, session.hardLook != nil {
+                    if critiques.isEmpty {
+                        Text(clearedReason ?? "It had no reading for this section. That is a gap in the hard look rather than a verdict on your lesson.")
+                            .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        ForEach(critiques) { critique in
+                            sectionCritiqueCard(critique)
+                        }
+                    }
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
+        }
+    }
+
+    private func sectionCritiqueCard(_ critique: AudioHardLookCritique) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(critique.headline)
+                .font(.heading(.subheadline)).foregroundStyle(AppTheme.forest)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(critique.critique)
+                .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            ForEach(Array(critique.evidence.enumerated()), id: \.offset) { _, item in
+                HStack(alignment: .top, spacing: 8) {
+                    Rectangle().fill(AppTheme.terracotta.opacity(0.5)).frame(width: 2)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\"\(item.text)\"").font(.footnote).foregroundStyle(AppTheme.textPrimary)
+                        Text("\(ReportConfidence.formatDuration(item.timestampSec)) · \(item.kind)")
+                            .font(.caption2).foregroundStyle(AppTheme.textSecondary)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if !critique.likelyCost.isEmpty {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("WHAT IT LIKELY COST")
+                        .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
+                    Text(critique.likelyCost)
+                        .font(.footnote).foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+            }
+
+            if !critique.nextStep.isEmpty {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("TRY INSTEAD")
+                        .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.terracotta600)
+                    Text(critique.nextStep)
+                        .font(.footnote).foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppTheme.goldTint.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
+    }
+
+    private func generate() async {
+        generating = true
+        error = nil
+        do {
+            onUpdate(try await AudioCoachingService.generateHardLook(sessionId: session.id))
+        } catch {
+            self.error = error.localizedDescription
+        }
+        generating = false
+    }
+}

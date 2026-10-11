@@ -235,6 +235,147 @@ function audioSession(id: string, studentTalkPct: number, days: number, reflecte
   }
 }
 
+/// A whole analyzed lesson, rich enough that every Insights section has
+/// something in it — including the two lenses and the student-talk focus card,
+/// which are the parts whose placement is easiest to get wrong and impossible
+/// to check from a list of sessions.
+function previewReport(): Json {
+  const seg = (speakerLabel: 'Teacher' | 'Student', startSec: number, text: string): Json => ({
+    id: `seg-${startSec}`,
+    speakerLabel,
+    startSec,
+    endSec: startSec + 6,
+    text,
+  })
+  return {
+    ...(audioSession('preview-report', 22, 1, true) as Record<string, unknown>),
+    durationSec: 1380,
+    status: 'analyzed',
+    classSubject: 'World history',
+    metricsDetail: {
+      totalDurationSec: 1380,
+      teacherTalkSec: 880,
+      studentTalkSec: 300,
+      studentVoiceSegments: 14,
+      longestTeacherMonologueSec: 360,
+      recallQuestionCount: 4,
+      higherOrderQuestionCount: 3,
+      followUpQuestionCount: 1,
+      waitTimeSampleCount: 4,
+      redirectionCount: 3,
+      firstRedirectionTimestampSec: 540,
+      transitionCount: 3,
+      directiveCount: 5,
+      positivePhraseCount: 2,
+      correctivePhraseCount: 1,
+      positiveToCorrectiveRatio: 2,
+      genericFeedbackCount: 2,
+      specificFeedbackCount: 1,
+      nameMentionCount: 6,
+      uniqueNameCount: 4,
+    },
+    questionLog: [
+      { timestampSec: 300, type: 'higher_order', waitTimeSec: 3.1, text: 'Why do you think wages went up after the plague?', followUps: [] },
+      { timestampSec: 620, type: 'recall', waitTimeSec: 0.4, text: 'What year did it reach England?', followUps: [] },
+    ],
+    cfuLog: [{ timestampSec: 700, text: 'Thumbs up if that makes sense so far', whatItChecked: 'whether the class followed the causal chain' }],
+    feedbackLog: [
+      { timestampSec: 340, kind: 'specific', text: 'Yes — you used the labour shortage to get there.' },
+      { timestampSec: 900, kind: 'generic', text: 'Good work.' },
+    ],
+    directiveLog: [{ timestampSec: 120, text: 'Take out your packets and turn to page four.' }],
+    toneLog: [{ timestampSec: 340, kind: 'positive', text: "That's exactly the connection I wanted." }],
+    redirectionLog: [{ timestampSec: 540, text: 'Eyes up here for a second.' }],
+    lessonContent: {
+      topicTerms: { teacher: [], student: [] },
+      statedObjective: { found: true, quote: 'By the end of today you will explain why the Black Death changed wages in Europe.', timestampSec: 60, source: 'model' },
+      summary: 'The Black Death and its effects on labour and wages in medieval Europe.',
+      connections: [{ quote: 'Remember what we said about supply and demand last week.', timestampSec: 420 }],
+      vocabulary: [{ quote: 'Overgrazing just means too many animals on too little land.', timestampSec: 240 }],
+      subject: 'world history',
+    },
+    classSummary: 'The lesson traced the Black Death through to its effect on wages, opening with a stated objective and returning twice to prior work on supply and demand.',
+    talkNarrative: 'Your voice carried the explanatory weight of this lesson, particularly across one long stretch early on; students were audible mainly in short answers to direct questions.',
+    questionsNarrative: 'Seven questions, leaning recall, with one followed up after a student answered.',
+    checksNarrative: 'One spoken check landed mid-lesson, after the causal chain had been laid out.',
+    climateNarrative: 'Three transitions and three redirections, all brief and directed at noise rather than individuals.',
+    studentTalkFocus: {
+      generatedAt: new Date().toISOString(),
+      classified: 14,
+      sampled: false,
+      onTopic: 9,
+      procedural: 2,
+      offTopic: 2,
+      unclear: 1,
+      examples: [
+        { timestampSec: 310, text: 'Because there were fewer people left to do the work', kind: 'on_topic' },
+        { timestampSec: 640, text: 'Do we need to write this part down', kind: 'procedural' },
+        { timestampSec: 505, text: 'did you see the game last night', kind: 'off_topic' },
+        { timestampSec: 980, text: "I'm not here. I don't have anything on this.", kind: 'off_topic' },
+      ],
+    },
+    hardLook: {
+      generatedAt: new Date().toISOString(),
+      critiques: [
+        {
+          section: 'talk',
+          headline: 'You held the floor for six straight minutes early on.',
+          critique: 'The longest unbroken stretch of teacher talk ran about six minutes starting around 1:00, inside an overall 64% share. Whatever was in it, no student voice broke it.',
+          likelyCost: 'Students who lost the thread early had no point to re-enter or ask something for six minutes.',
+          nextStep: 'Break the opening explanation at three minutes and take one question before continuing.',
+          evidence: [],
+        },
+        {
+          section: 'questions',
+          headline: 'A recall question got four tenths of a second before an answer.',
+          critique: 'The average wait of 3.1 seconds is carried by one higher-order question; the recall check about the year got 0.4 seconds, which is not processing time.',
+          likelyCost: 'Students who needed a beat to retrieve the date were likely passed over for whoever answered fastest.',
+          nextStep: 'Ask the question, then count to five silently before taking a hand.',
+          evidence: [{ kind: 'Recall question, about 0.4s before a student answered', timestampSec: 620, text: 'What year did it reach England?' }],
+        },
+        {
+          section: 'questions',
+          headline: 'Only one of seven questions was followed up.',
+          critique: 'Six questions were asked and answered and then left there. The one follow-up came after the wages question, which is also the only place a student built on their own answer.',
+          likelyCost: 'Partial answers stayed partial, and the class moved on with a shakier grasp than it looked.',
+          nextStep: 'After any answer you accept, ask "what makes you say that?" before moving on.',
+          evidence: [{ kind: 'Higher-order question', timestampSec: 300, text: 'Why do you think wages went up after the plague?' }],
+        },
+        {
+          section: 'routines',
+          headline: 'Three redirections, all about the same noise.',
+          critique: 'All three addressed volume rather than content, which suggests the first one did not land.',
+          likelyCost: 'Repeated redirection on one issue eats instructional time and signals the first request was optional.',
+          nextStep: 'Pair the next redirection with what to do instead, not just what to stop.',
+          evidence: [{ kind: 'Redirection', timestampSec: 540, text: 'Eyes up here for a second.' }],
+        },
+      ],
+      cleared: [
+        {
+          section: 'content',
+          reason: 'The objective was stated out loud, vocabulary was defined when introduced, and the lesson tied back to prior work twice — the audible evidence shows no clarity problem.',
+        },
+      ],
+    },
+    segments: [
+      seg('Teacher', 60, 'By the end of today you will explain why the Black Death changed wages in Europe.'),
+      seg('Teacher', 120, 'Take out your packets and turn to page four.'),
+      seg('Teacher', 240, 'Overgrazing just means too many animals on too little land.'),
+      seg('Teacher', 300, 'Why do you think wages went up after the plague?'),
+      seg('Student', 310, 'Because there were fewer people left to do the work'),
+      seg('Teacher', 340, 'Yes — you used the labour shortage to get there.'),
+      seg('Teacher', 420, 'Remember what we said about supply and demand last week.'),
+      seg('Student', 505, 'did you see the game last night'),
+      seg('Teacher', 540, 'Eyes up here for a second.'),
+      seg('Teacher', 620, 'What year did it reach England?'),
+      seg('Student', 640, 'Do we need to write this part down'),
+      seg('Teacher', 700, 'Thumbs up if that makes sense so far'),
+      seg('Teacher', 900, 'Good work.'),
+      seg('Student', 980, "I'm not here. I don't have anything on this."),
+    ],
+  }
+}
+
 function debrief(id: string, source: string, text: string, days: number): Json {
   return {
     id,
@@ -330,12 +471,21 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
       ? [{ id: 'preview-followup', checkInQuestion: 'How did the seating change go with 3rd period?', createdAt: daysAgo(2) }]
       : []
   }
+  // One finished report, so the Lesson Debrief page itself can be opened and
+  // clicked through — the list fixture below only ever fed Home's cards, which
+  // is why a layout change inside the report could not be looked at before it
+  // shipped. `?preview=1` at /audio-coaching/preview-report opens it.
+  const reportMatch = path.match(/^\/api\/audio-sessions\/(preview-report)$/)
+  if (reportMatch) return previewReport()
   if (path.startsWith('/api/audio-sessions')) {
     if (!tools.has('debrief')) return []
     // Five analyzed lessons so the sparkline draws, with the newest either
     // reflected on or not depending on whether the reflect rule is wanted.
     const reflected = !tools.has('unreflected')
     return [
+      // Newest, and the only one with a full report behind it — opening this
+      // row is how the report page itself gets looked at.
+      previewReport(),
       audioSession('preview-a1', 18, 40, true),
       audioSession('preview-a2', 21, 31, true),
       audioSession('preview-a3', 19, 24, true),

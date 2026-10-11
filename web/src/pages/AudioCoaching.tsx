@@ -2817,65 +2817,43 @@ function ReportPanel({
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
           <InsightsNav section={insightsSection} onSelect={setInsightsSection} />
           <div className="min-w-0 flex-1">
-            {/* A lens over the whole report rather than a section of its own:
-                it rearranges evidence the other four sections already hold. */}
-            <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-4">
-              <button
-                type="button"
-                onClick={() => setRubricOpen((open) => !open)}
-                className="flex items-center justify-between gap-3 text-left"
-              >
-                <span>
-                  <span className="text-sm font-semibold text-forest">Rubric lens</span>
-                  <span className="ml-2 text-xs text-ink-soft">
-                    This lesson seen through your evaluation framework. Evidence, not a rating.
-                  </span>
-                </span>
-                <span className="shrink-0 text-sm font-semibold text-terracotta-600">
-                  {rubricOpen ? 'Hide' : 'Show'}
-                </span>
-              </button>
-              {rubricOpen && (
-                <RubricLensTab
-                  rubricLens={session.rubricLens}
-                  locked={locked}
-                  isShort={coverage.isShort}
-                  sending={rubricLensSending}
-                  error={rubricLensError}
-                  onGenerate={handleGenerateRubricLens}
-                />
-              )}
-            </div>
-            {/* The other lens over the same four sections: the least generous
-                reading rather than the framework's. Second, and collapsed, on
-                purpose — a teacher should arrive at this one by choosing it. */}
-            <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-4">
-              <button
-                type="button"
-                onClick={() => setHardLookOpen((open) => !open)}
-                className="flex items-center justify-between gap-3 text-left"
-              >
-                <span>
-                  <span className="text-sm font-semibold text-forest">The Hard Look</span>
-                  <span className="ml-2 text-xs text-ink-soft">
-                    The least generous honest reading of what the mic caught. For when you want it straight.
-                  </span>
-                </span>
-                <span className="shrink-0 text-sm font-semibold text-terracotta-600">
-                  {hardLookOpen ? 'Hide' : 'Show'}
-                </span>
-              </button>
-              {hardLookOpen && (
-                <HardLookTab
-                  hardLook={session.hardLook}
-                  locked={locked}
-                  sending={hardLookSending}
-                  error={hardLookError}
-                  onGenerate={handleGenerateHardLook}
-                />
-              )}
-            </div>
+            {/* Heading first, always. The two lenses used to sit above it, so
+                choosing "Talk & Participation" showed two unrelated cards and
+                then, fourth down the page, the heading for the thing you had
+                just chosen — with its name already printed in the picker above.
+                Lenses now come after the content they are lenses on. */}
             <InsightsSectionHeader section={insightsSection} />
+            {/* One front door, on the first section only, for the whole-lesson
+                read: the per-section blocks below are easy to find while
+                reading but say nothing about the feature existing. */}
+            {insightsSection === 'talk' && (
+              <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-4">
+                <button
+                  type="button"
+                  onClick={() => setHardLookOpen((open) => !open)}
+                  className="flex items-center justify-between gap-3 text-left"
+                >
+                  <span>
+                    <span className="text-sm font-semibold text-forest">The Hard Look</span>
+                    <span className="ml-2 text-xs text-ink-soft">
+                      The least generous honest reading of the whole lesson. For when you want it straight.
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-sm font-semibold text-terracotta-600">
+                    {hardLookOpen ? 'Hide' : 'Show'}
+                  </span>
+                </button>
+                {hardLookOpen && (
+                  <HardLookTab
+                    hardLook={session.hardLook}
+                    locked={locked}
+                    sending={hardLookSending}
+                    error={hardLookError}
+                    onGenerate={handleGenerateHardLook}
+                  />
+                )}
+              </div>
+            )}
             <SectionAccentContext.Provider value={INSIGHTS_SECTION_META[insightsSection].accent}>
             {insightsSection === 'talk' && (
               <TalkParticipationTab
@@ -2956,6 +2934,19 @@ function ReportPanel({
             )}
 
 
+            {/* The hard read of THIS section, under the evidence it was drawn
+                from. Its findings are grouped by section, so holding them all
+                in one card at the top meant reading a section and then
+                scrolling back past the page to find the half about it. */}
+            <SectionHardLook
+              section={insightsSection}
+              hardLook={session.hardLook}
+              locked={locked}
+              sending={hardLookSending}
+              error={hardLookError}
+              onGenerate={handleGenerateHardLook}
+            />
+
             <DiscussFooter
               label="Discuss this with Wivoza Coach"
               onClick={() =>
@@ -2976,6 +2967,40 @@ function ReportPanel({
               }
             />
             </SectionAccentContext.Provider>
+
+            {/* Whole-report rather than per-section — Danielson's components do
+                not map onto these four — so it stays one block, at the foot,
+                where a teacher reaches for it on purpose before an evaluation
+                conversation rather than scrolling past it every time. */}
+            <div className="mt-8 border-t border-hairline pt-6">
+              <div className="flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-4">
+                <button
+                  type="button"
+                  onClick={() => setRubricOpen((open) => !open)}
+                  className="flex items-center justify-between gap-3 text-left"
+                >
+                  <span>
+                    <span className="text-sm font-semibold text-forest">Rubric lens</span>
+                    <span className="ml-2 text-xs text-ink-soft">
+                      This lesson seen through your evaluation framework. Evidence, not a rating.
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-sm font-semibold text-terracotta-600">
+                    {rubricOpen ? 'Hide' : 'Show'}
+                  </span>
+                </button>
+                {rubricOpen && (
+                  <RubricLensTab
+                    rubricLens={session.rubricLens}
+                    locked={locked}
+                    isShort={coverage.isShort}
+                    sending={rubricLensSending}
+                    error={rubricLensError}
+                    onGenerate={handleGenerateRubricLens}
+                  />
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -4773,6 +4798,129 @@ function RubricLensTab({
             ))}
         </section>
       ))}
+    </div>
+  )
+}
+
+/// The hard read of one section, shown under that section's own evidence.
+///
+/// The findings are grouped by section already, so a teacher who had just read
+/// Questioning & Checking had to scroll back up the page to a collapsed card
+/// and find the questioning group inside it. This puts each section's
+/// criticism directly beneath the numbers and quotes it was drawn from.
+///
+/// Collapsed by default, like the whole-lesson entry: a teacher who has not
+/// chosen this should not meet it on the way past. Opening it before one
+/// exists offers to build it, so any section is a way in — it is one call and
+/// one document either way.
+function SectionHardLook({
+  section,
+  hardLook,
+  locked,
+  sending,
+  error,
+  onGenerate,
+}: {
+  section: InsightsSection
+  hardLook: AudioHardLook | null
+  locked: boolean
+  sending: boolean
+  error: string | null
+  onGenerate: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const label = INSIGHTS_SECTIONS.find((s) => s.key === section)?.label ?? 'this section'
+  const critiques = (hardLook?.critiques ?? []).filter((c) => c.section === section)
+  const cleared = (hardLook?.cleared ?? []).find((c) => c.section === section)
+
+  // Nothing to offer and nothing to show: a locked report can't gain one.
+  if (locked && !hardLook) return null
+
+  return (
+    <div className="mt-2 flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-4">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center justify-between gap-3 text-left"
+      >
+        <span>
+          <span className="text-sm font-semibold text-forest">The hard look on {label}</span>
+          <span className="ml-2 text-xs text-ink-soft">
+            {hardLook
+              ? critiques.length > 0
+                ? `${critiques.length} thing${critiques.length === 1 ? '' : 's'} a demanding reader would press on.`
+                : 'Nothing here it could make a case against.'
+              : 'The least generous honest reading of this part of the lesson.'}
+          </span>
+        </span>
+        <span className="shrink-0 text-sm font-semibold text-terracotta-600">{open ? 'Hide' : 'Show'}</span>
+      </button>
+
+      {open && !hardLook && (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-ink">
+            This reads the same evidence again as a demanding reader looking for what could have been better, across
+            the whole lesson. Every criticism has to point at something you actually said, it can come back with
+            nothing, and only you see it.
+          </p>
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={sending}
+            className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+          >
+            {sending ? 'Taking the hard look...' : 'Give it to me straight'}
+          </button>
+          <WorkingRing
+            active={sending}
+            estimatedMs={30000}
+            label="Looking for what could be better"
+            className="text-forest"
+          />
+          {error && <p className="text-sm text-terracotta-600">{error}</p>}
+        </div>
+      )}
+
+      {open && hardLook && (
+        <div className="flex flex-col gap-3">
+          {critiques.map((critique, i) => (
+            <div key={`${critique.section}-${i}`} className="rounded-xl border border-hairline p-4">
+              <p className="font-heading text-base font-bold leading-snug text-forest">{critique.headline}</p>
+              <p className="mt-2 text-sm text-ink">{critique.critique}</p>
+              {critique.evidence.length > 0 && (
+                <div className="mt-3 flex flex-col gap-2">
+                  {critique.evidence.map((item, j) => (
+                    <div key={j} className="border-l-2 border-terracotta/50 pl-3">
+                      <p className="text-sm text-ink">"{item.text}"</p>
+                      <p className="mt-0.5 text-xs text-ink-soft">
+                        {formatTime(item.timestampSec)} · {item.kind}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {critique.likelyCost && (
+                <div className="mt-3 rounded-xl bg-cream p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">What it likely cost</p>
+                  <p className="mt-1 text-sm text-ink">{critique.likelyCost}</p>
+                </div>
+              )}
+              {critique.nextStep && (
+                <div className="mt-2 rounded-xl bg-gold-tint/50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Try instead</p>
+                  <p className="mt-1 text-sm text-ink">{critique.nextStep}</p>
+                </div>
+              )}
+            </div>
+          ))}
+          {critiques.length === 0 && (
+            <p className="text-sm text-ink">
+              {cleared?.reason ??
+                'It had no reading for this section. That is a gap in the hard look rather than a verdict on your lesson.'}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
