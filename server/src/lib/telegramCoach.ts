@@ -206,37 +206,24 @@ function wrapUpOfferButton(debriefId: string): ReplyMarkup {
 // this parent emailed me" in the same breath, and one offer for the whole
 // conversation leaves the second half of what they said with no door.
 //
-// Twice each, because the second time is usually the teacher saying yes.
-// They answer "go on then", Coach asks how long the period is, and the
-// button it can hand them now is better than the one further up the chat
-// — and a reply agreeing to build something, with nothing to tap, is the
-// dead end this was supposed to fix. What two stops is Coach pressing a
-// tool the teacher has twice declined to take.
+// One number, not two. A per-tool cap of two looked careful and was
+// wrong: a planning conversation spends both on the turns where Coach is
+// still collecting, and then the teacher says "yes, and can I print it"
+// and there is nothing to tap. Every offer in that conversation was the
+// same button getting better, not Coach pestering them.
 //
-// In memory rather than a column, like the menu button above: losing the
-// record on a deploy costs one extra offer, which is cheaper than a
-// migration.
-const MAX_OFFERS_PER_TOOL = 2
-// A ceiling on carrying the instruction at all, so a long wandering
-// conversation stops paying ~250 tokens a turn for a door it keeps not
-// taking.
-const MAX_OFFERS_PER_CONVERSATION = 4
-const offersByConversation = new Map<string, Map<ToolKey, number>>()
-
-function offersMade(debriefId: string | null | undefined): Map<ToolKey, number> {
-  return (debriefId && offersByConversation.get(debriefId)) || new Map<ToolKey, number>()
-}
+// What remains is a ceiling, and it is a safety valve rather than a taste
+// rule: six says the model is stuck in a loop, and by then the
+// instruction has stopped earning its ~250 tokens a turn.
+const MAX_OFFERS_PER_CONVERSATION = 6
+const offersByConversation = new Map<string, number>()
 
 function offerTotal(debriefId: string | null | undefined): number {
-  let total = 0
-  for (const count of offersMade(debriefId).values()) total += count
-  return total
+  return (debriefId && offersByConversation.get(debriefId)) || 0
 }
 
-function rememberToolOffer(debriefId: string, tool: ToolKey) {
-  const made = offersByConversation.get(debriefId) ?? new Map<ToolKey, number>()
-  made.set(tool, (made.get(tool) ?? 0) + 1)
-  offersByConversation.set(debriefId, made)
+function rememberToolOffer(debriefId: string) {
+  offersByConversation.set(debriefId, offerTotal(debriefId) + 1)
   if (offersByConversation.size > 500) {
     offersByConversation.delete(offersByConversation.keys().next().value!)
   }
@@ -709,7 +696,7 @@ async function offerPhotographedAssignment(chatId: string, userId: string, image
     : undefined
   if (!button) return
   await sendMessage(chatId, "I've got the assignment itself off that photo, if you want the full read on it.", button)
-  rememberToolOffer(debriefId, 'assignment_coach')
+  rememberToolOffer(debriefId)
 }
 
 // Keeps "typing…" showing while Claude writes; Telegram drops it after ~5s.
@@ -814,7 +801,7 @@ async function coachReply(chatId: string, user: BotUser, text: string, image?: C
   // the message, not above the typing box.
   // A photo isn't a reflection, and its own follow-up may still be coming.
   const wrapUpNow = !image && isCompleteReflection(text, countUserTurns(existing))
-  const spent = offer != null && (offersMade(saved.id).get(offer.key) ?? 0) >= MAX_OFFERS_PER_TOOL
+  const spent = offerTotal(saved.id) >= MAX_OFFERS_PER_CONVERSATION
   // An assignment in a photo can't be handed over as a photo — the form
   // takes text. Reading it out takes another pass over the picture and the
   // best part of a minute, which is far too long to hold up the reply, so
@@ -827,7 +814,7 @@ async function coachReply(chatId: string, user: BotUser, text: string, image?: C
   // round for the wrap-up anyway once this conversation has two exchanges.
   const wrapUp = !button && wrapUpNow ? wrapUpOfferButton(saved.id) : undefined
   await sendMessage(chatId, coachText, button ?? wrapUp ?? MAIN_KEYBOARD)
-  if (button && offer) rememberToolOffer(saved.id, offer.key)
+  if (button) rememberToolOffer(saved.id)
   // Marked as offered, so the 30-minute sweep doesn't ask a second time.
   // This IS that offer; it just arrives while they still have the phone in
   // their hand.
