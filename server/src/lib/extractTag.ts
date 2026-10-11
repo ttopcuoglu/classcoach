@@ -9,9 +9,18 @@
 // them, and sibling fields sharing a prefix are exactly the ones that get
 // confused), plus the requested tag itself. A plain <p> or <div> is left
 // alone, because a computer-science lesson can legitimately be about them.
-const STRUCTURAL_TAG = /<\/?[a-z]+(?:_[a-z]+)+>/g
+//
+// Plus the five repeating container tags our prompts use. They have no
+// underscore, so the rule above missed them, and a real printed lesson
+// plan carried "<step>" between Materials and the first step: the model
+// left off a </materials>, and nothing here recognised what came next as
+// the end of that section. Listed explicitly rather than matching any
+// single word, because <p>, <code> and <title> have to survive — a
+// lesson about HTML is a lesson about those.
+const CONTAINERS = 'step|cfu|idea|misconception|slide'
+const STRUCTURAL_TAG = new RegExp(`<\\/?[a-z]+(?:_[a-z]+)+>|<\\/?(?:${CONTAINERS})>`, 'g')
 // Same shape, unanchored and non-global, for finding where a section ends.
-const STRUCTURAL_TAG_ONCE = /<\/?[a-z]+(?:_[a-z]+)+>/
+const STRUCTURAL_TAG_ONCE = new RegExp(`<\\/?[a-z]+(?:_[a-z]+)+>|<\\/?(?:${CONTAINERS})>`)
 
 /// Anything shaped like one of our structural tags, for the callers that fall
 /// back to showing a whole raw response. A teacher should never read
