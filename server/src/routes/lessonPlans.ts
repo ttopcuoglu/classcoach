@@ -2,7 +2,7 @@ import { Router } from 'express'
 import JSZip from 'jszip'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
-import { Prisma } from '../generated/prisma/client.ts'
+import { Prisma, type LessonPlan } from '../generated/prisma/client.ts'
 import { checkFeatureAccess, countUsageLogActionsThisMonth, LESSON_PLANNING_ACTIONS } from '../lib/billing.ts'
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
@@ -898,6 +898,83 @@ function buildUserMessage(context: ReturnType<typeof readBuildContext>): string 
   ]
     .filter(Boolean)
     .join('\n')
+}
+
+/// Quick Ideas with no HTTP request around it, so the Telegram Coach can
+/// produce the same thing Build a Lesson's form does — the precedent is
+/// generateTalkTakeaway in debrief.ts. The plan is saved exactly as the
+/// form's would be, so it lands in Your lessons and can be adapted later;
+/// the chat gets a copy, not a separate universe.
+///
+/// Only the ideas kind. A full lesson is pages — fine on a screen, wrong
+/// in a chat — so that one stays a handoff.
+///
+/// The dozen lines below deliberately mirror /generate's ideas branch
+/// rather than sharing with it: that route answers both kinds from one
+/// Claude call, and splitting it to save a dozen lines would make the
+/// common path harder to follow than the repetition does. What must not
+/// drift — the prompt and the parser — is shared already.
+export async function generateQuickIdeas(
+  userId: string,
+  context: { objective: string; subject?: string | null; gradeLevel?: string | null; durationMinutes?: number | null },
+): Promise<{ plan: LessonPlan } | { error: string }> {
+  const access = await checkFeatureAccess(userId, 'lesson_planning', () =>
+    countUsageLogActionsThisMonth(userId, LESSON_PLANNING_ACTIONS),
+  )
+  // Typed as optional upstream; a denial always has to say something.
+  if (!access.allowed) return { error: access.upgradeMessage ?? "Planning Coach isn't included on your plan right now." }
+
+  const denied = await checkAndLogUsage(userId, 'lesson_plan_generate')
+  if (denied) return { error: denied }
+
+  const full = {
+    objective: context.objective,
+    unitName: null,
+    essentialQuestion: null,
+    standard: null,
+    subject: context.subject ?? null,
+    gradeLevel: context.gradeLevel ?? null,
+    additionalContext: null,
+    sourceMaterial: null,
+    durationMinutes: context.durationMinutes ?? DEFAULT_LESSON_MINUTES,
+    kind: 'ideas' as const,
+  }
+
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 1500,
+      thinking: { type: 'disabled' },
+      system: buildQuickIdeasPrompt(),
+      messages: [{ role: 'user', content: buildUserMessage(full) }],
+    })
+    const quickIdeas = parseQuickIdeas(
+      response.content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
+        .join('\n'),
+    )
+    if (quickIdeas.length === 0) {
+      console.error('[lesson-plans] no ideas parsed for chat — stop_reason:', response.stop_reason)
+      return { error: 'Could not put together teaching ideas. Please try again.' }
+    }
+    const plan = await prisma.lessonPlan.create({
+      data: {
+        userId,
+        mode: 'generated',
+        planKind: 'ideas',
+        objective: full.objective,
+        subject: full.subject,
+        gradeLevel: full.gradeLevel,
+        durationMinutes: full.durationMinutes,
+        quickIdeas,
+      },
+    })
+    return { plan }
+  } catch (error) {
+    console.error('[lesson-plans] generating ideas for chat failed:', error)
+    return { error: 'Could not put together teaching ideas. Please try again.' }
+  }
 }
 
 // Reads an uploaded file for what it's about, so the form can be filled in

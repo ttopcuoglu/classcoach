@@ -63,6 +63,30 @@ export function sendMessage(chatId: string, text: string, replyMarkup?: ReplyMar
   })
 }
 
+// A file in the chat. Multipart rather than JSON, so this can't go
+// through `call` above — Telegram wants the bytes as a form part.
+export async function sendDocument(
+  chatId: string,
+  filename: string,
+  bytes: Buffer,
+  contentType: string,
+  caption?: string,
+  replyMarkup?: ReplyMarkup,
+): Promise<unknown> {
+  const form = new FormData()
+  form.append('chat_id', chatId)
+  form.append('document', new Blob([new Uint8Array(bytes)], { type: contentType }), filename)
+  if (caption) form.append('caption', caption.slice(0, 1024))
+  if (replyMarkup) form.append('reply_markup', JSON.stringify(replyMarkup))
+
+  const res = await fetch(`${API_BASE}/bot${process.env.TELEGRAM_BOT_TOKEN}/sendDocument`, { method: 'POST', body: form })
+  const data = (await res.json().catch(() => null)) as { ok: boolean; description?: string; error_code?: number } | null
+  if (!data?.ok) {
+    throw new TelegramError(`Telegram sendDocument: ${data?.description ?? res.status}`, data?.error_code ?? res.status)
+  }
+  return data
+}
+
 // Takes the inline buttons off a message once one has been tapped, so the
 // same choice can't be made twice.
 export function removeInlineButtons(chatId: string, messageId: number): Promise<unknown> {

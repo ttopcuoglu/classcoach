@@ -15,6 +15,8 @@
 import { randomBytes } from 'node:crypto'
 import type { CoachFollowUp, Debrief } from '../generated/prisma/client.ts'
 import { generateTalkTakeaway } from '../routes/debrief.ts'
+import { generateQuickIdeas } from '../routes/lessonPlans.ts'
+import { buildPdf } from './pdfBuilder.ts'
 import { anthropic, CLAUDE_MODEL } from './anthropic.ts'
 import { trimIfTruncated } from './coachStream.ts'
 import { transcribeAudio } from './deepgram.ts'
@@ -29,7 +31,7 @@ import {
   type ToolKey,
   type ToolOffer,
 } from './betterTool.ts'
-import { createHandoff } from './coachHandoff.ts'
+import { createHandoff, readHandoff } from './coachHandoff.ts'
 import { buildMemoryContextBlock, MEMORY_UPDATE_INSTRUCTION, MEMORY_UPDATE_TOKEN_BUFFER, persistMemoryUpdate, shouldWriteMemory } from './coachMemory.ts'
 import { CORE_COACHING_RULES } from './coachPersona.ts'
 import { flagIfUnsafe } from './coachSafetyCheck.ts'
@@ -46,6 +48,7 @@ import {
   getUpdates,
   isChatGone,
   removeInlineButtons,
+  sendDocument,
   sendMessage,
   sendTyping,
   setChatMenuButton,
@@ -162,7 +165,20 @@ function ensureMiniAppMenuButton(chatId: string) {
 // Planning Coach" — because landing on a filled-in form is a different
 // promise from landing on an empty one.
 function toolOfferButton(offer: ToolOffer, details: HandoffDetails | null, userId: string): ReplyMarkup | undefined {
-  // A prefilled offer lands somewhere more specific than the tool's front
+  // Three to five activities is a chat-sized answer: a teacher at 3:40
+  // wants to read them, not open a web page to read them. So this one is
+  // made here and sent back, and the button is the teacher saying yes
+  // rather than a door out. A full lesson is pages, and stays a handoff.
+  if (details && 'topic' in details && details.kind === 'ideas') {
+    return {
+      inline_keyboard: [
+        [{ text: 'Send me a few ideas', callback_data: `ideas:${createHandoff(userId, offer.key, details)}` }],
+        [{ text: NEW_TOPIC_BUTTON, callback_data: 'new' }],
+      ],
+    }
+  }
+
+  // Everything else lands somewhere more specific than the tool's front
   // door — Communication Coach's hub has three tools behind it, and which
   // one depends on what Coach collected, not on the tool it tagged.
   const prefill = prefillTarget(details)
@@ -187,6 +203,93 @@ function toolOfferButton(offer: ToolOffer, details: HandoffDetails | null, userI
       // the keyboard, and still a command, for the conversations it fits.
       [{ text: NEW_TOPIC_BUTTON, callback_data: 'new' }],
     ],
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Short deliverables, made here
+// ---------------------------------------------------------------------------
+//
+// Quick Ideas is the one thing Planning Coach makes that fits in a chat:
+// three to five activities, a few lines each. It is still saved as a real
+// lesson plan, so it is in Your lessons and can be adapted and exported
+// like any other — the chat gets a copy, not a separate universe.
+
+function ideasAsText(plan: { objective: string | null; quickIdeas: unknown }): string {
+  const ideas = (plan.quickIdeas as { title: string; how: string }[] | null) ?? []
+  const lines = ideas.map((idea, i) => `${i + 1}. ${idea.title}\n${idea.how}`)
+  return `${plan.objective ? `${plan.objective}\n\n` : ''}${lines.join('\n\n')}`
+}
+
+async function sendQuickIdeas(chatId: string, userId: string, handoffId: string | undefined) {
+  const handoff = handoffId ? readHandoff(handoffId, userId) : null
+  const details = handoff?.details
+  if (!details || !('topic' in details)) {
+    await reply(chatId, "That one's gone stale, sorry — tell me the topic again and I'll put some ideas together.")
+    return
+  }
+
+  const stopTyping = keepTyping(chatId)
+  let result: Awaited<ReturnType<typeof generateQuickIdeas>>
+  try {
+    result = await generateQuickIdeas(userId, {
+      objective: details.topic,
+      subject: details.subject,
+      gradeLevel: details.gradeLevel,
+      durationMinutes: details.durationMinutes,
+    })
+  } finally {
+    stopTyping()
+  }
+
+  if ('error' in result) {
+    await reply(chatId, result.error)
+    return
+  }
+
+  // A PDF button rather than a PDF: most of these get read and acted on
+  // in the chat, and a file nobody asked for is an attachment to ignore.
+  await sendMessage(chatId, ideasAsText(result.plan), {
+    inline_keyboard: [
+      [{ text: '📄 Send as PDF', callback_data: `pdf:${result.plan.id}` }],
+      ...(miniAppUrl('/lesson-planning')
+        ? [[{ text: 'Open in Wivoza', web_app: { url: miniAppUrl('/lesson-planning')! } }]]
+        : []),
+    ],
+  })
+}
+
+async function sendIdeasPdf(chatId: string, userId: string, planId: string | undefined) {
+  const plan = planId ? await prisma.lessonPlan.findFirst({ where: { id: planId, userId } }) : null
+  if (!plan) {
+    await reply(chatId, "I can't find that one any more — it's in Wivoza under Planning Coach, and you can print it from there.")
+    return
+  }
+
+  const ideas = (plan.quickIdeas as { title: string; how: string }[] | null) ?? []
+  const stopTyping = keepTyping(chatId)
+  try {
+    const pdf = await buildPdf({
+      // Coach writes the topic mid-sentence ("opening activities for
+      // photosynthesis"), which reads as a mistake once it's a heading on
+      // a printed page.
+      title: plan.objective ? plan.objective[0].toUpperCase() + plan.objective.slice(1) : 'Teaching ideas',
+      subtitle: [plan.gradeLevel, plan.subject, plan.durationMinutes ? `${plan.durationMinutes} minutes` : null]
+        .filter(Boolean)
+        .join(' · ') || null,
+      blocks: ideas.flatMap((idea) => [
+        { type: 'heading' as const, text: idea.title },
+        { type: 'paragraph' as const, text: idea.how },
+      ]),
+    })
+    // A filename a teacher can find again in their downloads, not a cuid.
+    const name = (plan.objective ?? 'teaching-ideas').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50)
+    await sendDocument(chatId, `${name || 'teaching-ideas'}.pdf`, pdf, 'application/pdf')
+  } catch (error) {
+    console.error('[telegram] building the ideas PDF failed:', error)
+    await reply(chatId, "I couldn't turn that into a PDF, sorry. It's saved in Wivoza, and you can print it from there.")
+  } finally {
+    stopTyping()
   }
 }
 
@@ -592,6 +695,8 @@ async function handleButtonTap(chatId: string, tap: { id: string; data?: string;
   if (action === 'wrap') await finishConversation(chatId, user, id)
   else if (action === 'nowrap') await reply(chatId, 'No problem. Tap "Wrap up" whenever you\'re ready.')
   else if (action === 'new') await startNewTopic(chatId, user.id)
+  else if (action === 'ideas') await sendQuickIdeas(chatId, user.id, id)
+  else if (action === 'pdf') await sendIdeasPdf(chatId, user.id, id)
   else if (action === 'later' || action === 'skip') await answerCheckIn(chatId, user.id, action, id)
 }
 
