@@ -1,5 +1,6 @@
 import PhotosUI
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 /// Labels shared by the intake and the workspace — the same wording as the
@@ -506,13 +507,47 @@ private struct AssignmentIntakeView: View {
             error = "Could not read that photo. Please try pasting the text instead."
             return
         }
+        // PhotosPicker hands back the photo in whatever format the phone
+        // stored it, and an iPhone stores HEIC. This used to be written
+        // straight out as "assignment-photo.jpg" — a name the server
+        // believed and the bytes contradicted. Re-encode instead of
+        // renaming.
+        guard let jpeg = Self.jpegForUpload(data) else {
+            error = "Could not read that photo. Please try pasting the text instead."
+            return
+        }
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("assignment-photo.jpg")
         do {
-            try data.write(to: url, options: .atomic)
+            try jpeg.write(to: url, options: .atomic)
             await extract(url: url, displayName: "Photo of assignment")
         } catch {
             self.error = "Could not read that photo. Please try pasting the text instead."
         }
+    }
+
+    /// A photo as JPEG, no wider or taller than `maxDimension`.
+    ///
+    /// Two reasons to shrink it. The reader accepts 5MB and a modern
+    /// iPhone photo can exceed that on its own, which would come back as
+    /// a refusal the teacher can do nothing about. And the longest edge
+    /// of 2000px is far more than enough to read a worksheet — it is the
+    /// text that matters, not the grain of the paper — so the rest is
+    /// upload time in a school corridor for nothing.
+    static func jpegForUpload(_ data: Data, maxDimension: CGFloat = 2000, quality: CGFloat = 0.85) -> Data? {
+        guard let image = UIImage(data: data) else { return nil }
+        let longest = max(image.size.width, image.size.height)
+        guard longest > maxDimension else { return image.jpegData(compressionQuality: quality) }
+
+        let scale = maxDimension / longest
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let format = UIGraphicsImageRendererFormat.default()
+        // The image is already at its own scale; rendering at the screen's
+        // would multiply the pixels back up again on a Retina device.
+        format.scale = 1
+        let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+        return resized.jpegData(compressionQuality: quality)
     }
 
     private func extract(url: URL, displayName: String) async {
