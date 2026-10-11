@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import AssignmentCoach from './AssignmentCoach'
 import AnswerSection, { NumberedCard } from '../components/AnswerSection'
 import PastList, { type PastItem } from '../components/PastList'
-import { ShareIcon, StarIcon, UploadIcon, ClipboardIcon, CloseIcon } from '../components/icons'
+import { CameraIcon, ClipboardIcon, CloseIcon, ShareIcon, StarIcon, UploadIcon } from '../components/icons'
 import CoachingChat from '../components/CoachingChat'
 import ExportModal from '../components/ExportModal'
 import { PanelHeader } from '../components/PanelHeader'
@@ -1220,25 +1220,48 @@ function BuildPanel() {
                 )}
               </div>
             ) : (
-              <label className="flex cursor-pointer items-start gap-2 self-start text-left hover:text-forest">
-                <UploadIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-soft" />
-                <span className="flex flex-col">
-                  <span className="text-xs font-semibold text-ink-soft">
-                    Upload materials — start from slides, a reading, a worksheet or an activity
+              <div className="flex flex-col gap-1.5 self-start">
+                <label className="flex cursor-pointer items-start gap-2 text-left hover:text-forest">
+                  <UploadIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-soft" />
+                  <span className="flex flex-col">
+                    <span className="text-xs font-semibold text-ink-soft">
+                      Upload materials — start from slides, a reading, a worksheet or an activity
+                    </span>
+                    <span className="text-[11px] text-ink-soft/80">{MATERIAL_FORMATS}</span>
                   </span>
-                  <span className="text-[11px] text-ink-soft/80">{MATERIAL_FORMATS}</span>
-                </span>
-                <input
-                  type="file"
-                  accept={MATERIAL_ACCEPT}
-                  className="hidden"
-                  onChange={(e) => {
-                    const selected = e.target.files?.[0]
-                    if (selected) void handleMaterial(selected)
-                    e.target.value = ''
-                  }}
-                />
-              </label>
+                  <input
+                    type="file"
+                    accept={MATERIAL_ACCEPT}
+                    className="hidden"
+                    onChange={(e) => {
+                      const selected = e.target.files?.[0]
+                      if (selected) void handleMaterial(selected)
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+                {/* Its own input: `capture` belongs on an image-only one,
+                    since putting it on the picker above would take the
+                    documents away. On a phone this opens the camera; a
+                    laptop ignores the attribute and shows a picker. */}
+                <label className="flex cursor-pointer items-center gap-2 text-left hover:text-forest">
+                  <CameraIcon className="h-3.5 w-3.5 shrink-0 text-ink-soft" />
+                  <span className="text-xs font-semibold text-ink-soft">
+                    Or photograph it — the worksheet on your desk, what's on the board
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={(e) => {
+                      const selected = e.target.files?.[0]
+                      if (selected) void handleMaterial(selected)
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+              </div>
             )}
             {materialError && <p className="text-sm text-terracotta">{materialError}</p>}
             {followUp && (
