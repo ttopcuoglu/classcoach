@@ -58,13 +58,18 @@ struct DiscourseDetailsTab: View {
     private var m: OverviewMetrics { OverviewMetrics(session) }
     private var recordedSec: Double { m.coverage.recordedSec }
 
+    /// Counted rows are the labels that held still across repeated runs
+    /// (on-topic returned 32, 32, 33, 32, 32 of 59 on the same lesson). The
+    /// off-topic turns are shown as quotes with NO count, because that label
+    /// is the one that moved — two to six on that same lesson — and it is the
+    /// only one making a claim about students. A quote a teacher can check
+    /// beats a number they cannot.
     private var focusRows: [StudentTalkFocusRow] {
         guard let f = session.studentTalkFocus else { return [] }
         return [
             StudentTalkFocusRow(kind: "on_topic", label: "About the lesson", value: f.onTopic, color: AppTheme.forest),
             StudentTalkFocusRow(kind: "procedural", label: "About how to do the work", value: f.procedural, color: AppTheme.gold),
-            StudentTalkFocusRow(kind: "off_topic", label: "About something else", value: f.offTopic, color: AppTheme.terracotta),
-            StudentTalkFocusRow(kind: "unclear", label: "Too unclear to place", value: f.unclear, color: AppTheme.hairline),
+            StudentTalkFocusRow(kind: "unclear", label: "Too unclear to make out", value: f.unclear, color: AppTheme.hairline),
         ]
     }
 
@@ -88,10 +93,35 @@ struct DiscourseDetailsTab: View {
                 Text(focusCaveat(focus))
                     .font(.caption2).foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                if !focus.examples.isEmpty {
-                    DisclosureGroup("Show examples") {
+
+                let other = focus.examples.filter { $0.kind == "off_topic" }
+                if !other.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("TURNS THAT LOOKED LIKE SOMETHING ELSE")
+                            .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
+                        Text("Shown rather than counted, on purpose: judging what counts as off-topic varied between runs, so these are examples to read and not a tally. Off-topic talk can be the task's fault as easily as anyone's, and a tangent is sometimes the best part of a lesson.")
+                            .font(.caption2).foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        ForEach(Array(other.enumerated()), id: \.offset) { _, example in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\"\(example.text)\"").font(.footnote).foregroundStyle(AppTheme.textPrimary)
+                                Text(ReportConfidence.formatDuration(example.timestampSec))
+                                    .font(.caption2).foregroundStyle(AppTheme.textSecondary)
+                            }
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                }
+
+                let rest = focus.examples.filter { $0.kind != "off_topic" }
+                if !rest.isEmpty {
+                    DisclosureGroup("Show examples of the rest") {
                         VStack(alignment: .leading, spacing: 8) {
-                            ForEach(Array(focus.examples.enumerated()), id: \.offset) { _, example in
+                            ForEach(Array(rest.enumerated()), id: \.offset) { _, example in
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("\"\(example.text)\"").font(.footnote).foregroundStyle(AppTheme.textPrimary)
                                     Text("\(ReportConfidence.formatDuration(example.timestampSec)) · \(focusRows.first { $0.kind == example.kind }?.label ?? example.kind)")
@@ -115,7 +145,7 @@ struct DiscourseDetailsTab: View {
     }
 
     private func focusCaveat(_ focus: AudioStudentTalkFocus) -> String {
-        var text = "This is the only thing here that can tell a discussion from a room talking over itself — the talk-time split reads the same either way. It isn't a score, and there's no correct number: off-topic talk can be the task's fault as easily as anyone's, and a tangent is sometimes the best part of a lesson."
+        var text = "This is the only thing here that can tell a discussion from a room talking over itself — the talk-time split reads the same either way. It isn't a score, and there's no correct number."
         if focus.unclear > 0 {
             text += " The \(focus.unclear) unclear turn\(focus.unclear == 1 ? " is" : "s are") the microphone, not the students: it sits with you and hears the room poorly, so a distant voice often arrives garbled. Audio from a video played in class can land here too."
         }

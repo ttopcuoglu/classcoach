@@ -5284,12 +5284,18 @@ function TranscriptEvidenceCard({
 function StudentTalkFocusCard({ focus }: { focus: AudioStudentTalkFocus | null }) {
   if (!focus || focus.classified === 0) return null
 
+  // Counted rows are the labels that held still across repeated runs
+  // (on-topic returned 32, 32, 33, 32, 32 of 59 on the same lesson). The
+  // off-topic turns are shown below as quotes with NO count, because that
+  // label is the one that moved — two to six on that same lesson — and it is
+  // also the only one that makes a claim about students. A quote a teacher can
+  // check beats a number they cannot.
   const rows = [
-    { label: 'About the lesson', value: focus.onTopic, kind: 'on_topic' as const, band: 'bg-forest' },
-    { label: 'About how to do the work', value: focus.procedural, kind: 'procedural' as const, band: 'bg-gold' },
-    { label: 'About something else', value: focus.offTopic, kind: 'off_topic' as const, band: 'bg-terracotta' },
-    { label: 'Too unclear to place', value: focus.unclear, kind: 'unclear' as const, band: 'bg-hairline' },
+    { label: 'About the lesson', value: focus.onTopic, band: 'bg-forest' },
+    { label: 'About how to do the work', value: focus.procedural, band: 'bg-gold' },
+    { label: "Too unclear to make out", value: focus.unclear, band: 'bg-hairline' },
   ]
+  const otherExamples = focus.examples.filter((e) => e.kind === 'off_topic')
 
   return (
     <div className="rounded-2xl border border-hairline bg-cream-card p-6">
@@ -5300,7 +5306,7 @@ function StudentTalkFocusCard({ focus }: { focus: AudioStudentTalkFocus | null }
       </p>
       <div className="mt-3 flex flex-col gap-2">
         {rows.map((row) => (
-          <div key={row.kind} className="flex items-center gap-3">
+          <div key={row.label} className="flex items-center gap-3">
             <span aria-hidden="true" className={`h-3 w-3 shrink-0 rounded-sm ${row.band}`} />
             <span className="flex-1 text-sm text-ink">{row.label}</span>
             <span className="text-sm font-semibold text-forest">{row.value}</span>
@@ -5309,8 +5315,7 @@ function StudentTalkFocusCard({ focus }: { focus: AudioStudentTalkFocus | null }
       </div>
       <p className="mt-4 text-xs text-ink-soft">
         This is the only thing here that can tell a discussion from a room talking over itself — the talk-time split
-        reads the same either way. It isn't a score, and there's no correct number: off-topic talk can be the task's
-        fault as easily as anyone's, and a tangent is sometimes the best part of a lesson.
+        reads the same either way. It isn't a score, and there's no correct number.
         {focus.unclear > 0 && (
           <>
             {' '}
@@ -5320,21 +5325,49 @@ function StudentTalkFocusCard({ focus }: { focus: AudioStudentTalkFocus | null }
           </>
         )}
       </p>
-      {focus.examples.length > 0 && (
-        <details className="mt-3">
-          <summary className="cursor-pointer text-sm font-medium text-forest hover:text-terracotta-600">
-            Show examples
-          </summary>
-          <div className="mt-3 flex flex-col gap-2">
-            {focus.examples.map((example, i) => (
-              <div key={i} className="border-l-2 border-hairline pl-3">
+
+      {otherExamples.length > 0 && (
+        <div className="mt-4 rounded-xl bg-cream p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+            Turns that looked like something else
+          </p>
+          <p className="mt-1 text-xs text-ink-soft">
+            Shown rather than counted, on purpose: judging what counts as off-topic varied between runs, so these are
+            examples to read and not a tally. Off-topic talk can be the task's fault as easily as anyone's, and a
+            tangent is sometimes the best part of a lesson.
+          </p>
+          <div className="mt-2 flex flex-col gap-2">
+            {otherExamples.map((example, i) => (
+              <div key={i} className="border-l-2 border-terracotta/40 pl-3">
                 <p className="text-sm text-ink">"{example.text}"</p>
-                <p className="mt-0.5 text-xs text-ink-soft">
-                  {formatTime(example.timestampSec)} ·{' '}
-                  {rows.find((r) => r.kind === example.kind)?.label ?? example.kind}
-                </p>
+                <p className="mt-0.5 text-xs text-ink-soft">{formatTime(example.timestampSec)}</p>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {focus.examples.some((e) => e.kind !== 'off_topic') && (
+        <details className="mt-3">
+          <summary className="cursor-pointer text-sm font-medium text-forest hover:text-terracotta-600">
+            Show examples of the rest
+          </summary>
+          <div className="mt-3 flex flex-col gap-2">
+            {focus.examples
+              .filter((e) => e.kind !== 'off_topic')
+              .map((example, i) => (
+                <div key={i} className="border-l-2 border-hairline pl-3">
+                  <p className="text-sm text-ink">"{example.text}"</p>
+                  <p className="mt-0.5 text-xs text-ink-soft">
+                    {formatTime(example.timestampSec)} ·{' '}
+                    {example.kind === 'on_topic'
+                      ? 'About the lesson'
+                      : example.kind === 'procedural'
+                        ? 'About how to do the work'
+                        : 'Too unclear to make out'}
+                  </p>
+                </div>
+              ))}
           </div>
         </details>
       )}

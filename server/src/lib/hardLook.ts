@@ -249,7 +249,13 @@ export function buildHardLookEvidence(
     focus && (focus.classified ?? 0) > 0
       ? [
           ...evidence.facts,
-          `Of ${focus.classified} audible student turns, ${focus.onTopic ?? 0} were about the lesson's content, ${focus.procedural ?? 0} about how to do the work, ${focus.offTopic ?? 0} about something else, and ${focus.unclear ?? 0} too unclear or garbled to place. A high "unclear" count is the microphone, not the students.`,
+          // The off-topic COUNT is deliberately not given. Measured across
+          // repeated runs it moved from two to six on one lesson while the
+          // on-topic count held at 32-34, and it is the only one of these
+          // that makes a claim about students — so the model gets the steady
+          // numbers and is told the rest exists without being handed a figure
+          // it would quote as fact.
+          `Of ${focus.classified} audible student turns, ${focus.onTopic ?? 0} were about the lesson's content and ${focus.procedural ?? 0} about how to do the work, while ${focus.unclear ?? 0} were too unclear or garbled to place — a high unclear count is the microphone, not the students.${(focus.offTopic ?? 0) > 0 ? ' Some further turns looked like they were about something else; how many is a judgement call that moves between readings, so do not cite a number for it.' : ''}`,
         ]
       : evidence.facts
 

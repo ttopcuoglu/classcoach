@@ -81,11 +81,13 @@ ON_TOPIC — it engages with the lesson's content or the thinking the lesson ask
 
 PROCEDURAL — it engages with the lesson's logistics rather than its content: what page, whether to use pen, is this due today, can I get a Chromebook, did you say three or four. Students sorting out how to do the work are not off-task, and this is kept separate for that reason.
 
-OFF_TOPIC — it is plainly about something else: another class, the weekend, a joke unrelated to the material, a side conversation with another student, a complaint unrelated to the work. Choose this only when the words themselves make it clear.
+OFF_TOPIC — the words show it is about something other than this lesson and its work: another class, the weekend, a joke with no connection to the material, a side conversation, a complaint about something unrelated. Choose it when the words carry it, and reach for UNCLEAR when they do not.
 
 UNCLEAR — you cannot tell. This includes a turn the transcriber mangled into something that is not readable English, a fragment with too little in it to place, and a bare acknowledgement like "yeah", "okay", "mhm" or "what?". It also includes anything you would otherwise be guessing at. Automatic transcription hears distant voices worst, which in a classroom means student voices, so UNCLEAR is expected to be common and choosing it is not a failure.
 
-When torn between ON_TOPIC and OFF_TOPIC, and the words do not settle it, choose UNCLEAR. A teacher reading that their students were off-task deserves that claim to be certain.
+OFF_TOPIC is the only label here that makes a claim about students, so it is the one to be careful with — a turn you would not defend to the teacher's face is UNCLEAR. But do not extend that caution to the other labels, which accuse nobody: a student asking what page we are on is PROCEDURAL, and sending it to UNCLEAR instead tells the teacher nothing and makes their class look less organised than it was.
+
+How this is used matters for how you answer. Measured across repeated runs, the ON_TOPIC count is steady — the same lesson returned 32, 32, 33, 32 and 32 of 59 — while OFF_TOPIC moved from two to six on that same lesson. So the report shows ON_TOPIC as a number and shows the off-topic turns as QUOTES the teacher reads and judges for themselves, with no count attached. That means your job on OFF_TOPIC is to surface the clearest real examples rather than to be exhaustive: two turns that genuinely were about something else are worth more than six that include four maybes.
 
 Answer with one line per turn, in order, nothing else:
 
