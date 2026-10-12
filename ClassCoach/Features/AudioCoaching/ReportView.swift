@@ -182,6 +182,7 @@ struct ReportView: View {
     @State private var attemptedSummary = false
     @State private var readingMoment = false
     @State private var attemptedMoment = false
+    @State private var attemptedContentNotes = false
     @State private var retagging = false
 
     private var locked: Bool { session.status == "locked" }
@@ -237,6 +238,7 @@ struct ReportView: View {
             // still being written.
             await fillMissingMoment()
             await fillMissingSummary()
+            await fillMissingContentNotes()
         }
         .sheet(isPresented: $retagging) {
             RetagSpeakersView(session: session) { updated in
@@ -270,6 +272,18 @@ struct ReportView: View {
         defer { readingMoment = false }
         if let updated = try? await AudioCoachingService.generateMomentToRevisit(sessionId: session.id) {
             onUpdate(updated)
+        }
+    }
+
+    /// Content Specialist Notes used to wait for a button. They feed "Try next
+    /// time" on Summary, so a report without them is asked for them once —
+    /// quietly: if it fails, the button in Clarity & Content is still there
+    /// and says why when pressed.
+    private func fillMissingContentNotes() async {
+        guard !locked, session.contentNotes == nil, !attemptedContentNotes else { return }
+        attemptedContentNotes = true
+        if let updated = try? await AudioCoachingService.generateContentNotes(sessionId: session.id) {
+            onUpdate(AudioSessionWithSegments(session: updated, segments: session.segments))
         }
     }
 

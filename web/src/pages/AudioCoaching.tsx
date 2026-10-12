@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, LockIcon, MicIcon, PlayIcon } from '../components/icons'
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
@@ -11,6 +11,7 @@ import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { UPLOAD_STAGE, transcribeEstimateSec, transcribeHint, transcribeStage } from '../lib/transcribeStages'
 import { HATCH_STYLE } from '../lib/chartPatterns'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
+import { setPlanningPrefill } from '../lib/communicationsPrefill'
 import { createPlaybackQueue, primeAudioElement, splitIntoSentences, type PlaybackQueue } from '../lib/voicePlayback'
 import {
   createAudioSession,
@@ -2022,13 +2023,10 @@ function MomentToRevisitCard({ moment, sending }: { moment: AudioMomentToRevisit
               "{moment.quote}"{moment.timestampSec != null && ` · ${formatTime(moment.timestampSec)}`}
             </p>
           )}
+          {/* What to do about it is the first line of "Try next time", just
+              below — one list of next steps rather than one here and more
+              scattered through Insights. */}
           {moment.whyItMatters && <p className="mt-2 text-sm text-ink">{moment.whyItMatters}</p>}
-          {moment.tryNext && (
-            <p className="mt-2 text-sm text-ink">
-              <span className="font-semibold text-forest">Try next time: </span>
-              {moment.tryNext}
-            </p>
-          )}
         </>
       )}
     </div>
@@ -2334,6 +2332,21 @@ function ReportPanel({
       setContentNotesSending(false)
     }
   }
+
+  // Content Specialist Notes used to wait for a button. They feed "Try next
+  // time" on Summary, so a report without them is asked for them once, on
+  // opening — quietly: if this fails the button in Clarity & Content is still
+  // there and says why when pressed.
+  const hasAttemptedContentNotesRef = useRef(false)
+  useEffect(() => {
+    if (locked || session.contentNotes != null || hasAttemptedContentNotesRef.current) return
+    hasAttemptedContentNotesRef.current = true
+    setContentNotesSending(true)
+    generateContentNotes(session.id)
+      .then((updated) => onUpdate({ ...session, ...updated }))
+      .catch(() => {})
+      .finally(() => setContentNotesSending(false))
+  }, [locked, session, onUpdate])
 
   async function handleGenerateRubricLens() {
     setRubricLensSending(true)
@@ -3101,6 +3114,8 @@ function SummaryTab({
           <MomentToRevisitCard moment={momentToRevisit} sending={momentSending} />
         </div>
       </NumberedCard>
+
+      <TryNextTimeCard n={focusSnapshot ? 5 : 4} session={session} />
 
       <DiscussFooter
         label="Discuss this with Wivoza Coach"
@@ -6108,6 +6123,125 @@ function narrativeForSection(session: AudioSession, section: InsightsSection): s
     default:
       return null
   }
+}
+
+/// `lead` is how the item is introduced once it leaves the report: a content
+/// note is an observation, and a plan needs to be told what to do with it.
+type NextTimeItem = { id: string; from: string; text: string; lead?: string }
+
+/// Everything the report suggests, in one list: the moment to revisit's own
+/// step, one line per Insights section, and the two content notes that point
+/// forward. Each names where it came from, so a teacher can go and read the
+/// evidence behind it. "Worth double-checking" notes are left out — a caution
+/// about possible content errors is not something to build a lesson on.
+function buildNextTimeItems(session: AudioSessionWithSegments): NextTimeItem[] {
+  const items: NextTimeItem[] = []
+  const add = (id: string, from: string, text: string | null | undefined, lead?: string) => {
+    if (text?.trim()) items.push({ id, from, text: text.trim(), lead })
+  }
+  const moment = session.momentToRevisit
+  add('moment', 'Moment to revisit', moment?.status === 'found' ? moment.tryNext : null)
+  add('talk', 'Talk & Participation', session.nextSteps?.talk)
+  add('questions', 'Questioning & Checking', session.nextSteps?.questions)
+  const notes = session.contentNotes?.notes ?? []
+  add(
+    'content-further',
+    'Take further · Clarity & Content',
+    notes.find((n) => n.label === 'Where it could go further')?.text,
+    'Take this further',
+  )
+  add('climate', 'Climate & Routines', session.nextSteps?.climate)
+  add('content-worked', 'Keep doing · Clarity & Content', notes.find((n) => n.label === 'What worked')?.text, 'Keep doing this')
+  return items
+}
+
+// The report's suggestions in one place, and the way to carry them into the
+// next lesson. Planning is asked as a question and the checkboxes only appear
+// on a yes: a teacher reading their report should see what to try, not a form.
+// What travels is exactly what they left ticked, into Planning Coach's
+// "Anything else" box, where it can still be edited before anything is built.
+function TryNextTimeCard({ n, session }: { n: number; session: AudioSessionWithSegments }) {
+  const navigate = useNavigate()
+  const items = buildNextTimeItems(session)
+  const [choosing, setChoosing] = useState(false)
+  const [skipped, setSkipped] = useState<Set<string>>(new Set())
+  if (items.length === 0) return null
+  const chosen = items.filter((item) => !skipped.has(item.id))
+
+  function toggle(id: string) {
+    setSkipped((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function planNextLesson() {
+    setPlanningPrefill({
+      subject: session.classSubject ?? session.lessonContent?.subject ?? undefined,
+      gradeLevel: session.gradeLevel ?? undefined,
+      additionalContext: [
+        'From the debrief of my last lesson with this class, build these into the plan:',
+        ...chosen.map((item) => `- ${item.lead ? `${item.lead}: ` : ''}${item.text}`),
+      ].join('\n'),
+      source: `${sessionTitle(session)}, ${new Date(session.sessionDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`,
+    })
+    navigate('/lesson-planning')
+  }
+
+  return (
+    <NumberedCard n={n} title="Try next time" subtitle="What this report suggests, from every section, in one list">
+      <ul className="flex flex-col gap-3">
+        {items.map((item) => (
+          <li key={item.id}>
+            <label className={`flex items-start gap-3 ${choosing ? 'cursor-pointer' : ''}`}>
+              {choosing && (
+                <input
+                  type="checkbox"
+                  checked={!skipped.has(item.id)}
+                  onChange={() => toggle(item.id)}
+                  className="mt-1 h-4 w-4 shrink-0 accent-forest"
+                />
+              )}
+              <span>
+                <span className="block text-xs font-semibold uppercase tracking-wide text-terracotta-600">{item.from}</span>
+                <span className="mt-0.5 block text-sm text-ink">{item.text}</span>
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-4 border-t border-hairline pt-4">
+        {!choosing ? (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <p className="text-sm font-semibold text-ink">Would you like to plan your next class with this in mind?</p>
+            <button
+              type="button"
+              onClick={() => setChoosing(true)}
+              className="rounded-full bg-forest px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-forest/90"
+            >
+              Yes, choose what to include
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <button
+              type="button"
+              onClick={planNextLesson}
+              disabled={chosen.length === 0}
+              className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+            >
+              Plan the next lesson with {chosen.length === items.length ? 'all of these' : `${chosen.length} of these`} →
+            </button>
+            <button type="button" onClick={() => setChoosing(false)} className="text-sm font-medium text-ink-soft hover:text-ink">
+              Not now
+            </button>
+          </div>
+        )}
+      </div>
+    </NumberedCard>
+  )
 }
 
 function DiscussFooter({ label, onClick }: { label: string; onClick: () => void }) {

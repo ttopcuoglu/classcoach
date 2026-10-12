@@ -77,6 +77,11 @@ struct OverviewTab: View {
 
     private var m: OverviewMetrics { OverviewMetrics(session) }
 
+    /// Planning is asked as a question, and the ticks only appear on a yes: a
+    /// teacher reading their report should see what to try, not a form.
+    @State private var choosingForPlan = false
+    @State private var skippedForPlan: Set<String> = []
+
     /// 100 minus the two talk shares — the quiet, the overlap and anything the
     /// mic could not place. Mirrors the web report's own calculation.
     private var silencePct: Double? {
@@ -149,6 +154,7 @@ struct OverviewTab: View {
             strengthCard
             priorityCard
             whoWasHeardCard
+            tryNextTimeCard
 
             // Reading the summary and wanting to talk about it is the same
             // impulse, so the way to do that sits at the end of the reading
@@ -235,11 +241,9 @@ struct OverviewTab: View {
                         Text(why).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    if let tryNext = moment.tryNext {
-                        (Text("Try next time: ").fontWeight(.semibold).foregroundColor(AppTheme.forest) + Text(tryNext))
-                            .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                    // What to do about it is the first line of "Try next
+                    // time", below — one list of next steps, not one here and
+                    // more scattered through Insights.
                 } else {
                     Text(momentWithoutOne(moment.status))
                         .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
@@ -265,6 +269,103 @@ struct OverviewTab: View {
             return "This recording doesn\u{2019}t read as a class being taught, so there is no moment to pick out."
         default:
             return "Nothing in this lesson stood out as needing a second look."
+        }
+    }
+
+    private struct NextTimeItem: Identifiable {
+        let id: String
+        let from: String
+        let text: String
+        /// How the item is introduced once it leaves the report: a content
+        /// note is an observation, and a plan needs telling what to do with it.
+        var lead: String? = nil
+    }
+
+    /// Everything the report suggests, in one list — mirrors
+    /// `buildNextTimeItems` in AudioCoaching.tsx. "Worth double-checking"
+    /// notes are left out: a caution about possible content errors is not
+    /// something to build a lesson on.
+    private var nextTimeItems: [NextTimeItem] {
+        var items: [NextTimeItem] = []
+        func add(_ id: String, _ from: String, _ text: String?, lead: String? = nil) {
+            guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return }
+            items.append(NextTimeItem(id: id, from: from, text: text, lead: lead))
+        }
+        let moment = session.momentToRevisit
+        add("moment", "Moment to revisit", moment?.status == "found" ? moment?.tryNext : nil)
+        add("talk", "Talk & Participation", session.nextSteps?.talk)
+        add("questions", "Questioning & Checking", session.nextSteps?.questions)
+        let notes = session.contentNotes?.notes ?? []
+        add("content-further", "Take further · Clarity & Content",
+            notes.first { $0.label == "Where it could go further" }?.text, lead: "Take this further")
+        add("climate", "Climate & Routines", session.nextSteps?.climate)
+        add("content-worked", "Keep doing · Clarity & Content",
+            notes.first { $0.label == "What worked" }?.text, lead: "Keep doing this")
+        return items
+    }
+
+    private func planningPrefill(_ chosen: [NextTimeItem]) -> PlanningPrefill {
+        let lines = chosen.map { "- \($0.lead.map { "\($0): " } ?? "")\($0.text)" }
+        return PlanningPrefill(
+            subject: session.classSubject ?? session.lessonContent?.subject,
+            gradeLevel: session.gradeLevel,
+            additionalContext: (["From the debrief of my last lesson with this class, build these into the plan:"] + lines).joined(separator: "\n"),
+            source: "\(session.displayTitle), \(formattedDate(session.sessionDate))"
+        )
+    }
+
+    @ViewBuilder private var tryNextTimeCard: some View {
+        let items = nextTimeItems
+        if !items.isEmpty {
+            let chosen = items.filter { !skippedForPlan.contains($0.id) }
+            tintedCard(AppTheme.card) {
+                Text("Try next time").font(.heading(.headline)).foregroundStyle(AppTheme.forest)
+                Text("What this report suggests, from every section, in one list")
+                    .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                ForEach(items) { item in
+                    Button {
+                        guard choosingForPlan else { return }
+                        if skippedForPlan.contains(item.id) { skippedForPlan.remove(item.id) } else { skippedForPlan.insert(item.id) }
+                    } label: {
+                        HStack(alignment: .top, spacing: 10) {
+                            if choosingForPlan {
+                                Image(systemName: skippedForPlan.contains(item.id) ? "square" : "checkmark.square.fill")
+                                    .foregroundStyle(AppTheme.forest)
+                            }
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.from.uppercased()).font(.caption2.weight(.bold)).foregroundStyle(AppTheme.terracotta600)
+                                Text(item.text).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 6)
+                }
+                Divider().padding(.vertical, 6)
+                if !choosingForPlan {
+                    Text("Would you like to plan your next class with this in mind?")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Yes, choose what to include") { choosingForPlan = true }
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
+                        .padding(.top, 2)
+                } else {
+                    NavigationLink {
+                        LessonPlanningView(prefill: planningPrefill(chosen))
+                    } label: {
+                        Text(chosen.count == items.count ? "Plan the next lesson with all of these →" : "Plan the next lesson with \(chosen.count) of these →")
+                    }
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
+                    .disabled(chosen.isEmpty)
+                    Button("Not now") { choosingForPlan = false }
+                        .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                        .padding(.top, 2)
+                }
+            }
+            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
         }
     }
 

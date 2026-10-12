@@ -206,6 +206,14 @@ struct AudioStudentTurnFocus: Decodable {
     let kind: String
 }
 
+/// One thing to do next lesson per Insights section, written with the class
+/// summary. A section with nothing worth suggesting is nil.
+struct AudioNextSteps: Decodable {
+    let talk: String?
+    let questions: String?
+    let climate: String?
+}
+
 /// The one moment most worth a second look, chosen by a read of the transcript
 /// (server/src/lib/momentToRevisit.ts). Only "found" carries a moment; "thin",
 /// "not_a_lesson" and "clear" are the read saying it has none to give.
@@ -278,6 +286,8 @@ struct AudioSession: Decodable, Identifiable {
     let studentTalkFocus: AudioStudentTalkFocus?
     /// Null until the lesson has been read for it — the Summary tab asks.
     let momentToRevisit: AudioMomentToRevisit?
+    /// Null on reports summarised before this existed.
+    let nextSteps: AudioNextSteps?
     /// A plain-language "Lesson at a glance" paragraph, generated after analysis.
     let classSummary: String?
     /// Narrative for the Checks & Feedback section, written in the same model
@@ -301,7 +311,7 @@ struct AudioSession: Decodable, Identifiable {
              durationSec, transcribeStartedAt, failureReason,
              teacherTalkPct, studentTalkPct, questionCount, higherOrderPct, avgWaitTimeSec,
              cfuCount, metricsDetail, highlights, phases, questionLog, reflectConversation, lessonContent,
-             contentNotes, rubricLens, hardLook, studentTalkFocus, momentToRevisit, classSummary, checksNarrative, climateNarrative, contentNarrative, talkNarrative, questionsNarrative, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
+             contentNotes, rubricLens, hardLook, studentTalkFocus, momentToRevisit, nextSteps, classSummary, checksNarrative, climateNarrative, contentNarrative, talkNarrative, questionsNarrative, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -345,6 +355,7 @@ struct AudioSession: Decodable, Identifiable {
         hardLook = try? container.decodeIfPresent(AudioHardLook.self, forKey: .hardLook)
         studentTalkFocus = try? container.decodeIfPresent(AudioStudentTalkFocus.self, forKey: .studentTalkFocus)
         momentToRevisit = try? container.decodeIfPresent(AudioMomentToRevisit.self, forKey: .momentToRevisit)
+        nextSteps = try? container.decodeIfPresent(AudioNextSteps.self, forKey: .nextSteps)
         classSummary = try? container.decodeIfPresent(String.self, forKey: .classSummary)
         checksNarrative = try? container.decodeIfPresent(String.self, forKey: .checksNarrative)
         climateNarrative = try? container.decodeIfPresent(String.self, forKey: .climateNarrative)
@@ -409,6 +420,7 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
     var hardLook: AudioHardLook? { session.hardLook }
     var studentTalkFocus: AudioStudentTalkFocus? { session.studentTalkFocus }
     var momentToRevisit: AudioMomentToRevisit? { session.momentToRevisit }
+    var nextSteps: AudioNextSteps? { session.nextSteps }
     var classSummary: String? { session.classSummary }
     var strengths: String? { session.strengths }
     var growthAreas: String? { session.growthAreas }

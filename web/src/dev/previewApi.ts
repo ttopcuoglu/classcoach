@@ -307,6 +307,18 @@ function previewReport(): Json {
       ],
       subject: 'world history',
     },
+    contentNotes: {
+      subject: 'world history',
+      notes: [
+        { id: 'n1', label: 'What worked', text: 'Tying the labour shortage to supply and demand gave students a tool they already had.', timestampSec: 420, excerpt: 'Remember what we said about supply and demand last week.' },
+        { id: 'n2', label: 'Where it could go further', text: 'The step from higher wages to the end of serfdom was named but not explained.', timestampSec: 900, excerpt: 'And that is basically the end of serfdom.' },
+        { id: 'n3', label: 'Worth double-checking', text: 'The death toll was given as one third; estimates range more widely.', timestampSec: 1100, excerpt: 'About a third of Europe.' },
+      ],
+    },
+    nextSteps: {
+      talk: 'After explaining why wages rose, have pairs retell the chain of causes to each other before you move on.',
+      questions: "Follow your next recall question with 'what makes you say that?' and take a second student's view.",
+    },
     momentToRevisit: {
       generatedAt: new Date().toISOString(),
       status: 'found',

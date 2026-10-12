@@ -687,6 +687,11 @@ model AudioSession {
   contentNarrative String?
   talkNarrative    String?
   questionsNarrative String?
+  // { talk?, questions?, climate? } — one concrete thing to do next lesson per
+  // Insights section, written alongside the narratives above so each follows
+  // from the paragraph the teacher reads. A section with nothing worth
+  // suggesting is simply absent. Null on reports summarized before this.
+  nextSteps        Json?
 
   strengths        String?
   growthAreas      String?

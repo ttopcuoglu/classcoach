@@ -1623,7 +1623,9 @@ Then WAYS INTO THIS TOPIC: up to three real-world connections a teacher could us
 
 Then THE CONTENT NOTE: one warm paragraph opening the Clarity & Content section — what this lesson was about and what the teacher did with the content: the explanation, the model or representation, the examples, the vocabulary, the connections drawn. Lead with what worked; this paragraph opens the section, it does not grade it. Name the actual ideas and terms, never "the content" in the abstract.
 
-Respond with exactly these six blocks and nothing else. The summary block
+Then NEXT TIME, three separate lines: one for Talk & Participation, one for Questioning & Checking, one for Climate & Routines. Each is ONE concrete thing to do in the next lesson, following directly from what that section's note said — the words to say or the task to set, specific to this lesson's material, 30 words at most, starting with a verb. "After your next 'why' question, give pairs thirty seconds before taking an answer." Not a principle, not "consider", and not a repeat of another section's line. Where a section's evidence does not support a suggestion — too little was audible, or nothing there needs changing — write NONE: a made-up suggestion is worse than none, and most lessons will not earn all three.
+
+Respond with exactly these blocks and nothing else. The summary block
 holds all three paragraphs described above, separated by blank lines — one
 paragraph back is a failure, not a concise answer:
 <class_summary>
@@ -1651,8 +1653,19 @@ Your content note.
 <connection_ideas>
 one connection per line, or NONE
 </connection_ideas>
+<talk_next>one line, or NONE</talk_next>
+<questions_next>one line, or NONE</questions_next>
+<climate_next>one line, or NONE</climate_next>
 ${CORE_COACHING_RULES}
 ${TRANSCRIPT_RELIABILITY_NOTICE}`
+}
+
+/// One "next time" line, or null. NONE is the model declining, and anything
+/// that ran long is a paragraph that wandered into a slot meant for a line.
+function nextStepLine(raw: string | null): string | null {
+  const line = raw?.replace(/\s+/g, ' ').trim()
+  if (!line || /^NONE\.?$/i.test(line) || line.length > 320) return null
+  return line
 }
 
 function lessonContentField(content: unknown, key: string, nested?: string): string | null {
@@ -1705,12 +1718,7 @@ class UsageLimitError extends Error {}
 /// numbers. It is written once, with the rest of the report, and both clients
 /// now read the same words.
 ///
-/// Returns null when there is nothing to write (over the usage limit, or the
-/// model gave back no summary), so a caller that already has a report can
-/// keep it rather than lose it to this.
-async function writeClassSummary(
-  userId: string,
-  session: {
+type ClassSummarySource = {
     id: string
     durationSec: number | null
     teacherTalkPct: number | null
@@ -1727,26 +1735,12 @@ async function writeClassSummary(
     metricsDetail: unknown
     lessonContent: unknown
     studentTalkFocus?: unknown
-  },
-  segments: Segment[],
-) {
-  const exhibits = buildContentExhibits(segments)
-
-  // Genuinely nothing to summarize — say so plainly, no Claude call, and
-  // cache that answer so this session never re-attempts. This is the
-  // literal "don't sugarcoat" case: a recording too brief or too unclear
-  // to summarize gets told that, not a manufactured paragraph.
-  if (exhibits.length === 0) {
-    return prisma.audioSession.update({
-      where: { id: session.id },
-      data: { classSummary: "This recording didn't capture enough clear speech to summarize what the class covered." },
-      include: { segments: { orderBy: { startSec: 'asc' } } },
-    })
   }
 
-  const denied = await checkAndLogUsage(userId, 'class_summary')
-  if (denied) throw new UsageLimitError(denied)
-
+/// The model call behind the class summary, on its own so a script can see
+/// what comes back for a real lesson without writing it (scripts/tryNextSteps).
+export async function requestClassSummaryText(session: ClassSummarySource, segments: Segment[]): Promise<string> {
+  const exhibits = buildContentExhibits(segments)
   const response = await anthropic.messages.create({
     model: CLAUDE_MODEL,
     // Three paragraphs plus four section notes, each of them longer than the
@@ -1778,10 +1772,38 @@ async function writeClassSummary(
     }),
     messages: [{ role: 'user', content: 'Write the summary now.' }],
   })
-  const text = response.content
+  return response.content
     .filter((block) => block.type === 'text')
     .map((block) => block.text)
     .join('\n')
+}
+
+/// Returns null when there is nothing to write (over the usage limit, or the
+/// model gave back no summary), so a caller that already has a report can
+/// keep it rather than lose it to this.
+async function writeClassSummary(
+  userId: string,
+  session: ClassSummarySource,
+  segments: Segment[],
+) {
+  const exhibits = buildContentExhibits(segments)
+
+  // Genuinely nothing to summarize — say so plainly, no Claude call, and
+  // cache that answer so this session never re-attempts. This is the
+  // literal "don't sugarcoat" case: a recording too brief or too unclear
+  // to summarize gets told that, not a manufactured paragraph.
+  if (exhibits.length === 0) {
+    return prisma.audioSession.update({
+      where: { id: session.id },
+      data: { classSummary: "This recording didn't capture enough clear speech to summarize what the class covered." },
+      include: { segments: { orderBy: { startSec: 'asc' } } },
+    })
+  }
+
+  const denied = await checkAndLogUsage(userId, 'class_summary')
+  if (denied) throw new UsageLimitError(denied)
+
+  const text = await requestClassSummaryText(session, segments)
   flagIfUnsafe(text, 'audioSessions.classSummary')
 
   const checksNarrative = extractTag(text, 'checks_note')
@@ -1797,6 +1819,11 @@ async function writeClassSummary(
   const lessonContent = session.lessonContent as Record<string, unknown> | null
   const classSummary = extractTag(text, 'class_summary')
   if (!classSummary) return null
+  const nextSteps = Object.fromEntries(
+    (['talk', 'questions', 'climate'] as const)
+      .map((key) => [key, nextStepLine(extractTag(text, `${key}_next`))] as const)
+      .filter(([, line]) => line),
+  )
 
   return prisma.audioSession.update({
     where: { id: session.id },
@@ -1808,6 +1835,7 @@ async function writeClassSummary(
       ...(questionsNarrative ? { questionsNarrative: normalizeParagraphs(questionsNarrative) } : {}),
       ...(contentNarrative ? { contentNarrative: normalizeParagraphs(contentNarrative) } : {}),
       ...(connectionIdeas.length > 0 && lessonContent ? { lessonContent: { ...lessonContent, connectionIdeas } } : {}),
+      ...(Object.keys(nextSteps).length > 0 ? { nextSteps } : {}),
     },
     include: { segments: { orderBy: { startSec: 'asc' } } },
   })

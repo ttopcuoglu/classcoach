@@ -8,14 +8,27 @@ import UniformTypeIdentifiers
 /// The chips sit above the scroll rather than inside it, the way Practice's
 /// section chips do, so the assignment tab can bring its own scrolling instead
 /// of nesting one ScrollView inside another.
+/// What a Lesson Debrief suggested, carried into the build form so the next
+/// lesson can be planned around it. The room and the suggestions travel; the
+/// topic never does — the report knows what was taught, not what comes next.
+struct PlanningPrefill {
+    var subject: String?
+    var gradeLevel: String?
+    let additionalContext: String
+    /// Which lesson this came from, for the note above the form.
+    let source: String
+}
+
 struct LessonPlanningView: View {
     @State private var tab: String
+    private let prefill: PlanningPrefill?
 
     /// Lets a caller open straight onto a chip, the way the web's
     /// `/lesson-planning?tab=assignment` does — Home links to the assignment
     /// review rather than to a second, separate Assignment Coach screen.
-    init(initialTab: String = "generate") {
+    init(initialTab: String = "generate", prefill: PlanningPrefill? = nil) {
         _tab = State(initialValue: initialTab)
+        self.prefill = prefill
     }
 
     /// The chip values are unchanged even though the labels are not: they are
@@ -48,7 +61,7 @@ struct LessonPlanningView: View {
                                 title: "Build a lesson",
                                 subtitle: "Start with a topic, or the material you already have. Everything else is optional."
                             )
-                            BuildPanel()
+                            BuildPanel(prefill: prefill)
                         } else {
                             PanelHeader(
                                 eyebrow: "Planning Coach",
@@ -419,6 +432,9 @@ private struct RevertNote: View {
 
 private struct BuildPanel: View {
     @EnvironmentObject private var authManager: AuthManager
+    var prefill: PlanningPrefill? = nil
+    /// The lesson a Debrief's suggestions were carried over from, once landed.
+    @State private var fromDebrief: String?
 
     @State private var topic = ""
     @State private var subject = ""
@@ -498,6 +514,16 @@ private struct BuildPanel: View {
 
     private var form: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if let fromDebrief {
+                Text("Carried over from your Lesson Debrief (\(fromDebrief)): what you chose to build in is under More details, and you can edit it there. Add the topic for the next lesson, then build it.")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.forest)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppTheme.peachTint.opacity(0.4), in: RoundedRectangle(cornerRadius: 14))
+            }
+
             VStack(alignment: .leading, spacing: 4) {
                 Text("Topic or learning goal").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
                 Text("What are you teaching? Enter a topic, learning goal, or paste material.")
@@ -542,7 +568,7 @@ private struct BuildPanel: View {
                             .font(.caption).foregroundStyle(AppTheme.textSecondary)
                         TextEditor(text: $additionalContext)
                             .scrollContentBackground(.hidden)
-                            .frame(minHeight: 60)
+                            .frame(minHeight: fromDebrief == nil ? 60 : 180)
                             .padding(8)
                             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
                             .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
@@ -742,6 +768,18 @@ private struct BuildPanel: View {
     // MARK: Actions
 
     private func prefillFromProfile() {
+        // Arriving from a Lesson Debrief: the room wins over the profile
+        // default — it is the class that was recorded — and what the teacher
+        // chose lands in "Anything else", where it can be read and changed
+        // before anything is built. Once, so coming back to this screen never
+        // retypes over an edit.
+        if let prefill, fromDebrief == nil {
+            if let value = prefill.subject, !value.isEmpty { subject = value }
+            if let value = prefill.gradeLevel, !value.isEmpty { gradeLevel = value }
+            additionalContext = prefill.additionalContext
+            showMoreDetails = true
+            fromDebrief = prefill.source
+        }
         guard let user = authManager.currentUser else { return }
         if gradeLevel.isEmpty { gradeLevel = profileList(user.gradeLevels).first ?? "" }
         if subject.isEmpty { subject = profileList(user.subjects).first ?? "" }

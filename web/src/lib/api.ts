@@ -871,6 +871,10 @@ export type AudioSession = {
   // Null or absent until the lesson has been read for it; the Summary tab
   // asks the first time it is opened.
   momentToRevisit?: AudioMomentToRevisit | null
+  // One thing to do next lesson per Insights section, written with the class
+  // summary. A section with nothing worth suggesting is absent; the whole
+  // field is absent on reports summarized before this existed.
+  nextSteps?: { talk?: string; questions?: string; climate?: string } | null
   classSummary: string | null
   strengths: string | null
   growthAreas: string | null
