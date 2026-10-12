@@ -979,6 +979,18 @@ export type CoachHandoff = {
       }
 }
 
+// The box on Home. One sentence in; a short reply and at most one door
+// out, whose path already carries the handoff id and `build=1` when the
+// server decided the form has enough to run. See server/routes/coachRoute.
+export type CoachRouteAnswer = {
+  reply: string
+  offer: { key: string; label: string; path: string } | null
+}
+
+export function askCoachRoute(text: string): Promise<CoachRouteAnswer> {
+  return request('/api/coach/route', { method: 'POST', body: JSON.stringify({ text }) })
+}
+
 export function getCoachHandoff(id: string): Promise<CoachHandoff> {
   return request(`/api/coach-handoff/${id}`)
 }

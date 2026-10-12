@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { askCoachRoute, type CoachRouteAnswer } from '../lib/api'
 
 // Wivo on Home: the front desk for a teacher who has not chosen a tool.
 //
@@ -12,17 +13,6 @@ import { Link } from 'react-router-dom'
 // The character is the face of Coach, not a second personality: same voice,
 // same name in the copy. It has no nav entry, which is the whole point — it
 // is for the teacher who does not already know where to go.
-
-type Offer = {
-  key: string
-  label: string
-  path: string
-}
-
-type RouteAnswer = {
-  reply: string
-  offer: Offer | null
-}
 
 // Three, and they appear only while the box is focused and empty — a
 // teacher who knows what to ask never sees them, and they float over the
@@ -52,7 +42,7 @@ const POSE: Record<Phase, string> = {
 export default function AskWivo() {
   const [phase, setPhase] = useState<Phase>('idle')
   const [text, setText] = useState('')
-  const [answer, setAnswer] = useState<RouteAnswer | null>(null)
+  const [answer, setAnswer] = useState<CoachRouteAnswer | null>(null)
   const [focused, setFocused] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -62,14 +52,13 @@ export default function AskWivo() {
     setFocused(false)
     setPhase('thinking')
     try {
-      const res = await fetch('/api/coach/route', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text: question }),
-      })
-      setAnswer((await res.json()) as RouteAnswer)
-    } catch {
-      setAnswer({ reply: 'Coach could not be reached just now. The tools in the sidebar all still work.', offer: null })
+      setAnswer(await askCoachRoute(question))
+    } catch (error) {
+      // The server says why when it has a reason worth reading — a monthly
+      // ceiling, a line too long for one box. Those are more use to a
+      // teacher than a generic failure, so they are shown as written.
+      const message = error instanceof Error && error.message ? error.message : null
+      setAnswer({ reply: message ?? 'Coach could not be reached just now. The tools in the sidebar all still work.', offer: null })
     }
     setPhase('answered')
   }

@@ -84,6 +84,8 @@ export type UsageAction =
   // file for what it's about so the form can suggest a topic and subject.
   | 'lesson_plan_adapt'
   | 'lesson_plan_infer_context'
+  // The box on Home: one short reply and a door. See routes/coachRoute.ts.
+  | 'coach_route'
 
 // Every turn-based call in the two free-forever features. Kept as one list so
 // a future action in either area doesn't silently fall back into the flat cap.
@@ -102,6 +104,9 @@ export const CONVERSATIONAL_ACTIONS: readonly UsageAction[] = [
   'conversation_practice_generate',
   'conversation_practice_feedback',
   'conversation_practice_chat',
+  // Home's router. Free for everyone, one turn, and cheap — but it is a
+  // model call per question, so it belongs in a bucket rather than none.
+  'coach_route',
 ]
 
 // A user already loaded by the caller. The live coaching turns select this
