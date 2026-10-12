@@ -5,8 +5,8 @@ import { Prisma } from '../generated/prisma/client.ts'
 import { checkFeatureAccess, countUsageLogActionsThisMonth, LESSON_PLANNING_ACTIONS } from '../lib/billing.ts'
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { CORE_COACHING_RULES } from '../lib/coachPersona.ts'
-import { NoTextFoundError, UnsupportedFileError } from '../lib/extractErrors.ts'
-import { ExtractionTimeoutError, ExtractionTooHeavyError, extractInChild } from '../lib/extractInChild.ts'
+import { sendExtractionError } from '../lib/extractHttp.ts'
+import { extractInChild } from '../lib/extractInChild.ts'
 import type { DocBlock } from '../lib/exportModels.ts'
 import { extractTag } from '../lib/extractTag.ts'
 import { buildDocx } from '../lib/docxBuilder.ts'
@@ -498,32 +498,7 @@ assignmentCoachRouter.post('/extract-text', upload.single('file'), async (req, r
     const { text } = await extractInChild(req.file.buffer, req.file.originalname)
     res.json({ text })
   } catch (error) {
-    if (error instanceof UnsupportedFileError) {
-      res.status(400).json({ error: error.message })
-      return
-    }
-    if (error instanceof NoTextFoundError) {
-      res.status(422).json({ error: error.message })
-      return
-    }
-    if (error instanceof ExtractionTimeoutError) {
-      console.error('[assignment-coach] extract timed out:', req.file.originalname, req.file.size)
-      res.status(422).json({
-        error: 'That took too long to read — a photo or a long scan can. Try a smaller file, or paste the text instead.',
-      })
-      return
-    }
-    // Too big to read in the memory one document gets. Said as the fact it
-    // is, with the way round it, rather than as a server error — because
-    // from the teacher's side it is a fact about their file.
-    if (error instanceof ExtractionTooHeavyError) {
-      console.error('[assignment-coach] extract ran out of room:', req.file.originalname, req.file.size)
-      res.status(422).json({
-        error:
-          'That file was too heavy to read — a long scan usually is. Try exporting it as a smaller PDF, sending it in two halves, or pasting the text.',
-      })
-      return
-    }
+    if (sendExtractionError(res, error, 'assignment-coach', req.file)) return
     console.error('[assignment-coach] extract-text failed:', error)
     res.status(502).json({ error: 'Could not read that file. Please try pasting the text instead.' })
   }

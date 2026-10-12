@@ -38,6 +38,29 @@ export function cachedSystem(stable: string, volatile: string): SystemPrompt {
   return blocks
 }
 
+// A second breakpoint, for a block that is identical across every turn of ONE
+// conversation but different for every teacher — today just an attached
+// document. It does not belong in `stable` (it would cost every teacher's cache
+// hit on the surface) and it does not belong in `volatile` either: an attached
+// lesson plan runs to a few thousand tokens, Talk It Through allows thirty
+// turns, and re-sending it uncached thirty times is the whole document paid for
+// thirty times over. Cached, it is paid once and read back at a tenth of that.
+//
+// Ordering matters and is not arbitrary: `stable` stays first so its cache
+// entry is still the shared one, warm on other teachers' traffic. The document
+// sits behind it with its own breakpoint, so the prefix a given conversation
+// reuses is persona + document, and `volatile` — memory, experience, the
+// greeting instruction — stays last and uncached.
+export function cachedSystemWithDocument(stable: string, document: string, volatile: string): SystemPrompt {
+  if (!document) return cachedSystem(stable, volatile)
+  const blocks: SystemPrompt = [
+    { type: 'text', text: stable, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: document, cache_control: { type: 'ephemeral' } },
+  ]
+  if (volatile) blocks.push({ type: 'text', text: volatile })
+  return blocks
+}
+
 // `cacheRead: 0` on a surface that should be caching is the only symptom of a
 // prefix that drifted — logged on every coaching call so it shows up in Render's
 // logs without anyone having to go looking.
