@@ -13,6 +13,7 @@ import { buildExperienceContextBlock } from '../lib/experience.ts'
 import { TALK_REPLY_WORD_BUDGET } from '../lib/replyBudget.ts'
 import { streamCoachReply, trimIfTruncated } from '../lib/coachStream.ts'
 import { buildFeelingBlock } from '../lib/feelingSteer.ts'
+import { talkWordBudget } from '../lib/rehearsalTurn.ts'
 import { buildFollowUpContextBlock, checkInQuestionFor, nextCheckInDate } from '../lib/followUps.ts'
 import {
   appendTurn,
@@ -522,7 +523,10 @@ debriefRouter.post('/talk/stream', async (req, res) => {
     ),
     maxTokens: (isGreeting ? 150 : TALK_REPLY_MAX_TOKENS) + (memoryOn ? MEMORY_UPDATE_TOKEN_BUFFER : 0),
     // The greeting is two sentences of hello; it needs no budget.
-    wordBudget: isGreeting ? undefined : TALK_REPLY_WORD_BUDGET,
+    // A turn that is setting up a conversation the teacher has to have gets
+    // more room, because the offer to rehearse it lives at the END of the
+    // reply and the ordinary budget was cutting it off. See rehearsalTurn.ts.
+    wordBudget: isGreeting ? undefined : talkWordBudget(trimmed, [], TALK_REPLY_WORD_BUDGET),
     messages: [{ role: 'user', content: trimmed }],
     safetyLabel: 'debrief.talk',
     persist: async (reply) => {
@@ -636,7 +640,7 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
     maxTokens: writeMemory ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
     // Only the spoken surface has a budget: Lesson Debrief's Reflect chat is
     // read, where length costs nothing but screen.
-    wordBudget: isTalk ? TALK_REPLY_WORD_BUDGET : undefined,
+    wordBudget: isTalk ? talkWordBudget(trimmed, existing, TALK_REPLY_WORD_BUDGET) : undefined,
     messages: toClaudeMessages(existing, trimmed),
     safetyLabel: isTalk ? 'debrief.talk.chat' : 'debrief.ask.chat',
     persist: (reply) =>
