@@ -392,6 +392,83 @@ function debrief(id: string, source: string, text: string, days: number): Json {
   }
 }
 
+// --- Wivo's one-turn router on Home -----------------------------------
+//
+// Canned stand-in for the real thing: server/src/lib/betterTool.ts already
+// does this for Telegram, where the tag rides along on a reply Coach is
+// generating anyway. Here it is a single call, so the keyword rules below
+// are only a shape to look at — the real version would be a model turn with
+// the same <better_tool> roster.
+//
+// The roster is the five from betterTool plus Talk It Through, which is not
+// a key in Telegram because there the chat IS Talk It Through. On Home it
+// has to be a door like any other.
+const WIVO_ROUTES: { test: RegExp; reply: string; offer: Json | null }[] = [
+  {
+    test: /record|debrief|talk time|student talk|how did (my|the) (lesson|class)|went badly|went well/i,
+    reply:
+      'That is worth looking at with the actual numbers rather than from memory. Record the next one and Lesson Debrief will show you where the talking went.',
+    offer: { key: 'lesson_debrief', label: 'Open Lesson Debrief', path: '/audio-coaching' },
+  },
+  {
+    test: /parent|guardian|mom|dad|email|write (a|to)|message/i,
+    reply:
+      'I can help you write that. The tone is the hard part — say what happened and what you need them to do, and we will get a draft you would be happy to send.',
+    offer: { key: 'communication_coach', label: 'Write this message', path: '/communications?tool=write' },
+  },
+  {
+    test: /meeting|iep|504|conference|sit down with|talk to (my|the) (principal|coach|admin)/i,
+    reply:
+      'Worth preparing rather than walking in cold. We can work out what you want out of it, and what reactions to expect.',
+    offer: { key: 'communication_coach', label: 'Get ready for this', path: '/communications?tool=prepare' },
+  },
+  {
+    test: /assignment|worksheet|rubric|chatgpt|ai[- ]proof|cheat/i,
+    reply:
+      'Let us look at the task itself. Most of the time a small change to what students have to show makes the shortcut useless.',
+    offer: { key: 'assignment_coach', label: 'Review this assignment', path: '/lesson-planning?tab=assignment' },
+  },
+  {
+    test: /nervous|rehearse|practice|what do i say|how do i respond|confront/i,
+    reply:
+      'Better to say it once to me than for the first time to them. Pick how hard you want it and we will run it.',
+    offer: { key: 'practice', label: 'Open Practice', path: '/coach-chat' },
+  },
+]
+
+function wivoRoute(text: string): Json {
+  // Planning is special: the form has a 45-minute default the teacher would
+  // normally see and edit. Behind a button that default is a silent guess,
+  // so a lesson request with no period length gets the question asked out
+  // loud and a door that opens the form WITHOUT running it. Same rule that
+  // 0a91aef put on the Telegram handoff.
+  if (/lesson|plan|teach|unit|tomorrow|next week|slides/i.test(text)) {
+    const minutes = text.match(/(\d{2,3})\s*(?:-|\s)?(?:min|minute)/i)
+    return minutes
+      ? {
+          reply: `A ${minutes[1]}-minute lesson — I have enough to start. I will build it out and you can change anything after.`,
+          offer: { key: 'planning_coach', label: 'Build this lesson', path: '/lesson-planning?build=1' },
+        }
+      : {
+          reply:
+            'I can build that out. One thing first, because it changes the whole shape: how long is the period? The form is filled in — add the length and hit build.',
+          offer: { key: 'planning_coach', label: 'Open Planning Coach', path: '/lesson-planning' },
+        }
+  }
+
+  for (const route of WIVO_ROUTES) {
+    if (route.test.test(text)) return { reply: route.reply, offer: route.offer }
+  }
+
+  // No tool is better than this conversation — which is most of the time.
+  // The honest answer is to answer, not to send them somewhere.
+  return {
+    reply:
+      'That sounds like one to think out loud about rather than hand to a tool. Five minutes talking it through usually finds the one next thing.',
+    offer: { key: 'talk_it_through', label: 'Talk it through', path: '/talk-to-me' },
+  }
+}
+
 // Canned answers, matched longest-path-first so '/api/lesson-plans/x/adapt'
 // does not get answered by '/api/lesson-plans'.
 function answer(path: string, method: string, body: Json): Json | Json[] | null {
@@ -552,6 +629,7 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
         }]
       : []
   }
+  if (path.startsWith('/api/coach/route')) return wivoRoute(String(body.text ?? ''))
   return null
 }
 

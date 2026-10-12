@@ -29,9 +29,17 @@ import {
   type Debrief,
   type ScenarioAttempt,
 } from '../lib/api'
+import AskWivo from '../components/AskWivo'
 import { pickDailyTip, type Mood } from '../lib/dailyTips'
 import { isExperienced } from '../lib/experience'
 import { ACCENTS, ACCENT_CYCLE } from '../components/report'
+
+// Dev-only preview of Wivo, the Home router: `/?preview=1&wivo=1`. It is on
+// the real route inside the real Layout, with the real cards under it,
+// because a mock outside the shell cannot tell you whether a greeting
+// pushes "Pick up where you left off" below the fold — which is the main
+// thing to judge. The build replaces `import.meta.env.DEV` with `false`.
+const WIVO_PREVIEW = import.meta.env.DEV && new URLSearchParams(window.location.search).has('wivo')
 
 type IconComponent = (props: { className?: string }) => React.ReactElement
 
@@ -566,7 +574,7 @@ export default function Home() {
           the "next step" suggestion steps aside until it's handled. */}
       <div
         className={`grid gap-6 rounded-3xl bg-forest p-6 text-cream sm:p-8 lg:items-center ${
-          checkIn ? '' : 'lg:grid-cols-[1.3fr_1fr]'
+          checkIn || WIVO_PREVIEW ? '' : 'lg:grid-cols-[1.3fr_1fr]'
         }`}
       >
         <div>
@@ -576,9 +584,16 @@ export default function Home() {
             {firstName ? `, ${firstName}` : ''}
             <span className="text-gold">.</span>
           </h1>
-          <p className="mt-1.5 text-cream/70">What would help you feel more prepared today?</p>
+          {/* Wivo replaces this line rather than sitting under it: the
+              subtitle was already asking the question, so the mascot turns
+              a decorative sentence into the one input that answers it. */}
+          {WIVO_PREVIEW ? (
+            <AskWivo />
+          ) : (
+            <p className="mt-1.5 text-cream/70">What would help you feel more prepared today?</p>
+          )}
         </div>
-        {!checkIn && (
+        {!checkIn && !WIVO_PREVIEW && (
           <div className="flex flex-col gap-4 rounded-2xl bg-cream/5 p-5 ring-1 ring-cream/10">
             <div className="flex items-start gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gold text-forest">
