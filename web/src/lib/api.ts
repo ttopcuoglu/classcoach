@@ -711,6 +711,7 @@ export type AudioReflectMessage = { role: 'user' | 'assistant'; text: string; cr
 
 // Keyword/phrase-matched flags and quotes only — never scored.
 export type AudioTopicTerm = { term: string; count: number }
+export type AudioKeyTerm = { term: string; teacherCount: number; studentCount: number }
 export type AudioLessonContent = {
   // string[] is the shape stored by sessions analyzed before speaker-split
   // word clouds shipped — rendered as the old flat chip list, never crashes.
@@ -728,6 +729,9 @@ export type AudioLessonContent = {
   summary?: string | null
   connections: AudioQuote[]
   vocabulary: AudioQuote[]
+  // The lesson's academic vocabulary and who said it. Absent on reports
+  // analyzed before this shipped, and when the lesson had none.
+  keyTerms?: AudioKeyTerm[]
   subject: string | null
 }
 

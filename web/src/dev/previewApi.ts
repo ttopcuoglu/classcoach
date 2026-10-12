@@ -298,6 +298,13 @@ function previewReport(): Json {
       summary: 'The Black Death and its effects on labour and wages in medieval Europe.',
       connections: [{ quote: 'Remember what we said about supply and demand last week.', timestampSec: 420 }],
       vocabulary: [{ quote: 'Overgrazing just means too many animals on too little land.', timestampSec: 240 }],
+      keyTerms: [
+        { term: 'black death', teacherCount: 9, studentCount: 2 },
+        { term: 'wages', teacherCount: 7, studentCount: 3 },
+        { term: 'supply and demand', teacherCount: 5, studentCount: 0 },
+        { term: 'feudalism', teacherCount: 3, studentCount: 0 },
+        { term: 'serf', teacherCount: 2, studentCount: 1 },
+      ],
       subject: 'world history',
     },
     classSummary: 'The lesson traced the Black Death through to its effect on wages, opening with a stated objective and returning twice to prior work on supply and demand.',

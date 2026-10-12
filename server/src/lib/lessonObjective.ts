@@ -19,6 +19,7 @@
 import { anthropic, CLAUDE_MODEL } from './anthropic.ts'
 import type { LessonContentResult, Segment } from './audioAnalysis.ts'
 import { extractTag } from './extractTag.ts'
+import { countKeyTerms, parseKeyTermLines } from './keyTerms.ts'
 
 /// Enough of a lesson to know what it was about. A 35-minute class runs well
 /// under this; the cap exists so an unusually long recording degrades by
@@ -58,7 +59,9 @@ Most lessons do not contain one. A teacher who starts working without announcing
 
 5. DEFINED VOCABULARY. Up to two moments where the teacher gave the meaning of a term, however informally — "equivalent just means they're worth the same", "we call that the numerator". Again, exact sentences and timestamps.
 
-For 3 and 5, ${NONE} is a real answer. Plenty of lessons contain neither, and inventing one is worse than reporting none.
+6. KEY TERMS. Up to ten subject-specific terms this lesson is teaching or leaning on — the academic vocabulary a student would need in order to talk about this content: "photosynthesis", "numerator", "supply and demand". One to three words each, written the way the teacher said them. Not general classroom words ("worksheet", "partner", "question"), and not everyday words unless this lesson gives them a technical meaning. Only terms the teacher actually said.
+
+For 3, 5 and 6, ${NONE} is a real answer. Plenty of lessons contain none, and inventing one is worse than reporting none.
 
 Write nothing outside these tags:
 <objective>the exact sentence, or ${NONE}</objective>
@@ -70,7 +73,10 @@ one exact sentence per line, each followed by " @ m:ss", or ${NONE}
 </connections>
 <vocabulary>
 one exact sentence per line, each followed by " @ m:ss", or ${NONE}
-</vocabulary>`
+</vocabulary>
+<key_terms>
+one term per line, or ${NONE}
+</key_terms>`
 
 function parseTimestamp(value: string | null): number | null {
   if (!value) return null
@@ -169,6 +175,9 @@ export type ObjectiveFromModel = {
   subject: string | null
   connections: Quoted[]
   vocabulary: Quoted[]
+  /// Candidates only — see keyTerms.ts, which keeps the ones the teacher
+  /// said and does the counting.
+  keyTerms: string[]
 }
 
 /// Each line is "the teacher's sentence @ m:ss". Verified the same way the
@@ -216,16 +225,16 @@ function parseSubject(raw: string | null): string | null {
 /// detector's answer — a report that loses one line is fine, a transcription
 /// that fails because of this is not.
 export async function readLessonObjective(segments: Segment[]): Promise<ObjectiveFromModel> {
-  const empty: ObjectiveFromModel = { quote: null, timestampSec: null, summary: null, subject: null, connections: [], vocabulary: [] }
+  const empty: ObjectiveFromModel = { quote: null, timestampSec: null, summary: null, subject: null, connections: [], vocabulary: [], keyTerms: [] }
   const transcript = transcriptForModel(segments)
   if (transcript.length < 200) return empty
 
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 500,
+      max_tokens: 700,
       // This model defaults to adaptive extended thinking drawn from the same
-      // budget; left on, a 500-token reply can come back with no text blocks.
+      // budget; left on, a short reply can come back with no text blocks.
       thinking: { type: 'disabled' },
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: transcript }],
@@ -243,9 +252,10 @@ export async function readLessonObjective(segments: Segment[]): Promise<Objectiv
     const { flat, offsets } = flattenTeacherSpeech(segments)
     const connections = parseQuotedLines(extractTag(text, 'connections'), flat, offsets, 2)
     const vocabulary = parseQuotedLines(extractTag(text, 'vocabulary'), flat, offsets, 2)
+    const keyTerms = parseKeyTermLines(extractTag(text, 'key_terms'))
 
     if (!rawQuote || rawQuote.toUpperCase().includes(NONE)) {
-      return { quote: null, timestampSec: null, summary, subject, connections, vocabulary }
+      return { quote: null, timestampSec: null, summary, subject, connections, vocabulary, keyTerms }
     }
 
     const claimedTime = parseTimestamp(extractTag(text, 'objective_time'))
@@ -262,6 +272,7 @@ export async function readLessonObjective(segments: Segment[]): Promise<Objectiv
         subject,
         connections,
         vocabulary,
+        keyTerms,
       }
     }
 
@@ -269,11 +280,11 @@ export async function readLessonObjective(segments: Segment[]): Promise<Objectiv
     // rather than from the model.
     const recovered = quoteFromSegment(segments, claimedTime, rawQuote)
     if (recovered) {
-      return { ...recovered, summary, subject, connections, vocabulary }
+      return { ...recovered, summary, subject, connections, vocabulary, keyTerms }
     }
 
     console.warn('[lessonObjective] discarded a quote that is in neither the transcript nor the segment it cited')
-    return { quote: null, timestampSec: null, summary, subject, connections, vocabulary }
+    return { quote: null, timestampSec: null, summary, subject, connections, vocabulary, keyTerms }
   } catch (error) {
     console.error('[lessonObjective] failed:', error)
     return empty
@@ -288,7 +299,11 @@ export async function enrichLessonContent(
   segments: Segment[],
 ): Promise<LessonContentResult> {
   const read = await readLessonObjective(segments)
-  if (!read.quote && !read.summary && !read.subject && read.connections.length === 0 && read.vocabulary.length === 0) {
+  const keyTerms = countKeyTerms(read.keyTerms, segments)
+  if (
+    !read.quote && !read.summary && !read.subject &&
+    read.connections.length === 0 && read.vocabulary.length === 0 && keyTerms.length === 0
+  ) {
     return lessonContent
   }
 
@@ -317,6 +332,9 @@ export async function enrichLessonContent(
     // nothing of falls back, since the scan never invents.
     connections: read.connections.length > 0 ? read.connections : lessonContent.connections,
     vocabulary: read.vocabulary.length > 0 ? read.vocabulary : lessonContent.vocabulary,
+    // No fallback: the phrase scan cannot tell a term from a word, which is
+    // the whole reason the model is asked. Absent means the section is hidden.
+    ...(keyTerms.length > 0 ? { keyTerms } : {}),
     statedObjective: read.quote
       ? { found: true, quote: read.quote, timestampSec: read.timestampSec, source: 'model' }
       : foundNothing,

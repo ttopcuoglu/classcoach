@@ -49,6 +49,14 @@ struct AudioTopicTerm: Decodable {
 
 /// `topicTerms` can be the legacy flat `[String]` shape or the newer
 /// teacher/student split — both decoded, caller picks whichever is non-nil.
+/// One of the lesson's academic terms and how often each side said it —
+/// chosen and counted by the server (server/src/lib/keyTerms.ts).
+struct AudioKeyTerm: Decodable {
+    let term: String
+    let teacherCount: Int
+    let studentCount: Int
+}
+
 struct AudioLessonContent: Decodable {
     let topicTermsFlat: [String]?
     let topicTermsSplit: TeacherStudentTerms?
@@ -66,6 +74,9 @@ struct AudioLessonContent: Decodable {
     /// Ways into this topic from the world students live in — ideas for next
     /// time, not a reading of the lesson. Absent on older reports.
     let connectionIdeas: [String]?
+    /// Absent on reports analysed before this shipped, and when the lesson
+    /// had none.
+    let keyTerms: [AudioKeyTerm]?
 
     struct TeacherStudentTerms: Decodable {
         let teacher: [AudioTopicTerm]
@@ -73,7 +84,7 @@ struct AudioLessonContent: Decodable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case topicTerms, statedObjective, summary, connections, vocabulary, subject, connectionIdeas
+        case topicTerms, statedObjective, summary, connections, vocabulary, subject, connectionIdeas, keyTerms
     }
     private enum ObjectiveKeys: String, CodingKey {
         case found, quote, timestampSec, source
@@ -104,6 +115,7 @@ struct AudioLessonContent: Decodable {
         vocabulary = (try? container.decode([AudioQuote].self, forKey: .vocabulary)) ?? []
         subject = try? container.decode(String.self, forKey: .subject)
         connectionIdeas = try? container.decode([String].self, forKey: .connectionIdeas)
+        keyTerms = try? container.decode([AudioKeyTerm].self, forKey: .keyTerms)
     }
 }
 

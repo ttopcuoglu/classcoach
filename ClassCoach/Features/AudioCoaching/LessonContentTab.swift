@@ -18,6 +18,50 @@ struct LessonContentTab: View {
     @State private var error: String?
     @State private var dismissed: Set<String> = []
 
+    /// The lesson's own terms and who said them — the iOS twin of the web's
+    /// "Academic vocabulary" table. Hidden when there are none, like the
+    /// connections below it.
+    private func academicVocabulary(_ terms: [AudioKeyTerm]) -> some View {
+        // Three is where "you kept saying it" starts; fewer is a mention.
+        let unheard = terms.filter { $0.teacherCount >= 3 && $0.studentCount == 0 }.map { "\u{201C}\($0.term)\u{201D}" }
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("ACADEMIC VOCABULARY")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(AppTheme.textSecondary)
+            Text("The terms this lesson was teaching, and how many times each was said aloud.")
+                .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
+                GridRow {
+                    Text("TERM")
+                    Text("YOU").gridColumnAlignment(.trailing)
+                    Text("STUDENTS").gridColumnAlignment(.trailing)
+                }
+                .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
+                ForEach(terms, id: \.term) { t in
+                    Divider()
+                    GridRow {
+                        Text(t.term).font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text("\(t.teacherCount)").font(.subheadline).monospacedDigit().foregroundStyle(AppTheme.textPrimary)
+                        Text("\(t.studentCount)").font(.subheadline.weight(t.studentCount == 0 ? .regular : .semibold)).monospacedDigit()
+                            .foregroundStyle(t.studentCount == 0 ? AppTheme.textSecondary : AppTheme.forest)
+                    }
+                }
+            }
+            .padding(14)
+            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+            if !unheard.isEmpty {
+                Text("You said \(ListFormatter.localizedString(byJoining: unheard)) three or more times\(unheard.count == 1 ? "" : " each"), and no student was heard saying \(unheard.count == 1 ? "it" : "them").")
+                    .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text("Counted from the transcript, so read these as \u{201C}at least\u{201D}: unusual terms are the words a recording most often mishears, and student counts include only what the microphone picked up.")
+                .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     private var visibleNotes: [AudioContentNote] {
         (session.contentNotes?.notes ?? []).filter { !dismissed.contains($0.id) }
     }
@@ -27,6 +71,10 @@ struct LessonContentTab: View {
             // Every other Insights page opens with its paragraph; this one
             // opened with a bare heading and a button.
             CoachNoteView(text: session.contentNarrative)
+
+            if let terms = session.lessonContent?.keyTerms, !terms.isEmpty {
+                academicVocabulary(terms)
+            }
 
             // Only when the lesson actually contained one — "None detected"
             // over a lesson built on a cooking example said more about the

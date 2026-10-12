@@ -4525,12 +4525,59 @@ function LessonContentTab({
   const connections = lessonContent?.connections ?? []
 
   const connectionIdeas = lessonContent?.connectionIdeas ?? contentNotes?.connectionIdeas ?? []
+  const keyTerms = lessonContent?.keyTerms ?? []
+  // Three is where "you kept saying it" starts; one or two uses is a mention.
+  const unheard = keyTerms.filter((t) => t.teacherCount >= 3 && t.studentCount === 0).map((t) => `"${t.term}"`)
 
   return (
     <div className="flex flex-col gap-5">
       {/* Every other Insights page opens with its paragraph; this one opened
           with a bare heading and a button. */}
       {narrative && <CoachNote text={narrative} />}
+
+      {/* The terms are chosen by the read of the transcript and counted by
+          the server (keyTerms.ts). Hidden when there are none, like the
+          connections below — older reports have no list at all. */}
+      {keyTerms.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Academic vocabulary</h2>
+          <p className="text-sm text-ink-soft">
+            The terms this lesson was teaching, and how many times each was said aloud.
+          </p>
+          <div className="overflow-hidden rounded-xl border border-hairline bg-cream-card">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-hairline text-xs uppercase tracking-wide text-ink-soft">
+                  <th scope="col" className="px-4 py-2 text-left font-semibold">Term</th>
+                  <th scope="col" className="px-4 py-2 text-right font-semibold">You</th>
+                  <th scope="col" className="px-4 py-2 text-right font-semibold">Students</th>
+                </tr>
+              </thead>
+              <tbody>
+                {keyTerms.map((t) => (
+                  <tr key={t.term} className="border-b border-hairline last:border-b-0">
+                    <th scope="row" className="px-4 py-2 text-left font-medium text-ink">{t.term}</th>
+                    <td className="px-4 py-2 text-right tabular-nums text-ink">{t.teacherCount}</td>
+                    <td className={`px-4 py-2 text-right tabular-nums ${t.studentCount === 0 ? 'text-ink-soft' : 'font-semibold text-forest'}`}>
+                      {t.studentCount}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {unheard.length > 0 && (
+            <p className="text-sm text-ink">
+              You said {new Intl.ListFormat('en', { type: 'conjunction' }).format(unheard)} three or more times
+              {unheard.length === 1 ? '' : ' each'}, and no student was heard saying {unheard.length === 1 ? 'it' : 'them'}.
+            </p>
+          )}
+          <p className="text-xs text-ink-soft">
+            Counted from the transcript, so read these as "at least": unusual terms are the words a recording most
+            often mishears, and student counts include only what the microphone picked up.
+          </p>
+        </div>
+      )}
 
       {/* Only when the lesson actually contained one. The old section printed
           "None detected" over a lesson built on a cooking example, which said

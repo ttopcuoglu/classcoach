@@ -242,6 +242,9 @@ export type LessonContentResult = {
   summary?: string | null
   connections: { quote: string; timestampSec: number }[]
   vocabulary: { quote: string; timestampSec: number }[]
+  /// The lesson's academic vocabulary and who used it — see keyTerms.ts.
+  /// Absent on reports analyzed before this shipped, and when none was found.
+  keyTerms?: { term: string; teacherCount: number; studentCount: number }[]
   subject: string | null
 }
 
