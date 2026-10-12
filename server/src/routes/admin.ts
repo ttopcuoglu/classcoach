@@ -429,7 +429,17 @@ async function computeOverview(req: Request, res: Response) {
     where: { ...relatedUserScope },
     include: { scenario: true },
   })
-  const debriefs = await prisma.debrief.findMany({ where: { category: { not: null }, ...relatedUserScope } })
+  // Two columns, not the whole row: this is a tally, and the rows it was
+  // pulling carried every conversation's full transcript — and, since
+  // Talk It Through started taking a document, the text of that too — for
+  // every teacher in scope, to read `category` off each one. Nothing leaked
+  // (only the tally is returned), but it is a school's worth of transcripts
+  // held in memory for a count. The conversationPrep tally below has always
+  // done this correctly.
+  const debriefs = await prisma.debrief.findMany({
+    where: { category: { not: null }, ...relatedUserScope },
+    select: { category: true, userId: true },
+  })
 
   // Every category is always present, even at zero — a category with no
   // tallied attempts is a confirmed zero (a complete count, not a sample),

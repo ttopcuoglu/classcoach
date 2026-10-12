@@ -306,6 +306,12 @@ debriefRouter.get('/', async (req, res) => {
       ...(source === 'ask_tab' ? { OR: [{ source: 'ask_tab' }, { source: null }] } : typeof source === 'string' ? { source } : {}),
     },
     orderBy: { createdAt: 'desc' },
+    // An attached document can run to 12k characters and nothing on the client
+    // reads it — the list is titles and dates. Coach reads it back off the row
+    // itself on every turn, so leaving it out here costs nothing and keeps the
+    // conversations list from carrying a copy of every document the teacher
+    // has ever attached.
+    omit: { attachmentText: true },
   })
   res.json(debriefs)
 })
