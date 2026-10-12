@@ -99,10 +99,6 @@ struct OverviewTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // Right before the summary text, so the choice to listen is offered
-            // before the reading starts rather than after it is finished.
-            ListenInsteadButton(session: session)
-
             if summarizing && session.classSummary == nil {
                 ProgressRing(
                     active: true,
