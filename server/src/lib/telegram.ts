@@ -136,6 +136,18 @@ export async function downloadFile(fileId: string): Promise<Buffer> {
   return Buffer.from(await response.arrayBuffer())
 }
 
+// What a teacher reads in an empty chat, above the Start button, before
+// they have said anything. Up to 512 characters.
+export function setMyDescription(description: string): Promise<unknown> {
+  return call('setMyDescription', { description })
+}
+
+// The line on the bot's profile page, and in the preview when someone
+// shares its link. Up to 120 characters.
+export function setMyShortDescription(shortDescription: string): Promise<unknown> {
+  return call('setMyShortDescription', { short_description: shortDescription })
+}
+
 export function setWebhook(url: string, secretToken: string): Promise<unknown> {
   return call('setWebhook', { url, secret_token: secretToken, allowed_updates: ['message', 'callback_query'] })
 }

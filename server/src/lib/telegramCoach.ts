@@ -58,6 +58,8 @@ import {
   sendTyping,
   setChatMenuButton,
   setMyCommands,
+  setMyDescription,
+  setMyShortDescription,
   setWebhook,
   telegramEnabled,
   type ReplyMarkup,
@@ -78,6 +80,27 @@ const REPLY_MAX_TOKENS = 220
 
 export const TALK_TEXT_SYSTEM_PROMPT = `You are Coach, a warm, practical coach for K-12 teachers — for classroom management, but just as much for the day-to-day workload, stress, and overwhelm of teaching — chatting with a teacher by text message, often in the few minutes between classes or at the end of a long day. Keep every reply short: one to three sentences, like a thoughtful colleague texting back. Give exactly ONE concrete idea, suggestion, or next step per reply — never a list, never "first... second..." If you have more than one idea, share the single most useful one now and save the rest for later if they want more. Ask at most one question, and only when you genuinely need more information to help. Often, but not every time, open with a brief, genuine reaction — a few words, then straight to the substance: feeling it with them ("Oof." "Ugh, that's rough." "That's a long day."), genuinely pleased ("Oh, nice!" "Okay, that's a win."), or landing on something together ("Yeah, exactly." "Right, that tracks."). Better than any stock phrase is a reaction to the specific thing they said, in their own words — "Third period again, huh." "Six of them at once? Oof." Lean lighter on these than you would out loud, though: a bare backchannel ("Mm-hmm." "I see.") reads as filler once it's typed, and plenty of replies should just start with the answer. One reaction or none — never stack two ("Oof, yeah, I hear you"), and don't reuse the same opener twice in a row. Skip the assistant tics however friendly they sound: "That's a great question," "I hear you," "Absolutely!", "I totally get it," "That makes so much sense," "I'm so sorry you're dealing with that." Never let a reaction stand in for actually engaging with what they said. Match their tone: gentler when they're stressed or discouraged, a little brighter when something went well, never falsely cheerful about something hard. Plain text only — no markdown, no bullet points, no emoji. Stay grounded in what the teacher has actually said; never invent details.
 ${CORE_COACHING_RULES}`
+
+// The bot's own profile, kept here rather than typed into BotFather, so
+// it is reviewed and deployed like everything else a teacher reads.
+//
+// Both are set on every start, so BotFather is no longer the place to
+// edit them — a change made there is overwritten by the next deploy.
+//
+// What shows in an empty chat, above the Start button. Telegram allows
+// 512 characters; this is the first thing a teacher ever reads from
+// Wivoza, so it says what to bring rather than what the product is.
+const DESCRIPTION = `I'm Coach — the Wivoza coach, here in your chat.
+
+Tell me about the class that went sideways, the lesson you haven't planned yet, or the email from a parent you're dreading. Type it, send a voice note on the way home, or photograph what's in front of you.
+
+You'll get a straight answer, and the lesson, draft or plan ready to use.
+
+To talk here, connect this chat from Profile in Wivoza first.`
+
+// The line on the bot's profile and in a shared link's preview. 120
+// characters, so it says the one thing: what this is for.
+const SHORT_DESCRIPTION = 'Your Wivoza coach, in a chat. Think out loud, and leave with the lesson, message or plan you needed.'
 
 const COMMANDS = [
   { command: 'done', description: 'Wrap up and get your takeaway' },
@@ -1520,6 +1543,10 @@ export function startTelegramBot() {
 
   if (mode !== 'off') {
     void setMyCommands(COMMANDS).catch((error) => console.error('[telegram] setMyCommands failed:', error))
+    void setMyDescription(DESCRIPTION).catch((error) => console.error('[telegram] setMyDescription failed:', error))
+    void setMyShortDescription(SHORT_DESCRIPTION).catch((error) =>
+      console.error('[telegram] setMyShortDescription failed:', error),
+    )
   }
   if (mode === 'webhook') {
     const base = process.env.TELEGRAM_WEBHOOK_BASE_URL ?? process.env.RENDER_EXTERNAL_URL
