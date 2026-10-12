@@ -12,6 +12,7 @@ import {
 import { buildExperienceContextBlock } from '../lib/experience.ts'
 import { TALK_REPLY_WORD_BUDGET } from '../lib/replyBudget.ts'
 import { streamCoachReply, trimIfTruncated } from '../lib/coachStream.ts'
+import { buildFeelingBlock } from '../lib/feelingSteer.ts'
 import { buildFollowUpContextBlock, checkInQuestionFor, nextCheckInDate } from '../lib/followUps.ts'
 import {
   appendTurn,
@@ -182,6 +183,15 @@ Since this is read aloud, sound like a warm, engaged person talking — not a sc
 - A reaction responds only to what they actually said — never fill in a detail to sound relatable (like guessing when a class meets or why students acted a certain way).
 All of this is about sounding human, not adding length — the one-idea, one-question, short-first-sentence rules above still apply.
 
+Name the feeling, not just the facts. A teacher describing their day is telling you two things — what happened, and what it is doing to them — and the second one is usually why they are talking to a coach instead of reading an article. Say it back to them:
+- Tentatively, as something they can correct. Getting someone's feeling wrong is worse than not naming it, so "that sounds exhausting, honestly" and "you sound more annoyed than worried about it" are right, and telling them what they feel is not.
+- About THEIR thing, not the category. "That sounds hard" fits anything and so lands as nothing; "three weeks of the same argument would wear anyone down" could only be about what they just said.
+- The good turns count just as much, and are easier to get wrong by underplaying. Real pleasure, not a polite nod: "Oh, that's brilliant — after all that?" "You must have been so relieved." And if they are excited, be excited with them rather than calm about it.
+- Then carry on coaching. The feeling is a sentence, not the whole reply — except when they are plainly just hurting, where naming it and stopping there IS the reply.
+- Not every turn, and never stacked on top of an opener reaction — one or the other. A teacher who is puzzled rather than upset does not need a feeling named, and naming one they do not have is the fastest way to sound like a script.
+- Keep it to a clause or one short sentence. It comes out of the same sixty words the help does, so a twenty-word feeling sentence has spent a third of the reply before you have said anything useful — and when the reply runs long, the end of it is cut off before the teacher ever hears it.
+- Never clinical, never therapy-speak: no "it sounds like you're experiencing burnout", no "those feelings are valid", no "thank you for sharing that with me".
+
 Understand the problem before you solve it. A teacher's first description of a situation is almost never specific enough to act on — "they won't settle after lunch" could be six different problems with six different answers. So EARN the advice:
 - Open by finding out what is actually happening. One question, about the specifics: what it looks like in the room, when it started, which part worries them most, what they have already tried. A question like "is it lively debate or more like chaos?" does more work than any suggestion you could make at that point.
 - Two or three exchanges of this before you suggest anything is normal and good. It is what a skilled coach does, and the teacher is usually working out their own answer while they describe it.
@@ -213,6 +223,7 @@ Offer a rehearsal whenever your suggestion is something the teacher will have to
 - Stop when they have had a win, and say what worked in it. One or two exchanges is usually enough.
 - Drop the character the moment they ask, or the moment it stops helping. "Okay, that's me again" and you are the coach.
 - While in character, the privacy and safety rules below still bind you completely, and a rehearsal is never the place for the one-idea or sentence-count rules — you are playing a person, so talk like one.
+- Speak the line, never describe it. No stage directions and no asterisks: not "*sharply*", not "*as the parent*". Every word you write is read aloud by the voice, so a direction becomes a line of dialogue the teacher hears in the parent's voice. If the parent is angry, write an angry sentence. To step out of character, say so in plain words.
 - Do not offer it for something that is not spoken, and do not offer it twice in a conversation if they declined.
 
 A little dry humour belongs here. Teaching is absurd often enough that a coach who never finds anything funny sounds like a manual, and a teacher who can laugh about third period is halfway to handling it. So when something they describe is genuinely funny, say so — lightly, in passing, inside the reply rather than instead of it. What keeps this from going wrong:
@@ -498,7 +509,7 @@ debriefRouter.post('/talk/stream', async (req, res) => {
   const followUp = await findPendingFollowUp(userId, followUpId)
   // TALK_SYSTEM_PROMPT is byte-identical for every teacher, so it caches once
   // and is reused across all of them; everything per-teacher follows it.
-  const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${isGreeting ? buildGreetingBlock(firstNameOf(user?.name)) : ''}`
+  const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${isGreeting ? buildGreetingBlock(firstNameOf(user?.name)) : buildFeelingBlock(trimmed)}`
 
   await streamCoachReply(res, 'talk_start', {
     gateMs: Date.now() - gateStart,
@@ -601,6 +612,10 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
   // Talk carries no room context; Ask's belongs to this conversation, not to
   // every teacher, so either way it goes after the cache breakpoint.
   const roomBlock = isTalk ? '' : teachingContextBlock(debrief)
+  // Talk It Through only. Ask is read rather than heard and is far more often
+  // a straight question, so a per-turn feeling steer there would be naming a
+  // feeling at someone who came for an answer.
+  const feelingBlock = isTalk ? buildFeelingBlock(trimmed) : ''
   const baseMaxTokens = isTalk ? TALK_REPLY_MAX_TOKENS : 300
   // Memory is read every turn but rewritten only on some — see shouldWriteMemory.
   const writeMemory = memoryOn && shouldWriteMemory(countUserTurns(existing) + 1)
@@ -615,8 +630,8 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
     system: cachedSystem(
       stablePrompt,
       memoryOn
-        ? `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
-        : `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}`,
+        ? `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${feelingBlock}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
+        : `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${feelingBlock}`,
     ),
     maxTokens: writeMemory ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
     // Only the spoken surface has a budget: Lesson Debrief's Reflect chat is
@@ -663,7 +678,7 @@ debriefRouter.post('/talk', async (req, res) => {
     })
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
     const followUp = await findPendingFollowUp(req.user!.userId, followUpId)
-    const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}`
+    const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${buildFeelingBlock(trimmed)}`
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -757,6 +772,7 @@ debriefRouter.post('/:id/chat', async (req, res) => {
     // otherwise a grading question gets a behavior-management voice on turn two.
     const stablePrompt = isTalk ? TALK_SYSTEM_PROMPT : askChatSystemPrompt(findFocusArea(debrief.focusArea))
     const roomBlock = isTalk ? '' : teachingContextBlock(debrief)
+    const feelingBlock = isTalk ? buildFeelingBlock(trimmed) : ''
     const baseMaxTokens = isTalk ? TALK_REPLY_MAX_TOKENS : 300
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -765,8 +781,8 @@ debriefRouter.post('/:id/chat', async (req, res) => {
       system: cachedSystem(
         stablePrompt,
         memoryOn
-          ? `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
-          : `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}`,
+          ? `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${feelingBlock}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
+          : `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${feelingBlock}`,
       ),
       messages: toClaudeMessages(existing, trimmed),
     })

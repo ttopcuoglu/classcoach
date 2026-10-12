@@ -6,6 +6,7 @@ import { stripTag } from './extractTag.ts'
 import { cacheStats, type SystemPrompt } from './promptCache.ts'
 import { admitsSentence, countWords } from './replyBudget.ts'
 import { reconcileTail, takeCompleteSentences, visibleSoFar } from './sentenceStream.ts'
+import { stripStageDirections } from './spokenText.ts'
 import { prefetchSpeech } from './speechCache.ts'
 import { startTiming } from './turnTiming.ts'
 
@@ -152,7 +153,9 @@ export async function streamCoachReply(res: Response, label: string, opts: Strea
 
     stream.on('text', (delta) => {
       raw += delta
-      const visible = visibleSoFar(raw)
+      // Before anything measures, speaks or saves it: a stage direction the
+      // voice would read out loud is not part of the reply. See spokenText.ts.
+      const visible = stripStageDirections(visibleSoFar(raw))
       const { sentences, rest } = takeCompleteSentences(visible.slice(consumed))
       if (sentences.length === 0) return
       if (spoken.length === 0) timing.mark('first_sentence')
@@ -184,7 +187,7 @@ export async function streamCoachReply(res: Response, label: string, opts: Strea
       .map((block) => block.text)
       .join('\n')
     flagIfUnsafe(text, opts.safetyLabel)
-    const reply = trimIfTruncated(stripTag(text, 'memory_update'), message.stop_reason)
+    const reply = stripStageDirections(trimIfTruncated(stripTag(text, 'memory_update'), message.stop_reason))
 
     if (!reply) {
       // A reply that came back empty rather than a call that failed, so this
