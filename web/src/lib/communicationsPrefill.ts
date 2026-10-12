@@ -52,18 +52,6 @@ export type AssignmentRedesignPrefill = {
   extraNote?: string
 }
 
-// What a Lesson Debrief found, carried into Planning Coach's build form so the
-// next lesson can be planned around it. The room (subject, grade) and the
-// finding travel; the topic never does — the report knows what was taught,
-// not what comes next.
-export type PlanningPrefill = {
-  subject?: string
-  gradeLevel?: string
-  additionalContext: string
-  /// Which lesson this came from, for the note above the form.
-  source: string
-}
-
 const KEYS = {
   write: 'wivoza.prefill.write',
   prepare: 'wivoza.prefill.prepare',
@@ -71,7 +59,6 @@ const KEYS = {
   review: 'wivoza.prefill.review',
   ask: 'wivoza.prefill.ask',
   assignmentRedesign: 'wivoza.prefill.assignmentRedesign',
-  planning: 'wivoza.prefill.planning',
 } as const
 
 function setPrefill<T>(key: string, value: T) {
@@ -106,6 +93,3 @@ export const takeAskPrefill = () => takePrefill<AskPrefill>(KEYS.ask)
 
 export const setAssignmentRedesignPrefill = (value: AssignmentRedesignPrefill) => setPrefill(KEYS.assignmentRedesign, value)
 export const takeAssignmentRedesignPrefill = () => takePrefill<AssignmentRedesignPrefill>(KEYS.assignmentRedesign)
-
-export const setPlanningPrefill = (value: PlanningPrefill) => setPrefill(KEYS.planning, value)
-export const takePlanningPrefill = () => takePrefill<PlanningPrefill>(KEYS.planning)

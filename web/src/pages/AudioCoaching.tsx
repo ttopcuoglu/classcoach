@@ -11,7 +11,6 @@ import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { UPLOAD_STAGE, transcribeEstimateSec, transcribeHint, transcribeStage } from '../lib/transcribeStages'
 import { HATCH_STYLE } from '../lib/chartPatterns'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
-import { setPlanningPrefill } from '../lib/communicationsPrefill'
 import { createPlaybackQueue, primeAudioElement, splitIntoSentences, type PlaybackQueue } from '../lib/voicePlayback'
 import {
   createAudioSession,
@@ -3215,24 +3214,6 @@ function SummaryTab({
           })
         }
       />
-
-      {momentToRevisit ? (
-        <CarryForwardCard
-          session={session}
-          finding={formatCandidateHeadline(momentToRevisit)}
-          whyItMatters={momentToRevisit.whyItMatters}
-          metric={momentToRevisit.focusMetric}
-        />
-      ) : (
-        focusSnapshot && (
-          <CarryForwardCard
-            session={session}
-            finding={focusSnapshot.statusLine ?? focusSnapshot.capturedLine}
-            whyItMatters={focusSnapshot.tryNextTip}
-            metric={focusMetric}
-          />
-        )
-      )}
     </div>
   )
 }
@@ -6175,83 +6156,6 @@ function narrativeForSection(session: AudioSession, section: InsightsSection): s
     default:
       return null
   }
-}
-
-// Where each metric is rehearsed in Practice: the area chip and the
-// sub-category under it (lib/focusAreas.ts).
-const FOCUS_METRIC_PRACTICE: Record<FocusMetric, { area: string; category: string }> = {
-  talkRatio: { area: 'teaching_and_learning', category: 'questioning_discussion' },
-  higherOrderPct: { area: 'teaching_and_learning', category: 'questioning_discussion' },
-  avgWaitTime: { area: 'teaching_and_learning', category: 'questioning_discussion' },
-  followUpQuestionCount: { area: 'teaching_and_learning', category: 'questioning_discussion' },
-  cfuCount: { area: 'teaching_and_learning', category: 'checking_understanding' },
-  feedbackSpecificity: { area: 'teaching_and_learning', category: 'feedback_and_grading' },
-  directiveCount: { area: 'teaching_and_learning', category: 'explaining_clearly' },
-  redirectionCount: { area: 'classroom_management', category: 'disruption' },
-  toneRatio: { area: 'classroom_management', category: 'disruption' },
-  nameMentionCount: { area: 'classroom_management', category: 'disengagement' },
-}
-
-// The report's one priority, carried out of the report: into Planning Coach,
-// where the next lesson can be built around it, and into Practice, where the
-// move can be rehearsed first. Talking it over already has a home here — the
-// Reflect tab — so this holds only the two tools that had no way in.
-//
-// Planning Coach gets the finding itself, because the next lesson is for this
-// same class. Practice gets only the kind of moment: its scenarios are
-// invented ones, and a real lesson's details have no place in them.
-function CarryForwardCard({
-  session,
-  finding,
-  whyItMatters,
-  metric,
-}: {
-  session: AudioSessionWithSegments
-  finding: string
-  whyItMatters: string
-  metric: FocusMetric | null
-}) {
-  const practice = metric ? FOCUS_METRIC_PRACTICE[metric] : null
-  const tryNext = metric ? FOCUS_METRIC_TRY_NEXT[metric] : null
-  const source = `${sessionTitle(session)}, ${new Date(session.sessionDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
-
-  function carryToPlanning() {
-    setPlanningPrefill({
-      subject: session.classSubject ?? undefined,
-      gradeLevel: session.gradeLevel ?? undefined,
-      additionalContext: [
-        `From the debrief of my last lesson with this class: ${finding.replace(/[.\s]+$/, '')}.`,
-        // The tip already says what to do; the reason only stands in when
-        // there is no tip for this finding.
-        tryNext ? `Build this into the plan: ${tryNext}` : whyItMatters,
-      ].join(' '),
-      source,
-    })
-  }
-
-  return (
-    <div className="rounded-2xl border border-hairline bg-cream-card px-5 py-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Take it into your next lesson</p>
-      <p className="mt-1.5 text-sm text-ink">{finding}</p>
-      <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2">
-        <Link
-          to="/lesson-planning"
-          onClick={carryToPlanning}
-          className="text-sm font-medium text-forest hover:text-terracotta-600"
-        >
-          Plan the next lesson around this →
-        </Link>
-        {practice && (
-          <Link
-            to={`/coach-chat?area=${practice.area}&category=${practice.category}`}
-            className="text-sm font-medium text-forest hover:text-terracotta-600"
-          >
-            Rehearse a moment like it →
-          </Link>
-        )}
-      </div>
-    </div>
-  )
 }
 
 function DiscussFooter({ label, onClick }: { label: string; onClick: () => void }) {

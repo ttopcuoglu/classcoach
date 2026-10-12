@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import PracticeConversation from './PracticeConversation'
 import TryItOut from './TryItOut'
 import { DEFAULT_TEACHING_CONTEXT, type TeachingContext } from '../components/TeachingContextFields'
-import { FOCUS_AREAS, findFocusArea, focusAreaForCategory } from '../lib/focusAreas'
+import { FOCUS_AREAS, findFocusArea } from '../lib/focusAreas'
 import { SUBJECTS, bandFromProfile, subjectFromProfile } from '../lib/teachingContext'
 import { getProfile } from '../lib/api'
 
@@ -34,11 +34,6 @@ import { getProfile } from '../lib/api'
 export default function Practice() {
   const [searchParams, setSearchParams] = useSearchParams()
   const area = findFocusArea(searchParams.get('area'))
-  // Lesson Debrief's "Rehearse this" link names a sub-category as well as its
-  // area. Only read on arrival, and only when it belongs to that area.
-  const arrivingCategory = searchParams.get('category')
-  const initialCategory =
-    arrivingCategory && area && focusAreaForCategory(arrivingCategory)?.value === area.value ? arrivingCategory : undefined
   // No section chosen keeps the scenario engine: the coach picking for you only
   // makes sense where it can pick, and a role-play needs to know who you're facing.
   const isConversation = area?.engine === 'conversation'
@@ -63,7 +58,6 @@ export default function Practice() {
     const params = new URLSearchParams(searchParams)
     if (next) params.set('area', next)
     else params.delete('area')
-    params.delete('category')
     setSearchParams(params)
   }
 
@@ -127,7 +121,7 @@ export default function Practice() {
       {isConversation ? (
         <PracticeConversation />
       ) : (
-        <TryItOut focusArea={area?.value} initialCategory={initialCategory} room={room} onRoomChange={setRoom} />
+        <TryItOut focusArea={area?.value} room={room} onRoomChange={setRoom} />
       )}
     </div>
   )
