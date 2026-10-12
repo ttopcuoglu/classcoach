@@ -1018,13 +1018,50 @@ function plainWordCommand(text: string): 'done' | 'new' | null {
 }
 
 // Inline buttons carry "action:id" — see the wrap-up offer and check-ins.
+// Every action a button can carry. Listed so an unknown one can be
+// answered rather than ignored: a tap that does nothing AND says nothing
+// is the worst thing this chat can do, because the teacher cannot tell
+// whether it worked, whether to tap again, or whether Wivoza is broken.
+const BUTTON_ACTIONS = [
+  'wrap',
+  'nowrap',
+  'new',
+  'ideas',
+  'pdf',
+  'lesson',
+  'draft',
+  'meeting',
+  'review',
+  'later',
+  'skip',
+]
+
 async function handleButtonTap(chatId: string, tap: { id: string; data?: string; message?: { message_id: number } }) {
   await answerButtonTap(tap.id).catch(() => {})
   const user = await prisma.user.findUnique({ where: { telegramChatId: chatId }, select: USER_SELECT })
-  if (!user || user.suspendedAt) return
-  if (tap.message) await removeInlineButtons(chatId, tap.message.message_id).catch(() => {})
+  // Unlinked, or suspended: this used to return in silence, so every
+  // button in the chat was dead and nothing said why.
+  if (!user) {
+    await sendMessage(chatId, NOT_LINKED_TEXT, NO_KEYBOARD)
+    return
+  }
+  if (user.suspendedAt) {
+    await sendMessage(chatId, "This Wivoza account isn't active right now.", NO_KEYBOARD)
+    return
+  }
 
   const [action, id] = (tap.data ?? '').split(':')
+  // Buttons stay in the history forever, so one can outlive the version
+  // of the bot that knew what it meant.
+  if (!BUTTON_ACTIONS.includes(action)) {
+    await reply(chatId, "That button is from an older version of me and doesn't do anything any more. Tell me what you need and we'll pick it up from here.")
+    return
+  }
+
+  // Only once we know the tap is going somewhere — otherwise the buttons
+  // disappear and nothing replaces them.
+  if (tap.message) await removeInlineButtons(chatId, tap.message.message_id).catch(() => {})
+
   if (action === 'wrap') await finishConversation(chatId, user, id)
   else if (action === 'nowrap') await reply(chatId, 'No problem. Tap "Wrap up" whenever you\'re ready.')
   else if (action === 'new') await startNewTopic(chatId, user.id)
