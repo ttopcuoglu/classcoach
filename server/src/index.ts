@@ -11,7 +11,6 @@ import { authRouter } from './routes/auth.ts'
 import { billingRouter } from './routes/billing.ts'
 import { billingWebhookRouter } from './routes/billingWebhook.ts'
 import { coachHandoffRouter } from './routes/coachHandoff.ts'
-import { coachRouteRouter } from './routes/coachRoute.ts'
 import { conversationPlanRouter } from './routes/conversationPlan.ts'
 import { conversationPrepRouter } from './routes/conversationPrep.ts'
 import { debriefRouter } from './routes/debrief.ts'
@@ -118,7 +117,6 @@ app.use('/api/scenarios', requireAuth, scenariosRouter)
 app.use('/api/attempts', requireAuth, attemptsRouter)
 app.use('/api/profile', requireAuth, profileRouter)
 app.use('/api/coach-handoff', requireAuth, coachHandoffRouter)
-app.use('/api/coach', requireAuth, coachRouteRouter)
 app.use('/api/debriefs', requireAuth, debriefRouter)
 app.use('/api/follow-ups', requireAuth, followUpsRouter)
 app.use('/api/parent-messages', requireAuth, parentMessageRouter)

@@ -8,6 +8,7 @@ import {
   LessonPlanIcon,
   MailIcon,
   MicIcon,
+  PlayIcon,
 } from '../components/icons'
 import {
   getAssignmentCoachSessions,
@@ -24,16 +25,30 @@ import {
   type CoachFollowUp,
   type ConversationPlan,
   type LessonPlan,
+  type ExperienceLevel,
   type Debrief,
   type ScenarioAttempt,
 } from '../lib/api'
-import AskWivo from '../components/AskWivo'
 import { pickDailyTip, type Mood } from '../lib/dailyTips'
+import { isExperienced } from '../lib/experience'
 import { ACCENTS, ACCENT_CYCLE } from '../components/report'
 
 type IconComponent = (props: { className?: string }) => React.ReactElement
 
+type NextStep = {
+  icon: IconComponent
+  title: string
+  description: string
+  linkLabel: string
+  to: string
+}
+
 const DAY_MS = 24 * 60 * 60 * 1000
+// Below this many days of total inactivity, the "Next" card still shows
+// whichever step would otherwise apply — just with a "welcome back" framing
+// instead of pretending nothing happened.
+const WELCOME_BACK_THRESHOLD_DAYS = 14
+
 type Activity =
   | { type: 'scenario'; id: string; createdAt: string; attempt: ScenarioAttempt }
   | { type: 'ask'; id: string; createdAt: string; debrief: Debrief }
@@ -149,6 +164,51 @@ const MOOD_RESPONSES: Record<Mood, { text: string; talk: boolean }> = {
   overwhelmed: { text: "You don't have to sort it all out alone. A few minutes with Coach can help you find the one next thing.", talk: true },
 }
 
+type ToolKey = 'debrief' | 'talk' | 'practice' | 'planning' | 'communication'
+
+// Once a teacher has opened everything, "Keep the momentum going — practice
+// another scenario" was the card they saw from then on, forever, whatever they
+// had or hadn't touched. These are the same five tools said as an invitation
+// rather than a discovery, and the quietest one gets it — so using the tool it
+// names is what moves the card on to another.
+const TOOL_NUDGES: Record<ToolKey, NextStep> = {
+  debrief: {
+    icon: MicIcon,
+    title: 'Record another lesson',
+    description: 'It has been a while since your last one. See what has changed in your room since.',
+    linkLabel: 'Record a lesson',
+    to: '/audio-coaching',
+  },
+  talk: {
+    icon: HeadsetIcon,
+    title: 'Talk something through',
+    description: 'Something on your mind from this week? Think out loud about it — five minutes is enough.',
+    linkLabel: 'Start talking',
+    to: '/talk-to-me',
+  },
+  practice: {
+    icon: PlayIcon,
+    title: 'Practice a scenario',
+    description: 'Rehearse a moment and get coaching on your words, before it happens for real.',
+    linkLabel: 'Practice now',
+    to: '/coach-chat',
+  },
+  planning: {
+    icon: LessonPlanIcon,
+    title: 'Plan what is coming up',
+    description: 'Build a lesson from a topic, strengthen one you wrote, or review slides and assignments.',
+    linkLabel: 'Open Planning Coach',
+    to: '/lesson-planning',
+  },
+  communication: {
+    icon: MailIcon,
+    title: 'Get ahead of a conversation',
+    description: 'Write a message, prepare for a meeting, or get a second read on a draft.',
+    linkLabel: 'Open Communication Coach',
+    to: '/communications',
+  },
+}
+
 const ACTION_CARDS = [
   {
     to: '/audio-coaching',
@@ -256,13 +316,29 @@ function Donut({ pct }: { pct: number }) {
 export default function Home() {
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [name, setName] = useState<string | null>(null)
+  const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel | null>(null)
   const [activity, setActivity] = useState<Activity[]>([])
   const [sessions, setSessions] = useState<AudioSession[]>([])
+  // Unfiltered, newest-first — used only to drive the "Next" card's
+  // priority logic (has any lesson been recorded, is the latest one
+  // reflected on), separate from `sessions` above which is filtered/sorted
+  // for the classroom-pulse chart.
+  const [allSessions, setAllSessions] = useState<AudioSession[]>([])
   // Planning Coach is one tool in the nav and one flag here. Its first three
   // tabs write LessonPlan rows and Review an Assignment writes its own table,
   // so reading only the first of those told a teacher who had reviewed an
   // assignment that they had never opened the tool — the same undercount the
   // admin panel carried until the tools were counted the way the nav has them.
+  // When each tool was last used. Answers both questions the "next step" card
+  // asks — whether a tool has ever been opened, and, once they all have, which
+  // one has gone quietest — where three booleans could only answer the first.
+  // Lesson Debrief is missing here and filled in below from allSessions, which
+  // a different request loads.
+  const [lastUsedAt, setLastUsedAt] = useState<Partial<Record<ToolKey, number>>>({})
+  // Newest createdAt across attempts/debriefs/lesson plans/assignment
+  // sessions/conversation plans — combined with allSessions' own newest
+  // timestamp below to get the true overall last-activity time.
+  const [latestOtherActivityAt, setLatestOtherActivityAt] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [checkIn, setCheckIn] = useState<CoachFollowUp | null>(null)
   const [mood, setMood] = useState<Mood | null>(null)
@@ -272,6 +348,7 @@ export default function Home() {
     getProfile()
       .then((profile) => {
         setName(profile.name)
+        setExperienceLevel(profile.experienceLevel)
         setNeedsOnboarding(!profile.name && !profile.gradeLevels && !profile.subjects)
       })
       .catch(() => {})
@@ -282,6 +359,7 @@ export default function Home() {
 
     getAudioSessions()
       .then((all) => {
+        setAllSessions([...all].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
         const withVoice = all
           .filter((s) => (s.status === 'analyzed' || s.status === 'locked') && s.studentTalkPct != null)
           .sort((a, b) => new Date(a.sessionDate).getTime() - new Date(b.sessionDate).getTime())
@@ -309,6 +387,22 @@ export default function Home() {
         ]
         combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         setActivity(combined.slice(0, RECENT_WORK_LIMIT))
+
+        const newest = (rows: { createdAt: string }[]): number | undefined =>
+          rows.length > 0 ? Math.max(...rows.map((r) => new Date(r.createdAt).getTime())) : undefined
+        setLastUsedAt({
+          // source is what tells the two Debrief-backed tools apart; anything
+          // that isn't a Talk It Through row belongs to the old ask flow.
+          talk: newest(debriefs.filter((d) => d.source === 'talk_to_me')),
+          practice: newest(attempts),
+          // One tool, two tables — Review an Assignment is a tab of it.
+          planning: newest([...lessonPlans, ...assignmentSessions]),
+          communication: newest(conversationPlans),
+        })
+
+        // combined is every non-recording source, newest first, so its head is
+        // already the answer this used to assemble from four separate lists.
+        setLatestOtherActivityAt(combined[0] ? new Date(combined[0].createdAt).getTime() : null)
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -362,11 +456,119 @@ export default function Home() {
   // exactly one recommendation shows at a time. Deliberately does not try
   // to track "which step of Notice/Practice/Try/Reflect you're on" (see
   // COACHING_PATH above) — this only ever names one concrete next action.
+  const completedSessions = allSessions.filter((s) => s.status === 'analyzed' || s.status === 'locked')
+  const latestCompletedSession = completedSessions[0] ?? null
+  // The whole record, with the one tool whose rows arrive on a different
+  // request folded in.
+  const toolsLastUsed: Partial<Record<ToolKey, number>> = {
+    ...lastUsedAt,
+    debrief: latestCompletedSession ? new Date(latestCompletedSession.createdAt).getTime() : undefined,
+  }
+  const latestSessionUnreflected =
+    latestCompletedSession != null &&
+    (!latestCompletedSession.reflectConversation || latestCompletedSession.reflectConversation.length === 0)
+  const hasAnyActivity = activity.length > 0 || allSessions.length > 0
 
+  const experienced = isExperienced(experienceLevel)
+
+  function computeNextStep(): NextStep {
+    // An experienced teacher gets more from seeing their own classroom than
+    // from a rehearsal scenario, so their first step is a recording.
+    if (!hasAnyActivity && experienced) {
+      return {
+        icon: MicIcon,
+        title: 'See what’s really happening in your room',
+        description: 'Record a class and get an honest picture — talk time, questions, wait time, who was heard.',
+        linkLabel: 'Record a lesson',
+        to: '/audio-coaching',
+      }
+    }
+    if (!hasAnyActivity) {
+      return {
+        icon: PlayIcon,
+        title: 'Practice a scenario',
+        description: 'Run a realistic classroom moment and get coaching on your response.',
+        linkLabel: 'Practice now',
+        to: '/coach-chat',
+      }
+    }
+    if (!latestCompletedSession) {
+      return {
+        icon: MicIcon,
+        title: 'Try recording a real lesson',
+        description: 'See how it plays out for real — record a class and turn it into feedback.',
+        linkLabel: 'Record a lesson',
+        to: '/audio-coaching',
+      }
+    }
+    if (latestSessionUnreflected) {
+      return {
+        icon: ChatBubbleIcon,
+        title: 'Reflect on your last lesson',
+        description: 'You recorded a class — talk through what stood out and what to try next.',
+        linkLabel: 'Open Lesson Debrief',
+        to: '/audio-coaching',
+      }
+    }
+    // Nothing to set up and no format to pick, so it is the cheapest of the
+    // "you haven't opened this yet" suggestions to act on — and the one the
+    // nav moved up beside Home. It used to be missing from this list
+    // entirely, which left the catch-all tool as the only one Home never
+    // pointed a teacher at.
+    if (toolsLastUsed.talk == null) {
+      return {
+        icon: HeadsetIcon,
+        title: 'Try Talk It Through',
+        description: "A tool you haven't opened yet — think out loud about anything on your mind, and your coach listens.",
+        linkLabel: 'Open Talk It Through',
+        to: '/talk-to-me',
+      }
+    }
+    // One step for Planning Coach, not one per tab. Review an Assignment is a
+    // tab inside it rather than the separate tool this card used to name, and
+    // Home names tools everywhere else.
+    if (toolsLastUsed.planning == null) {
+      return {
+        icon: LessonPlanIcon,
+        title: 'Try Planning Coach',
+        description:
+          "A tool you haven't opened yet — build a lesson from a topic, strengthen one you wrote, or review slides and assignments.",
+        linkLabel: 'Open Planning Coach',
+        to: '/lesson-planning',
+      }
+    }
+    if (toolsLastUsed.communication == null) {
+      return {
+        icon: MailIcon,
+        title: 'Try Communication Coach',
+        description: "A tool you haven't opened yet — prepare for a meeting or draft a message.",
+        linkLabel: 'Open Communication Coach',
+        to: '/communications',
+      }
+    }
+    // Already touched every tool, so there is nothing left to discover and the
+    // useful thing to name is whatever has gone quietest. Every tool above has
+    // a timestamp by the time this line is reached, so the sort is total.
+    const quietest = (Object.keys(TOOL_NUDGES) as ToolKey[]).reduce((a, b) =>
+      (toolsLastUsed[a] ?? 0) <= (toolsLastUsed[b] ?? 0) ? a : b,
+    )
+    return TOOL_NUDGES[quietest]
+  }
+
+  const nextStep = computeNextStep()
+  const lastActivityAt = Math.max(latestOtherActivityAt ?? 0, allSessions[0] ? new Date(allSessions[0].createdAt).getTime() : 0) || null
+  const daysSinceActivity = lastActivityAt != null ? (today.getTime() - lastActivityAt) / DAY_MS : null
+  const isWelcomeBack = hasAnyActivity && daysSinceActivity != null && daysSinceActivity >= WELCOME_BACK_THRESHOLD_DAYS
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="rounded-3xl bg-forest p-6 text-cream sm:p-8">
+      {/* While Coach's check-in is waiting, it is the one thing Home asks for —
+          the "next step" suggestion steps aside until it's handled. */}
+      <div
+        className={`grid gap-6 rounded-3xl bg-forest p-6 text-cream sm:p-8 lg:items-center ${
+          checkIn ? '' : 'lg:grid-cols-[1.3fr_1fr]'
+        }`}
+      >
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">{dateLabel}</p>
           <h1 className="mt-2 font-heading text-3xl font-extrabold text-cream sm:text-4xl">
@@ -374,11 +576,30 @@ export default function Home() {
             {firstName ? `, ${firstName}` : ''}
             <span className="text-gold">.</span>
           </h1>
-          {/* Wivo replaces the old subtitle rather than sitting under it:
-              that line was already asking the question, so the mascot turns
-              a decorative sentence into the input that answers it. */}
-          <AskWivo />
+          <p className="mt-1.5 text-cream/70">What would help you feel more prepared today?</p>
         </div>
+        {!checkIn && (
+          <div className="flex flex-col gap-4 rounded-2xl bg-cream/5 p-5 ring-1 ring-cream/10">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gold text-forest">
+                <nextStep.icon className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">
+                  {isWelcomeBack ? 'Welcome back' : 'Your next step'}
+                </p>
+                <p className="mt-0.5 font-heading text-lg font-bold text-cream">{nextStep.title}</p>
+                <p className="text-sm text-cream/70">{nextStep.description}</p>
+              </div>
+            </div>
+            <Link
+              to={nextStep.to}
+              className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90"
+            >
+              {nextStep.linkLabel} →
+            </Link>
+          </div>
+        )}
       </div>
 
       {checkIn && (

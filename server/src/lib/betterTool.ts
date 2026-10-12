@@ -106,7 +106,7 @@ export function prefillTarget(details: HandoffDetails | null): { label: string; 
 
 // `when` is prompt-facing: it is what Claude reads to decide. `label` is the
 // button a teacher taps, `path` where it opens in the app.
-export const TOOLS: Record<ToolKey, { label: string; path: string; when: string }> = {
+const TOOLS: Record<ToolKey, { label: string; path: string; when: string }> = {
   lesson_debrief: {
     label: 'Open Lesson Debrief',
     path: '/audio-coaching',
@@ -134,7 +134,7 @@ export const TOOLS: Record<ToolKey, { label: string; path: string; when: string 
   },
 }
 
-export const TOOL_LINES = (Object.entries(TOOLS) as [ToolKey, (typeof TOOLS)[ToolKey]][])
+const TOOL_LINES = (Object.entries(TOOLS) as [ToolKey, (typeof TOOLS)[ToolKey]][])
   .map(([key, tool]) => `- ${key}: ${tool.when}`)
   .join('\n')
 
@@ -142,10 +142,24 @@ export const TOOL_LINES = (Object.entries(TOOLS) as [ToolKey, (typeof TOOLS)[Too
 // see telegramCoach.ts. "Most replies should have no tag" is load-bearing:
 // without it Coach tags nearly everything, because being helpful is what it
 // is for, and a button under every message is a nag.
-// The field specs for <tool_details>, shared verbatim with the Home
-// router in coachRoute.ts. One source: two surfaces drifting apart on
-// what a field means is how a prefill quietly starts arriving wrong.
-export const TOOL_DETAILS_INSTRUCTION = `When you tag planning_coach or communication_coach, also pass on what the teacher has already told you, so the tool opens with its form filled in instead of empty. Put this after the tag, one field per line, leaving out any line you don't know.
+export const BETTER_TOOL_INSTRUCTION = `
+
+Wivoza has other tools besides this chat, and the teacher is texting you without having picked one. Most of what they send belongs right here — keep answering it. But when what they have just described would be better served by one of these, end your reply with a tag, after your last sentence:
+
+<${TAG}>key</${TAG}>
+
+The keys, and when each one fits:
+${TOOL_LINES}
+
+Rules for the tag:
+- Answer them first, in full, exactly as you normally would. The tag is an offer underneath your reply, not a redirection — never send them elsewhere instead of helping, and don't name the tool in your reply text: it becomes a button that names itself.
+- At most one tag, and only for a concrete thing they want to make or find out. Thinking out loud, venting, a hard day, or any question you can simply answer gets no tag.
+- The tag carries nothing but the key — neither your reply nor anything the teacher wrote is sent anywhere, and the button opens an empty tool. So a message a parent sent them is a good reason to offer communication_coach, not a reason to stay quiet.
+- Most replies should have no tag. A reply with no tag is the normal case.
+- Never send a tag on its own. There must always be words for them to read first, even when they have just said yes and there is nothing left to ask — a line agreeing with them is a reply; a tag by itself is a blank message.
+- When you tag planning_coach, make your reply a real choice rather than a handover: they can have the lesson built out now, or work out the shape of it with you here first. Ask which they'd rather, in your own words.
+
+When you tag planning_coach or communication_coach, also pass on what the teacher has already told you, so the tool opens with its form filled in instead of empty. Put this after the tag, one field per line, leaving out any line you don't know.
 
 For planning_coach:
 
@@ -187,39 +201,11 @@ worry: what they're afraid will happen
 
 Use recipient or meeting_type, not both: recipient for one person, meeting_type when several people are sitting down together.
 
-Only the first line of each — topic, or situation — is required to offer at all.`
+Only the first line of each — topic, or situation — is required to offer at all.
 
-// Also shared. The rule that stops a prefill inventing a grade or a
-// tone applies wherever a form is filled from a conversation.
-export const FILL_ONLY_FROM_SAID = `Everything else is filled in only from what they have ALREADY said: never put down a grade, a subject, a length or a tone they haven't given you. Leave names out of all of it, the same as everywhere else.`
+For planning_coach, find out how long the lesson is before you offer to have one made. It decides the whole shape of the thing — five activities or two, a full arc or a single move — and you can't infer it from the topic. Ask for it, in your own words, unless they have already said. Worth asking for at the same time: what they have already got, or already covered, if it isn't obvious. One question per reply as always, and no more than two of them in total — they can change anything afterwards, so stop asking and offer once you know the length and roughly where they are.
 
-// Chat-only: in a conversation Coach can ask for the length and offer a
-// turn later. Home gets one turn, so it has its own version of this
-// rule — see HOME_DURATION_RULE in coachRoute.ts.
-const CHAT_DURATION_RULE = `For planning_coach, find out how long the lesson is before you offer to have one made. It decides the whole shape of the thing — five activities or two, a full arc or a single move — and you can't infer it from the topic. Ask for it, in your own words, unless they have already said. Worth asking for at the same time: what they have already got, or already covered, if it isn't obvious. One question per reply as always, and no more than two of them in total — they can change anything afterwards, so stop asking and offer once you know the length and roughly where they are.`
-
-export const BETTER_TOOL_INSTRUCTION = `
-
-Wivoza has other tools besides this chat, and the teacher is texting you without having picked one. Most of what they send belongs right here — keep answering it. But when what they have just described would be better served by one of these, end your reply with a tag, after your last sentence:
-
-<${TAG}>key</${TAG}>
-
-The keys, and when each one fits:
-${TOOL_LINES}
-
-Rules for the tag:
-- Answer them first, in full, exactly as you normally would. The tag is an offer underneath your reply, not a redirection — never send them elsewhere instead of helping, and don't name the tool in your reply text: it becomes a button that names itself.
-- At most one tag, and only for a concrete thing they want to make or find out. Thinking out loud, venting, a hard day, or any question you can simply answer gets no tag.
-- The tag carries nothing but the key — neither your reply nor anything the teacher wrote is sent anywhere, and the button opens an empty tool. So a message a parent sent them is a good reason to offer communication_coach, not a reason to stay quiet.
-- Most replies should have no tag. A reply with no tag is the normal case.
-- Never send a tag on its own. There must always be words for them to read first, even when they have just said yes and there is nothing left to ask — a line agreeing with them is a reply; a tag by itself is a blank message.
-- When you tag planning_coach, make your reply a real choice rather than a handover: they can have the lesson built out now, or work out the shape of it with you here first. Ask which they'd rather, in your own words.
-
-${TOOL_DETAILS_INSTRUCTION}
-
-${CHAT_DURATION_RULE}
-
-${FILL_ONLY_FROM_SAID}`
+Everything else is filled in only from what they have ALREADY said: never put down a grade, a subject, a length or a tone they haven't given you. Leave names out of all of it, the same as everywhere else.`
 
 // Room for the tag so that adding one cannot cost the teacher a sentence.
 export const BETTER_TOOL_TOKEN_BUFFER = 20
