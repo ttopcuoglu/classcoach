@@ -231,14 +231,32 @@ export function toolOfferButton(
   // teacher gets both doors: open it where it can be adapted, or just
   // have the thing to print. A document sidesteps the length problem
   // that keeps the lesson itself out of the chat.
+  //
+  // Neither door opens on a guess about how long the lesson is. The form
+  // defaults to 45 minutes, which is fine on a screen where a teacher can
+  // see the number and change it — and not fine here, where the button
+  // runs straight past the form. A teacher with a 30-minute period would
+  // get a 45-minute lesson and no sign that anything had been assumed.
+  //
+  // So: with the length known, both doors, and the lesson is made on the
+  // tap. Without it, the form opens filled in but does NOT run, so the
+  // number is on screen to be corrected — and no PDF, because a file is
+  // finished the moment it arrives. Coach is told to ask first, and this
+  // is what happens on the turns where it hasn't yet.
   if (details && 'topic' in details) {
     const target = prefillTarget(details)
-    const open = target && miniAppUrl(`${target.path}${target.path.includes('?') ? '&' : '?'}handoff=${createHandoff(userId, offer.key, details)}&build=1`)
+    const knowsLength = details.durationMinutes != null
+    const path =
+      target &&
+      `${target.path}${target.path.includes('?') ? '&' : '?'}handoff=${createHandoff(userId, offer.key, details)}${knowsLength ? '&build=1' : ''}`
+    const open = path && miniAppUrl(path)
     return {
       inline_keyboard: [
         ...(open && target ? [[{ text: target.label, web_app: { url: open } }]] : []),
         [
-          { text: '📄 Send a PDF', callback_data: `lesson:${createHandoff(userId, offer.key, details)}` },
+          ...(knowsLength
+            ? [{ text: '📄 Send a PDF', callback_data: `lesson:${createHandoff(userId, offer.key, details)}` }]
+            : []),
           { text: NEW_TOPIC_BUTTON, callback_data: 'new' },
         ],
       ],

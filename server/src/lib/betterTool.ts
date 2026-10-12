@@ -171,7 +171,7 @@ minutes: how long the lesson is, digits only
 kind: full for a whole lesson plan, ideas for a handful of activities
 </tool_details>
 
-With kind: ideas the activities come back to them right here in the chat, and they can have them as a printable PDF — so when they ask for something to print, the answer is yes. A full lesson opens in Wivoza instead, where they can print it from the page.
+Either kind can be printed, so when they ask for something to print the answer is simply yes. With kind: ideas the activities come back in the chat itself and a PDF is offered with them; a full lesson is too long to read as a message, so it arrives as the PDF.
 
 For communication_coach, when it's something they have to write or answer:
 
@@ -203,7 +203,7 @@ Use recipient or meeting_type, not both: recipient for one person, meeting_type 
 
 Only the first line of each — topic, or situation — is required to offer at all.
 
-For planning_coach, though, find out what would actually change the lesson before you offer to have it made: how long they have, and what they've already got or already covered. A lesson built from a topic and nothing else is the generic one they could have found anywhere. One question per reply as always, and no more than two of them — they can change anything afterwards, so stop asking and offer once you know enough to be useful.
+For planning_coach, find out how long the lesson is before you offer to have one made. It decides the whole shape of the thing — five activities or two, a full arc or a single move — and you can't infer it from the topic. Ask for it, in your own words, unless they have already said. Worth asking for at the same time: what they have already got, or already covered, if it isn't obvious. One question per reply as always, and no more than two of them in total — they can change anything afterwards, so stop asking and offer once you know the length and roughly where they are.
 
 Everything else is filled in only from what they have ALREADY said: never put down a grade, a subject, a length or a tone they haven't given you. Leave names out of all of it, the same as everywhere else.`
 

@@ -51,13 +51,6 @@ test('a few activities are made here, so the button says so', () => {
   assert.deepEqual(labelsOf(markup), ['Send me a few ideas', '🆕 New topic'])
 })
 
-test('a full lesson offers both doors: open it, or just have the file', () => {
-  // Too long to read as a message, which is not a reason to withhold it —
-  // a document is read on paper, not in the chat.
-  const markup = toolOfferButton(PLANNING, { topic: 'photosynthesis', kind: 'full' }, 'user-1')
-  assert.deepEqual(labelsOf(markup), ['Build this lesson', '📄 Send a PDF', '🆕 New topic'])
-})
-
 test('with nothing collected, the tool just opens', () => {
   const markup = toolOfferButton(PLANNING, null, 'user-1')
   assert.deepEqual(labelsOf(markup), ['Open Planning Coach', '🆕 New topic'])
@@ -119,4 +112,30 @@ test('with nothing forwarded, Coach\'s own summary stands', () => {
   const details = handoffBehind(markup, 'draft', 'user-3')?.details
   assert.equal(details && 'situation' in details && details.situation, 'a parent is upset about a zero')
   assert.equal(details && 'startingAction' in details && details.startingAction, 'new')
+})
+
+// The lesson length decides the shape of the lesson, and the form's 45
+// minute default is invisible here because the button runs past the form.
+// So nothing is MADE until Coach knows it.
+
+test('with the length known, both doors, and the tap builds it', () => {
+  const markup = toolOfferButton(PLANNING, { topic: 'photosynthesis', kind: 'full', durationMinutes: 30 }, 'u1')
+  assert.deepEqual(labelsOf(markup), ['Build this lesson', '📄 Send a PDF', '🆕 New topic'])
+  const rows = markup && 'inline_keyboard' in markup ? markup.inline_keyboard : []
+  const open = rows.flat().find((b) => 'web_app' in b)
+  assert.match((open as { web_app: { url: string } }).web_app.url, /build=1/)
+})
+
+test('without it, the form opens to be corrected and nothing is made', () => {
+  const markup = toolOfferButton(PLANNING, { topic: 'photosynthesis', kind: 'full' }, 'u1')
+  // No PDF: a file is finished the moment it arrives.
+  assert.deepEqual(labelsOf(markup), ['Build this lesson', '🆕 New topic'])
+  const rows = markup && 'inline_keyboard' in markup ? markup.inline_keyboard : []
+  const open = rows.flat().find((b) => 'web_app' in b)
+  assert.doesNotMatch((open as { web_app: { url: string } }).web_app.url, /build=1/)
+})
+
+test('quick ideas are unaffected — they are made here either way', () => {
+  const markup = toolOfferButton(PLANNING, { topic: 'photosynthesis', kind: 'ideas' }, 'u1')
+  assert.deepEqual(labelsOf(markup), ['Send me a few ideas', '🆕 New topic'])
 })
