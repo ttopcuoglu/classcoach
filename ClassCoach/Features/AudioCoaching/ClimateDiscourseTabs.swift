@@ -189,6 +189,17 @@ struct DiscourseDetailsTab: View {
                 StatView(label: "Student talk time", metric: percentMetric(session.studentTalkPct))
                 StatView(label: "Silence / other", metric: percentMetric(silencePct))
                 StatView(label: "Student voice segments", metric: ReportConfidence.getCountMetric(count: session.metricsDetail?["studentVoiceSegments"].map { Int($0) }, recordedSec: recordedSec))
+                // How FAST, beside how long. The report had four ways to say
+                // how much of a lesson a teacher spoke for and none to say the
+                // pace of it.
+                StatView(label: "Your pace", metric: paceMetric)
+            }
+            // Only when there is silence for it to explain.
+            if (silencePct ?? 0) > 0,
+               let note = AudioInsights.leadingSilenceNote(firstWordSec: session.metricsDetail?["firstWordSec"]) {
+                Text(note)
+                    .font(.caption2).foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -208,9 +219,42 @@ struct DiscourseDetailsTab: View {
                 StatView(label: "Thinking tasks", metric: thinkingTaskMetric)
                 StatView(label: "Your follow-up questions", metric: m.followUpMetric)
                 StatView(label: "Your avg. wait time", metric: waitTimeMetric)
+                // The other half of wait time, and the one that explains the
+                // follow-up count above it: a pause of a few tenths of a
+                // second after an answer leaves nowhere for a follow-up to go.
+                StatView(label: "Your pause after an answer", metric: waitTime2Metric)
             }
             QuestioningMixView(session: session)
         }
+    }
+
+    private var paceMetric: ReportConfidence.ConfidentMetric {
+        guard let wpm = session.metricsDetail?["teacherWordsPerMinute"] else {
+            return ReportConfidence.ConfidentMetric(
+                state: .notAnalyzed, display: "—",
+                reason: "This session was analyzed before speaking pace was measured.")
+        }
+        return ReportConfidence.ConfidentMetric(
+            state: .measured, display: "\(Int(wpm)) wpm",
+            reason: "Words a minute of your own speaking time. Everyday conversation runs about \(Int(AudioInsights.conversationalWpm)) — an anchor to place yourself against, not a target.")
+    }
+
+    private var waitTime2Metric: ReportConfidence.ConfidentMetric {
+        guard let sec = session.metricsDetail?["waitTime2Sec"] else {
+            return ReportConfidence.ConfidentMetric(
+                state: .notAnalyzed, display: "—",
+                reason: "This session was analyzed before the pause after an answer was measured.")
+        }
+        let samples = Int(session.metricsDetail?["waitTime2SampleCount"] ?? 0)
+        let display = String(format: "%.1fs", sec)
+        if Double(samples) < AudioInsights.minWaitTimeSamples {
+            return ReportConfidence.ConfidentMetric(
+                state: .limitedEvidence, display: display,
+                reason: "Averaged over only \(samples) exchange\(samples == 1 ? "" : "s"), which is too few to read as a habit.")
+        }
+        return ReportConfidence.ConfidentMetric(
+            state: .measured, display: display,
+            reason: "How long you left after a student finished before speaking. The pause above is the one after your question; this is the one after their answer, and it is where a follow-up has to fit.")
     }
 
     private var higherOrderCountMetric: ReportConfidence.ConfidentMetric {

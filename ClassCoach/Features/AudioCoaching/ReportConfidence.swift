@@ -295,6 +295,24 @@ enum AudioInsights {
     /// Strength or Priority.
     static let minWaitTimeSamples = 3.0
 
+    /// Conversational English runs around this. Stated as an anchor a teacher
+    /// can place themselves against, never as a target: there is no correct
+    /// rate, and a fast stretch of storytelling is not a fault.
+    static let conversationalWpm = 150.0
+
+    /// Long enough to be worth explaining. Below this the recording started
+    /// with the lesson and there is nothing to say.
+    static let materialLeadingSilenceSec = 30.0
+
+    /// What the silence share does NOT mean: coverage treats the whole
+    /// recording as recorded time, so a lesson whose first transcribed word is
+    /// at 4:29 reports four and a half minutes of classroom quiet that was
+    /// really the recorder running before the lesson began.
+    static func leadingSilenceNote(firstWordSec: Double?) -> String? {
+        guard let firstWordSec, firstWordSec >= materialLeadingSilenceSec else { return nil }
+        return "Nothing was transcribed until \(ReportConfidence.formatDuration(firstWordSec)), so that much of the silence above is the recorder running before the lesson got going rather than quiet in the room."
+    }
+
     static func hasEnoughWaitTimeSamples(_ session: AudioSessionWithSegments) -> Bool {
         guard let count = session.metricsDetail?["waitTimeSampleCount"] else { return false }
         return count >= minWaitTimeSamples

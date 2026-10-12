@@ -249,6 +249,8 @@ function previewReport(): Json {
   })
   return {
     ...(audioSession('preview-report', 22, 1, true) as Record<string, unknown>),
+    teacherTalkPct: 48,
+    studentTalkPct: 14,
     durationSec: 1380,
     status: 'analyzed',
     classSubject: 'World history',
@@ -262,6 +264,10 @@ function previewReport(): Json {
       higherOrderQuestionCount: 3,
       followUpQuestionCount: 1,
       waitTimeSampleCount: 4,
+      teacherWordsPerMinute: 214,
+      waitTime2Sec: 0.4,
+      waitTime2SampleCount: 11,
+      firstWordSec: 269,
       redirectionCount: 3,
       firstRedirectionTimestampSec: 540,
       transitionCount: 3,

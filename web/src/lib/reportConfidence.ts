@@ -59,6 +59,71 @@ export function feedbackMeasurable(studentVoiceSegments: number | null | undefin
 // rule, so a missing count deliberately fails the floor too.
 export const MIN_WAIT_TIME_SAMPLES = 3
 
+/// Conversational English runs around 150 words a minute. Stated as an anchor
+/// a teacher can place themselves against, never as a target: there is no
+/// correct rate, and a fast stretch of storytelling is not a fault. The report
+/// gives the number and the anchor and stops there.
+export const CONVERSATIONAL_WPM = 150
+
+export function speechRateMetric(wpm: number | null | undefined): ConfidentMetric {
+  if (wpm == null) {
+    return {
+      state: 'not_measurable',
+      display: '—',
+      reason:
+        'Too little of your own speech was captured to divide into a rate — under a minute of it, where one mis-transcribed stretch would move the number a long way.',
+    }
+  }
+  return { state: 'measured', display: String(wpm) }
+}
+
+/// The pause after a student finishes, before the teacher speaks. The pair of
+/// `waitTimeMetric` above, which times the pause after the question.
+///
+/// Measurable far more often than wait time 1, which needs a *detected
+/// question* followed by an audible answer; this only needs a student turn
+/// followed by a teacher turn. On real lessons it has samples where wait
+/// time 1 has none.
+export function waitTime2Metric(
+  waitTime2Sec: number | null | undefined,
+  sampleCount: number | null | undefined,
+): ConfidentMetric {
+  if (waitTime2Sec == null) {
+    return {
+      state: 'not_measurable',
+      display: '—',
+      reason: 'No audible student answer was followed by you speaking, so there was no pause to time.',
+    }
+  }
+  if ((sampleCount ?? 0) < MIN_WAIT_TIME_SAMPLES) {
+    return {
+      state: 'limited_evidence',
+      display: `${waitTime2Sec}s`,
+      reason: `Averaged over only ${sampleCount ?? 0} exchange${(sampleCount ?? 0) === 1 ? '' : 's'}, which is too few to read as a habit.`,
+    }
+  }
+  return { state: 'measured', display: `${waitTime2Sec}s` }
+}
+
+/// Long enough to be worth saying. Below this the recording started with the
+/// lesson and there is nothing to explain.
+const MATERIAL_LEADING_SILENCE_SEC = 30
+
+/// What the silence share does NOT mean.
+///
+/// `getCoverage` treats the whole recording as recorded time, so a lesson whose
+/// first transcribed word is at 4:29 reports four and a half minutes of
+/// classroom silence that was really the recorder running before the lesson
+/// began — on one real lesson that was 20% of the recording, inside a 52%
+/// silence figure.
+export function leadingSilenceNote(firstWordSec: number | null | undefined): string | null {
+  if (firstWordSec == null || firstWordSec < MATERIAL_LEADING_SILENCE_SEC) return null
+  const mins = Math.floor(firstWordSec / 60)
+  const secs = Math.round(firstWordSec % 60)
+  const stamp = mins > 0 ? `${mins}:${String(secs).padStart(2, '0')}` : `${secs}s`
+  return `Nothing was transcribed until ${stamp}, so that much of the silence below is the recorder running before the lesson got going rather than quiet in the room.`
+}
+
 /// Below this, checking for understanding is an instance rather than a habit,
 /// so it is not offered as "a strength to keep".
 ///

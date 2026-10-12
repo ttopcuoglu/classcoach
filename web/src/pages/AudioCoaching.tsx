@@ -76,6 +76,10 @@ import {
   type ConfidentMetric,
   type MetricState,
   type TalkBalanceJudgment,
+  speechRateMetric,
+  waitTime2Metric,
+  leadingSilenceNote,
+  CONVERSATIONAL_WPM,
 } from '../lib/reportConfidence'
 
 function formatTime(sec: number): string {
@@ -2891,6 +2895,8 @@ function ReportPanel({
                 waitTimeMetric={waitTimeMetric}
                 avgWaitTimeSec={session.avgWaitTimeSec}
                 waitTimeSampleCount={session.metricsDetail?.waitTimeSampleCount ?? null}
+                waitTime2Sec={session.metricsDetail?.waitTime2Sec ?? null}
+                waitTime2SampleCount={session.metricsDetail?.waitTime2SampleCount ?? null}
                 thinkingTaskCount={session.metricsDetail?.thinkingTaskCount ?? null}
                 focusMetric={focusMetric}
                     questioningInsight={questioningInsight}
@@ -5510,6 +5516,48 @@ function StudentTalkFocusCard({ focus }: { focus: AudioStudentTalkFocus | null }
   )
 }
 
+function WaitTime2Stat({
+  waitTime2Sec: sec,
+  sampleCount: samples,
+}: {
+  waitTime2Sec: number | null
+  sampleCount: number | null
+}) {
+  const metric = waitTime2Metric(sec, samples)
+  return (
+    <Stat
+      label="Your pause after an answer"
+      value={metric.display}
+      muted={isMissingState(metric.state)}
+      reason={
+        metric.reason ??
+        'How long you left after a student finished before speaking. The pause above is the one after your question; this is the one after their answer, and it is where a follow-up has to fit.'
+      }
+      sub={
+        !isMissingState(metric.state) && (samples ?? 0) > 0
+          ? `Based on ${samples} exchange${samples === 1 ? '' : 's'}`
+          : undefined
+      }
+    />
+  )
+}
+
+function PaceStat({ metricsDetail }: { metricsDetail: Record<string, number | null> | null }) {
+  const wpm = metricsDetail?.teacherWordsPerMinute ?? null
+  const metric = speechRateMetric(wpm)
+  return (
+    <Stat
+      label="Your pace"
+      value={wpm != null ? `${wpm} wpm` : metric.display}
+      muted={isMissingState(metric.state)}
+      reason={
+        metric.reason ??
+        `Words a minute of your own speaking time. Everyday conversation runs about ${CONVERSATIONAL_WPM} — an anchor to place yourself against, not a target.`
+      }
+    />
+  )
+}
+
 function TalkParticipationTab({
   session,
   teacherTalkMetric,
@@ -5599,7 +5647,17 @@ function TalkParticipationTab({
             muted={isMissingState(studentSegmentsMetric.state)}
             reason={studentSegmentsMetric.reason}
           />
+          {/* How FAST, beside how long. The report had four ways to say how
+              much of a lesson a teacher spoke for and none to say the pace of
+              it, and 65% at 170 words a minute is a different lesson from 65%
+              at 230. */}
+          <PaceStat metricsDetail={session.metricsDetail} />
         </div>
+        {/* Only when there is silence for it to explain. The note talks about
+            "the silence below", which reads as nonsense next to 0%. */}
+        {(silencePct ?? 0) > 0 && leadingSilenceNote(session.metricsDetail?.firstWordSec) && (
+          <p className="mt-3 text-xs text-ink-soft">{leadingSilenceNote(session.metricsDetail?.firstWordSec)}</p>
+        )}
         <div className="mt-4">
           <TalkParticipationBar
             teacherPct={session.teacherTalkPct}
@@ -5691,6 +5749,8 @@ function QuestionsThinkingTab({
   waitTimeMetric,
   avgWaitTimeSec,
   waitTimeSampleCount,
+  waitTime2Sec,
+  waitTime2SampleCount,
   thinkingTaskCount,
   focusMetric,
   questioningInsight,
@@ -5705,6 +5765,8 @@ function QuestionsThinkingTab({
   waitTimeMetric: ReturnType<typeof getPresenceMetric>
   avgWaitTimeSec: number | null
   waitTimeSampleCount: number | null
+  waitTime2Sec: number | null
+  waitTime2SampleCount: number | null
   thinkingTaskCount: number | null
   focusMetric: FocusMetric | null
   questioningInsight: string | null
@@ -5790,6 +5852,13 @@ function QuestionsThinkingTab({
             focused={focusMetric === 'avgWaitTime'}
           />
         </div>
+        {/* The other half of wait time, and the one that explains the
+            follow-up count beside it: a tenth-of-a-second pause after an
+            answer leaves nowhere for a follow-up to go. Measurable far more
+            often than wait time 1, which needs a detected question AND an
+            audible answer — this only needs a student turn followed by
+            yours. */}
+        <WaitTime2Stat waitTime2Sec={waitTime2Sec} sampleCount={waitTime2SampleCount} />
       </CategorySection>
 
       <QuestioningMixChart

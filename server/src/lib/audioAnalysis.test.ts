@@ -84,3 +84,64 @@ test('two real questions in one turn are still two', () => {
   ])
   assert.equal(a.questionCount, 2)
 })
+
+// --- speaking pace, the pause after an answer, and leading dead air
+//
+// The report had four ways to say how LONG a teacher spoke and none to say how
+// fast; it timed the pause after a question and never the pause after an
+// answer; and it counted a recording's leading silence as classroom quiet.
+
+test('pace is words over the teacher’s own speaking time, not over the lesson', () => {
+  // 120 words across 60s of teacher speech, inside a much longer recording.
+  const long = Array.from({ length: 120 }, (_, i) => `word${i}`).join(' ')
+  const a = transcript(() => [
+    { speakerLabel: 'Teacher', startSec: 0, endSec: 60, text: long },
+    { speakerLabel: 'Student', startSec: 300, endSec: 360, text: 'a student talking for a whole minute' },
+  ])
+  // 120 words / 60s = 120 a minute. Student speech and the gap do not dilute it.
+  assert.equal(a.metricsDetail.teacherWordsPerMinute, 120)
+})
+
+test('pace is withheld below a minute of teacher speech', () => {
+  const a = transcript(() => [say('Teacher', 'Just a few words here', 10)])
+  assert.equal(a.metricsDetail.teacherWordsPerMinute, null)
+})
+
+test('the pause after an answer is timed, separately from the pause after a question', () => {
+  const a = analyzeTranscript([
+    { speakerLabel: 'Teacher', startSec: 0, endSec: 4, text: 'Why do you think wages rose?' },
+    // 3s of wait time 1, then the answer.
+    { speakerLabel: 'Student', startSec: 7, endSec: 10, text: 'Because fewer people were left' },
+    // 2s of wait time 2 before the teacher takes the floor back.
+    { speakerLabel: 'Teacher', startSec: 12, endSec: 16, text: 'Yes, that is the labour shortage.' },
+  ])
+  assert.equal(a.metricsDetail.waitTime2Sec, 2)
+  assert.equal(a.metricsDetail.waitTime2SampleCount, 1)
+  // And the two are not the same number.
+  assert.equal(a.avgWaitTimeSec, 3)
+})
+
+test('a gap long enough to be work time is not counted as a pause', () => {
+  const a = analyzeTranscript([
+    { speakerLabel: 'Student', startSec: 0, endSec: 5, text: 'Is this one due today' },
+    // Five minutes later — independent work, not a teacher holding a pause.
+    { speakerLabel: 'Teacher', startSec: 305, endSec: 310, text: 'Alright, come back together.' },
+  ])
+  assert.equal(a.metricsDetail.waitTime2SampleCount, 0)
+  assert.equal(a.metricsDetail.waitTime2Sec, null)
+})
+
+test('a teacher following their own talk is not a pause after an answer', () => {
+  const a = analyzeTranscript([
+    { speakerLabel: 'Teacher', startSec: 0, endSec: 4, text: 'So terrace farming.' },
+    { speakerLabel: 'Teacher', startSec: 9, endSec: 13, text: 'It cuts stairs into the hillside.' },
+  ])
+  assert.equal(a.metricsDetail.waitTime2SampleCount, 0)
+})
+
+test('the first transcribed word is recorded, so leading silence can be explained', () => {
+  const a = analyzeTranscript([
+    { speakerLabel: 'Teacher', startSec: 269, endSec: 275, text: 'Alright, take out your packets.' },
+  ])
+  assert.equal(a.metricsDetail.firstWordSec, 269)
+})

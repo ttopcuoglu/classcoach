@@ -62,6 +62,29 @@ export type AnalysisResult = {
     thinkingTaskCount?: number
     // How many question → student-response intervals avgWaitTimeSec averages.
     waitTimeSampleCount: number
+    /// How fast the teacher spoke, in words a minute of their OWN speaking
+    /// time — not of the lesson. Absent on sessions analyzed before it
+    /// existed, and null when there is too little teacher speech to divide by.
+    ///
+    /// The report had plenty of ways to say how LONG a teacher spoke and none
+    /// to say how fast. Sixty-five per cent of a lesson at 170 words a minute
+    /// and the same share at 230 are different experiences for a student, and
+    /// nothing here could tell them apart.
+    teacherWordsPerMinute?: number | null
+    /// The pause after a student finishes answering, before the teacher
+    /// speaks — "wait time 2". `avgWaitTimeSec` is wait time 1, the pause
+    /// after the question.
+    ///
+    /// This is the half that was missing, and it explains a number the report
+    /// has been showing without explaining: follow-up counts are near zero on
+    /// most lessons, and a wait of three tenths of a second is why. There is
+    /// no gap for a follow-up to live in.
+    waitTime2Sec?: number | null
+    waitTime2SampleCount?: number
+    /// When the first word was transcribed. A recording that caught nothing
+    /// for its first four minutes is not a four-minute silence in the lesson,
+    /// and the silence share says otherwise unless this is known.
+    firstWordSec?: number | null
     redirectionCount: number
     firstRedirectionTimestampSec: number | null
     transitionCount: number
@@ -178,6 +201,19 @@ export const CORRECTIVE_PHRASES = [
 // reportConfidence.ts on the frontend for why 30s is the floor for
 // "meaningfully captured") makes the stated-objective check unavailable.
 const MIN_PHASE_DURATION_SEC = 30
+
+/// Beyond this, a gap between a student finishing and the teacher speaking is
+/// independent work, a transition or a recording artifact — not a teacher
+/// deliberately leaving space, which is the only thing wait time 2 is about.
+const WAIT_TIME_2_MAX_SEC = 30
+
+/// Below this much teacher speech, a words-a-minute figure is division by
+/// noise: a few short turns and one mis-transcription move it enormously.
+const MIN_TEACHER_SEC_FOR_RATE = 60
+
+function countWords(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length
+}
 // A detected Opening phase is often just the first 10% of the recording
 // (the proportional fallback when no transition phrase is heard), which
 // can end before a teacher states the objective — so the search always
@@ -710,6 +746,11 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
   let awaitingStudentAnswer = false
   let readyForFollowUp = false
   const waitCandidates: { wait: number; segment: Segment }[] = []
+  /// Wait time 2: a student turn ending, then the teacher's next turn. Capped
+  /// at 30s because a longer gap is independent work or a recording artifact
+  /// rather than a teacher holding a pause.
+  const waitTime2s: number[] = []
+  let teacherWords = 0
   let redirectionHighlightTaken = false
   let probingHighlightTaken = false
   let lastRootQuestionEntry: QuestionLogEntry | null = null
@@ -721,6 +762,14 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
 
     if (isTeacher) {
       if (currentMonologueSec === 0) currentMonologueStartSec = segment.startSec
+      teacherWords += countWords(segment.text)
+      // The pause the teacher left after a student finished, before taking
+      // the floor back.
+      const previous = index > 0 ? ordered[index - 1] : null
+      if (previous && previous.speakerLabel !== 'Teacher') {
+        const gap = segment.startSec - previous.endSec
+        if (gap >= 0 && gap <= WAIT_TIME_2_MAX_SEC) waitTime2s.push(gap)
+      }
       teacherTalkSec += duration
       currentMonologueSec += duration
       currentMonologueText = segment.text
@@ -962,6 +1011,12 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       higherOrderQuestionCount,
       followUpQuestionCount,
       waitTimeSampleCount: waitTimes.length,
+      teacherWordsPerMinute:
+        teacherTalkSec >= MIN_TEACHER_SEC_FOR_RATE ? Math.round((teacherWords / teacherTalkSec) * 60) : null,
+      waitTime2Sec:
+        waitTime2s.length > 0 ? round(waitTime2s.reduce((sum, w) => sum + w, 0) / waitTime2s.length, 1) : null,
+      waitTime2SampleCount: waitTime2s.length,
+      firstWordSec: ordered.length > 0 ? round(ordered[0].startSec, 1) : null,
       redirectionCount,
       firstRedirectionTimestampSec: firstRedirectionTimestampSec != null ? round(firstRedirectionTimestampSec, 1) : null,
       transitionCount,
