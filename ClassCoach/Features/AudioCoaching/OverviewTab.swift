@@ -70,7 +70,8 @@ struct OverviewTab: View {
     /// rather than the numbers-only fallback, which would be replaced under
     /// the teacher's eyes a few seconds later.
     var summarizing = false
-    let onSetFocus: (FocusMetric) -> Void
+    /// The transcript is being read for the moment to revisit.
+    var readingMoment = false
     let onNavigateInsights: (InsightsSection) -> Void
     let onDiscuss: (ReflectFocus) -> Void
 
@@ -92,9 +93,6 @@ struct OverviewTab: View {
 
     private var strengthCandidate: AudioInsights.NoticeCandidate? {
         AudioInsights.pickTop(AudioInsights.buildStrengthCandidates(session, cfuMetric: m.cfuMetric, feedbackRatio: m.feedbackRatio, higherOrderRatio: m.higherOrderRatio))
-    }
-    private var priorityCandidate: AudioInsights.NoticeCandidate? {
-        AudioInsights.pickTop(AudioInsights.buildPriorityCandidates(session, cfuMetric: m.cfuMetric, feedbackRatio: m.feedbackRatio, higherOrderRatio: m.higherOrderRatio))
     }
 
     var body: some View {
@@ -217,22 +215,56 @@ struct OverviewTab: View {
         }
     }
 
-    private var priorityCard: some View {
-        tintedCard(AppTheme.goldTint.opacity(0.7)) {
-            eyebrow("Coaching priority", AppTheme.terracotta600)
-            if let c = priorityCandidate {
-                Text(AudioInsights.formatCandidateHeadline(c)).font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
-                if let excerpt = c.excerpt { Text("\u{201C}\(excerpt)\u{201D}").font(.subheadline).foregroundStyle(AppTheme.textSecondary) }
-                Text(c.whyItMatters).font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-                if let metric = c.focusMetric {
-                    Button("Set as my focus →") { onSetFocus(metric) }
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
-                        .padding(.top, 2)
+    /// The moment comes from a read of the transcript, not from ranking the
+    /// report's counts — that ranking put "longest monologue" on almost every
+    /// lesson. Mirrors `MomentToRevisitCard` in AudioCoaching.tsx, including
+    /// the three answers that decline to name one and say why.
+    @ViewBuilder private var priorityCard: some View {
+        if let moment = session.momentToRevisit {
+            tintedCard(AppTheme.goldTint.opacity(0.7)) {
+                eyebrow("A moment to revisit", AppTheme.terracotta600)
+                if moment.status == "found", let headline = moment.headline {
+                    Text(headline).font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let quote = moment.quote {
+                        Text("\u{201C}\(quote)\u{201D}\(moment.timestampSec.map { " · \(ReportConfidence.formatDuration($0))" } ?? "")")
+                            .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let why = moment.whyItMatters {
+                        Text(why).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let tryNext = moment.tryNext {
+                        (Text("Try next time: ").fontWeight(.semibold).foregroundColor(AppTheme.forest) + Text(tryNext))
+                            .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else {
+                    Text(momentWithoutOne(moment.status))
+                        .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-            } else {
-                Text("This recording was \(ReportConfidence.formatDuration(m.coverage.recordedSec)) — coaching-priority signals need more length to surface reliably. Aim for at least \(Int(ReportConfidence.shortSessionThresholdSec / 60)) minutes next time.")
+            }
+        } else if readingMoment {
+            tintedCard(AppTheme.goldTint.opacity(0.7)) {
+                eyebrow("A moment to revisit", AppTheme.terracotta600)
+                Text("Reading the lesson for the moment most worth a second look…")
                     .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
             }
+        }
+        // Not read and not being read — an older report whose request failed,
+        // or a locked one. Nothing beats a placeholder that never resolves.
+    }
+
+    private func momentWithoutOne(_ status: String) -> String {
+        switch status {
+        case "thin":
+            return "Not enough of this lesson came through clearly to pick one moment honestly. A recording with the phone nearer to where you teach gives this more to go on."
+        case "not_a_lesson":
+            return "This recording doesn\u{2019}t read as a class being taught, so there is no moment to pick out."
+        default:
+            return "Nothing in this lesson stood out as needing a second look."
         }
     }
 

@@ -363,63 +363,6 @@ enum AudioInsights {
         return candidates
     }
 
-    static func buildPriorityCandidates(
-        _ session: AudioSessionWithSegments, cfuMetric: Metric, feedbackRatio: Metric, higherOrderRatio: Metric?
-    ) -> [NoticeCandidate] {
-        var candidates: [NoticeCandidate] = []
-        candidates += highlightCandidates(
-            session.highlights, label: "Redirection cluster", id: "highlight-redirection", weight: 3,
-            whyItMatters: "A cluster of redirections close together can be a sign the room needs a different routine or transition in that moment."
-        )
-        candidates += highlightCandidates(
-            session.highlights, label: "Repeated instruction", id: "highlight-repeated", weight: 3,
-            whyItMatters: "When directions need repeating, it's worth double-checking they land clearly the first time."
-        )
-        candidates += highlightCandidates(
-            session.highlights, label: "Longest uninterrupted teacher monologue", id: "highlight-monologue", weight: 2,
-            whyItMatters: "A long stretch without a break in teacher talk is a natural spot to build in a check-in or a question."
-        )
-        if case .teacherHeavy(let t, _) = Confidence.judgeTalkBalance(teacherPct: session.teacherTalkPct, studentPct: session.studentTalkPct) {
-            candidates.append(NoticeCandidate(
-                id: "talk-balance", observation: "You had \(Int(t))% of the talk the recording picked up today",
-                whyItMatters: "Look for a moment to hand the floor to students — even a short turn-and-talk shifts the balance.",
-                timestampSec: nil, excerpt: nil, durationSec: nil, weight: 2, focusMetric: .talkRatio
-            ))
-        }
-        if let higherOrderRatio, higherOrderRatio.state == .measured, let pct = session.higherOrderPct, pct < 40 {
-            candidates.append(NoticeCandidate(
-                id: "questioning", observation: "Most of today's questions were quick recall checks (\(Int(pct))% higher-order)",
-                whyItMatters: "A natural spot to slip in one 'why' or 'how' question next time.",
-                timestampSec: nil, excerpt: nil, durationSec: nil, weight: 1, focusMetric: .higherOrderPct
-            ))
-        }
-        if hasEnoughWaitTimeSamples(session), let wait = session.avgWaitTimeSec, wait < 3 {
-            candidates.append(NoticeCandidate(
-                id: "wait-time", observation: "Your average wait time was \(Confidence.formatNumber(wait))s",
-                whyItMatters: "A few extra seconds of silence after a question gives more students time to formulate an answer.",
-                timestampSec: nil, excerpt: nil, durationSec: nil, weight: 1, focusMetric: .avgWaitTime
-            ))
-        }
-        // Only spoken check phrases are detectable, so a zero from a short
-        // clip is too thin to headline as the one thing to work on.
-        if cfuMetric.state == .confirmedNone, (session.durationSec ?? 0) >= Confidence.shortSessionThresholdSec {
-            candidates.append(NoticeCandidate(
-                id: "cfu", observation: "None of the common spoken check-for-understanding phrases came through this session",
-                whyItMatters: "Even a quick thumbs-up check can catch confusion early, before it compounds.",
-                timestampSec: nil, excerpt: nil, durationSec: nil, weight: 1, focusMetric: .cfuCount
-            ))
-        }
-        if feedbackRatio.state == .measured, feedbackRatio.display.hasSuffix("%"),
-           let pct = Int(feedbackRatio.display.dropLast()), pct < 50 {
-            candidates.append(NoticeCandidate(
-                id: "feedback", observation: "Only \(feedbackRatio.display) of your feedback was specific",
-                whyItMatters: "Specific feedback gives students something concrete to act on, not just praise or correction.",
-                timestampSec: nil, excerpt: nil, durationSec: nil, weight: 1, focusMetric: nil
-            ))
-        }
-        return candidates
-    }
-
     static func formatHighlightHeadline(label: String, timestampSec: Double, durationSec: Double?) -> String {
         if let durationSec {
             return "\(label): \(Int(durationSec.rounded()))s — occurred at \(ReportConfidence.formatDuration(timestampSec))"

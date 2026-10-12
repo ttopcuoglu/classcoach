@@ -17,6 +17,7 @@ import {
   deleteAudioSession,
   generateClassSummary,
   generateHardLook,
+  generateMomentToRevisit,
   generateRubricLens,
   getAudioSession,
   getAudioSessions,
@@ -39,6 +40,7 @@ import {
   type AudioReflectMessage,
   type AudioRedirectionLogEntry,
   type AudioHardLook,
+  type AudioMomentToRevisit,
   type AudioStudentTalkFocus,
   type AudioRubricLens,
   type AudioSession,
@@ -1926,129 +1928,6 @@ function buildStrengthCandidates(
   return candidates
 }
 
-function buildPriorityCandidates(
-  session: AudioSessionWithSegments,
-  cfuMetric: ConfidentMetric,
-  feedbackRatio: ConfidentMetric,
-  higherOrderRatio: ConfidentMetric | null,
-): NoticeCandidate[] {
-  const candidates: NoticeCandidate[] = []
-
-  candidates.push(
-    ...highlightCandidates(
-      session.highlights,
-      'Redirection cluster',
-      'highlight-redirection',
-      3,
-      'A cluster of redirections close together can be a sign the room needs a different routine or transition in that moment.',
-    ),
-  )
-  candidates.push(
-    ...highlightCandidates(
-      session.highlights,
-      'Repeated instruction',
-      'highlight-repeated',
-      3,
-      "When directions need repeating, it's worth double-checking they land clearly the first time.",
-    ),
-  )
-  candidates.push(
-    ...highlightCandidates(
-      session.highlights,
-      'Longest uninterrupted teacher monologue',
-      'highlight-monologue',
-      2,
-      'A long stretch without a break in teacher talk is a natural spot to build in a check-in or a question.',
-    ),
-  )
-
-  const hasEnoughDurationForTalkBalance =
-    session.durationSec != null && session.durationSec >= MIN_DURATION_FOR_TALK_BALANCE_CANDIDATE_SEC
-
-  const balance = judgeTalkBalance(session.teacherTalkPct, session.studentTalkPct)
-  if (hasEnoughDurationForTalkBalance && balance?.kind === 'teacher-heavy') {
-    candidates.push({
-      id: 'talk-balance',
-      observation: `You had ${balance.teacherPct}% of the talk the recording picked up today`,
-      whyItMatters: 'Look for a moment to hand the floor to students — even a short turn-and-talk shifts the balance.',
-      timestampSec: null,
-      excerpt: null,
-      durationSec: null,
-      weight: 2,
-      focusMetric: 'talkRatio',
-    })
-  }
-
-  if (
-    higherOrderRatio &&
-    higherOrderRatio.state === 'measured' &&
-    session.higherOrderPct != null &&
-    session.higherOrderPct < 40
-  ) {
-    candidates.push({
-      id: 'questioning',
-      observation: `Most of today's questions were quick recall checks (${session.higherOrderPct}% higher-order)`,
-      whyItMatters: "A natural spot to slip in one 'why' or 'how' question next time.",
-      timestampSec: null,
-      excerpt: null,
-      durationSec: null,
-      weight: 1,
-      focusMetric: 'higherOrderPct',
-    })
-  }
-
-  if (
-    hasEnoughDurationForTalkBalance &&
-    hasEnoughWaitTimeSamples(session.metricsDetail) &&
-    session.avgWaitTimeSec != null &&
-    session.avgWaitTimeSec < 3
-  ) {
-    candidates.push({
-      id: 'wait-time',
-      observation: `Your average wait time was ${session.avgWaitTimeSec}s`,
-      whyItMatters: 'A few extra seconds of silence after a question gives more students time to formulate an answer.',
-      timestampSec: null,
-      excerpt: null,
-      durationSec: null,
-      weight: 1,
-      focusMetric: 'avgWaitTime',
-    })
-  }
-
-  // Only spoken check phrases are detectable, so a zero from a short clip
-  // is too thin to headline as the one thing to work on.
-  if (cfuMetric.state === 'confirmed_none' && hasEnoughDurationForTalkBalance) {
-    candidates.push({
-      id: 'cfu',
-      observation: 'None of the common spoken check-for-understanding phrases came through this session',
-      whyItMatters: 'Even a quick thumbs-up check can catch confusion early, before it compounds.',
-      timestampSec: null,
-      excerpt: null,
-      durationSec: null,
-      weight: 1,
-      focusMetric: 'cfuCount',
-    })
-  }
-
-  if (feedbackRatio.state === 'measured' && feedbackRatio.display.endsWith('%')) {
-    const pct = parseInt(feedbackRatio.display, 10)
-    if (!Number.isNaN(pct) && pct < 50) {
-      candidates.push({
-        id: 'feedback',
-        observation: `Only ${feedbackRatio.display} of your feedback was specific`,
-        whyItMatters: 'Specific feedback gives students something concrete to act on, not just praise or correction.',
-        timestampSec: null,
-        excerpt: null,
-        durationSec: null,
-        weight: 1,
-        focusMetric: 'feedbackSpecificity',
-      })
-    }
-  }
-
-  return candidates
-}
-
 // Always shows a duration and a timestamp as two distinct, explicitly
 // labeled things — never a bare "label · 0:38" that leaves it ambiguous
 // whether the number is how long something lasted or when it happened.
@@ -2113,31 +1992,45 @@ function StrengthCard({
 // One card inside the "Evidence from the lesson" section — the Summary's
 // single growth-oriented pick (the focus-aware top priority), with the
 // "Set as my focus" shortcut when it maps to a trended My Growth metric.
-function EvidenceMomentCard({
-  moment,
-  onSetFocus,
-}: {
-  moment: NoticeCandidate
-  onSetFocus: (metric: FocusMetric) => void
-}) {
+// The moment comes from a read of the transcript (the server's
+// momentToRevisit.ts), not from ranking the report's counts — that ranking put
+// "longest monologue" on almost every lesson. Three of the four statuses are
+// the read declining to name one, and each says why rather than leaving a gap
+// the teacher has to interpret.
+const MOMENT_WITHOUT_ONE: Record<Exclude<AudioMomentToRevisit['status'], 'found'>, string> = {
+  thin: 'Not enough of this lesson came through clearly to pick one moment honestly. A recording with the phone nearer to where you teach gives this more to go on.',
+  not_a_lesson: "This recording doesn't read as a class being taught, so there is no moment to pick out.",
+  clear: 'Nothing in this lesson stood out as needing a second look.',
+}
+
+function MomentToRevisitCard({ moment, sending }: { moment: AudioMomentToRevisit | null; sending: boolean }) {
+  // Not read, and not being read: an older report whose request failed, or a
+  // locked one. Nothing to show beats a placeholder that never resolves.
+  if (!moment && !sending) return null
   return (
     <div className="rounded-2xl border border-hairline bg-cream-card p-6 md:col-span-2">
       <span className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">A moment to revisit</span>
-      <p className="mt-1.5 text-sm font-semibold text-ink">{formatCandidateHeadline(moment)}</p>
-      {moment.excerpt && <p className="mt-1 text-sm text-ink-soft">"{moment.excerpt}"</p>}
-      <p className="mt-1 text-sm text-ink-soft">{moment.whyItMatters}</p>
-      <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2">
-        {/* One Discuss action per page — see DiscussFooter. */}
-        {moment.focusMetric && (
-          <button
-            type="button"
-            onClick={() => onSetFocus(moment.focusMetric as FocusMetric)}
-            className="text-sm font-medium text-forest hover:text-terracotta-600"
-          >
-            Set as my focus → My Growth
-          </button>
-        )}
-      </div>
+      {!moment ? (
+        <p className="mt-1.5 text-sm text-ink-soft">Reading the lesson for the moment most worth a second look…</p>
+      ) : moment.status !== 'found' ? (
+        <p className="mt-1.5 text-sm text-ink-soft">{MOMENT_WITHOUT_ONE[moment.status]}</p>
+      ) : (
+        <>
+          <p className="mt-1.5 text-sm font-semibold text-ink">{moment.headline}</p>
+          {moment.quote && (
+            <p className="mt-1 text-sm text-ink-soft">
+              "{moment.quote}"{moment.timestampSec != null && ` · ${formatTime(moment.timestampSec)}`}
+            </p>
+          )}
+          {moment.whyItMatters && <p className="mt-2 text-sm text-ink">{moment.whyItMatters}</p>}
+          {moment.tryNext && (
+            <p className="mt-2 text-sm text-ink">
+              <span className="font-semibold text-forest">Try next time: </span>
+              {moment.tryNext}
+            </p>
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -2317,6 +2210,8 @@ function ReportPanel({
   const [retagLoading, setRetagLoading] = useState(false)
   const [retagError, setRetagError] = useState<string | null>(null)
   const hasAttemptedClassSummaryRef = useRef(false)
+  const hasAttemptedMomentRef = useRef(false)
+  const [momentSending, setMomentSending] = useState(false)
   const [externalFocus, setExternalFocus] = useState<{
     label: string
     focus: string
@@ -2478,6 +2373,20 @@ function ReportPanel({
       .then((updated) => onUpdate({ ...session, ...updated }))
       .catch(() => {})
       .finally(() => setClassSummarySending(false))
+  }, [tab, locked, session, onUpdate])
+
+  // The same arrangement for the moment to revisit: new reports arrive with
+  // one, and a report analyzed before it existed is read the first time its
+  // Summary is opened. The server keeps whatever comes back, so this is one
+  // read per lesson, ever.
+  useEffect(() => {
+    if (tab !== 'summary' || locked || session.momentToRevisit != null || hasAttemptedMomentRef.current) return
+    hasAttemptedMomentRef.current = true
+    setMomentSending(true)
+    generateMomentToRevisit(session.id)
+      .then((updated) => onUpdate({ ...session, ...updated }))
+      .catch(() => {})
+      .finally(() => setMomentSending(false))
   }, [tab, locked, session, onUpdate])
 
   const metrics = session.metricsDetail ?? {}
@@ -2755,12 +2664,12 @@ function ReportPanel({
           followUpMetric={followUpMetric}
           cfuMetric={cfuMetric}
           feedbackRatio={feedbackRatio}
-          onFocusMetricChange={onFocusMetricChange}
           talkInsight={talkInsight}
           questioningInsight={questioningInsight}
           cfuInsight={cfuInsight}
           classSummary={session.classSummary}
           classSummarySending={classSummarySending}
+          momentSending={momentSending}
           onNavigateInsights={(section) => handleViewSource('insights', '', section)}
           onDiscussWithCoach={handleDiscussWithCoach}
           focusMetric={focusMetric}
@@ -3027,12 +2936,12 @@ function SummaryTab({
   followUpMetric,
   cfuMetric,
   feedbackRatio,
-  onFocusMetricChange,
   talkInsight,
   questioningInsight,
   cfuInsight,
   classSummary,
   classSummarySending,
+  momentSending,
   onNavigateInsights,
   onDiscussWithCoach,
   focusMetric,
@@ -3046,12 +2955,12 @@ function SummaryTab({
   followUpMetric: ReturnType<typeof getCountMetric>
   cfuMetric: ReturnType<typeof getCountMetric>
   feedbackRatio: ConfidentMetric
-  onFocusMetricChange: (metric: FocusMetric | null) => void
   talkInsight: string | null
   questioningInsight: string | null
   cfuInsight: string | null
   classSummary: string | null
   classSummarySending: boolean
+  momentSending: boolean
   onNavigateInsights: (section: InsightsSection) => void
   onDiscussWithCoach: (candidate: NoticeCandidate) => void
   focusMetric: FocusMetric | null
@@ -3059,11 +2968,9 @@ function SummaryTab({
 }) {
   const classSummaryProgress = useSimulatedProgress(classSummarySending, 14000)
   const strengthCandidates = buildStrengthCandidates(session, cfuMetric, feedbackRatio, higherOrderRatio)
-  const priorityCandidates = buildPriorityCandidates(session, cfuMetric, feedbackRatio, higherOrderRatio)
   const strength = pickTop(strengthCandidates)
-  // No separate "One next step" card any more — Reflect is its own tab — so
-  // the focus-aware top priority is the moment to revisit.
-  const momentToRevisit = pickTop(priorityCandidates, focusMetric)
+  const momentToRevisit = session.momentToRevisit ?? null
+  const foundMoment = momentToRevisit?.status === 'found' ? momentToRevisit : null
   const spotlight = buildSpotlight(talkInsight, questioningInsight, cfuInsight)
 
   // Four sections, in the order a teacher actually wants to read them:
@@ -3191,9 +3098,7 @@ function SummaryTab({
             followUpMetric={followUpMetric}
             onExplore={() => onNavigateInsights('questions')}
           />
-          {momentToRevisit && (
-            <EvidenceMomentCard moment={momentToRevisit} onSetFocus={onFocusMetricChange} />
-          )}
+          <MomentToRevisitCard moment={momentToRevisit} sending={momentSending} />
         </div>
       </NumberedCard>
 
@@ -3204,8 +3109,8 @@ function SummaryTab({
             id: 'summary',
             observation: 'The summary of this lesson',
             whyItMatters: "Let's talk through what this report showed.",
-            timestampSec: momentToRevisit?.timestampSec ?? null,
-            excerpt: momentToRevisit?.excerpt ?? null,
+            timestampSec: foundMoment?.timestampSec ?? null,
+            excerpt: foundMoment?.quote ?? null,
             durationSec: null,
             weight: 0,
             focusMetric: null,

@@ -42,6 +42,7 @@ import {
 } from '../lib/hardLook.ts'
 import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { readStudentTalkFocus } from '../lib/studentTalkFocus.ts'
+import { readMomentToRevisit } from '../lib/momentToRevisit.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const audioSessionsRouter = Router()
@@ -765,9 +766,13 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
   // design: if either call fails the phrase answer stands, so a transcript is
   // never lost to them.
   const scanned = analyzeTranscript(segments)
-  const [analysis, lessonContent] = await Promise.all([
+  // The moment to revisit rides along: it reads the same transcript and needs
+  // nothing from the other two. Null if it fails, and the Summary tab asks
+  // again — see the /:id/moment-to-revisit route.
+  const [analysis, lessonContent, momentToRevisit] = await Promise.all([
     enrichClassroomMoves(scanned, segments),
     enrichLessonContent(detectLessonContent(segments, scanned.phases), segments),
+    readMomentToRevisit(segments),
   ])
 
   // What the student talk was ABOUT, which needs the objective and so cannot
@@ -811,6 +816,9 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
       // former is what "not measured" means here, and what every reader
       // treats as absent.
       studentTalkFocus: studentTalkFocus ?? Prisma.DbNull,
+      // Rewritten on every analysis, so re-tagging the speakers and analyzing
+      // again cannot leave a moment chosen from the old labels.
+      momentToRevisit: momentToRevisit ?? Prisma.DbNull,
     },
     include: { segments: { orderBy: { startSec: 'asc' } } },
   })
@@ -1847,6 +1855,45 @@ audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
     console.error('[audio-sessions] class summary failed:', error)
     res.status(502).json({ error: 'Could not generate a class summary. Please try again.' })
   }
+})
+
+// The moment to revisit for a report that does not have one yet: every report
+// analyzed before this shipped, and any whose read failed during analysis. The
+// Summary tab asks once on first view, the way it asks for the class summary.
+// Read once and kept — including "nothing stood out" and "not enough was
+// captured", which are answers, so a lesson is never read twice hoping for a
+// different one.
+audioSessionsRouter.post('/:id/moment-to-revisit', async (req, res) => {
+  const session = await prisma.audioSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+    include: { segments: { orderBy: { startSec: 'asc' } } },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  if (session.momentToRevisit || session.status === 'locked') {
+    res.json(session)
+    return
+  }
+  if (session.status !== 'analyzed') {
+    res.status(409).json({ error: 'This lesson has not been analyzed yet.' })
+    return
+  }
+
+  const moment = await readMomentToRevisit(
+    session.segments.map((s) => ({ speakerLabel: s.speakerLabel, startSec: s.startSec, endSec: s.endSec, text: s.text })),
+  )
+  if (!moment) {
+    res.status(502).json({ error: 'Could not read this lesson for a moment to revisit. Please try again.' })
+    return
+  }
+  const updated = await prisma.audioSession.update({
+    where: { id: session.id },
+    data: { momentToRevisit: moment },
+    include: { segments: { orderBy: { startSec: 'asc' } } },
+  })
+  res.json(updated)
 })
 
 audioSessionsRouter.delete('/:id', async (req, res) => {

@@ -222,4 +222,11 @@ enum AudioCoachingService {
     static func generateClassSummary(sessionId: String) async throws -> AudioSessionWithSegments {
         try await APIClient.shared.request("/api/audio-sessions/\(sessionId)/class-summary", method: "POST")
     }
+
+    /// The moment to revisit for a report that has none yet — one analysed
+    /// before the server chose it by reading the transcript. Read once and
+    /// kept, so this never fires twice for a lesson.
+    static func generateMomentToRevisit(sessionId: String) async throws -> AudioSessionWithSegments {
+        try await APIClient.shared.request("/api/audio-sessions/\(sessionId)/moment-to-revisit", method: "POST")
+    }
 }

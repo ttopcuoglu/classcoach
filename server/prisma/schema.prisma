@@ -664,6 +664,12 @@ model AudioSession {
   // is common and is not zero.
   studentTalkFocus Json?
 
+  // The one moment most worth a second look, chosen by reading the transcript
+  // rather than by ranking counts — see lib/momentToRevisit.ts. Null until it
+  // has been read; a read that finds nothing is stored as its own status, so
+  // "looked and found nothing" never looks like "not looked yet".
+  momentToRevisit  Json?
+
   // Claude-generated summary of what the class covered + a genuine
   // strength, auto-generated once on the teacher's first Summary view and
   // cached forever after. Null = not yet attempted, or the one retryable

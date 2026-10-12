@@ -812,6 +812,20 @@ export type AudioStudentTalkFocus = {
   examples: AudioStudentTurnFocus[]
 }
 
+// The one moment most worth a second look, chosen by a read of the transcript
+// (server/src/lib/momentToRevisit.ts). Only 'found' carries a moment; the
+// other three are the read saying honestly that it has none to give.
+export type AudioMomentToRevisit = {
+  generatedAt: string
+  status: 'found' | 'thin' | 'not_a_lesson' | 'clear'
+  headline: string | null
+  /// The transcript's own words, never a paraphrase.
+  quote: string | null
+  timestampSec: number | null
+  whyItMatters: string | null
+  tryNext: string | null
+}
+
 export type AudioSession = {
   id: string
   teacherName: string | null
@@ -854,6 +868,9 @@ export type AudioSession = {
   rubricLens: AudioRubricLens | null
   hardLook: AudioHardLook | null
   studentTalkFocus: AudioStudentTalkFocus | null
+  // Null or absent until the lesson has been read for it; the Summary tab
+  // asks the first time it is opened.
+  momentToRevisit?: AudioMomentToRevisit | null
   classSummary: string | null
   strengths: string | null
   growthAreas: string | null
@@ -2171,6 +2188,10 @@ export function generateRubricLens(id: string): Promise<AudioSessionWithSegments
 
 export function generateHardLook(id: string): Promise<AudioSessionWithSegments> {
   return request(`/api/audio-sessions/${id}/hard-look`, { method: 'POST' })
+}
+
+export function generateMomentToRevisit(id: string): Promise<AudioSession> {
+  return request(`/api/audio-sessions/${id}/moment-to-revisit`, { method: 'POST' })
 }
 
 export function generateClassSummary(id: string): Promise<AudioSession> {

@@ -180,6 +180,8 @@ struct ReportView: View {
     /// One attempt per visit, so a server hiccup doesn't retry in a loop every
     /// time the teacher comes back to this tab.
     @State private var attemptedSummary = false
+    @State private var readingMoment = false
+    @State private var attemptedMoment = false
     @State private var retagging = false
 
     private var locked: Bool { session.status == "locked" }
@@ -211,7 +213,7 @@ struct ReportView: View {
                     OverviewTab(
                         session: session,
                         summarizing: summarizing,
-                        onSetFocus: { metric in focusMetric = metric; tab = .myGrowth },
+                        readingMoment: readingMoment,
                         onNavigateInsights: { target in section = target; tab = .insights },
                         onDiscuss: discuss
                     )
@@ -230,7 +232,12 @@ struct ReportView: View {
 
             disclaimer
         }
-        .task(id: tab) { await fillMissingSummary() }
+        .task(id: tab) {
+            // The quick one first, so the card is there while the prose is
+            // still being written.
+            await fillMissingMoment()
+            await fillMissingSummary()
+        }
         .sheet(isPresented: $retagging) {
             RetagSpeakersView(session: session) { updated in
                 retagging = false
@@ -250,6 +257,18 @@ struct ReportView: View {
         summarizing = true
         defer { summarizing = false }
         if let updated = try? await AudioCoachingService.generateClassSummary(sessionId: session.id) {
+            onUpdate(updated)
+        }
+    }
+
+    /// The same for the moment to revisit: an older report is read for one
+    /// the first time its Summary is opened.
+    private func fillMissingMoment() async {
+        guard tab == .summary, !locked, session.momentToRevisit == nil, !attemptedMoment else { return }
+        attemptedMoment = true
+        readingMoment = true
+        defer { readingMoment = false }
+        if let updated = try? await AudioCoachingService.generateMomentToRevisit(sessionId: session.id) {
             onUpdate(updated)
         }
     }
