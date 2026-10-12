@@ -185,6 +185,29 @@ enum LessonPlanningService {
         try await APIClient.shared.request("/api/lesson-plans/\(id)/presentation-feedback", method: "POST")
     }
 
+    private struct SlidesFileBody: Encodable { let format: String; let model: JSONValue }
+    private struct GeneratedDeck: Decodable { let model: JSONValue }
+
+    /// Rebuilds the reviewed deck with every recommendation applied, then
+    /// renders it to a real .pptx. Two steps, like the web: Claude lays the
+    /// deck out, then the server turns that layout into a file. Deliberately
+    /// reuses Assignment Coach's `export-file` renderer rather than adding a
+    /// second one — it already takes `{ format, model }` and knows how to
+    /// write a deck.
+    static func improvedSlides(id: String) async throws -> URL {
+        let deck: GeneratedDeck = try await APIClient.shared.request(
+            "/api/lesson-plans/\(id)/presentation-generate",
+            method: "POST"
+        )
+        let data = try await APIClient.shared.postForData(
+            "/api/assignment-coach/export-file",
+            body: SlidesFileBody(format: "pptx", model: deck.model)
+        )
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("wivoza-slides.pptx")
+        try data.write(to: url, options: .atomic)
+        return url
+    }
+
     static func sendChat(id: String, message: String) async throws -> LessonPlan {
         try await APIClient.shared.request("/api/lesson-plans/\(id)/chat", method: "POST", body: MessageBody(message: message))
     }
