@@ -87,6 +87,25 @@ final class APIClient {
     /// same `field name / filename` pattern as `web/src/lib/api.ts`'s
     /// hand-rolled `FormData` uploads, since those bypass the JSON-only
     /// `request()` helper there too.
+    /// The media type for a picked file's extension. Lives here rather than in
+    /// a feature service because every surface that uploads a document needs
+    /// the same map, and the second one to need it should not have to make a
+    /// copy. Anything unrecognised goes up as octet-stream and the server
+    /// decides from the filename.
+    static func mimeType(forExtension ext: String) -> String {
+        switch ext.lowercased() {
+        case "docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        case "pptx": return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        case "xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        case "xls": return "application/vnd.ms-excel"
+        case "pdf": return "application/pdf"
+        case "txt": return "text/plain"
+        case "png": return "image/png"
+        case "jpg", "jpeg": return "image/jpeg"
+        default: return "application/octet-stream"
+        }
+    }
+
     func upload<Response: Decodable>(
         _ path: String,
         fileData: Data,

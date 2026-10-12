@@ -113,15 +113,7 @@ enum AssignmentCoachService {
     }
 
     private static func mimeType(for ext: String) -> String {
-        switch ext.lowercased() {
-        case "docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        case "pptx": return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        case "pdf": return "application/pdf"
-        case "txt": return "text/plain"
-        case "png": return "image/png"
-        case "jpg", "jpeg": return "image/jpeg"
-        default: return "application/octet-stream"
-        }
+        APIClient.mimeType(forExtension: ext)
     }
 
     // MARK: Export
