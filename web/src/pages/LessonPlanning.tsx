@@ -38,6 +38,7 @@ import {
   type LessonPlanDeliveryCoaching,
   type LessonPlanPresentationReview,
 } from '../lib/api'
+import { takePlanningPrefill } from '../lib/communicationsPrefill'
 
 // Assignment Coach is the fourth chip rather than a seventh menu item. Every
 // chip here is one planning job — start a lesson, strengthen one you have,
@@ -897,6 +898,8 @@ function BuildPanel() {
   const [form, setForm] = useState<BuildForm>(EMPTY_BUILD)
   // Which fields Coach filled in from a chat, named for the teacher.
   const [fromChat, setFromChat] = useState<string[]>([])
+  // The lesson a Debrief finding was carried over from, when there is one.
+  const [fromDebrief, setFromDebrief] = useState<string | null>(null)
   // The latest form, for the arriving handoff below: it merges onto
   // whatever the profile defaults have already put there, without having to
   // wait for a render.
@@ -958,6 +961,22 @@ function BuildPanel() {
         }))
       })
       .catch(() => {})
+  }, [])
+
+  // Arriving from a Lesson Debrief's "Plan the next lesson around this". The
+  // room wins over the profile default — it is the class that was recorded —
+  // and the finding lands in "Anything else", where the teacher can read and
+  // change it before anything is built.
+  useEffect(() => {
+    const prefill = takePlanningPrefill()
+    if (!prefill) return
+    setForm((prev) => ({
+      ...prev,
+      subject: prefill.subject || prev.subject,
+      gradeLevel: prefill.gradeLevel || prev.gradeLevel,
+      additionalContext: prefill.additionalContext,
+    }))
+    setFromDebrief(prefill.source)
   }, [])
 
   function set<K extends keyof BuildForm>(key: K, value: BuildForm[K]) {
@@ -1166,6 +1185,13 @@ function BuildPanel() {
               Start with a topic, or the material you already have. Everything else is optional.
             </PanelHeader>
 
+            {fromDebrief && (
+              <p className="rounded-2xl bg-peach-tint/40 px-4 py-3 text-xs text-forest">
+                Carried over from your Lesson Debrief ({fromDebrief}): what to build in is under More details. Add
+                the topic for the next lesson, then build it.
+              </p>
+            )}
+
             {fromChat.length > 0 && (
               <p className="rounded-2xl bg-peach-tint/40 px-4 py-3 text-xs text-forest">
                 Filled in the {fromChat.join(', ')} from your chat with Coach — change anything that isn't right, then build it.
@@ -1362,7 +1388,7 @@ function BuildPanel() {
               </div>
             </div>
 
-            <details className="rounded-2xl border border-hairline bg-cream/60 px-4 py-3">
+            <details open={fromDebrief != null} className="rounded-2xl border border-hairline bg-cream/60 px-4 py-3">
               <summary className="cursor-pointer list-none text-sm font-semibold text-forest marker:hidden">
                 More details — optional
               </summary>

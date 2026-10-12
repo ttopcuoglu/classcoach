@@ -44,15 +44,19 @@ function difficultyLabel(value: string) {
 // primary control, because it decides what scenario they get handed.
 export default function TryItOut({
   focusArea,
+  initialCategory,
   room,
   onRoomChange,
 }: {
   focusArea?: string
+  /// A sub-category to start on — set when a Lesson Debrief sends a teacher
+  /// here to rehearse the thing its report pointed at.
+  initialCategory?: string
   /// Owned by the shell so switching to Ask keeps the room a teacher set.
   room: TeachingContext
   onRoomChange: (next: TeachingContext) => void
 }) {
-  const [category, setCategory] = useState<string | undefined>(undefined)
+  const [category, setCategory] = useState<string | undefined>(initialCategory)
   const [difficulty, setDifficulty] = useState<string | undefined>(undefined)
   const area = findFocusArea(focusArea)
 
