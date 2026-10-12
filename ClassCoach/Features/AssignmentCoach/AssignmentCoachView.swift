@@ -307,6 +307,7 @@ private struct AssignmentIntakeView: View {
     @State private var extracting = false
     @State private var showImporter = false
     @State private var photoItem: PhotosPickerItem?
+    @State private var showPhotos = false
     @State private var showCamera = false
     @State private var aiUseLevel: String?
     @State private var letWivozaRecommend = false
@@ -391,6 +392,7 @@ private struct AssignmentIntakeView: View {
         .fileImporter(isPresented: $showImporter, allowedContentTypes: importTypes) { result in
             if case .success(let url) = result { Task { await extractFile(url) } }
         }
+        .photosPicker(isPresented: $showPhotos, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) { _, item in
             if let item { Task { await extractPhoto(item) } }
         }
@@ -415,14 +417,26 @@ private struct AssignmentIntakeView: View {
                         Image(systemName: "doc.text.magnifyingglass").font(.largeTitle).foregroundStyle(AppTheme.terracotta)
                         Text("Add your assignment").font(.heading(.headline)).foregroundStyle(AppTheme.forest)
                         HStack(spacing: 8) {
-                            Button { showImporter = true } label: { pill("Choose file", "square.and.arrow.up") }
-                            // Absent on a simulator and on any device with
-                            // no camera, where the button would open
-                            // nothing.
+                            // One way in for something that already exists,
+                            // not two. A file and a photo of a worksheet are
+                            // the same act to a teacher, and only iOS cares
+                            // that the Files browser cannot see the camera
+                            // roll and the photo picker cannot see Files —
+                            // so the split lives inside this menu instead of
+                            // on the screen.
+                            Menu {
+                                Button { showImporter = true } label: { Label("Browse files", systemImage: "folder") }
+                                Button { showPhotos = true } label: { Label("Choose a photo", systemImage: "photo.on.rectangle") }
+                            } label: {
+                                pill("Add a file", "square.and.arrow.up")
+                            }
+                            // Taking a new picture is a different act, so it
+                            // keeps its own button. Absent on a simulator and
+                            // on any device with no camera, where it would
+                            // open nothing.
                             if UIImagePickerController.isSourceTypeAvailable(.camera) {
                                 Button { showCamera = true } label: { pill("Camera", "camera") }
                             }
-                            PhotosPicker(selection: $photoItem, matching: .images) { pill("Photo", "photo") }
                             Button { inputMode = "paste" } label: { pill("Paste text", "doc.on.clipboard") }
                         }
                         Text("PDF, Word, PowerPoint, image, or plain text")
