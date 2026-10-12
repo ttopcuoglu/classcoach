@@ -1,5 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 private enum Phase {
     case idle, listening, thinking, speaking, error
@@ -88,14 +87,6 @@ struct TalkToMeView: View {
     /// Sent with the first turn only; cleared when starting a new conversation.
     @State private var activeFollowUp: CoachFollowUp?
     /// The teacher tapped "Don't check in on this" on the current takeaway.
-    // A document attached BEFORE the call. Not during one: picking a file is
-    // two-handed and eyes-down, which is the opposite of what this screen is
-    // for, and the picker takes the audio session off the player every spoken
-    // reply goes through.
-    @State private var attachment: TalkToMeService.TalkAttachment?
-    @State private var attaching = false
-    @State private var attachError: String?
-    @State private var showAttachImporter = false
     @State private var checkInOff = false
     @State private var checkInNote: String?
 
@@ -203,103 +194,7 @@ struct TalkToMeView: View {
                     phase = .error
                 }
             }
-            .fileImporter(isPresented: $showAttachImporter, allowedContentTypes: attachTypes) { result in
-                if case .success(let url) = result { Task { await attachFile(url) } }
-            }
         }
-    }
-
-    /// Same set Look It Over accepts, which is everything documentText.ts can
-    /// read. A photo of a worksheet is the likeliest source here, and the
-    /// Files browser can reach the camera roll through "Browse" — a second
-    /// photo-library picker on this screen would be one more control on the
-    /// quietest row in the card.
-    private var attachTypes: [UTType] {
-        var types: [UTType] = [.pdf, .plainText, .png, .jpeg]
-        for ext in ["docx", "pptx", "xlsx", "xls"] {
-            if let type = UTType(filenameExtension: ext) { types.append(type) }
-        }
-        return types
-    }
-
-    private func attachFile(_ url: URL) async {
-        attachError = nil
-        attaching = true
-        defer { attaching = false }
-        // Files chosen from Files/iCloud are security-scoped.
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        guard let data = try? Data(contentsOf: url) else {
-            attachError = "Could not open that file. Try a different one, or just talk it through without it."
-            return
-        }
-        do {
-            attachment = try await TalkToMeService.extractAttachment(data: data, filename: url.lastPathComponent)
-        } catch {
-            // Every failure the server can name is already a sentence a
-            // teacher can act on — see server/src/lib/extractHttp.ts.
-            attachError = error.localizedDescription
-            attachment = nil
-        }
-    }
-
-    /// Attaching a plan or worksheet, offered before the call and nowhere
-    /// else. Deliberately the quietest control in the card: most conversations
-    /// have no document in them, and a teacher who never notices this loses
-    /// nothing.
-    @ViewBuilder
-    private var attachRow: some View {
-        VStack(spacing: 6) {
-            if let attachment {
-                HStack(spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(attachment.name)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(AppTheme.cream)
-                            .lineLimit(1).truncationMode(.middle)
-                        Text(attachment.truncated
-                             ? "Long file — Coach will have the first part of it."
-                             : "Coach will have this. Just start talking about it.")
-                            .font(.caption)
-                            .foregroundStyle(AppTheme.cream.opacity(0.6))
-                    }
-                    Spacer(minLength: 4)
-                    Button("Replace") { showAttachImporter = true }
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(AppTheme.cream.opacity(0.8))
-                        .buttonStyle(.plain)
-                    Button {
-                        self.attachment = nil
-                        attachError = nil
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(AppTheme.cream.opacity(0.6))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Remove attached file")
-                }
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(AppTheme.cream.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(AppTheme.cream.opacity(0.2)))
-            } else {
-                Button { showAttachImporter = true } label: {
-                    Label(attaching ? "Reading your file…" : "Attach a plan or worksheet (optional)",
-                          systemImage: "paperclip")
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(AppTheme.cream.opacity(attaching ? 0.4 : 0.6))
-                }
-                .buttonStyle(.plain)
-                .disabled(attaching)
-            }
-            if let attachError {
-                Text(attachError)
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.peachTint)
-                    .multilineTextAlignment(.center)
-            }
-        }
-        .padding(.top, 4)
     }
 
     /// The orb, what Coach is doing, the question, and both ways in — one card.
@@ -372,8 +267,6 @@ struct TalkToMeView: View {
                                 .overlay(Capsule().strokeBorder(AppTheme.cream.opacity(0.25), lineWidth: 2))
                         }
                         .buttonStyle(.plain)
-
-                        attachRow
                     }
                     .padding(.top, 2)
                 }
@@ -1085,8 +978,7 @@ struct TalkToMeView: View {
                         return try await TalkToMeService.streamReply(
                             debriefId: debrief?.id,
                             message: text,
-                            followUpId: activeFollowUp?.id,
-                            attachment: attachment
+                            followUpId: activeFollowUp?.id
                         ) { sentence in
                             heardAnything = true
                             streamingReply = streamingReply.map { "\($0) \(sentence)" } ?? sentence
@@ -1212,8 +1104,6 @@ struct TalkToMeView: View {
         activeFollowUp = nil
         checkInOff = false
         checkInNote = nil
-        attachment = nil
-        attachError = nil
         Task { await loadSavedTalks() }
     }
 

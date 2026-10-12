@@ -260,12 +260,6 @@ model Debrief {
   // When Coach offered, on Telegram, to wrap this conversation up after it
   // went quiet. Offered at most once per conversation.
   telegramWrapUpOfferedAt DateTime?
-  // A document the teacher attached BEFORE a Talk It Through call started —
-  // the text pulled out of it, never the file itself. Talk It Through only
-  // (source === 'talk_to_me'); attaching during a call is deliberately not a
-  // thing, see lib/talkAttachment.ts. Capped at MAX_ATTACHMENT_CHARS.
-  attachmentName String?
-  attachmentText String?
   saved        Boolean  @default(false)
   shareToken   String?  @unique
   createdAt    DateTime @default(now())

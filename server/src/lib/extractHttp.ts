@@ -1,12 +1,10 @@
-/// Turning a failed document read into a response, in one place.
+/// Turning a failed document read into a response.
 ///
-/// Every surface that accepts a file hits the same five failures, and each
-/// one already had a sentence written for it that is really a fact about the
-/// teacher's file rather than a server error ("a long scan usually is").
-/// Those sentences were living in routes/assignmentCoach.ts, which meant the
-/// second surface to accept a file had the choice of importing from an
-/// unrelated router or writing its own wording — and two copies of a
-/// teacher-facing sentence drift.
+/// Reading a file fails in five ways, and each one has a sentence written for
+/// it that is really a fact about the teacher's file rather than a server
+/// error ("a long scan usually is"). They live here rather than inline in the
+/// route so that the next surface to accept a file does not have to choose
+/// between importing from an unrelated router and writing its own wording.
 ///
 /// Deliberately no dependency on documentText.ts: see extractErrors.ts for
 /// why the names of the failures stay separate from the parsers.

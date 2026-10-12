@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import AnswerSection from '../components/AnswerSection'
-import { BrainIcon, CloseIcon, MicIcon, StarIcon, UploadIcon, WarningIcon } from '../components/icons'
+import { BrainIcon, MicIcon, StarIcon, WarningIcon } from '../components/icons'
 import VoiceBars from '../components/VoiceBars'
 import PastList from '../components/PastList'
 import SectionLabel from '../components/SectionLabel'
@@ -21,14 +21,12 @@ import {
   saveDebriefReflection,
   sendDebriefChat,
   setDebriefSaved,
-  extractTalkAttachment,
   startTalkToMe,
   streamCoachReply,
   type ApiError,
   type CoachFollowUp,
   type ChatMessage,
   type Debrief,
-  type TalkAttachment,
   type TalkTakeaway,
   type TalkVoice,
 } from '../lib/api'
@@ -185,12 +183,6 @@ export default function TalkToMe() {
   // Only used to narrow which starter prompts are worth showing — a K-2 room
   // and a 9-12 room are not stuck on the same things.
   const [room, setRoom] = useState<TeachingContext>(DEFAULT_TEACHING_CONTEXT)
-  // A document attached BEFORE the call. Not during one: a file picker in the
-  // middle of a hands-free conversation is the wrong shape, and on mobile it
-  // interrupts the audio element the whole spoken path depends on.
-  const [attachment, setAttachment] = useState<(TalkAttachment & { truncated: boolean }) | null>(null)
-  const [attaching, setAttaching] = useState(false)
-  const [attachError, setAttachError] = useState<string | null>(null)
   const [isSuperadmin, setIsSuperadmin] = useState(false)
   const [testCheckInError, setTestCheckInError] = useState<string | null>(null)
   // Per takeaway: the teacher opted out of the check-in on this one.
@@ -201,12 +193,6 @@ export default function TalkToMe() {
   // were created in and would otherwise test a stale phase.
   const phaseRef = useRef<Phase>('idle')
   phaseRef.current = phase
-  // Read by the send paths, which run from timers and audio callbacks. Only
-  // ever used on the turn that starts the conversation; after that the server
-  // reads the document off the row.
-  const attachmentRef = useRef<(TalkAttachment & { truncated: boolean }) | null>(null)
-  attachmentRef.current = attachment
-  const attachInputRef = useRef<HTMLInputElement | null>(null)
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const mutedRef = useRef(muted)
@@ -499,8 +485,6 @@ export default function TalkToMe() {
           queue.push(sentence)
         },
         followUpRef.current?.id,
-        undefined,
-        attachmentRef.current,
       )
       const result = await trackReply(reply)
       setDebrief(result)
@@ -704,7 +688,6 @@ export default function TalkToMe() {
       },
       followUpRef.current?.id,
       controller.signal,
-      attachmentRef.current,
     )
     // Nothing awaits this until the turn ends, and it may never be awaited at
     // all, so its rejection is absorbed here and re-read later if it matters.
@@ -773,7 +756,7 @@ export default function TalkToMe() {
         const current = debriefRef.current
         const result = current
           ? await sendDebriefChat(current.id, text)
-          : await startTalkToMe(text, followUpRef.current?.id, attachmentRef.current)
+          : await startTalkToMe(text, followUpRef.current?.id)
         setDebrief(result)
         // A typed turn comes back to the keyboard, so settle to idle. Calling
         // resumeListeningIfActive here would no-op — there is no live session —
@@ -872,7 +855,6 @@ export default function TalkToMe() {
             },
             followUpRef.current?.id,
             resumption.signal,
-            attachmentRef.current,
           ),
         )
       }
@@ -1113,21 +1095,6 @@ export default function TalkToMe() {
     window.scrollTo({ top: 0 })
   }
 
-  async function handleAttachFile(file: File) {
-    setAttachError(null)
-    setAttaching(true)
-    try {
-      setAttachment(await extractTalkAttachment(file))
-    } catch (err) {
-      // Every failure the server can name is already a sentence a teacher can
-      // act on — see lib/extractHttp.ts — so it is shown as-is.
-      setAttachError((err as Error).message)
-      setAttachment(null)
-    } finally {
-      setAttaching(false)
-    }
-  }
-
   function handleStartOver() {
     sessionActiveRef.current = false
     close()
@@ -1142,8 +1109,6 @@ export default function TalkToMe() {
     setNextStepOpen(false)
     setNextStepDraft('')
     setFollowUp(null)
-    setAttachment(null)
-    setAttachError(null)
     setPhase('idle')
     // The saved list was loaded when the page opened. A conversation resumed
     // since then has more turns and possibly a newer takeaway, and a stale
@@ -1174,12 +1139,6 @@ export default function TalkToMe() {
   // so already — a conversation can be resumed from its takeaway screen
   // without ever having hit the refusal in this session.
   const atCap = conversationFull || messages.filter((m) => m.role === 'user').length >= TALK_TURN_CAP
-  // Attaching stays available for as long as the conversation has not started,
-  // which includes having opened the keyboard: onStartScreen goes false there,
-  // and hiding the chip behind it meant a teacher who attached a plan and then
-  // chose to type saw nothing attached while the file was still going to be
-  // sent.
-  const beforeCall = !debrief && phase === 'idle' && !atCap
   const finishing = takeawayLoading || takeaway != null || takeawayError != null
 
   return (
@@ -1560,70 +1519,6 @@ export default function TalkToMe() {
                   >
                     Type instead
                   </button>
-                </div>
-              )}
-
-              {/* Attaching a document is only offered here, before the call.
-                  Not during one: picking a file is a two-handed, eyes-down act
-                  and this is the hands-free surface, and on mobile the picker
-                  can interrupt the audio element every spoken reply plays
-                  through. Deliberately small and last — most conversations
-                  have no document in them, and a teacher who ignores this
-                  loses nothing. */}
-              {beforeCall && (
-                <div className="mt-1 flex w-full max-w-xl flex-col items-center gap-2">
-                  <input
-                    ref={attachInputRef}
-                    type="file"
-                    accept=".docx,.pdf,.pptx,.xlsx,.xls,.txt,.jpg,.jpeg,.png"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) void handleAttachFile(file)
-                      e.target.value = ''
-                    }}
-                  />
-                  {attachment ? (
-                    <div className="flex w-full items-center gap-3 rounded-2xl border border-cream/20 bg-cream/10 px-4 py-3 text-left">
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-cream">{attachment.name}</span>
-                        <span className="block text-xs text-cream/60">
-                          {attachment.truncated
-                            ? 'Long file — Coach will have the first part of it.'
-                            : 'Coach will have this. Just start talking about it.'}
-                        </span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => attachInputRef.current?.click()}
-                        className="shrink-0 text-xs font-semibold text-cream/80 hover:text-cream"
-                      >
-                        Replace
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAttachment(null)
-                          setAttachError(null)
-                        }}
-                        aria-label="Remove attached file"
-                        className="shrink-0 text-cream/60 hover:text-cream"
-                      >
-                        <CloseIcon className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => attachInputRef.current?.click()}
-                      disabled={attaching}
-                      className="flex items-center gap-2 text-sm font-medium text-cream/60 transition-colors hover:text-cream disabled:opacity-60"
-                    >
-                      <UploadIcon className="h-4 w-4" />
-                      {attaching ? 'Reading your file…' : 'Attach a plan or worksheet (optional)'}
-                    </button>
-                  )}
-                  {attachError && <p className="text-xs text-peach-tint">{attachError}</p>}
                 </div>
               )}
             </div>

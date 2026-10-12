@@ -13,9 +13,6 @@ import { buildExperienceContextBlock } from '../lib/experience.ts'
 import { TALK_REPLY_WORD_BUDGET } from '../lib/replyBudget.ts'
 import { streamCoachReply, trimIfTruncated } from '../lib/coachStream.ts'
 import { buildFollowUpContextBlock, checkInQuestionFor, nextCheckInDate } from '../lib/followUps.ts'
-import { extractInChild } from '../lib/extractInChild.ts'
-import { sendExtractionError } from '../lib/extractHttp.ts'
-import { buildAttachmentBlock, cleanAttachmentName, clipAttachmentText, readAttachmentInput } from '../lib/talkAttachment.ts'
 import {
   appendTurn,
   CHAT_TURN_CAP,
@@ -33,7 +30,7 @@ import type { CoachFollowUp, Debrief } from '../generated/prisma/client.ts'
 import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { prisma } from '../lib/prisma.ts'
 import { buildDigestFor } from '../lib/coachDigest.ts'
-import { cachedSystem, cachedSystemWithDocument } from '../lib/promptCache.ts'
+import { cachedSystem } from '../lib/promptCache.ts'
 import { categoryInArea, isKnownCategory } from '../lib/scenarioCategories.ts'
 import {
   isCourseLevelFor,
@@ -306,12 +303,6 @@ debriefRouter.get('/', async (req, res) => {
       ...(source === 'ask_tab' ? { OR: [{ source: 'ask_tab' }, { source: null }] } : typeof source === 'string' ? { source } : {}),
     },
     orderBy: { createdAt: 'desc' },
-    // An attached document can run to 12k characters and nothing on the client
-    // reads it — the list is titles and dates. Coach reads it back off the row
-    // itself on every turn, so leaving it out here costs nothing and keeps the
-    // conversations list from carrying a copy of every document the teacher
-    // has ever attached.
-    omit: { attachmentText: true },
   })
   res.json(debriefs)
 })
@@ -473,42 +464,8 @@ async function markFollowUpAnswered(followUpId: string, debriefId: string) {
   })
 }
 
-// Reading an attached document. Returns the text rather than storing it: there
-// is no conversation to hang it on yet — the teacher attaches it on the start
-// screen, possibly changes their mind, and the row only exists once they
-// actually start talking. So the client holds the text and sends it with the
-// first turn, the same shape Look It Over already uses.
-//
-// Extraction itself runs in a child process; see extractInChild.ts for why.
-debriefRouter.post('/talk/attachment', upload.single('file'), async (req, res) => {
-  if (!req.file) {
-    res.status(400).json({ error: 'No file received' })
-    return
-  }
-  try {
-    const { text } = await extractInChild(req.file.buffer, req.file.originalname)
-    // Capped here as well as on the way in to a conversation, so the teacher
-    // finds out on the start screen that only part of a long file will be in
-    // play rather than discovering it mid-call.
-    const clipped = clipAttachmentText(text)
-    res.json({
-      name: cleanAttachmentName(req.file.originalname),
-      text: clipped.text,
-      truncated: clipped.truncated,
-    })
-  } catch (error) {
-    if (sendExtractionError(res, error, 'talk-attachment', req.file)) return
-    console.error('[debrief] talk attachment extract failed:', error)
-    res.status(502).json({ error: 'Could not read that file. Please try again, or just talk it through without it.' })
-  }
-})
-
 debriefRouter.post('/talk/stream', async (req, res) => {
   const { message, followUpId } = req.body ?? {}
-  // Attached before the call, so it arrives with the first turn and is stored
-  // on the row the first turn creates; every turn after this reads it back
-  // from there.
-  const attachment = readAttachmentInput(req.body?.attachment)
   // No message at all means Coach opens the conversation — an empty string
   // still does not, because that is a client bug rather than a greeting.
   const isGreeting = message == null
@@ -548,9 +505,8 @@ debriefRouter.post('/talk/stream', async (req, res) => {
     speak: { voice: user?.talkVoice ?? undefined },
     // Spoken, so the teacher is waiting in silence for it.
     model: SPOKEN_MODEL,
-    system: cachedSystemWithDocument(
+    system: cachedSystem(
       TALK_SYSTEM_PROMPT,
-      buildAttachmentBlock(attachment?.name ?? null, attachment?.text ?? null),
       memoryOn ? `${talkTail}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}` : talkTail,
     ),
     maxTokens: (isGreeting ? 150 : TALK_REPLY_MAX_TOKENS) + (memoryOn ? MEMORY_UPDATE_TOKEN_BUFFER : 0),
@@ -567,8 +523,6 @@ debriefRouter.post('/talk/stream', async (req, res) => {
           // thing they actually say becomes the title (see the chat routes).
           incidentText: isGreeting ? '' : trimmed,
           source: 'talk_to_me',
-          attachmentName: attachment?.name ?? null,
-          attachmentText: attachment?.text ?? null,
           conversation: isGreeting
             ? [{ role: 'assistant' as const, text: reply, createdAt: new Date().toISOString() }]
             : appendTurn([], trimmed, reply),
@@ -647,10 +601,6 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
   // Talk carries no room context; Ask's belongs to this conversation, not to
   // every teacher, so either way it goes after the cache breakpoint.
   const roomBlock = isTalk ? '' : teachingContextBlock(debrief)
-  // Attached before the call started and stored on the row, so it is in play
-  // on every turn of the conversation rather than only the one that carried
-  // it. Talk It Through only, as a rule and not just as a fact about the data.
-  const attachmentBlock = isTalk ? buildAttachmentBlock(debrief.attachmentName, debrief.attachmentText) : ''
   const baseMaxTokens = isTalk ? TALK_REPLY_MAX_TOKENS : 300
   // Memory is read every turn but rewritten only on some — see shouldWriteMemory.
   const writeMemory = memoryOn && shouldWriteMemory(countUserTurns(existing) + 1)
@@ -662,9 +612,8 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
     // Only Talk It Through is spoken; Reflect's chat is read, and there half
     // a second buys nothing while the reply is worth more.
     model: isTalk ? SPOKEN_MODEL : undefined,
-    system: cachedSystemWithDocument(
+    system: cachedSystem(
       stablePrompt,
-      attachmentBlock,
       memoryOn
         ? `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
         : `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}`,
@@ -695,7 +644,6 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
 
 debriefRouter.post('/talk', async (req, res) => {
   const { message, followUpId } = req.body ?? {}
-  const attachment = readAttachmentInput(req.body?.attachment)
   if (typeof message !== 'string' || !message.trim()) {
     res.status(400).json({ error: 'message is required' })
     return
@@ -721,9 +669,8 @@ debriefRouter.post('/talk', async (req, res) => {
       model: CLAUDE_MODEL,
       max_tokens: memoryOn ? TALK_REPLY_MAX_TOKENS + MEMORY_UPDATE_TOKEN_BUFFER : TALK_REPLY_MAX_TOKENS,
       thinking: { type: 'disabled' },
-      system: cachedSystemWithDocument(
+      system: cachedSystem(
         TALK_SYSTEM_PROMPT,
-        buildAttachmentBlock(attachment?.name ?? null, attachment?.text ?? null),
         memoryOn ? `${talkTail}${buildMemoryContextBlock(user!.coachMemory)}${MEMORY_UPDATE_INSTRUCTION}` : talkTail,
       ),
       messages: [{ role: 'user', content: trimmed }],
@@ -742,14 +689,7 @@ debriefRouter.post('/talk', async (req, res) => {
 
     const conversation = appendTurn([], trimmed, reply)
     const debrief = await prisma.debrief.create({
-      data: {
-        userId: req.user!.userId,
-        incidentText: trimmed,
-        source: 'talk_to_me',
-        conversation,
-        attachmentName: attachment?.name ?? null,
-        attachmentText: attachment?.text ?? null,
-      },
+      data: { userId: req.user!.userId, incidentText: trimmed, source: 'talk_to_me', conversation },
     })
     if (followUp) await markFollowUpAnswered(followUp.id, debrief.id)
 
@@ -817,15 +757,13 @@ debriefRouter.post('/:id/chat', async (req, res) => {
     // otherwise a grading question gets a behavior-management voice on turn two.
     const stablePrompt = isTalk ? TALK_SYSTEM_PROMPT : askChatSystemPrompt(findFocusArea(debrief.focusArea))
     const roomBlock = isTalk ? '' : teachingContextBlock(debrief)
-    const attachmentBlock = isTalk ? buildAttachmentBlock(debrief.attachmentName, debrief.attachmentText) : ''
     const baseMaxTokens = isTalk ? TALK_REPLY_MAX_TOKENS : 300
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: writeMemory ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
       thinking: { type: 'disabled' },
-      system: cachedSystemWithDocument(
+      system: cachedSystem(
         stablePrompt,
-        attachmentBlock,
         memoryOn
           ? `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
           : `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}`,

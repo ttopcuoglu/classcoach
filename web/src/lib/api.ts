@@ -1350,9 +1350,6 @@ export async function streamCoachReply(
   // instead of saving a turn nobody heard — see streamCoachReply in
   // server/src/routes/debrief.ts.
   signal?: AbortSignal,
-  // First turn only, and ignored when `id` is set: after that the server
-  // reads it back off the conversation's own row.
-  attachment?: TalkAttachment | null,
 ): Promise<Debrief> {
   const path = id ? `/api/debriefs/${id}/chat/stream` : '/api/debriefs/talk/stream'
   const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -1360,13 +1357,7 @@ export async function streamCoachReply(
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify(
-      id
-        ? { message }
-        : {
-            ...(message == null ? {} : { message }),
-            followUpId: followUpId ?? undefined,
-            attachment: attachment ?? undefined,
-          },
+      id ? { message } : { ...(message == null ? {} : { message }), followUpId: followUpId ?? undefined },
     ),
     signal,
   })
@@ -1408,33 +1399,10 @@ export async function streamCoachReply(
   return debrief
 }
 
-// A document the teacher attached on the Talk It Through start screen. The
-// text travels with the first turn rather than being stored on upload,
-// because there is no conversation to store it on until they start talking.
-export type TalkAttachment = { name: string; text: string }
-
-// Reads a file into text for Talk It Through. Same multipart convention as
-// extractAssignmentText; a different endpoint because the cap on what one
-// spoken conversation can carry is this surface's, not Look It Over's.
-export async function extractTalkAttachment(file: File): Promise<TalkAttachment & { truncated: boolean }> {
-  const formData = new FormData()
-  formData.append('file', file)
-  const res = await fetch(`${API_BASE_URL}/api/debriefs/talk/attachment`, {
-    method: 'POST',
-    credentials: 'include',
-    body: formData,
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => null)
-    throw new Error(body?.error ?? messageForStatus(res.status))
-  }
-  return res.json()
-}
-
-export function startTalkToMe(message: string, followUpId?: string | null, attachment?: TalkAttachment | null): Promise<Debrief> {
+export function startTalkToMe(message: string, followUpId?: string | null): Promise<Debrief> {
   return request('/api/debriefs/talk', {
     method: 'POST',
-    body: JSON.stringify({ message, followUpId: followUpId ?? undefined, attachment: attachment ?? undefined }),
+    body: JSON.stringify({ message, followUpId: followUpId ?? undefined }),
   })
 }
 

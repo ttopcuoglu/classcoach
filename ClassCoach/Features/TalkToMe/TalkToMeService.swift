@@ -28,31 +28,6 @@ enum TalkToMeService {
         return result.transcript
     }
 
-    /// A document the teacher attached BEFORE the call, as text. Mirrors
-    /// `TalkAttachment` in web/src/lib/api.ts and the shape
-    /// `readAttachmentInput` reads in server/src/lib/talkAttachment.ts.
-    ///
-    /// `truncated` is display only — it tells the teacher on the start screen
-    /// that a long file will only be partly in play, which is better found out
-    /// there than mid-conversation.
-    struct TalkAttachment: Codable, Equatable {
-        let name: String
-        let text: String
-        var truncated: Bool = false
-    }
-
-    /// Reads a picked file into text. The cap on how much of it one spoken
-    /// conversation can carry is the server's — see MAX_ATTACHMENT_CHARS.
-    static func extractAttachment(data: Data, filename: String) async throws -> TalkAttachment {
-        try await APIClient.shared.upload(
-            "/api/debriefs/talk/attachment",
-            fileData: data,
-            fieldName: "file",
-            filename: filename,
-            mimeType: APIClient.mimeType(forExtension: (filename as NSString).pathExtension)
-        )
-    }
-
     /// `followUpId` rides along only on a conversation's first turn, when it
     /// was opened from Coach's check-in; nil is left out of the JSON.
     private struct MessageBody: Encodable {
@@ -60,10 +35,6 @@ enum TalkToMeService {
         /// server reads a missing message as "greet them first".
         var message: String?
         var followUpId: String?
-        /// First turn only. After that the server reads the document back off
-        /// the conversation's own row, so sending it again would be paying to
-        /// repeat what it already has.
-        var attachment: TalkAttachment?
     }
 
     private struct StreamFrame: Decodable {
@@ -82,15 +53,10 @@ enum TalkToMeService {
         debriefId: String?,
         message: String?,
         followUpId: String? = nil,
-        attachment: TalkAttachment? = nil,
         onSentence: @MainActor @escaping (String) -> Void
     ) async throws -> Debrief {
         let path = debriefId.map { "/api/debriefs/\($0)/chat/stream" } ?? "/api/debriefs/talk/stream"
-        let body = MessageBody(
-            message: message,
-            followUpId: debriefId == nil ? followUpId : nil,
-            attachment: debriefId == nil ? attachment : nil
-        )
+        let body = MessageBody(message: message, followUpId: debriefId == nil ? followUpId : nil)
         var result: Debrief?
         try await APIClient.shared.streamLines(path, body: body) { line in
             guard let data = line.data(using: .utf8),
