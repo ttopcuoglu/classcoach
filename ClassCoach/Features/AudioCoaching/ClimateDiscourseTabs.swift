@@ -179,6 +179,18 @@ struct DiscourseDetailsTab: View {
                 if focus != nil {
                     DetailRow(title: "What students talked about, with examples") { studentTalkFocusCard }
                 }
+                // Only when it is long enough to be worth a look: every lesson
+                // has a longest stretch, and a 40-second one is not a finding.
+                if let stretch = TeacherStretch.longest(in: session.segments), stretch.durationSec >= TeacherStretch.minToShowSec {
+                    DetailRow(title: "Your longest stretch of talk · about \(Int((stretch.durationSec / 60).rounded())) min, from \(ReportConfidence.formatDuration(stretch.startSec))") {
+                        Text("From \(ReportConfidence.formatDuration(stretch.startSec)) to \(ReportConfidence.formatDuration(stretch.endSec)), opening with:")
+                            .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                        Text("\u{201C}\(stretch.opening)…\u{201D}")
+                            .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        readingNote("A stretch ends when a student is heard or you pause for more than ten seconds. A student the microphone missed does not end it, so check it against what you remember of that part of the lesson.")
+                    }
+                }
                 DetailRow(title: "How to read these numbers") {
                     readingNote("Talk time describes the recording, not the room: it doesn't show how many students took part or whether they were engaged, and a microphone near you hears you far better than it hears them.")
                     readingNote("\u{201C}Silence / other\u{201D} is everything that was neither clearly you nor clearly a student — quiet work, several voices at once, and audio too faint to place.")
@@ -322,6 +334,51 @@ struct DiscourseDetailsTab: View {
                 .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
             }
         }
+    }
+}
+
+/// The longest stretch of unbroken teacher talk. Mirrors
+/// server/src/lib/teacherStretch.ts, which has the reasoning: a stretch ends
+/// when a student is heard OR the teacher pauses for longer than a breath, so
+/// a video, a hand-out or a quiet room is not counted as talking. Computed
+/// from the transcript the report already holds, so reports analysed before
+/// the measure was corrected show the corrected one too.
+struct TeacherStretch {
+    let startSec: Double
+    let endSec: Double
+    let opening: String
+    var durationSec: Double { endSec - startSec }
+
+    static let pauseBreakSec = 10.0
+    /// Shorter than this is not a "long stretch" of anything, and is not shown.
+    static let minToShowSec = 120.0
+
+    static func longest(in segments: [TranscriptSegment]) -> TeacherStretch? {
+        var best: TeacherStretch?
+        var run: (start: Double, end: Double, opening: String)?
+        func close() {
+            guard let r = run else { return }
+            if best == nil || r.end - r.start > best!.durationSec {
+                best = TeacherStretch(startSec: r.start, endSec: r.end, opening: r.opening)
+            }
+            run = nil
+        }
+        for segment in segments.sorted(by: { $0.startSec < $1.startSec }) {
+            let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if segment.speakerLabel != "Teacher" {
+                if !text.isEmpty { close() }
+                continue
+            }
+            if text.isEmpty { continue }
+            if let r = run, segment.startSec - r.end > pauseBreakSec { close() }
+            if let r = run {
+                run = (r.start, max(r.end, segment.endSec), r.opening.count < 120 ? "\(r.opening) \(text)" : r.opening)
+            } else {
+                run = (segment.startSec, segment.endSec, text)
+            }
+        }
+        close()
+        return best
     }
 }
 

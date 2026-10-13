@@ -27,6 +27,7 @@
 
 import type { Segment } from './audioAnalysis.ts'
 import { extractTag } from './extractTag.ts'
+import { longestTeacherStretch as measureLongestTeacherStretch } from './teacherStretch.ts'
 import {
   buildRubricEvidence,
   stripMomentReferences,
@@ -265,48 +266,15 @@ export function buildHardLookEvidence(
 /// Where the longest unbroken stretch of teacher talk began.
 ///
 /// `metricsDetail` keeps how long it ran but not when, so the model could say
-/// "you held the floor for seven minutes" and had nothing to point at — which
-/// is how the talk criticism came back on three real lessons with no quote
-/// behind it at all, restating a percentage the Summary page already showed.
-/// Recomputed from the segments rather than added to the stored metrics, so
-/// it works on reports that already exist.
+/// "you held the floor for seven minutes" and had nothing to point at.
+/// Recomputed from the segments rather than read from the stored metric, so
+/// it works on reports that already exist — and with the same function the
+/// analysis uses, so there is one number for one stretch.
 export function longestTeacherStretch(
   segments: Segment[],
 ): { startSec: number; durationSec: number; opening: string } | null {
-  let best: { startSec: number; durationSec: number; opening: string } | null = null
-  let runStart: number | null = null
-  // Summed speaking time, NOT wall-clock from first to last segment.
-  //
-  // This has to match `audioAnalysis`'s own monologue measurement exactly,
-  // and the first version did not: it measured wall-clock, which includes
-  // every pause, and reported 9.5 minutes where the report's own metric said
-  // 6. Handed both numbers for the same stretch, the model reasonably read
-  // them as two different stretches and wrote a criticism about a "second
-  // six-minute run" that never happened. One fact, one number.
-  let spokenSec = 0
-  let opening = ''
-  const close = () => {
-    if (runStart == null) return
-    if (!best || spokenSec > best.durationSec) best = { startSec: runStart, durationSec: spokenSec, opening }
-    runStart = null
-    spokenSec = 0
-  }
-  for (const segment of [...segments].sort((a, b) => a.startSec - b.startSec)) {
-    if (segment.speakerLabel === 'Teacher') {
-      if (runStart == null) {
-        runStart = segment.startSec
-        opening = segment.text.trim().slice(0, 80)
-      }
-      spokenSec += Math.max(0, segment.endSec - segment.startSec)
-    } else if (segment.text.trim()) {
-      // Only an audible student turn breaks the stretch, same as
-      // `audioAnalysis` — a blank segment is the transcriber, not an
-      // interruption.
-      close()
-    }
-  }
-  close()
-  return best
+  const stretch = measureLongestTeacherStretch(segments)
+  return stretch && { startSec: stretch.startSec, durationSec: stretch.durationSec, opening: stretch.opening.slice(0, 80) }
 }
 
 /// How many findings to aim for across the whole lesson, and the ceiling per

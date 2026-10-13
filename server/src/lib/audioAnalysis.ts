@@ -5,6 +5,8 @@
 // Phrase lists are exported so they stay easy to tune without touching the
 // analysis logic itself.
 
+import { longestTeacherStretch } from './teacherStretch.ts'
+
 export type Segment = {
   speakerLabel: string // "Teacher" | "Student" (or a raw pre-tag label)
   startSec: number
@@ -703,11 +705,6 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
   let studentTalkSec = 0
   let studentVoiceSegments = 0
 
-  let currentMonologueSec = 0
-  let currentMonologueStartSec = 0
-  let currentMonologueText = ''
-  const monologueCandidates: { durationSec: number; startSec: number; text: string }[] = []
-
   let questionCount = 0
   let recallQuestionCount = 0
   let higherOrderQuestionCount = 0
@@ -764,7 +761,6 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
     const isTeacher = segment.speakerLabel === 'Teacher'
 
     if (isTeacher) {
-      if (currentMonologueSec === 0) currentMonologueStartSec = segment.startSec
       teacherWords += countWords(segment.text)
       // The pause the teacher left after a student finished, before taking
       // the floor back.
@@ -774,15 +770,9 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
         if (gap >= 0 && gap <= WAIT_TIME_2_MAX_SEC) waitTime2s.push(gap)
       }
       teacherTalkSec += duration
-      currentMonologueSec += duration
-      currentMonologueText = segment.text
     } else {
       studentTalkSec += duration
       studentVoiceSegments++
-      if (currentMonologueSec > 0) {
-        monologueCandidates.push({ durationSec: currentMonologueSec, startSec: currentMonologueStartSec, text: currentMonologueText })
-      }
-      currentMonologueSec = 0
     }
 
     // Wait time is only ever question → *student* response. A teacher turn
@@ -962,16 +952,11 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
     ordered.some((segment) => segment.speakerLabel === 'Student'),
   )
 
-  if (currentMonologueSec > 0) {
-    monologueCandidates.push({ durationSec: currentMonologueSec, startSec: currentMonologueStartSec, text: currentMonologueText })
-  }
-
   const longestWait = waitCandidates.length
     ? waitCandidates.reduce((best, candidate) => (candidate.wait > best.wait ? candidate : best))
     : null
-  const longestMonologue = monologueCandidates.length
-    ? monologueCandidates.reduce((best, candidate) => (candidate.durationSec > best.durationSec ? candidate : best))
-    : null
+  // Continuous talk only — see teacherStretch.ts for what used to be counted.
+  const longestMonologue = longestTeacherStretch(ordered)
   const longestTeacherMonologueSec = longestMonologue?.durationSec ?? 0
 
   if (longestWait) {
@@ -986,7 +971,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
     highlights.push({
       label: 'Longest uninterrupted teacher monologue',
       timestampSec: longestMonologue.startSec,
-      excerpt: longestMonologue.text,
+      excerpt: longestMonologue.opening,
       durationSec: round(longestMonologue.durationSec, 1),
     })
   }

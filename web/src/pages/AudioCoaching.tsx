@@ -12,6 +12,7 @@ import { UPLOAD_STAGE, transcribeEstimateSec, transcribeHint, transcribeStage } 
 import { HATCH_STYLE } from '../lib/chartPatterns'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import { setPlanningPrefill } from '../lib/communicationsPrefill'
+import { MIN_STRETCH_TO_SHOW_SEC, longestTeacherStretch } from '../lib/teacherStretch'
 import { createPlaybackQueue, primeAudioElement, splitIntoSentences, type PlaybackQueue } from '../lib/voicePlayback'
 import {
   createAudioSession,
@@ -5474,6 +5475,12 @@ function TalkParticipationTab({
   const hasFocus = focus != null && focus.classified > 0
   const wpm = session.metricsDetail?.teacherWordsPerMinute ?? null
   const silenceNote = (silencePct ?? 0) > 0 ? leadingSilenceNote(session.metricsDetail?.firstWordSec) : null
+  // Only when it is long enough to be worth a look: every lesson has a longest
+  // stretch, and a 40-second one is not a finding.
+  const stretch = useMemo(() => {
+    const longest = longestTeacherStretch(session.segments)
+    return longest && longest.durationSec >= MIN_STRETCH_TO_SHOW_SEC ? longest : null
+  }, [session.segments])
 
   return (
     <div className="flex flex-col gap-6">
@@ -5508,6 +5515,20 @@ function TalkParticipationTab({
         {hasFocus && (
           <DetailRow title="What students talked about, with examples">
             <StudentTalkFocusCard focus={focus} />
+          </DetailRow>
+        )}
+        {stretch && (
+          <DetailRow
+            title={`Your longest stretch of talk · about ${Math.round(stretch.durationSec / 60)} min, from ${formatTime(stretch.startSec)}`}
+          >
+            <p className="text-sm text-ink">
+              From {formatTime(stretch.startSec)} to {formatTime(stretch.endSec)}, opening with:
+            </p>
+            <p className="border-l-2 border-hairline pl-3 text-sm text-ink-soft">"{stretch.opening}…"</p>
+            <p className="text-sm text-ink-soft">
+              A stretch ends when a student is heard or you pause for more than ten seconds. A student the microphone
+              missed does not end it, so check it against what you remember of that part of the lesson.
+            </p>
           </DetailRow>
         )}
         {exampleCandidate && (
