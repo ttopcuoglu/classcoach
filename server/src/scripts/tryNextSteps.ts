@@ -42,6 +42,10 @@ for (const session of sessions) {
   const present = ['class_summary', 'checks_note', 'climate_note', 'talk_note', 'questions_note', 'content_note', 'connection_ideas']
     .map((tag) => `${tag}:${extractTag(text, tag) ? 'ok' : 'MISSING'}`)
   console.log(`    blocks  ${present.join(' ')}`)
+  const words = ['talk_note', 'questions_note', 'checks_note', 'climate_note', 'content_note']
+    .map((tag) => `${tag}:${(extractTag(text, tag) ?? '').split(/\s+/).filter(Boolean).length}`)
+  console.log(`    words   ${words.join(' ')}`)
+  console.log(`    talk note: ${extractTag(text, 'talk_note')}`)
   for (const key of ['talk', 'questions', 'climate']) {
     console.log(`    ${key.padEnd(9)} ${extractTag(text, `${key}_next`) ?? '(no tag)'}`)
   }

@@ -218,6 +218,12 @@ struct ReportView: View {
                         onNavigateInsights: { target in section = target; tab = .insights },
                         onDiscuss: discuss
                     )
+                    // The whole-lesson Hard Look, asked for here once. It used
+                    // to open the Insights tab, above whichever section a
+                    // teacher had just chosen; each section keeps its own part.
+                    if !(locked && session.hardLook == nil) {
+                        hardLookRow
+                    }
                 case .insights:
                     insights
                 case .rubric:
@@ -389,17 +395,10 @@ struct ReportView: View {
             // Lenses now come after the content they are lenses on.
             InsightsSectionHeader(section: section)
 
-            // One front door, on the first section only, for the whole-lesson
-            // read: the per-section blocks below are easy to find while
-            // reading but say nothing about the feature existing.
-            if section == .talk {
-                hardLookRow
-            }
-
             Group {
                 switch section {
                 case .talk: DiscourseDetailsTab(session: session, part: .talk)
-                case .questions: questioningAndChecking
+                case .questions: DiscourseDetailsTab(session: session, part: .questions)
                 case .content: LessonContentTab(session: session, onUpdate: onUpdate)
                 case .routines: ClimateRoutinesTab(session: session)
                 }
@@ -419,29 +418,6 @@ struct ReportView: View {
 
             DiscussFooter { discuss(.forSection(section, in: session)) }
 
-        }
-    }
-
-    /// Ask → student answers → respond is one teaching move, so it reads as one
-    /// page with two labelled halves. Both halves depend on the mic reaching
-    /// the students, and the second heading says so rather than leaving the
-    /// teacher to read a thin "how you responded" as their own failure.
-    private var questioningAndChecking: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            VStack(alignment: .leading, spacing: 12) {
-                SubsectionHeading(
-                    title: "What you asked",
-                    blurb: "Questions, what they asked of students, and the checks you ran."
-                )
-                DiscourseDetailsTab(session: session, part: .questions)
-            }
-            VStack(alignment: .leading, spacing: 12) {
-                SubsectionHeading(
-                    title: "How you responded",
-                    blurb: "Wait time, follow-ups, and your responses to what students said — all of it limited by how much of the room the microphone reached."
-                )
-                DiscourseDetailsTab(session: session, part: .understanding)
-            }
         }
     }
 
@@ -479,7 +455,7 @@ struct ReportView: View {
     }
 
     private var disclaimer: some View {
-        Text("This report reflects what could be heard in your recording — talk patterns, questioning, and classroom routines. It doesn't capture lesson planning, materials, physical space, visual engagement, or anything outside class time. Automated counts above are suggestions to confirm or edit, not final judgments.")
+        Text("This report reflects what could be heard in your recording — talk patterns, questioning, and classroom routines. It doesn't capture lesson planning, materials, physical space, visual engagement, or anything outside class time. Automated counts above are suggestions to confirm or edit, not final judgments. Audio is never saved: it's sent once for transcription and discarded, and only the transcript and these insights are kept.")
             .font(.caption2)
             .foregroundStyle(AppTheme.textSecondary)
             .padding(12)
@@ -569,24 +545,76 @@ struct StatView: View {
     }
 }
 
-struct CategorySectionView<Content: View>: View {
-    let title: String
-    let coverage: String
+struct StatGridView<Content: View>: View {
     @ViewBuilder let content: Content
     @Environment(\.reportAccent) private var accent
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(title.uppercased()).font(.caption.weight(.bold)).foregroundStyle(accent.ink)
-                Spacer()
-                Text(coverage).font(.caption2).foregroundStyle(AppTheme.textSecondary)
-            }
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                content
-            }
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+            content
         }
         .padding(14)
         .background(accent.tint.opacity(0.7), in: RoundedRectangle(cornerRadius: 20))
     }
+}
+
+/// One folded row of detail. Every Insights section has the same shape — the
+/// note, one picture, one finding, one thing to try — and then everything else
+/// lives in rows like this: the lists of quotes, the full numbers, how to read
+/// them. A teacher who wants the evidence is one tap away, and one who does
+/// not is not made to scroll past it. Mirrors `DetailRow` in AudioCoaching.tsx.
+struct DetailRow<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+    @State private var open = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Divider()
+            Button {
+                withAnimation { open.toggle() }
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: 8)
+                    Text(open ? "Hide" : "Show").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+                }
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            if open {
+                VStack(alignment: .leading, spacing: 12) { content }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, 16)
+            }
+        }
+    }
+}
+
+/// The section's own line from "Try next time" on Summary, shown where the
+/// evidence for it is. A report summarised before these existed has none, and
+/// a section with nothing worth suggesting says nothing.
+struct SectionNextStep: View {
+    let text: String?
+
+    var body: some View {
+        if let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("TRY NEXT TIME").font(.caption2.weight(.bold)).foregroundStyle(AppTheme.terracotta600)
+                Text(text).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.goldTint.opacity(0.5), in: RoundedRectangle(cornerRadius: 16))
+        }
+    }
+}
+
+/// A caveat inside a "How to read…" row.
+func readingNote(_ text: String) -> some View {
+    Text(text).font(.caption).foregroundStyle(AppTheme.textSecondary)
+        .fixedSize(horizontal: false, vertical: true)
 }

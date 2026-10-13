@@ -4,24 +4,17 @@ import SwiftUI
 struct ClimateRoutinesTab: View {
     let session: AudioSessionWithSegments
 
-    private var m: OverviewMetrics { OverviewMetrics(session) }
-    private var recordedSec: Double { m.coverage.recordedSec }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             routinesSection
         }
     }
 
-    /// Narrative only — no numbers card.
-    ///
-    /// These counters match fixed phrases, so on a well-run lesson most of
-    /// them are zero: "turn and talk for thirty seconds" is a clear direction
-    /// that "clear directions: 0" does not recognise. Leading with numbers
-    /// that are artefacts of the detector taught teachers to read their own
-    /// lesson as a list of failures.
+    /// The note, then what to try. No numbers card on purpose — a count of
+    /// directions says nothing about whether they landed — and no stock tip:
+    /// the next step is this lesson's own, or absent.
     private var routinesSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
             if let narrative = session.climateNarrative, !narrative.isEmpty {
                 CoachNoteView(text: narrative)
             } else {
@@ -29,31 +22,20 @@ struct ClimateRoutinesTab: View {
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.textSecondary)
             }
+            SectionNextStep(text: session.nextSteps?.climate)
         }
-    }
-
-    private func hasHighlight(_ label: String) -> Bool {
-        (session.highlights ?? []).contains { $0.label == label }
-    }
-
-    private func withDefaultReason(_ metric: ReportConfidence.ConfidentMetric, _ reason: String) -> ReportConfidence.ConfidentMetric {
-        var m = metric
-        if m.reason == nil, m.state.isMissing { m.reason = reason }
-        return m
     }
 }
 
 enum DiscoursePart {
-    case talk, questions, understanding
+    case talk, questions
 }
 
-/// Talk & Participation, plus the two halves of Questioning & Checking —
-/// which share the same session metrics. The halves stay separate parts
-/// because they are rendered under their own subsection headings.
+/// Talk & Participation and Questioning & Checking, which share the same
+/// session metrics. Both follow the section shape in `DetailRow`'s comment.
 struct DiscourseDetailsTab: View {
     let session: AudioSessionWithSegments
     let part: DiscoursePart
-    @State private var showBreakdown = false
 
     private var m: OverviewMetrics { OverviewMetrics(session) }
     private var recordedSec: Double { m.coverage.recordedSec }
@@ -77,8 +59,6 @@ struct DiscourseDetailsTab: View {
     private var studentTalkFocusCard: some View {
         if let focus = session.studentTalkFocus, focus.classified > 0 {
             VStack(alignment: .leading, spacing: 10) {
-                Text("WHAT STUDENTS TALKED ABOUT")
-                    .font(.caption.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
                 Text("Of \(focus.classified) audible student turn\(focus.classified == 1 ? "" : "s")\(focus.sampled ? " sampled across the lesson" : ""):")
                     .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -137,10 +117,7 @@ struct DiscourseDetailsTab: View {
                     .tint(AppTheme.forest)
                 }
             }
-            .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 20))
-            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(AppTheme.hairline))
         }
     }
 
@@ -155,88 +132,124 @@ struct DiscourseDetailsTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             switch part {
-            case .talk:
-                PacingTimelineView(segments: session.segments, durationSec: session.durationSec)
-                studentTalkFocusCard
-                talkSection
-            case .questions:
-                if let count = session.questionCount, count > 0 {
-                    Text("You asked \(count) question\(count == 1 ? "" : "s") this session.").font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-                } else {
-                    Text("No question data for this session.").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-                }
-                questioningSection
-                questionLogSection
-            case .understanding:
-                cfuSection
+            case .talk: talkSection
+            case .questions: questioningSection
             }
         }
     }
 
+    private var silencePct: Double? {
+        guard let t = session.teacherTalkPct, let s = session.studentTalkPct else { return nil }
+        return max(0, ((100 - t - s) * 10).rounded() / 10)
+    }
+
     private var talkSection: some View {
-        let silencePct: Double? = {
-            guard let t = session.teacherTalkPct, let s = session.studentTalkPct else { return nil }
-            return max(0, 100 - t - s)
-        }()
-        return VStack(alignment: .leading, spacing: 10) {
-            // Narrative first, and the written one when the report has it —
-            // the rule-assembled fallback can only restate the percentages.
+        let wpm = session.metricsDetail?["teacherWordsPerMinute"]
+        let focus = session.studentTalkFocus.flatMap { $0.classified > 0 ? $0 : nil }
+        return VStack(alignment: .leading, spacing: 14) {
+            // The reading before the numbers it was drawn from, and the
+            // written one when the report has it — the rule-assembled fallback
+            // can only restate the percentages.
             CoachNoteView(text: session.talkNarrative ?? AudioInsights.buildTalkInsight(session))
-            CategorySectionView(title: "Talk distribution", coverage: ReportConfidence.categoryCoverage([
-                ReportConfidence.getPresenceMetric(session.teacherTalkPct).state, ReportConfidence.getPresenceMetric(session.studentTalkPct).state,
-            ])) {
-                StatView(label: "Your talk time", metric: percentMetric(session.teacherTalkPct))
-                StatView(label: "Student talk time", metric: percentMetric(session.studentTalkPct))
-                StatView(label: "Silence / other", metric: percentMetric(silencePct))
-                StatView(label: "Student voice segments", metric: ReportConfidence.getCountMetric(count: session.metricsDetail?["studentVoiceSegments"].map { Int($0) }, recordedSec: recordedSec))
-                // How FAST, beside how long. The report had four ways to say
-                // how much of a lesson a teacher spoke for and none to say the
-                // pace of it.
-                StatView(label: "Your pace", metric: paceMetric)
+
+            // One picture of the split. It used to be four tiles.
+            VStack(alignment: .leading, spacing: 10) {
+                TalkSplitBar(teacherPct: session.teacherTalkPct, studentPct: session.studentTalkPct, silencePct: silencePct)
+                if let wpm {
+                    Text("Your pace · \(Int(wpm)) words a minute").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                }
             }
-            // Only when there is silence for it to explain.
-            if (silencePct ?? 0) > 0,
-               let note = AudioInsights.leadingSilenceNote(firstWordSec: session.metricsDetail?["firstWordSec"]) {
-                Text(note)
-                    .font(.caption2).foregroundStyle(AppTheme.textSecondary)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 20))
+            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(AppTheme.hairline))
+
+            if let focus {
+                Text("Of \(focus.classified) student turn\(focus.classified == 1 ? "" : "s") heard\(focus.sampled ? " in a sample across the lesson" : ""), \(focus.onTopic) \(focus.onTopic == 1 ? "was" : "were") about the lesson.")
+                    .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+
+            SectionNextStep(text: session.nextSteps?.talk)
+
+            VStack(alignment: .leading, spacing: 0) {
+                DetailRow(title: "Talk flow across the lesson") {
+                    PacingTimelineView(segments: session.segments, durationSec: session.durationSec)
+                }
+                if focus != nil {
+                    DetailRow(title: "What students talked about, with examples") { studentTalkFocusCard }
+                }
+                DetailRow(title: "How to read these numbers") {
+                    readingNote("Talk time describes the recording, not the room: it doesn't show how many students took part or whether they were engaged, and a microphone near you hears you far better than it hears them.")
+                    readingNote("\u{201C}Silence / other\u{201D} is everything that was neither clearly you nor clearly a student — quiet work, several voices at once, and audio too faint to place.")
+                    // Only when there is silence for it to explain.
+                    if (silencePct ?? 0) > 0,
+                       let note = AudioInsights.leadingSilenceNote(firstWordSec: session.metricsDetail?["firstWordSec"]) {
+                        readingNote(note)
+                    }
+                    if wpm != nil {
+                        readingNote("Pace is words a minute of your own speaking time. Everyday conversation runs about \(Int(AudioInsights.conversationalWpm)) — an anchor to place yourself against, not a target.")
+                    }
+                }
+                Divider()
             }
         }
     }
 
     private var questioningSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let higherOrder = session.metricsDetail?["higherOrderQuestionCount"].map { Int($0) }
+        return VStack(alignment: .leading, spacing: 14) {
             CoachNoteView(text: session.questionsNarrative
                 ?? AudioInsights.buildQuestioningInsight(session, higherOrderRatio: m.higherOrderRatio))
-            CategorySectionView(title: "The numbers", coverage: ReportConfidence.categoryCoverage([
-                (m.higherOrderRatio ?? m.cfuMetric).state, m.followUpMetric.state, ReportConfidence.getPresenceMetric(session.avgWaitTimeSec).state,
-            ])) {
-                StatView(label: "Questions you asked", metric: ReportConfidence.getCountMetric(count: session.questionCount, recordedSec: recordedSec))
-                StatView(label: "Higher-order questions", metric: higherOrderCountMetric)
-                // A lesson can be built on reasoning without a single
-                // higher-order question in it — a task can ask for more
-                // thinking than anything said out loud did.
-                StatView(label: "Thinking tasks", metric: thinkingTaskMetric)
-                StatView(label: "Your follow-up questions", metric: m.followUpMetric)
-                StatView(label: "Your avg. wait time", metric: waitTimeMetric)
-                // The other half of wait time, and the one that explains the
-                // follow-up count above it: a pause of a few tenths of a
-                // second after an answer leaves nowhere for a follow-up to go.
-                StatView(label: "Your pause after an answer", metric: waitTime2Metric)
-            }
-            QuestioningMixView(session: session)
-        }
-    }
 
-    private var paceMetric: ReportConfidence.ConfidentMetric {
-        guard let wpm = session.metricsDetail?["teacherWordsPerMinute"] else {
-            return ReportConfidence.ConfidentMetric(
-                state: .notAnalyzed, display: "—",
-                reason: "This session was analyzed before speaking pace was measured.")
+            // A count, never a share: one question out of one is "100%", and
+            // that is not a finding about anybody's questioning.
+            if let count = session.questionCount {
+                Text("You asked \(count) question\(count == 1 ? "" : "s")\(count > 0 && higherOrder != nil ? "; \(higherOrder!) \(higherOrder == 1 ? "was" : "were") higher-order." : ".")")
+                    .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            QuestioningMixView(session: session)
+
+            // The second half of the section: what happened after a question,
+            // and how understanding was checked.
+            if let narrative = session.checksNarrative, !narrative.isEmpty {
+                SubsectionHeading(
+                    title: "How you responded",
+                    blurb: "Checks for understanding and your responses to what students said."
+                )
+                CoachNoteView(text: narrative)
+            }
+
+            SectionNextStep(text: session.nextSteps?.questions)
+
+            VStack(alignment: .leading, spacing: 0) {
+                DetailRow(title: "The numbers") {
+                    StatGridView {
+                        StatView(label: "Questions you asked", metric: ReportConfidence.getCountMetric(count: session.questionCount, recordedSec: recordedSec))
+                        StatView(label: "Higher-order questions", metric: higherOrderCountMetric)
+                        // A lesson can be built on reasoning without a single
+                        // higher-order question in it — a task can ask for
+                        // more thinking than anything said out loud did.
+                        StatView(label: "Thinking tasks", metric: thinkingTaskMetric)
+                        StatView(label: "Your follow-up questions", metric: m.followUpMetric)
+                        StatView(label: "Your avg. wait time", metric: waitTimeMetric)
+                        // The other half of wait time: the pause after a
+                        // student's answer, where a follow-up has to fit.
+                        StatView(label: "Your pause after an answer", metric: waitTime2Metric)
+                    }
+                }
+                if let log = session.questionLog, !log.isEmpty {
+                    DetailRow(title: "Your questions, in order (\(log.count))") { questionLogList(log) }
+                }
+                DetailRow(title: "How to read these numbers") {
+                    readingNote("Questions and checks are read from your side of the transcript. Spoken checks only — hand signals and written work are invisible to a recording.")
+                    readingNote("Wait time, follow-ups and feedback all need a student to be heard, so they are limited by how much of the room the microphone reached. Where too little came through, the number says so rather than showing zero.")
+                }
+                Divider()
+            }
         }
-        return ReportConfidence.ConfidentMetric(
-            state: .measured, display: "\(Int(wpm)) wpm",
-            reason: "Words a minute of your own speaking time. Everyday conversation runs about \(Int(AudioInsights.conversationalWpm)) — an anchor to place yourself against, not a target.")
     }
 
     private var waitTime2Metric: ReportConfidence.ConfidentMetric {
@@ -261,7 +274,10 @@ struct DiscourseDetailsTab: View {
         guard let count = session.metricsDetail?["higherOrderQuestionCount"] else {
             return ReportConfidence.ConfidentMetric(state: .notAnalyzed, display: "—", reason: "This session was analyzed before questions were classified.")
         }
-        return ReportConfidence.ConfidentMetric(state: count > 0 ? .measured : .confirmedNone, display: "\(Int(count))")
+        let total = session.questionCount ?? 0
+        return ReportConfidence.ConfidentMetric(
+            state: count > 0 ? .measured : .confirmedNone,
+            display: total > 0 ? "\(Int(count)) of \(total)" : "\(Int(count))")
     }
 
     private var thinkingTaskMetric: ReportConfidence.ConfidentMetric {
@@ -287,86 +303,68 @@ struct DiscourseDetailsTab: View {
         return ReportConfidence.ConfidentMetric(state: .measured, display: "\(ReportConfidence.formatNumber(wait))s")
     }
 
-    private func percentMetric(_ value: Double?) -> ReportConfidence.ConfidentMetric {
-        guard let value else {
-            return ReportConfidence.ConfidentMetric(state: .notMeasurable, display: "—", reason: "Not enough data in this session to compute this.")
-        }
-        return ReportConfidence.ConfidentMetric(state: .measured, display: "\(Int(value))%")
-    }
-
-    private var cfuSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // No numbers card: "3 verbal checks" and "6 of 11" count fixed
-            // phrases, and a check made by reading over shoulders leaves no
-            // trace — so leading with them put a detector's blind spots at the
-            // top of a teacher's own lesson. The narrative says when the checks
-            // happened and what the feedback did with a student's answer.
-            if let narrative = session.checksNarrative, !narrative.isEmpty {
-                CoachNoteView(text: narrative)
-            } else {
-                Text("This section fills in once the report has been summarised.")
-                    .font(.subheadline)
-                    .foregroundStyle(AppTheme.textSecondary)
-            }
-        }
-    }
-
-    private func phasesSection(_ phases: [AudioPhase]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("SESSION PHASES").font(.caption.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
-            ForEach(Array(phases.enumerated()), id: \.offset) { _, phase in
-                HStack {
-                    Text(phase.label).font(.subheadline.weight(.medium)).frame(width: 100, alignment: .leading)
-                    Text("\(ReportConfidence.formatDuration(phase.startSec)) – \(ReportConfidence.formatDuration(phase.endSec))")
-                        .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-                }
-            }
-            Text("These boundaries are an automated estimate — treat them as a starting point.")
-                .font(.caption2).foregroundStyle(AppTheme.textSecondary)
-        }
-    }
-
-    @ViewBuilder
-    private var questionLogSection: some View {
-        if let log = session.questionLog {
-            VStack(alignment: .leading, spacing: 8) {
-                Button(showBreakdown ? "Hide breakdown" : "Show full question-by-question breakdown") {
-                    withAnimation { showBreakdown.toggle() }
-                }
-                .font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.primary)
-
-                if showBreakdown {
-                    if log.isEmpty {
-                        Text("No individual questions were detected this session.").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-                    } else {
-                        ForEach(Array(log.enumerated()), id: \.offset) { _, entry in
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Text(ReportConfidence.formatDuration(entry.timestampSec)).font(.caption).foregroundStyle(AppTheme.textSecondary)
-                                    Text(entry.type == "higher_order" ? "Higher-order" : "Recall")
-                                        .font(.caption2.weight(.bold))
-                                        .padding(.horizontal, 6).padding(.vertical, 2)
-                                        .background((entry.type == "higher_order" ? AppTheme.primary : AppTheme.textSecondary).opacity(0.12), in: Capsule())
-                                    Text(entry.waitTimeSec.map { "\(ReportConfidence.formatNumber($0))s wait" } ?? "wait not measured")
-                                        .font(.caption).foregroundStyle(AppTheme.textSecondary)
-                                }
-                                Text("\"\(entry.text)\"").font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-                                ForEach(Array(entry.followUps.enumerated()), id: \.offset) { _, followUp in
-                                    Text("\"\(followUp.text)\" · \(ReportConfidence.formatDuration(followUp.timestampSec))")
-                                        .font(.caption).foregroundStyle(AppTheme.textSecondary)
-                                        .padding(.leading, 10)
-                                        .overlay(Rectangle().frame(width: 1).foregroundStyle(AppTheme.textSecondary.opacity(0.3)), alignment: .leading)
-                                }
-                            }
-                            .padding(10)
-                            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
-                        }
+    private func questionLogList(_ log: [AudioQuestionLogEntry]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(log.enumerated()), id: \.offset) { _, entry in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(ReportConfidence.formatDuration(entry.timestampSec)).font(.caption).foregroundStyle(AppTheme.textSecondary)
+                        Text(entry.type == "higher_order" ? "Higher-order" : "Recall")
+                            .font(.caption2.weight(.bold))
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background((entry.type == "higher_order" ? AppTheme.primary : AppTheme.textSecondary).opacity(0.12), in: Capsule())
+                        Text(entry.waitTimeSec.map { "\(ReportConfidence.formatNumber($0))s wait" } ?? "wait not measured")
+                            .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                    }
+                    Text("\"\(entry.text)\"").font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    ForEach(Array(entry.followUps.enumerated()), id: \.offset) { _, followUp in
+                        Text("\"\(followUp.text)\" · \(ReportConfidence.formatDuration(followUp.timestampSec))")
+                            .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                            .padding(.leading, 10)
+                            .overlay(Rectangle().frame(width: 1).foregroundStyle(AppTheme.textSecondary.opacity(0.3)), alignment: .leading)
                     }
                 }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
             }
-        } else {
-            Text("Not available for this session — analyzed before per-question detail was tracked.")
-                .font(.caption).foregroundStyle(AppTheme.textSecondary)
+        }
+    }
+}
+
+/// The talk split as one bar and its three numbers.
+private struct TalkSplitBar: View {
+    let teacherPct: Double?
+    let studentPct: Double?
+    let silencePct: Double?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let teacherPct {
+                GeometryReader { geo in
+                    HStack(spacing: 0) {
+                        Rectangle().fill(AppTheme.terracotta).frame(width: geo.size.width * CGFloat(teacherPct / 100))
+                        Rectangle().fill(AppTheme.gold).frame(width: geo.size.width * CGFloat((studentPct ?? 0) / 100))
+                        Rectangle().fill(AppTheme.hairline)
+                    }
+                }
+                .frame(height: 14)
+                .clipShape(Capsule())
+                legend("You", teacherPct, AppTheme.terracotta)
+                legend("Students", studentPct, AppTheme.gold)
+                legend("Silence / other", silencePct, AppTheme.hairline)
+            } else {
+                Text("Talk balance unavailable this session.").font(.caption).foregroundStyle(AppTheme.textSecondary)
+            }
+        }
+    }
+
+    private func legend(_ label: String, _ pct: Double?, _ color: Color) -> some View {
+        HStack(spacing: 6) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text("\(label) · \(pct.map { "\(ReportConfidence.formatNumber($0))%" } ?? "unavailable")")
+                .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
         }
     }
 }
@@ -432,7 +430,6 @@ private struct PacingTimelineView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("PACING & RHYTHM").font(.caption.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
             if let durationSec, durationSec > 0, !segments.isEmpty {
                 let bins = 24
                 let binDuration = durationSec / Double(bins)

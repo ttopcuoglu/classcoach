@@ -1625,6 +1625,8 @@ Then THE CONTENT NOTE: one warm paragraph opening the Clarity & Content section 
 
 Then NEXT TIME, three separate lines: one for Talk & Participation, one for Questioning & Checking, one for Climate & Routines. Each is ONE concrete thing to do in the next lesson, following directly from what that section's note said — the words to say or the task to set, specific to this lesson's material, 30 words at most, starting with a verb. "After your next 'why' question, give pairs thirty seconds before taking an answer." Not a principle, not "consider", and not a repeat of another section's line. Where a section's evidence does not support a suggestion — too little was audible, or nothing there needs changing — write NONE: a made-up suggestion is worse than none, and most lessons will not earn all three.
 
+LENGTH OF THE FIVE NOTES. The checks, climate, talk, questions and content notes each open a section a teacher then reads the evidence under, so each has a hard limit of four sentences and 80 words, whatever the fuller descriptions above invite. Count before you answer; a fifth sentence or a long final clause is over the limit. Say the one or two things that matter most about that section in this lesson, keep any caveat about the microphone to a single clause, and leave the rest to the evidence below the note. The class summary is not shortened: it keeps its three paragraphs.
+
 Respond with exactly these blocks and nothing else. The summary block
 holds all three paragraphs described above, separated by blank lines — one
 paragraph back is a failure, not a concise answer:
