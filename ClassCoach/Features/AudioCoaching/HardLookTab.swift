@@ -149,7 +149,7 @@ struct HardLookTab: View {
                 .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            ForEach(Array(critique.evidence.enumerated()), id: \.offset) { _, item in
+            ForEach(Array((critique.evidence ?? []).enumerated()), id: \.offset) { _, item in
                 HStack(alignment: .top, spacing: 8) {
                     Rectangle().fill(AppTheme.terracotta.opacity(0.5)).frame(width: 2)
                     VStack(alignment: .leading, spacing: 2) {
@@ -161,11 +161,11 @@ struct HardLookTab: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
 
-            if !critique.likelyCost.isEmpty {
+            if let likelyCost = critique.likelyCost, !likelyCost.isEmpty {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("WHAT IT LIKELY COST")
                         .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
-                    Text(critique.likelyCost)
+                    Text(likelyCost)
                         .font(.footnote).foregroundStyle(AppTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -174,11 +174,11 @@ struct HardLookTab: View {
                 .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
             }
 
-            if !critique.nextStep.isEmpty {
+            if let nextStep = critique.nextStep, !nextStep.isEmpty {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("TRY INSTEAD")
                         .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.terracotta600)
-                    Text(critique.nextStep)
+                    Text(nextStep)
                         .font(.footnote).foregroundStyle(AppTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -313,7 +313,7 @@ struct SectionHardLook: View {
                 .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            ForEach(Array(critique.evidence.enumerated()), id: \.offset) { _, item in
+            ForEach(Array((critique.evidence ?? []).enumerated()), id: \.offset) { _, item in
                 HStack(alignment: .top, spacing: 8) {
                     Rectangle().fill(AppTheme.terracotta.opacity(0.5)).frame(width: 2)
                     VStack(alignment: .leading, spacing: 2) {
@@ -325,11 +325,11 @@ struct SectionHardLook: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
 
-            if !critique.likelyCost.isEmpty {
+            if let likelyCost = critique.likelyCost, !likelyCost.isEmpty {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("WHAT IT LIKELY COST")
                         .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
-                    Text(critique.likelyCost)
+                    Text(likelyCost)
                         .font(.footnote).foregroundStyle(AppTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -338,11 +338,11 @@ struct SectionHardLook: View {
                 .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
             }
 
-            if !critique.nextStep.isEmpty {
+            if let nextStep = critique.nextStep, !nextStep.isEmpty {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("TRY INSTEAD")
                         .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.terracotta600)
-                    Text(critique.nextStep)
+                    Text(nextStep)
                         .font(.footnote).foregroundStyle(AppTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                 }

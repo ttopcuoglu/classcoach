@@ -185,10 +185,19 @@ struct AudioHardLookCritique: Decodable, Identifiable {
     let section: String
     let headline: String
     let critique: String
-    let likelyCost: String
-    /// One concrete thing to try instead. Empty when the model left it out.
-    let nextStep: String
-    let evidence: [AudioRubricEvidence]
+    /// Optional because these are stored JSON, not a versioned contract, and a
+    /// row written before a field existed still has to decode.
+    ///
+    /// `nextStep` was added when the Hard Look was reworked, and reports
+    /// generated before that have critiques without it. Required here, those
+    /// rows failed to decode — and because the session decodes hardLook with
+    /// `try?`, the failure was silent: the whole Hard Look vanished and the
+    /// app offered to build one, while the server kept returning the stored
+    /// copy it could not read. A button that did nothing, with nothing on
+    /// screen to say why.
+    let likelyCost: String?
+    let nextStep: String?
+    let evidence: [AudioRubricEvidence]?
 }
 
 struct AudioHardLookClear: Decodable, Identifiable {
