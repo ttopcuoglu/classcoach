@@ -1458,6 +1458,15 @@ export type ClassSummaryMetrics = {
   avgWaitTimeSec: number | null
   cfuCount: number | null
   studentVoiceDetected: boolean
+  /// Speaking pace, the pause after a student answer, and when the first word
+  /// was transcribed. Without these the section narratives cannot mention
+  /// them — and the narratives are what "Try next time" is written from, so a
+  /// measurement the prompt never sees produces no suggestion no matter how
+  /// plainly it is printed on the page.
+  teacherWordsPerMinute?: number | null
+  waitTime2Sec?: number | null
+  waitTime2SampleCount?: number | null
+  firstWordSec?: number | null
   /// What the audible student talk was about (lib/studentTalkFocus.ts), so the
   /// talk note can say whether the student share meant a discussion or a room
   /// talking over itself. Null is "not measured", which is common.
@@ -1585,6 +1594,13 @@ ${
       : 'No redirections were heard.'
   }
 Student names: ${metrics?.nameMentions ?? 'not measured'} mentions across ${metrics?.uniqueNames ?? 'not measured'} names.
+${metrics?.teacherWordsPerMinute != null ? `Teacher speaking pace: about ${metrics.teacherWordsPerMinute} words a minute of their own speaking time (everyday conversation runs about 150).` : 'Teacher speaking pace: not measured.'}
+${
+    metrics?.waitTime2Sec != null
+      ? `Pause after a student finished answering, before the teacher spoke: about ${metrics.waitTime2Sec}s across ${metrics.waitTime2SampleCount ?? 0} exchanges. This is a different number from the wait time above, which is the pause AFTER THE QUESTION.`
+      : 'Pause after a student answer: not measured.'
+  }
+${metrics?.firstWordSec != null && metrics.firstWordSec >= 30 ? `Nothing was transcribed until ${mmss(metrics.firstWordSec)}, so that much of the silence is the recorder running before the lesson got going rather than quiet in the room.` : ''}
 ${(() => {
     const f = metrics?.studentTalkFocus as
       | { classified?: number; onTopic?: number; procedural?: number; offTopic?: number; unclear?: number }
@@ -1599,7 +1615,13 @@ Then THE TALK NOTE: one paragraph about who was heard and for how long,
 covering both the shape of the teacher's talk and where students got
 the floor, and what that does and does not tell us.
 The numbers — teacher talk, student talk, silence — are on that screen, so do
-not restate them. Say what they cannot: where the long teacher stretches fell
+not restate them. Pace is the exception worth making: how fast the teacher
+spoke is new to this report and a teacher will not have it in mind, so where
+the pace is notably quick for explaining new material, say so plainly and in
+their own terms — not as a verdict, since there is no correct rate and a fast
+stretch of storytelling is not a fault. Where the recording caught nothing for
+the first minutes, say that too, so the silence share is not read as quiet in
+the room. Say what they cannot: where the long teacher stretches fell
 and what they were doing (explaining, setting up, recapping), where students
 got the floor, and whether the shape changed across the lesson. The caveat
 governs this section more than any other, and it cuts both ways. A room
@@ -1617,7 +1639,13 @@ given, say what was audible and leave the reading of it to the teacher, who
 was in the room.
 
 Then THE QUESTIONS NOTE: one paragraph about the questioning, covering both
-what was asked and what happened after it was asked. Again the
+what was asked and what happened after it was asked. Two pauses matter here
+and they are different: the one after the question, and the one after a
+student's answer. The second is the one with nothing in this report before
+now, and it is usually what explains a low follow-up count — a pause of a few
+tenths of a second leaves nowhere for a follow-up to go. Where that is what
+the numbers show, say it, because it turns a count the teacher cannot act on
+into one they can. Again the
 counts are already on screen. Say what kinds of questions these were, whether
 they built on each other or moved on, what happened after one was asked, and
 whether answers were followed up or accepted. When you mention how many were
@@ -1762,6 +1790,10 @@ export async function requestClassSummaryText(session: ClassSummarySource, segme
       avgWaitTimeSec: session.avgWaitTimeSec,
       cfuCount: session.cfuCount,
       studentVoiceDetected: segments.some((s) => s.speakerLabel === 'Student'),
+      teacherWordsPerMinute: metricNumber(session.metricsDetail, 'teacherWordsPerMinute'),
+      waitTime2Sec: metricNumber(session.metricsDetail, 'waitTime2Sec'),
+      waitTime2SampleCount: metricNumber(session.metricsDetail, 'waitTime2SampleCount'),
+      firstWordSec: metricNumber(session.metricsDetail, 'firstWordSec'),
       studentTalkFocus: session.studentTalkFocus ?? null,
       cfuMoments: ((session.cfuLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 12),
       feedbackMoments: ((session.feedbackLog ?? []) as { kind: string; timestampSec: number; text: string }[]).slice(0, 12),
