@@ -18,7 +18,9 @@ const PROFILE: Json = {
   id: 'preview',
   email: 'preview.teacher@wivoza.com',
   name: 'Preview Teacher',
-  role: 'teacher',
+  // `?admin=1` makes the preview an org admin, which is what the /admin route
+  // guard checks — without it the page redirects home and cannot be looked at.
+  role: new URLSearchParams(window.location.search).has('admin') ? 'org_admin' : 'teacher',
   jobTitle: 'Teacher',
   schoolName: 'Preview Middle School',
   teachingGoal: null,
@@ -419,6 +421,142 @@ function previewReport(): Json {
   }
 }
 
+/// A school's admin overview, with numbers taken from the seeded demo school
+/// rather than invented — so the page is looked at against roughly what a
+/// real one produces.
+///
+/// Deliberately mixed confidence: wait time and talk are 'full', the two
+/// newest metrics 'limited', and one metric has none at all. A fixture where
+/// everything is confident would never show the suppression and badge paths,
+/// which are most of what makes this page honest.
+function adminOverview(): Json {
+  const tally = (count: number, teachers: number) => ({ count, teachers })
+  return {
+    scope: 'organization',
+    organizationName: 'Preview Middle School',
+    totalTeachers: 34,
+    activatedAccounts: 27,
+    activeThisWeek: 14,
+    returningUsers: 11,
+    activitiesThisWeek: 96,
+    activitiesPriorWeek: 78,
+    periodStart: daysAgo(7),
+    periodEnd: daysAgo(0),
+    featureActivity: { lessonDebrief: 38, talkItThrough: 24, lessonPlanning: 19, communications: 9, practiceReflect: 6 },
+    featureAdoption: { lessonDebrief: 12, talkItThrough: 9, lessonPlanning: 7, communications: 4, practiceReflect: 3 },
+    communicationsByTool: {
+      write: { activity: 5, teachers: 3 },
+      prepare: { activity: 3, teachers: 2 },
+      review: { activity: 1, teachers: 1 },
+    },
+    planningByTool: {
+      build: { activity: 9, teachers: 5 },
+      improve: { activity: 5, teachers: 3 },
+      slides: { activity: 3, teachers: 2 },
+      assignment: { activity: 2, teachers: 2 },
+    },
+    categoryTally: { disruption: tally(14, 6), engagement: tally(9, 5), pacing: tally(4, 3) },
+    challengeTally: { 'off-task talk': tally(11, 5), 'low participation': tally(7, 4) },
+    messagePurposeTally: { 'progress update': tally(6, 4), concern: tally(3, 2) },
+    strengths: [
+      { label: 'Clear directions', value: 18, confidence: 'full' },
+      { label: 'Encouraging tone', value: 11, confidence: 'full' },
+      { label: 'Checks for understanding', value: 4, confidence: 'limited' },
+    ],
+    priorityTally: { 'wait time': tally(12, 7), 'student talk': tally(8, 5) },
+    instructionalAverages: {
+      totalAnalyzedSessions: 71,
+      // Taken from the seeded demo school's own backfilled values.
+      avgWaitTimeSec: 2.9,
+      waitTimeSampleSize: 71,
+      waitTimeConfidence: 'full',
+      avgWaitTime2Sec: 0.8,
+      waitTime2SampleSize: 4,
+      waitTime2Confidence: 'limited',
+      avgTeacherPaceWpm: 142,
+      paceSampleSize: 71,
+      paceConfidence: 'full',
+      avgTeacherTalkPct: 68,
+      avgStudentTalkPct: 14,
+      talkSampleSize: 71,
+      talkConfidence: 'full',
+      higherOrderPct: 24,
+      higherOrderSampleSize: 410,
+      higherOrderConfidence: 'full',
+      realLifeConnectionRatePct: 38,
+      realLifeConnectionSampleSize: 66,
+      realLifeConnectionConfidence: 'full',
+      avgFollowUpPer10Min: 0.6,
+      followUpSampleSize: 71,
+      followUpConfidence: 'full',
+      cfuRatePct: 41,
+      cfuSampleSize: 64,
+      cfuConfidence: 'full',
+    },
+    climateAverages: {
+      avgRedirectionPer10Min: 1.4,
+      redirectionFrequencySampleSize: 71,
+      redirectionConfidence: 'full',
+      zeroRedirectionRatePct: 31,
+      redirectionMeasuredSampleSize: 71,
+      redirectionMeasuredConfidence: 'full',
+      avgTransitionPer10Min: 1.1,
+      transitionSampleSize: 71,
+      transitionConfidence: 'full',
+      clearDirectivesRatePct: 72,
+      directiveSampleSize: 71,
+      directiveConfidence: 'full',
+      positiveTonePct: 64,
+      toneSampleSize: 55,
+      toneConfidence: 'full',
+    },
+    contentNoteTally: { 'Where it could go further': tally(21, 9), 'What worked': tally(19, 9) },
+    growth: { recentStrong: 9, recentTotal: 22, priorStrong: 5, priorTotal: 20 },
+    weeklyActivity: Array.from({ length: 8 }, (_, i) => ({
+      weekStart: daysAgo((7 - i) * 7),
+      activeCount: 6 + ((i * 3) % 9),
+    })),
+  }
+}
+
+/// Grade and subject buckets, including a suppressed one and a combined one —
+/// the two paths that keep an individual teacher from being identifiable, and
+/// the ones a fixture where every bucket is full would never exercise.
+function adminBreakdown(): Json {
+  const metrics = (wait: number | null, wait2: number | null, pace: number | null) => ({
+    avgWaitTimeSec: wait,
+    waitTimeSampleSize: wait == null ? 0 : 24,
+    waitTimeConfidence: wait == null ? 'none' : 'full',
+    avgWaitTime2Sec: wait2,
+    waitTime2SampleSize: wait2 == null ? 0 : 4,
+    waitTime2Confidence: wait2 == null ? 'none' : 'limited',
+    avgTeacherPaceWpm: pace,
+    paceSampleSize: pace == null ? 0 : 24,
+    paceConfidence: pace == null ? 'none' : 'full',
+    avgTeacherTalkPct: 66,
+    talkSampleSize: 24,
+    talkConfidence: 'full',
+    higherOrderPct: 22,
+    higherOrderSampleSize: 140,
+    higherOrderConfidence: 'full',
+    avgRedirectionPer10Min: 1.2,
+    redirectionFrequencySampleSize: 24,
+    redirectionConfidence: 'full',
+    positiveTonePct: 61,
+    toneSampleSize: 20,
+    toneConfidence: 'full',
+  })
+  return {
+    minTeachers: 3,
+    breakdown: [
+      { bucket: '7th grade', suppressed: false, metrics: metrics(3.1, 0.9, 138) },
+      { bucket: '8th grade', suppressed: false, metrics: metrics(2.4, 0.6, 151) },
+      { bucket: 'Science + Math', suppressed: false, combined: ['Science', 'Math'], metrics: metrics(2.8, null, 144) },
+      { bucket: 'Art', suppressed: true, metrics: metrics(null, null, null) },
+    ],
+  }
+}
+
 function debrief(id: string, source: string, text: string, days: number): Json {
   return {
     id,
@@ -506,6 +644,35 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
     if (!id) return homeTools().has('planning') ? [lesson({ createdAt: daysAgo(8) })] : []
     return id === 'preview-ideas' ? IDEAS : id === 'preview-feedback' ? FEEDBACK : lesson()
   }
+
+  if (path.startsWith('/api/admin/overview/breakdown')) return adminBreakdown()
+  // Which My Growth focus teachers picked. Worth a real fixture rather than an
+  // empty one: this is the surface that shows whether the seven metrics the
+  // trend redesign kept are the ones teachers actually choose.
+  if (path.startsWith('/api/admin/overview/focus-areas')) {
+    return {
+      suppressed: false,
+      minTeachers: 3,
+      totalTeachers: 27,
+      areas: [
+        { metric: 'talkRatio', count: 7 },
+        { metric: 'waitTime2', count: 5 },
+        { metric: 'teacherPace', count: 4 },
+        { metric: 'higherOrderPct', count: 3 },
+        // A teacher who chose a metric before it was retired. It still has to
+        // render, which is why retired members were kept in the type.
+        { metric: 'avgWaitTime', count: 2 },
+      ],
+      otherCount: 6,
+    }
+  }
+  // A DIFFERENT endpoint with a different shape — the card reads `.items`, and
+  // returning a bare array here took the whole page to a blank screen rather
+  // than failing one card.
+  if (path.startsWith('/api/admin/pd-focus-areas')) return { items: [], themeCounts: {} }
+  if (path.startsWith('/api/admin/members')) return []
+  if (path.startsWith('/api/admin/overview')) return adminOverview()
+  if (path.startsWith('/api/admin/')) return []
 
   // --- Home ---
   const tools = homeTools()

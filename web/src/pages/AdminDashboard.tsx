@@ -1624,12 +1624,16 @@ function InstructionalAveragesCard({ n, data, insight }: { n: number; data: Inst
           value={data.avgWaitTime2Sec != null ? `${data.avgWaitTime2Sec.toFixed(1)}s` : '—'}
           sampleNote={sampleOr(data.waitTime2SampleSize, 'sessions')}
           confidence={data.waitTime2Confidence}
+          tooltip="Median seconds between a student finishing an answer and the teacher speaking again. Different from the pause above, which is the one after the question — and measurable far more often, since it needs only a student turn followed by a teacher turn."
+          goal="A good sign: 2 seconds or more, which is the room a follow-up question has to fit into."
         />
         <StatRow
           label="Avg. speaking pace"
           value={data.avgTeacherPaceWpm != null ? `${Math.round(data.avgTeacherPaceWpm)} wpm` : '—'}
           sampleNote={sampleOr(data.paceSampleSize, 'sessions')}
           confidence={data.paceConfidence}
+          tooltip="Median words a minute of teachers' own speaking time, not of the lesson. Exact arithmetic rather than a detection, so it is available on almost every lesson with a minute of teacher speech."
+          goal="Everyday conversation runs about 150. An anchor to compare against, not a target — there is no correct rate."
         />
         <StatRow
           label="Teacher talk vs. student talk"
