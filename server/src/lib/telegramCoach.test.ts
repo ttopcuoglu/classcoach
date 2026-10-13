@@ -139,3 +139,31 @@ test('quick ideas are unaffected — they are made here either way', () => {
   const markup = toolOfferButton(PLANNING, { topic: 'photosynthesis', kind: 'ideas' }, 'u1')
   assert.deepEqual(labelsOf(markup), ['Send me a few ideas', '🆕 New topic'])
 })
+
+// The two exits moved from the reply keyboard — which Telegram collapses
+// behind a toggle, so a teacher saw no buttons for days — onto the
+// messages themselves. Their actions have to be ones the dispatcher
+// knows, or every reply ends with two buttons that answer "that button
+// is from an older version of me".
+
+import { BUTTON_ACTIONS, EXIT_BUTTONS } from './telegramCoach.ts'
+
+test('the exits are inline, so nothing can hide them', () => {
+  assert.ok('inline_keyboard' in EXIT_BUTTONS, 'a reply keyboard is collapsible; an inline one is not')
+  assert.deepEqual(labelsOf(EXIT_BUTTONS), ['✅ Wrap up', '🆕 New topic'])
+})
+
+test('both exits are actions the dispatcher recognises', () => {
+  const rows = 'inline_keyboard' in EXIT_BUTTONS ? EXIT_BUTTONS.inline_keyboard : []
+  for (const button of rows.flat()) {
+    assert.ok('callback_data' in button, `${button.text} must carry a callback`)
+    const action = button.callback_data.split(':')[0]
+    assert.ok(BUTTON_ACTIONS.includes(action), `${action} is not dispatched`)
+  }
+})
+
+test('wrap carries no id, so it means the conversation they are in', () => {
+  const rows = 'inline_keyboard' in EXIT_BUTTONS ? EXIT_BUTTONS.inline_keyboard : []
+  const wrap = rows.flat().find((b) => b.text.includes('Wrap up'))
+  assert.equal(wrap && 'callback_data' in wrap && wrap.callback_data, 'wrap')
+})

@@ -114,10 +114,24 @@ const COMMANDS = [
 // that stay above the typing box. Tapping one just sends its text.
 const WRAP_UP_BUTTON = '✅ Wrap up'
 const NEW_TOPIC_BUTTON = '🆕 New topic'
-const MAIN_KEYBOARD: ReplyMarkup = {
-  keyboard: [[{ text: WRAP_UP_BUTTON }, { text: NEW_TOPIC_BUTTON }]],
-  resize_keyboard: true,
-  is_persistent: true,
+// The two ways out of a conversation, under the message rather than
+// above the typing box.
+//
+// They used to be a reply keyboard, which Telegram collapses behind a
+// small toggle in the message box — on Desktop by default, and on a
+// phone once it has been dismissed. A teacher reported seeing no buttons
+// at all for days; they were being sent correctly the whole time and the
+// client was hiding them. Nothing hides a button attached to a message.
+//
+// `wrap` with no id means the conversation this chat is in the middle of
+// — see handleButtonTap. The offers elsewhere name their own.
+export const EXIT_BUTTONS: ReplyMarkup = {
+  inline_keyboard: [
+    [
+      { text: WRAP_UP_BUTTON, callback_data: 'wrap' },
+      { text: NEW_TOPIC_BUTTON, callback_data: 'new' },
+    ],
+  ],
 }
 // For a chat that isn't (or is no longer) connected, where the buttons do nothing.
 const NO_KEYBOARD: ReplyMarkup = { remove_keyboard: true }
@@ -125,7 +139,7 @@ const NO_KEYBOARD: ReplyMarkup = { remove_keyboard: true }
 // Every message to a connected teacher carries the buttons, so a teacher
 // who connected before they existed gets them with their next reply.
 function reply(chatId: string, text: string) {
-  return sendMessage(chatId, text, MAIN_KEYBOARD)
+  return sendMessage(chatId, text)
 }
 
 // ---------------------------------------------------------------------------
@@ -404,7 +418,7 @@ async function sendMessageDraft(chatId: string, userId: string, handoffId: strin
   await sendMessage(
     chatId,
     result.message.draftText,
-    url ? { inline_keyboard: [[{ text: 'Change it in Wivoza', web_app: { url } }]] } : MAIN_KEYBOARD,
+    url ? { inline_keyboard: [[{ text: 'Change it in Wivoza', web_app: { url } }]] } : undefined,
   )
 }
 
@@ -1049,6 +1063,10 @@ async function startNewTopic(chatId: string, userId: string) {
   await reply(chatId, "Fresh start. What's on your mind?")
 }
 
+// Kept after the exits moved onto the messages: a chat that was used
+// before the move still has the old reply keyboard sitting collapsed
+// behind the toggle, and tapping one of those sends its label as text.
+// Same words, same outcome, so nothing a teacher taps goes nowhere.
 function plainWordCommand(text: string): 'done' | 'new' | null {
   const t = text.replace(/[.!]+$/, '').trim().toLowerCase()
   if (text === WRAP_UP_BUTTON || t === 'done' || t === 'wrap up' || t === 'wrap it up') return 'done'
@@ -1061,7 +1079,7 @@ function plainWordCommand(text: string): 'done' | 'new' | null {
 // answered rather than ignored: a tap that does nothing AND says nothing
 // is the worst thing this chat can do, because the teacher cannot tell
 // whether it worked, whether to tap again, or whether Wivoza is broken.
-const BUTTON_ACTIONS = [
+export const BUTTON_ACTIONS = [
   'wrap',
   'nowrap',
   'new',
@@ -1101,7 +1119,9 @@ async function handleButtonTap(chatId: string, tap: { id: string; data?: string;
   // disappear and nothing replaces them.
   if (tap.message) await removeInlineButtons(chatId, tap.message.message_id).catch(() => {})
 
-  if (action === 'wrap') await finishConversation(chatId, user, id)
+  // The exits under a reply carry no id, because they are about the
+  // conversation the teacher is in right now rather than a named one.
+  if (action === 'wrap') await finishConversation(chatId, user, id || user.telegramDebriefId)
   else if (action === 'nowrap') await reply(chatId, 'No problem. Tap "Wrap up" whenever you\'re ready.')
   else if (action === 'new') await startNewTopic(chatId, user.id)
   else if (action === 'ideas') await sendQuickIdeas(chatId, user.id, id)
@@ -1328,7 +1348,7 @@ async function coachReply(chatId: string, user: BotUser, text: string, extras: T
   // where wrapping up only ends what they said — and the sweep will come
   // round for the wrap-up anyway once this conversation has two exchanges.
   const wrapUp = !button && wrapUpNow ? wrapUpOfferButton(saved.id) : undefined
-  await sendMessage(chatId, coachText, button ?? wrapUp ?? MAIN_KEYBOARD)
+  await sendMessage(chatId, coachText, button ?? wrapUp ?? EXIT_BUTTONS)
   if (button) rememberToolOffer(saved.id)
   // Marked as offered, so the 30-minute sweep doesn't ask a second time.
   // This IS that offer; it just arrives while they still have the phone in
@@ -1400,7 +1420,7 @@ async function finishConversation(chatId: string, user: BotUser, debriefId: stri
   await sendMessage(
     chatId,
     `Here's your takeaway.\n\nWhat we talked about\n${takeaway.explored}\n\nTry next\n${takeaway.tryNext}\n\nNotice\n${takeaway.notice}${checkInLine}\n\nIt's saved in Wivoza under Talk It Through.`,
-    openInAppButton('Open in Wivoza', `/talk-to-me?open=${debrief.id}`) ?? MAIN_KEYBOARD,
+    openInAppButton('Open in Wivoza', `/talk-to-me?open=${debrief.id}`),
   )
 }
 
