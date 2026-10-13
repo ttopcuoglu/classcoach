@@ -592,7 +592,7 @@ export default function Home() {
             <p className="mt-3 text-sm text-cream/60">
               Coach is on Telegram too —{' '}
               <Link
-                to="/profile"
+                to="/profile#telegram"
                 className="font-semibold text-gold underline decoration-gold/40 underline-offset-4 hover:decoration-gold"
               >
                 connect your phone

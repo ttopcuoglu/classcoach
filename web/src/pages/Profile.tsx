@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import {
   createBillingPortalSession,
   createCheckoutSession,
@@ -125,6 +125,15 @@ export default function Profile() {
   // The Telegram card only shows when the server has a bot, so the sections
   // after it are numbered around it.
   const showTelegram = telegram?.available === true
+
+  // React Router doesn't act on a hash by itself, and the section it
+  // names isn't in the page until the telegram status has come back —
+  // so this waits for the thing to exist rather than firing on mount.
+  const { hash } = useLocation()
+  useEffect(() => {
+    if (hash !== '#telegram' || !showTelegram) return
+    document.getElementById('telegram')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [hash, showTelegram])
   const afterTelegram = showTelegram ? 1 : 0
 
   async function handleSave(e: React.FormEvent) {
@@ -542,7 +551,11 @@ export default function Profile() {
         <p className="mt-2 text-xs text-ink-soft">Use "Save changes" above to apply this.</p>
       </div>
 
+      {/* Anchored so Home's "connect your phone" lands on the section
+          rather than at the top of a page with three others above it.
+          scroll-mt keeps the heading clear of the top edge. */}
       {showTelegram && (
+        <div id="telegram" className="scroll-mt-6">
         <TelegramConnect
           status={telegram}
           onStatusChange={setTelegram}
@@ -554,6 +567,7 @@ export default function Profile() {
             />
           }
         />
+        </div>
       )}
 
       <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
