@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { Router } from 'express'
 import QRCode from 'qrcode'
 import { prisma } from '../lib/prisma.ts'
-import { getBotUsername, telegramEnabled, type TelegramUpdate } from '../lib/telegram.ts'
+import { getBotUsername, getWebhookInfo, telegramEnabled, type TelegramUpdate } from '../lib/telegram.ts'
 import { createLinkCode, dispatchUpdate, unlinkTelegram } from '../lib/telegramCoach.ts'
 
 // Signed-in teacher's Telegram connection, for Profile.
@@ -33,6 +33,36 @@ telegramRouter.post('/link', async (req, res) => {
   } catch (error) {
     console.error('[telegram] creating a link failed:', error)
     res.status(502).json({ error: 'Could not reach Telegram. Please try again.' })
+  }
+})
+
+// Why this exists: messages were arriving and button presses were not,
+// which from the outside is indistinguishable between "the webhook isn't
+// allowed to send callback_query", "the bot is erroring on them" and
+// "the buttons are wrong". Only Telegram knows the first one, and this is
+// the only way to ask it from a running deploy.
+//
+// Signed-in only, and deliberately nothing secret: the webhook URL is
+// already guessable, and the secret lives in a header rather than here.
+telegramRouter.get('/webhook-info', async (_req, res) => {
+  if (!telegramEnabled()) {
+    res.status(503).json({ error: 'Telegram is not configured on this deploy.' })
+    return
+  }
+  try {
+    const info = await getWebhookInfo()
+    res.json({
+      url: info.url,
+      allowedUpdates: info.allowed_updates ?? '(default — every type except chat_member)',
+      // The giveaway for the case this was written for.
+      deliversButtonPresses: info.allowed_updates == null || info.allowed_updates.includes('callback_query'),
+      pendingUpdates: info.pending_update_count,
+      lastError: info.last_error_message ?? null,
+      lastErrorAt: info.last_error_date ? new Date(info.last_error_date * 1000).toISOString() : null,
+    })
+  } catch (error) {
+    console.error('[telegram] getWebhookInfo failed:', error)
+    res.status(502).json({ error: 'Could not reach Telegram.' })
   }
 })
 

@@ -152,6 +152,27 @@ export function setWebhook(url: string, secretToken: string): Promise<unknown> {
   return call('setWebhook', { url, secret_token: secretToken, allowed_updates: ['message', 'callback_query'] })
 }
 
+/// What Telegram believes about this bot's webhook: where it delivers,
+/// which update types it is allowed to send, how many are queued, and the
+/// last error it hit.
+///
+/// `allowed_updates` is the one that matters and the one that can't be
+/// seen from here any other way: a webhook registered without
+/// callback_query delivers every message and silently drops every button
+/// press, which looks exactly like the buttons being broken.
+export type WebhookInfo = {
+  url?: string
+  pending_update_count?: number
+  allowed_updates?: string[]
+  last_error_date?: number
+  last_error_message?: string
+  ip_address?: string
+}
+
+export function getWebhookInfo(): Promise<WebhookInfo> {
+  return call<WebhookInfo>('getWebhookInfo')
+}
+
 export function deleteWebhook(): Promise<unknown> {
   return call('deleteWebhook', {})
 }

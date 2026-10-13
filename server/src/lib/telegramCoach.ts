@@ -60,6 +60,7 @@ import {
   setMyCommands,
   setMyDescription,
   setMyShortDescription,
+  getWebhookInfo,
   setWebhook,
   telegramEnabled,
   type ReplyMarkup,
@@ -1592,7 +1593,16 @@ export function startTelegramBot() {
       console.warn('[telegram] webhook mode needs TELEGRAM_WEBHOOK_SECRET and a public base URL; bot not started')
     } else {
       void setWebhook(`${base.replace(/\/$/, '')}/api/telegram/webhook`, secret)
-        .then(() => console.log('[telegram] webhook registered'))
+        // Logged rather than assumed: a webhook that is registered but
+        // not allowed to send callback_query delivers every message and
+        // drops every button press, and nothing in this process can tell
+        // the difference. See GET /api/telegram/webhook-info.
+        .then(() => getWebhookInfo())
+        .then((info) =>
+          console.log(
+            `[telegram] webhook registered — delivering ${info.allowed_updates?.join(', ') ?? 'the default update types'}`,
+          ),
+        )
         .catch((error) => console.error('[telegram] setWebhook failed:', error))
     }
   } else if (mode === 'polling') {
