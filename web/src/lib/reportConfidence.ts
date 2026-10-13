@@ -121,7 +121,7 @@ export function leadingSilenceNote(firstWordSec: number | null | undefined): str
   const mins = Math.floor(firstWordSec / 60)
   const secs = Math.round(firstWordSec % 60)
   const stamp = mins > 0 ? `${mins}:${String(secs).padStart(2, '0')}` : `${secs}s`
-  return `Nothing was transcribed until ${stamp}, so that much of the silence below is the recorder running before the lesson got going rather than quiet in the room.`
+  return `Nothing was transcribed until ${stamp}, so that much of the silence above is the recorder running before the lesson got going rather than quiet in the room.`
 }
 
 /// Below this, checking for understanding is an instance rather than a habit,

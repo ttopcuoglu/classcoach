@@ -19,6 +19,10 @@ import {
   getFollowUpMetric,
   getPresenceMetric,
   waitTimeMetric,
+  waitTime2Metric,
+  speechRateMetric,
+  leadingSilenceNote,
+  CONVERSATIONAL_WPM,
   isConfidentState,
   MIN_DURATION_FOR_CFU_DETECTION_SEC,
   TINY_RECORDING_THRESHOLD_SEC,
@@ -120,6 +124,8 @@ export default function AudioCoachingExport() {
       ? formatRatio(num('higherOrderQuestionCount'), session.questionCount)
       : null
   const waitTime = waitTimeMetric(session.avgWaitTimeSec, session.questionCount)
+  const pace = speechRateMetric(rawNum('teacherWordsPerMinute'))
+  const waitTime2 = waitTime2Metric(rawNum('waitTime2Sec'), rawNum('waitTime2SampleCount'))
   const followUps = getFollowUpMetric({
     count: rawNum('followUpQuestionCount'),
     studentVoiceSegments: rawNum('studentVoiceSegments'),
@@ -212,6 +218,62 @@ export default function AudioCoachingExport() {
               Talk balance could not be measured for this recording — the speakers were not separable.
             </p>
           )}
+          {/* How fast, beside how long. The shares above say how much of the
+              lesson each voice held and nothing about the pace of it. */}
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Stat label="Your pace" metric={pace} unit=" wpm" accent={A.terracotta} />
+          </div>
+          <p className="text-xs text-ink-soft">
+            Words a minute of your own speaking time. Everyday conversation runs about {CONVERSATIONAL_WPM} — an anchor
+            to place yourself against, not a target.
+          </p>
+          {(silencePct ?? 0) > 0 && leadingSilenceNote(rawNum('firstWordSec')) && (
+            <p className="text-xs text-ink-soft">{leadingSilenceNote(rawNum('firstWordSec'))}</p>
+          )}
+
+          {/* What the student talk was ABOUT — the only thing here that can
+              tell a discussion from a room talking over itself, since the
+              shares above read the same either way.
+
+              The counts print; the off-topic QUOTES deliberately do not, where
+              on screen they do. On screen a teacher reads their own students'
+              words in private and can judge whether the label was fair. This
+              page is the one they hand to an evaluator, and a student's
+              "I'm not here, I don't have anything on this" set down in a
+              shared document says something about that student, in a class
+              small enough to identify them, in a document about someone
+              else's teaching. The proportion is the teacher's to share; the
+              quote is not ours to put in their hands. */}
+          {session.studentTalkFocus && session.studentTalkFocus.classified > 0 && (
+            <>
+              <p className="mt-2 text-[11px] font-bold uppercase tracking-wide text-forest">
+                What students talked about
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <Stat
+                  label="About the lesson"
+                  metric={{ state: 'measured', display: String(session.studentTalkFocus.onTopic) }}
+                  accent={A.gold}
+                />
+                <Stat
+                  label="About how to do the work"
+                  metric={{ state: 'measured', display: String(session.studentTalkFocus.procedural) }}
+                  accent={A.gold}
+                />
+                <Stat
+                  label="Too unclear to make out"
+                  metric={{ state: 'measured', display: String(session.studentTalkFocus.unclear) }}
+                  accent={A.gold}
+                />
+              </div>
+              <p className="text-xs text-ink-soft">
+                Of {session.studentTalkFocus.classified} audible student turns. This is the only measure here that can
+                tell a discussion from a room talking over itself — the shares above read the same either way. It
+                isn't a score, and there's no correct number. A high unclear count is the microphone, which sits with
+                the teacher and hears the room poorly.
+              </p>
+            </>
+          )}
         </ReportSection>
 
         {/* Questioning & checking — one section, two halves, as on screen.
@@ -237,6 +299,9 @@ export default function AudioCoachingExport() {
           </p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="Avg. wait time" metric={waitTime} unit="s" accent={A.mint} />
+            {/* The pause after an ANSWER, which is where a follow-up has to
+                fit — and the reason the follow-up count beside it is low. */}
+            <Stat label="Pause after an answer" metric={waitTime2} accent={A.mint} />
             <Stat label="Follow-ups" metric={followUps} accent={A.mint} />
             {specificShare && <Stat label="Feedback that was specific" metric={specificShare} accent={A.mint} />}
             <Stat label="Feedback moments" metric={feedbackMoments} accent={A.mint} />
