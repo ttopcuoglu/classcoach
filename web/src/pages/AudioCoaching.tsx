@@ -1183,15 +1183,6 @@ const INSIGHTS_SECTION_META: Record<InsightsSection, { n: number; blurb: string;
 // colour without every Insights tab having to pass it down by hand.
 const SectionAccentContext = createContext<Accent>(ACCENTS.mint)
 
-function SubsectionHeading({ title, blurb }: { title: string; blurb: string }) {
-  return (
-    <div className="mb-4 border-l-4 border-gold pl-3">
-      <h3 className="font-heading text-lg font-bold text-forest">{title}</h3>
-      <p className="text-sm text-ink-soft">{blurb}</p>
-    </div>
-  )
-}
-
 function InsightsSectionHeader({ section }: { section: InsightsSection }) {
   const meta = INSIGHTS_SECTION_META[section]
   const label = INSIGHTS_SECTIONS.find((s) => s.key === section)?.label ?? ''
@@ -5708,15 +5699,6 @@ function QuestioningCheckingTab({
         state={higherOrderRatio?.state ?? 'not_measurable'}
       />
 
-      {/* The second half of the section: what happened after a question, and
-          how understanding was checked. One note rather than a second page. */}
-      {checksNarrative && (
-        <div>
-          <SubsectionHeading title="How you responded" blurb="Checks for understanding and your responses to what students said." />
-          <CoachNote text={checksNarrative} />
-        </div>
-      )}
-
       <SectionNextStep text={nextStep} />
 
       <DetailRows>
@@ -5815,6 +5797,20 @@ function QuestioningCheckingTab({
                 </div>
               ))}
             </div>
+          </DetailRow>
+        )}
+
+        {/* The section's second note — checks for understanding and what was
+            done with students' answers. It sat on the page under the first,
+            so this was the one section with two paragraphs to read before
+            anything else; it belongs with the evidence it describes. */}
+        {checksNarrative && (
+          <DetailRow title="How you checked and responded">
+            {splitParagraphs(checksNarrative).map((para, i) => (
+              <p key={i} className="text-sm text-ink">
+                {para}
+              </p>
+            ))}
           </DetailRow>
         )}
 

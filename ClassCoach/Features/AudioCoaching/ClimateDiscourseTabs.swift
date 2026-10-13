@@ -205,16 +205,6 @@ struct DiscourseDetailsTab: View {
             // count itself. A count, never a share.
             QuestioningMixView(session: session)
 
-            // The second half of the section: what happened after a question,
-            // and how understanding was checked.
-            if let narrative = session.checksNarrative, !narrative.isEmpty {
-                SubsectionHeading(
-                    title: "How you responded",
-                    blurb: "Checks for understanding and your responses to what students said."
-                )
-                CoachNoteView(text: narrative)
-            }
-
             SectionNextStep(text: session.nextSteps?.questions)
 
             VStack(alignment: .leading, spacing: 0) {
@@ -235,6 +225,15 @@ struct DiscourseDetailsTab: View {
                 }
                 if let log = session.questionLog, !log.isEmpty {
                     DetailRow(title: "Your questions, in order (\(log.count))") { questionLogList(log) }
+                }
+                // The section's second note. It sat on the page under the
+                // first, the one section with two paragraphs to read before
+                // anything else.
+                if let narrative = session.checksNarrative, !narrative.isEmpty {
+                    DetailRow(title: "How you checked and responded") {
+                        Text(narrative).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 DetailRow(title: "How to read these numbers") {
                     readingNote("Questions and checks are read from your side of the transcript. Spoken checks only — hand signals and written work are invisible to a recording.")
