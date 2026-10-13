@@ -342,6 +342,31 @@ export default function AdminPilotReport() {
             hint={inst.waitTimeConfidence === 'none' ? 'Not enough lessons yet' : 'After a question. A good sign: 3s or more.'}
             accent={A.gold}
           />
+          {/* The pause after an ANSWER, beside the one after a question. It is
+              measurable far more often on real classroom audio, and it is
+              usually what explains a low follow-up rate. */}
+          <StatTile
+            label="Pause after an answer"
+            value={shown(inst.avgWaitTime2Sec, inst.waitTime2Confidence, (v) => v.toFixed(1))}
+            unit={inst.avgWaitTime2Sec != null && inst.waitTime2Confidence !== 'none' ? 's' : undefined}
+            hint={
+              inst.waitTime2Confidence === 'none'
+                ? 'Not enough lessons yet'
+                : 'Before the teacher speaks again. It is where a follow-up has to fit.'
+            }
+            accent={A.gold}
+          />
+          <StatTile
+            label="Speaking pace"
+            value={shown(inst.avgTeacherPaceWpm, inst.paceConfidence, (v) => `${Math.round(v)}`)}
+            unit={inst.avgTeacherPaceWpm != null && inst.paceConfidence !== 'none' ? ' wpm' : undefined}
+            hint={
+              inst.paceConfidence === 'none'
+                ? 'Not enough lessons yet'
+                : 'Everyday conversation runs about 150. An anchor, not a target.'
+            }
+            accent={A.mint}
+          />
           <StatTile
             label="Positive tone"
             value={shown(climate.positiveTonePct, climate.toneConfidence, (v) => `${Math.round(v)}%`)}

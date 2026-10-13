@@ -128,6 +128,11 @@ function dataConfidence(n: number): DataConfidence {
   return 'full'
 }
 
+/// Matches MIN_WAIT_TIME_SAMPLES in web/src/lib/reportConfidence.ts — below
+/// this many exchanges the average is a reading of one or two moments, which
+/// no surface in this product treats as a habit.
+const MIN_WAIT_TIME_SAMPLES = 3
+
 type HeadlineMetricsRow = {
   teacherTalkPct: number | null
   questionCount: number | null
@@ -152,6 +157,11 @@ function numDetail(s: HeadlineMetricsRow, key: string): number | null {
 // counts as a zero for that field.
 function computeHeadlineMetrics(sessions: HeadlineMetricsRow[]) {
   const waitTimes = sessions.map((s) => s.avgWaitTimeSec).filter((v): v is number => v != null)
+  const waitTime2s = sessions
+    .filter((s) => (numDetail(s, 'waitTime2SampleCount') ?? 0) >= MIN_WAIT_TIME_SAMPLES)
+    .map((s) => numDetail(s, 'waitTime2Sec'))
+    .filter((v): v is number => v != null)
+  const paces = sessions.map((s) => numDetail(s, 'teacherWordsPerMinute')).filter((v): v is number => v != null)
   const teacherTalkPcts = sessions.map((s) => s.teacherTalkPct).filter((v): v is number => v != null)
 
   let higherOrderNumerator = 0
@@ -182,6 +192,12 @@ function computeHeadlineMetrics(sessions: HeadlineMetricsRow[]) {
     avgWaitTimeSec: median(waitTimes),
     waitTimeSampleSize: waitTimes.length,
     waitTimeConfidence: dataConfidence(waitTimes.length),
+    avgWaitTime2Sec: median(waitTime2s),
+    waitTime2SampleSize: waitTime2s.length,
+    waitTime2Confidence: dataConfidence(waitTime2s.length),
+    avgTeacherPaceWpm: median(paces),
+    paceSampleSize: paces.length,
+    paceConfidence: dataConfidence(paces.length),
     avgTeacherTalkPct: average(teacherTalkPcts),
     talkSampleSize: teacherTalkPcts.length,
     talkConfidence: dataConfidence(teacherTalkPcts.length),
@@ -619,6 +635,20 @@ async function computeOverview(req: Request, res: Response) {
   // average/metricsOf/numDetail are the module-scope helpers defined above
   // (shared with computeHeadlineMetrics for the grade/subject breakdown).
   const waitTimes = filteredAudioSessions.map((s) => s.avgWaitTimeSec).filter((v): v is number => v != null)
+  // The pause AFTER a student answers, alongside the one after a question.
+  // Measured on real classroom audio it lands about three and a half times as
+  // often as wait time 1, which needs a detected question AND an audible
+  // answer where this needs only a student turn followed by a teacher turn —
+  // so a staff-wide figure rests on far more sessions.
+  const waitTime2s = filteredAudioSessions
+    .filter((s) => (numDetail(s, 'waitTime2SampleCount') ?? 0) >= MIN_WAIT_TIME_SAMPLES)
+    .map((s) => numDetail(s, 'waitTime2Sec'))
+    .filter((v): v is number => v != null)
+  // How fast staff speak. Exact arithmetic rather than a detection, so it is
+  // available wherever there is a minute of teacher speech.
+  const paces = filteredAudioSessions
+    .map((s) => numDetail(s, 'teacherWordsPerMinute'))
+    .filter((v): v is number => v != null)
   const teacherTalkPcts = filteredAudioSessions.map((s) => s.teacherTalkPct).filter((v): v is number => v != null)
   const studentTalkPcts = filteredAudioSessions.map((s) => s.studentTalkPct).filter((v): v is number => v != null)
 
@@ -653,6 +683,12 @@ async function computeOverview(req: Request, res: Response) {
     avgWaitTimeSec: median(waitTimes),
     waitTimeSampleSize: waitTimes.length,
     waitTimeConfidence: dataConfidence(waitTimes.length),
+    avgWaitTime2Sec: median(waitTime2s),
+    waitTime2SampleSize: waitTime2s.length,
+    waitTime2Confidence: dataConfidence(waitTime2s.length),
+    avgTeacherPaceWpm: median(paces),
+    paceSampleSize: paces.length,
+    paceConfidence: dataConfidence(paces.length),
     avgTeacherTalkPct: average(teacherTalkPcts),
     avgStudentTalkPct: average(studentTalkPcts),
     talkSampleSize,
@@ -856,6 +892,8 @@ adminRouter.get('/overview/export', async (req, res) => {
     ['Returning users', data.returningUsers],
     ['Coaching activities', data.activitiesThisWeek],
     ['Avg. wait time after a question (s)', data.instructionalAverages.avgWaitTimeSec],
+    ['Avg. pause after a student answer (s)', data.instructionalAverages.avgWaitTime2Sec],
+    ['Avg. teacher speaking pace (words a minute)', data.instructionalAverages.avgTeacherPaceWpm],
     ['Avg. teacher talk %', data.instructionalAverages.avgTeacherTalkPct],
     ['Higher-order questions %', data.instructionalAverages.higherOrderPct],
     ['Checks for understanding rate %', data.instructionalAverages.cfuRatePct],

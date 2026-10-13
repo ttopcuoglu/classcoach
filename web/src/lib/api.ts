@@ -149,6 +149,12 @@ export type InstructionalAverages = {
   avgWaitTimeSec: number | null
   waitTimeSampleSize: number
   waitTimeConfidence: DataConfidence
+  avgWaitTime2Sec: number | null
+  waitTime2SampleSize: number
+  waitTime2Confidence: DataConfidence
+  avgTeacherPaceWpm: number | null
+  paceSampleSize: number
+  paceConfidence: DataConfidence
   avgTeacherTalkPct: number | null
   avgStudentTalkPct: number | null
   talkSampleSize: number
@@ -191,6 +197,12 @@ export type BreakdownHeadlineMetrics = {
   avgWaitTimeSec: number | null
   waitTimeSampleSize: number
   waitTimeConfidence: DataConfidence
+  avgWaitTime2Sec: number | null
+  waitTime2SampleSize: number
+  waitTime2Confidence: DataConfidence
+  avgTeacherPaceWpm: number | null
+  paceSampleSize: number
+  paceConfidence: DataConfidence
   avgTeacherTalkPct: number | null
   talkSampleSize: number
   talkConfidence: DataConfidence

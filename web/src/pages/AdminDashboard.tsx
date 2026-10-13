@@ -1489,6 +1489,16 @@ function buildInstructionalGroupInsight(data: InstructionalAverages): string | n
   if (data.waitTimeConfidence === 'full' && data.avgWaitTimeSec != null && data.avgWaitTimeSec < 3) {
     return `Average wait time after a question is ${data.avgWaitTimeSec.toFixed(1)}s staff-wide — extending it by even a couple seconds is a well-supported, easy lever to name.`
   }
+  // The pause after an ANSWER, which is where a follow-up has to fit — and
+  // usually what explains a low follow-up rate rather than teachers not
+  // thinking of one. Placed after wait time 1 so a school short on both hears
+  // about the better-known lever first.
+  if (data.waitTime2Confidence === 'full' && data.avgWaitTime2Sec != null && data.avgWaitTime2Sec < 1) {
+    return `Staff wait ${data.avgWaitTime2Sec.toFixed(1)}s on average after a student finishes answering before speaking again — there is no room in that for a follow-up, which is worth naming before asking anyone to ask more of them.`
+  }
+  if (data.paceConfidence === 'full' && data.avgTeacherPaceWpm != null && data.avgTeacherPaceWpm >= 200) {
+    return `Staff speak at about ${Math.round(data.avgTeacherPaceWpm)} words a minute on average, against roughly 150 in everyday conversation — a concrete, low-stakes thing to notice together, though there is no correct rate and a fast stretch is not a fault.`
+  }
   if (data.higherOrderConfidence === 'full' && data.higherOrderPct != null && data.higherOrderPct >= 40) {
     return `Higher-order questioning is a real strength staff-wide (${data.higherOrderPct}% of questions) — worth naming and reinforcing.`
   }
@@ -1605,6 +1615,21 @@ function InstructionalAveragesCard({ n, data, insight }: { n: number; data: Inst
           sampleNote={sampleOr(data.waitTimeSampleSize, 'sessions')}
           confidence={data.waitTimeConfidence}
           tooltip="Median seconds of silence between a question and the teacher speaking again — median rather than average so one unusually long pause doesn't swing a small sample."
+        />
+        {/* The pause after an ANSWER, beside the pause after a question. On
+            real classroom audio it is measurable about three and a half times
+            as often, so a staff-wide figure rests on more sessions. */}
+        <StatRow
+          label="Avg. pause after an answer"
+          value={data.avgWaitTime2Sec != null ? `${data.avgWaitTime2Sec.toFixed(1)}s` : '—'}
+          sampleNote={sampleOr(data.waitTime2SampleSize, 'sessions')}
+          confidence={data.waitTime2Confidence}
+        />
+        <StatRow
+          label="Avg. speaking pace"
+          value={data.avgTeacherPaceWpm != null ? `${Math.round(data.avgTeacherPaceWpm)} wpm` : '—'}
+          sampleNote={sampleOr(data.paceSampleSize, 'sessions')}
+          confidence={data.paceConfidence}
         />
         <StatRow
           label="Teacher talk vs. student talk"
@@ -1816,6 +1841,18 @@ function BreakdownCard({ n, selectedOrgId }: { n: number; selectedOrgId: string 
                     value={entry.metrics.avgWaitTimeSec != null ? `${entry.metrics.avgWaitTimeSec.toFixed(1)}s` : '—'}
                     sampleNote={sampleOr(entry.metrics.waitTimeSampleSize, 'sessions')}
                     confidence={entry.metrics.waitTimeConfidence}
+                  />
+                  <StatRow
+                    label="Pause after an answer"
+                    value={entry.metrics.avgWaitTime2Sec != null ? `${entry.metrics.avgWaitTime2Sec.toFixed(1)}s` : '—'}
+                    sampleNote={sampleOr(entry.metrics.waitTime2SampleSize, 'sessions')}
+                    confidence={entry.metrics.waitTime2Confidence}
+                  />
+                  <StatRow
+                    label="Speaking pace"
+                    value={entry.metrics.avgTeacherPaceWpm != null ? `${Math.round(entry.metrics.avgTeacherPaceWpm)} wpm` : '—'}
+                    sampleNote={sampleOr(entry.metrics.paceSampleSize, 'sessions')}
+                    confidence={entry.metrics.paceConfidence}
                   />
                   <StatRow
                     label="Teacher talk"
