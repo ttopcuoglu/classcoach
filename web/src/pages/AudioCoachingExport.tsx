@@ -28,6 +28,12 @@ import {
   TINY_RECORDING_THRESHOLD_SEC,
   type ConfidentMetric,
 } from '../lib/reportConfidence'
+import {
+  buildNextTimeItems,
+  buildStrengthCandidates,
+  formatCandidateHeadline,
+  pickTop,
+} from '../lib/reportHighlights'
 
 // A printable, section-per-page version of the Lesson Debrief report.
 //
@@ -140,6 +146,14 @@ export default function AudioCoachingExport() {
   const feedbackTotal = num('specificFeedbackCount') + num('genericFeedbackCount')
   const feedbackMoments = getCountMetric({ count: feedbackCounted ? feedbackTotal : null, recordedSec })
   const specificShare = feedbackTotal > 0 ? formatRatio(num('specificFeedbackCount'), feedbackTotal) : null
+
+  // The strength the report picked out, and everything it suggests. Both are
+  // built by the same functions the screen uses — a printed report that
+  // disagreed with the screen about what a teacher should try next would be
+  // worse than one that stayed silent.
+  const strength = pickTop(buildStrengthCandidates(session, cfu, specificShare ?? cfu, higherOrder))
+  const nextTimeItems = buildNextTimeItems(session)
+  const contentNotes = session.contentNotes?.notes ?? []
   const teacherTalk = getPresenceMetric(teacherPct)
   const studentTalk = getPresenceMetric(studentPct)
 
@@ -428,6 +442,22 @@ export default function AudioCoachingExport() {
             that stays true; printing it into the shareable report is how the
             feature stops being used. It lives on screen, for them, only. */}
 
+        {/* The one thing the report picked out as having worked. Screen-only
+            until now, which meant an exported report named every number and
+            nothing that went right. */}
+        {strength && (
+          <ReportSection
+            n={++n}
+            title="A strength to keep"
+            blurb="Something that worked in this lesson — keep doing it."
+            accent={A.mint}
+          >
+            <p className="text-sm font-semibold text-ink">{formatCandidateHeadline(strength)}</p>
+            {strength.excerpt && <p className="mt-1 text-sm italic text-ink-soft">“{strength.excerpt}”</p>}
+            <p className="mt-1 text-sm text-ink-soft">{strength.whyItMatters}</p>
+          </ReportSection>
+        )}
+
         {/* Moments */}
         {session.highlights && session.highlights.length > 0 && (
           <ReportSection n={++n} title="Moments Worth Revisiting" blurb="Specific points in the recording, with timestamps." accent={A.gold}>
@@ -441,6 +471,59 @@ export default function AudioCoachingExport() {
                     <p className="text-sm font-semibold text-forest">{h.label}</p>
                     {h.excerpt && <p className="mt-0.5 text-sm italic text-ink-soft">“{h.excerpt}”</p>}
                   </div>
+                </div>
+              ))}
+            </div>
+          </ReportSection>
+        )}
+
+        {/* The subject-specialist reading. The printable Clarity & Content
+            section carried vocabulary and connections only, so an exported
+            report reached a coach with the measurements and none of the
+            reading of the content itself. */}
+        {contentNotes.length > 0 && (
+          <ReportSection
+            n={++n}
+            title="Notes from a subject specialist"
+            blurb={`How this topic was taught${session.contentNotes?.subject ? `, read as a specialist in ${session.contentNotes.subject} would` : ''}.`}
+            accent={A.forest}
+          >
+            <div className="flex flex-col gap-3">
+              {contentNotes.map((note) => (
+                <div key={note.id} className="break-inside-avoid rounded-2xl border border-hairline bg-white p-4">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-terracotta-600">{note.label}</p>
+                  <p className="mt-1 text-sm text-ink">{note.text}</p>
+                  {note.excerpt && (
+                    <p className="mt-1.5 border-l-2 border-gold/60 pl-3 text-sm italic text-ink-soft">
+                      “{note.excerpt}”
+                      {note.timestampSec != null && (
+                        <span className="ml-1 not-italic text-xs">({formatTime(note.timestampSec)})</span>
+                      )}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </ReportSection>
+        )}
+
+        {/* Everything the report suggests, in one list — the most actionable
+            part of it, and the part the printed version did not carry. */}
+        {nextTimeItems.length > 0 && (
+          <ReportSection
+            n={++n}
+            title="Try next time"
+            blurb="What this report suggests, from every section, in one list."
+            accent={A.gold}
+          >
+            <div className="flex flex-col gap-2">
+              {nextTimeItems.map((item) => (
+                <div key={item.id} className="break-inside-avoid rounded-xl border border-hairline bg-white p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">{item.from}</p>
+                  <p className="mt-0.5 text-sm text-ink">
+                    {item.lead ? <span className="font-semibold">{item.lead}: </span> : null}
+                    {item.text}
+                  </p>
                 </div>
               ))}
             </div>
