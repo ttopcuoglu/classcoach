@@ -41,6 +41,7 @@ import {
   type SchoolInquiry,
 } from '../lib/api'
 import { ACCENT_CYCLE, type Accent } from '../components/report'
+import { CardBoundary } from '../components/CardBoundary'
 import { categoryLabel } from '../lib/categories'
 import {
   buildSchoolGlance,
@@ -281,35 +282,65 @@ export default function AdminDashboard() {
 
         {isAnalyticsTab && !overview && !overviewError && <p className="text-sm text-ink-soft">Loading...</p>}
 
+        {/* A boundary per PANEL as well as per card. The cards were the
+            obvious unit, but the crash that blanked this page was in a panel's
+            own body — it reads its own endpoint and builds its cards from the
+            answer, so it never reaches a card boundary. Keyed by tab so
+            switching away from a failed panel and back retries it rather than
+            leaving it stuck. */}
         {tab === 'dashboard' && overview && (
-          <DashboardPanel overview={overview} organizationId={selectedOrgId || undefined} onNavigate={setTab} />
+          <CardBoundary key="dashboard" title="Dashboard">
+            <DashboardPanel overview={overview} organizationId={selectedOrgId || undefined} onNavigate={setTab} />
+          </CardBoundary>
         )}
-        {tab === 'engagement' && overview && <EngagementPanel overview={overview} />}
+        {tab === 'engagement' && overview && (
+          <CardBoundary key="engagement" title="Adoption & engagement">
+            <EngagementPanel overview={overview} />
+          </CardBoundary>
+        )}
         {tab === 'insights' && overview && (
-          <CoachingInsightsPanel overview={overview} selectedOrgId={selectedOrgId} />
+          <CardBoundary key="insights" title="Coaching insights">
+            <CoachingInsightsPanel overview={overview} selectedOrgId={selectedOrgId} />
+          </CardBoundary>
         )}
         {tab === 'professionalLearning' && (
-          <PdFocusAreaPanel
-            selectedOrgId={selectedOrgId}
-            onOrgChange={handleOrgChange}
-            orgs={orgs}
-            isSuperadmin={isSuperadmin}
-            overview={overview}
-          />
+          <CardBoundary key="professionalLearning" title="Professional Learning">
+            <PdFocusAreaPanel
+              selectedOrgId={selectedOrgId}
+              onOrgChange={handleOrgChange}
+              orgs={orgs}
+              isSuperadmin={isSuperadmin}
+              overview={overview}
+            />
+          </CardBoundary>
         )}
         {tab === 'people' && (
-          <PeoplePanel
-            selectedOrgId={selectedOrgId}
-            onOrgChange={handleOrgChange}
-            orgs={orgs}
-            isSuperadmin={isSuperadmin}
-            currentUserId={me?.id ?? null}
-            overview={overview}
-          />
+          <CardBoundary key="people" title="People">
+            <PeoplePanel
+              selectedOrgId={selectedOrgId}
+              onOrgChange={handleOrgChange}
+              orgs={orgs}
+              isSuperadmin={isSuperadmin}
+              currentUserId={me?.id ?? null}
+              overview={overview}
+            />
+          </CardBoundary>
         )}
-        {tab === 'organizations' && <OrganizationsPanel />}
-        {tab === 'platformUsers' && <UsersPanel currentUserId={me?.id ?? null} />}
-        {tab === 'schoolInquiries' && <SchoolInquiriesPanel />}
+        {tab === 'organizations' && (
+          <CardBoundary key="organizations" title="Organizations">
+            <OrganizationsPanel />
+          </CardBoundary>
+        )}
+        {tab === 'platformUsers' && (
+          <CardBoundary key="platformUsers" title="Platform users">
+            <UsersPanel currentUserId={me?.id ?? null} />
+          </CardBoundary>
+        )}
+        {tab === 'schoolInquiries' && (
+          <CardBoundary key="schoolInquiries" title="School inquiries">
+            <SchoolInquiriesPanel />
+          </CardBoundary>
+        )}
       </div>
     </div>
   )
@@ -1107,7 +1138,11 @@ function MembersList({
         </AdminCard>
       )}
 
-      {members && needsNudge && <NudgeCard n={2} members={members} />}
+      {members && needsNudge && (
+        <CardBoundary n={2} title="Teachers to nudge">
+          <NudgeCard n={2} members={members} />
+        </CardBoundary>
+      )}
 
       <AdminCard
         n={rosterN}
@@ -2077,7 +2112,13 @@ function AdminCard({
         </div>
         {aside}
       </div>
-      <div className="mt-4">{children}</div>
+      {/* A crash in this card's content keeps the card's own heading and
+          number, so the page still reads as the numbered sequence it is. */}
+      <div className="mt-4">
+        <CardBoundary n={n} title={title}>
+          {children}
+        </CardBoundary>
+      </div>
       {howToRead && (
         <details className="mt-4 border-t border-hairline/70 pt-3">
           <summary className="cursor-pointer text-xs font-semibold text-forest">How to read this</summary>
@@ -2617,9 +2658,13 @@ function CoachingInsightsPanel({ overview, selectedOrgId }: { overview: AdminOve
             />
           </AdminCard>
 
-          <FocusAreasCard n={5} selectedOrgId={selectedOrgId} />
+          <CardBoundary n={5} title="Focus areas">
+            <FocusAreasCard n={5} selectedOrgId={selectedOrgId} />
+          </CardBoundary>
 
-          <BreakdownCard n={6} selectedOrgId={selectedOrgId} />
+          <CardBoundary n={6} title="Compare by grade or subject">
+            <BreakdownCard n={6} selectedOrgId={selectedOrgId} />
+          </CardBoundary>
         </>
       )}
 
