@@ -317,6 +317,9 @@ export default function Home() {
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [name, setName] = useState<string | null>(null)
   const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel | null>(null)
+  // Null until the profile lands, so the nudge below never flashes in
+  // for a teacher who has already connected.
+  const [telegramLinked, setTelegramLinked] = useState<boolean | null>(null)
   const [activity, setActivity] = useState<Activity[]>([])
   const [sessions, setSessions] = useState<AudioSession[]>([])
   // Unfiltered, newest-first — used only to drive the "Next" card's
@@ -349,6 +352,7 @@ export default function Home() {
       .then((profile) => {
         setName(profile.name)
         setExperienceLevel(profile.experienceLevel)
+        setTelegramLinked(profile.telegramChatId != null)
         setNeedsOnboarding(!profile.name && !profile.gradeLevels && !profile.subjects)
       })
       .catch(() => {})
@@ -577,6 +581,25 @@ export default function Home() {
             <span className="text-gold">.</span>
           </h1>
           <p className="mt-1.5 text-cream/70">What would help you feel more prepared today?</p>
+          {/* Everything Coach can do in a chat is reachable only from
+              Profile, which teachers open roughly never — so it is said
+              once, here, where the day starts. Not furniture: it is gone
+              for good the moment they connect, which is the thing that
+              makes it safe to put on a page this full.
+              Null while the profile is still loading, so a teacher who
+              has already connected never sees it flash past. */}
+          {telegramLinked === false && (
+            <p className="mt-3 text-sm text-cream/60">
+              Coach is on Telegram too —{' '}
+              <Link
+                to="/profile"
+                className="font-semibold text-gold underline decoration-gold/40 underline-offset-4 hover:decoration-gold"
+              >
+                connect your phone
+              </Link>{' '}
+              and talk it through from anywhere.
+            </p>
+          )}
         </div>
         {!checkIn && (
           <div className="flex flex-col gap-4 rounded-2xl bg-cream/5 p-5 ring-1 ring-cream/10">

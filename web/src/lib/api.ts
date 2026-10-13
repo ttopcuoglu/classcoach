@@ -103,6 +103,10 @@ export type UserProfile = {
   focusMetric: FocusMetric | null
   coachMemory: string | null
   coachMemoryEnabled: boolean
+  // Set when a Telegram chat is tied to this account. Already in the
+  // payload — /me and /profile omit only the password hash and the
+  // one-time link token — so reading it costs nothing.
+  telegramChatId: string | null
   plan: 'free' | 'plus'
   planStatus: string | null
   // Why this account has Plus-level access, or null on the Free plan — covers
