@@ -3,7 +3,7 @@ import { Router } from 'express'
 import QRCode from 'qrcode'
 import { prisma } from '../lib/prisma.ts'
 import { getBotUsername, getWebhookInfo, telegramEnabled, type TelegramUpdate } from '../lib/telegram.ts'
-import { createLinkCode, dispatchUpdate, unlinkTelegram } from '../lib/telegramCoach.ts'
+import { createLinkCode, dispatchUpdate, recentUpdates, unlinkTelegram } from '../lib/telegramCoach.ts'
 
 // Signed-in teacher's Telegram connection, for Profile.
 export const telegramRouter = Router()
@@ -59,6 +59,9 @@ telegramRouter.get('/webhook-info', async (_req, res) => {
       pendingUpdates: info.pending_update_count,
       lastError: info.last_error_message ?? null,
       lastErrorAt: info.last_error_date ? new Date(info.last_error_date * 1000).toISOString() : null,
+      // What this process actually did with the last few updates. Empty
+      // after a restart, which is itself worth knowing.
+      recentUpdates: recentUpdates(),
     })
   } catch (error) {
     console.error('[telegram] getWebhookInfo failed:', error)

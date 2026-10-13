@@ -721,14 +721,52 @@ const recentUpdateIds = new Set<number>()
 // to the same conversation, and two of the turns would be lost.
 const chatQueues = new Map<string, Promise<void>>()
 
+/// The last few updates this process saw, and what it did with each.
+///
+/// Written because messages were arriving and taps were not, and from
+/// outside the process the two silent exits below — a callback carrying
+/// no message, and a chat that isn't private — look identical to the
+/// update never arriving at all. Telegram said it was delivering them;
+/// this says what happened next.
+///
+/// No message text and no callback payload: the kind of update, the chat
+/// type, the action word of a tap, and the outcome. Enough to tell those
+/// three cases apart and nothing a teacher wrote.
+type SeenUpdate = { at: string; kind: string; chatType?: string; action?: string; outcome: string }
+const seenUpdates: SeenUpdate[] = []
+
+export function recentUpdates(): SeenUpdate[] {
+  return [...seenUpdates].reverse()
+}
+
+function noteUpdate(entry: Omit<SeenUpdate, 'at'>) {
+  seenUpdates.push({ at: new Date().toISOString(), ...entry })
+  if (seenUpdates.length > 20) seenUpdates.shift()
+}
+
 export function dispatchUpdate(update: TelegramUpdate): void {
-  if (recentUpdateIds.has(update.update_id)) return
+  const tapData = update.callback_query?.data
+  const kind = update.callback_query ? 'callback_query' : update.message ? 'message' : 'other'
+  const action = tapData ? tapData.split(':')[0] : undefined
+
+  if (recentUpdateIds.has(update.update_id)) {
+    noteUpdate({ kind, action, outcome: 'dropped: already seen this update id' })
+    return
+  }
   recentUpdateIds.add(update.update_id)
   if (recentUpdateIds.size > 500) recentUpdateIds.delete(recentUpdateIds.values().next().value!)
 
   const message = update.message ?? update.callback_query?.message
   // Direct messages only — the bot has no business in a group chat.
-  if (!message || message.chat.type !== 'private') return
+  if (!message) {
+    noteUpdate({ kind, action, outcome: 'dropped: the update carried no message' })
+    return
+  }
+  if (message.chat.type !== 'private') {
+    noteUpdate({ kind, action, chatType: message.chat.type, outcome: 'dropped: not a private chat' })
+    return
+  }
+  noteUpdate({ kind, action, chatType: message.chat.type, outcome: 'handled' })
   const chatId = String(message.chat.id)
   const tap = update.callback_query
 
