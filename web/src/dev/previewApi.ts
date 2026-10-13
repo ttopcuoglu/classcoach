@@ -329,7 +329,8 @@ function previewReport(): Json {
       tryNext: 'Ask it, give pairs thirty seconds to write a one-line guess, and take two answers before you explain.',
     },
     classSummary: 'The lesson traced the Black Death through to its effect on wages, opening with a stated objective and returning twice to prior work on supply and demand.',
-    talkNarrative: 'Your voice carried the explanatory weight of this lesson, particularly across one long stretch early on; students were audible mainly in short answers to direct questions.',
+    // Long on purpose, so the note's "Read more" has something to fold.
+    talkNarrative: 'Your voice carried the explanatory weight of this lesson, particularly across one long stretch early on. Students were audible mainly in short answers to direct questions. There is a visible shift partway through, from explanation into the wage data, where two students offered reasons of their own before you summed up. The room microphone sat near you, so talk between students during the source work likely went unheard, and the low student share may say more about the microphone than the room.',
     questionsNarrative: 'Seven questions, leaning recall, with one followed up after a student answered.',
     checksNarrative: 'One spoken check landed mid-lesson, after the causal chain had been laid out.',
     climateNarrative: 'Three transitions and three redirections, all brief and directed at noise rather than individuals.',

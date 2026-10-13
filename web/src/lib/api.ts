@@ -2198,6 +2198,10 @@ export function generateMomentToRevisit(id: string): Promise<AudioSession> {
   return request(`/api/audio-sessions/${id}/moment-to-revisit`, { method: 'POST' })
 }
 
+export function generateNextSteps(id: string): Promise<AudioSession> {
+  return request(`/api/audio-sessions/${id}/next-steps`, { method: 'POST' })
+}
+
 export function generateClassSummary(id: string): Promise<AudioSession> {
   return request(`/api/audio-sessions/${id}/class-summary`, { method: 'POST' })
 }

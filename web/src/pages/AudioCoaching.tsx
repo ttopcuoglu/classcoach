@@ -19,6 +19,7 @@ import {
   generateClassSummary,
   generateHardLook,
   generateMomentToRevisit,
+  generateNextSteps,
   generateRubricLens,
   getAudioSession,
   getAudioSessions,
@@ -1175,7 +1176,7 @@ const INSIGHTS_SECTION_META: Record<InsightsSection, { n: number; blurb: string;
   talk: { n: 1, blurb: 'Who was heard, and for how long.', accent: ACCENTS.terracotta },
   questions: { n: 2, blurb: 'What you asked, how you checked, and how you responded.', accent: ACCENTS.gold },
   content: { n: 3, blurb: 'What the lesson said it was about, in its own words.', accent: ACCENTS.forest },
-  routines: { n: 4, blurb: 'Counts, not scores. There is no such thing as a correct number here.', accent: ACCENTS.terracotta },
+  routines: { n: 4, blurb: 'Directions, praise and redirections, as they sounded.', accent: ACCENTS.terracotta },
 }
 
 // Lets the stat groups inside a section tint themselves with that section's
@@ -1646,9 +1647,30 @@ function splitParagraphs(text: string): string[] {
     .filter(Boolean)
 }
 
+/// The opening of a note: whole sentences, up to about three lines of text.
+/// Always at least one sentence, however long it runs.
+function noteOpening(text: string): string {
+  const sentences = text.replace(/\s+/g, ' ').trim().split(/(?<=[.!?])\s+/)
+  let opening = sentences[0] ?? ''
+  for (const sentence of sentences.slice(1, 3)) {
+    if (opening.length + sentence.length + 1 > 330) break
+    opening += ` ${sentence}`
+  }
+  return opening
+}
+
+// A section's note opens with its first two or three sentences and keeps the
+// rest behind "Read more". The note is the reading of the section; the page
+// below it is the evidence, and a teacher should reach the evidence without
+// scrolling past a paragraph first. Short notes are shown whole.
 function CoachNote({ text }: { text: string | null }) {
+  const [open, setOpen] = useState(false)
   if (!text) return null
-  const paragraphs = splitParagraphs(text)
+  const full = text.trim()
+  const opening = noteOpening(full)
+  // Not worth a button to reveal one more short sentence.
+  const folds = full.length - opening.length > 80
+  const paragraphs = open || !folds ? splitParagraphs(full) : [opening]
   return (
     <div className="flex items-start gap-3 rounded-xl border border-mint-tint bg-mint-tint/60 p-4">
       <ChatBubbleIcon className="mt-0.5 h-4 w-4 shrink-0 text-forest" />
@@ -1656,6 +1678,18 @@ function CoachNote({ text }: { text: string | null }) {
         {paragraphs.map((para, i) => (
           <p key={i} className="text-sm text-ink">
             {para}
+            {folds && i === paragraphs.length - 1 && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  onClick={() => setOpen((v) => !v)}
+                  className="font-semibold text-forest underline decoration-hairline underline-offset-4 hover:text-terracotta-600"
+                >
+                  {open ? 'Show less' : 'Read more'}
+                </button>
+              </>
+            )}
           </p>
         ))}
       </div>
@@ -2026,11 +2060,14 @@ function TalkParticipationBar({
   studentPct,
   silencePct,
   compact,
+  paceWpm,
 }: {
   teacherPct: number | null
   studentPct: number | null
   silencePct: number | null
   compact?: boolean
+  /// Given on the Insights page, where pace sits in the same line as the split.
+  paceWpm?: number | null
 }) {
   const barHeight = compact ? 'h-3' : 'h-4'
   if (teacherPct == null) {
@@ -2048,6 +2085,22 @@ function TalkParticipationBar({
           <div className="h-full" style={{ width: `${remainder}%`, ...HATCH_STYLE }} />
         )}
       </div>
+      {paceWpm !== undefined ? (
+        <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-ink-soft">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-terracotta" /> You {Math.round(teacherPct)}%
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-gold" /> Students{' '}
+            {studentPct != null ? `${Math.round(studentPct)}%` : 'unavailable'}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-hairline" /> Silence or other{' '}
+            {silencePct != null ? `${Math.round(silencePct)}%` : 'unavailable'}
+          </span>
+          {paceWpm != null && <span>Your pace {paceWpm} wpm</span>}
+        </div>
+      ) : (
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm text-ink-soft">
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 shrink-0 rounded-full bg-terracotta" /> Teacher · {teacherPct}%
@@ -2069,6 +2122,7 @@ function TalkParticipationBar({
           Silence / other · {silencePct != null ? `${silencePct}%` : 'unavailable'}
         </span>
       </div>
+      )}
     </div>
   )
 }
@@ -2382,6 +2436,32 @@ function ReportPanel({
       .catch(() => {})
       .finally(() => setMomentSending(false))
   }, [tab, locked, session, onUpdate])
+
+  // And for "Try next time": a report summarized before those lines existed
+  // gets them written from the notes it already has, the first time it is
+  // opened. Waits for the summary, which brings its own on new reports.
+  const hasAttemptedNextStepsRef = useRef(false)
+  useEffect(() => {
+    if (locked || session.nextSteps != null || session.classSummary == null || hasAttemptedNextStepsRef.current) return
+    hasAttemptedNextStepsRef.current = true
+    generateNextSteps(session.id)
+      .then((updated) => onUpdate({ ...session, ...updated }))
+      .catch(() => {})
+  }, [locked, session, onUpdate])
+
+  // The hard read of one section, as the last row under the evidence it was
+  // drawn from. Null on a locked report that never had one.
+  const sectionHardLook =
+    locked && !session.hardLook ? null : (
+      <SectionHardLook
+        section={insightsSection}
+        hardLook={session.hardLook}
+        locked={locked}
+        sending={hardLookSending}
+        error={hardLookError}
+        onGenerate={handleGenerateHardLook}
+      />
+    )
 
   const metrics = session.metricsDetail ?? {}
   const recordedSec = session.durationSec ?? 0
@@ -2765,7 +2845,7 @@ function ReportPanel({
             <InsightsSectionHeader section={insightsSection} />
             <SectionAccentContext.Provider value={INSIGHTS_SECTION_META[insightsSection].accent}>
             {insightsSection === 'talk' && (
-              <TalkParticipationTab session={session} silencePct={silencePct} talkInsight={talkInsight} />
+              <TalkParticipationTab session={session} silencePct={silencePct} talkInsight={talkInsight} lastRow={sectionHardLook} />
             )}
 
             {insightsSection === 'questions' && (
@@ -2790,6 +2870,7 @@ function ReportPanel({
                 cfuLog={session.cfuLog}
                 feedbackLog={session.feedbackLog}
                 segments={session.segments}
+                lastRow={sectionHardLook}
               />
             )}
 
@@ -2802,6 +2883,7 @@ function ReportPanel({
                 sending={contentNotesSending}
                 error={contentNotesError}
                 onGenerate={handleGenerateContentNotes}
+                lastRow={sectionHardLook}
               />
             )}
 
@@ -2813,24 +2895,13 @@ function ReportPanel({
                 toneLog={session.toneLog}
                 redirectionLog={session.redirectionLog}
                 segments={session.segments}
+                lastRow={sectionHardLook}
               />
             )}
 
 
-            {/* The hard read of THIS section, under the evidence it was drawn
-                from. Its findings are grouped by section, so holding them all
-                in one card at the top meant reading a section and then
-                scrolling back past the page to find the half about it. */}
-            <SectionHardLook
-              section={insightsSection}
-              hardLook={session.hardLook}
-              locked={locked}
-              sending={hardLookSending}
-              error={hardLookError}
-              onGenerate={handleGenerateHardLook}
-            />
-
             <DiscussFooter
+              compact
               label="Discuss this with Wivoza Coach"
               onClick={() =>
                 handleDiscussWithCoach({
@@ -4390,6 +4461,7 @@ function LessonContentTab({
   sending,
   error,
   onGenerate,
+  lastRow,
 }: {
   lessonContent: AudioLessonContent | null
   contentNotes: AudioContentNotes | null
@@ -4398,6 +4470,8 @@ function LessonContentTab({
   sending: boolean
   error: string | null
   onGenerate: () => void
+  /// The section's Hard Look, as the final row of its list.
+  lastRow: React.ReactNode
 }) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const visibleNotes = contentNotes?.notes.filter((n) => !dismissed.has(n.id)) ?? []
@@ -4581,6 +4655,7 @@ function LessonContentTab({
             point for your own reflection, not a factual review — your subject expertise is the final word.
           </p>
         </DetailRow>
+        {lastRow}
       </DetailRows>
     </div>
   )
@@ -4743,7 +4818,6 @@ function SectionHardLook({
   onGenerate: () => void
 }) {
   const [open, setOpen] = useState(false)
-  const label = INSIGHTS_SECTIONS.find((s) => s.key === section)?.label ?? 'this section'
   const critiques = (hardLook?.critiques ?? []).filter((c) => c.section === section)
   const cleared = (hardLook?.cleared ?? []).find((c) => c.section === section)
 
@@ -4751,27 +4825,22 @@ function SectionHardLook({
   if (locked && !hardLook) return null
 
   return (
-    <div className="mt-2 flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-4">
+    // The last row of the section's list, like the evidence rows above it:
+    // a card of its own made the hard reading the loudest thing on a page it
+    // is meant to be an option on.
+    <div className="flex flex-col">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center justify-between gap-3 text-left"
+        aria-expanded={open}
+        className="flex items-center justify-between gap-3 py-3 text-left text-sm font-semibold text-forest hover:text-terracotta-600"
       >
-        <span>
-          <span className="text-sm font-semibold text-forest">The hard look on {label}</span>
-          <span className="ml-2 text-xs text-ink-soft">
-            {hardLook
-              ? critiques.length > 0
-                ? `${critiques.length} thing${critiques.length === 1 ? '' : 's'} a demanding reader would press on.`
-                : 'Nothing here it could make a case against.'
-              : 'The least generous honest reading of this part of the lesson.'}
-          </span>
-        </span>
-        <span className="shrink-0 text-sm font-semibold text-terracotta-600">{open ? 'Hide' : 'Show'}</span>
+        <span>The hard look on this section</span>
+        <RowChevron className={open ? 'rotate-180' : ''} />
       </button>
 
       {open && !hardLook && (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 pb-5">
           <p className="text-sm text-ink">
             This reads the same evidence again as a demanding reader looking for what could have been better, across
             the whole lesson. Every criticism has to point at something you actually said, it can come back with
@@ -4796,7 +4865,7 @@ function SectionHardLook({
       )}
 
       {open && hardLook && (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 pb-5">
           {critiques.map((critique, i) => (
             <div key={`${critique.section}-${i}`} className="rounded-xl border border-hairline p-4">
               <p className="font-heading text-base font-bold leading-snug text-forest">{critique.headline}</p>
@@ -4993,6 +5062,7 @@ function ClimateRoutinesTab({
   toneLog,
   redirectionLog,
   segments,
+  lastRow,
 }: {
   climateNarrative: string | null
   nextStep: string | null | undefined
@@ -5000,6 +5070,8 @@ function ClimateRoutinesTab({
   toneLog: AudioToneLogEntry[] | null
   redirectionLog: AudioRedirectionLogEntry[] | null
   segments: TranscriptSegment[]
+  /// The section's Hard Look, as the final row of its list.
+  lastRow: React.ReactNode
 }) {
   const directiveCandidates: NoticeCandidate[] = (directiveLog ?? []).map((entry, i) => ({
     id: `directive-log-${i}`,
@@ -5047,15 +5119,16 @@ function ClimateRoutinesTab({
 
       <SectionNextStep text={nextStep} />
 
-      {evidenceCandidates.length > 0 && (
-        <DetailRows>
+      <DetailRows>
+        {evidenceCandidates.length > 0 && (
           <DetailRow title={`Directions, praise and redirections, in your words (${evidenceCandidates.length})`}>
             {evidenceCandidates.map((candidate) => (
               <EvidenceItemCard key={candidate.id} candidate={candidate} segments={segments} />
             ))}
           </DetailRow>
-        </DetailRows>
-      )}
+        )}
+        {lastRow}
+      </DetailRows>
     </div>
   )
 }
@@ -5391,10 +5464,13 @@ function TalkParticipationTab({
   session,
   silencePct,
   talkInsight,
+  lastRow,
 }: {
   session: AudioSessionWithSegments
   silencePct: number | null
   talkInsight: string | null
+  /// The section's Hard Look, as the final row of its list.
+  lastRow: React.ReactNode
 }) {
   const exampleCandidate = highlightCandidates(
     session.highlights,
@@ -5415,9 +5491,13 @@ function TalkParticipationTab({
 
       {/* One picture of the split. It used to be here three times — as tiles,
           as this bar, and as the bar's legend. */}
-      <div id="stat-talkRatio" className="rounded-2xl border border-hairline bg-cream-card p-6">
-        <TalkParticipationBar teacherPct={session.teacherTalkPct} studentPct={session.studentTalkPct} silencePct={silencePct} />
-        {wpm != null && <p className="mt-3 text-sm text-ink-soft">Your pace · {wpm} words a minute</p>}
+      <div id="stat-talkRatio">
+        <TalkParticipationBar
+          teacherPct={session.teacherTalkPct}
+          studentPct={session.studentTalkPct}
+          silencePct={silencePct}
+          paceWpm={wpm}
+        />
       </div>
 
       {hasFocus && (
@@ -5461,6 +5541,7 @@ function TalkParticipationTab({
             </p>
           )}
         </DetailRow>
+        {lastRow}
       </DetailRows>
     </div>
   )
@@ -5552,6 +5633,7 @@ function QuestioningCheckingTab({
   cfuLog,
   feedbackLog,
   segments,
+  lastRow,
 }: {
   questionCount: number | null
   questionLog: AudioQuestionLogEntry[] | null
@@ -5573,6 +5655,8 @@ function QuestioningCheckingTab({
   cfuLog: AudioCfuLogEntry[] | null
   feedbackLog: AudioFeedbackLogEntry[] | null
   segments: TranscriptSegment[]
+  /// The section's Hard Look, as the final row of its list.
+  lastRow: React.ReactNode
 }) {
   // Older sessions predate waitTimeSampleCount; their root-question count is the best available.
   const measurableWaitCount = waitTimeSampleCount ?? (questionLog ?? []).filter((q) => q.waitTimeSec != null).length
@@ -5615,17 +5699,9 @@ function QuestioningCheckingTab({
     <div className="flex flex-col gap-6">
       {questioningInsight && <CoachNote text={questioningInsight} />}
 
-      {/* A count, never a share: one question out of one is "100%", and that
-          is not a finding about anybody's questioning. */}
-      {questionCount != null && (
-        <p className="text-sm text-ink">
-          You asked {questionCount} question{questionCount === 1 ? '' : 's'}
-          {questionCount > 0 && higherOrderCount != null
-            ? `; ${higherOrderCount} ${higherOrderCount === 1 ? 'was' : 'were'} higher-order.`
-            : '.'}
-        </p>
-      )}
-
+      {/* The mix below is this section's one finding, and it states the count
+          itself — as "detected", not "you asked", because a student's question
+          can be picked up as one of them. A count, never a share. */}
       <QuestioningMixChart
         higherOrderCount={higherOrderCount}
         totalCount={questionCount}
@@ -5768,6 +5844,7 @@ function QuestioningCheckingTab({
             room the microphone reached. Where too little came through, the number says so rather than showing zero.
           </p>
         </DetailRow>
+        {lastRow}
       </DetailRows>
     </div>
   )
@@ -5929,13 +6006,29 @@ function DetailRows({ children }: { children: React.ReactNode }) {
   return <div className="divide-y divide-hairline border-y border-hairline">{children}</div>
 }
 
+function RowChevron({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      className={`h-4 w-4 shrink-0 text-ink-soft transition-transform ${className}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M5 7.5l5 5 5-5" />
+    </svg>
+  )
+}
+
 function DetailRow({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <details className="group">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-3 text-sm font-semibold text-forest marker:hidden hover:text-terracotta-600">
         <span>{title}</span>
-        <span className="shrink-0 text-xs font-semibold text-ink-soft group-open:hidden">Show</span>
-        <span className="hidden shrink-0 text-xs font-semibold text-ink-soft group-open:inline">Hide</span>
+        <RowChevron className="group-open:rotate-180" />
       </summary>
       <div className="flex flex-col gap-4 pb-5 pt-1">{children}</div>
     </details>
@@ -5956,12 +6049,16 @@ function SectionNextStep({ text }: { text: string | null | undefined }) {
   )
 }
 
-function DiscussFooter({ label, onClick }: { label: string; onClick: () => void }) {
+function DiscussFooter({ label, onClick, compact }: { label: string; onClick: () => void; compact?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="mt-2 w-full rounded-2xl border border-hairline bg-cream-card px-5 py-4 text-left text-sm font-semibold text-forest transition-colors hover:border-terracotta/40 hover:text-terracotta-600"
+      className={
+        compact
+          ? 'mt-4 rounded-xl border border-hairline bg-cream-card px-4 py-2.5 text-sm font-semibold text-forest transition-colors hover:border-terracotta/40 hover:text-terracotta-600'
+          : 'mt-2 w-full rounded-2xl border border-hairline bg-cream-card px-5 py-4 text-left text-sm font-semibold text-forest transition-colors hover:border-terracotta/40 hover:text-terracotta-600'
+      }
     >
       {label} →
     </button>

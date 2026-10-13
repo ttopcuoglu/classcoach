@@ -223,6 +223,11 @@ enum AudioCoachingService {
         try await APIClient.shared.request("/api/audio-sessions/\(sessionId)/class-summary", method: "POST")
     }
 
+    /// "Try next time" lines for a report summarised before they existed.
+    static func generateNextSteps(sessionId: String) async throws -> AudioSessionWithSegments {
+        try await APIClient.shared.request("/api/audio-sessions/\(sessionId)/next-steps", method: "POST")
+    }
+
     /// The moment to revisit for a report that has none yet — one analysed
     /// before the server chose it by reading the transcript. Read once and
     /// kept, so this never fires twice for a lesson.

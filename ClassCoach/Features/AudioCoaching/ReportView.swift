@@ -50,7 +50,7 @@ enum InsightsSection: String, CaseIterable, Identifiable {
         case .talk: return "Who was heard, and for how long."
         case .questions: return "What you asked, how you checked, and how you responded."
         case .content: return "What the lesson said it was about, in its own words."
-        case .routines: return "Counts, not scores. There is no such thing as a correct number here."
+        case .routines: return "Directions, praise and redirections, as they sounded."
         }
     }
 
@@ -183,6 +183,7 @@ struct ReportView: View {
     @State private var readingMoment = false
     @State private var attemptedMoment = false
     @State private var attemptedContentNotes = false
+    @State private var attemptedNextSteps = false
     @State private var retagging = false
 
     private var locked: Bool { session.status == "locked" }
@@ -245,6 +246,7 @@ struct ReportView: View {
             await fillMissingMoment()
             await fillMissingSummary()
             await fillMissingContentNotes()
+            await fillMissingNextSteps()
         }
         .sheet(isPresented: $retagging) {
             RetagSpeakersView(session: session) { updated in
@@ -290,6 +292,17 @@ struct ReportView: View {
         attemptedContentNotes = true
         if let updated = try? await AudioCoachingService.generateContentNotes(sessionId: session.id) {
             onUpdate(AudioSessionWithSegments(session: updated, segments: session.segments))
+        }
+    }
+
+    /// "Try next time" lines for a report summarised before they existed,
+    /// written from the notes it already has. Waits for the summary, which
+    /// brings its own on new reports.
+    private func fillMissingNextSteps() async {
+        guard !locked, session.nextSteps == nil, session.classSummary != nil, !attemptedNextSteps else { return }
+        attemptedNextSteps = true
+        if let updated = try? await AudioCoachingService.generateNextSteps(sessionId: session.id) {
+            onUpdate(updated)
         }
     }
 
@@ -501,13 +514,52 @@ struct SubsectionHeading: View {
     }
 }
 
+/// A section's note opens with its first two or three sentences and keeps the
+/// rest behind "Read more". The note is the reading of the section and the
+/// page below it is the evidence, so a teacher should reach the evidence
+/// without scrolling past a paragraph first. Short notes are shown whole.
+/// Mirrors `CoachNote` in AudioCoaching.tsx.
 struct CoachNoteView: View {
     let text: String?
+    @State private var open = false
+
+    /// Whole sentences, up to about three lines' worth; always at least one.
+    static func opening(of text: String) -> String {
+        let flat = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        var sentences: [String] = []
+        var current = ""
+        for word in flat.split(separator: " ") {
+            current += current.isEmpty ? String(word) : " \(word)"
+            if let last = word.last, ".!?".contains(last) {
+                sentences.append(current)
+                current = ""
+            }
+        }
+        if !current.isEmpty { sentences.append(current) }
+        var result = sentences.first ?? ""
+        for sentence in sentences.dropFirst().prefix(2) {
+            if result.count + sentence.count + 1 > 330 { break }
+            result += " \(sentence)"
+        }
+        return result
+    }
+
     var body: some View {
         if let text {
+            let full = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let opening = Self.opening(of: full)
+            // Not worth a button to reveal one more short sentence.
+            let folds = full.count - opening.count > 80
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "bubble.left.fill").foregroundStyle(AppTheme.forest).padding(.top, 2)
-                Text(text).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(open || !folds ? full : opening).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if folds {
+                        Button(open ? "Show less" : "Read more") { withAnimation { open.toggle() } }
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
+                    }
+                }
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -578,7 +630,9 @@ struct DetailRow<Content: View>: View {
                     Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
                         .multilineTextAlignment(.leading)
                     Spacer(minLength: 8)
-                    Text(open ? "Hide" : "Show").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+                        .rotationEffect(.degrees(open ? 180 : 0))
                 }
                 .padding(.vertical, 12)
                 .contentShape(Rectangle())

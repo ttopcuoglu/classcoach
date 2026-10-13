@@ -43,6 +43,7 @@ import {
 import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { readStudentTalkFocus } from '../lib/studentTalkFocus.ts'
 import { readMomentToRevisit } from '../lib/momentToRevisit.ts'
+import { parseNextSteps, writeNextStepsFromNotes } from '../lib/nextSteps.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 export const audioSessionsRouter = Router()
@@ -1662,14 +1663,6 @@ ${CORE_COACHING_RULES}
 ${TRANSCRIPT_RELIABILITY_NOTICE}`
 }
 
-/// One "next time" line, or null. NONE is the model declining, and anything
-/// that ran long is a paragraph that wandered into a slot meant for a line.
-function nextStepLine(raw: string | null): string | null {
-  const line = raw?.replace(/\s+/g, ' ').trim()
-  if (!line || /^NONE\.?$/i.test(line) || line.length > 320) return null
-  return line
-}
-
 function lessonContentField(content: unknown, key: string, nested?: string): string | null {
   const value = (content as Record<string, unknown> | null)?.[key]
   const resolved = nested ? (value as Record<string, unknown> | null)?.[nested] : value
@@ -1821,11 +1814,7 @@ async function writeClassSummary(
   const lessonContent = session.lessonContent as Record<string, unknown> | null
   const classSummary = extractTag(text, 'class_summary')
   if (!classSummary) return null
-  const nextSteps = Object.fromEntries(
-    (['talk', 'questions', 'climate'] as const)
-      .map((key) => [key, nextStepLine(extractTag(text, `${key}_next`))] as const)
-      .filter(([, line]) => line),
-  )
+  const nextSteps = parseNextSteps(text)
 
   return prisma.audioSession.update({
     where: { id: session.id },
@@ -1837,7 +1826,9 @@ async function writeClassSummary(
       ...(questionsNarrative ? { questionsNarrative: normalizeParagraphs(questionsNarrative) } : {}),
       ...(contentNarrative ? { contentNarrative: normalizeParagraphs(contentNarrative) } : {}),
       ...(connectionIdeas.length > 0 && lessonContent ? { lessonContent: { ...lessonContent, connectionIdeas } } : {}),
-      ...(Object.keys(nextSteps).length > 0 ? { nextSteps } : {}),
+      // Always written, even empty: "this summary suggested nothing" is an
+      // answer, and null is what tells the report to ask (/:id/next-steps).
+      nextSteps,
     },
     include: { segments: { orderBy: { startSec: 'asc' } } },
   })
@@ -1921,6 +1912,44 @@ audioSessionsRouter.post('/:id/moment-to-revisit', async (req, res) => {
   const updated = await prisma.audioSession.update({
     where: { id: session.id },
     data: { momentToRevisit: moment },
+    include: { segments: { orderBy: { startSec: 'asc' } } },
+  })
+  res.json(updated)
+})
+
+// "Try next time" lines for a report summarized before they existed, written
+// from the section notes it already has — see lib/nextSteps.ts. Asked for
+// once, when such a report is opened, and kept whatever comes back.
+audioSessionsRouter.post('/:id/next-steps', async (req, res) => {
+  const session = await prisma.audioSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+    include: { segments: { orderBy: { startSec: 'asc' } } },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  // Nothing to add to: a report that has them, one that is final, and one
+  // whose summary is still being written — that call brings its own.
+  if (session.nextSteps || session.status === 'locked' || !session.classSummary) {
+    res.json(session)
+    return
+  }
+
+  const nextSteps = await writeNextStepsFromNotes({
+    lessonSummary: lessonContentField(session.lessonContent, 'summary'),
+    talk: session.talkNarrative,
+    questions: session.questionsNarrative,
+    checks: session.checksNarrative,
+    climate: session.climateNarrative,
+  })
+  if (!nextSteps) {
+    res.status(502).json({ error: 'Could not write next steps for this lesson. Please try again.' })
+    return
+  }
+  const updated = await prisma.audioSession.update({
+    where: { id: session.id },
+    data: { nextSteps },
     include: { segments: { orderBy: { startSec: 'asc' } } },
   })
   res.json(updated)

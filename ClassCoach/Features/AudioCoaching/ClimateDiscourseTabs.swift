@@ -156,7 +156,7 @@ struct DiscourseDetailsTab: View {
             VStack(alignment: .leading, spacing: 10) {
                 TalkSplitBar(teacherPct: session.teacherTalkPct, studentPct: session.studentTalkPct, silencePct: silencePct)
                 if let wpm {
-                    Text("Your pace · \(Int(wpm)) words a minute").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                    Text("Your pace \(Int(wpm)) wpm").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                 }
             }
             .padding(16)
@@ -197,19 +197,12 @@ struct DiscourseDetailsTab: View {
     }
 
     private var questioningSection: some View {
-        let higherOrder = session.metricsDetail?["higherOrderQuestionCount"].map { Int($0) }
-        return VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 14) {
             CoachNoteView(text: session.questionsNarrative
                 ?? AudioInsights.buildQuestioningInsight(session, higherOrderRatio: m.higherOrderRatio))
 
-            // A count, never a share: one question out of one is "100%", and
-            // that is not a finding about anybody's questioning.
-            if let count = session.questionCount {
-                Text("You asked \(count) question\(count == 1 ? "" : "s")\(count > 0 && higherOrder != nil ? "; \(higherOrder!) \(higherOrder == 1 ? "was" : "were") higher-order." : ".")")
-                    .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
+            // The mix below is this section's one finding and states the
+            // count itself. A count, never a share.
             QuestioningMixView(session: session)
 
             // The second half of the section: what happened after a question,
@@ -353,7 +346,7 @@ private struct TalkSplitBar: View {
                 .clipShape(Capsule())
                 legend("You", teacherPct, AppTheme.terracotta)
                 legend("Students", studentPct, AppTheme.gold)
-                legend("Silence / other", silencePct, AppTheme.hairline)
+                legend("Silence or other", silencePct, AppTheme.hairline)
             } else {
                 Text("Talk balance unavailable this session.").font(.caption).foregroundStyle(AppTheme.textSecondary)
             }
@@ -363,7 +356,7 @@ private struct TalkSplitBar: View {
     private func legend(_ label: String, _ pct: Double?, _ color: Color) -> some View {
         HStack(spacing: 6) {
             Circle().fill(color).frame(width: 8, height: 8)
-            Text("\(label) · \(pct.map { "\(ReportConfidence.formatNumber($0))%" } ?? "unavailable")")
+            Text("\(label) \(pct.map { "\(Int($0.rounded()))%" } ?? "unavailable")")
                 .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
         }
     }
