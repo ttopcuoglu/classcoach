@@ -1453,6 +1453,8 @@ export type ClassSummaryMetrics = {
   studentTalkPct: number | null
   questionCount: number | null
   higherOrderPct: number | null
+  /// The same thing as a count, which is what the notes are allowed to say.
+  higherOrderCount?: number | null
   avgWaitTimeSec: number | null
   cfuCount: number | null
   studentVoiceDetected: boolean
@@ -1500,7 +1502,11 @@ export function buildClassSummarySystemPrompt(
 - teacher talk: ${metrics.teacherTalkPct ?? 'not measured'}%
 - student talk: ${metrics.studentTalkPct ?? 'not measured'}%${metrics.studentVoiceDetected ? '' : ' (NO student voice was separately detected at all)'}
 - questions asked: ${metrics.questionCount ?? 'not measured'}
-- of those, recognised as higher-order: ${metrics.higherOrderPct ?? 'not measured'}%
+- of those, higher-order: ${
+        metrics.higherOrderCount != null && metrics.questionCount != null
+          ? `${metrics.higherOrderCount} of ${metrics.questionCount}`
+          : 'not measured'
+      } (a count — never restate it as a percentage)
 - average wait time after a question: ${metrics.avgWaitTimeSec ?? 'not measured'}s
 - check-for-understanding moves heard: ${metrics.cfuCount ?? 'not measured'}`
     : ''
@@ -1614,17 +1620,21 @@ Then THE QUESTIONS NOTE: one paragraph about the questioning, covering both
 what was asked and what happened after it was asked. Again the
 counts are already on screen. Say what kinds of questions these were, whether
 they built on each other or moved on, what happened after one was asked, and
-whether answers were followed up or accepted. Be honest that the higher-order
-figure comes from recognising certain openings — "why do you think", "how
-might" — so a question phrased another way is counted as recall even when it
-asked for real thinking. Never let that number stand as a judgement of the
-teacher's questioning.
+whether answers were followed up or accepted. When you mention how many were
+higher-order, give it as a count — "three of the seven" — and never as a
+percentage: with a handful of questions a percentage reads as a score. State
+it once, plainly, and move on to the questions themselves — do not comment on
+the count, qualify it, or explain what it is. It is not a judgement of the
+teacher's questioning, and the way to honour that is to describe what a
+specific question asked of students, not to add a caveat.
 
 Then WAYS INTO THIS TOPIC: up to three real-world connections a teacher could use for THIS topic — the everyday thing, job, story, or phenomenon, and the question that opens it with students. Concrete and specific: "a calendar app's moon icons" beats "something from daily life". These are ideas for next time, so write them even when the teacher already made good connections, and never imply they made none.
 
 Then THE CONTENT NOTE: one warm paragraph opening the Clarity & Content section — what this lesson was about and what the teacher did with the content: the explanation, the model or representation, the examples, the vocabulary, the connections drawn. Lead with what worked; this paragraph opens the section, it does not grade it. Name the actual ideas and terms, never "the content" in the abstract.
 
 Then NEXT TIME, three separate lines: one for Talk & Participation, one for Questioning & Checking, one for Climate & Routines. Each is ONE concrete thing to do in the next lesson, following directly from what that section's note said — the words to say or the task to set, specific to this lesson's material, 30 words at most, starting with a verb. "After your next 'why' question, give pairs thirty seconds before taking an answer." Not a principle, not "consider", and not a repeat of another section's line. Where a section's evidence does not support a suggestion — too little was audible, or nothing there needs changing — write NONE: a made-up suggestion is worse than none, and most lessons will not earn all three.
+
+WRITE ABOUT THE LESSON, NOT THE REPORT. No note explains how a number was produced. Nothing is "coded as", "logged as", "marked as", "recognised as", "counted as", "matched" or "detected by" anything, and there is no "the system" or "the figure comes from" — a teacher reading about their own lesson should never have to read about software. How the numbers are made is explained once, on the page, under "How to read these numbers". What the microphone could and could not hear is different: that is about the recording, and it stays.
 
 LENGTH OF THE FIVE NOTES. The checks, climate, talk, questions and content notes each open a section a teacher then reads the evidence under, so each has a hard limit of four sentences and 80 words, whatever the fuller descriptions above invite. Count before you answer; a fifth sentence or a long final clause is over the limit. Say the one or two things that matter most about that section in this lesson, keep any caveat about the microphone to a single clause, and leave the rest to the evidence below the note. The class summary is not shortened: it keeps its three paragraphs.
 
@@ -1748,6 +1758,7 @@ export async function requestClassSummaryText(session: ClassSummarySource, segme
       studentTalkPct: session.studentTalkPct,
       questionCount: session.questionCount,
       higherOrderPct: session.higherOrderPct,
+      higherOrderCount: metricNumber(session.metricsDetail, 'higherOrderQuestionCount'),
       avgWaitTimeSec: session.avgWaitTimeSec,
       cfuCount: session.cfuCount,
       studentVoiceDetected: segments.some((s) => s.speakerLabel === 'Student'),

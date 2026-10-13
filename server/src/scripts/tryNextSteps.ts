@@ -45,7 +45,11 @@ for (const session of sessions) {
   const words = ['talk_note', 'questions_note', 'checks_note', 'climate_note', 'content_note']
     .map((tag) => `${tag}:${(extractTag(text, tag) ?? '').split(/\s+/).filter(Boolean).length}`)
   console.log(`    words   ${words.join(' ')}`)
-  console.log(`    talk note: ${extractTag(text, 'talk_note')}`)
+  console.log(`    questions note: ${extractTag(text, 'questions_note')}`)
+  if (/%|coded as|logged as|marked as|recogni[sz]ed as|the system|figure comes from|detected by/i.test(text)) {
+    const hits = text.match(/[^.\n]*(?:\d%|coded as|logged as|marked as|recogni[sz]ed as|the system|figure comes from|detected by)[^.\n]*\./gi) ?? []
+    console.log(`    watch: ${hits.slice(0, 6).join(' | ')}`)
+  }
   for (const key of ['talk', 'questions', 'climate']) {
     console.log(`    ${key.padEnd(9)} ${extractTag(text, `${key}_next`) ?? '(no tag)'}`)
   }
