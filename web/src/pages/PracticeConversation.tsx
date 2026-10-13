@@ -6,6 +6,7 @@ import PastList from '../components/PastList'
 import { usePastItems } from '../hooks/usePastItems'
 import SafetyAdvisoryBanner, { PrivacyReminder } from '../components/SafetyAdvisoryBanner'
 import { UpgradeMessage } from '../components/UpgradeMessage'
+import { PanelHeader } from '../components/PanelHeader'
 import { ProgressRing, WorkingRing } from '../components/ProgressRing'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
@@ -161,51 +162,30 @@ export default function PracticeConversation() {
   }
 
   const report = prep?.coachingReport
-  // The scenario engine's shape, because this is the same page: a forest panel
-  // while you set it up, a cream card once there is something to read. Chips
-  // follow it, since they stay on screen either side of that switch.
+  // The scenario engine's shape, because this is the same page: the green band
+  // opens the card while you set it up, and goes once there is something to read.
   const setup = !prep && !activeSituation
-  const label = 'text-[11px] font-bold uppercase tracking-[0.14em] text-gold'
+  const label = 'text-sm font-medium text-ink'
   const chip = (selected: boolean) =>
-    setup
-      ? `rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-60 ${
-          selected ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
-        }`
-      : `rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors disabled:opacity-60 ${
-          selected
-            ? 'border-forest bg-forest text-cream'
-            : 'border-hairline bg-cream text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
-        }`
+    `rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors disabled:opacity-60 ${
+      selected ? 'bg-forest text-cream' : 'bg-cream text-ink-soft hover:text-ink'
+    }`
 
   return (
     <div className="flex flex-col gap-6">
-      <div
-        className={
-          setup
-            ? 'rounded-3xl bg-forest p-6 text-cream sm:p-8'
-            : 'overflow-hidden rounded-2xl border border-hairline bg-cream-card p-6'
-        }
-      >
-        {setup && (
-          <>
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Practice a conversation</p>
-            <p className="mt-2 font-heading text-2xl font-bold text-cream">Ready when you are.</p>
-            <p className="mt-1 text-sm text-cream/70">
-              Say who you are up against and how hard they push, and Wivoza writes you one to practice cold.
-            </p>
-          </>
-        )}
+      <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6">
         {!prep ? (
-          <div className={setup ? 'mt-5 flex flex-col gap-4' : 'flex flex-col gap-4'}>
-            {/* One box, the same tinted box the scenario engine groups its choices
-                in — every choice on screen, one format, nothing folded away. */}
-            <div
-              className={
-                setup ? 'flex flex-col gap-3.5 rounded-2xl bg-cream/10 p-4' : 'flex flex-col gap-3.5'
-              }
-            >
+          <div className="flex flex-col gap-4">
+            {setup && (
+              <PanelHeader eyebrow="Practice" title="Practice a conversation">
+                Say who you are up against and how hard they push, and Wivoza writes you one to practice cold.
+              </PanelHeader>
+            )}
+            {/* Every choice on screen, one format, nothing folded away — the
+                same labels and chips the scenario engine uses. */}
+            <div className="flex flex-col gap-4">
               <div>
-                <p className={setup ? label : 'text-sm font-medium text-ink'}>
+                <p className={label}>
                   Who you’re practicing with
                 </p>
                 <div className="mt-1.5 flex flex-wrap gap-2">
@@ -225,7 +205,7 @@ export default function PracticeConversation() {
               </div>
 
               <div>
-                <p className={setup ? label : 'text-sm font-medium text-ink'}>Challenge</p>
+                <p className={label}>Challenge</p>
                 <div className="mt-1.5 flex flex-wrap gap-2">
                   {CHALLENGE_TYPES.map((c) => (
                     <button
@@ -243,7 +223,7 @@ export default function PracticeConversation() {
               </div>
 
               <div>
-                <p className={setup ? label : 'text-sm font-medium text-ink'}>Difficulty</p>
+                <p className={label}>Difficulty</p>
                 <div className="mt-1.5 flex flex-wrap gap-2">
                   {CONVERSATION_DIFFICULTY_LEVELS.map((d) => (
                     <button
@@ -261,16 +241,10 @@ export default function PracticeConversation() {
               </div>
             </div>
 
-            {/* Its own box, like the room next door: who is in front of you is the
-                scenario, what grade they are is the setting. */}
             {personType === 'student' && (
-              <div
-                className={
-                  setup ? 'flex flex-col gap-3.5 rounded-2xl bg-cream/10 p-4' : 'flex flex-col gap-3.5'
-                }
-              >
+              <div className="flex flex-col gap-4">
                 <div>
-                  <p className={setup ? label : 'text-sm font-medium text-ink'}>Grade band</p>
+                  <p className={label}>Grade band</p>
                   <div className="mt-1.5 flex flex-wrap gap-2">
                     {GRADE_BANDS.map((band) => (
                       <button
@@ -298,18 +272,18 @@ export default function PracticeConversation() {
                   estimatedMs={8000}
                   label="Building a conversation"
                   hint="Usually under ten seconds."
-                  className="mb-4 text-gold"
+                  className="mb-4 text-forest"
                 />
                 <button
                   type="button"
                   onClick={handleGenerate}
                   disabled={!canGenerate}
-                  className="rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90 disabled:opacity-60"
+                  className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:opacity-60"
                 >
                   {generating ? 'Generating...' : 'New Conversation'}
                 </button>
                 {!challenge && (
-                  <p className="mt-2 text-xs text-cream/60">Pick a challenge above and Wivoza writes one for you.</p>
+                  <p className="mt-2 text-xs text-ink-soft">Pick a challenge above and Wivoza writes one for you.</p>
                 )}
               </div>
             ) : null}
@@ -459,7 +433,7 @@ export default function PracticeConversation() {
           </div>
         ) : null}
         {error && (
-          <p className={`mt-4 text-center text-sm ${setup ? 'text-peach-tint' : 'text-terracotta-600'}`}>
+          <p className="mt-4 text-center text-sm text-terracotta-600">
             <UpgradeMessage text={error} />
           </p>
         )}

@@ -12,6 +12,7 @@ import { useSpeechToText } from '../hooks/useSpeechToText'
 import { categoryLabel } from '../lib/categories'
 import { TEACHING_AND_LEARNING, findFocusArea, focusAreaForCategory, subCategoriesFor } from '../lib/focusAreas'
 import { hintsFor } from '../lib/practiceHints'
+import { PanelHeader } from '../components/PanelHeader'
 import TeachingContextFields, { type TeachingContext } from '../components/TeachingContextFields'
 import {
   generateScenario,
@@ -337,13 +338,7 @@ export default function TryItOut({
 
   return (
     <div className="flex flex-col gap-6">
-      <div
-        className={
-          !attempt && !sessionState?.done
-            ? 'rounded-3xl bg-forest p-6 text-cream sm:p-8'
-            : 'rounded-2xl border border-hairline bg-cream-card p-6'
-        }
-      >
+      <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6">
         {sessionState?.done ? (
           <div className="flex flex-col gap-4 p-2">
             <div>
@@ -403,16 +398,12 @@ export default function TryItOut({
             </div>
           </div>
         ) : !attempt ? (
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Practice a scenario</p>
-            <p className="mt-2 font-heading text-2xl font-bold text-cream">Ready when you are.</p>
-            <p className="mt-1 text-sm text-cream/70">
-              {area
-                ? area.blurb
-                : 'Set the situation and your room, then let Wivoza build a scenario for you.'}
-            </p>
+          <div className="flex flex-col gap-4">
+            <PanelHeader eyebrow="Practice" title="Practice a scenario">
+              Set the situation and your room, then let Wivoza build a scenario for you.
+            </PanelHeader>
             {(generating || submitting) && (
-              <div className={`mt-4 flex justify-center ${attempt ? 'text-forest' : 'text-gold'}`}>
+              <div className="flex justify-center py-1 text-forest">
                 <ProgressRing
                   progress={workingProgress}
                   label={generating ? 'Building a scenario' : 'Reading your response'}
@@ -420,14 +411,14 @@ export default function TryItOut({
                 />
               </div>
             )}
-            {/* Every choice on this screen is shown, in one format: a gold label
-                and a row of chips, the same box the room uses below. Situation and
+            {/* Every choice on this screen is shown, in one format: a label and
+                a row of chips, the same as the room below. Situation and
                 difficulty used to rest behind a Change toggle as "refinements" —
                 but a teacher cannot choose what they cannot see, and the
                 conversation rehearsal next door never hid its own. */}
-            <div className="mt-5 flex flex-col gap-3.5 rounded-2xl bg-cream/10 p-4">
+            <div className="flex flex-col gap-4">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Situation</p>
+                <p className="text-sm font-medium text-ink">Situation</p>
                 {area ? (
                   <div className="mt-1.5 flex flex-wrap gap-2">
                     {[{ label: 'Any situation', value: undefined }, ...subCategories].map(({ label, value }) => {
@@ -439,8 +430,8 @@ export default function TryItOut({
                           onClick={() => setCategory(value)}
                           aria-pressed={category === value}
                           title={count ? `You've practiced this ${count === 1 ? 'once' : `${count} times`}` : undefined}
-                          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                            category === value ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
+                          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                            category === value ? 'bg-forest text-cream' : 'bg-cream text-ink-soft hover:text-ink'
                           }`}
                         >
                           {label}
@@ -452,7 +443,7 @@ export default function TryItOut({
                 ) : (
                   // Showing all twenty-four sub-categories at once would be a
                   // wall of chips, so this narrows only once a section is chosen.
-                  <p className="mt-1.5 text-sm text-cream/60">
+                  <p className="mt-1.5 text-sm text-ink-soft">
                     Pick a section to narrow this — otherwise your coach chooses, weighted toward what
                     you&rsquo;ve practiced least.
                   </p>
@@ -460,7 +451,7 @@ export default function TryItOut({
               </div>
 
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Difficulty</p>
+                <p className="text-sm font-medium text-ink">Difficulty</p>
                 <div className="mt-1.5 flex flex-wrap gap-2">
                   {DIFFICULTIES.map(({ label, value }) => (
                     <button
@@ -468,8 +459,8 @@ export default function TryItOut({
                       type="button"
                       onClick={() => setDifficulty(value)}
                       aria-pressed={difficulty === value}
-                      className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                        difficulty === value ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
+                      className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                        difficulty === value ? 'bg-forest text-cream' : 'bg-cream text-ink-soft hover:text-ink'
                       }`}
                     >
                       {label}
@@ -479,21 +470,19 @@ export default function TryItOut({
               </div>
             </div>
 
-            <div className="mt-3">
-              <TeachingContextFields
-                focusArea={focusArea}
-                value={room}
-                onChange={onRoomChange}
-                disabled={generating}
-              />
-            </div>
+            <TeachingContextFields
+              focusArea={focusArea}
+              value={room}
+              onChange={onRoomChange}
+              disabled={generating}
+            />
 
-            <div className="mt-5 flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => handleNewScenario()}
                 disabled={generating}
-                className="rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90 disabled:opacity-60"
+                className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:opacity-60"
               >
                 {generating ? 'Generating...' : 'New Scenario'}
               </button>
@@ -501,7 +490,7 @@ export default function TryItOut({
                 type="button"
                 onClick={handleStartSession}
                 disabled={generating}
-                className="rounded-full border border-cream/30 px-6 py-3 text-sm font-semibold text-cream transition-colors hover:border-cream hover:bg-cream/10 disabled:opacity-60"
+                className="rounded-full border border-hairline px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-terracotta/40 hover:text-terracotta-600 disabled:opacity-60"
               >
                 Quick Session ({SESSION_LENGTH} scenarios)
               </button>
@@ -705,7 +694,7 @@ export default function TryItOut({
         )}
 
         {error && (
-          <p className={`mt-4 text-center text-sm ${!attempt && !sessionState?.done ? 'text-peach-tint' : 'text-terracotta-600'}`}>
+          <p className="mt-4 text-center text-sm text-terracotta-600">
             {error}
           </p>
         )}

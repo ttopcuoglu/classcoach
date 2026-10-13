@@ -94,8 +94,8 @@ export default function Practice() {
                   type="button"
                   onClick={() => pickArea(value)}
                   aria-pressed={selected}
-                  className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                    selected ? 'bg-forest text-cream' : 'bg-cream-card text-ink-soft hover:text-ink'
+                  className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                    selected ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
                   }`}
                 >
                   {label}

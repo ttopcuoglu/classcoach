@@ -40,7 +40,7 @@ export const DEFAULT_TEACHING_CONTEXT: TeachingContext = {
 }
 
 // Shared by Ask and Practice, because both need the same answers and they have
-// to agree. Rendered on the dark stage card in both places, always visible —
+// to agree. Rendered on the cream input card, always visible —
 // this used to sit behind a "Change" fold, which made the room look optional.
 //
 // Grade band is asked for every section: a K-2 room and a 9-12 room differ
@@ -68,14 +68,14 @@ export default function TeachingContextFields({
   }
 
   const chip = (selected: boolean) =>
-    `rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-60 ${
-      selected ? 'bg-gold text-forest' : 'bg-cream/10 text-cream/80 hover:bg-cream/20 hover:text-cream'
+    `rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors disabled:opacity-60 ${
+      selected ? 'bg-forest text-cream' : 'bg-cream text-ink-soft hover:text-ink'
     }`
 
   return (
-    <div className="flex flex-col gap-3.5 rounded-2xl bg-cream/10 p-4">
+    <div className="flex flex-col gap-4">
       <div>
-        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Grade band</p>
+        <p className="text-sm font-medium text-ink">Grade band</p>
         <div className="mt-1.5 flex flex-wrap gap-2">
           {GRADE_BANDS.map((band) => (
             <button
@@ -109,7 +109,7 @@ export default function TeachingContextFields({
 
       {showSubjectAndLevel && (
       <div>
-        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Subject</p>
+        <p className="text-sm font-medium text-ink">Subject</p>
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
           {SUBJECTS.map((s) => (
             <button
@@ -148,7 +148,7 @@ export default function TeachingContextFields({
               placeholder="Which subject?"
               aria-label="Subject"
               disabled={disabled}
-              className="w-40 rounded-full border-0 bg-cream px-3 py-1.5 text-xs text-ink placeholder:text-ink-soft focus:outline-none focus:ring-2 focus:ring-gold"
+              className="w-40 rounded-full border border-hairline bg-cream px-3.5 py-1.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none"
             />
           )}
         </div>
@@ -162,7 +162,7 @@ export default function TeachingContextFields({
           never going to capture. */}
       {showSubjectAndLevel && courses.length > 0 && (
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Course</p>
+          <p className="text-sm font-medium text-ink">Course</p>
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             {courses.map((c) => (
               <button
@@ -193,7 +193,7 @@ export default function TeachingContextFields({
                 placeholder="What's it called?"
                 aria-label="Course"
                 disabled={disabled}
-                className="w-44 rounded-full border-0 bg-cream px-3 py-1.5 text-xs text-ink placeholder:text-ink-soft focus:outline-none focus:ring-2 focus:ring-gold"
+                className="w-44 rounded-full border border-hairline bg-cream px-3.5 py-1.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none"
               />
             )}
           </div>
@@ -208,8 +208,8 @@ export default function TeachingContextFields({
           cannot enumerate topics; never defaulted, because it changes weekly. */}
       {showSubjectAndLevel && (
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">
-            Topic or unit <span className="font-medium normal-case tracking-normal text-cream/50">(optional)</span>
+          <p className="text-sm font-medium text-ink">
+            Topic or unit <span className="font-normal text-ink-soft">(optional)</span>
           </p>
           <input
             type="text"
@@ -218,17 +218,17 @@ export default function TeachingContextFields({
             placeholder="What are you teaching right now? e.g. photosynthesis"
             aria-label="Topic or unit"
             disabled={disabled}
-            className="mt-1.5 w-full max-w-sm rounded-full border-0 bg-cream px-4 py-2 text-xs text-ink placeholder:text-ink-soft focus:outline-none focus:ring-2 focus:ring-gold"
+            className="mt-1.5 w-full max-w-sm rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none"
           />
           {value.topic && (
-            <p className="mt-1.5 text-xs text-cream/50">Scenarios and coaching will be about {value.topic}.</p>
+            <p className="mt-1.5 text-xs text-ink-soft">Scenarios and coaching will be about {value.topic}.</p>
           )}
         </div>
       )}
 
       {showSubjectAndLevel && levels.length > 0 && (
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Level</p>
+          <p className="text-sm font-medium text-ink">Level</p>
           <div className="mt-1.5 flex flex-wrap gap-2">
             {levels.map((level) => (
               <button
@@ -244,7 +244,7 @@ export default function TeachingContextFields({
             ))}
           </div>
           {value.courseLevel && (
-            <p className="mt-1.5 text-xs text-cream/50">{COURSE_LEVEL_BLURB[value.courseLevel]}</p>
+            <p className="mt-1.5 text-xs text-ink-soft">{COURSE_LEVEL_BLURB[value.courseLevel]}</p>
           )}
         </div>
       )}
@@ -256,9 +256,9 @@ export default function TeachingContextFields({
           a third of their room. */}
       {showSubjectAndLevel && (
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">
+          <p className="text-sm font-medium text-ink">
             Who&rsquo;s in the room{' '}
-            <span className="font-medium normal-case tracking-normal text-cream/50">(any that apply)</span>
+            <span className="font-normal text-ink-soft">(any that apply)</span>
           </p>
           <div className="mt-1.5 flex flex-wrap gap-2">
             {CLASS_MAKEUP.map(({ value: m, label }) => {
@@ -284,7 +284,7 @@ export default function TeachingContextFields({
             })}
           </div>
           {value.classMakeup.length > 0 && (
-            <p className="mt-1.5 text-xs text-cream/50">
+            <p className="mt-1.5 text-xs text-ink-soft">
               {value.classMakeup.map((m) => CLASS_MAKEUP_BLURB[m]).join(' ')}
             </p>
           )}
