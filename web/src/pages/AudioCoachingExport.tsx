@@ -337,18 +337,24 @@ export default function AudioCoachingExport() {
                 <p className="mt-1.5 text-sm text-ink">{content.summary}</p>
               </div>
             )}
-            <div className="break-inside-avoid rounded-2xl bg-mint-tint/50 p-5">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-forest">Stated objective</p>
-              <p className="mt-1.5 text-sm text-ink">
-                {content.statedObjective?.found && content.statedObjective.quote
-                  ? `“${content.statedObjective.quote}”`
-                  : content.statedObjective?.found === false
-                    ? content.statedObjective?.source === 'model'
-                      ? "Not said aloud anywhere in this recording (one posted on the board wouldn't show up). Even one sentence naming the goal aloud can anchor a lesson."
-                      : "Not heard near the start of the recording (an objective posted on the board wouldn't show up). Even one sentence naming the goal aloud can anchor a lesson."
-                    : "The start of the lesson wasn't captured, so a stated objective couldn't be checked."}
-              </p>
-            </div>
+            {/* No "Stated objective" block, deliberately, and it should not
+                come back. The screen dropped it for a documented reason — a
+                detection that reads "none" while the lesson plainly contained
+                the thing — and this page had kept it, so the printable report
+                made a claim the screen had stopped making.
+
+                The detector cannot support it either way. On real lessons it
+                counted "Today, we're starting it" as a stated objective, and
+                three of its other four passes were agenda announcements — what
+                students would DO, not what they would understand. A detector
+                that loose saying "yes" is equally untrustworthy saying "no",
+                and here that "no" printed as "not said aloud anywhere in this
+                recording" into the one document a teacher hands to a coach or
+                an administrator and cannot annotate.
+
+                The field is still stored and still used, as one input among
+                several in Rubric Lens 3a and the Hard Look's content scope,
+                rather than as a verdict of its own. */}
             <QuoteList label="Key vocabulary moments" quotes={content.vocabulary ?? []} accent={A.forest} />
             <QuoteList label="Connections to the wider world" quotes={content.connections ?? []} accent={A.forest} />
           </ReportSection>
