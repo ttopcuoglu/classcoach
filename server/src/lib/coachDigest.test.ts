@@ -177,3 +177,66 @@ test('a value that is neither true nor an email list switches nobody on', () => 
     assert.equal(on, raw.trim().toLowerCase() === 'true')
   }
 })
+
+// --- the trend metrics My Growth added
+//
+// Three of the seven focus metrics it now offers live in metricsDetail rather
+// than their own column. An unknown key here fails silently — no crash, just a
+// digest with no trend line — so a teacher focusing on one of them would quietly
+// get less than a teacher focusing on talk ratio.
+
+function paced(wpm: number, waitTime2: number, monologueSec: number, day: number): DigestSession {
+  return session({
+    sessionDate: new Date(`2026-09-${String(day).padStart(2, '0')}T14:00:00Z`),
+    metricsDetail: {
+      teacherWordsPerMinute: wpm,
+      waitTime2Sec: waitTime2,
+      longestTeacherMonologueSec: monologueSec,
+    },
+  })
+}
+
+test('a pace focus produces a trend line, not silence', () => {
+  const block = buildDigestBlock(
+    [paced(220, 0.4, 360, 24), paced(205, 0.9, 300, 17), paced(180, 1.6, 240, 10)],
+    { includeMetrics: true, focusMetric: 'teacherPace' },
+  )
+  assert.match(block, /speaking pace/)
+  assert.match(block, /words a minute/)
+})
+
+test('a pause-after-an-answer focus produces one too', () => {
+  const block = buildDigestBlock(
+    [paced(200, 0.4, 300, 24), paced(200, 0.9, 300, 17), paced(200, 1.6, 300, 10)],
+    { includeMetrics: true, focusMetric: 'waitTime2' },
+  )
+  assert.match(block, /pause after a student answers/)
+})
+
+test('the longest stretch is reported in minutes, not seconds', () => {
+  const block = buildDigestBlock(
+    [paced(200, 1, 360, 24), paced(200, 1, 240, 17), paced(200, 1, 120, 10)],
+    { includeMetrics: true, focusMetric: 'longestMonologue' },
+  )
+  assert.match(block, /longest unbroken stretch/)
+  // 360s is six minutes; the digest must not say "360".
+  assert.doesNotMatch(block, /\b360\b/)
+})
+
+test('a session with no metricsDetail is skipped rather than read as zero', () => {
+  const block = buildDigestBlock(
+    [paced(220, 0.4, 360, 24), session({ sessionDate: new Date('2026-09-17T14:00:00Z') })],
+    { includeMetrics: true, focusMetric: 'teacherPace' },
+  )
+  // One usable value is not a trend, and a missing one is not a zero.
+  assert.doesNotMatch(block, /speaking pace/)
+})
+
+test('a retired focus still works for an account that chose it', () => {
+  const block = buildDigestBlock(
+    [session({ sessionDate: new Date('2026-09-24T14:00:00Z'), avgWaitTimeSec: 3.2 }),
+     session({ sessionDate: new Date('2026-09-17T14:00:00Z'), avgWaitTimeSec: 1.1 })],
+    { includeMetrics: true, focusMetric: 'avgWaitTime' },
+  )
+  assert.match(block, /average wait time/)
+})

@@ -53,6 +53,8 @@ const DIGEST_SELECT = {
   higherOrderPct: true,
   avgWaitTimeSec: true,
   cfuCount: true,
+  // The trend columns below read three metrics that live only in here.
+  metricsDetail: true,
   classSummary: true,
   strengths: true,
   growthAreas: true,
@@ -71,6 +73,7 @@ export type DigestSession = {
   higherOrderPct: number | null
   avgWaitTimeSec: number | null
   cfuCount: number | null
+  metricsDetail?: unknown
   classSummary: string | null
   strengths: string | null
   growthAreas: string | null
@@ -137,11 +140,30 @@ function roomLabel(s: DigestSession): string {
   return `${room}, ${date}`
 }
 
-const TREND_COLUMNS: Record<string, { key: keyof DigestSession; label: string; unit: string }> = {
-  talkRatio: { key: 'teacherTalkPct', label: 'their share of the talking', unit: '%' },
-  higherOrderPct: { key: 'higherOrderPct', label: 'higher-order questions', unit: '%' },
-  avgWaitTime: { key: 'avgWaitTimeSec', label: 'average wait time', unit: 's' },
-  cfuCount: { key: 'cfuCount', label: 'spoken checks for understanding', unit: '' },
+/// A focus metric the digest can describe a trend in. `read` takes the value
+/// from wherever it lives — three of the seven My Growth now offers are in
+/// metricsDetail rather than their own column, and without an entry here a
+/// teacher focusing on one would get a digest with no trend line at all.
+const TREND_COLUMNS: Record<string, { read: (s: DigestSession) => number | null; label: string; unit: string }> = {
+  talkRatio: { read: (s) => s.teacherTalkPct, label: 'their share of the talking', unit: '%' },
+  higherOrderPct: { read: (s) => s.higherOrderPct, label: 'higher-order questions', unit: '%' },
+  avgWaitTime: { read: (s) => s.avgWaitTimeSec, label: 'average wait time', unit: 's' },
+  cfuCount: { read: (s) => s.cfuCount, label: 'spoken checks for understanding', unit: '' },
+  teacherPace: { read: (s) => detailNumber(s, 'teacherWordsPerMinute'), label: 'their speaking pace', unit: ' words a minute' },
+  waitTime2: { read: (s) => detailNumber(s, 'waitTime2Sec'), label: 'the pause after a student answers', unit: 's' },
+  longestMonologue: {
+    read: (s) => {
+      const sec = detailNumber(s, 'longestTeacherMonologueSec')
+      return sec == null ? null : Math.round((sec / 60) * 10) / 10
+    },
+    label: 'their longest unbroken stretch of talking',
+    unit: ' minutes',
+  },
+}
+
+function detailNumber(session: DigestSession, key: string): number | null {
+  const value = (session.metricsDetail as Record<string, unknown> | null)?.[key]
+  return typeof value === 'number' ? value : null
 }
 
 function trendLine(sessions: DigestSession[], focusMetric: string | null): string | null {
@@ -151,7 +173,7 @@ function trendLine(sessions: DigestSession[], focusMetric: string | null): strin
   const values = sessions
     .slice()
     .reverse()
-    .map((s) => s[spec.key])
+    .map((s) => spec.read(s))
     .filter((v): v is number => typeof v === 'number')
   if (values.length < 2) return null
   const window = values.slice(-TREND_SESSIONS)

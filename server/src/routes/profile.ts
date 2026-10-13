@@ -35,7 +35,16 @@ profileRouter.delete('/', async (req, res) => {
   res.json({ status: 'ok' })
 })
 
+// Every value My Growth has ever offered, not only the ones it offers now:
+// this guards a WRITE, and the retired members are still legitimate for an
+// account that chose one before the trend redesign. Which metrics are offered
+// lives in web/src/lib/focusMetrics.ts (TRENDABLE_FOCUS_METRICS); this list
+// only has to admit anything that could legitimately be stored.
 const FOCUS_METRICS = new Set([
+  // Offered today.
+  'teacherPace',
+  'waitTime2',
+  'longestMonologue',
   'talkRatio',
   'higherOrderPct',
   'avgWaitTime',

@@ -1,15 +1,39 @@
 import Foundation
 
-/// Ported from `web/src/lib/focusMetrics.ts` — shared labels/grouping for
-/// the My Growth focus-metric picker.
+/// Ported from `web/src/lib/focusMetrics.ts` — shared labels, grouping and
+/// series for the My Growth picker and charts.
 enum FocusMetrics {
+    /// What My Growth actually charts, in order.
+    ///
+    /// Measured against real lessons rather than chosen by taste, on three
+    /// tests: is there a value on most lessons, is it about something the
+    /// teacher controls, and does movement mean the same thing every time?
+    ///
+    /// Four of the seven are about the teacher's own talk, which is the
+    /// finding rather than a gap — the microphone sits with the teacher, so
+    /// those are the numbers it can hold. Everything cut depended on hearing
+    /// students well, which is what a room recording does worst.
+    static let trendable: [FocusMetric] = [
+        .teacherPace, .talkRatio, .longestMonologue,
+        .waitTime2, .followUpQuestionCount, .higherOrderPct, .cfuCount,
+    ]
+
+    /// Shown last and never used to claim an improvement: its median across
+    /// real lessons is 1 with a range of 0-7, and a model-read count drifts by
+    /// about 2 on identical input.
+    static let secondary: Set<FocusMetric> = [.cfuCount]
+
     static func label(_ metric: FocusMetric) -> String {
         switch metric {
-        case .talkRatio: return "Talk ratio"
-        case .higherOrderPct: return "Higher-order questions"
-        case .avgWaitTime: return "Avg. wait time"
-        case .cfuCount: return "Checks for understanding"
+        case .teacherPace: return "Your pace"
+        case .talkRatio: return "Your share of the talk"
+        case .longestMonologue: return "Longest unbroken stretch"
+        case .waitTime2: return "Pause after an answer"
         case .followUpQuestionCount: return "Follow-up questions"
+        case .higherOrderPct: return "Higher-order questions"
+        case .cfuCount: return "Checks for understanding"
+        // Retired from the picker, kept so an account that chose one renders.
+        case .avgWaitTime: return "Avg. wait time"
         case .redirectionCount: return "Redirection language"
         case .toneRatio: return "Positive vs. corrective tone"
         case .directiveCount: return "Clear directions given"
@@ -19,32 +43,34 @@ enum FocusMetrics {
     }
 
     static let groups: [(category: String, metrics: [FocusMetric])] = [
-        ("Talk & Participation", [.talkRatio]),
-        ("Questioning & Thinking", [.higherOrderPct, .avgWaitTime, .followUpQuestionCount]),
-        ("Checking Understanding", [.cfuCount, .feedbackSpecificity]),
-        ("Climate & Tone", [.redirectionCount, .toneRatio, .nameMentionCount]),
-        ("Routines", [.directiveCount]),
+        ("Talk & Participation", [.teacherPace, .talkRatio, .longestMonologue]),
+        ("Questioning & Checking", [.waitTime2, .followUpQuestionCount, .higherOrderPct, .cfuCount]),
     ]
 
     static func title(_ metric: FocusMetric) -> String {
         switch metric {
-        case .talkRatio: return "Talk Ratio (%)"
-        case .higherOrderPct: return "Question Quality (%)"
-        case .avgWaitTime: return "Avg. Wait Time (s)"
-        case .cfuCount: return "Checks for Understanding (/10min)"
-        case .followUpQuestionCount: return "Follow-up Questions (/10min)"
-        case .redirectionCount: return "Redirection Language (/10min)"
-        case .toneRatio: return "Positive vs. Corrective Tone (%)"
-        case .directiveCount: return "Clear Directions Given (/10min)"
-        case .nameMentionCount: return "Student Names Used (/10min)"
-        case .feedbackSpecificity: return "Feedback Specificity (%)"
+        case .teacherPace: return "Your pace (words a minute)"
+        case .talkRatio: return "Your share of the talk (%)"
+        case .longestMonologue: return "Longest unbroken stretch (min)"
+        case .waitTime2: return "Pause after an answer (s)"
+        case .followUpQuestionCount: return "Follow-up questions (/10min)"
+        case .higherOrderPct: return "Higher-order questions"
+        case .cfuCount: return "Checks for understanding (/10min)"
+        case .avgWaitTime: return "Avg. wait time (s)"
+        case .redirectionCount: return "Redirection language (/10min)"
+        case .toneRatio: return "Positive vs. corrective tone (%)"
+        case .directiveCount: return "Clear directions given (/10min)"
+        case .nameMentionCount: return "Student names used (/10min)"
+        case .feedbackSpecificity: return "Feedback specificity (%)"
         }
     }
 
     static func unit(_ metric: FocusMetric) -> String {
         switch metric {
         case .talkRatio, .higherOrderPct, .toneRatio, .feedbackSpecificity: return "%"
-        case .avgWaitTime: return "s"
+        case .avgWaitTime, .waitTime2: return "s"
+        case .teacherPace: return " wpm"
+        case .longestMonologue: return " min"
         default: return "/10m"
         }
     }
@@ -54,24 +80,48 @@ enum FocusMetrics {
         return ((count / (durationSec / 600)) * 10).rounded() / 10
     }
 
-    /// Returns 1 or 2 named series (Talk Ratio has "You"/"Students").
+    /// One named series, or two where a single number would mislead.
     static func series(_ metric: FocusMetric, sessions: [AudioSession]) -> [(label: String, values: [Double?])] {
         switch metric {
+        case .teacherPace:
+            return [("Words a minute", sessions.map { $0.metricsDetail?["teacherWordsPerMinute"] })]
         case .talkRatio:
-            return [
-                ("You", sessions.map(\.teacherTalkPct)),
-                ("Students", sessions.map(\.studentTalkPct)),
-            ]
-        case .higherOrderPct:
-            return [("Higher-order", sessions.map { ($0.questionCount ?? 0) >= ReportConfidence.minNForPercent ? $0.higherOrderPct : nil })]
-        case .avgWaitTime:
-            return [("Wait time", sessions.map(\.avgWaitTimeSec))]
-        case .cfuCount:
-            return [("CFUs", sessions.map {
-                $0.durationSec ?? 0 >= ReportConfidence.minDurationForCFUDetectionSec ? perTenMin($0.cfuCount.map(Double.init), durationSec: $0.durationSec) : nil
+            // The teacher's own share only. The student share is the least
+            // reliable number in this report — diarization folds student
+            // speech into teacher segments — so trending it would draw a line
+            // through measurement noise.
+            return [("You", sessions.map(\.teacherTalkPct))]
+        case .longestMonologue:
+            return [("Minutes", sessions.map { session in
+                guard let sec = session.metricsDetail?["longestTeacherMonologueSec"] else { return nil }
+                return ((sec / 60) * 10).rounded() / 10
+            })]
+        case .waitTime2:
+            // Below the sample floor the average is a reading of one or two
+            // exchanges, which the rest of the report refuses to call a habit.
+            return [("Seconds", sessions.map { session in
+                guard (session.metricsDetail?["waitTime2SampleCount"] ?? 0) >= AudioInsights.minWaitTimeSamples else { return nil }
+                return session.metricsDetail?["waitTime2Sec"]
             })]
         case .followUpQuestionCount:
             return [("Follow-ups", sessions.map { perTenMin($0.metricsDetail?["followUpQuestionCount"], durationSec: $0.durationSec) })]
+        case .higherOrderPct:
+            // Count AND total rather than a share: a share reads 100% when one
+            // question was asked and it happened to be a good one, and 0% when
+            // forty-three recall questions were asked and nothing else. The gap
+            // between the two lines is the recall questions.
+            return [
+                ("Higher-order", sessions.map { $0.metricsDetail?["higherOrderQuestionCount"] }),
+                ("All questions", sessions.map { $0.questionCount.map(Double.init) }),
+            ]
+        case .cfuCount:
+            return [("Checks", sessions.map {
+                $0.durationSec ?? 0 >= ReportConfidence.minDurationForCFUDetectionSec
+                    ? perTenMin($0.cfuCount.map(Double.init), durationSec: $0.durationSec) : nil
+            })]
+        // --- retired: still rendered if an account's stored focus is one ---
+        case .avgWaitTime:
+            return [("Wait time", sessions.map(\.avgWaitTimeSec))]
         case .redirectionCount:
             return [("Redirections", sessions.map { perTenMin($0.metricsDetail?["redirectionCount"], durationSec: $0.durationSec) })]
         case .toneRatio:

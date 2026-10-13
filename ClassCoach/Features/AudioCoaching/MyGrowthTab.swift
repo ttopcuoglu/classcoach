@@ -13,19 +13,28 @@ struct MyGrowthTab: View {
 
     private static let maxTrendSessions = 20
 
+    /// Tiny recordings are tests, not lessons — half a real teacher's
+    /// recordings are two minutes or less, and they were plotted beside a
+    /// thirty-nine-minute period as though they were the same kind of thing.
     private var qualifying: [AudioSession] {
         Array(
             sessions
-                .filter { $0.teacherTalkPct != nil && $0.durationSec != nil }
+                .filter {
+                    $0.teacherTalkPct != nil && ($0.durationSec ?? 0) >= ReportConfidence.tinyRecordingThresholdSec
+                }
                 .sorted { $0.createdAt < $1.createdAt }
                 .suffix(Self.maxTrendSessions)
         )
     }
 
+    /// The seven My Growth can defend, with the chosen focus lifted to the
+    /// top. A stored focus that has since been retired is still charted — it
+    /// is what this teacher asked to watch — but it is not offered to anyone
+    /// new.
     private var orderedMetrics: [FocusMetric] {
-        var all = FocusMetric.allCases
-        if let focus = focusMetric, let idx = all.firstIndex(of: focus) {
-            all.remove(at: idx)
+        var all = FocusMetrics.trendable
+        if let focus = focusMetric {
+            all.removeAll { $0 == focus }
             all.insert(focus, at: 0)
         }
         return all
@@ -49,7 +58,7 @@ struct MyGrowthTab: View {
                 ForEach(orderedMetrics, id: \.self) { metric in
                     TrendChartView(metric: metric, sessions: qualifying, highlighted: metric == focusMetric)
                 }
-                Text("Showing your last \(qualifying.count) analyzed sessions. Short sessions add noise — read the overall direction, not any single point. This is compared only against your own history, not other teachers.")
+                Text("Showing your last \(qualifying.count) analyzed sessions over \(Int(ReportConfidence.tinyRecordingThresholdSec / 60)) minutes — shorter recordings are left out, since a one-minute clip and a full period are not the same kind of thing. A gap in a line means that lesson had no measurable value, never a measured zero. Read the overall direction, not any single point, and this is compared only against your own history, never other teachers.")
                     .font(.caption2).foregroundStyle(AppTheme.textSecondary)
             }
         }

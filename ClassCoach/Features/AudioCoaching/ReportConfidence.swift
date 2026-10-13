@@ -7,6 +7,11 @@ import Foundation
 /// more here than almost anywhere else in the app.
 enum ReportConfidence {
     static let shortSessionThresholdSec: Double = 10 * 60
+
+    /// Mirrors `TINY_RECORDING_THRESHOLD_SEC` in reportConfidence.ts. Below
+    /// this a recording is a test rather than a lesson, and My Growth leaves
+    /// it off the trend entirely.
+    static let tinyRecordingThresholdSec: Double = 2 * 60
     static let minNForPercent = 10
     /// Mirrors MIN_STUDENT_SEGMENTS_FOR_FEEDBACK in reportConfidence.ts.
     static let minStudentSegmentsForFeedback = 5

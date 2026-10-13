@@ -473,9 +473,17 @@ struct SpeakerSample: Decodable {
 }
 
 /// Matches `web/src/lib/api.ts`'s `FocusMetric` union exactly.
+/// A teacher's chosen My Growth focus, persisted on the account.
+///
+/// Retired members are kept rather than deleted: the column holds whatever was
+/// chosen when it was chosen, and a value this enum no longer admits would
+/// fail to decode on a real account. What changed is which ones My Growth
+/// offers and charts — see FocusMetrics.trendable.
 enum FocusMetric: String, Codable, CaseIterable {
     case talkRatio, higherOrderPct, avgWaitTime, cfuCount, followUpQuestionCount
     case redirectionCount, toneRatio, directiveCount, nameMentionCount, feedbackSpecificity
+    // Added with the trend redesign.
+    case teacherPace, waitTime2, longestMonologue
 }
 
 extension AudioSession {
