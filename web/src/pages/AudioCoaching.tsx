@@ -74,6 +74,8 @@ import {
   MIN_DURATION_FOR_TALK_BALANCE_CANDIDATE_SEC,
   MIN_CFU_FOR_STRENGTH,
   MIN_N_FOR_PERCENT,
+  MIN_WAIT_TIME_SAMPLES,
+  TINY_RECORDING_THRESHOLD_SEC,
   SHORT_SESSION_THRESHOLD_SEC,
   STUDENT_TALK_CAVEAT,
   waitTimeMetric as waitTimeMetricOf,
@@ -1709,6 +1711,12 @@ function buildSpotlight(
 // to show regardless of how the session actually went.
 const FOCUS_METRIC_TRY_NEXT: Record<FocusMetric, string> = {
   talkRatio: 'Look for one moment to hand the floor to students — even a 30-second turn-and-talk shifts the balance.',
+  teacherPace:
+    'Pick the stretch where you introduce something new and deliberately slow it — the same words, more room between them.',
+  waitTime2:
+    'When a student finishes, count two silently before you speak. That gap is where their second sentence lives.',
+  longestMonologue:
+    'Choose one point in your longest explanation to stop and take a question, even if nobody has raised a hand.',
   higherOrderPct: "Turn one factual question into a 'why' or 'how' question.",
   avgWaitTime: 'After you ask a question, count silently to five before calling on anyone.',
   cfuCount: 'Build in one quick check for understanding — a thumbs-up, a whiteboard hold-up, a quick poll.',
@@ -1742,6 +1750,9 @@ type FocusSnapshot = {
 const FOCUS_METRIC_UNIT_SUFFIX: Partial<Record<FocusMetric, string>> = {
   talkRatio: '%',
   avgWaitTime: 's',
+  waitTime2: 's',
+  teacherPace: ' wpm',
+  longestMonologue: 's',
 }
 
 // Summary's "My Focus" card — a plain, always-honest snapshot of where the
@@ -3236,8 +3247,16 @@ function MyGrowthTab({
   focusMetric: FocusMetric | null
   onFocusMetricChange: (metric: FocusMetric | null) => void
 }) {
+  // Tiny recordings are tests, not lessons — a one-minute clip and a
+  // thirty-nine-minute period sat on the same line as if they were the same
+  // kind of thing, and half of a real teacher's recordings are tests.
   const analyzed = sessions
-    .filter((s) => s.teacherTalkPct != null && s.durationSec != null)
+    .filter(
+      (s) =>
+        s.teacherTalkPct != null &&
+        s.durationSec != null &&
+        s.durationSec >= TINY_RECORDING_THRESHOLD_SEC,
+    )
     .slice()
     .sort((a, b) => new Date(a.sessionDate).getTime() - new Date(b.sessionDate).getTime())
     .slice(-MAX_TREND_SESSIONS)
@@ -3259,63 +3278,115 @@ function MyGrowthTab({
   )
 
   const teacherTalk = analyzed.map((s) => s.teacherTalkPct)
-  const studentTalk = analyzed.map((s) => s.studentTalkPct)
-  const higherOrder = analyzed.map((s) => ((s.questionCount ?? 0) < MIN_N_FOR_PERCENT ? null : s.higherOrderPct))
-  const avgWaitTime = analyzed.map((s) => s.avgWaitTimeSec)
-  const waitTimeValues = avgWaitTime.filter((v): v is number => v != null)
-  const waitTimeMax = waitTimeValues.length ? Math.max(5, ...waitTimeValues) * 1.2 : 5
 
   const cfuFrequency = analyzed.map((s) => {
     const duration = s.durationSec ?? 0
     if (duration < MIN_DURATION_FOR_CFU_DETECTION_SEC) return null
     return Math.round(((s.cfuCount ?? 0) / (duration / 600)) * 10) / 10
   })
-  const excludedCfuCount = cfuFrequency.filter((v) => v == null).length
   const cfuMax = Math.max(4, ...cfuFrequency.filter((v): v is number => v != null)) * 1.2
 
   // Plain per-10-minute frequency for phrase-matched counts — none of these
   // have an established minimum-duration detection floor elsewhere in the
   // app (unlike CFUs), so no exclusion beyond having a real duration.
   const followUpFrequency = analyzed.map((s) => perTenMin(s, metricsNum(s, 'followUpQuestionCount')))
-  const redirectionFrequency = analyzed.map((s) => perTenMin(s, metricsNum(s, 'redirectionCount')))
-  const directiveFrequency = analyzed.map((s) => perTenMin(s, metricsNum(s, 'directiveCount')))
-  const nameMentionFrequency = analyzed.map((s) => perTenMin(s, metricsNum(s, 'nameMentionCount')))
   const followUpMax = frequencyMax(followUpFrequency)
-  const redirectionMax = frequencyMax(redirectionFrequency)
-  const directiveMax = frequencyMax(directiveFrequency)
-  const nameMentionMax = frequencyMax(nameMentionFrequency)
 
-  // Same MIN_N_FOR_PERCENT gate higherOrder already uses above — a ratio off
-  // too few moments reads as more precise than it is.
-  const toneRatio = analyzed.map((s) => {
-    const positive = metricsNum(s, 'positivePhraseCount')
-    const corrective = metricsNum(s, 'correctivePhraseCount')
-    if (positive == null || corrective == null || positive + corrective < MIN_N_FOR_PERCENT) return null
-    return Math.round((positive / (positive + corrective)) * 100)
+
+  const teacherPace = analyzed.map((s) => metricsNum(s, 'teacherWordsPerMinute'))
+  const paceMax = Math.max(220, ...teacherPace.filter((v): v is number => v != null)) * 1.1
+  const longestMonologue = analyzed.map((s) => {
+    const sec = metricsNum(s, 'longestTeacherMonologueSec')
+    return sec == null ? null : Math.round((sec / 60) * 10) / 10
   })
-  const feedbackSpecificity = analyzed.map((s) => {
-    const generic = metricsNum(s, 'genericFeedbackCount')
-    const specific = metricsNum(s, 'specificFeedbackCount')
-    if (generic == null || specific == null || generic + specific < MIN_N_FOR_PERCENT) return null
-    return Math.round((specific / (generic + specific)) * 100)
-  })
+  const monologueMax = Math.max(4, ...longestMonologue.filter((v): v is number => v != null)) * 1.2
+  // Below the sample floor the average is a reading of one or two exchanges,
+  // which the rest of the report refuses to treat as a habit — so does this.
+  const waitTime2 = analyzed.map((s) =>
+    (metricsNum(s, 'waitTime2SampleCount') ?? 0) >= MIN_WAIT_TIME_SAMPLES ? metricsNum(s, 'waitTime2Sec') : null,
+  )
+  const waitTime2Max = Math.max(4, ...waitTime2.filter((v): v is number => v != null)) * 1.2
+  // Count AND total on one chart rather than a share on its own: a share is
+  // 100% when one question was asked and one was higher-order, which reads as
+  // a triumph. The gap between the two lines is the recall questions, and it
+  // cannot lie that way.
+  const higherOrderCount = analyzed.map((s) => metricsNum(s, 'higherOrderQuestionCount'))
+  const allQuestions = analyzed.map((s) => s.questionCount ?? null)
+  const questionMax = Math.max(6, ...allQuestions.filter((v): v is number => v != null)) * 1.15
 
   const insight = buildTrendInsight(analyzed)
 
+  // Seven, not ten. Each one earned its place on three tests measured against
+  // real lessons: is there a value on most of them, is it about something the
+  // teacher controls, and does movement mean the same thing every time? What
+  // went: wait time after a question (measurable on a quarter of lessons),
+  // tone ratio and feedback specificity (fewer still, and the limit is per
+  // lesson so more lessons never fix it), redirections (rise with a hard group
+  // as readily as with anything the teacher did), and the plain counts of
+  // directions and names (no better direction to move in).
   const charts: { key: FocusMetric; node: React.ReactNode }[] = [
+    {
+      key: 'teacherPace',
+      node: (
+        <TrendChart
+          title="Your pace"
+          unit=" wpm"
+          maxValue={paceMax}
+          labels={labels}
+          series={[{ label: 'Words a minute', colorVar: '--color-terracotta', values: teacherPace }]}
+          emptyMessage="Not enough of your own speech captured yet to measure a pace."
+        />
+      ),
+    },
     {
       key: 'talkRatio',
       node: (
         <TrendChart
-          title="Talk Ratio"
+          title="Your share of the talk"
           unit="%"
           maxValue={100}
           labels={labels}
-          series={[
-            { label: 'You', colorVar: '--color-terracotta', values: teacherTalk },
-            { label: 'Students', colorVar: '--color-gold', values: studentTalk },
-          ]}
+          series={[{ label: 'You', colorVar: '--color-terracotta', values: teacherTalk }]}
           emptyMessage="Not enough sessions with a measured talk split yet to trend this."
+        />
+      ),
+    },
+    {
+      key: 'longestMonologue',
+      node: (
+        <TrendChart
+          title="Longest unbroken stretch"
+          unit=" min"
+          maxValue={monologueMax}
+          labels={labels}
+          series={[{ label: 'Minutes', colorVar: '--color-terracotta', values: longestMonologue }]}
+          emptyMessage="Not enough sessions yet to trend this."
+        />
+      ),
+    },
+    {
+      key: 'waitTime2',
+      node: (
+        <TrendChart
+          title="Pause after an answer"
+          unit="s"
+          maxValue={waitTime2Max}
+          labels={labels}
+          series={[{ label: 'Seconds', colorVar: '--color-terracotta', values: waitTime2 }]}
+          emptyMessage="Not enough exchanges where a student answered and you replied, yet."
+        />
+      ),
+    },
+    {
+      key: 'followUpQuestionCount',
+      node: (
+        <TrendChart
+          title="Follow-up questions"
+          unit=" per 10 min"
+          maxValue={followUpMax}
+          labels={labels}
+          series={[{ label: 'Follow-ups', colorVar: '--color-terracotta', values: followUpFrequency }]}
+          emptyMessage="Not enough follow-up questions detected yet to trend this."
         />
       ),
     },
@@ -3323,125 +3394,28 @@ function MyGrowthTab({
       key: 'higherOrderPct',
       node: (
         <TrendChart
-          title="Question Quality"
-          unit="%"
-          maxValue={100}
+          title="Higher-order questions"
+          unit=""
+          maxValue={questionMax}
           labels={labels}
-          series={[{ label: 'Higher-order questions', colorVar: '--color-terracotta', values: higherOrder }]}
-          emptyMessage="Not enough questions asked yet in any single session to trend this reliably."
-        />
-      ),
-    },
-    {
-      key: 'avgWaitTime',
-      node: (
-        <TrendChart
-          title="Avg. Wait Time"
-          unit="s"
-          maxValue={waitTimeMax}
-          labels={labels}
-          series={[{ label: 'Your avg. wait time', colorVar: '--color-terracotta', values: avgWaitTime }]}
-          emptyMessage="Not enough sessions with a measured average wait time yet to trend this."
+          series={[
+            { label: 'Higher-order', colorVar: '--color-terracotta', values: higherOrderCount },
+            { label: 'All questions', colorVar: '--color-hairline', values: allQuestions },
+          ]}
+          emptyMessage="No questions detected yet to trend."
         />
       ),
     },
     {
       key: 'cfuCount',
       node: (
-        <>
-          <TrendChart
-            title="Checks for Understanding"
-            unit="/10min"
-            maxValue={cfuMax}
-            labels={labels}
-            series={[{ label: 'CFUs per 10 min', colorVar: '--color-terracotta', values: cfuFrequency }]}
-            emptyMessage="Not enough sessions long enough to reliably detect checks for understanding yet."
-          />
-          {excludedCfuCount > 0 && (
-            <p className="mt-2 text-xs text-ink-soft">
-              {excludedCfuCount} session{excludedCfuCount === 1 ? '' : 's'} under{' '}
-              {Math.round(MIN_DURATION_FOR_CFU_DETECTION_SEC / 60)} min excluded from this line — too short to
-              reliably detect CFUs.
-            </p>
-          )}
-        </>
-      ),
-    },
-    {
-      key: 'followUpQuestionCount',
-      node: (
         <TrendChart
-          title="Follow-up Questions"
-          unit="/10min"
-          maxValue={followUpMax}
+          title="Checks for understanding"
+          unit=" per 10 min"
+          maxValue={cfuMax}
           labels={labels}
-          series={[{ label: 'Follow-ups per 10 min', colorVar: '--color-terracotta', values: followUpFrequency }]}
-          emptyMessage="Not enough follow-up questions recorded yet to trend this."
-        />
-      ),
-    },
-    {
-      key: 'redirectionCount',
-      node: (
-        <TrendChart
-          title="Redirection Language"
-          unit="/10min"
-          maxValue={redirectionMax}
-          labels={labels}
-          series={[{ label: 'Redirections per 10 min', colorVar: '--color-terracotta', values: redirectionFrequency }]}
-          emptyMessage="Not enough redirection language detected yet to trend this."
-        />
-      ),
-    },
-    {
-      key: 'toneRatio',
-      node: (
-        <TrendChart
-          title="Positive vs. Corrective Tone"
-          unit="%"
-          maxValue={100}
-          labels={labels}
-          series={[{ label: 'Share positive', colorVar: '--color-terracotta', values: toneRatio }]}
-          emptyMessage="Not enough tone-language moments in any single session yet to trend this reliably."
-        />
-      ),
-    },
-    {
-      key: 'directiveCount',
-      node: (
-        <TrendChart
-          title="Clear Directions Given"
-          unit="/10min"
-          maxValue={directiveMax}
-          labels={labels}
-          series={[{ label: 'Directions per 10 min', colorVar: '--color-terracotta', values: directiveFrequency }]}
-          emptyMessage="Not enough directive language detected yet to trend this."
-        />
-      ),
-    },
-    {
-      key: 'nameMentionCount',
-      node: (
-        <TrendChart
-          title="Student Names Used"
-          unit="/10min"
-          maxValue={nameMentionMax}
-          labels={labels}
-          series={[{ label: 'Name mentions per 10 min', colorVar: '--color-terracotta', values: nameMentionFrequency }]}
-          emptyMessage="Not enough student-name mentions detected yet to trend this."
-        />
-      ),
-    },
-    {
-      key: 'feedbackSpecificity',
-      node: (
-        <TrendChart
-          title="Feedback Specificity"
-          unit="%"
-          maxValue={100}
-          labels={labels}
-          series={[{ label: 'Share specific', colorVar: '--color-terracotta', values: feedbackSpecificity }]}
-          emptyMessage="Not enough feedback-after-response moments in any single session yet to trend this reliably."
+          series={[{ label: 'Checks', colorVar: '--color-terracotta', values: cfuFrequency }]}
+          emptyMessage="Not enough sessions long enough to detect checks yet."
         />
       ),
     },
@@ -3474,9 +3448,11 @@ function MyGrowthTab({
       )}
 
       <p className="text-xs text-ink-soft">
-        Showing your last {analyzed.length} analyzed session{analyzed.length === 1 ? '' : 's'}. Short sessions
-        add noise — read the overall direction, not any single point. This is compared only against your own
-        history, not other teachers.
+        Showing your last {analyzed.length} analyzed session{analyzed.length === 1 ? '' : 's'} over{' '}
+        {Math.round(TINY_RECORDING_THRESHOLD_SEC / 60)} minutes — shorter recordings are left out, since a
+        one-minute clip and a full period are not the same kind of thing. A gap in a line means that lesson had
+        no measurable value, never a measured zero. Read the overall direction, not any single point, and this is
+        compared only against your own history, never other teachers.
       </p>
     </div>
   )

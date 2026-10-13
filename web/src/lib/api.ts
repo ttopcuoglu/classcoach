@@ -61,6 +61,12 @@ export const TALK_VOICES: { value: TalkVoice; label: string; description: string
   { value: 'aries', label: 'Aries', description: 'Warm and energetic' },
 ]
 
+/// A teacher's chosen My Growth focus, persisted on User.focusMetric.
+///
+/// Retired members are kept in the type rather than deleted: the column holds
+/// whatever was chosen when it was chosen, and a value this type no longer
+/// admits would be an unrenderable label on a real account. What changed is
+/// which ones My Growth OFFERS — see TRENDABLE_FOCUS_METRICS.
 export type FocusMetric =
   | 'talkRatio'
   | 'higherOrderPct'
@@ -72,6 +78,10 @@ export type FocusMetric =
   | 'directiveCount'
   | 'nameMentionCount'
   | 'feedbackSpecificity'
+  // Added with the trend redesign.
+  | 'teacherPace'
+  | 'waitTime2'
+  | 'longestMonologue'
 
 export type JobTitle =
   | 'Teacher'
