@@ -46,3 +46,14 @@ test('a plural repeat of a term is not listed twice, and the list is ordered by 
     { term: 'fraction', teacherCount: 1, studentCount: 0 },
   ])
 })
+
+test('a single letter is a variable, not academic vocabulary', () => {
+  // A real unit-rate lesson (y = kx) listed x, y and k as academic
+  // vocabulary, each counted 5 for the teacher and 0 for students — which
+  // reads as a class that never picked up its teacher's terms.
+  assert.deepEqual(parseKeyTermLines('x\ny\nk\nunit rate'), ['unit rate'])
+})
+
+test('short real terms survive the same filter', () => {
+  assert.deepEqual(parseKeyTermLines('pH\npi\nDNA'), ['pH', 'pi', 'DNA'])
+})

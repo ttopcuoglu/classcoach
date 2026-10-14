@@ -59,7 +59,7 @@ Most lessons do not contain one. A teacher who starts working without announcing
 
 5. DEFINED VOCABULARY. Up to two moments where the teacher gave the meaning of a term, however informally — "equivalent just means they're worth the same", "we call that the numerator". Again, exact sentences and timestamps.
 
-6. KEY TERMS. Up to ten subject-specific terms this lesson is teaching or leaning on — the academic vocabulary a student would need in order to talk about this content: "photosynthesis", "numerator", "supply and demand". One to three words each, written the way the teacher said them. Not general classroom words ("worksheet", "partner", "question"), and not everyday words unless this lesson gives them a technical meaning. Only terms the teacher actually said.
+6. KEY TERMS. Up to ten subject-specific terms this lesson is teaching or leaning on — the academic vocabulary a student would need in order to talk about this content: "photosynthesis", "numerator", "supply and demand". One to three words each, written the way the teacher said them. Not general classroom words ("worksheet", "partner", "question"), and not everyday words unless this lesson gives them a technical meaning. Not single letters or variable names — in "y = kx", the vocabulary is "constant of proportionality", not "x", "y" or "k"; a symbol is something a student reads, not a word they need in order to talk about the content. Only terms the teacher actually said.
 
 For 3, 5 and 6, ${NONE} is a real answer. Plenty of lessons contain none, and inventing one is worse than reporting none.
 

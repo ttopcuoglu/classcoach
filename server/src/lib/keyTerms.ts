@@ -50,6 +50,14 @@ export function parseKeyTermLines(raw: string | null): string[] {
     if (!term || term.toUpperCase() === 'NONE') continue
     if (term.length > 40 || term.split(/\s+/).length > 3) continue
     if (!/^[A-Za-z][A-Za-z0-9 '-]*$/.test(term)) continue
+    // A single character is a variable, a label or a letter — never
+    // vocabulary. A unit-rate lesson came back with "x", "y" and "k" listed
+    // as academic vocabulary, counted 5 and 5 against the teacher with 0 for
+    // students, which reads as a teacher using terms their class never
+    // picked up. The words that lesson was actually teaching were "unit
+    // rate" and "constant of proportionality". Two characters is the floor
+    // because "pH", "pi" and "DNA" are real terms.
+    if (term.replace(/[^A-Za-z0-9]/g, '').length < 2) continue
     out.push(term)
   }
   return out
