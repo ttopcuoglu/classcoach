@@ -263,7 +263,7 @@ export default function GuideTalkItThrough() {
               {[
                 { icon: WaveformIcon, title: 'Tap Start Talking', body: 'The mic opens and Coach waits. What you said appears on screen as you go, so you can see it heard you right.' },
                 { icon: BrainIcon, title: 'Keep it conversational', body: 'Interrupt, backtrack, change your mind. It’s a conversation, not a form.' },
-                { icon: StarIcon, title: 'Finish when ready', body: 'Tap Finish session for your takeaway, or Exit to leave with nothing kept.' },
+                { icon: StarIcon, title: 'Finish when ready', body: 'Tap Finish session for your takeaway. Leave without it and the conversation is saved, ready to resume.' },
               ].map((item) => (
                 <div key={item.title}>
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-peach-tint text-terracotta">

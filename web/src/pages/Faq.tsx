@@ -22,7 +22,7 @@ const CATEGORIES: Category[] = [
       },
       {
         q: 'Does Wivoza keep my voice or video?',
-        a: 'No audio is ever kept. Talk It Through and Lesson Debrief both transcribe a recording and then immediately discard it — only the resulting text and metrics remain. Wivoza doesn\'t use a camera or video anywhere in the app.',
+        a: 'No audio is ever kept. Talk It Through and Lesson Debrief both transcribe a recording and then immediately discard it — only the resulting text and metrics remain. Wivoza never records video. A camera is used only if you choose to photograph a worksheet or lesson materials, and that photo is read for its text and not stored.',
       },
       {
         q: 'What happens to a presentation or document I upload?',
@@ -38,7 +38,7 @@ const CATEGORIES: Category[] = [
       },
       {
         q: 'What is "Coach\'s memory," and can I turn it off?',
-        a: 'A short, running note Coach keeps about your recurring strengths and any ongoing challenges — built only from your real Ask and Talk It Through conversations, never from Practice rehearsals. It\'s on by default, but you can view it, turn it off, or clear it anytime from Profile & Settings.',
+        a: 'A short, running note Coach keeps about your recurring strengths and any ongoing challenges — built only from your real Talk It Through conversations and Lesson Debrief reflections, never from Practice rehearsals. It\'s on by default, but you can view it, turn it off, or clear it anytime from Profile & Settings.',
       },
       {
         q: 'Can I delete my data?',
@@ -61,11 +61,20 @@ const CATEGORIES: Category[] = [
       },
       {
         q: 'Do I need to install an app?',
-        a: 'No — Wivoza is a website that works in any modern browser, on your phone, tablet, or computer. No download required.',
+        a: (
+          <>
+            No — Wivoza works in any modern browser, on your phone, tablet, or computer, with nothing to download. If you
+            prefer an app, Wivoza is also{' '}
+            <a href="https://apps.apple.com/us/app/wivoza/id6808223345" target="_blank" rel="noreferrer" className="font-semibold text-terracotta-600 hover:underline">
+              on the App Store for iPhone
+            </a>
+            , using the same account.
+          </>
+        ),
       },
       {
         q: 'What devices does it work on?',
-        a: 'Any device with a browser and a microphone. Talk It Through and Lesson Debrief have both been specifically tuned to work reliably on mobile, not just desktop.',
+        a: 'Any device with a browser and a microphone, plus the iPhone app. Talk It Through and Lesson Debrief have both been specifically tuned to work reliably on mobile, not just desktop.',
       },
     ],
   },

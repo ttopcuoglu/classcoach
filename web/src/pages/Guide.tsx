@@ -172,27 +172,26 @@ const TALK_IT_THROUGH: Feature = {
   guideTo: '/guide/talk-it-through',
   intro: 'A live, spoken back-and-forth with Coach — tap Start Talking (or one of the example prompts) and just talk. Prefer to type? Type instead is always one tap away.',
   specs: [
-    { label: 'Listening', body: 'a mic icon with a ring that visibly pulses in real time with your actual volume.' },
+    { label: 'Listening', body: 'live voice bars that move in real time with your actual volume.' },
     { label: 'Thinking', body: 'three gently bouncing dots and "One moment" — covers both transcribing what you said and Coach composing its reply, shown as one continuous state rather than two confusing ones.' },
     { label: 'Speaking', body: 'an animated equalizer plays while Coach\'s reply is read aloud.' },
     { label: 'Mute', body: 'silences Coach\'s voice without ending the conversation — replies still appear as text.' },
-    { label: 'Pause mic / Exit', body: 'Pause mic stops listening and releases the microphone while you stay in the conversation; Exit leaves at any point.' },
-    { label: 'Continuity', body: 'if Coach\'s memory is on, it can reference real patterns from your past Ask and Talk It Through conversations.' },
+    { label: 'Pause mic / Finish session', body: 'Pause mic stops listening and releases the microphone while you stay in the conversation; Finish session ends it with a short takeaway. Leave without finishing and the conversation is saved as "Not wrapped up", ready to resume.' },
+    { label: 'Continuity', body: 'if Coach\'s memory is on, it can reference real patterns from your past Talk It Through conversations and Lesson Debrief reflections.' },
     { label: 'Privacy', body: 'your voice itself is never saved — only the resulting conversation text.' },
   ],
 }
 
 const REPORT_TABS: SpecItem[] = [
   { label: 'Summary', body: 'the 60-second read, in the order you\'d want it: a plain-language "Lesson at a glance," one named Strength to keep, your focus metric with its current value and a "try next time" tip, an "Evidence from the lesson" row (who was heard, questions opened, and a moment worth revisiting), and one suggested next step. Every card links through to the fuller detail in Insights.' },
-  { label: 'Insights', body: 'the detail, in five sections — see below.' },
+  { label: 'Insights', body: 'the detail, in four sections — see below.' },
   { label: 'Reflect', body: 'a spoken debrief with Coach about what the report found. Pick a starting point (talk through today\'s highlights, explore a specific moment, reflect on how the lesson felt, or ask your own question), then talk it through — pause, resume, or type instead at any point. Finish with your own Strengths / Growth areas / My next step / Follow-up date notes, optionally drafted for you from the conversation, and a Lock button that makes the whole report permanently read-only.' },
-  { label: 'My Growth', body: 'ten metrics trended across every session you\'ve recorded — talk ratio, higher-order-question %, average wait time, checks for understanding, follow-up questions, redirection language, positive-vs-corrective tone, clear directions given, student names used, and feedback specificity. Pick one as your active focus and it\'s highlighted here and on Summary.' },
+  { label: 'My Growth', body: 'seven measures trended across every session you\'ve recorded — your pace, your share of the talk, your longest unbroken stretch, the pause after an answer, follow-up questions, higher-order questions, and checks for understanding. Pick one as your active focus and it\'s highlighted here and on Summary.' },
 ]
 
 const INSIGHTS_SECTIONS: SpecItem[] = [
   { label: 'Talk & Participation', body: 'the teacher / student / silence split for the period, how many separate times students spoke, and a coach-voice read of what the balance suggests.' },
-  { label: 'Questions & Thinking', body: 'every question you asked, logged and tagged recall or higher-order, with the wait time after each one and any follow-ups that built on it — plus your average wait time and higher-order share.' },
-  { label: 'Checks & Feedback', body: 'the checks for understanding you used, and how much of your feedback was specific rather than general — each with the actual moments behind the count.' },
+  { label: 'Questioning & Checking', body: 'the questions you asked, tagged recall or higher-order, with the wait time after each and any follow-ups that built on it — plus the checks for understanding you used, with the actual moments behind the count.' },
   { label: 'Clarity & Content', body: 'a detected stated objective (with the exact quote it came from), real-world connections, key vocabulary moments, teacher and student word clouds sized by frequency, and on-demand "content specialist" notes from a subject-area lens.' },
   { label: 'Climate & Routines', body: 'transitions between activities, clear task directions given, student names used, positive-vs-corrective tone balance, and redirection language — each a plain count with a coach-voice note, never a behavior score.' },
 ]
@@ -515,7 +514,7 @@ export default function Guide() {
             <div className="rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
               <h4 className="font-heading text-lg font-bold text-forest">Inside a Lesson Debrief report — all four tabs</h4>
               <SpecList items={REPORT_TABS} />
-              <h4 className="mt-7 font-heading text-lg font-bold text-forest">The five Insights sections</h4>
+              <h4 className="mt-7 font-heading text-lg font-bold text-forest">The four Insights sections</h4>
               <SpecList items={INSIGHTS_SECTIONS} />
               <div className="mt-5 flex items-start gap-3 rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
                 <BrainIcon className="mt-0.5 h-5 w-5 shrink-0 text-forest" />
@@ -608,7 +607,7 @@ export default function Guide() {
               <h3 className="mt-4 font-heading text-lg font-bold text-forest">Coach's memory</h3>
               <p className="mt-2 text-sm leading-relaxed text-ink-soft">
                 A short, running note about your recurring strengths and any ongoing challenges — built only
-                from your real Ask and Talk It Through conversations, never from Practice rehearsals. On by
+                from your real Talk It Through conversations and Lesson Debrief reflections, never from Practice rehearsals. On by
                 default, but entirely yours: read it, turn it off, or clear it anytime.
               </p>
             </div>

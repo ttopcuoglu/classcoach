@@ -34,7 +34,7 @@ const OFFER = [
     badge: 'bg-forest text-gold',
     card: 'bg-mint-tint/50',
     title: 'Simple to roll out',
-    body: 'Teachers enter one short join code — during setup or later from Profile & Settings — and everything unlocks. Nothing to install; Wivoza runs in the browser.',
+    body: 'Teachers enter one short join code — during setup or later from Profile & Settings — and everything unlocks. Nothing to install: Wivoza runs in the browser, with an iPhone app for teachers who want one.',
   },
 ]
 

@@ -12,27 +12,31 @@ evaluation tool. Teachers use it to think through a hard moment, review a
 recorded lesson, rehearse a difficult conversation, plan, or get a second
 read on something they wrote. Website: wivoza.com. Contact: hello@wivoza.com
 
-THE SIX TOOLS
+THE TOOLS
 - Talk It Through: a live, spoken conversation. The teacher says what
   happened out loud; Coach listens, asks questions, and helps them reach one
   next step, ending in a short takeaway. Typing is also supported.
 - Lesson Debrief: record one class period. Wivoza transcribes it, asks which
-  voice is the teacher, then produces a four-tab report (Summary, Insights,
-  Reflect, My Growth) covering talk balance, questioning, wait time, checks
-  for understanding, clarity and climate.
+  voice is the teacher, then produces a report in five tabs (Summary,
+  Insights, Rubric lens, Reflect, My Growth) covering talk balance,
+  questioning, wait time, checks for understanding, clarity and climate.
+  Rubric lens sorts the lesson's evidence under the Danielson rubric on
+  request and never gives a level or score.
 - Practice: a rehearsal against a realistic scenario, with a model response
   to compare against. Pick a section and Wivoza writes the scenario; the
   Conversation section role-plays a parent, student, colleague or
   administrator instead. Asking about something real is Talk It Through's job
   now, and a conversation that is actually happening goes to Communication
   Coach.
-- Lesson Planning: generate a sample day from an objective, get feedback on
-  a plan you wrote, or review a presentation you built (.pptx or .pdf).
-- Assignment Coach: read an assignment and report on grade fit, rigor,
-  learning value, workload and AI-completion risk; or redesign it so
-  students must show their own thinking.
-- Communication Coach: write a message, prepare for a meeting, practice a
-  conversation, or get a second read on a reply before sending it.
+- Planning Coach: build a lesson from a topic (quick ideas or a full
+  lesson), strengthen a plan you wrote, review slides you built (.pptx or
+  .pdf), or review an assignment. The assignment review, formerly called
+  Assignment Coach, reports on grade fit, rigor, learning value, workload
+  and AI-completion risk, or redesigns the task so students must show their
+  own thinking.
+- Communication Coach: write a message, prepare for a real meeting or
+  conversation (including rehearsing it), or get a second read on a reply
+  before sending it.
 
 PRIVACY (the most common questions)
 - No administrator ever sees an individual teacher's recordings, transcripts,
@@ -40,15 +44,17 @@ PRIVACY (the most common questions)
   trends across their staff. Every admin view says so on screen.
 - Audio is never kept. Talk It Through and Lesson Debrief transcribe a
   recording and then immediately discard it; only text and metrics remain.
-- There is no camera or video anywhere in Wivoza.
+- Wivoza never records video. A camera is used only when a teacher chooses
+  to photograph a worksheet or lesson materials; the photo is read for its
+  text and not stored.
 - Coach refers to people by role ("a student," "the class") even if the
   teacher types a real name.
 - Teachers are never scored. No grade, rank or rating is shown. A few private
   internal ratings power the teacher's own growth trends and are never shown
   to anyone as a number.
 - Coach's memory is a short running note about recurring strengths and
-  challenges, built only from Ask and Talk It Through conversations, never
-  from Practice rehearsals. On by default; a teacher can read it, turn it
+  challenges, built only from Talk It Through conversations and Lesson
+  Debrief reflections, never from Practice rehearsals. On by default; a teacher can read it, turn it
   off, or clear it anytime from Profile & Settings.
 - Lesson Debrief retention is teacher-controlled: 7, 30, 90 days, or
   indefinitely.
@@ -60,7 +66,7 @@ PRIVACY (the most common questions)
 PRICING
 - Free forever for everyone: Talk It Through and Practice, unlimited,
   plus 3 Lesson Debrief recordings a month.
-- Wivoza Plus is $9.99/month: unlimited Lesson Debrief, Lesson Planning,
+- Wivoza Plus is $9.99/month: unlimited Lesson Debrief, Planning Coach,
   Communication Coach, and Coach's memory.
 - Districts can license Plus-level access for every teacher. A teacher enters
   a short join code (during onboarding, or later from Profile & Settings) and
@@ -75,7 +81,9 @@ GETTING STARTED
   join code), mic check, a live demo, your goal, and an initial focus metric.
   Every step can be skipped.
 - Works in any browser on a phone, tablet or laptop. Nothing to install. A
-  microphone is needed for the voice features.
+  microphone is needed for the voice features. There is also an iPhone app
+  on the App Store, using the same account; some newer features reach the
+  website first.
 - Teachers sign up individually. Nobody needs district approval to start.
 
 WHAT WIVOZA DOES NOT DO

@@ -420,8 +420,8 @@ export default function Profile() {
 
         <h3 className="mt-5 text-sm font-semibold text-ink">From your conversations</h3>
         <p className="mt-1 text-xs text-ink-soft">
-          A short, running note about your recurring strengths and any ongoing challenges, built from Ask, Talk It
-          Through, and Lesson Debrief Reflect.
+          A short, running note about your recurring strengths and any ongoing challenges, built from Talk It Through and
+          Lesson Debrief Reflect.
         </p>
         {coachMemory ? (
           <p className="mt-3 rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5 text-sm text-ink">{coachMemory}</p>

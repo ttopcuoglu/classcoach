@@ -47,7 +47,7 @@ const MOMENTS = [
 const STEPS = [
   {
     title: 'Press Record',
-    body: 'A big timer, a Pause button, and a Stop button — that’s the whole screen. Class, period, and grade are optional. It records in your browser; no app to install, no device on your desk.',
+    body: 'A big timer, a Pause button, and a Stop button — that’s the whole screen. Class, period, and grade are optional. It records in your browser or the iPhone app; nothing extra on your desk.',
   },
   {
     title: 'Tell it which voice is yours',
@@ -70,7 +70,7 @@ const TABS = [
   },
   {
     name: 'Insights',
-    body: 'Five sections when you want the detail: Talk & Participation, Questions & Thinking, Checks & Feedback, Clarity & Content, Climate & Routines.',
+    body: 'Four sections when you want the detail: Talk & Participation, Questioning & Checking, Clarity & Content, Climate & Routines.',
   },
   {
     name: 'Reflect',
@@ -78,7 +78,7 @@ const TABS = [
   },
   {
     name: 'My Growth',
-    body: 'Ten metrics trended over time. Choose one as your focus and it’s highlighted here and on Summary.',
+    body: 'Seven measures trended over time. Choose one as your focus and it’s highlighted here and on Summary.',
   },
 ]
 
