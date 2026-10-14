@@ -323,6 +323,17 @@ export default function Terms() {
               with this Notice.
             </p>
             <p className="mt-2">
+              <strong>Telegram (optional):</strong> if you choose to connect a Telegram chat from your Profile, the
+              messages, voice notes, photos, and forwarded emails you send to Coach there travel through Telegram to
+              reach us, and Coach&rsquo;s replies travel back the same way. Telegram is a separate service that you
+              choose to use, and it handles that content under its own terms and privacy policy, not this Notice. We
+              store your Telegram account ID so we can match the chat to your Wivoza account, and we save the text of
+              the conversation in your account like any other coaching conversation. Voice notes are transcribed and
+              photos are read for their content, and neither file is stored. An email you forward is saved with the
+              draft reply it produced. You can disconnect the chat at any time from your Profile or by sending
+              /disconnect, after which we no longer send or receive anything through it.
+            </p>
+            <p className="mt-2">
               Our employees do not routinely review individual coaching content. Processing is primarily
               automated. If you request support involving specific content, authorized staff may access that
               content as needed to assist you.
