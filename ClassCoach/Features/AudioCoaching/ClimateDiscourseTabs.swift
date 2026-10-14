@@ -132,6 +132,20 @@ struct ClimateRoutinesTab: View {
     }
 }
 
+extension DiscourseDetailsTab {
+    /// Why "24 of 24 turns were about the lesson" is not the good news it
+    /// reads as. Mirrors `STUDENT_FOCUS_SELECTION_CAVEAT` in
+    /// `web/src/lib/reportConfidence.ts`.
+    ///
+    /// The turns that survive transcription are the ones spoken loudly and
+    /// towards the teacher — answers to questions, on-topic by construction.
+    /// Quiet side conversations never become text, so they cannot be counted
+    /// as off-task. Across real lessons the WORST-captured one returned 24 of
+    /// 24 on-topic with zero unclear, while lessons captured at 44% and 48%
+    /// returned 23 and 17 unclear turns.
+    static let focusSelectionCaveat = "Turns spoken loudly and towards you are the ones that reach a room microphone; quiet side conversations are the least likely to be picked up. This describes the turns that carried, not the whole room."
+}
+
 enum DiscoursePart {
     case talk, questions
 }
@@ -164,7 +178,10 @@ struct DiscourseDetailsTab: View {
     private var studentTalkFocusCard: some View {
         if let focus = session.studentTalkFocus, focus.classified > 0 {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Of \(focus.classified) audible student turn\(focus.classified == 1 ? "" : "s")\(focus.sampled ? " sampled across the lesson" : ""):")
+                Text("Of the \(focus.classified) student turn\(focus.classified == 1 ? "" : "s") the microphone caught clearly\(focus.sampled ? ", sampled across the lesson" : ""):")
+                Text(Self.focusSelectionCaveat)
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.textSecondary)
                     .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                 ForEach(focusRows) { row in
@@ -270,7 +287,16 @@ struct DiscourseDetailsTab: View {
             .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(AppTheme.hairline))
 
             if let focus {
-                Text("Of \(focus.classified) student turn\(focus.classified == 1 ? "" : "s") heard\(focus.sampled ? " in a sample across the lesson" : ""), \(focus.onTopic) \(focus.onTopic == 1 ? "was" : "were") about the lesson.")
+                // "Of 24 student turns heard, 24 were about the lesson" reads
+                // as a verdict on the class and is the opposite: the turns a
+                // room mic catches are the ones aimed at the teacher, which
+                // are on-topic by construction. On the real lesson that
+                // produced 24 of 24, the mic heard 15% of the room and the
+                // teacher remembers redirecting it ten times.
+                Text("Of the \(focus.classified) student turn\(focus.classified == 1 ? "" : "s") the microphone caught clearly\(focus.sampled ? ", sampled across the lesson," : ",") \(focus.onTopic) \(focus.onTopic == 1 ? "was" : "were") about the lesson.")
+                Text(Self.focusSelectionCaveat)
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.textSecondary)
                     .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
             }

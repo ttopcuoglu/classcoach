@@ -314,6 +314,23 @@ export function getFollowUpMetric(options: {
 export const STUDENT_TALK_CAVEAT =
   "Quiet or distant student voices often aren't picked up, so treat student talk here as a minimum."
 
+/// Why "24 of 24 turns were about the lesson" is not the good news it reads
+/// as, and must never be shown without this next to it.
+///
+/// The turns that survive transcription are the ones spoken loudly and
+/// towards the teacher — answers to questions, which are on-topic by
+/// construction. Quiet side conversations never become text, so they cannot
+/// be counted as off-task. The sample is selected for the very thing the
+/// number claims to measure.
+///
+/// The real lessons make it plain: the WORST-captured one (15%) returned 24
+/// of 24 on-topic with zero unclear, while lessons captured at 44% and 48%
+/// returned 23 and 17 unclear turns and 1 and 8 off-topic ones. The cleanest
+/// result came from the recording that heard least — and it was the lesson
+/// whose teacher remembered redirecting the class ten times for talking.
+export const STUDENT_FOCUS_SELECTION_CAVEAT =
+  'Turns spoken loudly and towards you are the ones that reach a room microphone; quiet side conversations are the least likely to be picked up. This describes the turns that carried, not the whole room.'
+
 // For a plain numeric field that's either present or it isn't (talk %,
 // wait time) — used only to fold these into a category's coverage tally
 // alongside the count/ratio metrics above.

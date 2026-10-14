@@ -14,6 +14,7 @@ import {
 import { getAudioSession, type AudioEscalationRung, type AudioQuote, type AudioSessionWithSegments } from '../lib/api'
 import { buildCorrectionBalance, coverageCaveatLine, DETECTION_CAVEAT } from '../lib/correctionBalance'
 import {
+  STUDENT_FOCUS_SELECTION_CAVEAT,
   formatRatio,
   getCoverage,
   getCountMetric,
@@ -292,10 +293,10 @@ export default function AudioCoachingExport() {
                 />
               </div>
               <p className="text-xs text-ink-soft">
-                Of {session.studentTalkFocus.classified} audible student turns. This is the only measure here that can
-                tell a discussion from a room talking over itself — the shares above read the same either way. It
-                isn't a score, and there's no correct number. A high unclear count is the microphone, which sits with
-                the teacher and hears the room poorly.
+                Of the {session.studentTalkFocus.classified} student turns the microphone caught clearly. This is the
+                only measure here that can tell a discussion from a room talking over itself — the shares above read
+                the same either way. It isn't a score, and there's no correct number. {STUDENT_FOCUS_SELECTION_CAVEAT}{' '}
+                A high unclear count is the microphone, which sits with the teacher and hears the room poorly.
               </p>
             </>
           )}

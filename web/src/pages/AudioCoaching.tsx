@@ -61,6 +61,7 @@ import {
 import { THIN_AUDIBLE_SHARE_PCT, useCaptureMonitor } from '../hooks/useCaptureMonitor'
 import { buildCorrectionBalance, coverageCaveatLine, DETECTION_CAVEAT } from '../lib/correctionBalance'
 import {
+  STUDENT_FOCUS_SELECTION_CAVEAT,
   buildEvidenceQualityLine,
   evidenceTier,
   EVIDENCE_TIER_LABELS,
@@ -5380,9 +5381,10 @@ function StudentTalkFocusCard({ focus }: { focus: AudioStudentTalkFocus | null }
   return (
     <div>
       <p className="text-sm text-ink">
-        Of {focus.classified} audible student turn{focus.classified === 1 ? '' : 's'}
-        {focus.sampled ? ' sampled across the lesson' : ''}:
+        Of the {focus.classified} student turn{focus.classified === 1 ? '' : 's'} the microphone caught clearly
+        {focus.sampled ? ', sampled across the lesson' : ''}:
       </p>
+      <p className="mt-1 text-xs text-ink-soft">{STUDENT_FOCUS_SELECTION_CAVEAT}</p>
       <div className="mt-3 flex flex-col gap-2">
         {rows.map((row) => (
           <div key={row.label} className="flex items-center gap-3">
@@ -5526,12 +5528,21 @@ function TalkParticipationTab({
         />
       </div>
 
+      {/* "Of 24 student turns heard, 24 were about the lesson" reads as a
+          verdict on the class, and it is the opposite: the turns a room mic
+          catches are the ones aimed at the teacher, which are on-topic by
+          construction. The caveat is not optional decoration — on the real
+          lesson that produced 24 of 24, the microphone heard 15% of the room
+          and the teacher remembers redirecting it ten times. */}
       {hasFocus && (
-        <p className="text-sm text-ink">
-          Of {focus.classified} student turn{focus.classified === 1 ? '' : 's'} heard
-          {focus.sampled ? ' in a sample across the lesson' : ''}, {focus.onTopic} {focus.onTopic === 1 ? 'was' : 'were'} about the
-          lesson.
-        </p>
+        <div className="flex flex-col gap-1">
+          <p className="text-sm text-ink">
+            Of the {focus.classified} student turn{focus.classified === 1 ? '' : 's'} the microphone caught clearly
+            {focus.sampled ? ', sampled across the lesson,' : ','} {focus.onTopic}{' '}
+            {focus.onTopic === 1 ? 'was' : 'were'} about the lesson.
+          </p>
+          <p className="text-xs text-ink-soft">{STUDENT_FOCUS_SELECTION_CAVEAT}</p>
+        </div>
       )}
 
       <SectionNextStep text={session.nextSteps?.talk} />
