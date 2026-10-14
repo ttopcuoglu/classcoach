@@ -327,12 +327,16 @@ function previewReport(): Json {
       waitTime2Sec: 0.4,
       waitTime2SampleCount: 11,
       firstWordSec: 269,
-      redirectionCount: 3,
+      // `home=imbalance` reproduces the real lesson that prompted this card:
+      // six redirections and no detected encouragement. It is the case the
+      // wording has to get right, because a zero here is a detector limit far
+      // more often than it is a fact about the teacher.
+      ...(homeTools().has('imbalance')
+        ? { redirectionCount: 6, positivePhraseCount: 0, correctivePhraseCount: 1 }
+        : { redirectionCount: 3, positivePhraseCount: 2, correctivePhraseCount: 1 }),
       firstRedirectionTimestampSec: 540,
       transitionCount: 3,
       directiveCount: 5,
-      positivePhraseCount: 2,
-      correctivePhraseCount: 1,
       positiveToCorrectiveRatio: 2,
       genericFeedbackCount: 2,
       specificFeedbackCount: 1,

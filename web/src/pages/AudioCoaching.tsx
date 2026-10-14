@@ -58,6 +58,7 @@ import {
   type TalkVoice,
   type TranscriptSegment,
 } from '../lib/api'
+import { buildCorrectionBalance, coverageCaveatLine, DETECTION_CAVEAT } from '../lib/correctionBalance'
 import {
   buildEvidenceQualityLine,
   evidenceTier,
@@ -2746,6 +2747,8 @@ function ReportPanel({
                 toneLog={session.toneLog}
                 redirectionLog={session.redirectionLog}
                 escalation={session.escalation ?? null}
+                metricsDetail={session.metricsDetail}
+                capturedSharePct={coverage.capturedSharePct}
                 segments={session.segments}
                 lastRow={sectionHardLook}
               />
@@ -4963,6 +4966,50 @@ function EscalationCard({ escalation }: { escalation: AudioEscalation | null }) 
   )
 }
 
+// Redirections set against encouragement. Both numbers have existed on every
+// lesson for months; the pairing is what was missing, and the pairing is the
+// part that means something — one real lesson carries six redirections and no
+// detected encouragement, which is the mechanism behind having to escalate.
+//
+// The counts are shown plainly and never as a score. There is no target ratio
+// here: the evidence is far too thin to hold a teacher to one.
+function CorrectionBalanceCard({
+  metricsDetail,
+  capturedSharePct,
+}: {
+  metricsDetail: AudioSessionWithSegments['metricsDetail']
+  capturedSharePct: number | null
+}) {
+  const balance = buildCorrectionBalance(metricsDetail, capturedSharePct)
+  if (balance.empty || !balance.line) return null
+  return (
+    <div className="rounded-xl border border-hairline bg-cream p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Correction and encouragement</p>
+      <div className="mt-2 flex flex-wrap gap-x-8 gap-y-2">
+        <Tally n={balance.redirections} label="redirections" />
+        {/* "detected" is in the label, not a footnote — a teacher reading a
+            zero must not read it as a verdict on their warmth. */}
+        <Tally n={balance.positives} label="encouragement detected" />
+        <Tally n={balance.correctives} label="corrective" />
+      </div>
+      <p className="mt-3 text-sm text-ink">{balance.line}</p>
+      {balance.detectionCaveat && <p className="mt-2 text-xs text-ink-soft">{DETECTION_CAVEAT}</p>}
+      {balance.coverageCaveat && (
+        <p className="mt-2 text-xs text-ink-soft">{coverageCaveatLine(capturedSharePct)}</p>
+      )}
+    </div>
+  )
+}
+
+function Tally({ n, label }: { n: number; label: string }) {
+  return (
+    <div>
+      <p className="text-2xl font-semibold text-ink">{n}</p>
+      <p className="text-xs text-ink-soft">{label}</p>
+    </div>
+  )
+}
+
 function ClimateRoutinesTab({
   climateNarrative,
   nextStep,
@@ -4970,6 +5017,8 @@ function ClimateRoutinesTab({
   toneLog,
   redirectionLog,
   escalation,
+  metricsDetail,
+  capturedSharePct,
   segments,
   lastRow,
 }: {
@@ -4979,6 +5028,8 @@ function ClimateRoutinesTab({
   toneLog: AudioToneLogEntry[] | null
   redirectionLog: AudioRedirectionLogEntry[] | null
   escalation: AudioEscalation | null
+  metricsDetail: AudioSessionWithSegments['metricsDetail']
+  capturedSharePct: number | null
   segments: TranscriptSegment[]
   /// The section's Hard Look, as the final row of its list.
   lastRow: React.ReactNode
@@ -5028,6 +5079,8 @@ function ClimateRoutinesTab({
       {climateNarrative && <CoachNote text={climateNarrative} />}
 
       <EscalationCard escalation={escalation} />
+
+      <CorrectionBalanceCard metricsDetail={metricsDetail} capturedSharePct={capturedSharePct} />
 
       <SectionNextStep text={nextStep} />
 

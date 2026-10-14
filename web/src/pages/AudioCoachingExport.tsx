@@ -12,6 +12,7 @@ import {
   type Accent,
 } from '../components/report'
 import { getAudioSession, type AudioEscalationRung, type AudioQuote, type AudioSessionWithSegments } from '../lib/api'
+import { buildCorrectionBalance, coverageCaveatLine, DETECTION_CAVEAT } from '../lib/correctionBalance'
 import {
   formatRatio,
   getCoverage,
@@ -429,21 +430,33 @@ export default function AudioCoachingExport() {
               )}
             </div>
           )}
-          {(num('positivePhraseCount') > 0 || num('correctivePhraseCount') > 0) && (
-            <div className="mt-4 break-inside-avoid rounded-2xl bg-peach-tint/50 p-5">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-terracotta-600">Tone balance</p>
-              <div className="mt-3 flex h-6 w-full overflow-hidden rounded-full">
-                <div
-                  className="bg-brand-500"
-                  style={{ width: `${(num('positivePhraseCount') / (num('positivePhraseCount') + num('correctivePhraseCount'))) * 100}%` }}
-                />
-                <div className="flex-1 bg-terracotta" />
+          {/* Redirections set against encouragement. The old block here was a
+              positive/corrective bar with no reading attached, which left the
+              most telling pairing in the section — redirections against
+              encouragement — unsaid on the page and absent from the screen
+              entirely. Zero encouragement is always labelled "detected". */}
+          {(() => {
+            const balance = buildCorrectionBalance(session.metricsDetail, coverage.capturedSharePct)
+            if (balance.empty || !balance.line) return null
+            return (
+              <div className="mt-4 break-inside-avoid rounded-2xl bg-peach-tint/50 p-5">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-terracotta-600">
+                  Correction and encouragement
+                </p>
+                <p className="mt-2 text-sm text-forest">
+                  {balance.redirections} redirection{balance.redirections === 1 ? '' : 's'} ·{' '}
+                  {balance.positives} encouragement detected · {balance.correctives} corrective
+                </p>
+                <p className="mt-2 text-sm text-forest">{balance.line}</p>
+                {balance.detectionCaveat && (
+                  <p className="mt-2 text-[11px] text-forest/70">{DETECTION_CAVEAT}</p>
+                )}
+                {balance.coverageCaveat && (
+                  <p className="mt-1 text-[11px] text-forest/70">{coverageCaveatLine(coverage.capturedSharePct)}</p>
+                )}
               </div>
-              <p className="mt-2 text-sm text-forest">
-                {num('positivePhraseCount')} positive · {num('correctivePhraseCount')} corrective
-              </p>
-            </div>
-          )}
+            )
+          })()}
         </ReportSection>
 
         {/* Rubric Lens — only once the teacher has asked for it in the app.
