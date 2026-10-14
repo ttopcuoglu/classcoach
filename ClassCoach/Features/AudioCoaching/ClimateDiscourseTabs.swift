@@ -22,8 +22,113 @@ struct ClimateRoutinesTab: View {
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.textSecondary)
             }
+            escalationCard
             SectionNextStep(text: session.nextSteps?.climate)
         }
+    }
+
+    /// Whether a bid for the room's attention HELD. Mirrors
+    /// `AudioCoaching.tsx`'s `EscalationCard`, including what it refuses to
+    /// say: no count of asks appears anywhere. Across five readings of one
+    /// lesson that number came back 11, 12, 13, 13 and 13 while the run
+    /// itself and the rung it reached never moved, so the run is shown and
+    /// the number stays out of sight.
+    @ViewBuilder
+    private var escalationCard: some View {
+        // Nil on every report analyzed before this existed. Showing nothing
+        // is right: that is "not looked at", not "nothing happened".
+        if let e = session.escalation {
+            switch e.state {
+            case "not_measurable":
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("DID YOUR ASKS HOLD?")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Text(e.reason ?? "Too little of this recording came through as speech to tell whether attention held.")
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+
+            case "confirmed_none":
+                Text("No run of repeated asks in this lesson \u{2014} when you asked for attention, the recording shows you moving on rather than asking again.")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.textSecondary)
+
+            case "found":
+                foundEscalation(e)
+
+            default:
+                EmptyView()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func foundEscalation(_ e: AudioEscalation) -> some View {
+        let cluster = e.clusters?.first
+        let repeated = e.repeatedAsks?.first
+        VStack(alignment: .leading, spacing: 8) {
+            Text("DID YOUR ASKS HOLD?")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(AppTheme.terracotta600)
+
+            if let c = cluster, let start = c.startSec {
+                let climb = (c.climbed ?? false)
+                    ? AudioEscalation.rungPhrase(c.fromRung).flatMap { from in
+                        AudioEscalation.rungPhrase(c.topRung).map { ", rising from \(from) to \($0)." }
+                    } ?? "."
+                    : "."
+                Text("Around \(formatTimerDisplay(start)) you asked for the room several times in quick succession\(climb)")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+
+                if let quote = c.quote {
+                    Text("\u{201C}\(quote)\u{201D}")
+                        .font(.subheadline.italic())
+                        .foregroundStyle(AppTheme.textPrimary)
+                } else {
+                    // The wording was too rough to attribute. The moment is
+                    // real; putting a garbled sentence in a teacher's mouth
+                    // inside this section is not worth being right most of
+                    // the time.
+                    Text("The transcript\u{2019}s wording here was too rough to quote back to you, so only the moment is shown.")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+
+                Text("Asking again that soon means the first ask didn\u{2019}t land. When that becomes the pattern, each one is worth less than the last, and escalating is the only way left to be heard.")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.textPrimary)
+            }
+
+            if let r = repeated, let at = r.timestampSec {
+                if let quote = r.quote {
+                    Text("At \(formatTimerDisplay(at)) you said you\u{2019}d already asked \u{2014} \u{201C}\(quote)\u{201D}")
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.textPrimary)
+                } else {
+                    Text("At \(formatTimerDisplay(at)) your own words noted you\u{2019}d already asked once.")
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.textPrimary)
+                }
+            }
+
+            Text(capturedNote(e))
+                .font(.caption)
+                .foregroundStyle(AppTheme.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(AppTheme.goldTint.opacity(0.5), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func capturedNote(_ e: AudioEscalation) -> String {
+        let base = "Read from your speech alone. Whether the room actually settled isn\u{2019}t something a room microphone can hear"
+        guard let pct = e.capturedSharePct else { return base + "." }
+        return base + ", and about \(pct)% of this recording came through as speech."
     }
 }
 

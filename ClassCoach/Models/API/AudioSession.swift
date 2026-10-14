@@ -173,6 +173,64 @@ struct AudioRubricLens: Decodable {
     let notObservable: [AudioRubricNotObservable]
 }
 
+/// Mirrors `web/src/lib/api.ts`'s `AudioEscalation` — whether a bid for the
+/// room's attention HELD, rather than how many redirections there were.
+///
+/// A count tells you which group a teacher has, not what they did, which is
+/// why `redirectionCount` was retired from My Growth. A run of asks in close
+/// succession that climbs toward a consequence is the spiral teachers
+/// describe, and it is readable from the teacher's own speech alone.
+///
+/// EVERY FIELD IS OPTIONAL, including ones the server always writes today.
+/// These are stored JSON rather than a versioned contract, the session
+/// decodes this with `try?`, and the Hard Look has already taught this
+/// lesson once: a single required field that an older row lacked made the
+/// whole section vanish silently, leaving a button that did nothing.
+struct AudioEscalationCluster: Decodable, Identifiable {
+    var id: String { "\(startSec ?? 0)|\(topRung ?? "")" }
+    let startSec: Double?
+    let endSec: Double?
+    let fromRung: String?
+    let topRung: String?
+    let climbed: Bool?
+    /// Null when the transcript's wording was too rough to put in the
+    /// teacher's mouth. The moment is still real; only the quote is withheld.
+    let quote: String?
+}
+
+struct AudioEscalationRepeat: Decodable, Identifiable {
+    var id: String { "\(timestampSec ?? 0)" }
+    let timestampSec: Double?
+    let quote: String?
+}
+
+struct AudioEscalation: Decodable {
+    /// "found" | "confirmed_none" | "not_measurable". Optional like the rest;
+    /// an unrecognised or missing state renders nothing rather than guessing.
+    let state: String?
+    let reason: String?
+    let peakRung: String?
+    /// Most severe first. The report shows the first and not the list,
+    /// because the hardest run repeats across readings and a marginal one
+    /// does not.
+    let clusters: [AudioEscalationCluster]?
+    let repeatedAsks: [AudioEscalationRepeat]?
+    let capturedSharePct: Int?
+
+    /// How much force the teacher had brought to bear, in the same words the
+    /// web report uses, so a teacher reading both sees one vocabulary.
+    static func rungPhrase(_ rung: String?) -> String? {
+        switch rung {
+        case "attention": return "asking for the room\u{2019}s attention"
+        case "behaviour": return "telling the room what to stop or start"
+        case "named": return "naming a student"
+        case "consequence": return "naming a consequence"
+        case "removal": return "separating a student from the group"
+        default: return nil
+        }
+    }
+}
+
 /// Mirrors `web/src/lib/api.ts`'s `AudioHardLook` — the least generous honest
 /// reading of the same evidence Rubric Lens organises. Each of the four
 /// sections comes back as either a criticism with quotes behind it or an
@@ -291,6 +349,9 @@ struct AudioSession: Decodable, Identifiable {
     let rubricLens: AudioRubricLens?
     /// Null unless the teacher has asked for it — never generated with the report.
     let hardLook: AudioHardLook?
+    /// Absent on every report analyzed before this existed; re-analyzing
+    /// fills it. Nil is never "no escalation" — see AudioEscalation's states.
+    let escalation: AudioEscalation?
     /// Null unless the lesson had enough audible student turns to characterise.
     let studentTalkFocus: AudioStudentTalkFocus?
     /// Null until the lesson has been read for it — the Summary tab asks.
@@ -320,7 +381,7 @@ struct AudioSession: Decodable, Identifiable {
              durationSec, transcribeStartedAt, failureReason,
              teacherTalkPct, studentTalkPct, questionCount, higherOrderPct, avgWaitTimeSec,
              cfuCount, metricsDetail, highlights, phases, questionLog, reflectConversation, lessonContent,
-             contentNotes, rubricLens, hardLook, studentTalkFocus, momentToRevisit, nextSteps, classSummary, checksNarrative, climateNarrative, contentNarrative, talkNarrative, questionsNarrative, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
+             contentNotes, rubricLens, hardLook, escalation, studentTalkFocus, momentToRevisit, nextSteps, classSummary, checksNarrative, climateNarrative, contentNarrative, talkNarrative, questionsNarrative, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -362,6 +423,7 @@ struct AudioSession: Decodable, Identifiable {
         // try? so an unexpected shape hides the lens instead of dropping the whole session.
         rubricLens = try? container.decodeIfPresent(AudioRubricLens.self, forKey: .rubricLens)
         hardLook = try? container.decodeIfPresent(AudioHardLook.self, forKey: .hardLook)
+        escalation = try? container.decodeIfPresent(AudioEscalation.self, forKey: .escalation)
         studentTalkFocus = try? container.decodeIfPresent(AudioStudentTalkFocus.self, forKey: .studentTalkFocus)
         momentToRevisit = try? container.decodeIfPresent(AudioMomentToRevisit.self, forKey: .momentToRevisit)
         nextSteps = try? container.decodeIfPresent(AudioNextSteps.self, forKey: .nextSteps)
@@ -427,6 +489,7 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
     var contentNotes: AudioContentNotes? { session.contentNotes }
     var rubricLens: AudioRubricLens? { session.rubricLens }
     var hardLook: AudioHardLook? { session.hardLook }
+    var escalation: AudioEscalation? { session.escalation }
     var studentTalkFocus: AudioStudentTalkFocus? { session.studentTalkFocus }
     var momentToRevisit: AudioMomentToRevisit? { session.momentToRevisit }
     var nextSteps: AudioNextSteps? { session.nextSteps }
