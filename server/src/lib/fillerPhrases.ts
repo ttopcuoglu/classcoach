@@ -71,30 +71,32 @@ export const GLAD_TURN_PHRASES = [
   "Oh, that's good.",
 ]
 
-// Grouped by what they actually do, because a list of "Let me X" variants
-// reads as one phrase in six wrappers. Sixteen phrases, five ideas.
+// Every one opens with "Um," on request, and the comma is not a typo. Written
+// the way it was asked for — "Um... let me see..." — Aura reads the first
+// ellipsis as a sentence break and drops a pause into the middle of a clip
+// whose whole job is to cover one second. Measured: "Um... give me a second
+// here..." came back 4500ms long with 512ms of sound in it, and "Hmm... let
+// me see..." drew 1620ms once and 4620ms the next time from the identical
+// request. With a comma the same fourteen phrases land between 1027ms and
+// 2540ms, every time.
+//
+// The trailing ellipsis stays, because that one is doing real work: it is
+// what makes the phrase trail off instead of stopping.
 export const THINKING_PHRASES = [
-  // thinking about it
-  "Let me see...",
-  "Let me think...",
-  "Okay, let me see...",
-  "Okay, let me think...",
-  "Alright, let me think...",
-  // working it out, which is a different claim from thinking about it
-  "Let me think it through...",
-  "Let me work through that...",
-  "Let's think about this...",
-  "Let me think about that one...",
-  // asking for the time outright
-  "Give me a second...",
-  "Just a second...",
-  "Give me a second here...",
-  "Let me take a moment...",
-  "Let me sit with that a second...",
-  // turning towards the answer
-  "Okay, so...",
-  "Right, so...",
-  "Well, now...",
+  "Um, let me see...",
+  "Um, let me think...",
+  "Um, okay, let me see...",
+  "Um, okay, let me think...",
+  "Um, alright, let me think...",
+  "Um, let me think it through...",
+  "Um, let me work through that...",
+  "Um, let's think about this...",
+  "Um, let me think about that one...",
+  "Um, give me a second...",
+  "Um, just a second...",
+  "Um, give me a second here...",
+  "Um, let me take a moment...",
+  "Um, let me sit with that a second...",
 ]
 
 // The jokes that used to sit here are gone, and the reason is worth keeping.

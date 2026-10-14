@@ -189,9 +189,48 @@ function normalise(wav: Buffer): Buffer {
   return wavFile(out)
 }
 
+/// A clip's job is to cover about a second. Past this it stops covering the
+/// gap and becomes the gap — the teacher waits out the filler, which is worse
+/// than the silence it replaced.
+///
+/// Needed because loudness was the only thing being checked, and Aura will
+/// answer the same request with wildly different lengths: measured, "Hmm...
+/// let me see..." drew 1620ms once and 4620ms the next time, and "Um... give
+/// me a second here..." came back 4500ms long carrying 512ms of actual
+/// sound. Every one of those passed the peak test, because the sound in them
+/// was perfectly loud — there was just a pause in the middle.
+const MAX_CLIP_MS = 3000
+
+/// And a long pause INSIDE a clip is the specific defect, so it is measured
+/// on its own rather than inferred from the total: a phrase can be a sensible
+/// length overall and still have a hole in the middle of it.
+const MAX_INNER_SILENCE_MS = 700
+
+function clipMs(body: Buffer): number {
+  return Math.round((body.length / 2 / SPEECH_WAV_SAMPLE_RATE) * 1000)
+}
+
+/// The longest run below the same relative floor the trimmer uses.
+function longestSilenceMs(body: Buffer): number {
+  const sampleCount = Math.floor(body.length / 2)
+  const floor = silenceFloor(body, sampleCount)
+  let run = 0
+  let longest = 0
+  for (let i = 0; i < sampleCount; i++) {
+    if (Math.abs(body.readInt16LE(i * 2)) < floor) {
+      run += 1
+      if (run > longest) longest = run
+    } else {
+      run = 0
+    }
+  }
+  return Math.round((longest / SPEECH_WAV_SAMPLE_RATE) * 1000)
+}
+
 async function drawAudible(text: string, voice: string | undefined): Promise<Buffer> {
   let best: Buffer | null = null
   let bestPeak = -1
+  let bestWasShortEnough = false
   for (let draw = 0; draw < AUDIBLE_DRAWS; draw++) {
     const upstream = await synthesizeSpeechStream(text, voice, 'wav')
     const audio = Buffer.from(await upstream.arrayBuffer())
@@ -199,15 +238,26 @@ async function drawAudible(text: string, voice: string | undefined): Promise<Buf
     if (audio.length === 0 || marker === -1) continue
     const body = audio.subarray(marker + 8)
     const peak = peakOf(body, Math.floor(body.length / 2))
-    if (peak > bestPeak) {
+    const shortEnough = clipMs(body) <= MAX_CLIP_MS && longestSilenceMs(body) <= MAX_INNER_SILENCE_MS
+    // A draw of a sane length always beats a louder one that drags, because
+    // normalise() can fix quiet and nothing here can fix a two-second hole.
+    const better = bestWasShortEnough === shortEnough ? peak > bestPeak : shortEnough
+    if (better) {
       best = audio
       bestPeak = peak
+      bestWasShortEnough = shortEnough
     }
-    if (bestPeak >= MIN_AUDIBLE_PEAK) break
+    if (bestWasShortEnough && bestPeak >= MIN_AUDIBLE_PEAK) break
   }
   if (!best) throw new Error('Deepgram returned no audio')
   if (bestPeak < MIN_AUDIBLE_PEAK) {
     console.warn(`[speech] "${text}" is barely audible after ${AUDIBLE_DRAWS} draws (peak ${bestPeak})`)
+  }
+  if (!bestWasShortEnough) {
+    const body = best.subarray(best.indexOf('data') + 8)
+    console.warn(
+      `[speech] "${text}" still drags after ${AUDIBLE_DRAWS} draws (${clipMs(body)}ms, ${longestSilenceMs(body)}ms gap)`,
+    )
   }
   return best
 }
