@@ -2040,7 +2040,7 @@ function TalkParticipationBar({
                 {Math.round(nonSpeech.quietPct)}%
               </span>
               <span className="flex items-center gap-1.5">
-                <HatchedSwatch className="h-2.5 w-2.5 rounded-sm" /> Sound we couldn’t make out{' '}
+                <HatchedSwatch className="h-2.5 w-2.5 rounded-sm" /> Class or group talk{' '}
                 {Math.round(nonSpeech.unresolvedPct)}%
               </span>
             </>
@@ -2051,6 +2051,19 @@ function TalkParticipationBar({
             </span>
           )}
         </div>
+          {/* "Class or group talk" is what the envelope can support saying and
+              no more: the measurement is that sound was present and the
+              transcript has no words for it. In a classroom that is usually
+              voices, which is why the label says so — but a video, a fire
+              drill or a teacher at the far side of the room reads exactly the
+              same, and the caption has to carry that rather than let a bar
+              segment make a claim on its own. */}
+          {nonSpeech && (
+            <p className="text-xs text-ink-soft">
+              “Class or group talk” is sound the microphone caught but couldn’t turn into words. In a classroom that is
+              usually voices — a video or noise from outside reads the same way.
+            </p>
+          )}
           {/* Pace used to be a trailing item in that legend row, where it
               read as a fourth slice of the bar rather than a separate
               measure. It is the one number here a teacher can act on the
