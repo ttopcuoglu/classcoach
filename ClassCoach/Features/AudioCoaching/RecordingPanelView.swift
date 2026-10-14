@@ -61,6 +61,8 @@ struct RecordingPanelView: View {
                     .foregroundStyle(AppTheme.cream)
 
                 statusCaption
+                captureMeter
+                thinCaptureNotice
                 buttonRow
             }
             .frame(maxWidth: .infinity)
@@ -107,6 +109,61 @@ struct RecordingPanelView: View {
             Text(batteryWarning ?? "")
         }
     }
+
+    /// What the microphone is picking up, live.
+    ///
+    /// A teacher who can see this move knows the phone is hearing them; one
+    /// who cannot is told so while they are still in the room and can move
+    /// it. Deliberately a plain level bar and not a verdict — it reads
+    /// loudness, which catches a phone in a bag or across the room, not a
+    /// loud room that will still transcribe to nothing.
+    @ViewBuilder
+    private var captureMeter: some View {
+        if recorder.phase == .recording {
+            VStack(spacing: 6) {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(AppTheme.cream.opacity(0.2))
+                        Capsule()
+                            .fill(AppTheme.cream)
+                            .frame(width: max(4, geo.size.width * recorder.inputLevel))
+                    }
+                }
+                .frame(height: 6)
+                .animation(.linear(duration: 0.25), value: recorder.inputLevel)
+
+                Text(recorder.warnQuiet
+                     ? "Hearing almost nothing for the last minute. Is the phone near you and uncovered?"
+                     : "What the microphone is picking up")
+                    .font(.caption2)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(recorder.warnQuiet ? AppTheme.gold : .white.opacity(0.6))
+            }
+            .frame(maxWidth: 260)
+            .padding(.top, 2)
+        }
+    }
+
+    /// Said while the upload runs — the last moment the teacher is looking at
+    /// this screen, and the only chance to say "do not trust the report you
+    /// are about to get" before it arrives looking authoritative.
+    @ViewBuilder
+    private var thinCaptureNotice: some View {
+        if recorder.phase == .uploading, let share = recorder.audibleSharePct, share < Self.thinAudibleSharePct {
+            Text("The microphone heard sound for only about \(share)% of this recording, so the report from it is likely to be thin. Next time, keeping the phone on you rather than on a desk is the single biggest difference.")
+                .font(.caption)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(AppTheme.cream)
+                .padding(10)
+                .background(AppTheme.gold.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
+                .frame(maxWidth: 300)
+        }
+    }
+
+    /// Below the report's own 50% coverage gate on purpose: this counts
+    /// audible SOUND and the report counts transcribed WORDS, and sound is
+    /// always the larger number.
+    private static let thinAudibleSharePct = 25
 
     private var statusCaption: some View {
         Group {

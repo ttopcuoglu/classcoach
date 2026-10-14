@@ -36,6 +36,50 @@ final class AudioRecorder: NSObject, ObservableObject {
     /// recording that is thrown away.
     @Published private(set) var reachedLimit = false
 
+    /// What the microphone is picking up right now, 0...1, for a live bar.
+    ///
+    /// Coverage — the share of a recording that becomes transcribed words —
+    /// runs from 13% to 90% across real lessons, and nothing told the teacher
+    /// until the report arrived days later. One 23-minute lesson came through
+    /// at 15%, its first 8:23 producing no transcript at all, and the report
+    /// described the room as calm.
+    ///
+    /// This measures LOUDNESS, not intelligibility. It catches a phone in a
+    /// bag, face-down, under papers or across the room — the level sits at
+    /// the floor and stays there. It cannot catch a room of overlapping
+    /// voices that is plenty loud and still transcribes to nothing; that
+    /// needs speech recognition, not a meter.
+    @Published private(set) var inputLevel: Double = 0
+
+    /// The level has sat at the floor long enough to be worth saying so.
+    @Published private(set) var warnQuiet = false
+
+    /// Share of the recording with audible sound, 0...100. Nil until there is
+    /// a minute behind it, because a share drawn from the first few seconds
+    /// is noise.
+    @Published private(set) var audibleSharePct: Int?
+
+    /// dBFS floor for "the mic is hearing the room at all", on
+    /// `AVAudioRecorder.averagePower`'s scale.
+    ///
+    /// Deliberately more permissive than VoiceTurnRecorder's -35, which was
+    /// tuned for a phone held close during a voice turn. A teacher across the
+    /// room reads well below that while genuinely speaking, and a threshold
+    /// that warned through normal teaching would train teachers to ignore it.
+    /// The job here is to catch a microphone hearing nothing, not to judge
+    /// whether what it hears will transcribe.
+    private static let audibleFloorDB: Float = -45
+
+    /// At a 0.25s tick, 240 ticks is a minute of unbroken near-silence before
+    /// saying anything — long enough to sit through silent reading, a video,
+    /// or students working.
+    private static let quietTicksBeforeWarning = 240
+    private static let ticksForShare = 240
+
+    private var audibleTicks = 0
+    private var totalTicks = 0
+    private var quietTicks = 0
+
     private var recorder: AVAudioRecorder?
     private var accumulatedSec: Double = 0
     private var runStart: Date?
@@ -152,6 +196,9 @@ final class AudioRecorder: NSObject, ObservableObject {
         do {
             let next = try AVAudioRecorder(url: RecordingStore.audioURL(for: sessionId), settings: Self.settings)
             next.delegate = self
+            // Metering is off by default and averagePower() returns 0 without
+            // it, which would read as a permanently loud room.
+            next.isMeteringEnabled = true
             next.record()
             recorder = next
         } catch {
@@ -161,6 +208,7 @@ final class AudioRecorder: NSObject, ObservableObject {
 
         accumulatedSec = 0
         runStart = Date()
+        resetCaptureTally()
         phase = .recording
         startTimer()
         // Asked now, while the teacher is holding the phone and has just
@@ -263,6 +311,10 @@ final class AudioRecorder: NSObject, ObservableObject {
         runStart = nil
         elapsedSec = 0
         reachedLimit = false
+        // Deliberately NOT cleared in stop(): the uploading phase is where
+        // the thin-capture notice is shown, and it needs the share that was
+        // just measured.
+        resetCaptureTally()
         phase = .idle
     }
 
@@ -293,10 +345,44 @@ final class AudioRecorder: NSObject, ObservableObject {
     private func tick() {
         let running = runStart.map { Date().timeIntervalSince($0) } ?? 0
         elapsedSec = accumulatedSec + running
+        sampleInputLevel()
         if !reachedLimit, elapsedSec >= RecordingStore.maxRecordingSeconds {
             reachedLimit = true
             notifyLimitReached()
         }
+    }
+
+    /// Rides the timer that already runs at 4Hz rather than adding a second
+    /// one, and reads AVAudioRecorder's own meter rather than tapping the
+    /// stream — the recorder is already the thing holding the microphone.
+    private func sampleInputLevel() {
+        guard let recorder, recorder.isRecording else { return }
+        recorder.updateMeters()
+        let db = recorder.averagePower(forChannel: 0)
+        // -60 reads as the bottom of the bar; averagePower bottoms out at
+        // -160 in true silence, which would make every real room look full.
+        inputLevel = min(1, max(0, Double(db + 60) / 60))
+
+        totalTicks += 1
+        if db >= Self.audibleFloorDB {
+            audibleTicks += 1
+            quietTicks = 0
+        } else {
+            quietTicks += 1
+        }
+        warnQuiet = quietTicks >= Self.quietTicksBeforeWarning
+        audibleSharePct = totalTicks >= Self.ticksForShare
+            ? Int((Double(audibleTicks) / Double(totalTicks) * 100).rounded())
+            : nil
+    }
+
+    private func resetCaptureTally() {
+        audibleTicks = 0
+        totalTicks = 0
+        quietTicks = 0
+        inputLevel = 0
+        warnQuiet = false
+        audibleSharePct = nil
     }
 
     /// The whole point is a teacher who is not looking at their phone, so this
