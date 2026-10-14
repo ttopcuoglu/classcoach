@@ -25,6 +25,7 @@
 // teacher sees it as such. A Hard Look that finds nothing in a section is what
 // buys the sections where it does find something their authority.
 
+import { capturedShare as sharedCapturedShare, MIN_SHARE_FOR_WHOLE_LESSON_CLAIM } from './transcriptCoverage.ts'
 import type { Segment } from './audioAnalysis.ts'
 import { extractTag } from './extractTag.ts'
 import { longestTeacherStretch as measureLongestTeacherStretch } from './teacherStretch.ts'
@@ -110,7 +111,7 @@ type EligibilitySource = {
 /// solid enough to argue about. Below this, most of the recording is silence,
 /// distance or crosstalk the mic could not resolve, and the teacher's share is
 /// a measurement artifact.
-const MIN_CAPTURED_TALK_SHARE = 0.45
+const MIN_CAPTURED_TALK_SHARE = MIN_SHARE_FOR_WHOLE_LESSON_CLAIM
 const MIN_STUDENT_VOICE_SEGMENTS = 3
 const MIN_QUESTIONS = 3
 const MIN_ROUTINE_MOMENTS = 3
@@ -127,9 +128,9 @@ export function sectionEligibility(source: EligibilitySource): {
     vocabulary?: unknown[]
   } | null
 
-  const totalSec = detail.totalDurationSec ?? source.durationSec ?? 0
-  const capturedSec = (detail.teacherTalkSec ?? 0) + (detail.studentTalkSec ?? 0)
-  const capturedShare = totalSec > 0 ? capturedSec / totalSec : 0
+  // One definition of coverage, in transcriptCoverage.ts, shared with the
+  // escalation read and the report's own caveat.
+  const capturedShare = sharedCapturedShare(detail, source.durationSec) ?? 0
   const routineMoments =
     (detail.directiveCount ?? 0) + (detail.transitionCount ?? 0) + (detail.redirectionCount ?? 0)
   const contentSignals =

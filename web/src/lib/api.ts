@@ -838,6 +838,41 @@ export type AudioStudentTalkFocus = {
   examples: AudioStudentTurnFocus[]
 }
 
+/// In order of force. The index is the severity.
+export type AudioEscalationRung = 'attention' | 'behaviour' | 'named' | 'consequence' | 'removal'
+
+/// A run of attention bids in close succession — the evidence that the first
+/// one did not hold (server/src/lib/escalation.ts).
+export type AudioEscalationCluster = {
+  startSec: number
+  endSec: number
+  bidCount: number
+  fromRung: AudioEscalationRung
+  topRung: AudioEscalationRung
+  climbed: boolean
+  /// Null when the transcript's wording was too rough to put in the teacher's
+  /// mouth. The moment is still real; only the quote is withheld.
+  quote: string | null
+}
+
+/// Whether a bid for the room's attention HELD — not a count of redirections.
+///
+/// 'not_measurable' is the state that matters: on a recording the microphone
+/// largely lost, "nothing happened" would be a lie, and one real lesson came
+/// through at 15% while the teacher remembered redirecting the class around
+/// ten times. Finding a pattern survives a patchy recording; claiming its
+/// absence does not.
+export type AudioEscalation = {
+  state: 'found' | 'confirmed_none' | 'not_measurable'
+  reason: string | null
+  peakRung: AudioEscalationRung | null
+  /// Most severe first. The report shows the first and not the list, because
+  /// the hardest run repeats across readings and a marginal one does not.
+  clusters: AudioEscalationCluster[]
+  repeatedAsks: { timestampSec: number; quote: string | null }[]
+  capturedSharePct: number | null
+}
+
 // The one moment most worth a second look, chosen by a read of the transcript
 // (server/src/lib/momentToRevisit.ts). Only 'found' carries a moment; the
 // other three are the read saying honestly that it has none to give.
@@ -894,6 +929,9 @@ export type AudioSession = {
   rubricLens: AudioRubricLens | null
   hardLook: AudioHardLook | null
   studentTalkFocus: AudioStudentTalkFocus | null
+  // Absent on every report analyzed before this existed; re-analyzing fills
+  // it. Null is never "no escalation" — see AudioEscalation's states.
+  escalation?: AudioEscalation | null
   // Null or absent until the lesson has been read for it; the Summary tab
   // asks the first time it is opened.
   momentToRevisit?: AudioMomentToRevisit | null

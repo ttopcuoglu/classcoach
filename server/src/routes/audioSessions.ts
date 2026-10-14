@@ -3,6 +3,7 @@ import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { analyzeTranscript, buildContentExhibits, detectLessonContent, type Segment } from '../lib/audioAnalysis.ts'
 import { enrichClassroomMoves } from '../lib/classroomMoves.ts'
+import { readEscalation } from '../lib/escalation.ts'
 import { enrichLessonContent } from '../lib/lessonObjective.ts'
 import { checkFeatureAccess, hasActivePlan, startOfCurrentMonth } from '../lib/billing.ts'
 import { cachedSystem, cacheStats } from '../lib/promptCache.ts'
@@ -770,10 +771,14 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
   // The moment to revisit rides along: it reads the same transcript and needs
   // nothing from the other two. Null if it fails, and the Summary tab asks
   // again — see the /:id/moment-to-revisit route.
-  const [analysis, lessonContent, momentToRevisit] = await Promise.all([
+  // The escalation read rides along with these: it needs the teacher's speech
+  // and the coverage figure the phrase scan already computed, and nothing
+  // from the other reads.
+  const [analysis, lessonContent, momentToRevisit, escalation] = await Promise.all([
     enrichClassroomMoves(scanned, segments),
     enrichLessonContent(detectLessonContent(segments, scanned.phases), segments),
     readMomentToRevisit(segments),
+    readEscalation(segments, scanned.metricsDetail),
   ])
 
   // What the student talk was ABOUT, which needs the objective and so cannot
@@ -820,6 +825,7 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
       // Rewritten on every analysis, so re-tagging the speakers and analyzing
       // again cannot leave a moment chosen from the old labels.
       momentToRevisit: momentToRevisit ?? Prisma.DbNull,
+      escalation: escalation ?? Prisma.DbNull,
     },
     include: { segments: { orderBy: { startSec: 'asc' } } },
   })

@@ -11,7 +11,7 @@ import {
   StatTile,
   type Accent,
 } from '../components/report'
-import { getAudioSession, type AudioQuote, type AudioSessionWithSegments } from '../lib/api'
+import { getAudioSession, type AudioEscalationRung, type AudioQuote, type AudioSessionWithSegments } from '../lib/api'
 import {
   formatRatio,
   getCoverage,
@@ -89,6 +89,16 @@ function Stat({ label, metric, unit, accent }: { label: string; metric: Confiden
   )
 }
 
+// Matches the in-app wording in AudioCoaching.tsx's EscalationCard, so the
+// printed page and the screen describe the same moment the same way.
+const EXPORT_RUNG_PHRASE: Record<AudioEscalationRung, string> = {
+  attention: 'asking for the room’s attention',
+  behaviour: 'telling the room what to stop or start',
+  named: 'naming a student',
+  consequence: 'naming a consequence',
+  removal: 'separating a student from the group',
+}
+
 export default function AudioCoachingExport() {
   const { id } = useParams<{ id: string }>()
   const [session, setSession] = useState<AudioSessionWithSegments | null>(null)
@@ -113,7 +123,7 @@ export default function AudioCoachingExport() {
   const rawNum = (k: string): number | null => (typeof metrics[k] === 'number' ? (metrics[k] as number) : null)
   const num = (k: string): number => rawNum(k) ?? 0
   const recordedSec = session.durationSec ?? 0
-  const coverage = getCoverage(session.durationSec, session.phases)
+  const coverage = getCoverage(session.durationSec, session.phases, session.metricsDetail)
   const isShort = recordedSec > 0 && recordedSec < TINY_RECORDING_THRESHOLD_SEC
 
   const teacherPct = session.teacherTalkPct
@@ -377,6 +387,48 @@ export default function AudioCoachingExport() {
               />
             ))}
           </div>
+          {/* Whether the asking HELD. The counts above cannot answer that, and
+              it is the question a teacher in a hard room is actually asking.
+              Never a bid count — that number moves between readings while the
+              run and the rung it reached do not. */}
+          {session.escalation && session.escalation.state !== 'confirmed_none' && (
+            <div className="mt-4 break-inside-avoid rounded-2xl bg-gold-tint/50 p-5">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-terracotta-600">Did your asks hold?</p>
+              {session.escalation.state === 'not_measurable' ? (
+                <p className="mt-2 text-sm text-forest">{session.escalation.reason}</p>
+              ) : (
+                <>
+                  {session.escalation.clusters[0] && (
+                    <>
+                      <p className="mt-2 text-sm font-semibold text-forest">
+                        Around {formatTime(session.escalation.clusters[0].startSec)} you asked for the room several times
+                        in quick succession
+                        {session.escalation.clusters[0].climbed
+                          ? `, rising from ${EXPORT_RUNG_PHRASE[session.escalation.clusters[0].fromRung]} to ${EXPORT_RUNG_PHRASE[session.escalation.clusters[0].topRung]}.`
+                          : '.'}
+                      </p>
+                      {session.escalation.clusters[0].quote && (
+                        <p className="mt-1 text-sm italic text-forest">“{session.escalation.clusters[0].quote}”</p>
+                      )}
+                      <p className="mt-1 text-sm text-forest">
+                        Asking again that soon means the first ask didn’t land.
+                      </p>
+                    </>
+                  )}
+                  {session.escalation.repeatedAsks[0] && (
+                    <p className="mt-2 text-sm text-forest">
+                      At {formatTime(session.escalation.repeatedAsks[0].timestampSec)} your own words noted you’d already
+                      asked once
+                      {session.escalation.repeatedAsks[0].quote ? ` — “${session.escalation.repeatedAsks[0].quote}”` : '.'}
+                    </p>
+                  )}
+                  <p className="mt-2 text-[11px] text-forest/70">
+                    Read from your speech alone. Whether the room settled is not something a room microphone can hear.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
           {(num('positivePhraseCount') > 0 || num('correctivePhraseCount') > 0) && (
             <div className="mt-4 break-inside-avoid rounded-2xl bg-peach-tint/50 p-5">
               <p className="text-[11px] font-bold uppercase tracking-wide text-terracotta-600">Tone balance</p>

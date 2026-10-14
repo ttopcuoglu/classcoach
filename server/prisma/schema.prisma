@@ -670,6 +670,15 @@ model AudioSession {
   // "looked and found nothing" never looks like "not looked yet".
   momentToRevisit  Json?
 
+  // Whether an attention bid HELD — see lib/escalation.ts. Not a count of
+  // redirections: a count tells you which group a teacher has, and this tells
+  // you whether asking worked, by reading runs of asks in close succession
+  // and whether they climbed toward a consequence. Null until read. A read
+  // that finds nothing carries its own state, because on a recording the mic
+  // largely lost, "no escalation" would be a lie and "not measurable" is the
+  // truth.
+  escalation       Json?
+
   // Claude-generated summary of what the class covered + a genuine
   // strength, auto-generated once on the teacher's first Summary view and
   // cached forever after. Null = not yet attempted, or the one retryable

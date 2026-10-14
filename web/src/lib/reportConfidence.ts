@@ -194,9 +194,31 @@ export type CoverageInfo = {
   isShort: boolean
   isTinyRecording: boolean
   uncapturedPhases: string[]
+  /// The share of the recording that became transcribed speech, 0-100.
+  ///
+  /// This was the hole in every gate here. They were all about DURATION: a
+  /// 23-minute lesson cleared the short-session threshold and was presented
+  /// as a full observation, while only 15% of it had become words — the
+  /// first 8:23 produced no transcript at all and a 7:40 stretch in the
+  /// middle produced none either. The teacher remembered redirecting the
+  /// class around ten times in a window the transcript is empty for, and the
+  /// report called the room calm. Length tells you how long the microphone
+  /// was on; this tells you whether it heard anything.
+  capturedSharePct: number | null
 }
 
-export function getCoverage(durationSec: number | null, phases: AudioPhase[] | null): CoverageInfo {
+/// Below this, the report is reading a minority of the lesson and has to say
+/// so. Shared with the server's own gate in lib/transcriptCoverage.ts.
+export const LOW_CAPTURE_PCT = 50
+
+export function getCoverage(
+  durationSec: number | null,
+  phases: AudioPhase[] | null,
+  /// Teacher + student speaking seconds, from metricsDetail. Optional so the
+  /// older two-argument calls still type-check; absent means unknown, which
+  /// is not the same as zero.
+  captured?: { teacherTalkSec?: number | null; studentTalkSec?: number | null } | null,
+): CoverageInfo {
   const recordedSec = durationSec ?? 0
   // We only ever have the audio we actually recorded — there's no separate
   // "intended class length" tracked today, so total and recorded are the
@@ -207,12 +229,15 @@ export function getCoverage(durationSec: number | null, phases: AudioPhase[] | n
     .filter((p) => p.endSec - p.startSec < MIN_PHASE_DURATION_SEC)
     .map((p) => p.label)
 
+  const capturedSec = (captured?.teacherTalkSec ?? 0) + (captured?.studentTalkSec ?? 0)
+
   return {
     recordedSec,
     totalSec,
     isShort: recordedSec > 0 && recordedSec < SHORT_SESSION_THRESHOLD_SEC,
     isTinyRecording: recordedSec > 0 && recordedSec < TINY_RECORDING_THRESHOLD_SEC,
     uncapturedPhases,
+    capturedSharePct: captured && recordedSec > 0 ? Math.round((capturedSec / recordedSec) * 100) : null,
   }
 }
 
@@ -343,12 +368,31 @@ export function buildEvidenceQualityLine(
 ): { text: string; tone: 'good' | 'warn' } {
   const total = metrics.length
   const measured = metrics.filter((m) => isConfidentState(m.state)).length
-  const warn = coverage.isShort || (total > 0 && measured / total < 0.6)
+  // A recording the microphone largely lost is the strongest warning here,
+  // and until now it was the one thing this line could not say.
+  const lowCapture = coverage.capturedSharePct != null && coverage.capturedSharePct < LOW_CAPTURE_PCT
+  const warn = coverage.isShort || lowCapture || (total > 0 && measured / total < 0.6)
   const parts: string[] = [`Recorded ${formatDuration(coverage.recordedSec)}`]
   if (coverage.isShort) {
     parts.push(`under ${Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} min — treat metrics as indicative, not conclusive`)
   }
-  parts.push(`${measured} of ${total} metrics measured confidently`)
+  if (lowCapture) {
+    // Named before the metric tally, because it explains the tally: metrics
+    // go unmeasured on these lessons because the speech was never captured,
+    // not because the lesson lacked the thing being measured.
+    parts.push(
+      `only ${coverage.capturedSharePct}% came through as audible speech — the quiet stretches are as likely to be distance or overlapping voices as a quiet room`,
+    )
+  }
+  // "Measured confidently" directly after "only 15% came through" reads as a
+  // reassurance that cancels the warning. The metrics were measured on the
+  // captured minority, and saying so is the difference between a caveat and
+  // a contradiction.
+  parts.push(
+    lowCapture
+      ? `${measured} of ${total} metrics measured from that portion`
+      : `${measured} of ${total} metrics measured confidently`,
+  )
   if (coverage.uncapturedPhases.length > 0) {
     // "Not clearly captured" read as if it contradicted the confident-
     // metrics count right before it — it's actually a narrower claim about

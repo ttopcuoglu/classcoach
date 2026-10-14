@@ -249,6 +249,49 @@ function audioSession(id: string, studentTalkPct: number, days: number, reflecte
 /// something in it — including the two lenses and the student-talk focus card,
 /// which are the parts whose placement is easiest to get wrong and impossible
 /// to check from a list of sessions.
+// The escalation read (server/src/lib/escalation.ts), with the real shape of
+// a found spiral: a run of asks climbing from a named consequence to a student
+// being separated, plus the teacher's own back-reference to an earlier ask.
+// Numbers deliberately absent from the copy — only the moment and the rung.
+function escalationFixture(): Json {
+  const tools = homeTools()
+  if (tools.has('escalation_unheard')) {
+    return {
+      state: 'not_measurable',
+      reason:
+        'Only about 15% of this recording came through as speech the microphone could resolve, so this can\u2019t tell you whether attention held. A quiet transcript here means the mic lost the room — group work, distance, voices over each other — not that the room was quiet.',
+      peakRung: null,
+      clusters: [],
+      repeatedAsks: [],
+      capturedSharePct: 15,
+    }
+  }
+  if (tools.has('escalation_none')) {
+    return { state: 'confirmed_none', reason: null, peakRung: null, clusters: [], repeatedAsks: [], capturedSharePct: 67 }
+  }
+  return {
+    state: 'found',
+    reason: null,
+    peakRung: 'removal',
+    clusters: [
+      {
+        startSec: 794,
+        endSec: 835,
+        bidCount: 5,
+        fromRung: 'consequence',
+        topRung: 'removal',
+        climbed: true,
+        quote: 'We\u2019re not working together today.',
+      },
+      // A second, milder run — stored but never shown, so this fixture also
+      // proves the page shows one moment rather than the list.
+      { startSec: 587, endSec: 598, bidCount: 3, fromRung: 'attention', topRung: 'behaviour', climbed: true, quote: null },
+    ],
+    repeatedAsks: [{ timestampSec: 587, quote: 'Excuse me? What did I say?' }],
+    capturedSharePct: 48,
+  }
+}
+
 function previewReport(): Json {
   const seg = (speakerLabel: 'Teacher' | 'Student', startSec: number, text: string): Json => ({
     id: `seg-${startSec}`,
@@ -266,8 +309,14 @@ function previewReport(): Json {
     classSubject: 'World history',
     metricsDetail: {
       totalDurationSec: 1380,
-      teacherTalkSec: 880,
-      studentTalkSec: 300,
+      // The low-capture mode has to lower these too, not just the escalation
+      // state: the header's trust line reads coverage from here, and a
+      // fixture where the card says 15% while the header says nine of nine
+      // metrics measured confidently is exactly the contradiction this whole
+      // change exists to remove.
+      ...(homeTools().has('escalation_unheard')
+        ? { teacherTalkSec: 129, studentTalkSec: 73 }
+        : { teacherTalkSec: 880, studentTalkSec: 300 }),
       studentVoiceSegments: 14,
       longestTeacherMonologueSec: 360,
       recallQuestionCount: 4,
@@ -344,6 +393,11 @@ function previewReport(): Json {
     questionsNarrative: 'Seven questions, leaning recall, with one followed up after a student answered.',
     checksNarrative: 'One spoken check landed mid-lesson, after the causal chain had been laid out.',
     climateNarrative: 'Three transitions and three redirections, all brief and directed at noise rather than individuals.',
+    // All three escalation states, because the one that is easiest to get
+    // wrong is the one that looks like good news. `home=escalation_none`
+    // shows a lesson where the asking held; `home=escalation_unheard` shows
+    // the recording the microphone lost, which must never read as calm.
+    escalation: escalationFixture(),
     studentTalkFocus: {
       generatedAt: new Date().toISOString(),
       classified: 14,

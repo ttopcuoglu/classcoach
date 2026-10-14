@@ -168,9 +168,18 @@ const CFU_PHRASE_DESCRIPTIONS: Record<string, string> = {
   'before you leave write': 'An end-of-lesson written check.',
 }
 
+/// "let's go" was here and has been removed. Across all 25 real lessons it
+/// was the ONLY phrase in this list that ever fired, and all four of its hits
+/// were wrong: "Let's go real quick" moving to the last question, "So let's
+/// go back to 1340 though" navigating content, "Let's go back to our car on
+/// the ramp" mid-explanation, and "Let's go have some fun" from a recording
+/// that was not a classroom. It also sits in buildContentExhibits' exclusion
+/// list, so it was deleting genuine content talk from the evidence pool. Its
+/// neighbours "let's move on" and "alright, let's" live in
+/// TRANSITION_PHRASES, which is what "let's go" actually is.
 export const REDIRECTION_PHRASES = [
-  'eyes up here', 'eyes on me', 'stop talking', 'focus up', 'put that away',
-  "let's go", 'settle down', 'quiet please', 'i need everyone', 'voices off',
+  'eyes up here', 'eyes on me', 'eyes up front', 'stop talking', 'focus up',
+  'put that away', 'settle down', 'quiet please', 'i need everyone', 'voices off',
 ]
 
 export const TRANSITION_PHRASES = [

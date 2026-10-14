@@ -41,6 +41,8 @@ import {
   type AudioLessonContent,
   type AudioQuestionLogEntry,
   type AudioReflectMessage,
+  type AudioEscalation,
+  type AudioEscalationRung,
   type AudioRedirectionLogEntry,
   type AudioHardLook,
   type AudioMomentToRevisit,
@@ -2314,7 +2316,7 @@ function ReportPanel({
 
   const metrics = session.metricsDetail ?? {}
   const recordedSec = session.durationSec ?? 0
-  const coverage = getCoverage(session.durationSec, session.phases)
+  const coverage = getCoverage(session.durationSec, session.phases, session.metricsDetail)
   const num = (key: string) => (typeof metrics[key] === 'number' ? (metrics[key] as number) : null)
 
   // Talk & Participation
@@ -2743,6 +2745,7 @@ function ReportPanel({
                 directiveLog={session.directiveLog}
                 toneLog={session.toneLog}
                 redirectionLog={session.redirectionLog}
+                escalation={session.escalation ?? null}
                 segments={session.segments}
                 lastRow={sectionHardLook}
               />
@@ -4869,12 +4872,104 @@ function HardLookTab({
   )
 }
 
+// Whether a bid for the room's attention HELD.
+//
+// Deliberately not a count. A teacher with a hard group redirects more than
+// one with an easy group, and the count says which group she has — which is
+// why redirectionCount was retired from My Growth. What is worth saying is
+// the shape: asks in close succession mean the first did not land, and a run
+// that climbs toward a consequence is the spiral where each warning is worth
+// less than the last.
+//
+// Nothing here states how many bids there were. Across repeated readings of
+// the same lesson that number came back 11, 12, 13, 13 and 13 while the run
+// itself and the rung it reached never moved — so the run is what gets shown
+// and the number stays out of sight.
+const RUNG_PHRASE: Record<AudioEscalationRung, string> = {
+  attention: 'asking for the room’s attention',
+  behaviour: 'telling the room what to stop or start',
+  named: 'naming a student',
+  consequence: 'naming a consequence',
+  removal: 'separating a student from the group',
+}
+
+function EscalationCard({ escalation }: { escalation: AudioEscalation | null }) {
+  // Absent on every report analyzed before this existed. Saying nothing is
+  // right: this is not "no escalation", it is "not looked at".
+  if (!escalation) return null
+
+  if (escalation.state === 'not_measurable') {
+    return (
+      <div className="rounded-xl border border-hairline bg-cream p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Did your asks hold?</p>
+        <p className="mt-1 text-sm text-ink-soft">{escalation.reason}</p>
+      </div>
+    )
+  }
+
+  if (escalation.state === 'confirmed_none') {
+    return (
+      <p className="text-sm text-ink-soft">
+        No run of repeated asks in this lesson — when you asked for attention, the recording shows you moving on rather
+        than asking again.
+      </p>
+    )
+  }
+
+  const cluster = escalation.clusters[0] ?? null
+  const repeat = escalation.repeatedAsks[0] ?? null
+
+  return (
+    <div className="rounded-xl border border-gold bg-gold-tint/50 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Did your asks hold?</p>
+      {cluster && (
+        <>
+          <p className="mt-1 text-sm font-semibold text-ink">
+            Around {formatTime(cluster.startSec)} you asked for the room several times in quick succession
+            {cluster.climbed ? `, rising from ${RUNG_PHRASE[cluster.fromRung]} to ${RUNG_PHRASE[cluster.topRung]}.` : '.'}
+          </p>
+          {cluster.quote ? (
+            <p className="mt-2 text-sm italic text-ink">“{cluster.quote}”</p>
+          ) : (
+            // The wording was too rough to attribute — see quoteSafety.ts. The
+            // moment is real; putting a garbled sentence in a teacher's mouth
+            // inside this section is not worth being right most of the time.
+            <p className="mt-2 text-xs text-ink-soft">
+              The transcript’s wording here was too rough to quote back to you, so only the moment is shown.
+            </p>
+          )}
+          <p className="mt-2 text-sm text-ink">
+            Asking again that soon means the first ask didn’t land. When that becomes the pattern, each one is worth less
+            than the last, and escalating is the only way left to be heard.
+          </p>
+        </>
+      )}
+      {repeat && (
+        <p className={`text-sm text-ink ${cluster ? 'mt-3' : 'mt-1'}`}>
+          {repeat.quote ? (
+            <>
+              At {formatTime(repeat.timestampSec)} you said you’d already asked — “{repeat.quote}”
+            </>
+          ) : (
+            <>At {formatTime(repeat.timestampSec)} your own words noted you’d already asked once.</>
+          )}
+        </p>
+      )}
+      <p className="mt-3 text-xs text-ink-soft">
+        Read from your speech alone. Whether the room actually settled isn’t something a room microphone can hear
+        {escalation.capturedSharePct != null ? `, and about ${escalation.capturedSharePct}% of this recording came through as speech` : ''}.
+      </p>
+    </div>
+  )
+}
+
 function ClimateRoutinesTab({
   climateNarrative,
   nextStep,
   directiveLog,
   toneLog,
   redirectionLog,
+  escalation,
   segments,
   lastRow,
 }: {
@@ -4883,6 +4978,7 @@ function ClimateRoutinesTab({
   directiveLog: AudioDirectiveLogEntry[] | null
   toneLog: AudioToneLogEntry[] | null
   redirectionLog: AudioRedirectionLogEntry[] | null
+  escalation: AudioEscalation | null
   segments: TranscriptSegment[]
   /// The section's Hard Look, as the final row of its list.
   lastRow: React.ReactNode
@@ -4930,6 +5026,8 @@ function ClimateRoutinesTab({
           nothing about whether they landed — and no stock tip: the next step
           is this lesson's own, or absent. */}
       {climateNarrative && <CoachNote text={climateNarrative} />}
+
+      <EscalationCard escalation={escalation} />
 
       <SectionNextStep text={nextStep} />
 
