@@ -58,6 +58,7 @@ import {
   type TalkVoice,
   type TranscriptSegment,
 } from '../lib/api'
+import { THIN_AUDIBLE_SHARE_PCT, useCaptureMonitor } from '../hooks/useCaptureMonitor'
 import { buildCorrectionBalance, coverageCaveatLine, DETECTION_CAVEAT } from '../lib/correctionBalance'
 import {
   buildEvidenceQualityLine,
@@ -424,6 +425,14 @@ function RecordingPanel({
 
   const recorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  // The same stream as streamRef, in state, because the capture monitor is a
+  // hook and a ref change does not re-run it.
+  const [liveStream, setLiveStream] = useState<MediaStream | null>(null)
+  // The audible share as it stood when the teacher pressed Stop. Shown while
+  // the upload runs — the last moment they are looking at this screen, and
+  // the only chance to say "do not trust the report you are about to get"
+  // before it arrives looking authoritative.
+  const [thinCaptureSharePct, setThinCaptureSharePct] = useState<number | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const accumulatedSecRef = useRef(0)
   const runStartRef = useRef<number | null>(null)
@@ -435,6 +444,11 @@ function RecordingPanel({
   // instead of leaving a dead "setup" entry behind — never touches a
   // session that already existed (e.g. re-opened from Past sessions).
   const justCreatedSessionIdRef = useRef<string | null>(null)
+  // What the mic is actually picking up, live. A teacher who can see the bar
+  // move knows the phone is hearing them; one who cannot is told so while
+  // they are still in the room and can move it.
+  const capture = useCaptureMonitor(liveStream, phase === 'recording')
+
   // A laptop/Chromebook's own idle-sleep or screensaver can suspend the tab
   // (and the mic stream with it) mid-recording — the Wake Lock API is the
   // one thing a web page can do to prevent that, mirroring the iOS app's
@@ -560,6 +574,8 @@ function RecordingPanel({
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
+      setLiveStream(stream)
+      setThinCaptureSharePct(null)
       const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
       const supported = candidates.find((t) => MediaRecorder.isTypeSupported(t))
       mimeTypeRef.current = supported ?? ''
@@ -617,12 +633,19 @@ function RecordingPanel({
     }
     const finalElapsed = accumulatedSecRef.current
     releaseWakeLock()
+    // Read before the monitor is torn down by setLiveStream(null).
+    setThinCaptureSharePct(
+      capture.audibleSharePct != null && capture.audibleSharePct < THIN_AUDIBLE_SHARE_PCT
+        ? capture.audibleSharePct
+        : null,
+    )
 
     const stopped = new Promise<void>((resolve) => {
       recorder.onstop = () => resolve()
     })
     recorder.stop()
     streamRef.current?.getTracks().forEach((t) => t.stop())
+    setLiveStream(null)
     await stopped
 
     const blob = new Blob(chunksRef.current, { type: mimeTypeRef.current || 'audio/webm' })
@@ -688,6 +711,37 @@ function RecordingPanel({
             {phase === 'paused' && 'Paused'}
             {phase === 'uploading' && `${UPLOAD_STAGE}\u2026`}
           </p>
+
+          {phase === 'uploading' && thinCaptureSharePct != null && (
+            <div className="w-full max-w-sm rounded-xl border border-gold/50 bg-gold/10 p-3">
+              <p className="text-xs text-cream">
+                The microphone heard sound for only about {thinCaptureSharePct}% of this recording, so the report from
+                it is likely to be thin. Next time, keeping the phone on you rather than on a desk is the single biggest
+                difference.
+              </p>
+            </div>
+          )}
+
+          {phase === 'recording' && (
+            <div className="w-full max-w-xs">
+              {/* Deliberately a plain level bar and not a verdict. It shows
+                  loudness, which catches a phone in a bag or across the room
+                  — not a loud room that will still transcribe to nothing. */}
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-cream/20">
+                <div
+                  className="h-full rounded-full bg-cream transition-[width] duration-100"
+                  style={{ width: `${Math.max(2, capture.level)}%` }}
+                />
+              </div>
+              <p className="mt-2 text-center text-[11px] text-cream/60">
+                {capture.unavailable
+                  ? 'Recording — input level unavailable in this browser.'
+                  : capture.warnQuiet
+                    ? 'Hearing almost nothing for the last minute. Is the phone near you and uncovered?'
+                    : 'What the microphone is picking up'}
+              </p>
+            </div>
+          )}
 
           <div className="flex items-center gap-4">
             {phase === 'idle' && (
