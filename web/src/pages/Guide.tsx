@@ -153,7 +153,7 @@ const GETTING_STARTED: Chapter = {
       intro: 'Your dashboard — built entirely from your own activity, never a generic template.',
       specs: [
         { label: 'Your next step', body: 'the greeting at the top suggests one concrete thing to do next — reflect on your last lesson, record your first one, or try a tool you haven\'t opened yet — with a button that takes you straight there.' },
-        { label: 'Quick actions', body: 'three large one-tap cards for Lesson Debrief, Talk It Through, and Practice.' },
+        { label: 'A door to every tool', body: 'one-tap cards for Lesson Debrief, Talk It Through, and Practice, then Planning Coach and Communication Coach — and, until you connect it, a line pointing to Coach on Telegram.' },
         { label: 'Your coaching path', body: 'a static Notice → Practice → Try → Reflect explainer.' },
         { label: 'Classroom pulse', body: 'a donut chart of your latest lesson\'s student-talk %, plus a sparkline once you have a few sessions.' },
         { label: 'Mood check-in', body: 'tap Good / Okay / Stressed / Overwhelmed and Wivoza quietly suggests a relevant practice category.' },
@@ -349,10 +349,10 @@ const PRACTICE_CONVERSATION: Feature = {
   intro: 'The same rehearsal, pointed at a person instead of a classroom: pick Conversation and Practice role-plays a parent, student, colleague, or administrator who pushes back.',
   specs: [
     { label: 'Setup', body: 'who you\'re talking to, the challenge type, grade band (when the other person is a student), and how hard they push — supportive, concerned, resistant, or highly escalated.' },
-    { label: 'Your turn', body: 'generate a scenario or write your own, then respond by typing or speaking.' },
+    { label: 'Your turn', body: 'Wivoza writes the scenario from those choices; you respond by typing or speaking.' },
     { label: 'Feedback — six rated dimensions', body: 'clarity, empathy, use of evidence, professional boundaries, collaboration, and resolution — each rated strong / developing / needs work with specific feedback.' },
     { label: 'Also included', body: 'what you did well, your single top priority, a stronger phrase to try, and a full model response.' },
-    { label: 'Where it used to live', body: 'this was Communication Coach\'s "Practice a Conversation" card. Rehearsing belongs with the rest of your rehearsals; Communication Coach kept the three tools that end in something you send or carry into a room. Old links still work, and everything you practiced there is still in Recent work.' },
+    { label: 'A conversation you really have to have', body: 'belongs in Communication Coach\'s Prepare for a Conversation, not here. Practice invents the person and the exchange; Prepare builds a plan for the real one and lets you rehearse against it. Everything you practiced here before is still in Recent work.' },
   ],
 }
 
@@ -380,12 +380,12 @@ const MESSAGE_TOOLS: Feature[] = [
     tint: 'bg-peach-tint text-terracotta',
     nav: 'Plan → Communication Coach → Prepare for a Conversation',
     title: 'Prepare for a Conversation',
-    intro: 'A full written plan for a real meeting that\'s already on the calendar.',
+    intro: 'A full written plan for a real conversation you have to have — with one person, or in a scheduled meeting — and a way to rehearse it.',
     specs: [
-      { label: 'Input', body: 'the meeting type — parent or family conference, student conference, IEP or 504, team or department, with an administrator, post-observation, difficult colleague conversation, or other — and what the meeting is about, which is the only required field. How it will happen (in person, phone, video call, or formal meeting), who\'s attending, the outcome you\'re hoping for, and anything sensitive or difficult are all optional.' },
+      { label: 'Input', body: 'first, what you are preparing for: a person, or a scheduled meeting. For a person, who it is with. For a meeting, the meeting type — parent or family conference, student conference, IEP or 504, team or department, with an administrator, post-observation, or other — and who\'s attending. Then what is going on, in your own words, which is the only required field. How it will happen, the outcome you\'re hoping for, and anything sensitive or difficult are all optional.' },
       { label: 'Supporting material', body: 'paste or upload an agenda, email, report, notes, or a spreadsheet you already have — .docx, .pdf, .xlsx, .xls, .txt, .jpg, .jpeg, or .png — so the plan is built around what\'s actually been said rather than a blank slate.' },
       { label: 'Output — twelve sections', body: 'a suggested meeting agenda, a suggested opening, key talking points, important facts to present, questions to ask, possible reactions, how to respond, language to avoid, boundaries to maintain, a suggested closing, next steps, and honest guidance on when to involve an administrator — with a complete model response sitting in the middle, there to read aloud if the moment gets away from you.' },
-      { label: 'After the plan', body: 'a follow-up chat that revises the plan in place rather than just discussing it alongside, plus two handoffs — "Practice This Meeting" and "Create a Follow-Up Message" — that carry the situation into the relevant tool pre-filled. Save it, or print it to take into the room.' },
+      { label: 'After the plan', body: 'a follow-up chat that revises the plan in place rather than just discussing it alongside, plus two buttons. "Rehearse this conversation" turns the chat into a run-through: Coach plays the other person, opening with their first line and drawing on the plan\'s own likely reactions. "Create a Follow-Up Message" carries the situation into Write a Message pre-filled. Save the plan, or print it to take into the room.' },
     ],
   },
   {

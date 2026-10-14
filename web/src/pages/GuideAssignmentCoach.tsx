@@ -174,6 +174,7 @@ export default function GuideAssignmentCoach() {
         paragraphs={[
           'Every assignment you give makes a quiet promise about what students will actually do. Assignment Coach reads the thing you wrote and tells you whether it keeps that promise.',
           'Review gives you an honest read on rigor, workload, grade fit, and how easily the whole task could be handed to a chatbot. Redesign rebuilds it so students have to show their own thinking — at whatever AI policy you decide on.',
+          'You’ll find it inside Planning Coach, under the Review an Assignment tab.',
         ]}
       />
 

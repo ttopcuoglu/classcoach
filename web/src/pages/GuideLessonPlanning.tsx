@@ -75,7 +75,7 @@ const LANES = [
 const STEPS = [
   {
     title: 'Pick the lane that matches where you are',
-    body: 'Blank page, written draft, or finished deck. All three live behind the same tab and you can move between them.',
+    body: 'Blank page, written draft, or finished deck. Each is a tab in Planning Coach, beside a fourth for reviewing an assignment, and you can move between them.',
   },
   {
     title: 'Say what you’re teaching, and how long you have',
@@ -83,7 +83,7 @@ const STEPS = [
   },
   {
     title: 'Or upload what you already have',
-    body: 'Slides, a reading, a worksheet, an activity. Wivoza reads it, fills in what it appears to be about for you to check, and builds the lesson around your material rather than replacing it.',
+    body: 'Slides, a reading, a worksheet, an activity — or a photo of the page on your desk. Wivoza reads it, fills in what it appears to be about for you to check, and builds the lesson around your material rather than replacing it.',
   },
   {
     title: 'Read it as a colleague’s draft, not an answer key',

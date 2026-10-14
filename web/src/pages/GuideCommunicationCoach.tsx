@@ -27,7 +27,7 @@ import {
 const BENEFITS = [
   { title: 'Don’t send the 9pm reply', body: 'The message you write angry is never the message you’d have written Tuesday.' },
   { title: 'Walk in with an agenda', body: 'A meeting you’ve planned goes differently from one you show up to.' },
-  { title: 'Rehearse the version that goes badly', body: 'Practice at “highly escalated” and the real thing feels manageable.' },
+  { title: 'Rehearse it before you’re in the room', body: 'Coach plays the other person from your own plan, so the first time you say it isn’t the real one.' },
   { title: 'Say the hard thing without the edge', body: 'Firm and direct is a tone you can pick. So is warm.' },
   { title: 'Reach families in their language', body: 'One tap translates a finished message and keeps the tone intact.' },
   { title: 'Know when it’s not yours alone', body: 'Every plan gives honest guidance on when to involve an administrator.' },
@@ -55,16 +55,16 @@ const LANES = [
   {
     icon: ChecklistIcon,
     name: 'Prepare for a Conversation',
-    when: 'It’s on the calendar.',
+    when: 'You have to have it.',
     detail:
-      'A full plan for a real upcoming meeting — conference, IEP or 504, post-observation, department, or a hard colleague conversation. Agenda, talking points, facts, likely reactions, and how to close.',
+      'A full plan for a real conversation — with one person, or a scheduled meeting such as a conference, an IEP or 504, or a post-observation. Talking points, facts, likely reactions, and how to close. Then rehearse it, with Coach playing the other side.',
   },
   {
     icon: ScenarioIcon,
     name: 'Practice a Conversation',
-    when: 'You’re dreading it. — now in Practice',
+    when: 'It hasn’t happened yet. — in Practice',
     detail:
-      'Role-play it first: choose who you’re facing, the kind of challenge, and how hard they push — supportive, concerned, resistant, or highly escalated. This lives in Grow → Practice now, under Conversation, beside the rest of your rehearsals.',
+      'For the conversation you fear might come, not one you already face: choose who you’re up against, the kind of challenge, and how hard they push — supportive, concerned, resistant, or highly escalated — and Wivoza invents the exchange. This lives in Grow → Practice, under Conversation.',
   },
   {
     icon: ChatBubbleIcon,
@@ -90,7 +90,7 @@ const STEPS = [
   },
   {
     title: 'Hand it to the next tool',
-    body: 'A finished meeting plan has two buttons: Practice This Meeting, and Create a Follow-Up Message. The situation carries over — you don’t retype it.',
+    body: 'A finished plan has two buttons: Rehearse this conversation, where Coach plays the other person from your plan, and Create a Follow-Up Message. The situation carries over — you don’t retype it.',
   },
 ]
 
@@ -117,7 +117,7 @@ const STORY = [
   'She pastes both the email and her draft into Review My Communication and asks for both feedback and a rewrite. The coaching is blunt about the problem: her second paragraph litigates the grade instead of opening a conversation, and a parent reading it will hear a wall.',
   'She takes the revised version, makes it slightly firmer than the suggestion, and schedules it for the morning rather than sending it at 9:52pm.',
   'Then she opens Prepare for a Conversation, picks “Parent or family conference,” and gets an agenda, the facts worth bringing, the reactions she should expect, the phrases to avoid — and a straight answer on whether an administrator belongs in the room.',
-  'Before Thursday she runs it once in Practice at “highly escalated,” which goes worse than the real meeting does. The real one isn’t pleasant. But nobody raises their voice, and it ends with a plan.',
+  'Before Thursday she presses Rehearse this conversation, and Coach plays the parent from the plan’s own likely reactions — which goes worse than the real meeting does. The real one isn’t pleasant. But nobody raises their voice, and it ends with a plan.',
 ]
 
 const DEBRIEF_QUESTIONS = [
@@ -382,8 +382,8 @@ export default function GuideCommunicationCoach() {
                 },
                 {
                   icon: TargetIcon,
-                  title: 'Rehearse harder than reality',
-                  body: 'Set the difficulty to highly escalated. If you can hold that, the actual conversation will feel survivable.',
+                  title: 'Rehearse before you walk in',
+                  body: 'Press Rehearse this conversation on a finished plan and try your opening on someone who pushes back. The second time you say it is the real one.',
                 },
               ].map((item) => (
                 <div key={item.title}>
@@ -468,10 +468,10 @@ export default function GuideCommunicationCoach() {
             <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-hairline pt-6">
               <GuidePrimaryButton to="/talk-to-me?mode=debrief">Debrief This Experience</GuidePrimaryButton>
               <Link
-                to="/coach-chat?area=parent_communication"
+                to="/communications?tool=prepare"
                 className="text-sm font-semibold text-terracotta-600 hover:text-terracotta"
               >
-                Or rehearse the follow-up conversation
+                Or prepare the follow-up conversation
               </Link>
             </div>
           </div>

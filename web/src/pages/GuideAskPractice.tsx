@@ -60,7 +60,7 @@ const STEPS = [
   },
   {
     title: 'Or say who you’re facing',
-    body: 'Conversation asks something different, because a person is not a room: who you’re up against, the kind of challenge, and how hard they push. Generate the situation, or paste in the real one you’re dreading.',
+    body: 'Conversation asks something different, because a person is not a room: who you’re up against, the kind of challenge, and how hard they push. Wivoza writes the situation from those three choices.',
   },
   {
     title: 'Respond, badly if you like',
@@ -88,7 +88,7 @@ const LANES = [
     name: 'A conversation',
     when: 'Conversation — a parent, student, colleague, or administrator.',
     detail:
-      'Say who you’re facing, the kind of challenge, and how hard they push — supportive, concerned, resistant, or highly escalated. Generate the situation or write your own, then respond by typing or speaking. Back comes a six-part read — clarity, empathy, use of evidence, professional boundaries, collaboration, and resolution — each marked strong, developing, or needs work, plus what you did well, your one top priority, a stronger phrase to borrow, and a full model response.',
+      'Say who you’re facing, the kind of challenge, and how hard they push — supportive, concerned, resistant, or highly escalated. Wivoza writes the situation, then you respond by typing or speaking. Back comes a six-part read — clarity, empathy, use of evidence, professional boundaries, collaboration, and resolution — each marked strong, developing, or needs work, plus what you did well, your one top priority, a stronger phrase to borrow, and a full model response.',
   },
 ]
 
@@ -99,7 +99,7 @@ const STORY = [
   'She runs it three times — Guided, then Independent, then Challenge, where the student escalates instead of folding.',
   'Her third attempt still isn’t the model response. It’s shorter and it sounds like her, which is the version she’ll actually say out loud.',
   'It happens again the following week. She isn’t smooth, and he doesn’t hand over the phone. But she doesn’t say the thing she’ll regret, and the class goes back to work — which is the part that mattered.',
-  'His mother emails that evening, and it is not a friendly email. She switches the section to Conversation, sets the other side to resistant, and drafts a reply she never sends. It comes back marked down on boundaries. The one she does send is her fourth try.',
+  'His mother emails that evening, and it is not a friendly email. Before answering she switches the section to Conversation, picks a parent, sets them to resistant, and practices on the email Wivoza invents. Her reply comes back marked down on boundaries. The answer to the real one she writes in Communication Coach, and it is her fourth draft that goes out.',
 ]
 
 const DEBRIEF_QUESTIONS = [
@@ -245,9 +245,9 @@ export default function GuideAskPractice() {
             ))}
           </div>
           <p className="mt-6 text-sm leading-relaxed text-ink-soft">
-            Conversation overlaps with Communication Coach on purpose. Come here to rehearse the exchange against
-            someone who pushes back; go to Communication Coach when you need the actual email drafted or a whole
-            meeting prepared.
+            Conversation sits beside Communication Coach on purpose. Come here to practice on an invented person
+            who pushes back; go to Communication Coach for the conversation you really have to have — it drafts
+            the email, plans the meeting, and lets you rehearse that exact exchange.
           </p>
         </GuideSection>
 
