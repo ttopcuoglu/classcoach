@@ -279,6 +279,11 @@ export default function GuideTalkItThrough() {
               the spoken replies — they still arrive as text — and <strong className="font-semibold">Type
               instead</strong> is there from the first screen.
             </p>
+            <p className="mt-3 rounded-xl bg-mint-tint/50 p-4 text-sm leading-relaxed text-forest">
+              Not near Wivoza at all? Connect <strong className="font-semibold">Coach on Telegram</strong> from
+              your Profile and the same conversation is a chat on your phone — typed, or a voice note on the
+              drive home.
+            </p>
             <div className="mt-7 border-t border-hairline pt-6">
               <GuidePrimaryButton to="/talk-to-me">Talk It Through Now</GuidePrimaryButton>
             </div>

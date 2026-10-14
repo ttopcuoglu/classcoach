@@ -66,11 +66,15 @@ const STEPS = [
 const TABS = [
   {
     name: 'Summary',
-    body: 'Lesson at a glance, one named strength, the evidence it came from, and a “try next time” tip tied to your focus.',
+    body: 'Lesson at a glance, one named strength, the evidence it came from, and a “Try next time” list you can carry straight into your next plan.',
   },
   {
     name: 'Insights',
-    body: 'Four sections when you want the detail: Talk & Participation, Questioning & Checking, Clarity & Content, Climate & Routines.',
+    body: 'Four sections when you want the detail: Talk & Participation, Questioning & Checking, Clarity & Content, Climate & Routines. Ask for the Hard Look on any of them when you want the least generous reading the evidence supports.',
+  },
+  {
+    name: 'Rubric lens',
+    body: 'On request, the same lesson sorted under the Danielson rubric, with one next step for each component. Never a level or a score.',
   },
   {
     name: 'Reflect',

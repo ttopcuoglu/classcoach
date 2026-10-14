@@ -16,6 +16,7 @@ import {
   LockIcon,
   MailIcon,
   MenuIcon,
+  MicIcon,
   PlayIcon,
   QuoteIcon,
   SparkleIcon,
@@ -42,7 +43,7 @@ const PROCESS = [
     icon: TargetIcon,
     tint: 'bg-gold-tint text-terracotta-600',
     title: 'Try one next step',
-    description: 'Practice a strategy, use it in class, and see your progress build over time.',
+    description: 'Carry it into your next plan, rehearse it, use it in class, and see your progress build over time.',
   },
 ]
 
@@ -65,9 +66,11 @@ const MOMENTS = [
       {
         icon: BookIcon,
         tint: 'bg-gold-tint text-terracotta-600',
-        title: 'Assignment Coach',
+        // A tab inside Planning Coach now, not a tool of its own. It keeps a
+        // card because it is a different job from writing a lesson.
+        title: 'Assignment review',
         slug: 'assignment-coach',
-        description: 'See what an assignment really asks, redesign it for meaningful AI use, then save it as a Word document, PDF, or PowerPoint.',
+        description: 'Inside Planning Coach: paste, upload, or photograph an assignment to see what it really asks, redesign it for meaningful AI use, then save it as Word, PDF, or PowerPoint.',
       },
     ],
   },
@@ -80,14 +83,14 @@ const MOMENTS = [
         tint: 'bg-peach-tint text-terracotta',
         title: 'Lesson Debrief',
         slug: 'lesson-debrief',
-        description: 'See classroom talk, questions, pacing, and practical coaching priorities.',
+        description: 'See classroom talk, questions, and pacing, with one list of what to try next. Then read it through the Danielson rubric, or ask for the Hard Look.',
       },
       {
         icon: HeadsetIcon,
         tint: 'bg-mint-tint text-forest',
         title: 'Talk It Through',
         slug: 'talk-it-through',
-        description: 'A live voice coach for sorting through what happened and what to do next.',
+        description: 'A live voice coach for sorting through what happened and what to do next. Type instead whenever you can’t talk.',
       },
     ],
   },
@@ -124,6 +127,35 @@ const TINT_STYLES: Record<string, { badge: string; card: string; ink: string }> 
   'bg-lavender-tint text-[#6B5FA0]': { badge: 'bg-forest text-gold', card: 'bg-mint-tint/50', ink: 'text-forest' },
 }
 const COLUMN_BADGES = ['bg-gold text-forest', 'bg-terracotta text-cream', 'bg-forest text-gold']
+
+// The three places Coach can be reached. Telegram and the iPhone app shipped
+// without the home page ever saying so.
+const PLACES = [
+  {
+    icon: SparkleIcon,
+    tint: 'bg-mint-tint text-forest',
+    title: 'In your browser',
+    description: 'Every tool, on a phone, tablet, or laptop. Nothing to install.',
+    href: null,
+    cta: null,
+  },
+  {
+    icon: MicIcon,
+    tint: 'bg-peach-tint text-terracotta',
+    title: 'On your iPhone',
+    description: 'Record a lesson from the phone in your pocket, with the same account.',
+    href: 'https://apps.apple.com/us/app/wivoza/id6808223345',
+    cta: 'Get it on the App Store',
+  },
+  {
+    icon: ChatBubbleIcon,
+    tint: 'bg-gold-tint text-terracotta-600',
+    title: 'In Telegram',
+    description: 'Text Coach, send a voice note on the way home, or photograph the worksheet in front of you. Connect it from your Profile.',
+    href: null,
+    cta: null,
+  },
+]
 
 const VALUE_PROPS = ['Private by design', 'Judgment-free', 'Built for busy educators', 'Actionable, not overwhelming']
 
@@ -163,7 +195,7 @@ const SAMPLES = [
     pdf: '/samples/second-read.pdf',
   },
   {
-    feature: 'Assignment Coach',
+    feature: 'Planning Coach',
     eyebrow: 'Redesign for AI',
     title: 'An assignment, redesigned for AI',
     before: {
@@ -651,6 +683,38 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
         </div>
       </section>
 
+      {/* Where Coach is */}
+      <section id="wherever-you-are" className="mx-auto w-full max-w-6xl px-6 pt-16">
+        <div className="mx-auto mb-10 max-w-2xl text-center">
+          <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Wherever you are</span>
+          <h2 className="mt-3 font-heading text-3xl font-extrabold text-forest sm:text-4xl">
+            At your desk, in the hallway, on the drive home.
+          </h2>
+        </div>
+        <div className="grid gap-6 sm:grid-cols-3">
+          {PLACES.map(({ icon: Icon, tint, title, description, href, cta }) => (
+            <div key={title} className={`flex flex-col rounded-3xl p-7 ${TINT_STYLES[tint].card}`}>
+              <span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${TINT_STYLES[tint].badge}`}>
+                <Icon className="h-6 w-6" />
+              </span>
+              <h3 className="mt-5 font-heading text-xl font-bold text-forest">{title}</h3>
+              <p className="mt-2 text-sm text-ink-soft">{description}</p>
+              {href && (
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-terracotta-600 hover:text-terracotta"
+                >
+                  {cta}
+                  <ArrowRightIcon className="h-4 w-4" />
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Sample reports */}
       <section id="samples" className="mx-auto w-full max-w-6xl px-6 pt-16">
         <div className="mx-auto mb-10 max-w-2xl text-center">
@@ -825,11 +889,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                 </li>
                 <li className="flex items-start gap-2.5">
                   <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
-                  Planning Coach
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
-                  Assignment Coach
+                  Planning Coach: lessons, slides, and assignments
                 </li>
                 <li className="flex items-start gap-2.5">
                   <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />

@@ -179,12 +179,31 @@ const TALK_IT_THROUGH: Feature = {
     { label: 'Pause mic / Finish session', body: 'Pause mic stops listening and releases the microphone while you stay in the conversation; Finish session ends it with a short takeaway. Leave without finishing and the conversation is saved as "Not wrapped up", ready to resume.' },
     { label: 'Continuity', body: 'if Coach\'s memory is on, it can reference real patterns from your past Talk It Through conversations and Lesson Debrief reflections.' },
     { label: 'Privacy', body: 'your voice itself is never saved — only the resulting conversation text.' },
+    { label: 'Check-ins', body: 'a few days after a conversation, Coach checks in once on the next step you chose. One at a time, easy to skip, and you can turn them off.' },
+  ],
+}
+
+const TELEGRAM: Feature = {
+  id: 'telegram',
+  icon: ChatBubbleIcon,
+  tint: 'bg-gold-tint text-terracotta-600',
+  nav: 'Profile & Settings → Coach on Telegram',
+  title: 'Coach on Telegram',
+  intro: 'The same Coach as a chat on your phone, for the moments you are nowhere near Wivoza.',
+  specs: [
+    { label: 'Connecting', body: 'scan the QR code on your Profile or tap Open Telegram. If the chat is already open, paste the link or the code into it instead.' },
+    { label: 'What you can send', body: 'a typed message, a voice note of up to five minutes, a photo of a worksheet or materials, or an email forwarded from a parent or colleague.' },
+    { label: 'What comes back', body: 'short things arrive in the chat — a few lesson ideas, a draft reply. Longer ones — a full lesson, a meeting plan, an assignment review — come as a PDF or open in Wivoza with the form already filled in.' },
+    { label: 'Wrap up / New topic', body: 'buttons under Coach\'s messages. Wrap up writes the same takeaway Talk It Through does; New topic starts fresh.' },
+    { label: 'Open Wivoza', body: 'opens the app inside Telegram, already signed in — no password.' },
+    { label: 'Privacy', body: 'voice notes and photos are read and not kept; the conversation text is saved under Talk It Through. Disconnect anytime from Profile or with /disconnect.' },
   ],
 }
 
 const REPORT_TABS: SpecItem[] = [
-  { label: 'Summary', body: 'the 60-second read, in the order you\'d want it: a plain-language "Lesson at a glance," one named Strength to keep, your focus metric with its current value and a "try next time" tip, an "Evidence from the lesson" row (who was heard, questions opened, and a moment worth revisiting), and one suggested next step. Every card links through to the fuller detail in Insights.' },
-  { label: 'Insights', body: 'the detail, in four sections — see below.' },
+  { label: 'Summary', body: 'the 60-second read, in the order you\'d want it: a plain-language "Lesson at a glance," one named Strength to keep, your focus metric with its current value and a "try next time" tip, an "Evidence from the lesson" row (who was heard, questions opened, and a moment worth revisiting), and a "Try next time" list that gathers every suggestion in the report in one place — then asks whether you want to plan your next class with it in mind, and carries the ones you tick into Planning Coach. Every card links through to the fuller detail in Insights.' },
+  { label: 'Insights', body: 'the detail, in four sections — see below. Each section can also be given the Hard Look: on request, the least generous reading its evidence supports, with the moments behind it. Where the recording cannot carry a criticism it says so, and it never appears in the printable report.' },
+  { label: 'Rubric lens', body: 'on request, this lesson sorted under the Danielson rubric\'s Domains 2 and 3 — the moments that speak to each component and one next step for it. Never a level or a score.' },
   { label: 'Reflect', body: 'a spoken debrief with Coach about what the report found. Pick a starting point (talk through today\'s highlights, explore a specific moment, reflect on how the lesson felt, or ask your own question), then talk it through — pause, resume, or type instead at any point. Finish with your own Strengths / Growth areas / My next step / Follow-up date notes, optionally drafted for you from the conversation, and a Lock button that makes the whole report permanently read-only.' },
   { label: 'My Growth', body: 'seven measures trended across every session you\'ve recorded — your pace, your share of the talk, your longest unbroken stretch, the pause after an answer, follow-up questions, higher-order questions, and checks for understanding. Pick one as your active focus and it\'s highlighted here and on Summary.' },
 ]
@@ -203,7 +222,7 @@ const LESSON_DEBRIEF: Feature = {
   nav: 'Grow → Lesson Debrief',
   title: 'Lesson Debrief',
   guideTo: '/guide/lesson-debrief',
-  intro: 'Record a real class period; Wivoza transcribes it, asks you which voice is the teacher, and turns it into a four-tab report — no audio is ever kept, only the text and what it shows.',
+  intro: 'Record a real class period; Wivoza transcribes it, asks you which voice is the teacher, and turns it into a five-tab report — no audio is ever kept, only the text and what it shows.',
   specs: [
     { label: 'Before recording', body: 'class/subject, period, grade level, and session date are all optional.' },
     { label: 'While recording', body: 'a running timer with record, pause, resume, and stop controls, capturing entirely in your browser.' },
@@ -402,7 +421,9 @@ const ACCOUNT: Chapter = {
       intro: 'Everything about your account and your data, in one place.',
       specs: [
         { label: 'Basic info', body: 'your name, grade levels, and subjects taught.' },
-        { label: 'What Coach remembers', body: 'read the running profile Coach keeps about you, turn it off, or clear it entirely.' },
+        { label: 'What Coach knows', body: 'read the running note Coach keeps from your conversations, turn it off, clear it, or undo its last change — and choose whether Coach may draw on what your own class recordings measured.' },
+        { label: 'Coach\'s voice', body: 'choose the voice Coach speaks with in Talk It Through.' },
+        { label: 'Coach on Telegram', body: 'connect or disconnect the chat.' },
         { label: 'School', body: 'join with a code, or see the school/district you\'re already part of.' },
         { label: 'Lesson Debrief retention', body: 'keep transcripts and reports indefinitely, or auto-delete after 7, 30, or 90 days.' },
         { label: 'Export playbook', body: 'a printable page of everything you\'ve saved.' },
@@ -509,10 +530,11 @@ export default function Guide() {
           </p>
           <div className="mt-8 flex flex-col gap-5">
             <FeatureBlock feature={TALK_IT_THROUGH} />
+            <FeatureBlock feature={TELEGRAM} />
             <FeatureBlock feature={LESSON_DEBRIEF} />
 
             <div className="rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
-              <h4 className="font-heading text-lg font-bold text-forest">Inside a Lesson Debrief report — all four tabs</h4>
+              <h4 className="font-heading text-lg font-bold text-forest">Inside a Lesson Debrief report — all five tabs</h4>
               <SpecList items={REPORT_TABS} />
               <h4 className="mt-7 font-heading text-lg font-bold text-forest">The four Insights sections</h4>
               <SpecList items={INSIGHTS_SECTIONS} />

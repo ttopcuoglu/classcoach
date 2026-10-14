@@ -41,6 +41,10 @@ const CATEGORIES: Category[] = [
         a: 'A short, running note Coach keeps about your recurring strengths and any ongoing challenges — built only from your real Talk It Through conversations and Lesson Debrief reflections, never from Practice rehearsals. It\'s on by default, but you can view it, turn it off, or clear it anytime from Profile & Settings.',
       },
       {
+        q: 'What happens to what I send Coach on Telegram?',
+        a: 'The text of the conversation is saved in your account like any Talk It Through conversation, and you can delete it the same way. A voice note is transcribed and a photo is read, and neither file is kept. An email you forward is saved with the draft reply it produced. Messages reach Wivoza through Telegram, which handles them under its own privacy policy, and you can disconnect the chat at any time.',
+      },
+      {
         q: 'Can I delete my data?',
         a: 'Yes. Profile & Settings has a "Reset & clear data" option that permanently removes your saved scenarios, answers, messages, and Lesson Debrief sessions.',
       },
@@ -58,6 +62,22 @@ const CATEGORIES: Category[] = [
       {
         q: 'What if Coach gets something wrong or misses something?',
         a: 'Treat it the way you\'d treat a colleague\'s read on a moment they weren\'t fully present for — a useful outside perspective, not the final word. Your own judgment always comes first.',
+      },
+      {
+        q: 'Can I reach Coach without opening Wivoza?',
+        a: 'Yes. Connect Telegram from Profile & Settings and Coach is a chat on your phone: type, send a voice note, photograph a worksheet, or forward an email you need to answer. Short things, like a few lesson ideas or a draft reply, arrive in the chat; longer ones arrive as a PDF or open in Wivoza already signed in.',
+      },
+      {
+        q: 'Will Coach follow up with me?',
+        a: 'A few days after a Talk It Through conversation, Coach checks in once on the next step you chose. It is one check-in at a time, and you can skip it or turn check-ins off.',
+      },
+      {
+        q: 'What is the Hard Look?',
+        a: 'An optional second reading of a Lesson Debrief that says the least generous thing the evidence can support, section by section, with the moments it is based on. You ask for it; it never appears on its own. Where the recording cannot carry a criticism it says so, and it is left out of the printable report, so it stays between you and Coach.',
+      },
+      {
+        q: 'Does the Rubric lens rate my lesson?',
+        a: 'No. On request, it sorts what your recording captured under the Danielson rubric’s classroom domains and gives one next step for each component. It never assigns a level or a score.',
       },
       {
         q: 'Do I need to install an app?',

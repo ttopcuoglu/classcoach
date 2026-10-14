@@ -15,13 +15,24 @@ read on something they wrote. Website: wivoza.com. Contact: hello@wivoza.com
 THE TOOLS
 - Talk It Through: a live, spoken conversation. The teacher says what
   happened out loud; Coach listens, asks questions, and helps them reach one
-  next step, ending in a short takeaway. Typing is also supported.
+  next step, ending in a short takeaway. Typing is also supported. A few
+  days later Coach checks in once on that next step; check-ins can be
+  skipped or turned off.
+- Coach on Telegram: connect a Telegram chat from Profile & Settings and
+  text Coach from a phone. It takes typed messages, voice notes, photos of
+  a worksheet, and forwarded emails. Short results arrive in the chat;
+  longer ones arrive as a PDF or open in Wivoza already signed in. Voice
+  notes and photos are not kept; the conversation text is saved like a Talk
+  It Through conversation. Messages pass through Telegram.
 - Lesson Debrief: record one class period. Wivoza transcribes it, asks which
   voice is the teacher, then produces a report in five tabs (Summary,
   Insights, Rubric lens, Reflect, My Growth) covering talk balance,
   questioning, wait time, checks for understanding, clarity and climate.
   Rubric lens sorts the lesson's evidence under the Danielson rubric on
-  request and never gives a level or score.
+  request and never gives a level or score. Summary ends with a "Try next
+  time" list the teacher can carry into Planning Coach. The Hard Look is an
+  optional, on-request reading that gives the least generous criticism the
+  evidence supports; it is never in the printable report.
 - Practice: a rehearsal against a realistic scenario, with a model response
   to compare against. Pick a section and Wivoza writes the scenario; the
   Conversation section role-plays a parent, student, colleague or
