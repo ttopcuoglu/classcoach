@@ -12,10 +12,12 @@
 // Three rules this must never break:
 //
 // 1. Zero positives means NONE DETECTED, never none given. Only 4 of 13 real
-//    lessons register a single positive, and a 23-minute lesson with no
-//    encouragement in it is far less likely than a detector that missed it —
-//    warmth that doesn't use the words "good job" or "nice thinking" is
-//    invisible to the phrase list, and the model read misses plenty too.
+//    lessons register a single positive. Detection is better than it sounds —
+//    Claude reads the transcript for these and the phrase lists are only a
+//    fallback, so "You did beautiful job there" and "Good questions, people"
+//    are both caught — but a read still misses, and warmth the microphone
+//    never captured cannot be read at all. On the lesson that prompted this
+//    card only 48% came through.
 // 2. It is never a score. There is no correct ratio here and no target to
 //    hit; the research-backed 4:1 would be a stick to beat a teacher with on
 //    evidence this thin.
@@ -94,8 +96,17 @@ export function buildCorrectionBalance(
 }
 
 /// The sentence that keeps "0 detected" from reading as "0 happened".
+///
+/// An earlier version of this said encouragement was "picked up from a short
+/// list of phrases", which was wrong in a way that undersold it: the phrase
+/// lists are only a fallback for when the model read returns nothing. On one
+/// real lesson 7 of 9 tone moments were found by the read alone — "You did
+/// beautiful job there", "Abigail's piece of is wonderful", "Good questions,
+/// people" — none of which any list would hold. The real limits are that a
+/// read can still miss, and that nothing the microphone lost can be read at
+/// all.
 export const DETECTION_CAVEAT =
-  'Encouragement is picked up from a short list of phrases and a read of the transcript, so warmth carried by tone, a look, or words we do not listen for will not appear here. Read a zero as "not detected", not as "not given".'
+  'These are read from the transcript rather than matched against a word list, so phrasing like "you did a beautiful job there" is caught. It can still miss, and anything the microphone did not pick up cannot be read at all — so treat a zero as "not found in what was captured", not as "not given".'
 
 export function coverageCaveatLine(capturedSharePct: number | null): string {
   return `About ${capturedSharePct}% of this recording came through as speech, so these counts describe that portion rather than the whole lesson.`
