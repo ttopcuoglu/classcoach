@@ -49,7 +49,7 @@ const PRIVACY_POINTS = [
 // leader. Kept to what the report actually contains.
 const LEADER_VIEW = [
   { title: 'Is it being used?', body: 'Who activated, who is active, who keeps coming back, and who could use a nudge, with what tends to help.' },
-  { title: 'Where should PD go?', body: 'Shared strengths and growth areas from recorded lessons, each explained in plain words, by grade or subject once groups are large enough.' },
+  { title: 'Where should PD go?', body: 'Shared strengths and growth areas from recorded lessons, including wait time, the pause after a student answers, and pace, each explained in plain words, by grade or subject once groups are large enough.' },
   { title: 'Did the PD work?', body: 'Track a focus area and see whether it shows up in fewer lessons since you started, for example 43% of lessons down to 22%.' },
   { title: 'What should we do next?', body: 'The most common need you are not working on yet, with a suggested PD session, ready for your next staff meeting.' },
 ]
