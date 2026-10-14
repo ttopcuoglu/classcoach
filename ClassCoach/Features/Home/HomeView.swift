@@ -78,7 +78,7 @@ struct HomeView: View {
                         FeatureCard(
                             eyebrow: "Safe Practice",
                             title: "Practice",
-                            description: "Rehearse a real classroom moment and get coaching on the words you used — before it happens for real.",
+                            description: "Rehearse a classroom moment written for you and get coaching on the words you used — before you face one for real.",
                             actionLabel: "Practice a scenario",
                             systemImage: "bubble.left.and.bubble.right.fill",
                             iconTint: AppTheme.Category.disruption

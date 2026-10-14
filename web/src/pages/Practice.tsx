@@ -69,8 +69,8 @@ export default function Practice() {
           Practice<span className="text-gold">.</span>
         </h1>
         <p className="text-ink-soft">
-          Rehearse a real moment — a classroom situation or a hard conversation — and get coaching on the
-          words you used, before it happens for real.
+          Rehearse the moments that are hard to get right — a classroom situation or a hard conversation,
+          written for you — and get coaching on the words you used, before you face one for real.
         </p>
         <Link
           to="/guide/ask-practice"
