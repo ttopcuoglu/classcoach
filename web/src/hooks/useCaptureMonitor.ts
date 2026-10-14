@@ -62,6 +62,11 @@ export type CaptureMonitor = {
   /// The microphone could not be read at all — a real failure, distinct from
   /// a quiet room.
   unavailable: boolean
+  /// One averaged level per second of recording, for settle time. Uploaded as
+  /// plain numbers and never as audio — speech cannot be reconstructed from a
+  /// 1Hz amplitude curve, which is what lets this exist alongside the promise
+  /// that audio is never saved.
+  trace: number[]
 }
 
 const IDLE: CaptureMonitor = {
@@ -70,6 +75,7 @@ const IDLE: CaptureMonitor = {
   quietStreakSec: 0,
   warnQuiet: false,
   unavailable: false,
+  trace: [],
 }
 
 export function useCaptureMonitor(stream: MediaStream | null, active: boolean): CaptureMonitor {
@@ -79,6 +85,11 @@ export function useCaptureMonitor(stream: MediaStream | null, active: boolean): 
   // see SAMPLE_MS.
   const totalMsRef = useRef(0)
   const audibleMsRef = useRef(0)
+  // The per-second envelope, and the bucket currently being filled. Kept in
+  // refs so accumulating a sample never re-renders — only the published
+  // snapshot does.
+  const traceRef = useRef<number[]>([])
+  const bucketRef = useRef<{ sum: number; count: number }>({ sum: 0, count: 0 })
 
   useEffect(() => {
     if (!active || !stream) return
@@ -91,6 +102,9 @@ export function useCaptureMonitor(stream: MediaStream | null, active: boolean): 
     // on the way out.
     totalMsRef.current = 0
     audibleMsRef.current = 0
+    traceRef.current = []
+    bucketRef.current = { sum: 0, count: 0 }
+    let bucketMs = 0
 
     try {
       audioCtx = new AudioContext()
@@ -123,6 +137,21 @@ export function useCaptureMonitor(stream: MediaStream | null, active: boolean): 
         } else {
           quietMs += dt
         }
+        // One value per second, averaged over however many samples the
+        // browser actually delivered in that second — which is one in a
+        // throttled tab and ten in a visible one. Averaging rather than
+        // sampling means a throttled tab produces a coarser envelope, not a
+        // wrong one.
+        bucketRef.current.sum += level
+        bucketRef.current.count += 1
+        bucketMs += dt
+        while (bucketMs >= 1000) {
+          const { sum, count } = bucketRef.current
+          traceRef.current.push(count > 0 ? sum / count / 100 : 0)
+          bucketRef.current = { sum: 0, count: 0 }
+          bucketMs -= 1000
+        }
+
         const quietStreakSec = Math.round(quietMs / 1000)
         // Only once there is a minute of recording behind it; a share drawn
         // from the first few seconds is noise.
@@ -133,6 +162,9 @@ export function useCaptureMonitor(stream: MediaStream | null, active: boolean): 
           quietStreakSec,
           warnQuiet: quietStreakSec >= QUIET_WARNING_SEC,
           unavailable: false,
+          // A copy, so a consumer holding this snapshot cannot be surprised
+          // by the array growing underneath it.
+          trace: [...traceRef.current],
         })
       }, SAMPLE_MS)
     } catch {
@@ -141,7 +173,7 @@ export function useCaptureMonitor(stream: MediaStream | null, active: boolean): 
       // than throwing into the recorder. This is a setState inside an effect
       // and the linter says so; it is a one-shot error path that has to
       // reach the screen, and the alternatives are worse than the warning.
-      setState({ ...IDLE, unavailable: true })
+      setState({ ...IDLE, unavailable: true, trace: [] })
     }
 
     return () => {

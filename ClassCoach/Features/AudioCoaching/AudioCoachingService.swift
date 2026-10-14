@@ -56,7 +56,7 @@ enum AudioCoachingService {
     /// The system finishes the transfer even if the teacher locks the phone,
     /// and the server transcribes without us — mirrors `startTranscription` in
     /// `web/src/lib/api.ts`.
-    static func startTranscription(sessionId: String, audioFileURL: URL, durationSec: Double) async throws {
+    static func startTranscription(sessionId: String, audioFileURL: URL, durationSec: Double, levelTrace: [Double]? = nil) async throws {
         // Recording is uncompressed so an interrupted lesson survives; the
         // upload does not have to be. See AudioCompressor. Every upload goes
         // through here, so Stop and recovery both get it.
@@ -66,6 +66,7 @@ enum AudioCoachingService {
             sessionId: sessionId,
             audioFileURL: upload,
             durationSec: durationSec,
+            levelTrace: levelTrace,
             token: await AuthManager.shared.token,
             baseURL: APIClient.shared.uploadBaseURL
         )

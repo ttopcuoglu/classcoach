@@ -33,6 +33,39 @@
 /// from the start of the recording.
 export type LevelTrace = number[]
 
+/// Two hours at 1Hz. A cap is needed because this arrives from the client:
+/// without one, a request could ask the database to store an arbitrarily
+/// long array.
+export const MAX_TRACE_SECONDS = 7200
+
+/// Validates and normalises a trace sent by a client. Returns null for
+/// anything that is not a usable envelope, so a malformed or hostile value
+/// becomes "no trace" rather than a stored shape nothing downstream expects.
+///
+/// Values are rounded to two decimals: the measurement is far coarser than
+/// that, and it roughly halves what gets stored.
+export function parseLevelTrace(raw: unknown): LevelTrace | null {
+  let value = raw
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value)
+    } catch {
+      return null
+    }
+  }
+  if (!Array.isArray(value) || value.length === 0) return null
+  const out: number[] = []
+  for (const entry of value.slice(0, MAX_TRACE_SECONDS)) {
+    // Only genuine numbers. Coercing with Number() turned a null in the JSON
+    // into 0 — and zero reads as silence, so a trace with holes in it would
+    // have credited settles that were never measured. Caught by the test
+    // written for exactly that.
+    if (typeof entry !== 'number' || !Number.isFinite(entry) || entry < 0 || entry > 1) return null
+    out.push(Math.round(entry * 100) / 100)
+  }
+  return out.length > 0 ? out : null
+}
+
 /// When the teacher was speaking, from the transcript.
 export type SpeechInterval = { startSec: number; endSec: number }
 

@@ -670,6 +670,15 @@ model AudioSession {
   // "looked and found nothing" never looks like "not looked yet".
   momentToRevisit  Json?
 
+  // A loudness envelope for the recording — one RMS sample per second,
+  // measured on the device while recording. NOT audio: speech cannot be
+  // reconstructed from a 1Hz amplitude curve, which is what lets this exist
+  // alongside the promise that audio is never saved. Feeds lib/settleTime.ts,
+  // the only thing that can tell a bubbly room that settles when asked from
+  // one where directions compete with chatter — the transcript cannot, since
+  // diarization resolves crosstalk away before anything is stored.
+  levelTrace       Json?
+
   // Whether an attention bid HELD — see lib/escalation.ts. Not a count of
   // redirections: a count tells you which group a teacher has, and this tells
   // you whether asking worked, by reading runs of asks in close succession

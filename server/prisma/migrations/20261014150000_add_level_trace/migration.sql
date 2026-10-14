@@ -1,0 +1,12 @@
+-- A loudness envelope for the recording: one RMS sample per second, captured
+-- on the device while recording and uploaded as plain numbers
+-- (lib/settleTime.ts). NOT audio — speech cannot be reconstructed from a 1Hz
+-- amplitude curve, so "audio is never saved" stays true.
+--
+-- It exists because the transcript cannot carry whether a room stayed loud:
+-- Deepgram's utterances are sequential by construction, and across 1,856
+-- adjacent segment pairs in real lessons only 0.4% overlap at all.
+--
+-- Nullable: every recording made before this shipped has none, and a client
+-- that cannot measure its input sends none.
+ALTER TABLE "AudioSession" ADD COLUMN "levelTrace" JSONB;

@@ -4,6 +4,7 @@ import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { analyzeTranscript, buildContentExhibits, detectLessonContent, type Segment } from '../lib/audioAnalysis.ts'
 import { enrichClassroomMoves } from '../lib/classroomMoves.ts'
 import { readEscalation } from '../lib/escalation.ts'
+import { parseLevelTrace } from '../lib/settleTime.ts'
 import { enrichLessonContent } from '../lib/lessonObjective.ts'
 import { checkFeatureAccess, hasActivePlan, startOfCurrentMonth } from '../lib/billing.ts'
 import { cachedSystem, cacheStats } from '../lib/promptCache.ts'
@@ -602,12 +603,17 @@ audioSessionsRouter.post('/:id/transcribe', upload.single('audio'), async (req, 
   if (req.body?.mode === 'async') {
     const recordedSec = Number(req.body?.durationSec)
     const { mimetype } = req.file
+    // The loudness envelope the device measured while recording. Validated
+    // rather than trusted — it arrives from a client, and anything that is
+    // not a usable envelope becomes no envelope.
+    const levelTrace = parseLevelTrace(req.body?.levelTrace)
     await prisma.audioSession.update({
       where: { id: sessionId },
       data: {
         status: 'transcribing',
         transcribeStartedAt: new Date(),
         failureReason: null,
+        ...(levelTrace ? { levelTrace } : {}),
         // The client knows how long it recorded; storing it now is what lets
         // any other device draw a progress estimate for this job.
         ...(Number.isFinite(recordedSec) && recordedSec > 0 ? { durationSec: Math.round(recordedSec) } : {}),

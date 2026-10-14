@@ -2123,11 +2123,20 @@ export async function startTranscription(
   id: string,
   audioBlob: Blob,
   durationSec: number,
+  /// One averaged level per second of recording. NOT audio — a 1Hz amplitude
+  /// curve cannot be turned back into speech — and the only thing that can
+  /// tell a room that settles when asked from one that does not, since
+  /// diarization resolves crosstalk away before the transcript is written.
+  /// Omitted when the device could not measure its own input.
+  levelTrace?: number[],
 ): Promise<void> {
   const formData = new FormData()
   formData.append('audio', audioBlob, 'session-audio')
   formData.append('mode', 'async')
   formData.append('durationSec', String(Math.round(durationSec)))
+  if (levelTrace && levelTrace.length > 0) {
+    formData.append('levelTrace', JSON.stringify(levelTrace.map((v) => Math.round(v * 100) / 100)))
+  }
   const res = await fetch(`${API_BASE_URL}/api/audio-sessions/${id}/transcribe`, {
     method: 'POST',
     credentials: 'include',

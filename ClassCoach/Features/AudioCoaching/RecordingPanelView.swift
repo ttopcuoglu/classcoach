@@ -289,7 +289,10 @@ struct RecordingPanelView: View {
             try await AudioCoachingService.startTranscription(
                 sessionId: result.sessionId,
                 audioFileURL: result.fileURL,
-                durationSec: result.elapsedSec
+                durationSec: result.elapsedSec,
+                // Read before handOff(), which resets the recorder and with
+                // it the envelope.
+                levelTrace: recorder.levelTrace
             )
             // The file stays until the server reports a transcript for this
             // session. Queued is not the same as safe.

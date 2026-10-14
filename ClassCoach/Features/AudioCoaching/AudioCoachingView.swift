@@ -218,6 +218,10 @@ struct AudioCoachingView: View {
                 sessionId: sessionId,
                 audioFileURL: RecordingStore.audioURL(for: sessionId),
                 durationSec: manifest.accumulatedSec
+                // No level trace: this is a recovery upload after a crash,
+                // and the measurement died with the process that made it.
+                // Settle time will report itself unmeasurable rather than
+                // reading an envelope that was never taken.
             )
             // Not discarded here either: this upload is queued, exactly like
             // the first one was. `reconcileLocalAudio` clears it once the

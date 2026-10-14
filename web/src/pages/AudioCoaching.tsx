@@ -633,7 +633,8 @@ function RecordingPanel({
     }
     const finalElapsed = accumulatedSecRef.current
     releaseWakeLock()
-    // Read before the monitor is torn down by setLiveStream(null).
+    // Both read before the monitor is torn down by setLiveStream(null).
+    const levelTrace = capture.trace
     setThinCaptureSharePct(
       capture.audibleSharePct != null && capture.audibleSharePct < THIN_AUDIBLE_SHARE_PCT
         ? capture.audibleSharePct
@@ -654,7 +655,7 @@ function RecordingPanel({
     setPhase('uploading')
     setError(null)
     try {
-      await startTranscription(session.id, blob, finalElapsed)
+      await startTranscription(session.id, blob, finalElapsed, levelTrace)
       // Handed over. Deepgram's eight minutes happen server-side now, so the
       // teacher goes back to the list and the row reports it — they can shut
       // the laptop.

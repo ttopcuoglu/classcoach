@@ -109,6 +109,10 @@ final class BackgroundUploader: NSObject {
         sessionId: String,
         audioFileURL: URL,
         durationSec: Double,
+        /// One averaged level per second of recording. Nil for a recovery
+        /// upload after a crash, where the measurement was lost with the
+        /// process that made it.
+        levelTrace: [Double]?,
         token: String?,
         baseURL: URL
     ) throws {
@@ -123,7 +127,8 @@ final class BackgroundUploader: NSObject {
         let bodyURL = try writeMultipartBody(
             boundary: boundary,
             audioFileURL: audioFileURL,
-            durationSec: durationSec
+            durationSec: durationSec,
+            levelTrace: levelTrace
         )
 
         let task = session.uploadTask(with: request, fromFile: bodyURL)
@@ -138,7 +143,7 @@ final class BackgroundUploader: NSObject {
     /// The envelope, streamed to a temp file rather than built in memory: a
     /// fifty-minute recording held as `Data` twice over is how a phone with a
     /// full photo library gets the app killed mid-upload.
-    private func writeMultipartBody(boundary: String, audioFileURL: URL, durationSec: Double) throws -> URL {
+    private func writeMultipartBody(boundary: String, audioFileURL: URL, durationSec: Double, levelTrace: [Double]?) throws -> URL {
         let bodyURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("upload-\(UUID().uuidString).multipart")
         FileManager.default.createFile(atPath: bodyURL.path, contents: nil)
@@ -149,7 +154,16 @@ final class BackgroundUploader: NSObject {
             try handle.write(contentsOf: Data(string.utf8))
         }
 
-        for (name, value) in [("mode", "async"), ("durationSec", String(Int(durationSec.rounded())))] {
+        // Two decimals: the measurement is far coarser than that, and it
+        // roughly halves a forty-minute envelope on the wire. The server
+        // validates and rounds again regardless.
+        var fields: [(String, String)] = [("mode", "async"), ("durationSec", String(Int(durationSec.rounded())))]
+        if let levelTrace, !levelTrace.isEmpty {
+            let rounded = levelTrace.map { String(format: "%.2f", min(1, max(0, $0))) }
+            fields.append(("levelTrace", "[" + rounded.joined(separator: ",") + "]"))
+        }
+
+        for (name, value) in fields {
             try write("--\(boundary)\r\n")
             try write("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
             try write("\(value)\r\n")

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { roomBaseline, settleTime, teacherIntervals, type LevelTrace } from './settleTime.ts'
+import { MAX_TRACE_SECONDS, parseLevelTrace, roomBaseline, settleTime, teacherIntervals, type LevelTrace } from './settleTime.ts'
 
 // No real recording carries a level trace yet, so these traces are built by
 // hand. That is a limit worth stating plainly: the thresholds below are
@@ -115,4 +115,40 @@ test('teacher intervals come from the teacher only', () => {
     { startSec: 0, endSec: 4 },
     { startSec: 8, endSec: 10 },
   ])
+})
+
+// --- what arrives from a client ---------------------------------------------
+
+test('a trace arrives as a JSON string from multipart form data', () => {
+  assert.deepEqual(parseLevelTrace('[0.1,0.25,0.3]'), [0.1, 0.25, 0.3])
+})
+
+test('values are rounded, because the measurement is coarser than the digits', () => {
+  assert.deepEqual(parseLevelTrace([0.123456, 0.987654]), [0.12, 0.99])
+})
+
+test('anything that is not a usable envelope becomes no envelope', () => {
+  assert.equal(parseLevelTrace(undefined), null)
+  assert.equal(parseLevelTrace('not json'), null)
+  assert.equal(parseLevelTrace([]), null)
+  assert.equal(parseLevelTrace({ 0: 0.5 }), null)
+})
+
+test('a sample outside 0..1 means the sender is not measuring what we think', () => {
+  // Rejected wholesale rather than clamped: one impossible value means the
+  // scale is wrong, and a clamped trace would be read as if it were sound.
+  assert.equal(parseLevelTrace([0.2, 4, 0.3]), null)
+  assert.equal(parseLevelTrace([0.2, -1]), null)
+})
+
+test('a non-finite sample is a gap, and a gap invalidates the trace', () => {
+  // NaN must never become 0: zero reads as silence, and settle time would
+  // credit a settle it never measured.
+  assert.equal(parseLevelTrace([0.2, NaN, 0.3]), null)
+  assert.equal(parseLevelTrace('[0.2,null,0.3]'), null)
+})
+
+test('a trace longer than the cap is truncated, not refused', () => {
+  const long = new Array(MAX_TRACE_SECONDS + 500).fill(0.3)
+  assert.equal(parseLevelTrace(long)?.length, MAX_TRACE_SECONDS)
 })

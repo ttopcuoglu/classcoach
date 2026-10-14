@@ -87,6 +87,26 @@ final class AudioRecorder: NSObject, ObservableObject {
     private var quietSec: Double = 0
     private var lastSampleAt: Date?
 
+    /// One averaged level per second of recording, uploaded with the audio.
+    ///
+    /// NOT audio: speech cannot be reconstructed from a 1Hz amplitude curve,
+    /// which is what lets this exist alongside the promise on the recording
+    /// screen that audio is never saved. It is the only thing that can tell a
+    /// room which settles when asked from one where directions compete with
+    /// chatter — the transcript cannot, because diarization resolves
+    /// crosstalk away before a word of it is stored.
+    ///
+    /// Not @Published: it grows every second and nothing on screen draws it,
+    /// so publishing it would re-render the panel once a second for nothing.
+    private(set) var levelTrace: [Double] = []
+
+    /// Two hours at 1Hz, matching the server's cap.
+    private static let maxTraceSeconds = 7200
+
+    private var traceBucketSum: Double = 0
+    private var traceBucketCount = 0
+    private var traceBucketSec: Double = 0
+
     private var recorder: AVAudioRecorder?
     private var accumulatedSec: Double = 0
     private var runStart: Date?
@@ -384,6 +404,21 @@ final class AudioRecorder: NSObject, ObservableObject {
         } else {
             quietSec += dt
         }
+        // One value a second, averaged over however many samples the timer
+        // actually delivered in that second. Averaging rather than sampling
+        // means a coalesced timer yields a coarser envelope, not a wrong one.
+        traceBucketSum += inputLevel
+        traceBucketCount += 1
+        traceBucketSec += dt
+        while traceBucketSec >= 1 {
+            if levelTrace.count < Self.maxTraceSeconds {
+                levelTrace.append(traceBucketCount > 0 ? traceBucketSum / Double(traceBucketCount) : 0)
+            }
+            traceBucketSum = 0
+            traceBucketCount = 0
+            traceBucketSec -= 1
+        }
+
         warnQuiet = quietSec >= Self.quietSecondsBeforeWarning
         audibleSharePct = totalSec >= Self.secondsForShare
             ? Int((audibleSec / totalSec * 100).rounded())
@@ -395,6 +430,12 @@ final class AudioRecorder: NSObject, ObservableObject {
         totalSec = 0
         quietSec = 0
         lastSampleAt = nil
+        // Deliberately NOT cleared in stop(): the upload reads this after
+        // stopping, the same reason audibleSharePct survives.
+        levelTrace = []
+        traceBucketSum = 0
+        traceBucketCount = 0
+        traceBucketSec = 0
         inputLevel = 0
         warnQuiet = false
         audibleSharePct = nil
