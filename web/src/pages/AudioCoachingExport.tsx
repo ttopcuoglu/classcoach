@@ -14,7 +14,6 @@ import {
 import { getAudioSession, type AudioEscalationRung, type AudioQuote, type AudioSessionWithSegments } from '../lib/api'
 import { buildCorrectionBalance, coverageCaveatLine, DETECTION_CAVEAT } from '../lib/correctionBalance'
 import {
-  STUDENT_FOCUS_SELECTION_CAVEAT,
   formatRatio,
   getCoverage,
   getCountMetric,
@@ -270,36 +269,6 @@ export default function AudioCoachingExport() {
               small enough to identify them, in a document about someone
               else's teaching. The proportion is the teacher's to share; the
               quote is not ours to put in their hands. */}
-          {session.studentTalkFocus && session.studentTalkFocus.classified > 0 && (
-            <>
-              <p className="mt-2 text-[11px] font-bold uppercase tracking-wide text-forest">
-                What students talked about
-              </p>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                <Stat
-                  label="About the lesson"
-                  metric={{ state: 'measured', display: String(session.studentTalkFocus.onTopic) }}
-                  accent={A.gold}
-                />
-                <Stat
-                  label="About how to do the work"
-                  metric={{ state: 'measured', display: String(session.studentTalkFocus.procedural) }}
-                  accent={A.gold}
-                />
-                <Stat
-                  label="Too unclear to make out"
-                  metric={{ state: 'measured', display: String(session.studentTalkFocus.unclear) }}
-                  accent={A.gold}
-                />
-              </div>
-              <p className="text-xs text-ink-soft">
-                Of the {session.studentTalkFocus.classified} student turns the microphone caught clearly. This is the
-                only measure here that can tell a discussion from a room talking over itself — the shares above read
-                the same either way. It isn't a score, and there's no correct number. {STUDENT_FOCUS_SELECTION_CAVEAT}{' '}
-                A high unclear count is the microphone, which sits with the teacher and hears the room poorly.
-              </p>
-            </>
-          )}
         </ReportSection>
 
         {/* Questioning & checking — one section, two halves, as on screen.

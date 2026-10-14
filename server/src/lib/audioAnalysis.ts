@@ -87,6 +87,15 @@ export type AnalysisResult = {
     /// for its first four minutes is not a four-minute silence in the lesson,
     /// and the silence share says otherwise unless this is known.
     firstWordSec?: number | null
+    /// The non-speech part of the recording, told apart by the loudness
+    /// envelope: genuinely quiet seconds versus seconds with real sound in
+    /// them that produced no transcript. Absent on every recording made
+    /// before envelopes existed, and on any where the teacher's own speech
+    /// could not be located well enough to calibrate against — in which case
+    /// the report keeps the one combined "Silence or other" slice, which is
+    /// the honest answer with nothing to split it by.
+    quietSec?: number
+    unresolvedSec?: number
     redirectionCount: number
     firstRedirectionTimestampSec: number | null
     transitionCount: number

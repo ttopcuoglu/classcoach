@@ -27,10 +27,16 @@ import { useEffect, useRef, useState } from 'react'
 /// thing in both places.
 const LEVEL_SCALE = 300
 
-/// Below this the microphone is hearing room tone, not a room. Taken from
-/// MicLevelMeter's own signal-detected threshold, which is the one number
-/// here that has been in front of users already.
-const AUDIBLE_FLOOR = 8
+/// Below this the microphone is hearing room tone, not a room — 0.02 of the
+/// 0...1 linear RMS scale, which is roughly -44 dBFS.
+///
+/// Was 8 (i.e. 0.08, about -31 dBFS), borrowed from MicLevelMeter, where a
+/// phone is held close during a mic check. For a phone on a desk across a
+/// classroom that is far too strict. iOS now uses the identical number on
+/// the identical scale, so the envelopes the two platforms upload can be
+/// compared at all. Provisional: no real classroom envelope exists yet to
+/// tune against.
+const AUDIBLE_FLOOR = 2
 
 /// How long the level has to stay at the floor before saying anything. Long
 /// enough to sit through a genuine quiet stretch — silent reading, a video,

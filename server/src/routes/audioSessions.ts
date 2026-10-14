@@ -4,7 +4,7 @@ import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { analyzeTranscript, buildContentExhibits, detectLessonContent, type Segment } from '../lib/audioAnalysis.ts'
 import { enrichClassroomMoves } from '../lib/classroomMoves.ts'
 import { readEscalation } from '../lib/escalation.ts'
-import { parseLevelTrace } from '../lib/settleTime.ts'
+import { parseLevelTrace, splitNonSpeech, teacherIntervals } from '../lib/settleTime.ts'
 import { enrichLessonContent } from '../lib/lessonObjective.ts'
 import { checkFeatureAccess, hasActivePlan, startOfCurrentMonth } from '../lib/billing.ts'
 import { cachedSystem, cacheStats } from '../lib/promptCache.ts'
@@ -803,6 +803,19 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
   // populated later from the Reflect tab's actual coaching conversation
   // (see reflect-summary below), so the teacher doesn't see two independent
   // AI-written takeaways derived from the same numbers.
+  // Silence told apart from sound the transcript has no words for. Only
+  // possible where the device uploaded an envelope, which is recordings made
+  // after that shipped — everything older keeps the combined slice, which is
+  // the honest answer when there is nothing to split it with.
+  const stored = await prisma.audioSession.findUnique({
+    where: { id: sessionId },
+    select: { levelTrace: true, durationSec: true },
+  })
+  const trace = parseLevelTrace(stored?.levelTrace)
+  const nonSpeech = trace
+    ? splitNonSpeech(trace, teacherIntervals(segments), stored?.durationSec ?? analysis.metricsDetail.totalDurationSec)
+    : null
+
   const updated = await prisma.audioSession.update({
     where: { id: sessionId },
     data: {
@@ -814,7 +827,10 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
       higherOrderPct: analysis.higherOrderPct,
       avgWaitTimeSec: analysis.avgWaitTimeSec,
       cfuCount: analysis.cfuCount,
-      metricsDetail: analysis.metricsDetail,
+      metricsDetail: {
+        ...analysis.metricsDetail,
+        ...(nonSpeech ? { quietSec: nonSpeech.quietSec, unresolvedSec: nonSpeech.unresolvedSec } : {}),
+      },
       highlights: analysis.highlights,
       phases: analysis.phases,
       questionLog: analysis.questionLog,

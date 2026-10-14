@@ -327,6 +327,11 @@ function previewReport(): Json {
       waitTime2Sec: 0.4,
       waitTime2SampleCount: 11,
       firstWordSec: 269,
+      // `home=split` shows the quiet / could-not-make-out breakdown that a
+      // recording with a loudness envelope produces. Without the flag the
+      // fixture has no envelope, which is every lesson recorded before this
+      // shipped — and that path must keep showing one combined slice.
+      ...(homeTools().has('split') ? { quietSec: 200, unresolvedSec: 324 } : {}),
       // `home=imbalance` reproduces the real lesson that prompted this card:
       // six redirections and no detected encouragement. It is the case the
       // wording has to get right, because a zero here is a detector limit far
@@ -745,6 +750,14 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
   // shipped. `?preview=1` at /audio-coaching/preview-report opens it.
   const reportMatch = path.match(/^\/api\/audio-sessions\/(preview-report)$/)
   if (reportMatch) return previewReport()
+  // Any OTHER session id fetched on its own. Without this the request fell
+  // through to the list handler below and answered with an ARRAY, so opening
+  // any row but the first handed the report page a session with no segments
+  // and the whole page went blank on `segments is not iterable`.
+  const anySession = path.match(/^\/api\/audio-sessions\/([A-Za-z0-9-]+)$/)
+  if (anySession && method === 'GET') {
+    return { ...(audioSession(anySession[1], 20, 7, true) as Record<string, unknown>), segments: [] }
+  }
   // Creating a session has to answer with ONE session in 'setup', not the
   // list. Returning the list here meant pressing Record handed the page an
   // array, which fell through to an "Untitled lesson / Invalid Date" report

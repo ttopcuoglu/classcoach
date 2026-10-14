@@ -59,16 +59,23 @@ final class AudioRecorder: NSObject, ObservableObject {
     /// is noise.
     @Published private(set) var audibleSharePct: Int?
 
-    /// dBFS floor for "the mic is hearing the room at all", on
-    /// `AVAudioRecorder.averagePower`'s scale.
+    /// Floor for "the mic is hearing the room at all", as LINEAR RMS on the
+    /// same 0...1 scale the web recorder uses.
     ///
-    /// Deliberately more permissive than VoiceTurnRecorder's -35, which was
-    /// tuned for a phone held close during a voice turn. A teacher across the
-    /// room reads well below that while genuinely speaking, and a threshold
-    /// that warned through normal teaching would train teachers to ignore it.
-    /// The job here is to catch a microphone hearing nothing, not to judge
-    /// whether what it hears will transcribe.
-    private static let audibleFloorDB: Float = -45
+    /// It has to be the same scale on both platforms, because the envelope
+    /// these produce is read by the same server code and compared across a
+    /// teacher's lessons. iOS used to publish `(dB + 60) / 60` while web
+    /// published `rms * 3`; at the same real loudness iOS read about four
+    /// times higher, so one teacher's phone lesson and laptop lesson were not
+    /// on the same axis at all.
+    ///
+    /// Deliberately permissive — roughly -44 dBFS, well below
+    /// VoiceTurnRecorder's -35, which was tuned for a phone held close during
+    /// a voice turn. A teacher across the room reads far below that while
+    /// genuinely speaking, and a meter that warned through normal teaching
+    /// would train teachers to ignore it. Provisional: no real classroom
+    /// envelope exists yet to tune against.
+    private static let audibleFloor: Double = 0.02
 
     /// A minute of unbroken near-silence before saying anything — long enough
     /// to sit through silent reading, a video, or students working.
@@ -386,9 +393,10 @@ final class AudioRecorder: NSObject, ObservableObject {
         guard let recorder, recorder.isRecording else { return }
         recorder.updateMeters()
         let db = recorder.averagePower(forChannel: 0)
-        // -60 reads as the bottom of the bar; averagePower bottoms out at
-        // -160 in true silence, which would make every real room look full.
-        inputLevel = min(1, max(0, Double(db + 60) / 60))
+        // dBFS back to linear RMS, then the same x3 the web recorder applies,
+        // so both platforms put the same sound at the same number.
+        let rms = pow(10.0, Double(db) / 20.0)
+        inputLevel = min(1, max(0, rms * 3))
 
         // Real elapsed time since the previous sample, capped so a long
         // interruption (a phone call, the app suspended) does not land as one
@@ -398,7 +406,7 @@ final class AudioRecorder: NSObject, ObservableObject {
         lastSampleAt = now
 
         totalSec += dt
-        if db >= Self.audibleFloorDB {
+        if inputLevel >= Self.audibleFloor {
             audibleSec += dt
             quietSec = 0
         } else {

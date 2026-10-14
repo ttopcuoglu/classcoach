@@ -46,7 +46,6 @@ import {
   type AudioRedirectionLogEntry,
   type AudioHardLook,
   type AudioMomentToRevisit,
-  type AudioStudentTalkFocus,
   type AudioRubricLens,
   type AudioSession,
   type AudioSessionWithSegments,
@@ -61,7 +60,6 @@ import {
 import { THIN_AUDIBLE_SHARE_PCT, useCaptureMonitor } from '../hooks/useCaptureMonitor'
 import { buildCorrectionBalance, coverageCaveatLine, DETECTION_CAVEAT } from '../lib/correctionBalance'
 import {
-  STUDENT_FOCUS_SELECTION_CAVEAT,
   buildEvidenceQualityLine,
   evidenceTier,
   EVIDENCE_TIER_LABELS,
@@ -1956,23 +1954,47 @@ function MomentToRevisitCard({ moment, sending }: { moment: AudioMomentToRevisit
   )
 }
 
-// One stacked bar (Teacher / Students / Silence — all in one, not two
-// separate visualizations) plus a legend grid below it. "Silence / other"
-// is deliberately one honest combined segment, not split into "silence"
-// vs. "unclear audio" — the batch transcription API has no voice-activity
-// signal to tell the two apart, so `silencePct` is already
-// `100 - teacherPct - studentPct` upstream; splitting it further would be
-// inventing precision the data can't back up.
+/// The quiet / could-not-make-out split as percentages of the recording,
+/// from the seconds the analysis stored. Null whenever there is no envelope
+/// behind it, which is every recording made before envelopes existed — the
+/// combined "Silence or other" slice is the honest answer there.
+function nonSpeechSplit(
+  metricsDetail: AudioSessionWithSegments['metricsDetail'],
+  durationSec: number | null,
+): { quietPct: number; unresolvedPct: number } | null {
+  const quiet = metricsDetail?.quietSec
+  const unresolved = metricsDetail?.unresolvedSec
+  if (quiet == null || unresolved == null || !durationSec || durationSec <= 0) return null
+  return { quietPct: (quiet / durationSec) * 100, unresolvedPct: (unresolved / durationSec) * 100 }
+}
+
+// One stacked bar (Teacher / Students / the rest — all in one, not two
+// separate visualizations) plus a legend grid below it.
+//
+// "Silence or other" was one combined segment for a good reason: batch
+// transcription has no voice-activity signal, so a quiet room and a room the
+// microphone could not resolve produced the identical number, and splitting
+// it would have been invented precision. On one real lesson that slice was
+// 85%, and nothing in the report could say which it had been.
+//
+// The loudness envelope the device now uploads answers it, so the split is
+// shown WHERE THERE IS ONE and the combined slice stays everywhere else —
+// every recording made before envelopes existed, and any where the teacher's
+// own speech could not be located well enough to calibrate against.
 function TalkParticipationBar({
   teacherPct,
   studentPct,
   silencePct,
+  nonSpeech,
   compact,
   paceWpm,
 }: {
   teacherPct: number | null
   studentPct: number | null
   silencePct: number | null
+  /// Seconds of quiet versus seconds with sound the transcript has no words
+  /// for. Absent unless the recording carried an envelope.
+  nonSpeech?: { quietPct: number; unresolvedPct: number } | null
   compact?: boolean
   /// Given on the Insights page, where pace sits in the same line as the split.
   paceWpm?: number | null
@@ -1987,13 +2009,22 @@ function TalkParticipationBar({
       <div className={`flex w-full overflow-hidden rounded-full bg-cream ${barHeight}`}>
         <div className="h-full bg-terracotta" style={{ width: `${teacherPct}%` }} />
         {studentPct != null && <div className="h-full bg-gold" style={{ width: `${studentPct}%` }} />}
-        {silencePct != null ? (
+        {nonSpeech ? (
+          <>
+            <div className="h-full bg-hairline" style={{ width: `${nonSpeech.quietPct}%` }} />
+            {/* Hatched, like every other "we could not read this" mark in the
+                report — sound with no words in it is missing data, not a
+                measured quantity of anything. */}
+            <div className="h-full" style={{ width: `${nonSpeech.unresolvedPct}%`, ...HATCH_STYLE }} />
+          </>
+        ) : silencePct != null ? (
           <div className="h-full bg-hairline" style={{ width: `${silencePct}%` }} />
         ) : (
           <div className="h-full" style={{ width: `${remainder}%`, ...HATCH_STYLE }} />
         )}
       </div>
       {paceWpm !== undefined ? (
+        <>
         <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-ink-soft">
           <span className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-terracotta" /> You {Math.round(teacherPct)}%
@@ -2002,12 +2033,41 @@ function TalkParticipationBar({
             <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-gold" /> Students{' '}
             {studentPct != null ? `${Math.round(studentPct)}%` : 'unavailable'}
           </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-hairline" /> Silence or other{' '}
-            {silencePct != null ? `${Math.round(silencePct)}%` : 'unavailable'}
-          </span>
-          {paceWpm != null && <span>Your pace {paceWpm} wpm</span>}
+          {nonSpeech ? (
+            <>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-hairline" /> Quiet{' '}
+                {Math.round(nonSpeech.quietPct)}%
+              </span>
+              <span className="flex items-center gap-1.5">
+                <HatchedSwatch className="h-2.5 w-2.5 rounded-sm" /> Sound we couldn’t make out{' '}
+                {Math.round(nonSpeech.unresolvedPct)}%
+              </span>
+            </>
+          ) : (
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-hairline" /> Silence or other{' '}
+              {silencePct != null ? `${Math.round(silencePct)}%` : 'unavailable'}
+            </span>
+          )}
         </div>
+          {/* Pace used to be a trailing item in that legend row, where it
+              read as a fourth slice of the bar rather than a separate
+              measure. It is the one number here a teacher can act on the
+              same afternoon, so it gets its own line — with an anchor,
+              because "181" means nothing on its own, and a target would be
+              wrong: a lab demo and a read-aloud are different speeds and
+              neither is a fault. */}
+          {paceWpm != null && (
+            <div className="rounded-xl bg-cream p-3">
+              <p className="text-sm text-ink">
+                <span className="font-semibold">Your pace — {paceWpm} words a minute.</span>{' '}
+                Everyday conversation runs about 150.
+              </p>
+              <p className="mt-0.5 text-xs text-ink-soft">An anchor to place yourself against, not a target.</p>
+            </div>
+          )}
+        </>
       ) : (
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm text-ink-soft">
         <span className="flex items-center gap-1.5">
@@ -5362,99 +5422,6 @@ function TranscriptEvidenceCard({
 ///
 /// Counts rather than percentages, deliberately: "54% on topic" is a score,
 /// and there is no correct figure here.
-function StudentTalkFocusCard({ focus }: { focus: AudioStudentTalkFocus | null }) {
-  if (!focus || focus.classified === 0) return null
-
-  // Counted rows are the labels that held still across repeated runs
-  // (on-topic returned 32, 32, 33, 32, 32 of 59 on the same lesson). The
-  // off-topic turns are shown below as quotes with NO count, because that
-  // label is the one that moved — two to six on that same lesson — and it is
-  // also the only one that makes a claim about students. A quote a teacher can
-  // check beats a number they cannot.
-  const rows = [
-    { label: 'About the lesson', value: focus.onTopic, band: 'bg-forest' },
-    { label: 'About how to do the work', value: focus.procedural, band: 'bg-gold' },
-    { label: "Too unclear to make out", value: focus.unclear, band: 'bg-hairline' },
-  ]
-  const otherExamples = focus.examples.filter((e) => e.kind === 'off_topic')
-
-  return (
-    <div>
-      <p className="text-sm text-ink">
-        Of the {focus.classified} student turn{focus.classified === 1 ? '' : 's'} the microphone caught clearly
-        {focus.sampled ? ', sampled across the lesson' : ''}:
-      </p>
-      <p className="mt-1 text-xs text-ink-soft">{STUDENT_FOCUS_SELECTION_CAVEAT}</p>
-      <div className="mt-3 flex flex-col gap-2">
-        {rows.map((row) => (
-          <div key={row.label} className="flex items-center gap-3">
-            <span aria-hidden="true" className={`h-3 w-3 shrink-0 rounded-sm ${row.band}`} />
-            <span className="flex-1 text-sm text-ink">{row.label}</span>
-            <span className="text-sm font-semibold text-forest">{row.value}</span>
-          </div>
-        ))}
-      </div>
-      <p className="mt-4 text-xs text-ink-soft">
-        This is the only thing here that can tell a discussion from a room talking over itself — the talk-time split
-        reads the same either way. It isn't a score, and there's no correct number.
-        {focus.unclear > 0 && (
-          <>
-            {' '}
-            The {focus.unclear} unclear turn{focus.unclear === 1 ? '' : 's'}{' '}
-            {focus.unclear === 1 ? 'is' : 'are'} the microphone, not the students: it sits with you and hears the room
-            poorly, so a distant voice often arrives garbled. Audio from a video played in class can land here too.
-          </>
-        )}
-      </p>
-
-      {otherExamples.length > 0 && (
-        <div className="mt-4 rounded-xl bg-cream p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-            Turns that looked like something else
-          </p>
-          <p className="mt-1 text-xs text-ink-soft">
-            Shown rather than counted, on purpose: judging what counts as off-topic varied between runs, so these are
-            examples to read and not a tally. Off-topic talk can be the task's fault as easily as anyone's, and a
-            tangent is sometimes the best part of a lesson.
-          </p>
-          <div className="mt-2 flex flex-col gap-2">
-            {otherExamples.map((example, i) => (
-              <div key={i} className="border-l-2 border-terracotta/40 pl-3">
-                <p className="text-sm text-ink">"{example.text}"</p>
-                <p className="mt-0.5 text-xs text-ink-soft">{formatTime(example.timestampSec)}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {focus.examples.some((e) => e.kind !== 'off_topic') && (
-        <details className="mt-3">
-          <summary className="cursor-pointer text-sm font-medium text-forest hover:text-terracotta-600">
-            Show examples of the rest
-          </summary>
-          <div className="mt-3 flex flex-col gap-2">
-            {focus.examples
-              .filter((e) => e.kind !== 'off_topic')
-              .map((example, i) => (
-                <div key={i} className="border-l-2 border-hairline pl-3">
-                  <p className="text-sm text-ink">"{example.text}"</p>
-                  <p className="mt-0.5 text-xs text-ink-soft">
-                    {formatTime(example.timestampSec)} ·{' '}
-                    {example.kind === 'on_topic'
-                      ? 'About the lesson'
-                      : example.kind === 'procedural'
-                        ? 'About how to do the work'
-                        : 'Too unclear to make out'}
-                  </p>
-                </div>
-              ))}
-          </div>
-        </details>
-      )}
-    </div>
-  )
-}
 
 function WaitTime2Stat({
   waitTime2Sec: sec,
@@ -5501,8 +5468,13 @@ function TalkParticipationTab({
     0,
     'Following up on a student answer pushes their thinking further instead of stopping at the first response.',
   )[0]
-  const focus = session.studentTalkFocus
-  const hasFocus = focus != null && focus.classified > 0
+  // What students talked about is no longer shown. The count could only ever
+  // describe the turns the microphone caught, and those are the ones spoken
+  // loudly towards the teacher — on-topic by construction. The worst-captured
+  // real lesson returned 24 of 24 on-topic with zero unclear, while lessons
+  // captured at 44% and 48% returned 23 and 17 unclear; the cleanest-looking
+  // answer came from the recording that heard least. It is still computed,
+  // because the Hard Look uses it to avoid criticising airtime blind.
   const wpm = session.metricsDetail?.teacherWordsPerMinute ?? null
   const silenceNote = (silencePct ?? 0) > 0 ? leadingSilenceNote(session.metricsDetail?.firstWordSec) : null
   // Only when it is long enough to be worth a look: every lesson has a longest
@@ -5524,26 +5496,10 @@ function TalkParticipationTab({
           teacherPct={session.teacherTalkPct}
           studentPct={session.studentTalkPct}
           silencePct={silencePct}
+          nonSpeech={nonSpeechSplit(session.metricsDetail, session.durationSec)}
           paceWpm={wpm}
         />
       </div>
-
-      {/* "Of 24 student turns heard, 24 were about the lesson" reads as a
-          verdict on the class, and it is the opposite: the turns a room mic
-          catches are the ones aimed at the teacher, which are on-topic by
-          construction. The caveat is not optional decoration — on the real
-          lesson that produced 24 of 24, the microphone heard 15% of the room
-          and the teacher remembers redirecting it ten times. */}
-      {hasFocus && (
-        <div className="flex flex-col gap-1">
-          <p className="text-sm text-ink">
-            Of the {focus.classified} student turn{focus.classified === 1 ? '' : 's'} the microphone caught clearly
-            {focus.sampled ? ', sampled across the lesson,' : ','} {focus.onTopic}{' '}
-            {focus.onTopic === 1 ? 'was' : 'were'} about the lesson.
-          </p>
-          <p className="text-xs text-ink-soft">{STUDENT_FOCUS_SELECTION_CAVEAT}</p>
-        </div>
-      )}
 
       <SectionNextStep text={session.nextSteps?.talk} />
 
@@ -5551,11 +5507,6 @@ function TalkParticipationTab({
         <DetailRow title="Talk flow across the lesson">
           <PacingTimeline segments={session.segments} durationSec={session.durationSec} />
         </DetailRow>
-        {hasFocus && (
-          <DetailRow title="What students talked about, with examples">
-            <StudentTalkFocusCard focus={focus} />
-          </DetailRow>
-        )}
         {stretch && (
           <DetailRow
             title={`Your longest stretch of talk · about ${Math.round(stretch.durationSec / 60)} min, from ${formatTime(stretch.startSec)}`}

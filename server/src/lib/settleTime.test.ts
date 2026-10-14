@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { MAX_TRACE_SECONDS, parseLevelTrace, roomBaseline, settleTime, teacherIntervals, type LevelTrace } from './settleTime.ts'
+import { MAX_TRACE_SECONDS, parseLevelTrace, roomBaseline, settleTime, splitNonSpeech, teacherIntervals, type LevelTrace } from './settleTime.ts'
 
 // No real recording carries a level trace yet, so these traces are built by
 // hand. That is a limit worth stating plainly: the thresholds below are
@@ -151,4 +151,46 @@ test('a non-finite sample is a gap, and a gap invalidates the trace', () => {
 test('a trace longer than the cap is truncated, not refused', () => {
   const long = new Array(MAX_TRACE_SECONDS + 500).fill(0.3)
   assert.equal(parseLevelTrace(long)?.length, MAX_TRACE_SECONDS)
+})
+
+// --- silence vs sound we could not make out ---------------------------------
+
+test('quiet non-speech time and unresolved sound are told apart', () => {
+  // 0-40s the teacher speaks at 0.6. 40-70s is genuinely quiet. 70-100s has
+  // real sound in it that produced no transcript — the case the combined
+  // "Silence or other" slice could never show.
+  const t: number[] = []
+  for (let i = 0; i < 40; i++) t.push(0.6)
+  for (let i = 40; i < 70; i++) t.push(0.05)
+  for (let i = 70; i < 100; i++) t.push(0.45)
+  const split = splitNonSpeech(t, [{ startSec: 0, endSec: 40 }], 100)
+  assert.equal(split?.quietSec, 30)
+  assert.equal(split?.unresolvedSec, 30)
+})
+
+test('the threshold follows the teacher, not a fixed number', () => {
+  // The same shape at half the volume throughout — a quieter phone, or a
+  // teacher further from it. The split must come out the same.
+  const loud: number[] = []
+  const quiet: number[] = []
+  for (let i = 0; i < 40; i++) { loud.push(0.8); quiet.push(0.4) }
+  for (let i = 40; i < 70; i++) { loud.push(0.08); quiet.push(0.04) }
+  for (let i = 70; i < 100; i++) { loud.push(0.6); quiet.push(0.3) }
+  const a = splitNonSpeech(loud, [{ startSec: 0, endSec: 40 }], 100)
+  const b = splitNonSpeech(quiet, [{ startSec: 0, endSec: 40 }], 100)
+  assert.deepEqual(a, b)
+})
+
+test('without enough located teacher speech there is nothing to calibrate against', () => {
+  const t = new Array(100).fill(0.3)
+  assert.equal(splitNonSpeech(t, [{ startSec: 0, endSec: 10 }], 100), null)
+})
+
+test('a teacher the microphone never really heard yields no split', () => {
+  const t = new Array(100).fill(0)
+  assert.equal(splitNonSpeech(t, [{ startSec: 0, endSec: 40 }], 100), null)
+})
+
+test('no trace, no split', () => {
+  assert.equal(splitNonSpeech([], [{ startSec: 0, endSec: 40 }], 100), null)
 })

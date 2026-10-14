@@ -200,3 +200,74 @@ export function teacherIntervals(
     .filter((s) => s.speakerLabel === 'Teacher')
     .map((s) => ({ startSec: s.startSec, endSec: s.endSec }))
 }
+
+// --- separating silence from sound we could not make out ---------------------
+
+/// What the non-speech part of a recording actually was.
+///
+/// The report has always shown one combined "Silence or other" slice, and the
+/// comment on the bar said why: batch transcription has no voice-activity
+/// signal, so a quiet room and a room the microphone could not resolve
+/// produce the identical number. On one real lesson that slice was 85%, and a
+/// teacher reading it had no way to tell whether the class sat in silence or
+/// talked over itself for twenty minutes.
+///
+/// The envelope answers it. Seconds with no transcript but real sound in them
+/// are not silence.
+export type NonSpeechSplit = {
+  quietSec: number
+  /// Sound was present and no words came out of it. NOT "off-task talk" — it
+  /// could be a video, a fire drill, or a teacher at the far side of the
+  /// room. It is "the microphone heard something and the transcript has
+  /// nothing for it".
+  unresolvedSec: number
+}
+
+/// Non-speech seconds below this share of the teacher's own speaking level
+/// count as quiet.
+///
+/// Calibrated against the teacher's voice IN THIS RECORDING rather than an
+/// absolute number, which makes it survive a different phone, a different
+/// room, and the two platforms disagreeing about scale. The teacher is the
+/// one sound we can always locate in the envelope, because the transcript
+/// says exactly when they were speaking.
+const QUIET_FRACTION_OF_SPEECH = 0.35
+
+/// Below this many seconds of located teacher speech there is no reference to
+/// calibrate against, and the split would be guesswork.
+const MIN_REFERENCE_SEC = 20
+
+export function splitNonSpeech(
+  trace: LevelTrace,
+  speech: SpeechInterval[],
+  durationSec: number,
+): NonSpeechSplit | null {
+  if (trace.length === 0 || durationSec <= 0) return null
+
+  const speakingLevels: number[] = []
+  const nonSpeechLevels: number[] = []
+  const limit = Math.min(trace.length, Math.ceil(durationSec))
+  for (let sec = 0; sec < limit; sec++) {
+    const level = trace[sec]
+    if (!Number.isFinite(level)) continue
+    if (speech.some((i) => sec >= i.startSec && sec < i.endSec)) speakingLevels.push(level)
+    else nonSpeechLevels.push(level)
+  }
+
+  if (speakingLevels.length < MIN_REFERENCE_SEC) return null
+
+  const sorted = [...speakingLevels].sort((a, b) => a - b)
+  const medianSpeech = sorted[Math.floor(sorted.length / 2)]
+  // A teacher whose own speech sits at the floor means the microphone never
+  // really heard them either, and everything would be classed as quiet.
+  if (medianSpeech <= 0) return null
+  const quietThreshold = medianSpeech * QUIET_FRACTION_OF_SPEECH
+
+  let quietSec = 0
+  let unresolvedSec = 0
+  for (const level of nonSpeechLevels) {
+    if (level <= quietThreshold) quietSec++
+    else unresolvedSec++
+  }
+  return { quietSec, unresolvedSec }
+}
