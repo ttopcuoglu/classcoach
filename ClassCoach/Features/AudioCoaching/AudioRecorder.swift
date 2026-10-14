@@ -70,15 +70,22 @@ final class AudioRecorder: NSObject, ObservableObject {
     /// whether what it hears will transcribe.
     private static let audibleFloorDB: Float = -45
 
-    /// At a 0.25s tick, 240 ticks is a minute of unbroken near-silence before
-    /// saying anything — long enough to sit through silent reading, a video,
-    /// or students working.
-    private static let quietTicksBeforeWarning = 240
-    private static let ticksForShare = 240
+    /// A minute of unbroken near-silence before saying anything — long enough
+    /// to sit through silent reading, a video, or students working.
+    ///
+    /// Measured in elapsed SECONDS rather than tick counts. The timer asks for
+    /// 0.25s but a timer is a request: under load, in the background, or
+    /// while the system is busy, ticks are coalesced and dropped. Counting
+    /// them would stretch a one-minute warning into several. The web half had
+    /// exactly this bug and a hidden tab turned its one-minute warning into
+    /// ten; it was found by watching the warning fail to appear.
+    private static let quietSecondsBeforeWarning: Double = 60
+    private static let secondsForShare: Double = 60
 
-    private var audibleTicks = 0
-    private var totalTicks = 0
-    private var quietTicks = 0
+    private var audibleSec: Double = 0
+    private var totalSec: Double = 0
+    private var quietSec: Double = 0
+    private var lastSampleAt: Date?
 
     private var recorder: AVAudioRecorder?
     private var accumulatedSec: Double = 0
@@ -363,23 +370,31 @@ final class AudioRecorder: NSObject, ObservableObject {
         // -160 in true silence, which would make every real room look full.
         inputLevel = min(1, max(0, Double(db + 60) / 60))
 
-        totalTicks += 1
+        // Real elapsed time since the previous sample, capped so a long
+        // interruption (a phone call, the app suspended) does not land as one
+        // enormous silent block.
+        let now = Date()
+        let dt = min(lastSampleAt.map { now.timeIntervalSince($0) } ?? 0, 5)
+        lastSampleAt = now
+
+        totalSec += dt
         if db >= Self.audibleFloorDB {
-            audibleTicks += 1
-            quietTicks = 0
+            audibleSec += dt
+            quietSec = 0
         } else {
-            quietTicks += 1
+            quietSec += dt
         }
-        warnQuiet = quietTicks >= Self.quietTicksBeforeWarning
-        audibleSharePct = totalTicks >= Self.ticksForShare
-            ? Int((Double(audibleTicks) / Double(totalTicks) * 100).rounded())
+        warnQuiet = quietSec >= Self.quietSecondsBeforeWarning
+        audibleSharePct = totalSec >= Self.secondsForShare
+            ? Int((audibleSec / totalSec * 100).rounded())
             : nil
     }
 
     private func resetCaptureTally() {
-        audibleTicks = 0
-        totalTicks = 0
-        quietTicks = 0
+        audibleSec = 0
+        totalSec = 0
+        quietSec = 0
+        lastSampleAt = nil
         inputLevel = 0
         warnQuiet = false
         audibleSharePct = nil

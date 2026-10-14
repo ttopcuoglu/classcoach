@@ -40,6 +40,13 @@ const QUIET_WARNING_SEC = 60
 
 /// Sampling interval. 10Hz is far finer than needed for a share-of-time
 /// figure and keeps the bar smooth to look at.
+///
+/// It is a REQUEST, not a guarantee. Browsers throttle setInterval to about
+/// 1Hz in a hidden or background tab, which a teacher's laptop very plausibly
+/// is during a lesson. Everything below therefore accumulates elapsed
+/// MILLISECONDS rather than counting ticks — an earlier version counted
+/// samples, and in a background tab its one-minute quiet warning would have
+/// taken ten minutes to fire. Found by watching it not fire.
 const SAMPLE_MS = 100
 
 export type CaptureMonitor = {
@@ -68,20 +75,22 @@ const IDLE: CaptureMonitor = {
 export function useCaptureMonitor(stream: MediaStream | null, active: boolean): CaptureMonitor {
   const [state, setState] = useState<CaptureMonitor>(IDLE)
   // Totals survive a pause/resume, so the share describes the whole
-  // recording rather than the current run.
-  const samplesRef = useRef(0)
-  const audibleRef = useRef(0)
+  // recording rather than the current run. Milliseconds, not tick counts —
+  // see SAMPLE_MS.
+  const totalMsRef = useRef(0)
+  const audibleMsRef = useRef(0)
 
   useEffect(() => {
     if (!active || !stream) return
     let audioCtx: AudioContext | null = null
     let timer = 0
-    let quietSamples = 0
+    let quietMs = 0
+    let lastTickAt = Date.now()
     // A fresh recording starts a fresh tally. Done here rather than in a
     // second effect watching `active`, which only existed to call setState
     // on the way out.
-    samplesRef.current = 0
-    audibleRef.current = 0
+    totalMsRef.current = 0
+    audibleMsRef.current = 0
 
     try {
       audioCtx = new AudioContext()
@@ -101,21 +110,26 @@ export function useCaptureMonitor(stream: MediaStream | null, active: boolean): 
         const rms = Math.sqrt(sumSquares / data.length)
         const level = Math.min(100, Math.round(rms * LEVEL_SCALE))
 
-        samplesRef.current += 1
-        const audible = level >= AUDIBLE_FLOOR
-        if (audible) {
-          audibleRef.current += 1
-          quietSamples = 0
+        // Real elapsed time since the previous tick, so a throttled interval
+        // stretches the weight of each sample instead of slowing the clock.
+        const now = Date.now()
+        const dt = Math.min(now - lastTickAt, 5000)
+        lastTickAt = now
+
+        totalMsRef.current += dt
+        if (level >= AUDIBLE_FLOOR) {
+          audibleMsRef.current += dt
+          quietMs = 0
         } else {
-          quietSamples += 1
+          quietMs += dt
         }
-        const quietStreakSec = Math.round((quietSamples * SAMPLE_MS) / 1000)
+        const quietStreakSec = Math.round(quietMs / 1000)
         // Only once there is a minute of recording behind it; a share drawn
         // from the first few seconds is noise.
-        const enough = samplesRef.current >= (60 * 1000) / SAMPLE_MS
+        const enough = totalMsRef.current >= 60 * 1000
         setState({
           level,
-          audibleSharePct: enough ? Math.round((audibleRef.current / samplesRef.current) * 100) : null,
+          audibleSharePct: enough ? Math.round((audibleMsRef.current / totalMsRef.current) * 100) : null,
           quietStreakSec,
           warnQuiet: quietStreakSec >= QUIET_WARNING_SEC,
           unavailable: false,

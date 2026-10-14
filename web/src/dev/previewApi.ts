@@ -745,6 +745,24 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
   // shipped. `?preview=1` at /audio-coaching/preview-report opens it.
   const reportMatch = path.match(/^\/api\/audio-sessions\/(preview-report)$/)
   if (reportMatch) return previewReport()
+  // Creating a session has to answer with ONE session in 'setup', not the
+  // list. Returning the list here meant pressing Record handed the page an
+  // array, which fell through to an "Untitled lesson / Invalid Date" report
+  // and made the recording panel itself unreachable in preview — so the live
+  // mic meter, the quiet warning and the thin-capture notice could not be
+  // looked at before they shipped.
+  if (path === '/api/audio-sessions' && method === 'POST') {
+    return {
+      ...(audioSession('preview-new', 0, 0, false) as Record<string, unknown>),
+      status: 'setup',
+      durationSec: null,
+      teacherTalkPct: null,
+      studentTalkPct: null,
+      sessionDate: new Date().toISOString(),
+      classSubject: 'World history',
+      period: '3',
+    }
+  }
   if (path.startsWith('/api/audio-sessions')) {
     if (!tools.has('debrief')) return []
     // Five analyzed lessons so the sparkline draws, with the newest either
