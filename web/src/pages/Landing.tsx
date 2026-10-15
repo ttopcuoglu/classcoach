@@ -361,7 +361,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       <header className="bg-cream">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5">
           <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-11 w-auto" />
-          <nav className="hidden items-center gap-5 text-sm font-medium text-ink-soft lg:flex xl:gap-7">
+          <nav className="hidden items-center gap-6 whitespace-nowrap text-sm font-medium text-ink-soft xl:flex">
             <a href="#how-it-works" className="hover:text-ink">
               How it works
             </a>
@@ -376,6 +376,9 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             </a>
             <Link to="/for-schools" className="hover:text-ink">
               For Schools
+            </Link>
+            <Link to="/research" className="hover:text-ink">
+              Research
             </Link>
             <Link to="/guide" className="hover:text-ink">
               Guide
@@ -399,14 +402,14 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               type="button"
               onClick={() => setMobileNavOpen((open) => !open)}
               aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-hairline text-forest lg:hidden"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-hairline text-forest xl:hidden"
             >
               {mobileNavOpen ? <CloseIcon className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
             </button>
           </div>
         </div>
         {mobileNavOpen && (
-          <nav className="flex flex-col gap-1 border-t border-hairline bg-cream-card px-6 py-3 lg:hidden">
+          <nav className="flex flex-col gap-1 border-t border-hairline bg-cream-card px-6 py-3 xl:hidden">
             <a
               href="#get-started"
               onClick={() => setMobileNavOpen(false)}
@@ -448,6 +451,13 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               className="rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-cream hover:text-ink"
             >
               For Schools
+            </Link>
+            <Link
+              to="/research"
+              onClick={() => setMobileNavOpen(false)}
+              className="rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-cream hover:text-ink"
+            >
+              Research
             </Link>
             <Link
               to="/guide"
