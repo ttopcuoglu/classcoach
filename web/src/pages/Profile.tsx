@@ -10,6 +10,7 @@ import {
   getTelegramStatus,
   resetData,
   TALK_VOICES,
+  resolveTalkVoice,
   updateProfile,
   type ExperienceLevel,
   type TelegramStatus,
@@ -536,13 +537,13 @@ export default function Profile() {
                 setSaved(false)
               }}
               className={`group rounded-2xl border px-4 py-3 text-left text-sm transition-colors ${
-                (talkVoice ?? 'arcas') === v.value
+                resolveTalkVoice(talkVoice) === v.value
                   ? 'border-forest bg-forest text-cream'
                   : 'border-hairline bg-cream text-ink hover:border-terracotta/40'
               }`}
             >
               <span className="font-semibold">{v.label}</span>
-              <span className={`block text-xs ${(talkVoice ?? 'arcas') === v.value ? 'text-cream/70' : 'text-ink-soft'}`}>
+              <span className={`block text-xs ${resolveTalkVoice(talkVoice) === v.value ? 'text-cream/70' : 'text-ink-soft'}`}>
                 {v.description}
               </span>
             </button>

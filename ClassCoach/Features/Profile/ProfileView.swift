@@ -3,14 +3,14 @@ import SwiftUI
 /// Mirrors `TALK_VOICES` in web/src/lib/api.ts — the voices Coach can speak
 /// with in Talk It Through (see server/src/lib/talkVoices.ts).
 enum TalkVoice {
-    static let defaultId = "thalia"
+    /// Was "thalia" while the server's DEFAULT_TALK_VOICE has been arcas, so
+    /// this screen labelled the wrong voice as the default and showed it as
+    /// selected for every teacher who had never chosen one.
+    static let defaultId = "arcas"
     static let all: [(id: String, label: String, description: String)] = [
-        ("thalia", "Thalia", "Clear, confident, energetic (default)"),
+        ("arcas", "Arcas", "Smooth and natural (default)"),
         ("andromeda", "Andromeda", "Casual and expressive"),
-        ("helena", "Helena", "Warm, caring, friendly"),
         ("apollo", "Apollo", "Calm and confident"),
-        ("arcas", "Arcas", "Smooth and natural"),
-        ("aries", "Aries", "Warm and energetic"),
     ]
 }
 

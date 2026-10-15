@@ -412,13 +412,6 @@ export async function playQueue(
 // that's rough.") however well it worked in a recording where the coach had
 // already heard them, and nothing from the assistant-tic list in the system
 // prompt. Kept in step with server/src/lib/fillerPhrases.ts.
-export const FILLER_PHRASES = [
-  'Got it.',
-  'I see.',
-  'Oh, okay.',
-  'Yeah, okay.',
-  'Right, yeah.',
-]
 
 // Nothing plays between Coach's own sentences. There was a pool of twenty
 // two-word phrases for that, then a quiet hum, and both are gone — a sound
@@ -673,20 +666,21 @@ export async function loadFillers(voice: TalkVoice | null): Promise<Fillers> {
     )
   // The mood pools are smaller: most turns are neither, so three of each is
   // all a conversation will reach.
-  const [acks, thinking, hard, glad] = await Promise.all([
-    fetchPool(FILLER_PHRASES, CLIPS_PER_POOL),
+  const [thinking, hard, glad] = await Promise.all([
     fetchPool(THINKING_PHRASES, CLIPS_PER_POOL),
     fetchPool(HARD_TURN_PHRASES, 3),
     fetchPool(GLAD_TURN_PHRASES, 3),
   ])
+  // One rotation shared by both, so a statement and a question draw from the
+  // same fourteen and neither repeats a clip the other just played.
+  const nextThinking = rotate(thinking)
   return {
-    nextAcknowledgement: rotate(acks),
-    nextThinking: rotate(thinking),
+    nextAcknowledgement: nextThinking,
+    nextThinking,
     nextHard: rotate(hard),
     nextGlad: rotate(glad),
     release() {
-      for (const url of [...acks, ...thinking, ...hard, ...glad]) URL.revokeObjectURL(url)
-      acks.length = 0
+      for (const url of [...thinking, ...hard, ...glad]) URL.revokeObjectURL(url)
       thinking.length = 0
       hard.length = 0
       glad.length = 0

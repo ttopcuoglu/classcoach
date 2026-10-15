@@ -151,11 +151,11 @@ final class SpeechPlayer: NSObject, ObservableObject {
     // since the clip is picked before Claude has read a word the teacher
     // said. Kept in step with web/src/lib/voicePlayback.ts and the server's
     // fillerPhrases.ts.
-    private static let shortFillers = [
-        "Got it.", "I see.",
-        "Oh, okay.", "Yeah, okay.",
-        "Right, yeah.",
-    ]
+    // The acknowledgement pool is gone: "Got it.", "I see.", "Oh, okay.",
+    // "Yeah, okay.", "Right, yeah." played on every turn that was neither a
+    // question nor a mood, so a teacher kept hearing "ok" and "yeah" long
+    // after the starter list had been replaced. A neutral turn now draws from
+    // thinkingPhrases, which fits a statement as well as a question.
     // Nothing plays between Coach's own sentences. There was a pool of
     // twenty two-word phrases for that, then a quiet hum, and both are
     // gone — a sound there was asked for and then asked to be removed.
@@ -404,15 +404,16 @@ final class SpeechPlayer: NSObject, ObservableObject {
     /// Fetched once a conversation, in the teacher's own Coach voice. Doing
     /// this per turn would reintroduce exactly the delay they exist to cover.
     func loadFillers(voice: String?) async {
-        guard starterClips.isEmpty else { return }
-        async let starters = Self.fetchAll(Self.shortFillers.shuffled().prefix(Self.clipsPerPool), voice: voice)
+        guard thinkingClips.isEmpty else { return }
         async let thinking = Self.fetchAll(Self.thinkingPhrases.shuffled().prefix(Self.clipsPerPool), voice: voice)
         // Smaller: most turns are neither, so three of each is all a
         // conversation will reach.
         async let hard = Self.fetchAll(Self.hardTurnPhrases.shuffled().prefix(3), voice: voice)
         async let glad = Self.fetchAll(Self.gladTurnPhrases.shuffled().prefix(3), voice: voice)
-        starterClips = await starters
         thinkingClips = await thinking
+        // One pool behind both, so a statement and a question draw from the
+        // same fourteen rather than fetching them twice.
+        starterClips = thinkingClips
         hardClips = await hard
         gladClips = await glad
     }

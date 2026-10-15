@@ -4,7 +4,13 @@
 // teacher), not a cost one. Add to this list freely; removing a value that
 // a teacher already has stored as their preference just falls back to the
 // default at the application layer, never a hard error.
-export const TALK_VOICES = ['thalia', 'andromeda', 'helena', 'apollo', 'arcas', 'aries'] as const
+//
+// Cut from six to three on request. Teachers who had picked thalia, helena
+// or aries keep that string in the column and are served arcas instead —
+// isValidTalkVoice guards every read, so nothing has to be migrated. The
+// web picker resolves an unlisted value to the default too, otherwise their
+// Profile would show no voice selected at all.
+export const TALK_VOICES = ['arcas', 'andromeda', 'apollo'] as const
 
 export type TalkVoice = (typeof TALK_VOICES)[number]
 

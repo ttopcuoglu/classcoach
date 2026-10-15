@@ -19,21 +19,6 @@
 // a win. It also rules out "I hear you", which the system prompt lists as an
 // assistant tic to avoid.
 //
-// Trimmed to five on request, and the four bare single words went first —
-// "Yeah.", "Right.", "Okay.", "Sure." Which is the same set Aura renders
-// least reliably and the same set the prompt had to forbid Coach from
-// opening with, so the three constraints agreed for once.
-//
-// Kept in step with web/src/lib/voicePlayback.ts, SpeechPlayer.swift, and
-// the opener rule in TALK_SYSTEM_PROMPT — if a phrase is not played here,
-// Coach should not be banned from saying it.
-export const FILLER_PHRASES = [
-  "Got it.",
-  "I see.",
-  "Oh, okay.",
-  "Yeah, okay.",
-  "Right, yeah.",
-]
 
 // And what Coach says when the teacher asked it something.
 //
@@ -70,6 +55,19 @@ export const GLAD_TURN_PHRASES = [
   "Nice one.",
   "Oh, that's good.",
 ]
+
+// The acknowledgement pool is gone. "Got it.", "I see.", "Oh, okay.",
+// "Yeah, okay." and "Right, yeah." played on every turn that was neither a
+// question nor a mood, which is most of them — so a teacher kept hearing
+// "ok" and "yeah" long after the starter list had been replaced, which is
+// exactly how it was reported.
+//
+// What took its place is the same fourteen "Um," phrases below. A thinking
+// sound fits a statement as well as a question: the teacher has said
+// something and Coach is considering it either way. The two mood pools stay,
+// because they are the ones that could not be covered by a generic noise —
+// "Um, let me see..." after "I cried in my car at lunch" is the cold reply
+// this whole mechanism exists to avoid.
 
 // Every one opens with "Um," on request, and the comma is not a typo. Written
 // the way it was asked for — "Um... let me see..." — Aura reads the first
@@ -113,7 +111,7 @@ export const THINKING_PHRASES = [
 // advice.
 
 const lookup = new Set(
-  [...FILLER_PHRASES, ...THINKING_PHRASES, ...HARD_TURN_PHRASES, ...GLAD_TURN_PHRASES].map((p) => p.toLowerCase()),
+  [...THINKING_PHRASES, ...HARD_TURN_PHRASES, ...GLAD_TURN_PHRASES].map((p) => p.toLowerCase()),
 )
 
 export function isFillerPhrase(text: string): boolean {

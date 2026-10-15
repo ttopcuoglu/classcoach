@@ -50,16 +50,22 @@ export type ScenarioAttempt = {
 // Curated subset of Deepgram Aura-2's voice catalog for Talk It Through —
 // see server/src/lib/talkVoices.ts. Same flat per-character billing
 // regardless of voice, so this list is a UX choice, not a cost one.
-export type TalkVoice = 'thalia' | 'andromeda' | 'helena' | 'apollo' | 'arcas' | 'aries'
+export type TalkVoice = 'arcas' | 'andromeda' | 'apollo'
 
 export const TALK_VOICES: { value: TalkVoice; label: string; description: string }[] = [
-  { value: 'thalia', label: 'Thalia', description: 'Clear, confident, energetic' },
-  { value: 'andromeda', label: 'Andromeda', description: 'Casual and expressive' },
-  { value: 'helena', label: 'Helena', description: 'Warm, caring, friendly' },
-  { value: 'apollo', label: 'Apollo', description: 'Calm and confident' },
   { value: 'arcas', label: 'Arcas', description: 'Smooth and natural (default)' },
-  { value: 'aries', label: 'Aries', description: 'Warm and energetic' },
+  { value: 'andromeda', label: 'Andromeda', description: 'Casual and expressive' },
+  { value: 'apollo', label: 'Apollo', description: 'Calm and confident' },
 ]
+
+export const DEFAULT_TALK_VOICE: TalkVoice = 'arcas'
+
+/// A voice the teacher chose before the list was narrowed is still in their
+/// column; the server serves the default for it, so the picker has to show
+/// the default as selected rather than nothing.
+export function resolveTalkVoice(stored: TalkVoice | null | undefined): TalkVoice {
+  return TALK_VOICES.some((v) => v.value === stored) ? (stored as TalkVoice) : DEFAULT_TALK_VOICE
+}
 
 /// A teacher's chosen My Growth focus, persisted on User.focusMetric.
 ///
