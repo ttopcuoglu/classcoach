@@ -156,10 +156,6 @@ const EVIDENCE_POINTS = [
     title: 'Results depend on context',
     body: 'Findings vary by setting, by how a program is implemented, and by who takes part. Effects found in one study may not appear in another.',
   },
-  {
-    title: 'Wivoza needs its own evidence',
-    body: 'None of these studies evaluated Wivoza. Its own impact on teaching and learning requires direct evaluation.',
-  },
 ]
 
 const REFERENCES = [
