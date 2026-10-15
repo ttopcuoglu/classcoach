@@ -11,6 +11,7 @@ import {
   syncOrganizationRoles,
 } from '../lib/organization.ts'
 import { mergeBreakdownGroups } from '../lib/breakdownGroups.ts'
+import { splitByCoverage } from '../lib/transcriptCoverage.ts'
 import { prisma } from '../lib/prisma.ts'
 import { SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
 import { stripe } from '../lib/stripe.ts'
@@ -288,11 +289,13 @@ async function computePriorityTally(
       classSubject: true,
     },
   })
-  const filtered = sessions.filter((s) => {
-    if (gradeBandFilter && gradeBandFor(s.gradeLevel) !== gradeBandFilter) return false
-    if (subjectFilter && subjectBucketFor(s.classSubject) !== subjectFilter) return false
-    return true
-  })
+  const filtered = splitByCoverage(
+    sessions.filter((s) => {
+      if (gradeBandFilter && gradeBandFor(s.gradeLevel) !== gradeBandFilter) return false
+      if (subjectFilter && subjectBucketFor(s.classSubject) !== subjectFilter) return false
+      return true
+    }),
+  ).counted
   const tally = createTally(PRIORITY_LABELS)
   for (const s of filtered) {
     const top = topPriorityForSession(s)
@@ -314,6 +317,9 @@ type ThemeWindowSnapshot = {
   sessions: number
   sharePct: number | null
   confidence: DataConfidence
+  /// Lessons in the window left out because too little of them came through
+  /// as speech. Not in `sessions`, and never part of the share.
+  lowAudio: number
 }
 
 async function computeThemeWindow(
@@ -322,7 +328,7 @@ async function computeThemeWindow(
   from: Date | null,
   to: Date | null,
 ): Promise<ThemeWindowSnapshot> {
-  const sessions = await prisma.audioSession.findMany({
+  const allSessions = await prisma.audioSession.findMany({
     where: {
       status: { in: ['analyzed', 'locked'] },
       user: { organizationId },
@@ -340,6 +346,10 @@ async function computeThemeWindow(
       metricsDetail: true,
     },
   })
+  // A before/after comparison is where a change in recording habits would
+  // most easily pass for a change in teaching, so neither window gets to rest
+  // on lessons the microphone mostly missed.
+  const { counted: sessions, lowAudio } = splitByCoverage(allSessions)
   const teacherIds = new Set<string>()
   let count = 0
   for (const s of sessions) {
@@ -353,6 +363,7 @@ async function computeThemeWindow(
     sessions: sessions.length,
     sharePct: sessions.length > 0 ? Math.round((count / sessions.length) * 100) : null,
     confidence: dataConfidence(sessions.length),
+    lowAudio,
   }
 }
 
@@ -518,11 +529,21 @@ async function computeOverview(req: Request, res: Response) {
 
   // gradeBand/subject only ever narrow the metrics below — featureActivity/
   // featureAdoption above already used the full, unfiltered `audioSessions`.
-  const filteredAudioSessions = audioSessions.filter((s) => {
+  const inFilterAudioSessions = audioSessions.filter((s) => {
     if (gradeBandFilter && gradeBandFor(s.gradeLevel) !== gradeBandFilter) return false
     if (subjectFilter && subjectBucketFor(s.classSubject) !== subjectFilter) return false
     return true
   })
+  // Every measured number below rests only on lessons where at least half the
+  // recording came through as speech. The lost speech is mostly students', so
+  // a patchy lesson would not just blur talk balance, it would tilt it toward
+  // the teacher. The count of what was left out goes back with the numbers.
+  const { counted: filteredAudioSessions, lowAudio: lowAudioLessons } = splitByCoverage(inFilterAudioSessions)
+  const audioCoverage = {
+    analyzedLessons: inFilterAudioSessions.length,
+    countedLessons: filteredAudioSessions.length,
+    lowAudioLessons,
+  }
 
   const priorityTally = createTally(PRIORITY_LABELS)
   for (const s of filteredAudioSessions) {
@@ -852,6 +873,7 @@ async function computeOverview(req: Request, res: Response) {
     strengths,
     instructionalAverages,
     climateAverages,
+    audioCoverage,
     contentNoteTally: contentNoteTally.toJSON(),
     growth: {
       recentStrong: strongCount(recentRated),
@@ -891,6 +913,9 @@ adminRouter.get('/overview/export', async (req, res) => {
     ['Active this period', data.activeThisWeek],
     ['Returning users', data.returningUsers],
     ['Coaching activities', data.activitiesThisWeek],
+    ['Lessons analyzed', data.audioCoverage.analyzedLessons],
+    ['Lessons the lesson numbers below are based on', data.audioCoverage.countedLessons],
+    ['Lessons left out (too little clear audio)', data.audioCoverage.lowAudioLessons],
     ['Avg. wait time after a question (s)', data.instructionalAverages.avgWaitTimeSec],
     ['Avg. pause after a student answer (s)', data.instructionalAverages.avgWaitTime2Sec],
     ['Avg. teacher speaking pace (words a minute)', data.instructionalAverages.avgTeacherPaceWpm],
@@ -941,7 +966,10 @@ adminRouter.get('/overview/breakdown', async (req, res) => {
   const bucketOf = (s: Row) => (by === 'subject' ? subjectBucketFor(s.classSubject) : gradeBandFor(s.gradeLevel))
 
   const grouped = new Map<string, Row[]>(bucketKeys.map((k) => [k, []]))
-  for (const s of sessions) {
+  // Same coverage bar as the school-wide numbers, applied before grouping so a
+  // bucket's minimum-teacher check counts only the lessons it rests on.
+  const { counted, lowAudio } = splitByCoverage(sessions)
+  for (const s of counted) {
     grouped.get(bucketOf(s))!.push(s)
   }
 
@@ -955,7 +983,7 @@ adminRouter.get('/overview/breakdown', async (req, res) => {
     metrics: computeHeadlineMetrics(g.rows),
   }))
 
-  res.json({ by, minTeachers: MIN_TEACHERS_FOR_BREAKDOWN, breakdown })
+  res.json({ by, minTeachers: MIN_TEACHERS_FOR_BREAKDOWN, breakdown, countedLessons: counted.length, lowAudioLessons: lowAudio })
 })
 
 // "Where teachers are focusing" — how many teachers picked each My Growth
@@ -1394,7 +1422,23 @@ adminRouter.get('/pd-focus-areas', async (req, res) => {
       if (row.status !== 'active') {
         return { ...row, currentSnapshot: null }
       }
-      return { ...row, currentSnapshot: await computeThemeWindow(organizationId, row.themeKey, row.createdAt, null) }
+      // The baseline was frozen under whatever rules held on the day it was
+      // taken, and "since" is recomputed under today's. Its window is closed,
+      // so recomputing it is the same lessons read the same way as "since" —
+      // otherwise the coverage bar would apply to one side of the comparison
+      // and pass a change in the rules off as a change in the school. Kept
+      // frozen for rows from before shares were tracked, which the client
+      // still shows as raw counts.
+      const stored = row.baselineSnapshot as { sessions?: number; capturedAt?: string } | null
+      const baselineSnapshot =
+        stored?.sessions != null
+          ? { ...(await computeThemeWindow(organizationId, row.themeKey, null, row.createdAt)), capturedAt: stored.capturedAt }
+          : row.baselineSnapshot
+      return {
+        ...row,
+        baselineSnapshot,
+        currentSnapshot: await computeThemeWindow(organizationId, row.themeKey, row.createdAt, null),
+      }
     }),
   )
 

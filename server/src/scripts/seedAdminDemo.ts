@@ -21,6 +21,7 @@ import { randomBytes } from 'node:crypto'
 import bcrypt from 'bcryptjs'
 import { analyzeTranscript, detectLessonContent, type Segment } from '../lib/audioAnalysis.ts'
 import { topPriorityForSession } from '../lib/coachingPriority.ts'
+import { knownCapturedShare, MIN_SHARE_FOR_SCHOOL_TRENDS } from '../lib/transcriptCoverage.ts'
 
 const SCHOOL_NAME = 'Maple Ridge Academy'
 const JOIN_CODE = 'MAPLE612'
@@ -447,6 +448,11 @@ function summarize(staff: PlannedTeacher[]) {
   console.log(`Zero-redirection lessons ${Math.round((zeroRedirect / lessons.length) * 100)}%, clear directions ${Math.round((withDirective / lessons.length) * 100)}%, checks for understanding ${Math.round((withCfu / lessons.length) * 100)}%`)
   const minutes = lessons.map((x) => x.analysis.metricsDetail.totalDurationSec / 60)
   console.log(`Lesson length: ${Math.min(...minutes).toFixed(1)}–${Math.max(...minutes).toFixed(1)} min`)
+  // The dashboard leaves a lesson out of its numbers below this share, so a
+  // demo where every lesson clears it never shows the "X of Y" line working.
+  const shares = lessons.map((x) => knownCapturedShare(x.analysis.metricsDetail) ?? 0)
+  const counted = shares.filter((s) => s >= MIN_SHARE_FOR_SCHOOL_TRENDS).length
+  console.log(`Clear audio: ${Math.round(Math.min(...shares) * 100)}–${Math.round(Math.max(...shares) * 100)}% captured, ${counted} of ${lessons.length} lessons count toward the dashboard`)
   const others = staff.flatMap((t) => t.activities.filter((a) => a.kind !== 'lesson'))
   const count = (k: string) => others.filter((a) => a.kind === k).length
   console.log(`Other activity: ask ${count('ask')}, talk ${count('talk')}, practice ${count('practice')}, messages ${count('message')}, conversation practice ${count('prep')}, lesson plans ${count('lesson_plan')}`)

@@ -326,7 +326,11 @@ export default function AdminPilotReport() {
           <StatTile
             label="Lessons analyzed"
             value={String(inst.totalAnalyzedSessions)}
-            hint="Recorded by teachers, for their own feedback"
+            hint={
+              (overview.audioCoverage?.lowAudioLessons ?? 0) > 0
+                ? `With enough clear audio to count. ${overview.audioCoverage!.lowAudioLessons} more left out: less than half came through as speech.`
+                : 'Recorded by teachers, for their own feedback'
+            }
             accent={A.mint}
           />
           <StatTile

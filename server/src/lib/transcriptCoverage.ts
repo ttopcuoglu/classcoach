@@ -29,6 +29,39 @@ export function capturedShare(detail: CoverageSource | null | undefined, duratio
   return captured / total
 }
 
+/// The same share, but null when the analysis never recorded talk seconds at
+/// all. capturedShare reads a missing field as zero, which is right inside one
+/// report (nothing measured, so nothing claimed) and wrong for a school-wide
+/// filter, where it would quietly drop a lesson for a field it predates
+/// rather than for anything the microphone did.
+export function knownCapturedShare(detail: CoverageSource | null | undefined, durationSec?: number | null): number | null {
+  if (detail?.teacherTalkSec == null && detail?.studentTalkSec == null) return null
+  return capturedShare(detail, durationSec)
+}
+
+/// A lesson below this is left out of every school-wide number a principal
+/// sees, and counted as left out. Same bar as claiming absence, for the same
+/// reason: the speech a room mic loses first is students', so a patchy lesson
+/// does not just add noise to talk balance, it pushes it one way.
+export const MIN_SHARE_FOR_SCHOOL_TRENDS = 0.5
+
+/// Splits lessons into the ones a school-wide number may rest on and a count
+/// of the ones it may not. A lesson whose share cannot be known is counted —
+/// leaving it out would be a guess about the microphone in the other
+/// direction.
+export function splitByCoverage<T extends { durationSec?: number | null; metricsDetail: unknown }>(
+  sessions: T[],
+): { counted: T[]; lowAudio: number } {
+  const counted: T[] = []
+  let lowAudio = 0
+  for (const s of sessions) {
+    const share = knownCapturedShare(s.metricsDetail as CoverageSource | null, s.durationSec)
+    if (share != null && share < MIN_SHARE_FOR_SCHOOL_TRENDS) lowAudio += 1
+    else counted.push(s)
+  }
+  return { counted, lowAudio }
+}
+
 /// Below this, a reading of the whole lesson is a reading of a minority of it.
 /// Shared with the Hard Look, which arrived at the same number independently
 /// for its airtime section.

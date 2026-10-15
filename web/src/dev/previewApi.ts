@@ -527,8 +527,11 @@ function adminOverview(): Json {
       { label: 'Checks for understanding', value: 4, confidence: 'limited' },
     ],
     priorityTally: { 'wait time': tally(12, 7), 'student talk': tally(8, 5) },
+    // What the seeded demo school's plan reports: 3 of its 71 lessons fall
+    // under the coverage bar.
+    audioCoverage: { analyzedLessons: 71, countedLessons: 68, lowAudioLessons: 3 },
     instructionalAverages: {
-      totalAnalyzedSessions: 71,
+      totalAnalyzedSessions: 68,
       // Taken from the seeded demo school's own backfilled values.
       avgWaitTimeSec: 2.9,
       waitTimeSampleSize: 71,
@@ -611,6 +614,8 @@ function adminBreakdown(): Json {
   })
   return {
     minTeachers: 3,
+    countedLessons: 68,
+    lowAudioLessons: 3,
     breakdown: [
       { bucket: '7th grade', suppressed: false, metrics: metrics(3.1, 0.9, 138) },
       { bucket: '8th grade', suppressed: false, metrics: metrics(2.4, 0.6, 151) },

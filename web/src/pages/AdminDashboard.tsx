@@ -22,6 +22,7 @@ import {
   updateMember,
   updateUser,
   updateOrganization,
+  type AdminAudioCoverage,
   type AdminBreakdown,
   type AdminOverview,
   type AdminUser,
@@ -1716,9 +1717,9 @@ function InstructionalAveragesCard({ n, data, insight }: { n: number; data: Inst
         />
       </div>
       <p className="mt-3 text-xs text-ink-soft">
-        Averaged across {data.totalAnalyzedSessions} analyzed Lesson Debrief session
-        {data.totalAnalyzedSessions === 1 ? '' : 's'} — each stat only counts sessions with real evidence for it,
-        never padded with sessions where it wasn&rsquo;t measured.
+        Averaged across {data.totalAnalyzedSessions} Lesson Debrief session
+        {data.totalAnalyzedSessions === 1 ? '' : 's'} with enough clear audio — each stat only counts sessions with
+        real evidence for it, never padded with sessions where it wasn&rsquo;t measured.
       </p>
       {insight !== undefined && <AdminCoachNote text={insight} />}
     </AdminCard>
@@ -1928,6 +1929,13 @@ function BreakdownCard({ n, selectedOrgId }: { n: number; selectedOrgId: string 
           ))}
         </div>
       )}
+      {data && (data.lowAudioLessons ?? 0) > 0 && (
+        <p className="mt-3 text-xs text-ink-soft">
+          Based on {data.countedLessons} lessons. {data.lowAudioLessons} more{' '}
+          {data.lowAudioLessons === 1 ? 'was' : 'were'} left out because less than half of the recording came through as
+          clear speech.
+        </p>
+      )}
     </AdminCard>
   )
 }
@@ -2079,6 +2087,32 @@ function confidenceFor(n: number): DataConfidence {
 // title, and the question the card answers — then the numbers, then (closed
 // by default) how they were measured. Principals open these between other
 // things; each card has to make sense on its own, without the manual.
+
+// Which lessons the numbers on this page rest on. Every lesson measure leaves
+// out lessons where under half the recording came through as speech — the
+// speech a room mic loses first is students', so those lessons would tilt
+// talk balance toward the teacher rather than just blur it. This line is the
+// only place that rule is visible, so it names the count plainly and never
+// guesses why a recording came through thin.
+function LessonBasisNote({ coverage }: { coverage?: AdminAudioCoverage }) {
+  if (!coverage || coverage.analyzedLessons === 0) return null
+  const { analyzedLessons, countedLessons, lowAudioLessons } = coverage
+  return (
+    <p className="mb-4 rounded-lg border border-hairline bg-cream px-4 py-2.5 text-sm text-ink-soft">
+      {lowAudioLessons === 0 ? (
+        <>
+          Lesson numbers are based on all {analyzedLessons} analyzed lesson{analyzedLessons === 1 ? '' : 's'}.
+        </>
+      ) : (
+        <>
+          Lesson numbers are based on <span className="font-semibold text-ink">{countedLessons} of {analyzedLessons}</span>{' '}
+          analyzed lessons. {lowAudioLessons === 1 ? '1 was' : `${lowAudioLessons} were`} left out because less than
+          half of the recording came through as clear speech.
+        </>
+      )}
+    </p>
+  )
+}
 
 function AdminCard({
   n,
@@ -2610,6 +2644,8 @@ function CoachingInsightsPanel({ overview, selectedOrgId }: { overview: AdminOve
         <>
           <AtAGlance overview={overview} />
 
+          <LessonBasisNote coverage={overview.audioCoverage} />
+
           <StrengthsCard n={1} strengths={overview.strengths} />
 
           <AdminCard
@@ -2670,6 +2706,7 @@ function CoachingInsightsPanel({ overview, selectedOrgId }: { overview: AdminOve
 
       {tab === 'practice' && (
         <>
+          <LessonBasisNote coverage={overview.audioCoverage} />
           <InstructionalAveragesCard
             n={1}
             data={overview.instructionalAverages}
@@ -2707,7 +2744,10 @@ function CoachingInsightsPanel({ overview, selectedOrgId }: { overview: AdminOve
       )}
 
       {tab === 'climate' && (
-        <ClimateAveragesCard n={1} data={overview.climateAverages} insight={buildClimateGroupInsight(overview.climateAverages)} />
+        <>
+          <LessonBasisNote coverage={overview.audioCoverage} />
+          <ClimateAveragesCard n={1} data={overview.climateAverages} insight={buildClimateGroupInsight(overview.climateAverages)} />
+        </>
       )}
 
       {tab === 'communication' && (

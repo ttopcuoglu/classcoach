@@ -239,6 +239,14 @@ export type AdminBreakdown = {
   by: 'gradeBand' | 'subject'
   minTeachers: number
   breakdown: AdminBreakdownBucket[]
+  countedLessons?: number
+  lowAudioLessons?: number
+}
+
+export type AdminAudioCoverage = {
+  analyzedLessons: number
+  countedLessons: number
+  lowAudioLessons: number
 }
 
 export type AdminOverview = {
@@ -289,6 +297,10 @@ export type AdminOverview = {
   priorityTally: Record<string, TallyEntry>
   instructionalAverages: InstructionalAverages
   climateAverages: ClimateAverages
+  // Every lesson number on the dashboard rests on countedLessons alone; the
+  // rest had under half their recording come through as speech. Optional
+  // only so an older server's response still renders.
+  audioCoverage?: AdminAudioCoverage
   contentNoteTally: Record<string, TallyEntry>
   growth: {
     recentStrong: number
@@ -320,6 +332,7 @@ export type PdFocusAreaSnapshot = {
   capturedAt?: string
   sessions?: number
   sharePct?: number | null
+  lowAudio?: number
 }
 
 export type PdFocusArea = {
