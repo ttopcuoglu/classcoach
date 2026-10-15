@@ -153,9 +153,20 @@ export async function streamCoachReply(res: Response, label: string, opts: Strea
 
     stream.on('text', (delta) => {
       raw += delta
-      // Before anything measures, speaks or saves it: a stage direction the
-      // voice would read out loud is not part of the reply. See spokenText.ts.
-      const visible = stripStageDirections(visibleSoFar(raw))
+      // Deliberately NOT stripped here. `consumed` indexes into this string
+      // and reconcileTail needs what was spoken to be a prefix of the final
+      // reply — both of which require that growing `raw` only ever appends to
+      // `visible`. stripStageDirections does not guarantee that: an asterisk
+      // span that straddles a sentence boundary is untouched while its
+      // closing "*" is still unwritten, and unwrapped once it arrives, so a
+      // sentence already sent stops being a prefix of the finished reply.
+      // reconcileTail then returns nothing and the rest of the turn is never
+      // spoken, while the full text is still saved and shown — which is
+      // exactly the "the script is there but Coach goes quiet" report.
+      //
+      // So stripping happens per sentence on the way out, where the text is
+      // final, and once more on the reply that gets saved.
+      const visible = visibleSoFar(raw)
       const { sentences, rest } = takeCompleteSentences(visible.slice(consumed))
       if (sentences.length === 0) return
       if (spoken.length === 0) timing.mark('first_sentence')
@@ -171,9 +182,11 @@ export async function streamCoachReply(res: Response, label: string, opts: Strea
         // Only the first one: every later sentence is already being
         // prefetched by the client while the ones ahead of it play.
         if (spoken.length === 0 && opts.speak) prefetchSpeech(sentence, opts.speak.voice)
+        // `spoken` keeps the untouched sentence, because it is what the
+        // reconciliation below compares against the untouched reply.
         spoken.push(sentence)
         wordsSent += countWords(sentence)
-        send({ type: 'sentence', text: sentence })
+        send({ type: 'sentence', text: stripStageDirections(sentence) })
       }
       consumed = visible.length - rest.length
     })
@@ -187,7 +200,7 @@ export async function streamCoachReply(res: Response, label: string, opts: Strea
       .map((block) => block.text)
       .join('\n')
     flagIfUnsafe(text, opts.safetyLabel)
-    const reply = stripStageDirections(trimIfTruncated(stripTag(text, 'memory_update'), message.stop_reason))
+    const reply = trimIfTruncated(stripTag(text, 'memory_update'), message.stop_reason)
 
     if (!reply) {
       // A reply that came back empty rather than a call that failed, so this
@@ -211,7 +224,39 @@ export async function streamCoachReply(res: Response, label: string, opts: Strea
       // A reply short enough to be one sentence never passed through the
       // boundary check above, so this is its first sentence too.
       if (spoken.length === 0 && opts.speak) prefetchSpeech(tail, opts.speak.voice)
-      send({ type: 'sentence', text: tail })
+      send({ type: 'sentence', text: stripStageDirections(tail) })
+    }
+
+    // What was heard and what gets saved have to be the same words, in both
+    // directions. The word budget already handles one direction (Claude wrote
+    // more than was sent). The other direction is subtler and was the bug:
+    // anything that rewrites the text — today stripStageDirections — can make
+    // the finished reply differ from the sentences already sent, and then
+    // either the teacher hears something the transcript does not show or the
+    // transcript shows something they never heard.
+    //
+    // So the normal path is checked rather than assumed. When the two agree,
+    // the reply is saved as written, which keeps its line breaks for the typed
+    // surfaces that share this function. When they do not, what was actually
+    // spoken wins and it is logged, because a divergence here is a bug every
+    // time and silence about it is how this one survived a deploy.
+    // Compared on the STRIPPED text, because that is what the teacher heard.
+    // Comparing the originals would miss the whole class of bug: stripping one
+    // finished sentence at a time and stripping the whole reply in one go do
+    // not always agree, and the raw strings can match while what came out of
+    // the speaker does not.
+    const sameWords = (a: string, b: string) => a.replace(/\s+/g, ' ').trim() === b.replace(/\s+/g, ' ').trim()
+    const heardAloud = [...spoken, tail]
+      .filter(Boolean)
+      .map(stripStageDirections)
+      .filter(Boolean)
+      .join(' ')
+    const strippedReply = stripStageDirections(reply)
+    const diverged = !capped && spoken.length > 0 && !sameWords(heardAloud, strippedReply)
+    if (diverged) {
+      console.warn(
+        `[coachStream] ${opts.safetyLabel}: spoken sentences do not match the finished reply — saving what was spoken (${spoken.length} sentence(s)${tail ? ' + tail' : ''})`,
+      )
     }
 
     // Checked again here, not just after the stream: the teacher can carry
@@ -223,7 +268,11 @@ export async function streamCoachReply(res: Response, label: string, opts: Strea
     // client and must not end up in the conversation either — otherwise
     // Coach's next turn builds on advice the teacher never heard, which is
     // the same bug as a barged-in reply being saved in full.
-    const heard = capped ? spoken.join(' ') : reply
+    const heard = capped
+      ? stripStageDirections(spoken.join(' '))
+      : diverged
+        ? heardAloud
+        : strippedReply
     const record = await opts.persist(heard)
     timing.mark('persist')
     send({ type: 'done', [opts.recordKey ?? 'debrief']: record })

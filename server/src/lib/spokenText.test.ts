@@ -45,3 +45,33 @@ test('spacing is cleaned up after a removal', () => {
   assert.equal(stripStageDirections('Okay, I will be her.  *Sharp*  Hi there.'), 'Okay, I will be her. Hi there.')
   assert.ok(!stripStageDirections('Fine. *Beat* Yes.').includes('  '))
 })
+
+// The regression that produced "the script is on screen but Coach went
+// quiet". Sentences are emitted while the reply is still being written, and
+// reconcileTail only sends the remainder if what was already spoken is a
+// prefix of the finished reply. Stripping the PARTIAL stream broke that:
+// an asterisk span straddling a sentence boundary is untouched while its
+// closing "*" is unwritten and unwrapped once it lands, so a sentence
+// already sent stopped being a prefix and the rest of the turn was dropped.
+//
+// The fix is that nothing strips the growing stream any more. These pin the
+// property that made it safe: the text the queue reconciles on is the
+// untouched text, and stripping happens per finished sentence.
+test('stripping a partial stream is NOT prefix-stable — which is why it is no longer done', () => {
+  const partial = "I'll be her. *She sounds tired."
+  const whole = "I'll be her. *She sounds tired. And impatient.* Go ahead."
+  // The dangerous property, asserted so nobody reintroduces the old call site.
+  assert.equal(stripStageDirections(whole).startsWith(stripStageDirections(partial)), false)
+})
+
+test('untouched sentences stay a prefix of the untouched reply, so nothing is dropped', async () => {
+  const { reconcileTail } = await import('./sentenceStream.ts')
+  const reply = "I'll be her. *She sounds tired. And impatient.* Go ahead."
+  // What the stream actually pushes to `spoken` now: the raw sentences.
+  const spoken = ["I'll be her.", '*She sounds tired.', 'And impatient.*']
+  const tail = reconcileTail(spoken, reply)
+  assert.equal(tail, 'Go ahead.', 'the remainder must still be spoken')
+  // And what reaches the teacher's ear carries no asterisk.
+  assert.ok(!stripStageDirections(tail).includes('*'))
+  for (const s of spoken) assert.ok(!stripStageDirections(s).includes('*'))
+})

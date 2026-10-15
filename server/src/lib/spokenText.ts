@@ -27,7 +27,12 @@ export function stripStageDirections(text: string): string {
   const withoutDirections = text.replace(STAGE_DIRECTION, '$1')
   // Whatever is left is emphasis in the middle of a sentence: lose the
   // asterisks, keep the words.
-  const unwrapped = withoutDirections.replace(EMPHASIS, '$1')
+  // A lone, unpaired asterisk survives both patterns above, and it happens
+  // for a real reason: this runs on one finished sentence at a time, so a
+  // span that straddles a sentence boundary is split down the middle and each
+  // half keeps one "*". Aura would read it out. Nothing spoken ever needs an
+  // asterisk, so any that are left simply go.
+  const unwrapped = withoutDirections.replace(EMPHASIS, '$1').replace(/\*/g, '')
   // A removed span can leave a double space or a space before punctuation.
   return unwrapped.replace(/[ \t]{2,}/g, ' ').replace(/\s+([.!?,;:])/g, '$1').trim()
 }
