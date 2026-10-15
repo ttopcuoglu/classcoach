@@ -289,6 +289,22 @@ struct AudioCoachingView: View {
             // give the recording a session that exists.
             if BackgroundUploader.shared.isUploading(sessionId: manifest.sessionId) {
                 if byId[manifest.sessionId] != nil { continue }
+                // `byId` is this view's own copy of the session list, which a
+                // session created seconds ago is not in yet. Cancelling on
+                // that alone meant the app killed its own upload moments
+                // after starting it, and the teacher was told the recording
+                // had not arrived — with "Cancelled." as the reason, by the
+                // app that cancelled it. A one-minute lesson failed this way
+                // while a two-minute one on another account went through,
+                // purely because that account's list happened to be fresh.
+                //
+                // The case this abandons is real — an upload aimed at a
+                // session the server does not have retries for days and never
+                // lands — but it takes days to become true, and a stale list
+                // takes seconds. So only an upload old enough to be that case
+                // is abandoned.
+                let age = BackgroundUploader.shared.uploadAge(sessionId: manifest.sessionId) ?? 0
+                if age < BackgroundUploader.cancelGrace { continue }
                 BackgroundUploader.shared.cancelUploads(sessionId: manifest.sessionId)
             }
 

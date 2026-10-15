@@ -69,9 +69,24 @@ final class BackgroundUploader: NSObject {
     /// succeed — the session it targets no longer exists, so the server can
     /// only answer "Session not found" — background URLSession would otherwise
     /// keep retrying it for days while the recording sat unoffered.
+    /// How long after starting an upload it is protected from being
+    /// abandoned. Generous on purpose: the thing this guards against is a
+    /// doomed upload retrying for days, and nothing is lost by waiting ten
+    /// minutes before deciding that is what we are looking at.
+    static let cancelGrace: TimeInterval = 10 * 60
+
+    /// Seconds since this upload was handed to the system, or nil if it is
+    /// not in flight.
+    func uploadAge(sessionId: String) -> TimeInterval? {
+        lock.lock()
+        defer { lock.unlock() }
+        return startedAt[sessionId].map { Date().timeIntervalSince($0) }
+    }
+
     func cancelUploads(sessionId: String) {
         lock.lock()
         uploading.remove(sessionId)
+        startedAt[sessionId] = nil
         lock.unlock()
         session.getAllTasks { tasks in
             for task in tasks where task.taskDescription == sessionId { task.cancel() }
@@ -110,6 +125,10 @@ final class BackgroundUploader: NSObject {
     /// recordings failed to arrive and neither the teacher nor anyone reading
     /// the database could see the cause, because the one place that knew it
     /// kept it to itself.
+    /// When each in-flight upload was handed to the system, so a brand-new
+    /// one is never mistaken for one that has been failing for days.
+    private var startedAt: [String: Date] = [:]
+
     private(set) var lastResult: UploadResult? {
         didSet {
             guard let lastResult, !lastResult.success else { return }
@@ -161,6 +180,7 @@ final class BackgroundUploader: NSObject {
         lock.lock()
         bodyFiles[task.taskIdentifier] = bodyURL
         uploading.insert(sessionId)
+        startedAt[sessionId] = Date()
         lock.unlock()
         task.resume()
     }
@@ -242,6 +262,7 @@ extension BackgroundUploader: URLSessionDataDelegate {
         let (_, data) = cleanUp(taskIdentifier: task.taskIdentifier)
         lock.lock()
         uploading.remove(sessionId)
+        startedAt[sessionId] = nil
         lock.unlock()
         let status = (task.response as? HTTPURLResponse)?.statusCode ?? 0
 
