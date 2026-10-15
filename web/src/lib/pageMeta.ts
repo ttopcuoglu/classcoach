@@ -29,6 +29,11 @@ export const PUBLIC_PAGE_META: Record<string, Meta> = {
     description:
       'Give every teacher private, Plus-level AI coaching. Leaders see aggregate trends — never an individual teacher’s work. Tell us about your school.',
   },
+  '/research': {
+    title: 'The research behind Wivoza',
+    description:
+      'Published research on teacher coaching, practice with feedback, and reflection that informed how Wivoza is designed — and what those studies do and do not show.',
+  },
   '/terms': {
     title: 'Wivoza Terms of Use and Privacy Notice',
     description: 'The terms of use and privacy notice for Wivoza.',

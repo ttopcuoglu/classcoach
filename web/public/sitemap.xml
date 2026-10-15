@@ -17,6 +17,10 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.wivoza.com/research</loc>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.wivoza.com/guide/talk-it-through</loc>
     <priority>0.6</priority>
   </url>

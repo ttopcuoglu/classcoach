@@ -40,6 +40,7 @@ const GuideLessonPlanning = lazy(() => import('./pages/GuideLessonPlanning'))
 const GuideAssignmentCoach = lazy(() => import('./pages/GuideAssignmentCoach'))
 const GuideCommunicationCoach = lazy(() => import('./pages/GuideCommunicationCoach'))
 const Faq = lazy(() => import('./pages/Faq'))
+const Research = lazy(() => import('./pages/Research'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 
@@ -160,6 +161,7 @@ export default function App() {
             <Route path="guide/assignment-coach" element={<GuideAssignmentCoach />} />
             <Route path="guide/communication-coach" element={<GuideCommunicationCoach />} />
             <Route path="faq" element={<Faq />} />
+            <Route path="research" element={<Research />} />
             <Route path="for-schools" element={<ForSchools />} />
             <Route
               path="onboarding"
