@@ -16,6 +16,58 @@ import AVFoundation
 /// playing or recording, so during transcription and Coach's thinking iOS
 /// suspended the app, and a backgrounded app isn't allowed to re-open the
 /// mic for the next turn ("Could not access your microphone").
+/// Telling a voice apart from the room it is in.
+///
+/// Mirrors web/src/lib/noiseGate.ts, and exists for the same reported
+/// reason: the barge-in level was a fixed number, chosen against the echo of
+/// Coach's own voice leaking back in a quiet room. A classroom is not a quiet
+/// room — steady noise sits above that number indefinitely, holds there past
+/// the sustain, and stops Coach mid-sentence for nobody.
+///
+/// What matters is not how loud the room is but whether something just got
+/// LOUDER than it, so the room is measured continuously and a voice has to
+/// stand above it.
+///
+/// Unlike the web version this follows the room on a TIME constant rather
+/// than a per-callback fraction. The browser samples at 60fps; AVAudioEngine
+/// delivers a metering callback roughly eleven times a second, so the same
+/// per-callback coefficients would make the follower about five times slower
+/// here and it would still be climbing towards the room when the reply ended.
+private struct NoiseGate {
+    /// Rises slowly, so a voice does not drag the floor up with it and gate
+    /// itself out mid-sentence. Falls quickly, so a room going quiet restores
+    /// sensitivity within a moment instead of staying deaf.
+    private static let riseSeconds: Float = 2.0
+    private static let fallSeconds: Float = 0.2
+
+    private let marginDB: Float
+    private var floorDB: Float?
+    private var lastAt: Date?
+
+    init(marginDB: Float) {
+        self.marginDB = marginDB
+    }
+
+    /// True when `db` is clearly above the room. Call once per metering
+    /// callback, in order — it is a running measurement, not a pure test.
+    mutating func aboveRoom(_ db: Float) -> Bool {
+        let now = Date()
+        defer { lastAt = now }
+        guard let floor = floorDB, let last = lastAt else {
+            floorDB = db
+            // Never on the first sample: with nothing to compare against,
+            // any answer would be a guess about a room not yet heard.
+            return false
+        }
+        let aboveRoom = db > floor + marginDB
+        let dt = Float(max(0.001, min(1.0, now.timeIntervalSince(last))))
+        let tau = db > floor ? Self.riseSeconds : Self.fallSeconds
+        let alpha = 1 - exp(-dt / tau)
+        floorDB = floor + alpha * (db - floor)
+        return aboveRoom
+    }
+}
+
 @MainActor
 final class VoiceTurnRecorder: NSObject, ObservableObject {
     @Published private(set) var listening = false
@@ -370,9 +422,17 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     private let bargeInThresholdDB: Float = -22
     private let bargeInSustain: TimeInterval = 0.35
 
+    /// How far above the room's own level a voice has to reach.
+    ///
+    /// Mirrors BARGE_IN_MARGIN in web/src/lib/noiseGate.ts, converted: the
+    /// web works on a 0-100 level where one unit is 0.6dB, so its margin of
+    /// 14 is about 9dB here.
+    private static let bargeInMarginDB: Float = 9
+
     private var monitoringForBargeIn = false
     private var onBargeIn: (() -> Void)?
     private var loudSince: Date?
+    private var bargeInGate = NoiseGate(marginDB: VoiceTurnRecorder.bargeInMarginDB)
 
     /// Starts listening for the teacher talking over Coach. The caller stops
     /// it when Coach finishes, or when a new turn begins.
@@ -389,10 +449,24 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
         monitoringForBargeIn = false
         onBargeIn = nil
         loudSince = nil
+        // The room is re-measured per reply rather than carried between them:
+        // a teacher can walk from a quiet corridor into a loud room between
+        // one turn and the next.
+        bargeInGate = NoiseGate(marginDB: Self.bargeInMarginDB)
     }
 
     private func checkForBargeIn(_ db: Float) {
-        guard db > bargeInThresholdDB else {
+        // Every sample goes to the gate, loud or quiet, because that is how it
+        // measures the room — and `guard` would short-circuit past it on the
+        // quiet ones. Measured: with the call inside the guard, the gate only
+        // ever saw loud samples, took the first of them as the room, and
+        // barge-in then never fired at all.
+        let aboveRoom = bargeInGate.aboveRoom(db)
+        // Loud in absolute terms AND clearly above the room — see NoiseGate.
+        // The threshold alone was a fixed number chosen against Coach's echo
+        // in a quiet room, so steady classroom noise sat above it
+        // indefinitely and stopped Coach mid-sentence for nobody.
+        guard db > bargeInThresholdDB, aboveRoom else {
             loudSince = nil
             return
         }
