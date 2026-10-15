@@ -32,14 +32,6 @@ struct AudioCoachingView: View {
     }
 
     @State private var unfinished: Unfinished?
-    /// Why the last upload did not arrive. A background upload fails out of
-    /// sight — the teacher is looking at the session list, not at the
-    /// request — and without this the only thing they ever saw was the
-    /// recording being offered back with no reason attached.
-    @State private var uploadFailure: String?
-    /// Why the session list could not be read. Shown in place of the empty
-    /// state, which otherwise claims there are no recordings.
-    @State private var historyError: String?
     @State private var recovering = false
 
     /// Anything the server is working on without this screen. Both waits end
@@ -103,17 +95,6 @@ struct AudioCoachingView: View {
             // mic is live the way out is Stop.
             .navigationBarBackButtonHidden(recorder.phase == .recording || recorder.phase == .paused)
             .task { await loadHistory() }
-            .onReceive(NotificationCenter.default.publisher(for: BackgroundUploader.uploadFailed)) { note in
-                uploadFailure = note.userInfo?["message"] as? String
-            }
-            .alert("Your recording didn't reach us", isPresented: Binding(
-                get: { uploadFailure != nil },
-                set: { if !$0 { uploadFailure = nil } }
-            )) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("\(uploadFailure ?? "")\n\nThe audio is still on this phone. Pull down to refresh and choose \"Send it\" to try again.")
-            }
             // A row that says "Processing" has to stop saying it without being
             // asked. Only while something is actually running, so an idle list
             // makes no requests at all.
@@ -172,23 +153,6 @@ struct AudioCoachingView: View {
             Text("PAST SESSIONS").font(.caption.weight(.bold)).tracking(1.1).foregroundStyle(AppTheme.terracotta600)
             if historyLoading {
                 Text("Loading...").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-            } else if let historyError {
-                // Never the empty state: "you have no recordings" and "we
-                // could not read your recordings" are opposite claims, and
-                // only one of them is ours to make.
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Couldn't load your sessions")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                    Text(historyError)
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.textSecondary)
-                    Text("Your recordings are safe on the server — this screen just couldn't fetch them.")
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading).padding()
-                .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
             } else if sessions.isEmpty {
                 Text("Sessions you record will show up here.")
                     .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
@@ -269,21 +233,7 @@ struct AudioCoachingView: View {
     }
 
     private func loadHistory() async {
-        // `catch {}` here hid the single most consequential failure in this
-        // screen. When the list cannot be read, `sessions` stays empty — and
-        // the empty state ("Sessions you record will show up here") is
-        // indistinguishable from having recorded nothing. Worse,
-        // reconcileLocalAudio then runs with an EMPTY byId, so every
-        // recording on the phone looks like one the server has never heard
-        // of: before the cancel grace landed, that is what was cancelling
-        // uploads seconds after they started. One silent failure, two
-        // symptoms that looked unrelated for a whole afternoon.
-        do {
-            sessions = try await AudioCoachingService.getSessions()
-            historyError = nil
-        } catch {
-            historyError = error.localizedDescription
-        }
+        do { sessions = try await AudioCoachingService.getSessions() } catch {}
         historyLoading = false
         reconcileLocalAudio()
     }
@@ -323,22 +273,6 @@ struct AudioCoachingView: View {
             // give the recording a session that exists.
             if BackgroundUploader.shared.isUploading(sessionId: manifest.sessionId) {
                 if byId[manifest.sessionId] != nil { continue }
-                // `byId` is this view's own copy of the session list, which a
-                // session created seconds ago is not in yet. Cancelling on
-                // that alone meant the app killed its own upload moments
-                // after starting it, and the teacher was told the recording
-                // had not arrived — with "Cancelled." as the reason, by the
-                // app that cancelled it. A one-minute lesson failed this way
-                // while a two-minute one on another account went through,
-                // purely because that account's list happened to be fresh.
-                //
-                // The case this abandons is real — an upload aimed at a
-                // session the server does not have retries for days and never
-                // lands — but it takes days to become true, and a stale list
-                // takes seconds. So only an upload old enough to be that case
-                // is abandoned.
-                let age = BackgroundUploader.shared.uploadAge(sessionId: manifest.sessionId) ?? 0
-                if age < BackgroundUploader.cancelGrace { continue }
                 BackgroundUploader.shared.cancelUploads(sessionId: manifest.sessionId)
             }
 

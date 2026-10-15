@@ -69,24 +69,9 @@ final class BackgroundUploader: NSObject {
     /// succeed — the session it targets no longer exists, so the server can
     /// only answer "Session not found" — background URLSession would otherwise
     /// keep retrying it for days while the recording sat unoffered.
-    /// How long after starting an upload it is protected from being
-    /// abandoned. Generous on purpose: the thing this guards against is a
-    /// doomed upload retrying for days, and nothing is lost by waiting ten
-    /// minutes before deciding that is what we are looking at.
-    static let cancelGrace: TimeInterval = 10 * 60
-
-    /// Seconds since this upload was handed to the system, or nil if it is
-    /// not in flight.
-    func uploadAge(sessionId: String) -> TimeInterval? {
-        lock.lock()
-        defer { lock.unlock() }
-        return startedAt[sessionId].map { Date().timeIntervalSince($0) }
-    }
-
     func cancelUploads(sessionId: String) {
         lock.lock()
         uploading.remove(sessionId)
-        startedAt[sessionId] = nil
         lock.unlock()
         session.getAllTasks { tasks in
             for task in tasks where task.taskDescription == sessionId { task.cancel() }
@@ -116,36 +101,7 @@ final class BackgroundUploader: NSObject {
         let message: String?
     }
 
-    /// The last upload to finish, success or failure.
-    ///
-    /// This was written and never read anywhere. When a background upload
-    /// failed, the reason — an HTTP status, a server message, a transport
-    /// error — was captured here and thrown away, and the teacher got a bare
-    /// "unfinished recording" with nothing to say why. A whole afternoon of
-    /// recordings failed to arrive and neither the teacher nor anyone reading
-    /// the database could see the cause, because the one place that knew it
-    /// kept it to itself.
-    /// When each in-flight upload was handed to the system, so a brand-new
-    /// one is never mistaken for one that has been failing for days.
-    private var startedAt: [String: Date] = [:]
-
-    private(set) var lastResult: UploadResult? {
-        didSet {
-            guard let lastResult, !lastResult.success else { return }
-            let note = lastResult.message ?? "Upload failed."
-            DispatchQueue.main.async {
-                NotificationCenter.default.post(
-                    name: BackgroundUploader.uploadFailed,
-                    object: nil,
-                    userInfo: ["sessionId": lastResult.sessionId, "message": note],
-                )
-            }
-        }
-    }
-
-    /// Posted when an upload finishes unsuccessfully, carrying "sessionId"
-    /// and "message".
-    static let uploadFailed = Notification.Name("WivozaUploadFailed")
+    private(set) var lastResult: UploadResult?
 
     /// Hands the recording to the system. Returns as soon as the task is
     /// queued — not when the upload completes.
@@ -180,7 +136,6 @@ final class BackgroundUploader: NSObject {
         lock.lock()
         bodyFiles[task.taskIdentifier] = bodyURL
         uploading.insert(sessionId)
-        startedAt[sessionId] = Date()
         lock.unlock()
         task.resume()
     }
@@ -262,7 +217,6 @@ extension BackgroundUploader: URLSessionDataDelegate {
         let (_, data) = cleanUp(taskIdentifier: task.taskIdentifier)
         lock.lock()
         uploading.remove(sessionId)
-        startedAt[sessionId] = nil
         lock.unlock()
         let status = (task.response as? HTTPURLResponse)?.statusCode ?? 0
 
