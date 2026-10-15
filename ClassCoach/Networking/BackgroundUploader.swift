@@ -101,7 +101,32 @@ final class BackgroundUploader: NSObject {
         let message: String?
     }
 
-    private(set) var lastResult: UploadResult?
+    /// The last upload to finish, success or failure.
+    ///
+    /// This was written and never read anywhere. When a background upload
+    /// failed, the reason — an HTTP status, a server message, a transport
+    /// error — was captured here and thrown away, and the teacher got a bare
+    /// "unfinished recording" with nothing to say why. A whole afternoon of
+    /// recordings failed to arrive and neither the teacher nor anyone reading
+    /// the database could see the cause, because the one place that knew it
+    /// kept it to itself.
+    private(set) var lastResult: UploadResult? {
+        didSet {
+            guard let lastResult, !lastResult.success else { return }
+            let note = lastResult.message ?? "Upload failed."
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: BackgroundUploader.uploadFailed,
+                    object: nil,
+                    userInfo: ["sessionId": lastResult.sessionId, "message": note],
+                )
+            }
+        }
+    }
+
+    /// Posted when an upload finishes unsuccessfully, carrying "sessionId"
+    /// and "message".
+    static let uploadFailed = Notification.Name("WivozaUploadFailed")
 
     /// Hands the recording to the system. Returns as soon as the task is
     /// queued — not when the upload completes.

@@ -32,6 +32,11 @@ struct AudioCoachingView: View {
     }
 
     @State private var unfinished: Unfinished?
+    /// Why the last upload did not arrive. A background upload fails out of
+    /// sight — the teacher is looking at the session list, not at the
+    /// request — and without this the only thing they ever saw was the
+    /// recording being offered back with no reason attached.
+    @State private var uploadFailure: String?
     @State private var recovering = false
 
     /// Anything the server is working on without this screen. Both waits end
@@ -95,6 +100,17 @@ struct AudioCoachingView: View {
             // mic is live the way out is Stop.
             .navigationBarBackButtonHidden(recorder.phase == .recording || recorder.phase == .paused)
             .task { await loadHistory() }
+            .onReceive(NotificationCenter.default.publisher(for: BackgroundUploader.uploadFailed)) { note in
+                uploadFailure = note.userInfo?["message"] as? String
+            }
+            .alert("Your recording didn't reach us", isPresented: Binding(
+                get: { uploadFailure != nil },
+                set: { if !$0 { uploadFailure = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("\(uploadFailure ?? "")\n\nThe audio is still on this phone. Pull down to refresh and choose \"Send it\" to try again.")
+            }
             // A row that says "Processing" has to stop saying it without being
             // asked. Only while something is actually running, so an idle list
             // makes no requests at all.
