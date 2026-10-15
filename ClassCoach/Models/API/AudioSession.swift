@@ -128,7 +128,22 @@ struct AudioContentNote: Decodable, Identifiable {
 }
 
 struct AudioContentNotes: Decodable {
-    let subject: String
+    /// Optional because the server writes null whenever the lesson has no
+    /// identifiable school subject — a recording that is an interview, a
+    /// rehearsal, or anything the subject read cannot place.
+    ///
+    /// It was `String`, and that one declaration emptied whole teachers'
+    /// session lists. Swift decodes the list as a single array, so a single
+    /// row with a null subject fails the decode of all of them; the list came
+    /// back empty, which the screen showed as "Sessions you record will show
+    /// up here". With the list empty, reconcileLocalAudio then judged every
+    /// recording on the phone to be one the server had never heard of and
+    /// cancelled its upload — so a typing mistake in a field nothing displays
+    /// presented as recordings that would not send. One account had carried
+    /// such a row since September and had never once uploaded a lesson.
+    ///
+    /// Nothing in the app reads this. The web guards it already.
+    let subject: String?
     let notes: [AudioContentNote]
     /// Ways into this topic from the world students live in — ideas for next
     /// time, not a reading of the lesson. Absent on older notes.
