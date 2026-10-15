@@ -290,9 +290,22 @@ struct RecordingPanelView: View {
                 sessionId: result.sessionId,
                 audioFileURL: result.fileURL,
                 durationSec: result.elapsedSec,
-                // Read before handOff(), which resets the recorder and with
-                // it the envelope.
-                levelTrace: recorder.levelTrace
+                // DELIBERATELY nil. Sending the envelope is switched off at
+                // the call site rather than removed, because the plumbing is
+                // not what is suspected and a one-line change is easy to put
+                // back once it is understood.
+                //
+                // Why: no lesson has uploaded from a phone since build 96,
+                // which is the build that started sending this field. Eight
+                // recordings in one afternoon were created on the server and
+                // left at "setup" — the audio never arrived — and the app
+                // offered each one back as an unfinished recording. The
+                // multipart framing reads correctly and the server treats an
+                // unparseable trace as no trace rather than an error, so the
+                // mechanism is not yet known. What IS known is that the last
+                // upload to succeed predates this field. Restoring the body
+                // to what it was is worth more than being right about why.
+                levelTrace: nil
             )
             // The file stays until the server reports a transcript for this
             // session. Queued is not the same as safe.
