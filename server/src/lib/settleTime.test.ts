@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { MAX_TRACE_SECONDS, parseLevelTrace, roomBaseline, settleTime, splitNonSpeech, teacherIntervals, type LevelTrace } from './settleTime.ts'
+import { classifySeconds, MAX_TRACE_SECONDS, parseLevelTrace, roomBaseline, settleTime, splitNonSpeech, teacherIntervals, type LevelTrace } from './settleTime.ts'
 
 // No real recording carries a level trace yet, so these traces are built by
 // hand. That is a limit worth stating plainly: the thresholds below are
@@ -193,4 +193,24 @@ test('a teacher the microphone never really heard yields no split', () => {
 
 test('no trace, no split', () => {
   assert.equal(splitNonSpeech([], [{ startSec: 0, endSec: 40 }], 100), null)
+})
+
+// The bug this pins: calibration uses the teacher's seconds, but a student's
+// transcribed answer was then counted again as quiet or as sound with no
+// words, so the talk bar could add up past 100%.
+test('a transcribed student answer is words, not sound with no words', () => {
+  const t = new Array(100).fill(0.5)
+  for (let i = 0; i < 40; i++) t[i] = 0.8
+  const teacher = [{ startSec: 0, endSec: 40 }]
+  const student = { startSec: 40, endSec: 70 }
+  const split = splitNonSpeech(t, teacher, 100, [...teacher, student])
+  assert.deepEqual(split, { quietSec: 0, unresolvedSec: 30 })
+})
+
+test('classifySeconds marks every second, and seconds past the trace as unread', () => {
+  const t = new Array(50).fill(0.8)
+  for (let i = 40; i < 45; i++) t[i] = 0.05
+  for (let i = 45; i < 50; i++) t[i] = 0.6
+  const s = classifySeconds(t, [{ startSec: 0, endSec: 40 }], 52)
+  assert.equal(s, 'w'.repeat(40) + 'q'.repeat(5) + 's'.repeat(5) + '--')
 })

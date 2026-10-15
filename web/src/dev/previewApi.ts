@@ -293,6 +293,35 @@ function escalationFixture(): Json {
 }
 
 function previewReport(): Json {
+  const previewSoundTimeline = (): Json => {
+    const words = [60, 120, 240, 300, 310, 340, 420, 505, 540, 620, 640, 700, 900, 980]
+    let seconds = ''
+    let wordsSec = 0
+    let soundSec = 0
+    let quietSec = 0
+    for (let sec = 0; sec < 1380; sec++) {
+      const c = words.some((w) => sec >= w && sec < w + 6)
+        ? 'w'
+        : sec < 60 || (sec >= 720 && sec < 900) || sec >= 1250
+          ? 's'
+          : 'q'
+      seconds += c
+      if (c === 'w') wordsSec++
+      else if (c === 's') soundSec++
+      else quietSec++
+    }
+    return {
+      seconds,
+      wordsSec,
+      soundSec,
+      quietSec,
+      soundRuns: [
+        { startSec: 0, endSec: 60 },
+        { startSec: 720, endSec: 900 },
+        { startSec: 1250, endSec: 1380 },
+      ],
+    }
+  }
   const seg = (speakerLabel: 'Teacher' | 'Student', startSec: number, text: string): Json => ({
     id: `seg-${startSec}`,
     speakerLabel,
@@ -465,6 +494,10 @@ function previewReport(): Json {
         },
       ],
     },
+    // `home=split` also carries the per-second timeline the server works out
+    // from the envelope, laid out so the Talk flow strip shows all four kinds:
+    // a lost opening minute, a lost stretch mid-lesson, a quiet work block.
+    ...(homeTools().has('split') ? { soundTimeline: previewSoundTimeline() } : {}),
     segments: [
       seg('Teacher', 60, 'By the end of today you will explain why the Black Death changed wages in Europe.'),
       seg('Teacher', 120, 'Take out your packets and turn to page four.'),

@@ -237,23 +237,30 @@ const QUIET_FRACTION_OF_SPEECH = 0.35
 /// calibrate against, and the split would be guesswork.
 const MIN_REFERENCE_SEC = 20
 
-export function splitNonSpeech(
+/// One character per second of the recording: 'w' someone's words are in the
+/// transcript, 'q' quiet, 's' sound with no words for it, '-' no reading for
+/// that second. Null when there is no teacher speech to calibrate against.
+///
+/// Calibration uses the TEACHER's seconds only — the one voice the transcript
+/// always locates — but every transcribed second is excluded from the
+/// non-speech count. An earlier version excluded only the teacher's, so a
+/// student's transcribed answer was counted a second time as quiet or as
+/// sound-with-no-words, and the talk bar could add up past 100%.
+export function classifySeconds(
   trace: LevelTrace,
-  speech: SpeechInterval[],
+  teacherSpeech: SpeechInterval[],
   durationSec: number,
-): NonSpeechSplit | null {
+  anySpeech: SpeechInterval[] = teacherSpeech,
+): string | null {
   if (trace.length === 0 || durationSec <= 0) return null
+  const total = Math.ceil(durationSec)
+  const inAny = (sec: number, list: SpeechInterval[]) => list.some((i) => sec >= i.startSec && sec < i.endSec)
 
   const speakingLevels: number[] = []
-  const nonSpeechLevels: number[] = []
-  const limit = Math.min(trace.length, Math.ceil(durationSec))
-  for (let sec = 0; sec < limit; sec++) {
+  for (let sec = 0; sec < Math.min(trace.length, total); sec++) {
     const level = trace[sec]
-    if (!Number.isFinite(level)) continue
-    if (speech.some((i) => sec >= i.startSec && sec < i.endSec)) speakingLevels.push(level)
-    else nonSpeechLevels.push(level)
+    if (Number.isFinite(level) && inAny(sec, teacherSpeech)) speakingLevels.push(level)
   }
-
   if (speakingLevels.length < MIN_REFERENCE_SEC) return null
 
   const sorted = [...speakingLevels].sort((a, b) => a - b)
@@ -263,11 +270,28 @@ export function splitNonSpeech(
   if (medianSpeech <= 0) return null
   const quietThreshold = medianSpeech * QUIET_FRACTION_OF_SPEECH
 
+  let out = ''
+  for (let sec = 0; sec < total; sec++) {
+    if (inAny(sec, anySpeech) || inAny(sec, teacherSpeech)) out += 'w'
+    else if (sec >= trace.length || !Number.isFinite(trace[sec])) out += '-'
+    else out += trace[sec] <= quietThreshold ? 'q' : 's'
+  }
+  return out
+}
+
+export function splitNonSpeech(
+  trace: LevelTrace,
+  teacherSpeech: SpeechInterval[],
+  durationSec: number,
+  anySpeech: SpeechInterval[] = teacherSpeech,
+): NonSpeechSplit | null {
+  const seconds = classifySeconds(trace, teacherSpeech, durationSec, anySpeech)
+  if (seconds == null) return null
   let quietSec = 0
   let unresolvedSec = 0
-  for (const level of nonSpeechLevels) {
-    if (level <= quietThreshold) quietSec++
-    else unresolvedSec++
+  for (const c of seconds) {
+    if (c === 'q') quietSec++
+    else if (c === 's') unresolvedSec++
   }
   return { quietSec, unresolvedSec }
 }

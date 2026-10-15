@@ -976,7 +976,18 @@ export type TranscriptSegment = {
   text: string
 }
 
-export type AudioSessionWithSegments = AudioSession & { segments: TranscriptSegment[] }
+// Worked out by the server from the loudness envelope, for recordings that
+// carried one. `seconds` is one character per second of the lesson: w words,
+// q quiet, s sound with no words, - no reading.
+export type SoundTimeline = {
+  seconds: string
+  wordsSec: number
+  soundSec: number
+  quietSec: number
+  soundRuns: { startSec: number; endSec: number }[]
+}
+
+export type AudioSessionWithSegments = AudioSession & { segments: TranscriptSegment[]; soundTimeline?: SoundTimeline | null }
 
 export type SpeakerSample = {
   rawSpeakerTag: string

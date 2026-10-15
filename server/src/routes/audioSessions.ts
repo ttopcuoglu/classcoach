@@ -5,6 +5,7 @@ import { analyzeTranscript, buildContentExhibits, detectLessonContent, type Segm
 import { enrichClassroomMoves } from '../lib/classroomMoves.ts'
 import { readEscalation } from '../lib/escalation.ts'
 import { parseLevelTrace, splitNonSpeech, teacherIntervals } from '../lib/settleTime.ts'
+import { buildSoundTimeline } from '../lib/soundTimeline.ts'
 import { enrichLessonContent } from '../lib/lessonObjective.ts'
 import { checkFeatureAccess, hasActivePlan, startOfCurrentMonth } from '../lib/billing.ts'
 import { cachedSystem, cacheStats } from '../lib/promptCache.ts'
@@ -333,7 +334,10 @@ audioSessionsRouter.get('/:id', async (req, res) => {
     res.status(404).json({ error: 'Session not found' })
     return
   }
-  res.json(session)
+  // Worked out on read rather than stored, so every recording that carried an
+  // envelope gets it — including the ones analyzed before this existed.
+  const soundTimeline = buildSoundTimeline(parseLevelTrace(session.levelTrace), session.segments, session.durationSec)
+  res.json({ ...session, soundTimeline })
 })
 
 audioSessionsRouter.post('/', async (req, res) => {
@@ -813,7 +817,12 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
   })
   const trace = parseLevelTrace(stored?.levelTrace)
   const nonSpeech = trace
-    ? splitNonSpeech(trace, teacherIntervals(segments), stored?.durationSec ?? analysis.metricsDetail.totalDurationSec)
+    ? splitNonSpeech(
+        trace,
+        teacherIntervals(segments),
+        stored?.durationSec ?? analysis.metricsDetail.totalDurationSec,
+        segments.map((s) => ({ startSec: s.startSec, endSec: s.endSec })),
+      )
     : null
 
   const updated = await prisma.audioSession.update({

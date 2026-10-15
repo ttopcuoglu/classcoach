@@ -49,6 +49,7 @@ import {
   type AudioRubricLens,
   type AudioSession,
   type AudioSessionWithSegments,
+  type SoundTimeline,
   type AudioToneLogEntry,
   type ApiError,
   type FocusMetric,
@@ -2040,7 +2041,7 @@ function TalkParticipationBar({
                 {Math.round(nonSpeech.quietPct)}%
               </span>
               <span className="flex items-center gap-1.5">
-                <HatchedSwatch className="h-2.5 w-2.5 rounded-sm" /> Class or group talk{' '}
+                <HatchedSwatch className="h-2.5 w-2.5 rounded-sm" /> Sound, no words{' '}
                 {Math.round(nonSpeech.unresolvedPct)}%
               </span>
             </>
@@ -2051,7 +2052,7 @@ function TalkParticipationBar({
             </span>
           )}
         </div>
-          {/* "Class or group talk" is what the envelope can support saying and
+          {/* "Sound, no words" is what the envelope can support saying and
               no more: the measurement is that sound was present and the
               transcript has no words for it. In a classroom that is usually
               voices, which is why the label says so — but a video, a fire
@@ -2060,7 +2061,7 @@ function TalkParticipationBar({
               segment make a claim on its own. */}
           {nonSpeech && (
             <p className="text-xs text-ink-soft">
-              “Class or group talk” is sound the microphone caught but couldn’t turn into words. In a classroom that is
+              “Sound, no words” is sound the microphone caught but couldn’t turn into words. In a classroom that is
               usually voices — a video or noise from outside reads the same way.
             </p>
           )}
@@ -5235,9 +5236,47 @@ function ClimateRoutinesTab({
 // skipped — the timeline always spans the full lesson duration.
 const PACING_TIMELINE_BINS = 24
 
-type PacingBin = 'teacher' | 'student' | 'unavailable'
+type PacingBin = 'teacher' | 'student' | 'sound' | 'quiet' | 'unavailable'
 
-function buildPacingTimeline(segments: TranscriptSegment[], durationSec: number): PacingBin[] {
+// A bin with no words in it used to be one hatched "no dominant speaker"
+// block, which covered a quiet room and a room the microphone could not
+// resolve alike. Where the recording carried a loudness envelope the server
+// says which each second was, so the bin takes whichever of the two filled
+// more of it. Without one, it stays the combined block — still the honest
+// answer when there is nothing to tell them apart with.
+function emptyBinKind(seconds: string | undefined, binStart: number, binEnd: number): PacingBin {
+  if (!seconds) return 'unavailable'
+  let sound = 0
+  let quiet = 0
+  for (let sec = Math.floor(binStart); sec < Math.ceil(binEnd) && sec < seconds.length; sec++) {
+    if (seconds[sec] === 's') sound++
+    else if (seconds[sec] === 'q') quiet++
+  }
+  if (sound === 0 && quiet === 0) return 'unavailable'
+  return sound >= quiet ? 'sound' : 'quiet'
+}
+
+function minutesPhrase(sec: number): string {
+  if (sec < 60) return 'under a minute'
+  const m = Math.round(sec / 60)
+  return `${m} minute${m === 1 ? '' : 's'}`
+}
+
+/// One sentence of what the recording did and did not catch, and where.
+/// Never a reason: the teacher was in the room and knows what 18:00 was.
+function soundTimelineSentence(t: SoundTimeline): string {
+  const cap = (x: string) => x[0].toUpperCase() + x.slice(1)
+  const verb = (sec: number) => (sec < 90 ? 'was' : 'were')
+  const parts = [`Words came through for ${minutesPhrase(t.wordsSec)} of ${minutesPhrase(t.seconds.length)}.`]
+  if (t.soundSec >= 30) {
+    const where = t.soundRuns.map((r) => `${formatTime(r.startSec)}–${formatTime(r.endSec)}`).join(', ')
+    parts.push(`${cap(minutesPhrase(t.soundSec))} had sound but no words${where ? ` (${where})` : ''}.`)
+  }
+  if (t.quietSec >= 30) parts.push(`${cap(minutesPhrase(t.quietSec))} ${verb(t.quietSec)} quiet.`)
+  return parts.join(' ')
+}
+
+function buildPacingTimeline(segments: TranscriptSegment[], durationSec: number, seconds?: string): PacingBin[] {
   const binSec = durationSec / PACING_TIMELINE_BINS
   const bins: PacingBin[] = []
   for (let i = 0; i < PACING_TIMELINE_BINS; i++) {
@@ -5251,22 +5290,41 @@ function buildPacingTimeline(segments: TranscriptSegment[], durationSec: number)
       if (seg.speakerLabel === 'Teacher') teacherSec += overlap
       else if (seg.speakerLabel === 'Student') studentSec += overlap
     }
-    bins.push(teacherSec === 0 && studentSec === 0 ? 'unavailable' : teacherSec >= studentSec ? 'teacher' : 'student')
+    bins.push(
+      teacherSec === 0 && studentSec === 0
+        ? emptyBinKind(seconds, binStart, binEnd)
+        : teacherSec >= studentSec
+          ? 'teacher'
+          : 'student',
+    )
   }
   return bins
 }
 
-function PacingTimeline({ segments, durationSec }: { segments: TranscriptSegment[]; durationSec: number | null }) {
+function PacingTimeline({
+  segments,
+  durationSec,
+  soundTimeline,
+}: {
+  segments: TranscriptSegment[]
+  durationSec: number | null
+  soundTimeline?: SoundTimeline | null
+}) {
   if (durationSec == null || durationSec <= 0 || segments.length === 0) {
     return <HatchedBar label="Talk flow unavailable this session." className="h-6 rounded-lg" />
   }
-  const bins = buildPacingTimeline(segments, durationSec)
+  const bins = buildPacingTimeline(segments, durationSec, soundTimeline?.seconds)
   return (
     <div>
       <div className="flex h-6 w-full overflow-hidden rounded-lg">
         {bins.map((bin, i) =>
-          bin === 'unavailable' ? (
+          // Hatched means the same thing here as in the talk bar above: sound
+          // the transcript has no words for, or, with no envelope, a block
+          // we cannot read at all.
+          bin === 'unavailable' || bin === 'sound' ? (
             <div key={i} className="h-full flex-1" style={HATCH_STYLE} />
+          ) : bin === 'quiet' ? (
+            <div key={i} className="h-full flex-1 bg-hairline" />
           ) : (
             // Same teacher/student colors as TalkParticipationBar below, so
             // the timeline and the distribution bar read as one consistent
@@ -5286,13 +5344,25 @@ function PacingTimeline({ segments, durationSec }: { segments: TranscriptSegment
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-gold" /> Student-heavy
         </span>
-        <span className="flex items-center gap-1.5">
-          {/* Not labeled "unclear audio" — this bucket also covers genuine
-              silence (think-time, quiet reading), which the pipeline has
-              no way to tell apart from audio that just didn't diarize. */}
-          <HatchedSwatch /> No dominant speaker
-        </span>
+        {soundTimeline ? (
+          <>
+            <span className="flex items-center gap-1.5">
+              <HatchedSwatch /> Sound, no words
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-hairline" /> Quiet
+            </span>
+          </>
+        ) : (
+          <span className="flex items-center gap-1.5">
+            {/* Not labeled "unclear audio" — without an envelope this bucket
+                also covers genuine silence (think-time, quiet reading), which
+                nothing in the recording can tell apart from lost audio. */}
+            <HatchedSwatch /> No dominant speaker
+          </span>
+        )}
       </div>
+      {soundTimeline && <p className="mt-3 text-sm text-ink">{soundTimelineSentence(soundTimeline)}</p>}
     </div>
   )
 }
@@ -5518,7 +5588,11 @@ function TalkParticipationTab({
 
       <DetailRows>
         <DetailRow title="Talk flow across the lesson">
-          <PacingTimeline segments={session.segments} durationSec={session.durationSec} />
+          <PacingTimeline
+            segments={session.segments}
+            durationSec={session.durationSec}
+            soundTimeline={session.soundTimeline}
+          />
         </DetailRow>
         {stretch && (
           <DetailRow

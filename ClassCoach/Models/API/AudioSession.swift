@@ -451,10 +451,26 @@ struct TranscriptSegment: Decodable, Identifiable {
     let text: String
 }
 
+/// Worked out by the server from the loudness envelope, for recordings that
+/// carried one. `seconds` is one character per second of the lesson: w words,
+/// q quiet, s sound with no words, - no reading.
+struct SoundTimeline: Decodable {
+    struct Run: Decodable {
+        let startSec: Double
+        let endSec: Double
+    }
+    let seconds: String
+    let wordsSec: Double
+    let soundSec: Double
+    let quietSec: Double
+    let soundRuns: [Run]
+}
+
 struct AudioSessionWithSegments: Decodable, Identifiable {
     var id: String { session.id }
     let session: AudioSession
     let segments: [TranscriptSegment]
+    var soundTimeline: SoundTimeline? = nil
 
     // Flattened accessors so call sites can read `withSegments.teacherTalkPct`
     // the same way the web app reads straight off the session object.
@@ -508,6 +524,7 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
         session = try AudioSession(from: decoder)
         let container = try decoder.container(keyedBy: DynamicKey.self)
         segments = (try? container.decode([TranscriptSegment].self, forKey: DynamicKey(stringValue: "segments")!)) ?? []
+        soundTimeline = try? container.decode(SoundTimeline.self, forKey: DynamicKey(stringValue: "soundTimeline")!)
     }
 
     private struct DynamicKey: CodingKey {

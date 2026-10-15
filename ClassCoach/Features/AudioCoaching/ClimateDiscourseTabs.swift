@@ -305,7 +305,7 @@ struct DiscourseDetailsTab: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 DetailRow(title: "Talk flow across the lesson") {
-                    PacingTimelineView(segments: session.segments, durationSec: session.durationSec)
+                    PacingTimelineView(segments: session.segments, durationSec: session.durationSec, soundTimeline: session.soundTimeline)
                 }
                 if focus != nil {
                     DetailRow(title: "What students talked about, with examples") { studentTalkFocusCard }
@@ -607,6 +607,12 @@ private struct StudentTalkFocusRow: Identifiable {
 private struct PacingTimelineView: View {
     let segments: [TranscriptSegment]
     let durationSec: Double?
+    /// Present only for recordings that carried a loudness envelope. Without
+    /// it an empty block stays one combined "No dominant speaker", since
+    /// nothing in the recording can tell a quiet room from lost audio.
+    let soundTimeline: SoundTimeline?
+
+    private enum Bin { case teacher, student, sound, quiet, unavailable }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -616,8 +622,7 @@ private struct PacingTimelineView: View {
                 HStack(spacing: 1) {
                     ForEach(0..<bins, id: \.self) { i in
                         let binStart = Double(i) * binDuration
-                        let binEnd = binStart + binDuration
-                        Rectangle().fill(binColor(binStart: binStart, binEnd: binEnd))
+                        binView(bin(binStart: binStart, binEnd: binStart + binDuration))
                     }
                 }
                 .frame(height: 20)
@@ -628,11 +633,23 @@ private struct PacingTimelineView: View {
                 }
                 .font(.caption2).foregroundStyle(AppTheme.textSecondary)
                 HStack(spacing: 12) {
-                    legend("Teacher", AppTheme.terracotta)
-                    legend("Student", AppTheme.gold)
-                    legend("Unavailable", AppTheme.textSecondary.opacity(0.3))
+                    legend("Teacher", AnyView(Circle().fill(AppTheme.terracotta)))
+                    legend("Student", AnyView(Circle().fill(AppTheme.gold)))
+                    if soundTimeline != nil {
+                        legend("Sound, no words", AnyView(Circle().fill(AppTheme.textSecondary.opacity(0.15)).overlay(Hatch().clipShape(Circle()))))
+                        legend("Quiet", AnyView(Circle().fill(AppTheme.textSecondary.opacity(0.15))))
+                    } else {
+                        legend("No dominant speaker", AnyView(Circle().fill(AppTheme.textSecondary.opacity(0.15))))
+                    }
                 }
                 .font(.caption2)
+                if let soundTimeline {
+                    Text(Self.sentence(soundTimeline))
+                        .font(.footnote)
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .padding(.top, 4)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             } else {
                 Text("Pacing timeline unavailable this session.")
                     .font(.caption).foregroundStyle(AppTheme.textSecondary)
@@ -643,20 +660,84 @@ private struct PacingTimelineView: View {
         }
     }
 
-    private func legend(_ label: String, _ color: Color) -> some View {
+    private func legend(_ label: String, _ swatch: AnyView) -> some View {
         HStack(spacing: 4) {
-            Circle().fill(color).frame(width: 8, height: 8)
+            swatch.frame(width: 8, height: 8)
             Text(label).foregroundStyle(AppTheme.textSecondary)
         }
     }
 
-    private func binColor(binStart: Double, binEnd: Double) -> Color {
+    @ViewBuilder
+    private func binView(_ bin: Bin) -> some View {
+        switch bin {
+        case .teacher: Rectangle().fill(AppTheme.terracotta)
+        case .student: Rectangle().fill(AppTheme.gold)
+        // Hatched, like the web report: sound the transcript has no words for.
+        case .sound: Rectangle().fill(AppTheme.textSecondary.opacity(0.15)).overlay(Hatch().clipped())
+        case .quiet, .unavailable: Rectangle().fill(AppTheme.textSecondary.opacity(0.15))
+        }
+    }
+
+    private func bin(binStart: Double, binEnd: Double) -> Bin {
         let overlapping = segments.filter { $0.startSec < binEnd && $0.endSec > binStart }
-        guard !overlapping.isEmpty else { return AppTheme.textSecondary.opacity(0.15) }
+        guard !overlapping.isEmpty else { return emptyBin(binStart: binStart, binEnd: binEnd) }
         let teacherDuration = overlapping.filter { $0.speakerLabel == "Teacher" }
             .reduce(0.0) { $0 + (min($1.endSec, binEnd) - max($1.startSec, binStart)) }
         let studentDuration = overlapping.filter { $0.speakerLabel != "Teacher" }
             .reduce(0.0) { $0 + (min($1.endSec, binEnd) - max($1.startSec, binStart)) }
-        return teacherDuration >= studentDuration ? AppTheme.terracotta : AppTheme.gold
+        return teacherDuration >= studentDuration ? .teacher : .student
+    }
+
+    /// Whichever of quiet and sound-with-no-words filled more of the block.
+    private func emptyBin(binStart: Double, binEnd: Double) -> Bin {
+        guard let chars = soundTimeline.map({ Array($0.seconds) }) else { return .unavailable }
+        var sound = 0
+        var quiet = 0
+        var sec = Int(binStart.rounded(.down))
+        while sec < Int(binEnd.rounded(.up)) && sec < chars.count {
+            if chars[sec] == "s" { sound += 1 } else if chars[sec] == "q" { quiet += 1 }
+            sec += 1
+        }
+        if sound == 0 && quiet == 0 { return .unavailable }
+        return sound >= quiet ? .sound : .quiet
+    }
+
+    private static func minutes(_ sec: Double) -> String {
+        if sec < 60 { return "under a minute" }
+        let m = Int((sec / 60).rounded())
+        return "\(m) minute\(m == 1 ? "" : "s")"
+    }
+
+    /// Same sentence as the web report: what came through and where, never why.
+    static func sentence(_ t: SoundTimeline) -> String {
+        func cap(_ s: String) -> String { s.prefix(1).uppercased() + s.dropFirst() }
+        var parts = ["Words came through for \(minutes(t.wordsSec)) of \(minutes(Double(t.seconds.count)))."]
+        if t.soundSec >= 30 {
+            let whereText = t.soundRuns
+                .map { "\(ReportConfidence.formatDuration($0.startSec))–\(ReportConfidence.formatDuration($0.endSec))" }
+                .joined(separator: ", ")
+            parts.append("\(cap(minutes(t.soundSec))) had sound but no words\(whereText.isEmpty ? "" : " (\(whereText))").")
+        }
+        if t.quietSec >= 30 {
+            parts.append("\(cap(minutes(t.quietSec))) \(t.quietSec < 90 ? "was" : "were") quiet.")
+        }
+        return parts.joined(separator: " ")
+    }
+}
+
+/// Diagonal stripes for "sound, no words" — the hatch the web report uses
+/// for the same thing.
+private struct Hatch: View {
+    var body: some View {
+        Canvas { context, size in
+            var path = Path()
+            var x: CGFloat = -size.height
+            while x < size.width {
+                path.move(to: CGPoint(x: x, y: size.height))
+                path.addLine(to: CGPoint(x: x + size.height, y: 0))
+                x += 4
+            }
+            context.stroke(path, with: .color(AppTheme.textSecondary.opacity(0.5)), lineWidth: 1)
+        }
     }
 }

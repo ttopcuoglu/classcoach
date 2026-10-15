@@ -20,8 +20,8 @@ test('exactly half captured still counts', () => {
 // capturedShare reads missing talk seconds as zero, which would drop every
 // lesson analyzed before the field existed — for its age, not its audio.
 test('a lesson with no recorded talk seconds is counted, not dropped', () => {
-  const old = { durationSec: 1800, metricsDetail: { redirectionCount: 2 } }
-  assert.equal(knownCapturedShare(old.metricsDetail, old.durationSec), null)
+  const old = { durationSec: 1800, metricsDetail: { redirectionCount: 2 } as unknown }
+  assert.equal(knownCapturedShare({}, old.durationSec), null)
   assert.deepEqual(splitByCoverage([old]), { counted: [old], lowAudio: 0 })
 })
 
