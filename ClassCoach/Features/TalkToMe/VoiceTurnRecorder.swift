@@ -16,55 +16,55 @@ import AVFoundation
 /// playing or recording, so during transcription and Coach's thinking iOS
 /// suspended the app, and a backgrounded app isn't allowed to re-open the
 /// mic for the next turn ("Could not access your microphone").
-/// Telling a voice apart from the room it is in.
+/// How loud the room is, measured continuously.
 ///
-/// Mirrors web/src/lib/noiseGate.ts, and exists for the same reported
-/// reason: the barge-in level was a fixed number, chosen against the echo of
-/// Coach's own voice leaking back in a quiet room. A classroom is not a quiet
-/// room — steady noise sits above that number indefinitely, holds there past
-/// the sustain, and stops Coach mid-sentence for nobody.
+/// Both decisions that used a fixed level needed this, and for the same
+/// reported reason: a number chosen in a quiet room does not survive a
+/// classroom.
 ///
-/// What matters is not how loud the room is but whether something just got
-/// LOUDER than it, so the room is measured continuously and a voice has to
-/// stand above it.
+///   - Interrupting Coach was "above -22dB for 0.35s". Steady noise sits
+///     above -22 indefinitely, so Coach stopped mid-sentence for nobody.
+///   - Deciding the teacher has STOPPED talking was "below -35dB". Steady
+///     noise never goes below -35, so the turn never ended: the app sat on
+///     "listening" and nothing was ever sent. Reported as Coach not hearing
+///     them at all, which is the opposite of the cause — it was hearing the
+///     room and could not tell when they had finished.
 ///
-/// Unlike the web version this follows the room on a TIME constant rather
-/// than a per-callback fraction. The browser samples at 60fps; AVAudioEngine
-/// delivers a metering callback roughly eleven times a second, so the same
-/// per-callback coefficients would make the follower about five times slower
-/// here and it would still be climbing towards the room when the reply ended.
-private struct NoiseGate {
-    /// Rises slowly, so a voice does not drag the floor up with it and gate
-    /// itself out mid-sentence. Falls quickly, so a room going quiet restores
-    /// sensitivity within a moment instead of staying deaf.
-    private static let riseSeconds: Float = 2.0
-    private static let fallSeconds: Float = 0.2
+/// Measured whenever the microphone is open, which includes while Coach is
+/// speaking, so a turn never has to start by guessing. Measuring only from
+/// the first sample of a turn fails exactly when someone starts talking
+/// immediately: their own voice becomes "the room" and is then inaudible.
+///
+/// The follower rises slowly and falls quickly. Slowly up, because a voice
+/// must not drag the floor up and gate itself out: measured at the barge-in
+/// speed, a twelve-second sentence was detected for only 25 of its 132
+/// callbacks, which would have cut the teacher off mid-word. Quickly down,
+/// because the pauses inside real speech are what reveal the room, and a
+/// room that goes quiet should restore sensitivity at once.
+private struct RoomLevel {
+    private static let riseSeconds: Float = 20
+    private static let fallSeconds: Float = 0.3
 
-    private let marginDB: Float
     private var floorDB: Float?
     private var lastAt: Date?
 
-    init(marginDB: Float) {
-        self.marginDB = marginDB
-    }
-
-    /// True when `db` is clearly above the room. Call once per metering
-    /// callback, in order — it is a running measurement, not a pure test.
-    mutating func aboveRoom(_ db: Float) -> Bool {
+    /// How far this sample stands above the room, in dB. Nil on the very
+    /// first sample, where there is nothing to compare against yet. Updates
+    /// the measurement as a side effect, so it must be called once per
+    /// metering callback, in order, whether or not the caller cares about
+    /// the answer — that is how the room gets measured at all.
+    mutating func excess(_ db: Float) -> Float? {
         let now = Date()
         defer { lastAt = now }
         guard let floor = floorDB, let last = lastAt else {
             floorDB = db
-            // Never on the first sample: with nothing to compare against,
-            // any answer would be a guess about a room not yet heard.
-            return false
+            return nil
         }
-        let aboveRoom = db > floor + marginDB
+        let above = db - floor
         let dt = Float(max(0.001, min(1.0, now.timeIntervalSince(last))))
         let tau = db > floor ? Self.riseSeconds : Self.fallSeconds
-        let alpha = 1 - exp(-dt / tau)
-        floorDB = floor + alpha * (db - floor)
-        return aboveRoom
+        floorDB = floor + (1 - exp(-dt / tau)) * (db - floor)
+        return above
     }
 }
 
@@ -92,6 +92,10 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     /// ambient noise — same scale as `AVAudioRecorder.averagePower`, which
     /// this threshold was originally tuned against.
     private let speechThresholdDB: Float = -35
+
+    /// Measured for the whole time the microphone is open, not per turn —
+    /// see RoomLevel for why starting fresh each turn is not good enough.
+    private var room = RoomLevel()
 
     /// How long to wait in silence before deciding the turn is over, as a
     /// function of how long the teacher has just been speaking — the native
@@ -387,15 +391,23 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     // MARK: - Turn
 
     private func handleLevel(_ db: Float) {
+        // Every sample, before anything branches: this is both the question
+        // "how far above the room is this?" and the act of measuring the
+        // room. Behind a `guard` it would only ever see the loud samples and
+        // mistake the first of them for the room.
+        let excess = room.excess(db) ?? 0
         guard listening else {
-            if monitoringForBargeIn { checkForBargeIn(db) }
+            if monitoringForBargeIn { checkForBargeIn(db, excess: excess) }
             return
         }
         level = Double(max(0, min(100, (db + 60) * (100.0 / 60.0))))
         let now = Date()
         let sinceLast = lastLevelAt.map { now.timeIntervalSince($0) * 1000 } ?? 0
         lastLevelAt = now
-        if db > speechThresholdDB {
+        // Loud in absolute terms AND above the room. The absolute threshold
+        // alone meant a noisy room read as continuous speech, which reset the
+        // silence timer on every callback and left the turn running forever.
+        if db > speechThresholdDB, excess >= Self.speechMarginDB {
             // Capped per callback so a gap (the app suspended, the engine
             // restarted after an interruption) cannot be counted as speech.
             speechMs += min(sinceLast, 100)
@@ -422,17 +434,22 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     private let bargeInThresholdDB: Float = -22
     private let bargeInSustain: TimeInterval = 0.35
 
-    /// How far above the room's own level a voice has to reach.
+    /// How far above the room each decision needs a voice to stand.
     ///
-    /// Mirrors BARGE_IN_MARGIN in web/src/lib/noiseGate.ts, converted: the
-    /// web works on a 0-100 level where one unit is 0.6dB, so its margin of
-    /// 14 is about 9dB here.
+    /// Interrupting gets the larger margin: a false positive there stops
+    /// Coach mid-sentence for nobody, which is the worst outcome in the
+    /// product. Mirrors BARGE_IN_MARGIN in web/src/lib/noiseGate.ts,
+    /// converted — the web works on a 0-100 level where one unit is 0.6dB,
+    /// so its 14 is about 9dB here.
     private static let bargeInMarginDB: Float = 9
+
+    /// Deciding they are still talking gets the smaller one, because a false
+    /// NEGATIVE here is what cuts someone off mid-sentence.
+    private static let speechMarginDB: Float = 5
 
     private var monitoringForBargeIn = false
     private var onBargeIn: (() -> Void)?
     private var loudSince: Date?
-    private var bargeInGate = NoiseGate(marginDB: VoiceTurnRecorder.bargeInMarginDB)
 
     /// Starts listening for the teacher talking over Coach. The caller stops
     /// it when Coach finishes, or when a new turn begins.
@@ -448,25 +465,18 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     func stopWatchingWhileSpeaking() {
         monitoringForBargeIn = false
         onBargeIn = nil
+        // The room measurement is deliberately NOT reset here: it belongs to
+        // the microphone being open, not to one reply, and throwing it away
+        // between turns is what would make the next turn start by guessing.
         loudSince = nil
-        // The room is re-measured per reply rather than carried between them:
-        // a teacher can walk from a quiet corridor into a loud room between
-        // one turn and the next.
-        bargeInGate = NoiseGate(marginDB: Self.bargeInMarginDB)
     }
 
-    private func checkForBargeIn(_ db: Float) {
-        // Every sample goes to the gate, loud or quiet, because that is how it
-        // measures the room — and `guard` would short-circuit past it on the
-        // quiet ones. Measured: with the call inside the guard, the gate only
-        // ever saw loud samples, took the first of them as the room, and
-        // barge-in then never fired at all.
-        let aboveRoom = bargeInGate.aboveRoom(db)
-        // Loud in absolute terms AND clearly above the room — see NoiseGate.
+    private func checkForBargeIn(_ db: Float, excess: Float) {
+        // Loud in absolute terms AND clearly above the room — see RoomLevel.
         // The threshold alone was a fixed number chosen against Coach's echo
         // in a quiet room, so steady classroom noise sat above it
         // indefinitely and stopped Coach mid-sentence for nobody.
-        guard db > bargeInThresholdDB, aboveRoom else {
+        guard db > bargeInThresholdDB, excess >= Self.bargeInMarginDB else {
             loudSince = nil
             return
         }

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { createNoiseGate } from '../lib/noiseGate'
+import { createRoomLevel } from '../lib/noiseGate'
 import { transcribeTalkToMeAudio } from '../lib/api'
 import { liveTranscriptionEnabled, openLiveSession, type LiveSession } from '../lib/liveTranscription'
 import { LONGEST_WAIT_MS, silenceWindowFor } from '../lib/turnEndpointing'
@@ -30,6 +30,11 @@ const BARGE_IN_SUSTAIN_MS = 350
 // regenerated, and missing a teacher who really was still talking is worse.
 const BARGE_IN_MARGIN = 14
 const RESUME_MARGIN = 6
+
+// Deciding the teacher is still talking gets its own, because here a false
+// NEGATIVE is what cuts someone off mid-sentence, while a false positive is
+// what kept the turn running forever.
+const SPEECH_MARGIN = 8
 
 // On by default: a teacher who starts talking expects Coach to stop, and
 // without that the thinking sounds below would be something they cannot get
@@ -123,6 +128,9 @@ export function useVoiceTurn(
 
   // How long this turn has actually been speech, accumulated frame by frame
   // — the signal the wait length is derived from.
+  // Measured for as long as the microphone is open rather than per turn, so
+  // a turn never begins by guessing at the room — see createRoomLevel.
+  const roomRef = useRef(createRoomLevel())
   const speechMsRef = useRef(0)
   // Whether any frame this turn was loud enough to be speech. Kept separately
   // from speechMsRef, which can legitimately still read 0 after a single
@@ -341,7 +349,14 @@ export function useVoiceTurn(
       const now = performance.now()
       const sinceLastFrame = lastFrameRef.current ? now - lastFrameRef.current : 0
       lastFrameRef.current = now
-      if (pct > SPEECH_LEVEL_THRESHOLD) {
+      // Every frame, before anything branches: this both asks how far above
+      // the room this frame is and performs the measurement.
+      const excess = roomRef.current.excess(pct, sinceLastFrame || 16.7)
+      // Loud in absolute terms AND above the room. The absolute threshold on
+      // its own meant any room above level 8 read as continuous speech, which
+      // pushed lastSpeechAt forward every frame so the silence window could
+      // never elapse and the turn ran forever.
+      if (pct > SPEECH_LEVEL_THRESHOLD && excess >= SPEECH_MARGIN) {
         // Capped per frame so a backgrounded tab, where rAF stops firing,
         // cannot come back and count the whole gap as speech.
         speechMsRef.current += Math.min(sinceLastFrame, 100)
@@ -448,9 +463,7 @@ export function useVoiceTurn(
 
     stream.getAudioTracks().forEach((t) => (t.enabled = true))
     const data = new Uint8Array(analyser.frequencyBinCount)
-    // Measures the room as it goes, so "loud" means louder than the room
-    // rather than louder than a number picked in a quiet one.
-    const gate = createNoiseGate(threshold, margin)
+    let lastAt: number | null = null
     let rafId: number | null = null
     let loudSince = 0
     let stopped = false
@@ -473,7 +486,12 @@ export function useVoiceTurn(
       }
       const pct = Math.min(100, Math.round(Math.sqrt(sumSquares / data.length) * 300))
       const now = performance.now()
-      if (gate.test(pct)) {
+      const dtMs = lastAt ? now - lastAt : 16.7
+      lastAt = now
+      // The same room measurement the turn loop uses: only one of the two is
+      // ever running, and sharing it means neither has to re-learn the room.
+      const excess = roomRef.current.excess(pct, dtMs)
+      if (pct > threshold && excess >= margin) {
         if (!loudSince) loudSince = now
         if (now - loudSince >= sustainMs) {
           stopWatching()

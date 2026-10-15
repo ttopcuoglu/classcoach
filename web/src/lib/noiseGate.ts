@@ -1,50 +1,65 @@
-// Telling a voice apart from the room it is in.
+// How loud the room is, measured continuously.
 //
-// The microphone level was compared against a fixed number: above 20 for
-// 350ms meant the teacher had started talking over Coach, so Coach stopped.
-// That number was chosen against the echo of Coach's own voice leaking back
-// in, in a quiet room. A classroom is not a quiet room. Steady background
-// noise sits above 20 indefinitely, clears the 350ms with ease, and stops
-// Coach mid-sentence for nobody — reported as "in a loud environment Coach's
-// voice stops".
+// Both decisions that used a fixed level needed this, and for the same
+// reported reason: a number chosen in a quiet room does not survive a
+// classroom.
 //
-// A level alone cannot answer the question, because what matters is not how
-// loud the room is but whether something just got LOUDER than the room. So
-// the room is measured continuously and a voice has to stand above it.
+//   - Interrupting Coach was "level above 20 for 350ms". Steady noise sits
+//     above 20 indefinitely, so Coach stopped mid-sentence for nobody.
+//   - Deciding the teacher has STOPPED talking was "level below 8". Steady
+//     noise never goes below 8, so `lastSpeechAt` was pushed forward on every
+//     single frame and the silence window could never elapse: the turn ran
+//     forever, the page sat on "listening", and nothing was ever sent.
+//     Reported on iOS as Coach not hearing them at all, which is the opposite
+//     of the cause — it was hearing the room and could not tell when they had
+//     finished.
 //
-// The follower is deliberately asymmetric. It rises slowly, so a voice does
-// not drag the floor up with it and gate itself out mid-sentence; it falls
-// quickly, so when a noisy corridor goes quiet the gate becomes sensitive
-// again within a moment rather than staying deaf. If watching happens to
-// begin while something is already loud, the fast fall is also what recovers
-// from starting with too high a floor.
-const FLOOR_RISE = 0.02
-const FLOOR_FALL = 0.25
+// Measured for as long as the microphone is open, including while Coach is
+// speaking, so a turn never has to begin by guessing. Measuring from the
+// first frame of a turn instead fails exactly when someone starts talking
+// immediately: their own voice becomes "the room" and is then inaudible.
+//
+// Mirrors RoomLevel in ClassCoach/Features/TalkToMe/VoiceTurnRecorder.swift.
+// Both follow the room on a TIME constant rather than a per-frame fraction,
+// because the two surfaces sample at very different rates — 60fps here,
+// about eleven callbacks a second there — and the same per-frame number
+// would mean two quite different followers.
 
-export type NoiseGate = {
-  /// True when this sample is both loud in absolute terms and clearly above
-  /// the room. Call once per frame, in order — it is a running measurement.
-  test: (level: number) => boolean
-  /// The room as currently measured. Exposed for logging and tests.
+/// Rises slowly, so a voice cannot drag the floor up and gate itself out.
+/// Measured on the phone at a 2s rise, a twelve-second sentence was detected
+/// for only 25 of its 132 callbacks, which would cut a teacher off mid-word.
+const RISE_SECONDS = 20
+/// Falls quickly, because the pauses inside real speech are what reveal the
+/// room, and a room that goes quiet should become sensitive again at once.
+const FALL_SECONDS = 0.3
+
+export type RoomLevel = {
+  /// How far this sample stands above the room. 0 on the very first sample,
+  /// where there is nothing to compare against yet.
+  ///
+  /// Updates the measurement as a side effect, so it must be called once per
+  /// frame, in order, whether or not the caller cares about the answer — that
+  /// is how the room gets measured at all. Putting it behind a condition that
+  /// only fires on loud frames means it sees nothing but loud ones and takes
+  /// the first of them as the room.
+  excess: (level: number, dtMs: number) => number
+  /// The room as currently measured, for logging and tests.
   floor: () => number
 }
 
-/// `threshold` is the absolute floor kept from before, so a voice in a quiet
-/// room triggers exactly as it always did. `margin` is how far above the
-/// room's own level the sample has to reach.
-export function createNoiseGate(threshold: number, margin: number): NoiseGate {
+export function createRoomLevel(): RoomLevel {
   let floor: number | null = null
   return {
-    test(level: number): boolean {
+    excess(level: number, dtMs: number): number {
       if (floor === null) {
         floor = level
-        // Never on the first sample: with nothing to compare against, any
-        // answer would be a guess about a room that has not been heard yet.
-        return false
+        return 0
       }
-      const loudEnough = level > threshold && level > floor + margin
-      floor = floor + (level > floor ? FLOOR_RISE : FLOOR_FALL) * (level - floor)
-      return loudEnough
+      const above = level - floor
+      const dt = Math.max(0.001, Math.min(1, dtMs / 1000))
+      const tau = level > floor ? RISE_SECONDS : FALL_SECONDS
+      floor = floor + (1 - Math.exp(-dt / tau)) * (level - floor)
+      return above
     },
     floor: () => floor ?? 0,
   }
