@@ -22,5 +22,10 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Test files are not app code and are not bundled. They use node:test,
+  // which this project's "types": ["vite/client"] deliberately excludes —
+  // the web app has no test runner of its own, so they are run directly
+  // with `npx tsx --test src/lib/<name>.test.ts`.
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

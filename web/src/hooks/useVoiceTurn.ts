@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { createNoiseGate } from '../lib/noiseGate'
 import { transcribeTalkToMeAudio } from '../lib/api'
 import { liveTranscriptionEnabled, openLiveSession, type LiveSession } from '../lib/liveTranscription'
 import { LONGEST_WAIT_MS, silenceWindowFor } from '../lib/turnEndpointing'
@@ -17,6 +18,18 @@ const SPEECH_LEVEL_THRESHOLD = 8
 // nothing they would notice.
 const BARGE_IN_LEVEL_THRESHOLD = 20
 const BARGE_IN_SUSTAIN_MS = 350
+
+// How far above the room's own level a voice has to reach. The absolute
+// thresholds above are kept as a floor, so a voice in a quiet room behaves
+// exactly as it always did; these only add the second condition that stopped
+// a noisy classroom from reading as someone talking.
+//
+// Interrupting gets the larger margin because the cost of a false positive is
+// the worst one in the product — Coach stops mid-sentence for nobody.
+// Continuing a turn gets a smaller one: there the cost is a reply being
+// regenerated, and missing a teacher who really was still talking is worse.
+const BARGE_IN_MARGIN = 14
+const RESUME_MARGIN = 6
 
 // On by default: a teacher who starts talking expects Coach to stop, and
 // without that the thinking sounds below would be something they cannot get
@@ -428,13 +441,16 @@ export function useVoiceTurn(
   //   that, but not all of it on every device, so this needs a much higher
   //   bar — a louder level, held for long enough that leaked echo or a cough
   //   cannot cut Coach off mid-sentence.
-  function watchLevel(threshold: number, sustainMs: number, onSpeech: () => void): () => void {
+  function watchLevel(threshold: number, sustainMs: number, margin: number, onSpeech: () => void): () => void {
     const analyser = analyserRef.current
     const stream = streamRef.current
     if (!analyser || !stream) return () => {}
 
     stream.getAudioTracks().forEach((t) => (t.enabled = true))
     const data = new Uint8Array(analyser.frequencyBinCount)
+    // Measures the room as it goes, so "loud" means louder than the room
+    // rather than louder than a number picked in a quiet one.
+    const gate = createNoiseGate(threshold, margin)
     let rafId: number | null = null
     let loudSince = 0
     let stopped = false
@@ -457,7 +473,7 @@ export function useVoiceTurn(
       }
       const pct = Math.min(100, Math.round(Math.sqrt(sumSquares / data.length) * 300))
       const now = performance.now()
-      if (pct > threshold) {
+      if (gate.test(pct)) {
         if (!loudSince) loudSince = now
         if (now - loudSince >= sustainMs) {
           stopWatching()
@@ -479,13 +495,13 @@ export function useVoiceTurn(
   // microphone is hearing the room with Coach playing into it.
   function watchForResume(onResume: () => void): () => void {
     // ~50ms at 60fps: a chair creak is a spike, speech is not.
-    return watchLevel(SPEECH_LEVEL_THRESHOLD, 50, onResume)
+    return watchLevel(SPEECH_LEVEL_THRESHOLD, 50, RESUME_MARGIN, onResume)
   }
 
   // The teacher started talking over Coach. Deliberately hard to trigger.
   function watchWhileSpeaking(onBargeIn: () => void): () => void {
     if (!bargeInEnabled()) return () => {}
-    return watchLevel(BARGE_IN_LEVEL_THRESHOLD, BARGE_IN_SUSTAIN_MS, onBargeIn)
+    return watchLevel(BARGE_IN_LEVEL_THRESHOLD, BARGE_IN_SUSTAIN_MS, BARGE_IN_MARGIN, onBargeIn)
   }
 
   function stop() {

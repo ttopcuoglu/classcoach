@@ -548,8 +548,10 @@ export default function TalkToMe() {
     const delay = FILLER_AFTER_MIN_MS + Math.random() * (FILLER_AFTER_MAX_MS - FILLER_AFTER_MIN_MS)
     fillerTimerRef.current = window.setTimeout(() => {
       const audio = fillerAudioRef.current
-      // A question gets a thinking sound, a hard turn gets sympathy, a win
-      // gets pleasure, and everything else gets a plain acknowledgement.
+      // A hard turn gets sympathy, a win gets pleasure, and everything else —
+      // a question or a plain statement alike — gets a thinking sound. There
+      // is no separate acknowledgement pool any more; nextAcknowledgement and
+      // nextThinking are one rotation over the same fourteen phrases.
       const fillers = fillersRef.current
       const clip =
         moodRef.current === 'hard'
