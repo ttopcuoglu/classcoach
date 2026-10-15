@@ -197,8 +197,16 @@ export async function checkFeatureAccess(
 ): Promise<{ allowed: boolean; upgradeMessage?: string }> {
   // Superadmin never hits the monthly soft ceiling either — same reasoning
   // as the daily cap's bypass in usageLimit.ts.
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, email: true } })
   if (user?.role === 'superadmin') return { allowed: true }
+  // Nor does a demo account. isDemoAccount already grants these the paid
+  // tier, but that only moved the wall from 3 to 20 — and the whole point of
+  // DEMO_ACCOUNT_EMAILS, stated where it is defined, is an account that must
+  // never hit a wall or a paywall, because a reviewer blocked mid-review
+  // files a rejection. A ceiling is a wall. The same gap bites the demo login
+  // used to show the product: ten failed upload attempts in one afternoon
+  // burned half its month without a single recording being analyzed.
+  if (isDemoAccount(user?.email)) return { allowed: true }
 
   const paid = await hasActivePlan(userId)
   const limit = paid ? PAID_MONTHLY_LIMITS[area] : FREE_MONTHLY_LIMITS[area]
