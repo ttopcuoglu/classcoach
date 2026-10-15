@@ -291,6 +291,9 @@ export default function ForSchools() {
             <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-10 w-auto" />
           </Link>
           <div className="flex items-center gap-5">
+            <Link to="/research" className="hidden text-sm font-medium text-ink-soft hover:text-ink sm:inline">
+              Research
+            </Link>
             <Link to="/guide" className="hidden text-sm font-medium text-ink-soft hover:text-ink sm:inline">
               Guide
             </Link>
