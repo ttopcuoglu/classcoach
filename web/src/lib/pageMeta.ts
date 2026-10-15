@@ -32,7 +32,7 @@ export const PUBLIC_PAGE_META: Record<string, Meta> = {
   '/research': {
     title: 'The research behind Wivoza',
     description:
-      'Published research on teacher coaching, practice with feedback, and reflection that informed how Wivoza is designed — and what those studies do and do not show.',
+      'Coaching, rehearsal, and feedback on real lessons are among the best-studied ways teachers grow. See the research behind each Wivoza tool, and how Wivoza helps teachers and schools.',
   },
   '/terms': {
     title: 'Wivoza Terms of Use and Privacy Notice',

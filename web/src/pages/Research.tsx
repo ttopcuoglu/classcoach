@@ -1,160 +1,231 @@
 import { Link } from 'react-router-dom'
 import SupportChat from '../components/SupportChat'
 import FooterContact from '../components/FooterContact'
-import { ArrowRightIcon, BookIcon } from '../components/icons'
+import {
+  ArrowRightIcon,
+  ChartBarIcon,
+  ChatBubbleIcon,
+  CheckIcon,
+  GraduationCapIcon,
+  LessonPlanIcon,
+  LockIcon,
+  ScenarioIcon,
+  WaveformIcon,
+} from '../components/icons'
 
-// Every study on this page evaluated something other than Wivoza. The copy is
-// written so that line never blurs: findings are the study's, the Wivoza line
-// is a design rationale, and each card says what the study did not test.
-// Don't add Wivoza results, pilots, partners or testimonials here unless a
-// direct evaluation exists to back them.
+// The case this page makes: coaching, rehearsal and feedback on real lessons
+// are among the best-studied ways teachers improve, and the hardest to get.
+// Wivoza is built to put them in every teacher's week. Every study here
+// evaluated other programs and tools, so the research is stated as what it
+// found and Wivoza is described by what it does — never by a study's numbers.
+// Don't add Wivoza results, pilots, partners or testimonials unless a direct
+// evaluation exists to back them.
 //
 // Small terracotta text uses a deeper shade (#9a4b2c) than terracotta-600,
 // which falls just short of WCAG AA on cream.
 
-type Study = {
-  id: string
-  topic: string
-  title: string
-  citation: string
-  found: React.ReactNode
-  connection: string
-  context: string
-  details: React.ReactNode
+type Finding = {
+  text: React.ReactNode
+  cite: string
   href: string
-  accent: string
+  details: React.ReactNode
 }
 
-const STUDIES: Study[] = [
+type Feature = {
+  id: string
+  name: string
+  icon: (props: { className?: string }) => React.ReactElement
+  badge: string
+  need: string
+  intro: string
+  does: string[]
+  findings: Finding[]
+}
+
+const KRAFT = 'https://www.matthewakraft.com/new-page-78'
+const COHEN = 'https://doi.org/10.3102/0162373720906217'
+const DEMSZKY = 'https://doi.org/10.3102/01623737231169270'
+const DARLING_HAMMOND = 'https://learningpolicyinstitute.org/product/effective-teacher-professional-development-brief'
+const ROWE = 'https://doi.org/10.1177/002248718603700110'
+const HOWE = 'https://doi.org/10.1080/10508406.2019.1573730'
+
+const FEATURES: Feature[] = [
   {
-    id: 'coaching',
-    topic: 'Personalized coaching',
-    title: 'Coaching can change what happens in classrooms',
-    citation: 'Kraft, Blazar & Hogan (2018)',
-    found:
-      'Across 60 studies using causal research designs, teacher coaching had positive average effects on instructional practice and student achievement.',
-    connection:
-      'Talk It Through is designed to give teachers an accessible space to discuss classroom challenges, consider strategies, and identify a next step.',
-    context:
-      'Much of the evidence involved early childhood and elementary literacy coaching. These results do not establish the effectiveness of Wivoza’s AI coaching.',
-    details: (
-      <>
-        <p>
-          A meta-analysis of studies of human coaching programs. The pooled effects were about 0.49 standard deviations
-          on instruction and 0.18 standard deviations on achievement.
-        </p>
-        <p>
-          The authors also found that larger programs, studied as they were rolled out at scale, showed average effects
-          that were only a fraction of those found in smaller, closely supported programs. Implementation matters.
-        </p>
-      </>
-    ),
-    href: 'https://www.matthewakraft.com/new-page-78',
-    accent: 'bg-terracotta text-cream',
+    id: 'talk-it-through',
+    name: 'Talk It Through',
+    icon: ChatBubbleIcon,
+    badge: 'bg-terracotta text-cream',
+    need: 'A coach to think out loud with',
+    intro:
+      'Most classroom problems get clearer once you have to say them in order. Talk It Through is a voice coach for exactly that: a prep period or a car ride is enough.',
+    does: [
+      'Asks more questions than it answers, so the thinking stays yours',
+      'Helps separate what happened from what it felt like',
+      'Ends with one practical next step, small enough to try tomorrow',
+    ],
+    findings: [
+      {
+        text: 'Across 60 studies with causal research designs, teacher coaching had positive average effects on both instructional practice and student achievement.',
+        cite: 'Kraft, Blazar & Hogan, 2018',
+        href: KRAFT,
+        details: (
+          <>
+            <p>
+              A meta-analysis of human coaching programs, with pooled effects of about 0.49 standard deviations on
+              instruction and 0.18 on achievement. Much of the evidence came from early childhood and elementary
+              literacy coaching.
+            </p>
+            <p>
+              The authors also found that larger programs showed only a fraction of the effects of smaller ones, which
+              is part of why making coaching widely available is hard.
+            </p>
+          </>
+        ),
+      },
+    ],
   },
   {
     id: 'practice',
-    topic: 'Practice with feedback',
-    title: 'Rehearsal helps more when feedback comes with it',
-    citation: 'Cohen, Wong, Krishnamachari & Berlin (2020)',
-    found:
-      'In a randomized study of 105 prospective teachers, participants who received coaching between simulated teaching sessions improved targeted skills more than participants who reflected without coaching.',
-    connection:
-      'Practice gives teachers a space to rehearse classroom situations and conversations, receive feedback, and try a different approach.',
-    context:
-      'The study evaluated coached simulations with prospective teachers, rather than Wivoza’s AI role-play or its effects in everyday classrooms.',
-    details: (
-      <>
-        <p>
-          Teacher candidates in a preparation program practiced in mixed-reality simulations with simulated students.
-          Between sessions, they were randomly assigned either to receive coaching or to reflect on their own teaching.
-        </p>
-        <p>
-          Coached candidates also changed how they perceived student behavior and what next steps they suggested for
-          addressing it. The authors conclude that some skills novices struggle with can be developed before they
-          reach a classroom.
-        </p>
-      </>
-    ),
-    href: 'https://doi.org/10.3102/0162373720906217',
-    accent: 'bg-gold text-forest',
+    name: 'Practice',
+    icon: ScenarioIcon,
+    badge: 'bg-gold text-forest',
+    need: 'Somewhere safe to rehearse',
+    intro:
+      'The hard moments in teaching are loud, public, and three seconds long. Practice lets teachers find their words beforehand, on a scenario instead of a real student.',
+    does: [
+      'Rehearse a classroom moment or a hard conversation',
+      'Get feedback, and compare your response with a strong model side by side',
+      'Try again with a different approach. No one else sees a practice attempt',
+    ],
+    findings: [
+      {
+        text: 'In a randomized study of 105 prospective teachers, those coached between simulated teaching sessions improved targeted skills more than those who only reflected on their own.',
+        cite: 'Cohen, Wong, Krishnamachari & Berlin, 2020',
+        href: COHEN,
+        details: (
+          <p>
+            Teacher candidates practiced in mixed-reality simulations with simulated students. Coached candidates also
+            changed how they read student behavior and what next steps they proposed. The authors conclude that some
+            skills new teachers struggle with don’t have to be learned on the job.
+          </p>
+        ),
+      },
+    ],
   },
   {
-    id: 'feedback',
-    topic: 'Feedback on classroom conversations',
-    title: 'Automated feedback can shift how teachers respond to students',
-    citation: 'Demszky, Liu, Hill, Jurafsky & Piech (2024)',
-    found: (
-      <>
-        A randomized trial involving 1,136 online instructors found that an automated feedback tool increased
-        instructors’ <span className="font-semibold text-forest">uptake</span> of student contributions by 13%. Uptake
-        means building on what students say: picking up a student’s idea and taking it further, so students feel heard.
-      </>
-    ),
-    connection:
-      'Lesson Debrief is designed to help teachers examine classroom conversations, reflect on questioning and participation, and select an instructional move to try.',
-    context:
-      'The study tested a different tool in an online computer science course. The reported improvement is not a Wivoza result.',
-    details: (
-      <>
-        <p>
-          The researchers built a tool called M-Powering Teachers, which used natural language processing to give
-          instructors feedback on their uptake of student contributions. Instructors in a large online course were
-          randomly assigned to receive the feedback or not.
-        </p>
-        <p>
-          The authors also report suggestive evidence of higher student satisfaction and assignment completion. First
-          published online in 2023.
-        </p>
-      </>
-    ),
-    href: 'https://doi.org/10.3102/01623737231169270',
-    accent: 'bg-forest text-gold',
+    id: 'lesson-debrief',
+    name: 'Lesson Debrief',
+    icon: WaveformIcon,
+    badge: 'bg-forest text-gold',
+    need: 'An honest look at your own lesson',
+    intro:
+      'While you teach, you are busy running the lesson. Lesson Debrief listens to one class period and gives you a private report on what the conversation in your room actually sounded like.',
+    does: [
+      'Talk share, wait time, questioning, and how transitions went',
+      'One named strength, with the moment it came from',
+      'A “Try next time” list to carry into your next plan',
+    ],
+    findings: [
+      {
+        text: 'Teachers typically wait less than one second for a student to respond to a question, and respond just as quickly once a student stops speaking.',
+        cite: 'Rowe, 1986',
+        href: ROWE,
+        details: (
+          <p>
+            Rowe reviewed the research on “wait time”: the pause after a teacher asks a question, and the pause after a
+            student answers. The review also describes approaches used to help teachers lengthen those pauses and
+            improve their questioning.
+          </p>
+        ),
+      },
+      {
+        text: 'In 72 classrooms, when students participated extensively, teachers elaborating on and querying earlier contributions was positively associated with how well students mastered the curriculum.',
+        cite: 'Howe, Hennessy, Mercer, Vrikki & Wheatley, 2019',
+        href: HOWE,
+        details: (
+          <p>
+            Two lessons were video recorded in each of 72 demographically diverse classrooms with students aged 10–11,
+            and teacher–student dialogue was related to student outcomes while accounting for prior attainment and
+            other factors. The study shows an association rather than a tested intervention.
+          </p>
+        ),
+      },
+      {
+        text: 'In a randomized trial with 1,136 instructors, an automated tool giving feedback on classroom talk increased instructors’ uptake of student ideas (building on what students say) by 13%.',
+        cite: 'Demszky, Liu, Hill, Jurafsky & Piech, 2024',
+        href: DEMSZKY,
+        details: (
+          <p>
+            The tool, M-Powering Teachers, used natural language processing and was tested in a large online computer
+            science course. The authors describe individualized feedback as essential but often too resource-intensive
+            to provide, and report suggestive evidence of higher student satisfaction. First published online in 2023.
+          </p>
+        ),
+      },
+    ],
   },
   {
-    id: 'professional-learning',
-    topic: 'Ongoing professional learning',
-    title: 'Effective professional development shares common features',
-    citation: 'Darling-Hammond, Hyler & Gardner (2017)',
-    found:
-      'A review of 35 rigorous studies identified common features of effective professional development, including active learning, modeling, coaching, feedback, reflection, and sustained duration.',
-    connection:
-      'Planning Coach, Practice, Talk It Through, and Lesson Debrief offer opportunities to connect preparation, rehearsal, and reflection across lessons.',
-    context:
-      'The review identified features shared by successful programs. Including those features does not, by itself, establish a product’s effectiveness.',
-    details: (
-      <>
-        <p>
-          The Learning Policy Institute reviewed studies that found a positive link between professional development,
-          teaching practice, and student outcomes, and described the features those programs tended to share.
-        </p>
-        <p>
-          Alongside the features above, the review also names content focus, collaboration, and expert support. The
-          linked brief summarizes the full report.
-        </p>
-      </>
-    ),
-    href: 'https://learningpolicyinstitute.org/product/effective-teacher-professional-development-brief',
-    accent: 'bg-mint-tint text-forest',
+    id: 'planning-coach',
+    name: 'Planning Coach',
+    icon: LessonPlanIcon,
+    badge: 'bg-mint-tint text-forest',
+    need: 'Follow-through into the next lesson',
+    intro:
+      'Reflection only pays off if it reaches the next lesson. Planning Coach is where it lands: build a lesson, strengthen one you wrote, or adapt it before class.',
+    does: [
+      'Build from a topic or from your own materials',
+      'Get a second read on a plan before your students see it',
+      'Bring your “Try next time” list straight from a Lesson Debrief',
+    ],
+    findings: [
+      {
+        text: 'A review of 35 rigorous studies found that effective professional development shares common features, including active learning, modeling, coaching, feedback, reflection, and sustained duration.',
+        cite: 'Darling-Hammond, Hyler & Gardner, 2017',
+        href: DARLING_HAMMOND,
+        details: (
+          <p>
+            The Learning Policy Institute reviewed studies linking professional development to changes in teaching and
+            student outcomes. Alongside the features above, it names content focus, collaboration, and expert support.
+            The linked brief summarizes the full report.
+          </p>
+        ),
+      },
+    ],
   },
 ]
 
 const CYCLE = [
-  { step: 'Plan', where: 'Planning Coach', body: 'Shape the lesson and think ahead about where it might go.' },
-  { step: 'Practice', where: 'Practice', body: 'Rehearse a classroom moment or conversation and get feedback.' },
-  { step: 'Teach', where: 'Your classroom', body: 'The real work happens with your students, not in an app.' },
-  { step: 'Reflect', where: 'Lesson Debrief & Talk It Through', body: 'Look back at the lesson and talk through what you noticed.' },
-  { step: 'Adjust', where: 'Your next lesson', body: 'Choose one move to try, and carry it into your next plan.' },
+  { step: 'Plan', where: 'Planning Coach' },
+  { step: 'Practice', where: 'Practice' },
+  { step: 'Teach', where: 'Your classroom' },
+  { step: 'Reflect', where: 'Lesson Debrief & Talk It Through' },
+  { step: 'Adjust', where: 'Into the next plan' },
 ]
 
-const EVIDENCE_POINTS = [
+const SCHOOL_POINTS = [
   {
-    title: 'Related approaches show promise',
-    body: 'Research supports the potential of coaching, practice with feedback, reflection, and automated feedback as ways to support teachers’ professional learning.',
+    icon: GraduationCapIcon,
+    badge: 'bg-terracotta text-cream',
+    title: 'A coach for every teacher',
+    body: 'Every teacher gets their own coach, available between PD sessions and outside the school day, not only when a coach’s calendar allows.',
   },
   {
-    title: 'Results depend on context',
-    body: 'Findings vary by setting, by how a program is implemented, and by who takes part. Effects found in one study may not appear in another.',
+    icon: LockIcon,
+    badge: 'bg-forest text-gold',
+    title: 'Coaching, not evaluation',
+    body: 'Teachers’ recordings, conversations, and practice stay private to them. Leaders never see an individual teacher’s work, so teachers can be honest with their coach.',
+  },
+  {
+    icon: ChartBarIcon,
+    badge: 'bg-gold text-forest',
+    title: 'PD aimed at real needs',
+    body: 'Leaders see school-wide patterns from recorded lessons, such as wait time and pace, explained in plain words, so professional learning can target what teachers actually need.',
+  },
+  {
+    icon: CheckIcon,
+    badge: 'bg-mint-tint text-forest',
+    title: 'Follow-through you can see',
+    body: 'Choose a focus area as a school and watch whether it shows up in fewer lessons over time, in aggregate, with groups under five combined.',
   },
 ]
 
@@ -166,7 +237,7 @@ const REFERENCES = [
         <em>Educational Evaluation and Policy Analysis, 42</em>(2), 208–231.
       </>
     ),
-    href: 'https://doi.org/10.3102/0162373720906217',
+    href: COHEN,
   },
   {
     text: (
@@ -175,17 +246,27 @@ const REFERENCES = [
         Learning Policy Institute.
       </>
     ),
-    href: 'https://learningpolicyinstitute.org/product/effective-teacher-professional-development-brief',
+    href: DARLING_HAMMOND,
   },
   {
     text: (
       <>
         Demszky, D., Liu, J., Hill, H. C., Jurafsky, D., &amp; Piech, C. (2024). Can automated feedback improve teachers’
         uptake of student ideas? Evidence from a randomized controlled trial in a large-scale online course.{' '}
-        <em>Educational Evaluation and Policy Analysis, 46</em>(3), 483–505. (First published online 2023.)
+        <em>Educational Evaluation and Policy Analysis, 46</em>(3), 483–505.
       </>
     ),
-    href: 'https://doi.org/10.3102/01623737231169270',
+    href: DEMSZKY,
+  },
+  {
+    text: (
+      <>
+        Howe, C., Hennessy, S., Mercer, N., Vrikki, M., &amp; Wheatley, L. (2019). Teacher–student dialogue during
+        classroom teaching: Does it really impact on student outcomes? <em>Journal of the Learning Sciences, 28</em>
+        (4–5), 462–512.
+      </>
+    ),
+    href: HOWE,
   },
   {
     text: (
@@ -194,7 +275,16 @@ const REFERENCES = [
         A meta-analysis of the causal evidence. <em>Review of Educational Research, 88</em>(4), 547–588.
       </>
     ),
-    href: 'https://www.matthewakraft.com/new-page-78',
+    href: KRAFT,
+  },
+  {
+    text: (
+      <>
+        Rowe, M. B. (1986). Wait time: Slowing down may be a way of speeding up! <em>Journal of Teacher Education, 37</em>
+        (1), 43–50.
+      </>
+    ),
+    href: ROWE,
   },
 ]
 
@@ -207,62 +297,76 @@ function ExternalLink({ href, children, className }: { href: string; children: R
   )
 }
 
-function StudyCard({ study, index }: { study: Study; index: number }) {
-  const headingId = `study-${study.id}`
+function Plus() {
+  return (
+    <span
+      aria-hidden="true"
+      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gold text-base font-bold leading-none text-forest transition-transform duration-200 group-open:rotate-45 group-open:bg-terracotta group-open:text-cream"
+    >
+      +
+    </span>
+  )
+}
+
+function FindingCard({ finding }: { finding: Finding }) {
+  return (
+    <div className="rounded-2xl border border-hairline bg-cream p-5">
+      <p className="text-sm leading-relaxed text-ink">{finding.text}</p>
+      <p className="mt-2 text-xs font-semibold text-ink-soft">{finding.cite}</p>
+      <details className="group mt-3 border-t border-hairline pt-3">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-forest marker:content-none [&::-webkit-details-marker]:hidden">
+          About this study
+          <Plus />
+        </summary>
+        <div className="mt-2 flex flex-col gap-2 text-sm leading-relaxed text-ink-soft">{finding.details}</div>
+        <ExternalLink
+          href={finding.href}
+          className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[#9a4b2c] hover:underline"
+        >
+          Read the research
+          <ArrowRightIcon className="h-4 w-4" />
+        </ExternalLink>
+      </details>
+    </div>
+  )
+}
+
+function FeatureSection({ feature }: { feature: Feature }) {
+  const Icon = feature.icon
+  const headingId = `feature-${feature.id}`
   return (
     <article
       aria-labelledby={headingId}
-      className="flex flex-col rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm sm:p-7"
+      className="grid gap-6 rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm sm:p-8 lg:grid-cols-[1fr_1.1fr] lg:gap-10"
     >
-      <div className="flex items-center gap-3">
-        <span
-          aria-hidden="true"
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-heading text-sm font-bold ${study.accent}`}
-        >
-          {index + 1}
-        </span>
-        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#9a4b2c]">{study.topic}</p>
-      </div>
-      <h3 id={headingId} className="mt-4 font-heading text-xl font-bold leading-snug text-forest">
-        {study.title}
-      </h3>
-      <p className="mt-1 text-sm text-ink-soft">{study.citation}</p>
-
-      <dl className="mt-5 flex flex-1 flex-col gap-4 text-sm leading-relaxed">
-        <div>
-          <dt className="font-semibold text-forest">What the research found</dt>
-          <dd className="mt-1 text-ink-soft">{study.found}</dd>
-        </div>
-        <div className="rounded-2xl bg-mint-tint/40 p-4">
-          <dt className="font-semibold text-forest">How it connects to Wivoza’s design</dt>
-          <dd className="mt-1 text-ink-soft">{study.connection}</dd>
-        </div>
-        <div className="rounded-2xl border-l-4 border-gold bg-gold-tint/40 px-4 py-3">
-          <dt className="font-semibold text-forest">Important context</dt>
-          <dd className="mt-1 text-ink-soft">{study.context}</dd>
-        </div>
-      </dl>
-
-      <details className="group mt-5 rounded-2xl border border-hairline bg-cream/60 px-4 py-3">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-forest marker:content-none [&::-webkit-details-marker]:hidden">
-          More about this study
-          <span
-            aria-hidden="true"
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gold text-base font-bold leading-none text-forest transition-transform duration-200 group-open:rotate-45 group-open:bg-terracotta group-open:text-cream"
-          >
-            +
+      <div>
+        <div className="flex items-center gap-3">
+          <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${feature.badge}`}>
+            <Icon className="h-5 w-5" />
           </span>
-        </summary>
-        <div className="mt-3 flex flex-col gap-2 text-sm leading-relaxed text-ink-soft">{study.details}</div>
-      </details>
-
-      <ExternalLink
-        href={study.href}
-        className="mt-5 inline-flex items-center gap-1.5 self-start rounded-sm text-sm font-semibold text-[#9a4b2c] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terracotta"
-      >
-        Read the research
-        <ArrowRightIcon className="h-4 w-4" />
-      </ExternalLink>
+          <p className="font-heading text-sm font-bold uppercase tracking-[0.12em] text-[#9a4b2c]">{feature.name}</p>
+        </div>
+        <h3 id={headingId} className="mt-4 font-heading text-2xl font-bold leading-snug text-forest">
+          {feature.need}
+        </h3>
+        <p className="mt-2 leading-relaxed text-ink-soft">{feature.intro}</p>
+        <ul className="mt-5 flex flex-col gap-2.5">
+          {feature.does.map((item) => (
+            <li key={item} className="flex items-start gap-2.5 text-sm text-forest">
+              <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-[#9a4b2c]" />
+              {item}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">What the research found</p>
+        <div className="mt-3 flex flex-col gap-3">
+          {feature.findings.map((finding) => (
+            <FindingCard key={finding.cite} finding={finding} />
+          ))}
+        </div>
+      </div>
     </article>
   )
 }
@@ -276,11 +380,11 @@ export default function Research() {
             <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-10 w-auto" />
           </Link>
           <div className="flex items-center gap-5">
+            <Link to="/for-schools" className="hidden text-sm font-medium text-ink-soft hover:text-ink sm:inline">
+              For Schools
+            </Link>
             <Link to="/guide" className="hidden text-sm font-medium text-ink-soft hover:text-ink sm:inline">
               Guide
-            </Link>
-            <Link to="/faq" className="hidden text-sm font-medium text-ink-soft hover:text-ink sm:inline">
-              FAQ
             </Link>
             <Link
               to="/#get-started"
@@ -295,121 +399,159 @@ export default function Research() {
 
       <main>
         {/* Hero */}
-        <section className="mx-auto w-full max-w-4xl px-6 pb-10 pt-14 text-center sm:pt-20">
+        <section className="mx-auto w-full max-w-4xl px-6 pb-12 pt-14 text-center sm:pt-20">
           <p className="font-heading text-xs font-bold uppercase tracking-[0.18em] text-[#9a4b2c]">
             Research behind Wivoza
           </p>
           <h1 className="mx-auto mt-4 max-w-3xl font-heading text-4xl font-extrabold leading-[1.1] tracking-tight text-forest sm:text-5xl">
-            Built around research on how teachers grow<span className="text-gold">.</span>
+            Built on what research says helps teachers grow<span className="text-gold">.</span>
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-ink-soft">
-            Wivoza brings coaching conversations, practice, and classroom reflection into teachers’ everyday work. Its
-            design draws on research about professional learning and instructional improvement.
+            Coaching, rehearsal, and feedback on real lessons are among the best-studied ways teachers improve. They are
+            also the hardest to get. Wivoza puts all three into a teacher’s week.
           </p>
-          <p className="mx-auto mt-7 flex max-w-2xl items-start gap-3 rounded-2xl border border-gold/60 bg-cream-card px-5 py-4 text-left text-sm font-medium text-forest shadow-sm">
-            <BookIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#9a4b2c]" />
-            The studies featured here examine related approaches and tools. They do not evaluate Wivoza itself.
-          </p>
-          <a
-            href="#research"
-            className="mt-8 inline-flex items-center gap-2 rounded-full bg-forest px-6 py-3.5 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-forest-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terracotta"
-          >
-            Explore the Research
-            <ArrowRightIcon className="h-4 w-4 rotate-90" />
-          </a>
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <a
+              href="#teachers"
+              className="inline-flex items-center gap-2 rounded-full bg-forest px-6 py-3.5 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-forest-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terracotta"
+            >
+              How it helps teachers
+              <ArrowRightIcon className="h-4 w-4 rotate-90" />
+            </a>
+            <a
+              href="#schools"
+              className="inline-flex items-center gap-2 rounded-full border border-forest/25 bg-cream-card px-6 py-3.5 text-sm font-semibold text-forest transition-colors hover:border-forest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terracotta"
+            >
+              How it helps schools
+              <ArrowRightIcon className="h-4 w-4 rotate-90" />
+            </a>
+          </div>
         </section>
 
-        {/* Research cards */}
-        <section id="research" aria-labelledby="research-heading" className="mx-auto w-full max-w-6xl scroll-mt-6 px-6 py-10">
+        {/* The gap */}
+        <section aria-labelledby="gap-heading" className="mx-auto w-full max-w-6xl px-6 py-8">
+          <div className="grid gap-8 rounded-3xl bg-forest p-7 text-cream sm:p-10 lg:grid-cols-[1fr_1.3fr] lg:items-center">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">The problem Wivoza is built for</p>
+              <h2 id="gap-heading" className="mt-2 font-heading text-3xl font-extrabold leading-tight">
+                Coaching works. Most teachers can’t get enough of it<span className="text-gold">.</span>
+              </h2>
+            </div>
+            <div className="flex flex-col gap-4">
+              <div className="rounded-2xl bg-cream/10 p-5">
+                <p className="leading-relaxed text-cream">
+                  Across 60 rigorous studies, coaching improved both teaching practice and student achievement on
+                  average.
+                </p>
+                <p className="mt-1.5 text-xs text-cream/70">Kraft, Blazar &amp; Hogan, 2018</p>
+              </div>
+              <div className="rounded-2xl bg-cream/10 p-5">
+                <p className="leading-relaxed text-cream">
+                  But regular, individualized feedback is resource-intensive, and as coaching programs grew larger, their
+                  average effects shrank to a fraction of those in smaller programs.
+                </p>
+                <p className="mt-1.5 text-xs text-cream/70">
+                  Kraft, Blazar &amp; Hogan, 2018; Demszky et al., 2024
+                </p>
+              </div>
+              <p className="text-sm leading-relaxed text-cream/85">
+                Wivoza is designed to close that gap: a private coach for every teacher, ready whenever they have ten
+                minutes, built around the practices this research studies.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* For teachers */}
+        <section id="teachers" aria-labelledby="teachers-heading" className="mx-auto w-full max-w-6xl scroll-mt-6 px-6 py-10">
           <div className="mb-8 max-w-2xl">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#9a4b2c]">Four lines of research</p>
-            <h2 id="research-heading" className="mt-2 font-heading text-3xl font-extrabold text-forest">
-              What the studies found, and why it matters to us<span className="text-gold">.</span>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#9a4b2c]">For teachers</p>
+            <h2 id="teachers-heading" className="mt-2 font-heading text-3xl font-extrabold text-forest">
+              How Wivoza helps teachers<span className="text-gold">.</span>
             </h2>
             <p className="mt-3 text-ink-soft">
-              Each card pairs a published finding with the design choice it informed. The Wivoza line is our reasoning,
-              not a result.
+              Each tool is built around a practice that research connects to teacher growth. Open “About this study” on
+              any finding for its setting, scope, and source.
             </p>
           </div>
-          <div className="grid gap-5 md:grid-cols-2">
-            {STUDIES.map((study, i) => (
-              <StudyCard key={study.id} study={study} index={i} />
+          <div className="flex flex-col gap-5">
+            {FEATURES.map((feature) => (
+              <FeatureSection key={feature.id} feature={feature} />
             ))}
           </div>
         </section>
 
-        {/* Learning cycle */}
-        <section aria-labelledby="cycle-heading" className="mx-auto w-full max-w-6xl px-6 py-10">
-          <div className="rounded-3xl bg-cream-card p-6 shadow-sm sm:p-9">
-            <div className="max-w-2xl">
-              <h2 id="cycle-heading" className="font-heading text-3xl font-extrabold text-forest">
-                A practical cycle for professional growth<span className="text-gold">.</span>
-              </h2>
-              <p className="mt-3 text-ink-soft">
-                This is the approach Wivoza is designed around: one cycle that connects preparation, rehearsal, and
-                reflection. It describes our intended approach, not a validated intervention.
-              </p>
-            </div>
-            <ol className="mt-7 grid gap-3 lg:grid-cols-5">
+        {/* Cycle */}
+        <section aria-labelledby="cycle-heading" className="mx-auto w-full max-w-6xl px-6 py-8">
+          <div className="rounded-3xl border-l-8 border-gold bg-gold-tint/40 p-6 sm:p-9">
+            <h2 id="cycle-heading" className="font-heading text-2xl font-extrabold text-forest sm:text-3xl">
+              One cycle, not one-off workshops<span className="text-gold">.</span>
+            </h2>
+            <p className="mt-2 max-w-2xl text-ink-soft">
+              Research on professional development points to learning that is active and sustained. Wivoza connects the
+              tools into a cycle teachers can repeat lesson after lesson.
+            </p>
+            <ol className="mt-6 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-stretch lg:flex-nowrap">
               {CYCLE.map((item, i) => {
                 const isClassroom = item.step === 'Teach'
                 return (
-                  <li
-                    key={item.step}
-                    className={`relative flex flex-col rounded-2xl p-5 ${
-                      isClassroom ? 'bg-forest text-cream' : 'border border-hairline bg-cream'
-                    }`}
-                  >
-                    <span className={`font-heading text-xs font-bold ${isClassroom ? 'text-gold' : 'text-[#9a4b2c]'}`}>
-                      Step {i + 1}
-                    </span>
-                    <span className={`mt-1 font-heading text-xl font-bold ${isClassroom ? 'text-cream' : 'text-forest'}`}>
-                      {item.step}
-                    </span>
-                    <span className={`mt-1 text-sm font-semibold ${isClassroom ? 'text-gold' : 'text-forest'}`}>
-                      {item.where}
-                    </span>
-                    <span className={`mt-2 text-sm leading-relaxed ${isClassroom ? 'text-cream/80' : 'text-ink-soft'}`}>
-                      {item.body}
-                    </span>
+                  <li key={item.step} className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center lg:flex-1">
+                    <div
+                      className={`flex flex-1 flex-col rounded-2xl px-4 py-3 ${
+                        isClassroom ? 'bg-forest text-cream' : 'bg-cream-card'
+                      }`}
+                    >
+                      <span className={`font-heading text-lg font-bold ${isClassroom ? 'text-cream' : 'text-forest'}`}>
+                        {item.step}
+                      </span>
+                      <span className={`text-xs font-semibold ${isClassroom ? 'text-gold' : 'text-ink-soft'}`}>
+                        {item.where}
+                      </span>
+                    </div>
                     {i < CYCLE.length - 1 && (
-                      <span
-                        aria-hidden="true"
-                        className="absolute -bottom-3 left-1/2 z-10 flex h-6 w-6 -translate-x-1/2 rotate-90 items-center justify-center rounded-full bg-cream-card text-terracotta lg:-right-3.5 lg:bottom-auto lg:left-auto lg:top-1/2 lg:-translate-y-1/2 lg:translate-x-0 lg:rotate-0"
-                      >
-                        <ArrowRightIcon className="h-4 w-4" />
+                      <span aria-hidden="true" className="flex justify-center text-[#9a4b2c]">
+                        <ArrowRightIcon className="h-4 w-4 rotate-90 sm:rotate-0" />
                       </span>
                     )}
                   </li>
                 )
               })}
             </ol>
-            <p className="mt-5 text-sm text-ink-soft">
-              Then the cycle starts again: what you adjust becomes part of the next plan.
-            </p>
           </div>
         </section>
 
-        {/* Evidence transparency */}
-        <section aria-labelledby="evidence-heading" className="mx-auto w-full max-w-6xl px-6 py-10">
-          <div className="grid gap-8 rounded-3xl border-l-8 border-gold bg-gold-tint/40 p-6 sm:p-9 lg:grid-cols-[1fr_1.6fr] lg:items-start">
-            <div>
-              <h2 id="evidence-heading" className="font-heading text-3xl font-extrabold text-forest">
-                Understanding the evidence<span className="text-gold">.</span>
-              </h2>
-              <p className="mt-3 text-sm text-ink-soft">
-                How to read this page, and what it does and does not tell you.
-              </p>
-            </div>
-            <ul className="flex flex-col gap-4">
-              {EVIDENCE_POINTS.map((point) => (
-                <li key={point.title} className="rounded-2xl bg-cream-card p-5">
-                  <h3 className="font-heading text-base font-bold text-forest">{point.title}</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-ink-soft">{point.body}</p>
-                </li>
-              ))}
-            </ul>
+        {/* For schools */}
+        <section id="schools" aria-labelledby="schools-heading" className="mx-auto w-full max-w-6xl scroll-mt-6 px-6 py-10">
+          <div className="mb-8 max-w-2xl">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#9a4b2c]">For schools</p>
+            <h2 id="schools-heading" className="mt-2 font-heading text-3xl font-extrabold text-forest">
+              How Wivoza helps schools<span className="text-gold">.</span>
+            </h2>
+            <p className="mt-3 text-ink-soft">
+              Effective professional development combines coaching, feedback, and reflection over time (Darling-Hammond,
+              Hyler &amp; Gardner, 2017). Wivoza gives a school’s PD that follow-through between sessions.
+            </p>
           </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {SCHOOL_POINTS.map(({ icon: Icon, badge, title, body }) => (
+              <div key={title} className="flex items-start gap-4 rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+                <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${badge}`}>
+                  <Icon className="h-5 w-5" />
+                </span>
+                <div>
+                  <h3 className="font-heading text-lg font-bold text-forest">{title}</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-ink-soft">{body}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <Link
+            to="/for-schools"
+            className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-[#9a4b2c] hover:underline"
+          >
+            See what a school license includes
+            <ArrowRightIcon className="h-4 w-4" />
+          </Link>
         </section>
 
         {/* Closing */}
@@ -418,13 +560,24 @@ export default function Research() {
             <h2 className="mx-auto max-w-2xl font-heading text-3xl font-extrabold sm:text-4xl">
               Bring reflection into your next lesson<span className="text-gold">.</span>
             </h2>
-            <Link
-              to="/"
-              className="mt-7 inline-flex items-center gap-2 rounded-full bg-gold px-6 py-3.5 text-sm font-semibold text-forest shadow-lg transition-colors hover:bg-gold/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cream"
-            >
-              Explore Wivoza
-              <ArrowRightIcon className="h-4 w-4" />
-            </Link>
+            <p className="mx-auto mt-3 max-w-xl text-cream/80">
+              Talk It Through and Practice are free. Start with one conversation.
+            </p>
+            <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Link
+                to="/#get-started"
+                className="inline-flex items-center gap-2 rounded-full bg-gold px-6 py-3.5 text-sm font-semibold text-forest shadow-lg transition-colors hover:bg-gold/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cream"
+              >
+                Start free
+                <ArrowRightIcon className="h-4 w-4" />
+              </Link>
+              <Link
+                to="/for-schools"
+                className="inline-flex items-center gap-2 rounded-full border border-cream/30 px-6 py-3.5 text-sm font-semibold text-cream transition-colors hover:border-cream hover:bg-cream/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cream"
+              >
+                Bring Wivoza to your school
+              </Link>
+            </div>
           </div>
         </section>
 
@@ -433,6 +586,10 @@ export default function Research() {
           <h2 id="references-heading" className="font-heading text-xl font-bold text-forest">
             References
           </h2>
+          <p className="mt-2 text-sm text-ink-soft">
+            These studies examined coaching programs and tools in their own settings. Findings vary with setting,
+            implementation, and who takes part.
+          </p>
           <ul className="mt-4 flex flex-col gap-4 text-sm leading-relaxed text-ink-soft">
             {REFERENCES.map((ref) => (
               <li key={ref.href} className="pl-6 -indent-6">
