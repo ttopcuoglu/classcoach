@@ -112,6 +112,17 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     /// rather than guessing at one. Temporary.
     @Published private(set) var micDebug: String = ""
 
+    /// What happened to the last turn AFTER the audio was captured: whether
+    /// the live socket ever opened, the peak level reached, and what came
+    /// back from transcription. The levels turned out to be a red herring —
+    /// audio is captured and turns do end — so this is the half that is
+    /// actually failing. Temporary.
+    @Published private(set) var turnDebug: String = ""
+
+    /// Loudest sample seen this turn, so the number can be read after the
+    /// fact instead of caught mid-sentence.
+    private var peakDB: Float = -160
+
 
     /// How long to wait in silence before deciding the turn is over, as a
     /// function of how long the teacher has just been speaking — the native
@@ -452,6 +463,7 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
             // restarted after an interruption) cannot be counted as speech.
             speechMs += min(sinceLast, 100)
         }
+        if db > peakDB { peakDB = db }
 
         // "Are they STILL going?" — this one has to be relative to the room,
         // because it is the question a noisy room answered wrongly forever,
@@ -576,6 +588,8 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
             return
         }
 
+        let peak = peakDB
+        peakDB = -160
         transcribing = true
         Task { @MainActor in
             defer { try? FileManager.default.removeItem(at: url) }
@@ -584,22 +598,30 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
             // recording never has to be uploaded at all. Anything short of a
             // usable transcript falls through to the upload below, which
             // still holds the complete turn.
+            let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+            let head = String(format: "peak %.0f | %dkB | socket %@", peak, (size ?? 0) / 1024, session == nil ? "NEVER OPENED" : "open")
+
             if let session {
                 let transcript = await session.finish()
                 if let transcript {
+                    self.turnDebug = "\(head) | live: \(transcript.count) chars"
                     self.transcribing = false
                     self.onTurnComplete?(transcript)
                     return
                 }
+                self.turnDebug = "\(head) | live: empty, uploading..."
             }
 
             do {
                 let transcript = try await TalkToMeService.transcribe(audioFileURL: url)
+                let clean = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+                self.turnDebug = "\(head) | upload: \(clean.count) chars"
                 self.transcribing = false
-                self.onTurnComplete?(transcript.trimmingCharacters(in: .whitespacesAndNewlines))
+                self.onTurnComplete?(clean)
             } catch {
                 // A transcription hiccup for one turn shouldn't end the
                 // conversation — treat it the same as "nothing was said."
+                self.turnDebug = "\(head) | upload FAILED: \(error.localizedDescription)"
                 self.transcribing = false
                 self.onTurnComplete?("")
             }
