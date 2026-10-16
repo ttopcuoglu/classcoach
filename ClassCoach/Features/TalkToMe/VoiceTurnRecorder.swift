@@ -521,7 +521,26 @@ private final class TurnCapture: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         let finished = file != nil ? url : nil
-        file = nil
+        // Dropping the last reference is what writes the m4a's trailing moov
+        // atom, and until that happens the file on disk is unplayable — it
+        // has a header and a plausible size, so nothing about it looks wrong,
+        // but a decoder rejects it. Deepgram answers with
+        // "400: failed to process audio: corrupt or unsupported data", which
+        // the app reports as "Could not transcribe the recording".
+        //
+        // AVAudioFile is an Objective-C object, so releasing the property is
+        // not necessarily the last release: an autoreleased reference can
+        // keep it alive until the pool drains at the end of the run loop
+        // iteration, which is AFTER the caller has read the file and sent it.
+        // Reproduced exactly that way off-device — the same audio written
+        // with the same settings transcribes perfectly when the file is
+        // closed first and fails with that error when it is not.
+        //
+        // So the release happens inside a pool that drains here, before this
+        // function returns a URL anyone can read.
+        autoreleasepool {
+            file = nil
+        }
         url = nil
         return finished
     }
