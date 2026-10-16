@@ -438,15 +438,32 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
         let draft = live?.draft ?? ""
         let draftGrew = draft.count > draftCount
         if draftGrew { draftCount = draft.count }
-        let levelSaysSpeech = db > speechThresholdDB && excess >= Self.speechMarginDB
-        micDebug = String(
-            format: "db %.0f | room %.0f | +%.0f | %@%@",
-            db, db - excess, excess, levelSaysSpeech ? "level" : "—", draftGrew ? " draft" : ""
-        )
-        if levelSaysSpeech || draftGrew {
+        // ONE threshold used to answer two different questions, and that is
+        // what broke this. They are separated now, because only one of them
+        // can afford to be wrong.
+        //
+        // "Did they say anything at all?" — absolute threshold, exactly as it
+        // was before a second condition was added to it. Nothing tuned to a
+        // room may gate this, because it is what decides the audio was worth
+        // keeping. A margin that is slightly too strict here does not make a
+        // turn a little less responsive, it makes the teacher inaudible.
+        if db > speechThresholdDB {
             // Capped per callback so a gap (the app suspended, the engine
             // restarted after an interruption) cannot be counted as speech.
             speechMs += min(sinceLast, 100)
+        }
+
+        // "Are they STILL going?" — this one has to be relative to the room,
+        // because it is the question a noisy room answered wrongly forever,
+        // and it is allowed to be imperfect: being wrong here costs a pause,
+        // not a lost sentence. The draft is in because a new word is proof
+        // they are talking that no threshold can argue with.
+        let levelSaysVoice = db > speechThresholdDB && excess >= Self.speechMarginDB
+        micDebug = String(
+            format: "db %.0f | room %.0f | +%.0f | %@%@ | said %.0fms",
+            db, db - excess, excess, levelSaysVoice ? "voice" : "—", draftGrew ? " draft" : "", speechMs
+        )
+        if levelSaysVoice || draftGrew {
             lastSpeechAt = now
             scheduleSilenceEnd()
         } else if let since = lastSpeechAt, now.timeIntervalSince(since) >= silenceInterval {
