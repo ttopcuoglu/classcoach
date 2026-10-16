@@ -227,21 +227,6 @@ struct TalkToMeView: View {
 
             orb
             statusLabel
-            // Temporary, for diagnosing a microphone in a real room instead
-            // of guessing at one. Shown only while the mic is actually open.
-            if !recorder.micDebug.isEmpty, phase == .listening || phase == .thinking {
-                Text(recorder.micDebug)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(AppTheme.cream.opacity(0.45))
-            }
-            // Stays on screen after the turn ends, so it can be read rather
-            // than caught. This is the half that is actually failing.
-            if !recorder.turnDebug.isEmpty {
-                Text(recorder.turnDebug)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(AppTheme.gold.opacity(0.8))
-                    .multilineTextAlignment(.center)
-            }
 
             if onStartScreen {
                 VStack(spacing: 8) {

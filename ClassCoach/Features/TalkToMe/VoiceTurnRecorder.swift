@@ -16,58 +16,6 @@ import AVFoundation
 /// playing or recording, so during transcription and Coach's thinking iOS
 /// suspended the app, and a backgrounded app isn't allowed to re-open the
 /// mic for the next turn ("Could not access your microphone").
-/// How loud the room is, measured continuously.
-///
-/// Both decisions that used a fixed level needed this, and for the same
-/// reported reason: a number chosen in a quiet room does not survive a
-/// classroom.
-///
-///   - Interrupting Coach was "above -22dB for 0.35s". Steady noise sits
-///     above -22 indefinitely, so Coach stopped mid-sentence for nobody.
-///   - Deciding the teacher has STOPPED talking was "below -35dB". Steady
-///     noise never goes below -35, so the turn never ended: the app sat on
-///     "listening" and nothing was ever sent. Reported as Coach not hearing
-///     them at all, which is the opposite of the cause — it was hearing the
-///     room and could not tell when they had finished.
-///
-/// Measured whenever the microphone is open, which includes while Coach is
-/// speaking, so a turn never has to start by guessing. Measuring only from
-/// the first sample of a turn fails exactly when someone starts talking
-/// immediately: their own voice becomes "the room" and is then inaudible.
-///
-/// The follower rises slowly and falls quickly. Slowly up, because a voice
-/// must not drag the floor up and gate itself out: measured at the barge-in
-/// speed, a twelve-second sentence was detected for only 25 of its 132
-/// callbacks, which would have cut the teacher off mid-word. Quickly down,
-/// because the pauses inside real speech are what reveal the room, and a
-/// room that goes quiet should restore sensitivity at once.
-private struct RoomLevel {
-    private static let riseSeconds: Float = 20
-    private static let fallSeconds: Float = 0.3
-
-    private var floorDB: Float?
-    private var lastAt: Date?
-
-    /// How far this sample stands above the room, in dB. Nil on the very
-    /// first sample, where there is nothing to compare against yet. Updates
-    /// the measurement as a side effect, so it must be called once per
-    /// metering callback, in order, whether or not the caller cares about
-    /// the answer — that is how the room gets measured at all.
-    mutating func excess(_ db: Float) -> Float? {
-        let now = Date()
-        defer { lastAt = now }
-        guard let floor = floorDB, let last = lastAt else {
-            floorDB = db
-            return nil
-        }
-        let above = db - floor
-        let dt = Float(max(0.001, min(1.0, now.timeIntervalSince(last))))
-        let tau = db > floor ? Self.riseSeconds : Self.fallSeconds
-        floorDB = floor + (1 - exp(-dt / tau)) * (db - floor)
-        return above
-    }
-}
-
 @MainActor
 final class VoiceTurnRecorder: NSObject, ObservableObject {
     @Published private(set) var listening = false
@@ -92,37 +40,6 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     /// ambient noise — same scale as `AVAudioRecorder.averagePower`, which
     /// this threshold was originally tuned against.
     private let speechThresholdDB: Float = -35
-
-    /// Measured for the whole time the microphone is open, not per turn —
-    /// see RoomLevel for why starting fresh each turn is not good enough.
-    private var room = RoomLevel()
-
-    /// How much of the live draft had arrived at the previous callback.
-    ///
-    /// Deepgram producing a new word is the one unambiguous answer to "is
-    /// the teacher talking", and it does not depend on a level threshold
-    /// being tuned correctly for this room and this microphone. Levels alone
-    /// can fail in both directions — too strict and a real sentence never
-    /// registers, too loose and a noisy room registers forever — and both
-    /// failures look identical from the teacher's side: the app says
-    /// listening and nothing is ever sent.
-    private var draftCount = 0
-
-    /// What the readout shows, for diagnosing a microphone in a real room
-    /// rather than guessing at one. Temporary.
-    @Published private(set) var micDebug: String = ""
-
-    /// What happened to the last turn AFTER the audio was captured: whether
-    /// the live socket ever opened, the peak level reached, and what came
-    /// back from transcription. The levels turned out to be a red herring —
-    /// audio is captured and turns do end — so this is the half that is
-    /// actually failing. Temporary.
-    @Published private(set) var turnDebug: String = ""
-
-    /// Loudest sample seen this turn, so the number can be read after the
-    /// fact instead of caught mid-sentence.
-    private var peakDB: Float = -160
-
 
     /// How long to wait in silence before deciding the turn is over, as a
     /// function of how long the teacher has just been speaking — the native
@@ -306,8 +223,6 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
         listening = true
         speechMs = 0
         lastLevelAt = nil
-        // A fresh turn has heard none of the new socket's draft yet.
-        draftCount = 0
         turnId += 1
         scheduleSilenceEnd()
 
@@ -420,62 +335,18 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     // MARK: - Turn
 
     private func handleLevel(_ db: Float) {
-        // Every sample, before anything branches: this is both the question
-        // "how far above the room is this?" and the act of measuring the
-        // room. Behind a `guard` it would only ever see the loud samples and
-        // mistake the first of them for the room.
-        let excess = room.excess(db) ?? 0
         guard listening else {
-            if monitoringForBargeIn { checkForBargeIn(db, excess: excess) }
+            if monitoringForBargeIn { checkForBargeIn(db) }
             return
         }
         level = Double(max(0, min(100, (db + 60) * (100.0 / 60.0))))
         let now = Date()
         let sinceLast = lastLevelAt.map { now.timeIntervalSince($0) * 1000 } ?? 0
         lastLevelAt = now
-        // Two independent signals, either of which means "still talking".
-        //
-        // Levels: loud in absolute terms AND above the room. The absolute
-        // threshold alone meant a noisy room read as continuous speech, which
-        // reset the silence timer on every callback and left the turn running
-        // forever.
-        //
-        // The draft: Deepgram just produced another word. This is the signal
-        // that cannot be mistuned — if the socket is hearing them, the turn
-        // stays open whatever the levels say. It is safe to OR in only
-        // because the level test above is relative to the room: steady noise
-        // produces neither new words nor any excess over the room, so the
-        // turn can still end.
-        let draft = live?.draft ?? ""
-        let draftGrew = draft.count > draftCount
-        if draftGrew { draftCount = draft.count }
-        // ONE threshold used to answer two different questions, and that is
-        // what broke this. They are separated now, because only one of them
-        // can afford to be wrong.
-        //
-        // "Did they say anything at all?" — absolute threshold, exactly as it
-        // was before a second condition was added to it. Nothing tuned to a
-        // room may gate this, because it is what decides the audio was worth
-        // keeping. A margin that is slightly too strict here does not make a
-        // turn a little less responsive, it makes the teacher inaudible.
         if db > speechThresholdDB {
             // Capped per callback so a gap (the app suspended, the engine
             // restarted after an interruption) cannot be counted as speech.
             speechMs += min(sinceLast, 100)
-        }
-        if db > peakDB { peakDB = db }
-
-        // "Are they STILL going?" — this one has to be relative to the room,
-        // because it is the question a noisy room answered wrongly forever,
-        // and it is allowed to be imperfect: being wrong here costs a pause,
-        // not a lost sentence. The draft is in because a new word is proof
-        // they are talking that no threshold can argue with.
-        let levelSaysVoice = db > speechThresholdDB && excess >= Self.speechMarginDB
-        micDebug = String(
-            format: "db %.0f | room %.0f | +%.0f | %@%@ | said %.0fms",
-            db, db - excess, excess, levelSaysVoice ? "voice" : "—", draftGrew ? " draft" : "", speechMs
-        )
-        if levelSaysVoice || draftGrew {
             lastSpeechAt = now
             scheduleSilenceEnd()
         } else if let since = lastSpeechAt, now.timeIntervalSince(since) >= silenceInterval {
@@ -499,22 +370,6 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     private let bargeInThresholdDB: Float = -22
     private let bargeInSustain: TimeInterval = 0.35
 
-    /// How far above the room each decision needs a voice to stand.
-    ///
-    /// Interrupting gets the larger margin: a false positive there stops
-    /// Coach mid-sentence for nobody, which is the worst outcome in the
-    /// product. Mirrors BARGE_IN_MARGIN in web/src/lib/noiseGate.ts,
-    /// converted — the web works on a 0-100 level where one unit is 0.6dB,
-    /// so its 14 is about 9dB here.
-    private static let bargeInMarginDB: Float = 9
-
-    /// Deciding they are still talking gets a deliberately small one. A false
-    /// positive here only holds a turn open a moment longer; a false negative
-    /// loses real words. The web learned this the hard way at the equivalent
-    /// of 5dB, which sat inside the range quiet speech occupies on a quiet
-    /// microphone — see SPEECH_MARGIN in web/src/hooks/useVoiceTurn.ts.
-    private static let speechMarginDB: Float = 3
-
     private var monitoringForBargeIn = false
     private var onBargeIn: (() -> Void)?
     private var loudSince: Date?
@@ -533,18 +388,11 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     func stopWatchingWhileSpeaking() {
         monitoringForBargeIn = false
         onBargeIn = nil
-        // The room measurement is deliberately NOT reset here: it belongs to
-        // the microphone being open, not to one reply, and throwing it away
-        // between turns is what would make the next turn start by guessing.
         loudSince = nil
     }
 
-    private func checkForBargeIn(_ db: Float, excess: Float) {
-        // Loud in absolute terms AND clearly above the room — see RoomLevel.
-        // The threshold alone was a fixed number chosen against Coach's echo
-        // in a quiet room, so steady classroom noise sat above it
-        // indefinitely and stopped Coach mid-sentence for nobody.
-        guard db > bargeInThresholdDB, excess >= Self.bargeInMarginDB else {
+    private func checkForBargeIn(_ db: Float) {
+        guard db > bargeInThresholdDB else {
             loudSince = nil
             return
         }
@@ -578,7 +426,6 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
         lastLevelAt = nil
         lastSpeechAt = nil
         level = 0
-        draftCount = 0
         turnId += 1
         capture.streamTo(nil)
         let session = live
@@ -588,8 +435,6 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
             return
         }
 
-        let peak = peakDB
-        peakDB = -160
         transcribing = true
         Task { @MainActor in
             defer { try? FileManager.default.removeItem(at: url) }
@@ -598,30 +443,22 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
             // recording never has to be uploaded at all. Anything short of a
             // usable transcript falls through to the upload below, which
             // still holds the complete turn.
-            let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
-            let head = String(format: "peak %.0f | %dkB | socket %@", peak, (size ?? 0) / 1024, session == nil ? "NEVER OPENED" : "open")
-
             if let session {
                 let transcript = await session.finish()
                 if let transcript {
-                    self.turnDebug = "\(head) | live: \(transcript.count) chars"
                     self.transcribing = false
                     self.onTurnComplete?(transcript)
                     return
                 }
-                self.turnDebug = "\(head) | live: empty, uploading..."
             }
 
             do {
                 let transcript = try await TalkToMeService.transcribe(audioFileURL: url)
-                let clean = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-                self.turnDebug = "\(head) | upload: \(clean.count) chars"
                 self.transcribing = false
-                self.onTurnComplete?(clean)
+                self.onTurnComplete?(transcript.trimmingCharacters(in: .whitespacesAndNewlines))
             } catch {
                 // A transcription hiccup for one turn shouldn't end the
                 // conversation — treat it the same as "nothing was said."
-                self.turnDebug = "\(head) | upload FAILED: \(error.localizedDescription)"
                 self.transcribing = false
                 self.onTurnComplete?("")
             }
