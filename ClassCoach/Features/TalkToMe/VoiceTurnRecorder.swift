@@ -97,6 +97,22 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     /// see RoomLevel for why starting fresh each turn is not good enough.
     private var room = RoomLevel()
 
+    /// How much of the live draft had arrived at the previous callback.
+    ///
+    /// Deepgram producing a new word is the one unambiguous answer to "is
+    /// the teacher talking", and it does not depend on a level threshold
+    /// being tuned correctly for this room and this microphone. Levels alone
+    /// can fail in both directions — too strict and a real sentence never
+    /// registers, too loose and a noisy room registers forever — and both
+    /// failures look identical from the teacher's side: the app says
+    /// listening and nothing is ever sent.
+    private var draftCount = 0
+
+    /// What the readout shows, for diagnosing a microphone in a real room
+    /// rather than guessing at one. Temporary.
+    @Published private(set) var micDebug: String = ""
+
+
     /// How long to wait in silence before deciding the turn is over, as a
     /// function of how long the teacher has just been speaking — the native
     /// half of `web/src/lib/turnEndpointing.ts`, where the reasoning lives.
@@ -279,6 +295,8 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
         listening = true
         speechMs = 0
         lastLevelAt = nil
+        // A fresh turn has heard none of the new socket's draft yet.
+        draftCount = 0
         turnId += 1
         scheduleSilenceEnd()
 
@@ -404,10 +422,28 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
         let now = Date()
         let sinceLast = lastLevelAt.map { now.timeIntervalSince($0) * 1000 } ?? 0
         lastLevelAt = now
-        // Loud in absolute terms AND above the room. The absolute threshold
-        // alone meant a noisy room read as continuous speech, which reset the
-        // silence timer on every callback and left the turn running forever.
-        if db > speechThresholdDB, excess >= Self.speechMarginDB {
+        // Two independent signals, either of which means "still talking".
+        //
+        // Levels: loud in absolute terms AND above the room. The absolute
+        // threshold alone meant a noisy room read as continuous speech, which
+        // reset the silence timer on every callback and left the turn running
+        // forever.
+        //
+        // The draft: Deepgram just produced another word. This is the signal
+        // that cannot be mistuned — if the socket is hearing them, the turn
+        // stays open whatever the levels say. It is safe to OR in only
+        // because the level test above is relative to the room: steady noise
+        // produces neither new words nor any excess over the room, so the
+        // turn can still end.
+        let draft = live?.draft ?? ""
+        let draftGrew = draft.count > draftCount
+        if draftGrew { draftCount = draft.count }
+        let levelSaysSpeech = db > speechThresholdDB && excess >= Self.speechMarginDB
+        micDebug = String(
+            format: "db %.0f | room %.0f | +%.0f | %@%@",
+            db, db - excess, excess, levelSaysSpeech ? "level" : "—", draftGrew ? " draft" : ""
+        )
+        if levelSaysSpeech || draftGrew {
             // Capped per callback so a gap (the app suspended, the engine
             // restarted after an interruption) cannot be counted as speech.
             speechMs += min(sinceLast, 100)
@@ -513,6 +549,7 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
         lastLevelAt = nil
         lastSpeechAt = nil
         level = 0
+        draftCount = 0
         turnId += 1
         capture.streamTo(nil)
         let session = live
