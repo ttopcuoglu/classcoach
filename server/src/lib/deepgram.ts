@@ -51,6 +51,12 @@ async function sendToDeepgram(
   const apiKey = process.env.DEEPGRAM_API_KEY
   if (!apiKey) throw new Error('DEEPGRAM_API_KEY is not set')
 
+  // Only a STREAM needs `duplex` and a hand-written Content-Length. A buffer
+  // does not, and saying so anyway is not harmless: undici rejects the
+  // combination before a connection is made, which surfaces as the bare
+  // "fetch failed" seen on a phone whose every turn fell back to this path.
+  // Audio Coaching sends a read stream here and still needs both.
+  const isStream = typeof (body as { pipe?: unknown })?.pipe === 'function'
   const response = await fetch(
     // model must stay explicit: with none, Deepgram falls back to its oldest
     // "base" model (confirmed via response metadata), not Nova.
@@ -60,11 +66,10 @@ async function sendToDeepgram(
       headers: {
         Authorization: `Token ${apiKey}`,
         'Content-Type': contentType || 'audio/webm',
-        'Content-Length': String(byteLength),
+        ...(isStream ? { 'Content-Length': String(byteLength) } : {}),
       },
       body,
-      // Required by undici whenever the body is a stream.
-      duplex: 'half',
+      ...(isStream ? { duplex: 'half' } : {}),
     } as RequestInit,
   )
 

@@ -105,7 +105,12 @@ debriefRouter.post('/transcribe', upload.single('audio'), async (req, res) => {
     //
     // It only ever shows on a path that is already failing, and it comes out
     // as soon as this is diagnosed.
-    const detail = error instanceof Error ? ` [${error.message.slice(0, 220)}]` : ''
+    // "fetch failed" on its own names nothing. undici puts the real reason —
+    // DNS, TLS, a refused connection, an invalid request — in `cause`.
+    const cause = (error as { cause?: unknown })?.cause
+    const causeText =
+      cause instanceof Error ? `: ${cause.message}` : cause ? `: ${String(cause).slice(0, 120)}` : ''
+    const detail = error instanceof Error ? ` [${error.message.slice(0, 160)}${causeText}]` : ''
     res.status(failure.status).json({ error: `${failure.message}${detail}` })
   }
 })
