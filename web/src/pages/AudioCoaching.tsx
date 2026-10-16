@@ -45,7 +45,6 @@ import {
   type AudioEscalationRung,
   type AudioRedirectionLogEntry,
   type AudioHardLook,
-  type AudioMomentToRevisit,
   type AudioRubricLens,
   type AudioSession,
   type AudioSessionWithSegments,
@@ -1920,40 +1919,7 @@ function StrengthCard({
 // "longest monologue" on almost every lesson. Three of the four statuses are
 // the read declining to name one, and each says why rather than leaving a gap
 // the teacher has to interpret.
-const MOMENT_WITHOUT_ONE: Record<Exclude<AudioMomentToRevisit['status'], 'found'>, string> = {
-  thin: 'Not enough of this lesson came through clearly to pick one moment honestly. A recording with the phone nearer to where you teach gives this more to go on.',
-  not_a_lesson: "This recording doesn't read as a class being taught, so there is no moment to pick out.",
-  clear: 'Nothing in this lesson stood out as needing a second look.',
-}
 
-function MomentToRevisitCard({ moment, sending }: { moment: AudioMomentToRevisit | null; sending: boolean }) {
-  // Not read, and not being read: an older report whose request failed, or a
-  // locked one. Nothing to show beats a placeholder that never resolves.
-  if (!moment && !sending) return null
-  return (
-    <div className="rounded-2xl border border-hairline bg-cream-card p-6 md:col-span-2">
-      <span className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">A moment to revisit</span>
-      {!moment ? (
-        <p className="mt-1.5 text-sm text-ink-soft">Reading the lesson for the moment most worth a second look…</p>
-      ) : moment.status !== 'found' ? (
-        <p className="mt-1.5 text-sm text-ink-soft">{MOMENT_WITHOUT_ONE[moment.status]}</p>
-      ) : (
-        <>
-          <p className="mt-1.5 text-sm font-semibold text-ink">{moment.headline}</p>
-          {moment.quote && (
-            <p className="mt-1 text-sm text-ink-soft">
-              "{moment.quote}"{moment.timestampSec != null && ` · ${formatTime(moment.timestampSec)}`}
-            </p>
-          )}
-          {/* What to do about it is the first line of "Try next time", just
-              below — one list of next steps rather than one here and more
-              scattered through Insights. */}
-          {moment.whyItMatters && <p className="mt-2 text-sm text-ink">{moment.whyItMatters}</p>}
-        </>
-      )}
-    </div>
-  )
-}
 
 /// The quiet / could-not-make-out split as percentages of the recording,
 /// from the seconds the analysis stored. Null whenever there is no envelope
@@ -2226,7 +2192,9 @@ function ReportPanel({
   const [retagError, setRetagError] = useState<string | null>(null)
   const hasAttemptedClassSummaryRef = useRef(false)
   const hasAttemptedMomentRef = useRef(false)
-  const [momentSending, setMomentSending] = useState(false)
+  // Only the setter: the read still runs for "Try next time", but nothing
+  // shows a pending state for it now that the Evidence card has gone.
+  const [, setMomentSending] = useState(false)
   const [externalFocus, setExternalFocus] = useState<{
     label: string
     focus: string
@@ -2725,7 +2693,6 @@ function ReportPanel({
           cfuInsight={cfuInsight}
           classSummary={session.classSummary}
           classSummarySending={classSummarySending}
-          momentSending={momentSending}
           hardLookDoor={
             locked && !session.hardLook ? null : (
               <div className="flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-4">
@@ -2962,7 +2929,6 @@ function SummaryTab({
   cfuInsight,
   classSummary,
   classSummarySending,
-  momentSending,
   hardLookDoor,
   onNavigateInsights,
   onDiscussWithCoach,
@@ -2982,7 +2948,6 @@ function SummaryTab({
   cfuInsight: string | null
   classSummary: string | null
   classSummarySending: boolean
-  momentSending: boolean
   /// The whole-lesson Hard Look. It used to open the Insights tab, above the
   /// section a teacher had just chosen; each section still carries its own
   /// part, and the whole of it is asked for here, once.
@@ -3124,7 +3089,10 @@ function SummaryTab({
             followUpMetric={followUpMetric}
             onExplore={() => onNavigateInsights('questions')}
           />
-          <MomentToRevisitCard moment={momentToRevisit} sending={momentSending} />
+          {/* The moment to revisit used to sit here too. It is still read and
+              still shown — in "Try next time", where it comes with the thing
+              to do about it. Here it was the same moment stated twice on one
+              screen, the first time without a next step. */}
         </div>
       </NumberedCard>
 
