@@ -23,10 +23,6 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     @Published var fatalError: String?
     @Published private(set) var transcribing = false
 
-    /// What happened to the last turn after the audio was captured. Shown
-    /// under the status line while this is being diagnosed.
-    @Published private(set) var turnDebug: String = ""
-
     /// A recording is only complete once AVAudioFile's trailing atom has been
     /// written, which happens when the last reference goes — and that release
     /// can be held by an autorelease pool that does not drain until the run
@@ -464,8 +460,6 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
 
             // Never upload a recording that is not finished being written.
             let complete = await Self.waitForCompleteRecording(url)
-            let size = ((try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? Int) ?? 0
-            let head = "\(size / 1024)kB | file \(complete ? "ok" : "INCOMPLETE") | socket \(session == nil ? "none" : "open")"
 
             // If the socket was running, the words are already there and the
             // recording never has to be uploaded at all. Anything short of a
@@ -474,7 +468,6 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
             if let session {
                 let transcript = await session.finish()
                 if let transcript {
-                    self.turnDebug = "\(head) | live: \(transcript.count) chars"
                     self.transcribing = false
                     self.onTurnComplete?(transcript)
                     return
@@ -484,13 +477,11 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
             do {
                 let transcript = try await TalkToMeService.transcribe(audioFileURL: url)
                 let clean = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-                self.turnDebug = "\(head) | upload: \(clean.count) chars"
                 self.transcribing = false
                 self.onTurnComplete?(clean)
             } catch {
                 // A transcription hiccup for one turn shouldn't end the
                 // conversation — treat it the same as "nothing was said."
-                self.turnDebug = "\(head) | FAILED: \(error.localizedDescription)"
                 self.transcribing = false
                 self.onTurnComplete?("")
             }

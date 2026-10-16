@@ -163,10 +163,15 @@ const AUDIBLE_DRAWS = 4
 // that phrase, and a teacher on that server instance would hear almost
 // nothing for days. Other fillers landed anywhere between 12% and 50%.
 //
-// So every clip is brought to the same loudness: well under Coach's own
-// speech, which measures 37-49%, and comfortably audible. The gain is capped
-// so a near-silent draw is lifted without its noise floor coming with it.
-const FILLER_TARGET_PEAK = 0.3
+// So every clip is brought to the same loudness. That target used to sit
+// well under Coach's own speech, which measures 37-49%, and the step up was
+// audible — reported as the voice being "kind of volume down at the
+// beginning". It was easier to miss when a starter was a two-word
+// acknowledgement; now that every turn opens with "Um, let me see..." the
+// quiet part is longer and lands every time. So it moves into the bottom of
+// Coach's own range rather than under it. The gain is still capped, so a
+// near-silent draw is lifted without its noise floor coming with it.
+const FILLER_TARGET_PEAK = 0.4
 const MAX_NORMALISE_GAIN = 8
 
 function normalise(wav: Buffer): Buffer {

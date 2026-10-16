@@ -227,13 +227,6 @@ struct TalkToMeView: View {
 
             orb
             statusLabel
-            // Temporary, while the transcription path is being diagnosed.
-            if !recorder.turnDebug.isEmpty {
-                Text(recorder.turnDebug)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(AppTheme.gold.opacity(0.85))
-                    .multilineTextAlignment(.center)
-            }
 
             if onStartScreen {
                 VStack(spacing: 8) {

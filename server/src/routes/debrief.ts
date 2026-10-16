@@ -94,24 +94,7 @@ debriefRouter.post('/transcribe', upload.single('audio'), async (req, res) => {
   } catch (error) {
     const failure = classifyModelError(error, 'Could not transcribe the recording')
     logModelFailure('[debrief] transcription failed:', failure, error)
-    // TEMPORARY, and unconditional on purpose.
-    //
-    // The upstream reason is in the thrown error (deepgram.ts puts the status
-    // and body there) but was only ever reaching the log, which is no use
-    // when the person who can reproduce it is holding a phone. This was first
-    // gated on role === 'superadmin' and the detail never appeared, because
-    // the account reproducing it is not one — so the gate cost a round trip
-    // and told us nothing.
-    //
-    // It only ever shows on a path that is already failing, and it comes out
-    // as soon as this is diagnosed.
-    // "fetch failed" on its own names nothing. undici puts the real reason —
-    // DNS, TLS, a refused connection, an invalid request — in `cause`.
-    const cause = (error as { cause?: unknown })?.cause
-    const causeText =
-      cause instanceof Error ? `: ${cause.message}` : cause ? `: ${String(cause).slice(0, 120)}` : ''
-    const detail = error instanceof Error ? ` [${error.message.slice(0, 160)}${causeText}]` : ''
-    res.status(failure.status).json({ error: `${failure.message}${detail}` })
+    res.status(failure.status).json({ error: failure.message })
   }
 })
 
