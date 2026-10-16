@@ -31,10 +31,13 @@ const BARGE_IN_SUSTAIN_MS = 350
 const BARGE_IN_MARGIN = 14
 const RESUME_MARGIN = 6
 
-// Deciding the teacher is still talking gets its own, because here a false
-// NEGATIVE is what cuts someone off mid-sentence, while a false positive is
-// what kept the turn running forever.
-const SPEECH_MARGIN = 8
+// Deciding the teacher is still talking gets its own, and it is deliberately
+// small. A false positive here only keeps a turn open a moment longer; a
+// false negative loses real words. Measured: on a quiet microphone speech
+// reads around 9-15 with the room at 3, so a margin of 8 sat right in the
+// middle of real speech and lost it. Four clears the room without reaching
+// into the quiet end of a voice.
+const SPEECH_MARGIN = 4
 
 // On by default: a teacher who starts talking expects Coach to stop, and
 // without that the thinking sounds below would be something they cannot get
@@ -286,41 +289,53 @@ export function useVoiceTurn(
       const live = liveRef.current
       liveRef.current = null
 
-      // Nothing crossed the speech threshold this turn, so there is nothing
-      // to transcribe. Skip both paths entirely.
+      // The live socket is asked FIRST, and whatever it heard wins, whatever
+      // the level meter thought.
       //
-      // This is most turns, not an edge case: while a teacher is gathering
-      // their thoughts the silence timer ends a turn every couple of seconds
-      // and immediately starts another. Every one of those used to be
-      // uploaded and transcribed — paying Deepgram to confirm silence the
-      // level meter had already measured. Live transcription made it worse:
-      // an empty live transcript deliberately falls back to the upload (see
-      // the next block), so each silent turn was billed twice.
+      // It used to be the other way round: a turn where no frame crossed the
+      // speech threshold was dropped here without being transcribed at all.
+      // That was safe only while the threshold was a single low number that
+      // "any real speech crosses" — and it stopped being that the moment a
+      // second condition was added to it. On a quiet microphone, speech reads
+      // around 9-15 with the room at 3, so requiring 8 above the room lost
+      // real words; the audio was then discarded, the turn restarted, and
+      // Coach never answered. Reported as Coach not hearing them at all.
       //
-      // The threshold is low enough that any real speech crosses it, and it
-      // is the same one that decides when a turn ends — a teacher who never
-      // crossed it would already have been cut off regardless.
-      if (!heardSpeechRef.current) {
-        live?.abandon()
-        onTurnComplete('')
-        return
-      }
+      // Asking the socket costs nothing extra: it has been open and streaming
+      // for the whole turn, and finish() only closes it and reads what came
+      // back. The expensive path is the upload below, and that is still
+      // withheld from a turn with no speech in it — which is most turns,
+      // since the silence timer ends one every couple of seconds while a
+      // teacher gathers their thoughts.
+      const measuredSpeech = heardSpeechRef.current
 
-      setTranscribing(true)
-      // If live transcription was running, the words are already there and
-      // the recording never has to be uploaded at all. Anything less than a
-      // usable transcript falls through to the batch path below, which still
-      // holds the complete turn.
       if (live) {
-        const transcript = await live.finish()
+        setTranscribing(true)
+        // finish() resolves null when the socket produced nothing at all.
+        const transcript = (await live.finish())?.trim() ?? ''
         live.abandon()
         if (transcript) {
           markTurn('transcribe_live')
           setTranscribing(false)
-          onTurnComplete(transcript.trim())
+          onTurnComplete(transcript)
+          return
+        }
+        // The socket heard nothing AND no frame measured as speech: a
+        // genuinely silent turn, so it ends without paying to upload it.
+        if (!measuredSpeech) {
+          setTranscribing(false)
+          onTurnComplete('')
           return
         }
         console.warn('[useVoiceTurn] live transcription returned nothing — falling back to the upload')
+      } else if (!measuredSpeech) {
+        // No socket and nothing measured. Same reasoning, and the only case
+        // where the level meter still gets the last word — there is nothing
+        // else to ask.
+        onTurnComplete('')
+        return
+      } else {
+        setTranscribing(true)
       }
 
       const blob = new Blob(chunksRef.current, { type: mimeTypeRef.current || 'audio/webm' })

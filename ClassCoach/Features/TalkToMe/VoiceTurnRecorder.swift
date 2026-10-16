@@ -443,9 +443,12 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     /// so its 14 is about 9dB here.
     private static let bargeInMarginDB: Float = 9
 
-    /// Deciding they are still talking gets the smaller one, because a false
-    /// NEGATIVE here is what cuts someone off mid-sentence.
-    private static let speechMarginDB: Float = 5
+    /// Deciding they are still talking gets a deliberately small one. A false
+    /// positive here only holds a turn open a moment longer; a false negative
+    /// loses real words. The web learned this the hard way at the equivalent
+    /// of 5dB, which sat inside the range quiet speech occupies on a quiet
+    /// microphone — see SPEECH_MARGIN in web/src/hooks/useVoiceTurn.ts.
+    private static let speechMarginDB: Float = 3
 
     private var monitoringForBargeIn = false
     private var onBargeIn: (() -> Void)?

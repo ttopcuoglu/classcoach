@@ -4,7 +4,7 @@ import { createRoomLevel } from './noiseGate.ts'
 
 const FRAME_MS = 1000 / 60
 const SPEECH_THRESHOLD = 8
-const SPEECH_MARGIN = 8
+const SPEECH_MARGIN = 4
 const BARGE_THRESHOLD = 20
 const BARGE_MARGIN = 14
 
@@ -105,4 +105,21 @@ test('a room going quiet restores sensitivity quickly', () => {
   for (const level of frames(50, 5)) room.excess(level, FRAME_MS)
   for (const level of frames(4, 1)) room.excess(level, FRAME_MS)
   assert.ok(room.floor() < 12, `floor should fall back fast, was ${room.floor()}`)
+})
+
+test('quiet speech on a quiet microphone is never lost', () => {
+  // The reported regression: speech at 9-15 over a room at 3. A margin of 8
+  // sat inside that range, the frame did not count as speech, and the turn
+  // was discarded as silent.
+  const room = createRoomLevel()
+  for (const level of frames(3, 2)) room.excess(level, FRAME_MS)
+  for (const speech of [9, 11, 15]) {
+    const r = createRoomLevel()
+    for (const level of frames(3, 2)) r.excess(level, FRAME_MS)
+    const excess = r.excess(speech, FRAME_MS)
+    assert.ok(
+      speech > SPEECH_THRESHOLD && excess >= SPEECH_MARGIN,
+      `speech at ${speech} over a room at 3 must register (excess ${excess})`,
+    )
+  }
 })
