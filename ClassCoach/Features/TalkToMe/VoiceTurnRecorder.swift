@@ -23,6 +23,29 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
     @Published var fatalError: String?
     @Published private(set) var transcribing = false
 
+    /// What happened to the last turn after the audio was captured. Shown
+    /// under the status line while this is being diagnosed.
+    @Published private(set) var turnDebug: String = ""
+
+    /// A recording is only complete once AVAudioFile's trailing atom has been
+    /// written, which happens when the last reference goes — and that release
+    /// can be held by an autorelease pool that does not drain until the run
+    /// loop comes back round. Reading the file before then yields something
+    /// with a header, a plausible size, and no decodable audio in it, which
+    /// Deepgram rejects as "corrupt or unsupported data".
+    ///
+    /// Opening it for reading is the exact test: measured off-device, it
+    /// throws on the unfinished file and reports the frame count on the
+    /// finished one. Awaiting between attempts is the point as much as the
+    /// test is — it hands control back, which is what lets the pool drain.
+    private static func waitForCompleteRecording(_ url: URL) async -> Bool {
+        for _ in 0..<20 {
+            if (try? AVAudioFile(forReading: url)) != nil { return true }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+        return false
+    }
+
     private let engine = AVAudioEngine()
     private let capture = TurnCapture()
     private var engineRunning = false
@@ -439,6 +462,11 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
         Task { @MainActor in
             defer { try? FileManager.default.removeItem(at: url) }
 
+            // Never upload a recording that is not finished being written.
+            let complete = await Self.waitForCompleteRecording(url)
+            let size = ((try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? Int) ?? 0
+            let head = "\(size / 1024)kB | file \(complete ? "ok" : "INCOMPLETE") | socket \(session == nil ? "none" : "open")"
+
             // If the socket was running, the words are already there and the
             // recording never has to be uploaded at all. Anything short of a
             // usable transcript falls through to the upload below, which
@@ -446,6 +474,7 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
             if let session {
                 let transcript = await session.finish()
                 if let transcript {
+                    self.turnDebug = "\(head) | live: \(transcript.count) chars"
                     self.transcribing = false
                     self.onTurnComplete?(transcript)
                     return
@@ -454,11 +483,14 @@ final class VoiceTurnRecorder: NSObject, ObservableObject {
 
             do {
                 let transcript = try await TalkToMeService.transcribe(audioFileURL: url)
+                let clean = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+                self.turnDebug = "\(head) | upload: \(clean.count) chars"
                 self.transcribing = false
-                self.onTurnComplete?(transcript.trimmingCharacters(in: .whitespacesAndNewlines))
+                self.onTurnComplete?(clean)
             } catch {
                 // A transcription hiccup for one turn shouldn't end the
                 // conversation — treat it the same as "nothing was said."
+                self.turnDebug = "\(head) | FAILED: \(error.localizedDescription)"
                 self.transcribing = false
                 self.onTurnComplete?("")
             }
