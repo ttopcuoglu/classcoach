@@ -94,7 +94,14 @@ debriefRouter.post('/transcribe', upload.single('audio'), async (req, res) => {
   } catch (error) {
     const failure = classifyModelError(error, 'Could not transcribe the recording')
     logModelFailure('[debrief] transcription failed:', failure, error)
-    res.status(failure.status).json({ error: failure.message })
+    // The upstream reason is in the thrown error (deepgram.ts puts the status
+    // and body there) but was only ever reaching the log, which is no use
+    // when the person who can reproduce it is holding a phone. Superadmins
+    // get it in the response so a failure can be read where it happens; every
+    // teacher still gets the sentence written for them.
+    const detail =
+      req.user?.role === 'superadmin' && error instanceof Error ? ` [${error.message.slice(0, 220)}]` : ''
+    res.status(failure.status).json({ error: `${failure.message}${detail}` })
   }
 })
 
