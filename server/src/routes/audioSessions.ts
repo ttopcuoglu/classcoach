@@ -7,7 +7,7 @@ import { readEscalation } from '../lib/escalation.ts'
 import { readTeachingMoves } from '../lib/teachingMoves.ts'
 import { parseLevelTrace, splitNonSpeech, teacherIntervals } from '../lib/settleTime.ts'
 import { buildSoundTimeline } from '../lib/soundTimeline.ts'
-import { enrichLessonContent } from '../lib/lessonObjective.ts'
+import { enrichLessonContent, flattenTeacherSpeech, normalizeForMatch } from '../lib/lessonObjective.ts'
 import { checkFeatureAccess, hasActivePlan, startOfCurrentMonth } from '../lib/billing.ts'
 import { cachedSystem, cacheStats } from '../lib/promptCache.ts'
 import {
@@ -1524,6 +1524,15 @@ export type ClassSummaryMetrics = {
   directionMoments?: { timestampSec: number; text: string }[]
   toneMoments?: { kind: string; timestampSec: number; text: string }[]
   redirectionMoments?: { timestampSec: number; text: string }[]
+  /// Moments from the teaching-moves read — the teacher's own sentences,
+  /// already verified against their speech. These are the ONLY strings the
+  /// note may quote.
+  invitationMoments?: { timestampSec: number; text: string }[]
+  revisionMoments?: { timestampSec: number; text: string }[]
+  selfAnsweredMoments?: { timestampSec: number; text: string }[]
+  explanationMoments?: { timestampSec: number; text: string; kind: string }[]
+  connectionMoments?: { timestampSec: number; text: string; kind: string }[]
+  directionPartMoments?: { timestampSec: number; text: string; parts: string[] }[]
   nameMentions?: number | null
   uniqueNames?: number | null
   /// Already read out of the transcript by `lessonObjective.ts`. Handed to
@@ -1578,7 +1587,13 @@ If a number is missing or the transcript is too thin to support a paragraph, say
 
 ${measured}
 
-Below are numbered excerpts of what the teacher said, in order. Paraphrase only — do not quote them directly or use quotation marks.
+Below are numbered excerpts of what the teacher said, in order. Paraphrase these — do not quote them or use quotation marks around them. They are raw transcript and may be mis-transcribed.
+
+QUOTING. There is one exception, and it matters more than anything else here. The MOMENT LISTS further down hold sentences already checked word-for-word against what the teacher said. You may quote from those, verbatim, inside quotation marks. Copy the words exactly; changing so much as a word makes it a sentence the teacher did not say.
+
+ANCHOR EVERY NOTE ON ONE MOMENT. A coach who was in the room does not say "you followed up once" — they say what happened: when a student gave you half an answer you said "I'm not the answer. Take a guess." and they came back with the whole thing. Each section note below must name ONE real moment that way, quoted from the lists and given its timestamp, and say why that moment mattered. One moment, not three: a note listing six observations is a report with a friendlier voice, not coaching.
+
+Where a section has no moment worth anchoring on, write the note without a quote rather than reaching for a weak one. A general note is better than a forced quote.
 
 ${exhibits.map((e, i) => `[${i + 1}] ${e.text}`).join('\n')}
 
@@ -1610,6 +1625,18 @@ ${
       : 'No feedback moments were detected.'
   }
 
+${
+    metrics?.revisionMoments?.length
+      ? `MOMENT LIST — times you pushed a student further (quotable):\n${metrics.revisionMoments.map((m) => `- ${mmss(m.timestampSec)} "${m.text}"`).join('\n')}`
+      : ''
+  }
+
+${
+    metrics?.selfAnsweredMoments?.length
+      ? `MOMENT LIST — questions you answered yourself (quotable):\n${metrics.selfAnsweredMoments.map((m) => `- ${mmss(m.timestampSec)} "${m.text}"`).join('\n')}`
+      : ''
+  }
+
 Then THE CLIMATE NOTE: one paragraph for a section about routines,
 directions and classroom language, covering both how the class was moved
 between activities and how the teacher spoke to students. These moments are
@@ -1619,6 +1646,32 @@ and never explain the detector to the teacher. A zero still means only that
 nothing of that kind was heard: encouragement carried by tone, a look that
 settles a room, and anything said too quietly for the mic leave no trace. If
 there is genuinely nothing to say, one honest sentence is the right answer.
+
+${
+    metrics?.invitationMoments?.length
+      ? `MOMENT LIST — times you opened the floor (quotable):\n${metrics.invitationMoments.map((m) => `- ${mmss(m.timestampSec)} "${m.text}"`).join('\n')}`
+      : ''
+  }
+
+${
+    metrics?.directionPartMoments?.length
+      ? `MOMENT LIST — directions, and which of task/steps/time/product each named (quotable):\n${metrics.directionPartMoments
+          .map((m) => `- ${mmss(m.timestampSec)} [${m.parts.length ? m.parts.join('+') : 'named none of the four'}] "${m.text}"`)
+          .join('\n')}`
+      : ''
+  }
+
+${
+    metrics?.connectionMoments?.length
+      ? `MOMENT LIST — how you tied the lesson together (quotable):\n${metrics.connectionMoments.map((m) => `- ${mmss(m.timestampSec)} [${m.kind}] "${m.text}"`).join('\n')}`
+      : ''
+  }
+
+${
+    metrics?.explanationMoments?.length
+      ? `MOMENT LIST — how you opened the content up (quotable):\n${metrics.explanationMoments.map((m) => `- ${mmss(m.timestampSec)} [${m.kind}] "${m.text}"`).join('\n')}`
+      : ''
+  }
 
 ${
     metrics?.directionMoments?.length
@@ -1810,7 +1863,74 @@ type ClassSummarySource = {
     metricsDetail: unknown
     lessonContent: unknown
     studentTalkFocus?: unknown
+    teachingMoves?: unknown
   }
+
+/// The quotable moment lists, from whatever the teaching-moves read stored.
+///
+/// Defensive about shape because this is stored JSON: a report written before
+/// a category existed simply has no entry, and a malformed one yields an
+/// empty list rather than throwing inside the summary call.
+export function teachingMomentsFor(raw: unknown): Record<string, unknown[]> {
+  const m = (raw ?? {}) as Record<string, { quote?: string; timestampSec?: number; kind?: string; parts?: string[] }[]>
+  const take = (key: string, limit: number) =>
+    (Array.isArray(m[key]) ? m[key] : [])
+      .filter((x) => typeof x?.quote === 'string' && typeof x?.timestampSec === 'number')
+      .slice(0, limit)
+  const plain = (key: string, limit: number) =>
+    take(key, limit).map((x) => ({ timestampSec: x.timestampSec as number, text: x.quote as string }))
+  return {
+    invitationMoments: plain('invitations', 8),
+    revisionMoments: plain('revisionPrompts', 8),
+    selfAnsweredMoments: plain('selfAnswered', 5),
+    explanationMoments: take('explanations', 8).map((x) => ({
+      timestampSec: x.timestampSec as number,
+      text: x.quote as string,
+      kind: x.kind ?? 'example',
+    })),
+    connectionMoments: take('connections', 8).map((x) => ({
+      timestampSec: x.timestampSec as number,
+      text: x.quote as string,
+      kind: x.kind ?? 'prior',
+    })),
+    directionPartMoments: take('directions', 8).map((x) => ({
+      timestampSec: x.timestampSec as number,
+      text: x.quote as string,
+      parts: Array.isArray(x.parts) ? x.parts : [],
+    })),
+  }
+}
+
+/// Every quoted span in a note must be something the teacher actually said.
+///
+/// The prompt now allows verbatim quoting, which it did not before — the old
+/// rule was "paraphrase only", and that rule was the only thing standing
+/// between a teacher and a sentence they never said. Replacing it with an
+/// instruction is not enough: a model that quotes a moment list is still a
+/// model, and the one thing this report has is that a teacher can check it.
+///
+/// A note carrying a quote that fails is DISCARDED rather than shown. The
+/// section renders without a note, which is a known, handled state. Showing
+/// a misquote is not.
+///
+/// WHERE THIS STOPS. Matching is normalized, so it catches a sentence the
+/// teacher never said and a sentence whose WORDS have been changed — "I am
+/// not the answer" against "I'm not the answer" is rejected. It does NOT
+/// catch punctuation or capitalisation drift: "So what was it, so which
+/// two?" passes for "So what was it? So which two?". That is the right
+/// trade. Rejecting a real moment over a comma was tried elsewhere in this
+/// codebase and turned a genuine objective into "not said aloud", which is
+/// a worse lie than the comma. The harm being prevented here is words the
+/// teacher did not say, not a model's punctuation.
+export function noteQuotesAreReal(note: string | null, segments: Segment[]): boolean {
+  if (!note) return true
+  const { flat } = flattenTeacherSpeech(segments)
+  // Short spans inside quotes are usually a word being highlighted rather
+  // than a claim about what was said, and are not worth rejecting a whole
+  // note over.
+  const quoted = [...note.matchAll(/[\u201C"]([^\u201D"]{12,})[\u201D"]/g)].map((m) => m[1])
+  return quoted.every((q) => flat.includes(normalizeForMatch(q)))
+}
 
 /// The model call behind the class summary, on its own so a script can see
 /// what comes back for a real lesson without writing it (scripts/tryNextSteps).
@@ -1842,6 +1962,10 @@ export async function requestClassSummaryText(session: ClassSummarySource, segme
       directionMoments: ((session.directiveLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 10),
       toneMoments: ((session.toneLog ?? []) as { kind: string; timestampSec: number; text: string }[]).slice(0, 10),
       redirectionMoments: ((session.redirectionLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 10),
+      // The teaching-moves read's own quotes, already verified word-for-word
+      // against the teacher's speech when it stored them. They are the only
+      // strings the note is allowed to put in quotation marks.
+      ...teachingMomentsFor(session.teachingMoves),
       nameMentions: metricNumber(session.metricsDetail, 'nameMentionCount'),
       uniqueNames: metricNumber(session.metricsDetail, 'uniqueNameCount'),
       statedObjective: lessonContentField(session.lessonContent, 'statedObjective', 'quote'),
@@ -1901,15 +2025,32 @@ async function writeClassSummary(
   if (!classSummary) return null
   const nextSteps = parseNextSteps(text)
 
+  // Every note is checked before it is stored. The prompt now allows verbatim
+  // quoting, and an instruction is not a guarantee — a note carrying a
+  // sentence the teacher did not say is dropped rather than shown. The
+  // section then renders without a note, which is a state the UI already
+  // handles; a misquote is not.
+  const verified = (note: string | null): string | null => {
+    if (!note) return null
+    if (noteQuotesAreReal(note, segments)) return note
+    console.error('[class-summary] note dropped: it quoted something not in the teacher\u2019s speech')
+    return null
+  }
+  const safeChecks = verified(checksNarrative)
+  const safeClimate = verified(climateNarrative)
+  const safeTalk = verified(talkNarrative)
+  const safeQuestions = verified(questionsNarrative)
+  const safeContent = verified(contentNarrative)
+
   return prisma.audioSession.update({
     where: { id: session.id },
     data: {
       classSummary: normalizeParagraphs(classSummary),
-      ...(checksNarrative ? { checksNarrative: normalizeParagraphs(checksNarrative) } : {}),
-      ...(climateNarrative ? { climateNarrative: normalizeParagraphs(climateNarrative) } : {}),
-      ...(talkNarrative ? { talkNarrative: normalizeParagraphs(talkNarrative) } : {}),
-      ...(questionsNarrative ? { questionsNarrative: normalizeParagraphs(questionsNarrative) } : {}),
-      ...(contentNarrative ? { contentNarrative: normalizeParagraphs(contentNarrative) } : {}),
+      ...(safeChecks ? { checksNarrative: normalizeParagraphs(safeChecks) } : {}),
+      ...(safeClimate ? { climateNarrative: normalizeParagraphs(safeClimate) } : {}),
+      ...(safeTalk ? { talkNarrative: normalizeParagraphs(safeTalk) } : {}),
+      ...(safeQuestions ? { questionsNarrative: normalizeParagraphs(safeQuestions) } : {}),
+      ...(safeContent ? { contentNarrative: normalizeParagraphs(safeContent) } : {}),
       ...(connectionIdeas.length > 0 && lessonContent ? { lessonContent: { ...lessonContent, connectionIdeas } } : {}),
       // Always written, even empty: "this summary suggested nothing" is an
       // answer, and null is what tells the report to ask (/:id/next-steps).
