@@ -450,7 +450,7 @@ function previewReport(): Json {
       questionKinds: [
         { quote: 'What do you think abandoned means?', timestampSec: 877, kind: 'explain' },
         { quote: 'So what was the big one?', timestampSec: 780, kind: 'recall' },
-        { quote: 'Which of those two mattered more, do you think?', timestampSec: 1020, kind: 'evaluate' },
+        { quote: 'Why do you think wages went up after the plague?', timestampSec: 301, kind: 'evaluate' },
       ],
       directions: [
         { quote: 'I\u2019m gonna give you guys about five ish minutes. I want you guys to read over that and answer these two questions down here.', timestampSec: 766, parts: ['task', 'time'] },

@@ -70,7 +70,6 @@ import {
   getFollowUpMetric,
   feedbackMeasurable,
   getPresenceMetric,
-  hasEnoughWaitTimeSamples,
   isConfidentState,
   isMissingState,
   judgeTalkBalance,
@@ -1570,7 +1569,6 @@ function buildQuestioningInsight(
   session: AudioSessionWithSegments,
   higherOrderRatio: ConfidentMetric | null,
   followUpMetric: ConfidentMetric,
-  waitTimeMetric: ConfidentMetric,
 ): string | null {
   if (!higherOrderRatio || isMissingState(higherOrderRatio.state)) return null
   let sentence: string
@@ -1586,11 +1584,17 @@ function buildQuestioningInsight(
   } else if (followUpMetric.state === 'confirmed_none') {
     sentence += ' No follow-up questions were detected after a student answer today — a quick "say more about that" can go a long way.'
   }
-  if (waitTimeMetric.state === 'measured' && session.avgWaitTimeSec != null && hasEnoughWaitTimeSamples(session.metricsDetail)) {
+  // Reads the SAME number the stat card shows. It used to cite
+  // avgWaitTimeSec while the card beside it had been changed to held
+  // silence, so Summary said "your average wait time was 1.8s" next to a
+  // card reading "—". A report that contradicts itself on one screen spends
+  // trust it cannot earn back.
+  const heldSilence = session.metricsDetail?.heldSilenceSec
+  if (heldSilence != null) {
     sentence +=
-      session.avgWaitTimeSec >= 3
-        ? ` Your average wait time was ${session.avgWaitTimeSec.toFixed(1)}s — that's real thinking room.`
-        : ` Your average wait time was ${session.avgWaitTimeSec.toFixed(1)}s — waiting a beat longer can bring more students into a response.`
+      heldSilence >= 3
+        ? ` When nobody answered, you held the silence for ${heldSilence.toFixed(1)}s on average — that's real thinking room.`
+        : ` When nobody answered, you held the silence for ${heldSilence.toFixed(1)}s on average — waiting a beat longer can bring more students into a response.`
   }
   return sentence
 }
@@ -2485,7 +2489,7 @@ function ReportPanel({
   // for, which is the more useful thing for a teacher to read.
   const talkInsight = session.talkNarrative ?? buildTalkInsight(session, studentSegmentsMetric)
   const questioningInsight =
-    session.questionsNarrative ?? buildQuestioningInsight(session, higherOrderRatio, followUpMetric, waitTimeMetric)
+    session.questionsNarrative ?? buildQuestioningInsight(session, higherOrderRatio, followUpMetric)
   const feedbackTotal = genericCount != null && specificCount != null ? genericCount + specificCount : null
   const cfuInsight = buildCfuInsight(cfuMetric, feedbackRatio, specificCount, feedbackTotal)
   const hasRepeatedInstructionHighlight = (session.highlights ?? []).some((h) => h.label === 'Repeated instruction')
@@ -4549,9 +4553,11 @@ function LessonContentTab({
           {error && <p className="text-sm text-terracotta-600">{error}</p>}
         </DetailRow>
 
-        {/* Only when the lesson actually contained one: silence is the right
-            answer when nothing was found. */}
-        {connections.length > 0 && (
+        {/* Superseded by "How you tied the lesson together", which is not
+            capped at two and says which kind each one is. Kept only for
+            lessons analyzed before that read existed, so an older report
+            does not quietly lose a section. */}
+        {!teachingMoves?.connections?.length && connections.length > 0 && (
           <DetailRow title={`Connections you made (${connections.length})`}>
             {connections.map((c) => (
               <div key={`${c.timestampSec}-${c.quote.slice(0, 24)}`} className="rounded-xl border border-hairline bg-cream-card p-4">
@@ -5149,6 +5155,24 @@ function Tally({ n, label }: { n: number; label: string }) {
 // which of task/steps/time/product it named, is a thing they can look at and
 // disagree with. Everything here is checkable against their own lesson, which
 // is the only authority this report has.
+/// The finer question kind for a question at this timestamp, if the two reads
+/// agree about where it was.
+///
+/// The question log and the teaching-moves read are separate passes and can
+/// disagree by a second or two on the same utterance, so this allows a small
+/// window. No match means no badge — an unlabelled question is better than a
+/// label borrowed from the wrong one.
+const QUESTION_KIND_MATCH_SEC = 3
+
+function questionKindAt(moves: AudioTeachingMoves | null, timestampSec: number): string | null {
+  const hit = (moves?.questionKinds ?? []).find(
+    (k) => Math.abs(k.timestampSec - timestampSec) <= QUESTION_KIND_MATCH_SEC,
+  )
+  // "recall" is already carried by the coarse badge beside it; repeating it
+  // would add a word and no information.
+  return hit && hit.kind !== 'recall' ? hit.kind : null
+}
+
 function MoveEvidence({
   title,
   blurb,
@@ -5170,8 +5194,13 @@ function MoveEvidence({
   if (rows.length === 0) {
     return emptyNote ? <p className="text-sm text-ink-soft">{emptyNote}</p> : null
   }
+  // No count in the heading. These come from a model read, and the number
+  // moves between reads of the SAME lesson — one backfill returned 27
+  // moments for a lesson and 7 on the next pass, while the moments
+  // themselves held. A teacher reading "(16)" would reasonably treat it as
+  // a measurement; the quotes are the measurement, and they are all here.
   return (
-    <DetailRow title={`${title} (${rows.length})`}>
+    <DetailRow title={title}>
       {blurb && <p className="text-sm text-ink-soft">{blurb}</p>}
       <div className="flex flex-col gap-2">
         {rows.map((row, i) => {
@@ -5256,9 +5285,21 @@ function ClimateRoutinesTab({
     weight: 0,
     focusMetric: 'redirectionCount',
   }))
-  const evidenceCandidates = [...directiveCandidates, ...positiveCandidates, ...redirectionCandidates].sort(
-    (a, b) => (a.timestampSec ?? 0) - (b.timestampSec ?? 0),
-  )
+  // Praise only. Directions and redirections each have their own row now,
+  // saying what the direction NAMED and whether the redirection said what to
+  // DO — strictly more than this list did. Leaving all three in meant a
+  // teacher met the same sentences twice in one section, a few hundred
+  // pixels apart.
+  //
+  // The older reads still feed this when the newer one is absent, so a
+  // report analyzed before that existed keeps its evidence.
+  const hasDirectionMoves = (teachingMoves?.directions?.length ?? 0) > 0
+  const hasRedirectionMoves = (teachingMoves?.redirections?.length ?? 0) > 0
+  const evidenceCandidates = [
+    ...(hasDirectionMoves ? [] : directiveCandidates),
+    ...positiveCandidates,
+    ...(hasRedirectionMoves ? [] : redirectionCandidates),
+  ].sort((a, b) => (a.timestampSec ?? 0) - (b.timestampSec ?? 0))
 
   return (
     <div className="flex flex-col gap-6">
@@ -5293,7 +5334,13 @@ function ClimateRoutinesTab({
           tag={(row: { clarity: string }) => (row.clarity === 'actionable' ? 'says what to do' : 'says only what to stop')}
         />
         {evidenceCandidates.length > 0 && (
-          <DetailRow title={`Directions, praise and redirections, in your words (${evidenceCandidates.length})`}>
+          <DetailRow
+            title={
+              hasDirectionMoves && hasRedirectionMoves
+                ? `Praise, in your words (${evidenceCandidates.length})`
+                : `Directions, praise and redirections, in your words (${evidenceCandidates.length})`
+            }
+          >
             {evidenceCandidates.map((candidate) => (
               <EvidenceItemCard key={candidate.id} candidate={candidate} segments={segments} />
             ))}
@@ -5972,13 +6019,6 @@ function QuestioningCheckingTab({
         />
 
         <MoveEvidence
-          title="What your questions asked for"
-          blurb="What answering would have required of a student — finer than the recall and higher-order split above, and shown as examples rather than a score."
-          rows={teachingMoves?.questionKinds}
-          tag={(row: { kind: string }) => row.kind}
-        />
-
-        <MoveEvidence
           title="When you pushed a student further"
           blurb="Responses that asked a student to go on, back it up, or try again — rather than closing the exchange."
           rows={teachingMoves?.revisionPrompts}
@@ -5998,6 +6038,17 @@ function QuestioningCheckingTab({
                     >
                       {q.type === 'higher_order' ? 'Higher-order' : 'Recall'}
                     </span>
+                    {/* The finer reading of the same question, folded in
+                        rather than listed again beside it. It used to be a
+                        parallel row — the same questions, twice, under two
+                        taxonomies. Matched on timestamp, and simply absent
+                        when the two reads disagree about where a question
+                        was, which is better than inventing a pairing. */}
+                    {questionKindAt(teachingMoves, q.timestampSec) && (
+                      <span className="rounded-full bg-gold-tint/60 px-2 py-0.5 text-forest">
+                        {questionKindAt(teachingMoves, q.timestampSec)}
+                      </span>
+                    )}
                     <span className="normal-case font-normal">
                       {q.waitTimeSec != null ? `${q.waitTimeSec}s wait` : 'wait not measured'}
                     </span>
