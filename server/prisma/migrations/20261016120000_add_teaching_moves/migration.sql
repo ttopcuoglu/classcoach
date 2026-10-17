@@ -1,0 +1,11 @@
+-- What the teacher's own language did, with the evidence attached
+-- (lib/teachingMoves.ts): self-answered questions, what answering a question
+-- would have required, whether a direction named the task/steps/time/product,
+-- how the content was opened up, prompts inviting revision, invitations to
+-- participate, whether a redirection was actionable, and connections to prior
+-- learning, purpose and a closing.
+--
+-- Every entry is a quote verified against the teacher's own speech. Nullable:
+-- every recording made before this shipped has none, and a read that fails
+-- leaves it null rather than writing an empty answer.
+ALTER TABLE "AudioSession" ADD COLUMN "teachingMoves" JSONB;

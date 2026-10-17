@@ -4,6 +4,7 @@ import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { analyzeTranscript, buildContentExhibits, detectLessonContent, type Segment } from '../lib/audioAnalysis.ts'
 import { enrichClassroomMoves } from '../lib/classroomMoves.ts'
 import { readEscalation } from '../lib/escalation.ts'
+import { readTeachingMoves } from '../lib/teachingMoves.ts'
 import { parseLevelTrace, splitNonSpeech, teacherIntervals } from '../lib/settleTime.ts'
 import { buildSoundTimeline } from '../lib/soundTimeline.ts'
 import { enrichLessonContent } from '../lib/lessonObjective.ts'
@@ -784,11 +785,14 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
   // The escalation read rides along with these: it needs the teacher's speech
   // and the coverage figure the phrase scan already computed, and nothing
   // from the other reads.
-  const [analysis, lessonContent, momentToRevisit, escalation] = await Promise.all([
+  const [analysis, lessonContent, momentToRevisit, escalation, teachingMoves] = await Promise.all([
     enrichClassroomMoves(scanned, segments),
     enrichLessonContent(detectLessonContent(segments, scanned.phases), segments),
     readMomentToRevisit(segments),
     readEscalation(segments, scanned.metricsDetail),
+    // Rides along with the others: it reads the teacher's side of the same
+    // transcript and needs nothing any of them produce.
+    readTeachingMoves(segments),
   ])
 
   // What the student talk was ABOUT, which needs the objective and so cannot
@@ -857,6 +861,7 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
       // again cannot leave a moment chosen from the old labels.
       momentToRevisit: momentToRevisit ?? Prisma.DbNull,
       escalation: escalation ?? Prisma.DbNull,
+      teachingMoves: teachingMoves ?? Prisma.DbNull,
     },
     include: { segments: { orderBy: { startSec: 'asc' } } },
   })

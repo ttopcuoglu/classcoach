@@ -670,6 +670,14 @@ model AudioSession {
   // "looked and found nothing" never looks like "not looked yet".
   momentToRevisit  Json?
 
+  // What the teacher's own LANGUAGE did, with a verified quote behind every
+  // entry — see lib/teachingMoves.ts. These are the only measures in the
+  // report that appraise rather than count, and that is defensible for one
+  // reason: they are all about the teacher, whose voice the microphone
+  // actually has. The same judgments about students were dropped because it
+  // does not.
+  teachingMoves    Json?
+
   // A loudness envelope for the recording — one RMS sample per second,
   // measured on the device while recording. NOT audio: speech cannot be
   // reconstructed from a 1Hz amplitude curve, which is what lets this exist
