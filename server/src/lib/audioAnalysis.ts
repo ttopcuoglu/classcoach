@@ -19,7 +19,24 @@ export type Phase = { label: string; startSec: number; endSec: number }
 export type QuestionLogEntry = {
   timestampSec: number
   type: 'recall' | 'higher_order'
+  /// The pause before a STUDENT answered. Null whenever no student was
+  /// audible after the question, which on a room mic is most of the time —
+  /// across real lessons this is set on 23 questions and null on 117.
   waitTimeSec: number | null
+  /// How long before the TEACHER spoke again.
+  ///
+  /// Measurable on nearly every question, because it needs only the
+  /// teacher's own voice. It is a different thing from waitTimeSec and must
+  /// never be presented as the same: this span MAY CONTAIN a student
+  /// response, audible or not, and the report has to say so. Where a student
+  /// was audible in it, `studentAudibleInPause` records that, so the two
+  /// cases can be told apart instead of averaged together.
+  ///
+  /// This is the number that shows a teacher asking and moving straight on.
+  /// waitTimeSec cannot: it only exists where a student answered, which is
+  /// by construction the times the wait worked.
+  pauseSec: number | null
+  studentAudibleInPause: boolean
   text: string
   followUps: { timestampSec: number; text: string }[]
 }
@@ -83,6 +100,15 @@ export type AnalysisResult = {
     /// no gap for a follow-up to live in.
     waitTime2Sec?: number | null
     waitTime2SampleCount?: number
+    /// Median silence held after a question that nobody answered, and how
+    /// many such questions there were. Absent on sessions analyzed before
+    /// this existed.
+    ///
+    /// Measurable far more often than avgWaitTimeSec, which needs an audible
+    /// student answer and so only ever describes the questions where waiting
+    /// WORKED — 25 of them across real lessons, against 65 here.
+    heldSilenceSec?: number | null
+    heldSilenceSampleCount?: number
     /// When the first word was transcribed. A recording that caught nothing
     /// for its first four minutes is not a four-minute silence in the lesson,
     /// and the silence share says otherwise unless this is known.
@@ -226,6 +252,10 @@ const MIN_PHASE_DURATION_SEC = 30
 /// independent work, a transition or a recording artifact — not a teacher
 /// deliberately leaving space, which is the only thing wait time 2 is about.
 const WAIT_TIME_2_MAX_SEC = 30
+
+/// Same ceiling, same reason: a longer gap after a question is independent
+/// work, a transition, or a hole in the recording — not a teacher waiting.
+const PAUSE_AFTER_QUESTION_MAX_SEC = 30
 
 /// Below this much teacher speech, a words-a-minute figure is division by
 /// noise: a few short turns and one mis-transcription move it enormously.
@@ -714,6 +744,71 @@ function round(value: number, digits = 1): number {
   return Math.round(value * factor) / factor
 }
 
+/// Fills in how long the teacher left each question hanging before speaking
+/// again.
+///
+/// Exported because the question log is built TWICE: once by the phrase scan
+/// here, and again by classroomMoves when Claude's read of the transcript
+/// replaces it. The second build would otherwise drop these fields and the
+/// measure would silently vanish on every lesson the model read succeeded
+/// on — which is nearly all of them.
+export function fillPauseAfterQuestion(questionLog: QuestionLogEntry[], ordered: Segment[]): void {
+  for (const entry of questionLog) {
+    // Needs speaker labels and end times, so it reads the raw ordered
+    // segments rather than the joined `prepared` ones.
+    const idx = ordered.findIndex((s) => s.endSec > entry.timestampSec)
+    if (idx === -1 || ordered[idx].speakerLabel !== 'Teacher') continue
+    // A question can sit inside a run of teacher segments; the pause starts
+    // when the whole run ends, not when its first fragment does.
+    //
+    // Two consecutive teacher segments are ambiguous: one turn still running,
+    // or the teacher speaking AGAIN after a pause. Walking over all of them
+    // swallowed the second case entirely — a question the teacher answers
+    // themselves came back with no pause at all, which is the very case this
+    // measure exists to catch. MAX_JOIN_GAP_SEC is the transcript's own
+    // definition of "still the same turn", so it decides here too.
+    let endIdx = idx
+    while (
+      endIdx + 1 < ordered.length &&
+      ordered[endIdx + 1].speakerLabel === 'Teacher' &&
+      ordered[endIdx + 1].startSec - ordered[endIdx].endSec <= MAX_JOIN_GAP_SEC
+    ) {
+      endIdx++
+    }
+    const askedEnd = ordered[endIdx].endSec
+    const rest = ordered.slice(endIdx + 1)
+    const nextTeacher = rest.find((s) => s.speakerLabel === 'Teacher')
+    if (!nextTeacher) continue
+    const gap = nextTeacher.startSec - askedEnd
+    // Beyond this the class has moved into independent work or the recording
+    // has a hole in it; neither is a teacher holding a pause.
+    if (gap < 0 || gap > PAUSE_AFTER_QUESTION_MAX_SEC) continue
+    entry.pauseSec = Math.round(gap * 10) / 10
+    entry.studentAudibleInPause = rest.some(
+      (s) => s.speakerLabel !== 'Teacher' && s.startSec < nextTeacher.startSec,
+    )
+  }
+}
+
+/// The median silence the teacher held after a question when NOBODY answered.
+///
+/// Only the pauses with no audible student in them. A pause that contains an
+/// answer is mostly the student talking — across real lessons those run to a
+/// median of 6.0s against 3.9s for held silence, so averaging the two
+/// produces a number that describes neither. This is the half the teacher
+/// controls: they asked, no one spoke, and this is how long they left it.
+///
+/// Median rather than mean: one 28-second gap in a patchy recording would
+/// otherwise carry a whole lesson.
+export function heldSilenceFrom(questionLog: QuestionLogEntry[]): { sec: number | null; sampleCount: number } {
+  const held = questionLog
+    .filter((q) => q.pauseSec != null && !q.studentAudibleInPause)
+    .map((q) => q.pauseSec as number)
+    .sort((a, b) => a - b)
+  if (held.length === 0) return { sec: null, sampleCount: 0 }
+  return { sec: Math.round(held[Math.floor(held.length / 2)] * 10) / 10, sampleCount: held.length }
+}
+
 export function analyzeTranscript(segments: Segment[]): AnalysisResult {
   const ordered = [...segments].sort((a, b) => a.startSec - b.startSec)
   const prepared = joinFragmentedSpeech(ordered)
@@ -920,6 +1015,8 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
           timestampSec: prepared[index].startSec,
           type: classification === 'higher_order' ? 'higher_order' : 'recall',
           waitTimeSec: null,
+          pauseSec: null,
+          studentAudibleInPause: false,
           text: sentence.trim(),
           followUps: [],
         }
@@ -994,6 +1091,19 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
     })
   }
 
+  // How long the teacher left each question hanging before speaking again.
+  //
+  // A second pass rather than state threaded through the main loop: it needs
+  // to look FORWARD from each question, and the loop only ever looks back.
+  //
+  // The gap is measured to the teacher's next turn, not to a student's, so
+  // it exists for nearly every question instead of only the ones a student
+  // audibly answered. Whether a student WAS audible inside it is recorded
+  // rather than assumed — a silent gap and a gap containing an answer are
+  // different facts and the report must not average them.
+  fillPauseAfterQuestion(questionLog, ordered)
+  const heldSilence = heldSilenceFrom(questionLog)
+
   const phases = buildPhases(ordered, transitionIndexes, totalDurationSec)
 
   const avgWaitTimeSec = waitTimes.length
@@ -1022,6 +1132,8 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       waitTime2Sec:
         waitTime2s.length > 0 ? round(waitTime2s.reduce((sum, w) => sum + w, 0) / waitTime2s.length, 1) : null,
       waitTime2SampleCount: waitTime2s.length,
+      heldSilenceSec: heldSilence.sec,
+      heldSilenceSampleCount: heldSilence.sampleCount,
       firstWordSec: ordered.length > 0 ? round(ordered[0].startSec, 1) : null,
       redirectionCount,
       firstRedirectionTimestampSec: firstRedirectionTimestampSec != null ? round(firstRedirectionTimestampSec, 1) : null,

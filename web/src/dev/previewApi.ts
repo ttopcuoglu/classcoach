@@ -355,6 +355,10 @@ function previewReport(): Json {
       teacherWordsPerMinute: 214,
       waitTime2Sec: 0.4,
       waitTime2SampleCount: 11,
+      // Median silence held after a question nobody answered aloud. The real
+      // lessons this was built against sit at 3.9s across 65 such questions.
+      heldSilenceSec: 3.9,
+      heldSilenceSampleCount: 9,
       firstWordSec: 269,
       // `home=split` shows the quiet / could-not-make-out breakdown that a
       // recording with a loudness envelope produces. Without the flag the

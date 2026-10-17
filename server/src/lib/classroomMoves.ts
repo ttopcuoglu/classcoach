@@ -13,6 +13,7 @@
 // at a moment, the transcript decides whether it happened.
 
 import { anthropic, CLAUDE_MODEL } from './anthropic.ts'
+import { fillPauseAfterQuestion, heldSilenceFrom } from './audioAnalysis.ts'
 import type { AnalysisResult, Segment } from './audioAnalysis.ts'
 import { extractTag } from './extractTag.ts'
 import {
@@ -274,10 +275,23 @@ export async function enrichClassroomMoves(analysis: AnalysisResult, segments: S
         timestampSec: q.timestampSec,
         type: q.type,
         waitTimeSec: waitAt(q.timestampSec),
+        // Filled in below, once the rebuilt log exists: the model's read
+        // replaces the phrase scan's question log wholesale, and without
+        // this the pause measure would vanish on every lesson the read
+        // succeeded on — which is nearly all of them.
+        pauseSec: null,
+        studentAudibleInPause: false,
         text: q.quote,
         followUps: [],
       }))
     : analysis.questionLog
+  // One implementation, both paths. The phrase scan fills these in
+  // analyzeTranscript; a model-read log is rebuilt from scratch and has to be
+  // filled here or the measure is lost exactly when the read works.
+  fillPauseAfterQuestion(questionLog, segments)
+  // Recomputed, not inherited: the question log this came from was rebuilt,
+  // so the aggregate over the old one no longer describes it.
+  const heldSilence = heldSilenceFrom(questionLog)
   const higherOrderQuestionCount = modelQuestions.length > 0
     ? moves.higherOrderQuestions.length
     : analysis.metricsDetail.higherOrderQuestionCount
@@ -310,6 +324,8 @@ export async function enrichClassroomMoves(analysis: AnalysisResult, segments: S
       higherOrderQuestionCount,
       recallQuestionCount,
       waitTimeSampleCount: measuredWaits.length,
+      heldSilenceSec: heldSilence.sec,
+      heldSilenceSampleCount: heldSilence.sampleCount,
       // Reasoning students were asked to DO, not just answer — a lesson can
       // be built on one and contain no higher-order question at all.
       thinkingTaskCount: moves.thinkingTasks.length,

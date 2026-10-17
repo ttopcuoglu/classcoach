@@ -2539,8 +2539,7 @@ function ReportPanel({
     studentSegmentsMetric,
     questionsMetric,
     followUpMetric,
-    waitTimeMetric,
-    cfuMetric,
+      cfuMetric,
     feedbackRatio,
   ])
 
@@ -2805,9 +2804,8 @@ function ReportPanel({
                 higherOrderRatio={higherOrderRatio}
                 higherOrderCount={higherOrderCount}
                 followUpMetric={followUpMetric}
-                waitTimeMetric={waitTimeMetric}
-                avgWaitTimeSec={session.avgWaitTimeSec}
-                waitTimeSampleCount={session.metricsDetail?.waitTimeSampleCount ?? null}
+                heldSilenceSec={session.metricsDetail?.heldSilenceSec ?? null}
+                heldSilenceCount={session.metricsDetail?.heldSilenceSampleCount ?? 0}
                 waitTime2Sec={session.metricsDetail?.waitTime2Sec ?? null}
                 waitTime2SampleCount={session.metricsDetail?.waitTime2SampleCount ?? null}
                 thinkingTaskCount={session.metricsDetail?.thinkingTaskCount ?? null}
@@ -3008,7 +3006,19 @@ function SummaryTab({
           <SummaryStat label="Students spoke" metric={getPresenceMetric(session.studentTalkPct)} unit="%" accent={ACCENTS.gold} />
           <SummaryStat label="Silence / other" metric={getPresenceMetric(silencePct)} unit="%" accent={ACCENTS.mint} />
           <SummaryStat label="Questions" metric={questionsMetric} accent={ACCENTS.mint} />
-          <SummaryStat label="Avg. wait" metric={waitTimeMetricOf(session.avgWaitTimeSec, session.questionCount)} unit="s" accent={ACCENTS.forest} />
+          {/* Was "Avg. wait", which needs an audible student answer and so
+              showed a dash on most lessons. This one needs only the
+              teacher's own voice. */}
+          <SummaryStat
+            label="Silence held"
+            metric={
+              session.metricsDetail?.heldSilenceSec != null
+                ? { state: 'measured', display: String(session.metricsDetail.heldSilenceSec) }
+                : { state: 'not_measurable', display: '—', reason: 'No question here went unanswered long enough to time a silence.' }
+            }
+            unit="s"
+            accent={ACCENTS.forest}
+          />
         </div>
       </NumberedCard>
 
@@ -5676,9 +5686,8 @@ function QuestioningCheckingTab({
   higherOrderRatio,
   higherOrderCount,
   followUpMetric,
-  waitTimeMetric,
-  avgWaitTimeSec,
-  waitTimeSampleCount,
+  heldSilenceSec,
+  heldSilenceCount,
   waitTime2Sec,
   waitTime2SampleCount,
   thinkingTaskCount,
@@ -5698,9 +5707,10 @@ function QuestioningCheckingTab({
   higherOrderRatio: ReturnType<typeof formatRatio> | null
   higherOrderCount: number | null
   followUpMetric: ReturnType<typeof getCountMetric>
-  waitTimeMetric: ReturnType<typeof getPresenceMetric>
-  avgWaitTimeSec: number | null
-  waitTimeSampleCount: number | null
+  /// Median silence held after a question nobody answered aloud, and how many
+  /// such questions there were.
+  heldSilenceSec: number | null
+  heldSilenceCount: number
   waitTime2Sec: number | null
   waitTime2SampleCount: number | null
   thinkingTaskCount: number | null
@@ -5716,7 +5726,6 @@ function QuestioningCheckingTab({
   lastRow: React.ReactNode
 }) {
   // Older sessions predate waitTimeSampleCount; their root-question count is the best available.
-  const measurableWaitCount = waitTimeSampleCount ?? (questionLog ?? []).filter((q) => q.waitTimeSec != null).length
   const followUpToKeep = highlightCandidates(
     highlights,
     'Follow-up / probing question',
@@ -5808,15 +5817,27 @@ function QuestioningCheckingTab({
               reason={followUpMetric.reason}
               focused={focusMetric === 'followUpQuestionCount'}
             />
+            {/* Replaces "your average wait time", which needed an audible
+                student answer and so only ever described the questions where
+                waiting WORKED — 25 of them across this teacher's real
+                lessons, against 65 here. This is the half they control: they
+                asked, nobody spoke, and this is how long they left it.
+                Pauses that contain an answer are excluded rather than
+                averaged in; those run to a median of 6.0s against 3.9s, and
+                are mostly the student talking. */}
             <div id="stat-avgWaitTime">
               <Stat
-                label="Your avg. wait time"
-                value={avgWaitTimeSec != null ? `${avgWaitTimeSec}s` : waitTimeMetric.display}
-                muted={isMissingState(waitTimeMetric.state)}
-                reason={waitTimeMetric.reason}
+                label="Silence you held after a question"
+                value={heldSilenceSec != null ? `${heldSilenceSec}s` : '—'}
+                muted={heldSilenceSec == null}
+                reason={
+                  heldSilenceSec == null
+                    ? 'Every question here was either answered aloud or came too close to the next thing you said to time a silence.'
+                    : undefined
+                }
                 sub={
-                  !isMissingState(waitTimeMetric.state) && measurableWaitCount > 0
-                    ? `Based on ${measurableWaitCount} measurable question-response interval${measurableWaitCount === 1 ? '' : 's'}`
+                  heldSilenceSec != null && heldSilenceCount > 0
+                    ? `Median across ${heldSilenceCount} question${heldSilenceCount === 1 ? '' : 's'} nobody answered aloud`
                     : undefined
                 }
                 focused={focusMetric === 'avgWaitTime'}
