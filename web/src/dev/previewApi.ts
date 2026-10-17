@@ -440,6 +440,44 @@ function previewReport(): Json {
     // shows a lesson where the asking held; `home=escalation_unheard` shows
     // the recording the microphone lost, which must never read as calm.
     escalation: escalationFixture(),
+    // Quotes taken from the real lessons this was built against, so the
+    // layout is exercised by the kind of sentences teachers actually say
+    // rather than tidy invented ones.
+    teachingMoves: {
+      selfAnswered: [
+        { quote: 'So what does abandoned mean? It\u2019s abandoned in the definition of abandoned.', timestampSec: 892 },
+      ],
+      questionKinds: [
+        { quote: 'What do you think abandoned means?', timestampSec: 877, kind: 'explain' },
+        { quote: 'So what was the big one?', timestampSec: 780, kind: 'recall' },
+        { quote: 'Which of those two mattered more, do you think?', timestampSec: 1020, kind: 'evaluate' },
+      ],
+      directions: [
+        { quote: 'I\u2019m gonna give you guys about five ish minutes. I want you guys to read over that and answer these two questions down here.', timestampSec: 766, parts: ['task', 'time'] },
+        { quote: 'All you need to do is read through it.', timestampSec: 869, parts: ['task'] },
+        { quote: 'Off you go.', timestampSec: 1180, parts: [] },
+      ],
+      explanations: [
+        { quote: 'Waxing is like wax on, wax off \u2014 it grows the same way.', timestampSec: 300, kind: 'analogy' },
+        { quote: 'So they created a number system that used zero as an actual number.', timestampSec: 319, kind: 'example' },
+      ],
+      revisionPrompts: [
+        { quote: 'I\u2019m not the answer. Take a guess.', timestampSec: 364 },
+        { quote: 'I mean, I\u2019m just having you figure out your own answer. That\u2019s all.', timestampSec: 1581 },
+      ],
+      invitations: [
+        { quote: 'So does anybody wanna share some of the things that they noticed about their egg?', timestampSec: 952 },
+        { quote: 'Who wants to read the paragraph for this one?', timestampSec: 1254 },
+      ],
+      redirections: [
+        { quote: 'When I\u2019m talking, you are not.', timestampSec: 267, clarity: 'actionable' },
+        { quote: 'Don\u2019t wanna hear any more conversation.', timestampSec: 598, clarity: 'vague' },
+      ],
+      connections: [
+        { quote: 'We talked about the Indus River Valley, we\u2019ve talked about the Gupta.', timestampSec: 457, kind: 'prior' },
+        { quote: 'Throughout history, different empires have risen and fallen.', timestampSec: 518, kind: 'purpose' },
+      ],
+    },
     studentTalkFocus: {
       generatedAt: new Date().toISOString(),
       classified: 14,

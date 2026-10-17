@@ -42,6 +42,7 @@ import {
   type AudioQuestionLogEntry,
   type AudioReflectMessage,
   type AudioEscalation,
+  type AudioTeachingMoves,
   type AudioEscalationRung,
   type AudioRedirectionLogEntry,
   type AudioHardLook,
@@ -2800,6 +2801,7 @@ function ReportPanel({
               <QuestioningCheckingTab
                 questionCount={session.questionCount}
                 questionLog={session.questionLog}
+                teachingMoves={session.teachingMoves ?? null}
                 questionsMetric={questionsMetric}
                 higherOrderRatio={higherOrderRatio}
                 higherOrderCount={higherOrderCount}
@@ -2825,6 +2827,7 @@ function ReportPanel({
               <LessonContentTab
                 lessonContent={session.lessonContent}
                 contentNotes={session.contentNotes}
+                teachingMoves={session.teachingMoves ?? null}
                 narrative={session.contentNarrative ?? null}
                 isShort={coverage.isShort}
                 sending={contentNotesSending}
@@ -2842,6 +2845,7 @@ function ReportPanel({
                 toneLog={session.toneLog}
                 redirectionLog={session.redirectionLog}
                 escalation={session.escalation ?? null}
+                teachingMoves={session.teachingMoves ?? null}
                 metricsDetail={session.metricsDetail}
                 capturedSharePct={coverage.capturedSharePct}
                 segments={session.segments}
@@ -4384,6 +4388,7 @@ const CONTENT_NOTE_LABEL_STYLES: Record<string, string> = {
 function LessonContentTab({
   lessonContent,
   contentNotes,
+  teachingMoves,
   narrative,
   isShort,
   sending,
@@ -4393,6 +4398,7 @@ function LessonContentTab({
 }: {
   lessonContent: AudioLessonContent | null
   contentNotes: AudioContentNotes | null
+  teachingMoves: AudioTeachingMoves | null
   narrative: string | null
   isShort: boolean
   sending: boolean
@@ -4459,6 +4465,23 @@ function LessonContentTab({
       <SectionNextStep text={takeFurther} />
 
       <DetailRows>
+        {/* How the content was opened up, in the teacher's own words. The
+            vocabulary table above says which terms were used; this says what
+            was done to make them land. */}
+        <MoveEvidence
+          title="How you opened the content up"
+          blurb="Examples, analogies, meanings given for a term, and moments you thought aloud through your own reasoning."
+          rows={teachingMoves?.explanations}
+          tag={(row: { kind: string }) => row.kind}
+        />
+        <MoveEvidence
+          title="How you tied the lesson together"
+          blurb="Links back to earlier learning, statements of why this matters, and drawing it together at the end."
+          rows={teachingMoves?.connections}
+          tag={(row: { kind: string }) =>
+            row.kind === 'prior' ? 'prior learning' : row.kind === 'purpose' ? 'why it matters' : 'closing'
+          }
+        />
         {/* Offered for every lesson, and asked for when the report opens. The
             button stays for the case where that request failed, and to write
             them again. */}
@@ -5118,6 +5141,63 @@ function Tally({ n, label }: { n: number; label: string }) {
   )
 }
 
+// One shape for everything teachingMoves produces: a heading, a line saying
+// what it is, and the teacher's own sentences with timestamps.
+//
+// Quotes rather than counts, deliberately. "5 clear directions" told a
+// teacher nothing they could act on; the sentence they actually said, and
+// which of task/steps/time/product it named, is a thing they can look at and
+// disagree with. Everything here is checkable against their own lesson, which
+// is the only authority this report has.
+function MoveEvidence({
+  title,
+  blurb,
+  rows,
+  tag,
+  emptyNote,
+}: {
+  title: string
+  blurb?: string
+  rows: { quote: string; timestampSec: number }[] | undefined
+  /// A short label per row — the kind, the clarity, or which parts a
+  /// direction named.
+  tag?: (row: never) => string | null
+  /// Shown when the read ran and found none. Absent means show nothing at
+  /// all, which is right wherever "none" is unremarkable.
+  emptyNote?: string
+}) {
+  if (!rows) return null
+  if (rows.length === 0) {
+    return emptyNote ? <p className="text-sm text-ink-soft">{emptyNote}</p> : null
+  }
+  return (
+    <DetailRow title={`${title} (${rows.length})`}>
+      {blurb && <p className="text-sm text-ink-soft">{blurb}</p>}
+      <div className="flex flex-col gap-2">
+        {rows.map((row, i) => {
+          const label = tag ? tag(row as never) : null
+          return (
+            <div key={`${row.timestampSec}-${i}`} className="rounded-xl border border-hairline bg-cream-card p-3">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                <span>{formatTime(row.timestampSec)}</span>
+                {label && <span className="rounded-full bg-cream px-2 py-0.5">{label}</span>}
+              </div>
+              <p className="mt-1 text-sm italic text-ink">“{row.quote}”</p>
+            </div>
+          )
+        })}
+      </div>
+    </DetailRow>
+  )
+}
+
+/// Which of task / steps / time / product a direction named. An empty list is
+/// a real result — a direction that named none of them is "off you go" — so
+/// it reads as that rather than as a missing label.
+function directionTag(row: { parts: string[] }): string {
+  return row.parts.length > 0 ? row.parts.join(' · ') : 'named none of the four'
+}
+
 function ClimateRoutinesTab({
   climateNarrative,
   nextStep,
@@ -5125,6 +5205,7 @@ function ClimateRoutinesTab({
   toneLog,
   redirectionLog,
   escalation,
+  teachingMoves,
   metricsDetail,
   capturedSharePct,
   segments,
@@ -5136,6 +5217,7 @@ function ClimateRoutinesTab({
   toneLog: AudioToneLogEntry[] | null
   redirectionLog: AudioRedirectionLogEntry[] | null
   escalation: AudioEscalation | null
+  teachingMoves: AudioTeachingMoves | null
   metricsDetail: AudioSessionWithSegments['metricsDetail']
   capturedSharePct: number | null
   segments: TranscriptSegment[]
@@ -5193,6 +5275,23 @@ function ClimateRoutinesTab({
       <SectionNextStep text={nextStep} />
 
       <DetailRows>
+        {/* Replaces a bare count of directions, which was never
+            interpretable — more directions is not better or worse, and a lab
+            has more than a seminar. What a direction NAMED is interpretable:
+            a teacher can look at one that named only the task and decide
+            whether the class knew how long they had. */}
+        <MoveEvidence
+          title="What your directions named"
+          blurb="Of the four things a direction can carry — the task, the order of steps, how long, and what to hand in — these are the ones each named."
+          rows={teachingMoves?.directions}
+          tag={directionTag}
+        />
+        <MoveEvidence
+          title="What your redirections asked for"
+          blurb="Whether each one said what to DO, or only what to stop. Quotes too rough in the transcript to put in your mouth are left out rather than shown."
+          rows={teachingMoves?.redirections}
+          tag={(row: { clarity: string }) => (row.clarity === 'actionable' ? 'says what to do' : 'says only what to stop')}
+        />
         {evidenceCandidates.length > 0 && (
           <DetailRow title={`Directions, praise and redirections, in your words (${evidenceCandidates.length})`}>
             {evidenceCandidates.map((candidate) => (
@@ -5565,6 +5664,16 @@ function TalkParticipationTab({
       <SectionNextStep text={session.nextSteps?.talk} />
 
       <DetailRows>
+        {/* The one participation signal a teacher-side microphone can carry
+            honestly. Airtime says how long students spoke; this says whether
+            the floor was opened, which is the part the teacher controls. It
+            records the invitation ONLY — never whether anyone took it up,
+            because this recording cannot show that. */}
+        <MoveEvidence
+          title="You opened the floor"
+          blurb="Moments you invited students in. Whether anyone took it up is not something a recording from the front of the room can show."
+          rows={session.teachingMoves?.invitations}
+        />
         <DetailRow title="Talk flow across the lesson">
           <PacingTimeline
             segments={session.segments}
@@ -5682,6 +5791,7 @@ function EvidenceItemCard({
 function QuestioningCheckingTab({
   questionCount,
   questionLog,
+  teachingMoves,
   questionsMetric,
   higherOrderRatio,
   higherOrderCount,
@@ -5703,6 +5813,7 @@ function QuestioningCheckingTab({
 }: {
   questionCount: number | null
   questionLog: AudioQuestionLogEntry[] | null
+  teachingMoves: AudioTeachingMoves | null
   questionsMetric: ReturnType<typeof getCountMetric>
   higherOrderRatio: ReturnType<typeof formatRatio> | null
   higherOrderCount: number | null
@@ -5849,6 +5960,29 @@ function QuestioningCheckingTab({
           </StatGrid>
           <WaitTimeChips questionLog={questionLog} />
         </DetailRow>
+
+        {/* Counted nowhere else: the question detector excludes a question
+            the teacher answers themselves, so the move most worth noticing
+            left no trace at all. Shown without comment — it is a move, not a
+            fault, and a teacher can decide what it meant. */}
+        <MoveEvidence
+          title="Questions you answered yourself"
+          blurb="Asked and answered in the same breath. Sometimes that is the right call; sometimes it is the pause that got away."
+          rows={teachingMoves?.selfAnswered}
+        />
+
+        <MoveEvidence
+          title="What your questions asked for"
+          blurb="What answering would have required of a student — finer than the recall and higher-order split above, and shown as examples rather than a score."
+          rows={teachingMoves?.questionKinds}
+          tag={(row: { kind: string }) => row.kind}
+        />
+
+        <MoveEvidence
+          title="When you pushed a student further"
+          blurb="Responses that asked a student to go on, back it up, or try again — rather than closing the exchange."
+          rows={teachingMoves?.revisionPrompts}
+        />
 
         {questionLog !== null && questionLog.length > 0 && (
           <DetailRow title={`Your questions, in order (${questionLog.length})`}>

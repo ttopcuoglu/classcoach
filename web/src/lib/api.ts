@@ -857,6 +857,36 @@ export type AudioStudentTalkFocus = {
   examples: AudioStudentTurnFocus[]
 }
 
+/// What the teacher's own language did, every entry a quote verified against
+/// their speech (server/src/lib/teachingMoves.ts).
+///
+/// These are the only measures in the report that appraise rather than count.
+/// That is defensible for one reason: they are all about the teacher, whose
+/// voice the microphone actually has. The same judgments about students were
+/// dropped because it does not.
+export type AudioMoveQuote = { quote: string; timestampSec: number }
+export type AudioQuestionKind = 'recall' | 'explain' | 'justify' | 'compare' | 'evaluate'
+export type AudioDirectionPart = 'task' | 'steps' | 'time' | 'product'
+export type AudioExplanationKind = 'example' | 'analogy' | 'vocabulary' | 'modeling'
+export type AudioConnectionKind = 'prior' | 'purpose' | 'closing'
+
+export type AudioTeachingMoves = {
+  /// Questions the teacher asked and answered themselves. Counted nowhere
+  /// else — the question detector excludes them by design.
+  selfAnswered?: AudioMoveQuote[]
+  questionKinds?: (AudioMoveQuote & { kind: AudioQuestionKind })[]
+  /// `parts` is what the direction actually named. An empty list is the
+  /// finding, not missing data: that direction named none of the four.
+  directions?: (AudioMoveQuote & { parts: AudioDirectionPart[] })[]
+  explanations?: (AudioMoveQuote & { kind: AudioExplanationKind })[]
+  revisionPrompts?: AudioMoveQuote[]
+  /// The invitation only. Never whether anyone took it up — a microphone
+  /// sitting with the teacher cannot show that.
+  invitations?: AudioMoveQuote[]
+  redirections?: (AudioMoveQuote & { clarity: 'actionable' | 'vague' })[]
+  connections?: (AudioMoveQuote & { kind: AudioConnectionKind })[]
+}
+
 /// In order of force. The index is the severity.
 export type AudioEscalationRung = 'attention' | 'behaviour' | 'named' | 'consequence' | 'removal'
 
@@ -951,6 +981,9 @@ export type AudioSession = {
   // Absent on every report analyzed before this existed; re-analyzing fills
   // it. Null is never "no escalation" — see AudioEscalation's states.
   escalation?: AudioEscalation | null
+  /// Absent on every report analyzed before this existed; re-analyzing fills
+  /// it. Each category is independently absent when the read found none.
+  teachingMoves?: AudioTeachingMoves | null
   // Null or absent until the lesson has been read for it; the Summary tab
   // asks the first time it is opened.
   momentToRevisit?: AudioMomentToRevisit | null
