@@ -107,18 +107,18 @@ import {
   teacherVoiceView,
 } from '../lib/teacherVoice'
 
-/// The v3 Insights layout (components/insights) while it is compared against
-/// the current one on real lessons. `?insights=new` turns it on for this
-/// browser and `?insights=old` turns it off; the choice is remembered so a
-/// teacher clicking between lessons stays in one layout.
+/// The v3 Insights layout (components/insights) is the layout for everyone.
+/// `?insights=old` still opens the previous one on this browser, for
+/// comparing the two while it beds in; `?insights=new` comes back. The
+/// choice is remembered so clicking between lessons stays in one layout.
 function wantsNewInsights(): boolean {
   const param = new URLSearchParams(window.location.search).get('insights')
   try {
-    if (param === 'new') localStorage.setItem('wivozaInsightsNew', '1')
-    if (param === 'old') localStorage.removeItem('wivozaInsightsNew')
-    return localStorage.getItem('wivozaInsightsNew') === '1'
+    if (param === 'old') localStorage.setItem('wivozaInsightsOld', '1')
+    if (param === 'new') localStorage.removeItem('wivozaInsightsOld')
+    return localStorage.getItem('wivozaInsightsOld') !== '1'
   } catch {
-    return param === 'new'
+    return param !== 'old'
   }
 }
 
