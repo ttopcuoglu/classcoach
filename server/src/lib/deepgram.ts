@@ -19,6 +19,34 @@ export type DeepgramUtterance = {
   start: number
   end: number
   transcript: string
+  /// How sure Deepgram is that each word is this speaker's, as runs in word
+  /// order: [number of words, confidence]. Null when the response had no
+  /// per-word confidence. See `speakerConfidenceRuns`.
+  speakerConfidence: SpeakerConfidenceRuns | null
+}
+
+/// [words, confidence] pairs, in order. Kept per word rather than one figure
+/// per line because diarization can fold a second voice into a line: on a
+/// synthetic two-voice clip, Deepgram labelled everything one speaker, and
+/// a single line ran "Take a second and think about it" at 0.76 then a
+/// different voice's "Because the earth casts a shadow…" at 0.11. An average
+/// would have hidden that.
+export type SpeakerConfidenceRuns = [number, number][]
+
+/// Words grouped into runs of the same confidence (to two places), so a
+/// line is a few pairs rather than one number per word.
+export function speakerConfidenceRuns(words: unknown): SpeakerConfidenceRuns | null {
+  if (!Array.isArray(words) || words.length === 0) return null
+  const runs: SpeakerConfidenceRuns = []
+  for (const w of words) {
+    const c = (w as { speaker_confidence?: unknown })?.speaker_confidence
+    if (typeof c !== 'number' || !Number.isFinite(c)) return null
+    const rounded = Math.round(c * 100) / 100
+    const last = runs[runs.length - 1]
+    if (last && last[1] === rounded) last[0]++
+    else runs.push([1, rounded])
+  }
+  return runs
 }
 
 if (!process.env.DEEPGRAM_API_KEY) {
@@ -83,12 +111,13 @@ async function sendToDeepgram(
   if (!Array.isArray(utterances)) return []
 
   return utterances.map((u) => {
-    const utterance = u as { speaker?: number; start?: number; end?: number; transcript?: string }
+    const utterance = u as { speaker?: number; start?: number; end?: number; transcript?: string; words?: unknown }
     return {
       speaker: typeof utterance.speaker === 'number' ? utterance.speaker : 0,
       start: Number(utterance.start) || 0,
       end: Number(utterance.end) || 0,
       transcript: typeof utterance.transcript === 'string' ? utterance.transcript : '',
+      speakerConfidence: speakerConfidenceRuns(utterance.words),
     }
   })
 }

@@ -757,6 +757,11 @@ model TranscriptSegment {
   startSec      Float
   endSec        Float
   text          String
+  /// Deepgram's confidence that each word is this speaker's, as
+  /// [words, confidence] runs (lib/deepgram.ts). Null on lines transcribed
+  /// before it was kept. Recorded to find lines where diarization folded a
+  /// student into the teacher; nothing reads it yet.
+  speakerConfidence Json?
   createdAt     DateTime     @default(now())
 }
 
