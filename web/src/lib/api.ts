@@ -999,6 +999,8 @@ export type AudioSession = {
   // summary. A section with nothing worth suggesting is absent; the whole
   // field is absent on reports summarized before this existed.
   nextSteps?: { talk?: string; questions?: string; climate?: string } | null
+  /// The focus loop; absent until a focus is picked on this lesson's report.
+  lessonFocus?: LessonFocus | null
   classSummary: string | null
   strengths: string | null
   growthAreas: string | null
@@ -2148,6 +2150,46 @@ export function getAudioSessions(): Promise<AudioSession[]> {
 
 export function getAudioSession(id: string): Promise<AudioSessionWithSegments> {
   return request(`/api/audio-sessions/${id}`)
+}
+
+/// The focus loop (server lib/lessonFocus.ts). `next` is the focus picked on
+/// this lesson's report for the teacher's next lesson; `checkIn` is what this
+/// lesson's report found for the focus picked on the previous lesson with the
+/// same teacher name.
+export type FocusLine = { quote: string; timestampSec: number; segmentId: string | null }
+export type NextFocus = {
+  findingKey: string
+  findingLabel: string
+  text: string
+  value: string | null
+  line: FocusLine | null
+  rewrite: string | null
+  pickedAt: string
+}
+export type FocusCheckIn = {
+  fromSessionId: string
+  findingKey: string
+  text: string
+  lastValue: string | null
+  thisValue: string | null
+  outcome: 'heard' | 'not_yet' | 'unavailable'
+  line: FocusLine | null
+  checkedAt: string
+}
+export type LessonFocus = { next?: NextFocus | null; checkIn?: FocusCheckIn | null }
+
+export function setNextFocus(sessionId: string, focus: Omit<NextFocus, 'pickedAt'>): Promise<LessonFocus> {
+  return request(`/api/audio-sessions/${sessionId}/lesson-focus/next`, { method: 'PUT', body: JSON.stringify(focus) })
+}
+
+export function getPreviousFocus(
+  sessionId: string,
+): Promise<{ previous: { sessionId: string; sessionDate: string; next: NextFocus } | null; reason?: string }> {
+  return request(`/api/audio-sessions/${sessionId}/lesson-focus/previous`)
+}
+
+export function saveFocusCheckIn(sessionId: string, checkIn: Omit<FocusCheckIn, 'checkedAt'>): Promise<LessonFocus> {
+  return request(`/api/audio-sessions/${sessionId}/lesson-focus/check-in`, { method: 'PUT', body: JSON.stringify(checkIn) })
 }
 
 /// The v3 Insights coach notes, written on the server from the findings the

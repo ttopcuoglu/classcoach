@@ -7,6 +7,7 @@ import { readEscalation } from '../lib/escalation.ts'
 import { readTeachingMoves } from '../lib/teachingMoves.ts'
 import { LONG_PAUSE_SEC, pauseAfterQuestions, STUDENT_METRICS_ON } from '../lib/teacherVoice.ts'
 import { parseQuoteFlag } from '../lib/quoteFlags.ts'
+import { parseCheckIn, parseNextFocus, teacherKey, type LessonFocus } from '../lib/lessonFocus.ts'
 import {
   hashNotesInput,
   keepTeacherQuotes,
@@ -394,6 +395,111 @@ audioSessionsRouter.post('/', async (req, res) => {
     },
   })
   res.status(201).json(session)
+})
+
+/// The focus picked on this lesson's report for the teacher's next lesson
+/// (lib/lessonFocus.ts). Picking again replaces it.
+audioSessionsRouter.put('/:id/lesson-focus/next', async (req, res) => {
+  const parsed = parseNextFocus(req.body)
+  if ('error' in parsed) {
+    res.status(400).json({ error: parsed.error })
+    return
+  }
+  const session = await prisma.audioSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+    select: { id: true, lessonFocus: true },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  // A line named by id has to be in this lesson.
+  if (parsed.line?.segmentId) {
+    const inLesson = await prisma.transcriptSegment.count({ where: { id: parsed.line.segmentId, sessionId: session.id } })
+    if (!inLesson) parsed.line.segmentId = null
+  }
+  const focus: LessonFocus = {
+    ...((session.lessonFocus as LessonFocus | null) ?? {}),
+    next: { ...parsed, pickedAt: new Date().toISOString() },
+  }
+  await prisma.audioSession.update({ where: { id: session.id }, data: { lessonFocus: focus as Prisma.InputJsonValue } })
+  res.json(focus)
+})
+
+audioSessionsRouter.delete('/:id/lesson-focus/next', async (req, res) => {
+  const session = await prisma.audioSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+    select: { id: true, lessonFocus: true },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  const focus: LessonFocus = { ...((session.lessonFocus as LessonFocus | null) ?? {}), next: null }
+  await prisma.audioSession.update({ where: { id: session.id }, data: { lessonFocus: focus as Prisma.InputJsonValue } })
+  res.json(focus)
+})
+
+/// The focus this lesson should be checked against: the one picked on the
+/// most recent earlier lesson with the same teacher name. None when this
+/// lesson has no teacher name — one account records many teachers' classes,
+/// and comparing two of them would be comparing two different people.
+audioSessionsRouter.get('/:id/lesson-focus/previous', async (req, res) => {
+  const session = await prisma.audioSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+    select: { id: true, teacherName: true, sessionDate: true },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  const key = teacherKey(session.teacherName)
+  if (!key) {
+    res.json({ previous: null, reason: 'no_teacher_name' })
+    return
+  }
+  const earlier = await prisma.audioSession.findMany({
+    where: {
+      userId: req.user!.userId,
+      id: { not: session.id },
+      sessionDate: { lt: session.sessionDate },
+      status: { in: ['analyzed', 'locked'] },
+    },
+    orderBy: { sessionDate: 'desc' },
+    select: { id: true, teacherName: true, sessionDate: true, lessonFocus: true },
+  })
+  const previous = earlier.find((s) => teacherKey(s.teacherName) === key)
+  const next = (previous?.lessonFocus as LessonFocus | null)?.next ?? null
+  res.json(
+    previous && next
+      ? { previous: { sessionId: previous.id, sessionDate: previous.sessionDate, next } }
+      : { previous: null, reason: previous ? 'no_focus_picked' : 'no_earlier_lesson' },
+  )
+})
+
+/// What this lesson's report found for the previous lesson's focus, kept so
+/// My Growth can list it without re-reading every lesson.
+audioSessionsRouter.put('/:id/lesson-focus/check-in', async (req, res) => {
+  const parsed = parseCheckIn(req.body)
+  if ('error' in parsed) {
+    res.status(400).json({ error: parsed.error })
+    return
+  }
+  const session = await prisma.audioSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+    select: { id: true, lessonFocus: true },
+  })
+  const from = await prisma.audioSession.count({ where: { id: parsed.fromSessionId, userId: req.user!.userId } })
+  if (!session || !from) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  const focus: LessonFocus = {
+    ...((session.lessonFocus as LessonFocus | null) ?? {}),
+    checkIn: { ...parsed, checkedAt: new Date().toISOString() },
+  }
+  await prisma.audioSession.update({ where: { id: session.id }, data: { lessonFocus: focus as Prisma.InputJsonValue } })
+  res.json(focus)
 })
 
 /// A lesson's notes are written at most this many times. Each write is one

@@ -95,6 +95,7 @@ import {
   type NoticeCandidate,
 } from '../lib/reportHighlights'
 import InsightsPage from '../components/insights/InsightsPage'
+import { FocusCheckInHistory } from '../components/insights/FocusCards'
 import type { SectionKey as InsightsV3Section } from '../lib/insightsModel'
 import {
   FOLLOW_UPS_OFF,
@@ -3616,6 +3617,10 @@ function MyGrowthTab({
           Choose a focus above to see your growth trend for that metric.
         </div>
       )}
+
+      {/* The focus loop's data point (Insights): what each next-lesson focus
+          found on the lesson after it. */}
+      <FocusCheckInHistory sessions={sessions} />
 
       <p className="text-xs text-ink-soft">
         Showing your last {analyzed.length} analyzed session{analyzed.length === 1 ? '' : 's'} over{' '}

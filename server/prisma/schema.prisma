@@ -682,6 +682,11 @@ model AudioSession {
   // and checked before storing. Keyed by a hash of those findings, so they
   // are rewritten only when what they are about changes.
   insightsNotes    Json?
+  // The focus loop (lib/lessonFocus.ts): `next` is the one thing picked on
+  // this lesson's report for the teacher's next lesson; `checkIn` is what this
+  // lesson's report found for the focus picked on the previous lesson with the
+  // same teacher name.
+  lessonFocus      Json?
 
   // A loudness envelope for the recording — one RMS sample per second,
   // measured on the device while recording. NOT audio: speech cannot be

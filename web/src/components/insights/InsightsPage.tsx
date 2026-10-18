@@ -10,12 +10,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   flagQuote,
+  getPreviousFocus,
   getQuoteFlags,
+  saveFocusCheckIn,
+  setNextFocus,
   writeInsightsNotes,
   type AudioSessionWithSegments,
   type InsightsNotes,
   type InsightsSectionNote,
+  type NextFocus,
 } from '../../lib/api'
+import { checkFocus, focusFromTry, suggestFocus, type FocusCandidate } from '../../lib/focusLoop'
 import {
   applyGuidanceLinks,
   buildInsightsModel,
@@ -31,6 +36,7 @@ import { NOT_IN_THIS_REPORT, STUDENT_METRICS_ON } from '../../lib/teacherVoice'
 import { DirectionsGrid, LessonTimeline, QuestionSquares } from './InsightsCharts'
 import { CoachNote, EmptyEvidence, FindingRow, KeepTry, SectionCard, UnavailablePanel, type SectionMeta } from './InsightsParts'
 import { QuoteFlagContext, type QuoteFlagState } from './quoteFlagContext'
+import { FocusCheckInCard, OneFocusCard } from './FocusCards'
 
 const META: Record<SectionKey, SectionMeta> = {
   talk_pace: { n: 1, title: 'Talk & Pace', sub: 'How much you spoke, how fast, and when you opened the floor.', chip: 'bg-terracotta' },
@@ -162,6 +168,44 @@ export default function InsightsPage({ report, slots }: { report: AudioSessionWi
   const contentLinks = notes.status === 'ready' ? notes.notes.sections.content_lens?.guidanceLinks : undefined
   const content = useMemo(() => applyGuidanceLinks(model.content, contentLinks ?? []), [model.content, contentLinks])
 
+  // The focus loop: the focus picked on this report for the teacher's next
+  // lesson, and the one picked on their previous lesson, checked here.
+  const [picked, setPicked] = useState<NextFocus | null>(report.lessonFocus?.next ?? null)
+  const [focusSaving, setFocusSaving] = useState(false)
+  const [focusError, setFocusError] = useState<string | null>(null)
+  const pick = useCallback(
+    (candidate: FocusCandidate) => {
+      setFocusSaving(true)
+      setFocusError(null)
+      setNextFocus(report.id, candidate)
+        .then((f) => setPicked(f.next ?? null))
+        .catch(() => setFocusError('That focus could not be saved. Please try again.'))
+        .finally(() => setFocusSaving(false))
+    },
+    [report.id],
+  )
+  const [previous, setPrevious] = useState<{ sessionId: string; next: NextFocus } | null>(null)
+  useEffect(() => {
+    let live = true
+    getPreviousFocus(report.id)
+      .then((r) => live && setPrevious(r.previous))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [report.id])
+  const checkIn = useMemo(
+    () => (previous ? checkFocus(model, previous.next, previous.sessionId) : null),
+    [model, previous],
+  )
+  // Kept on this lesson so My Growth can list it; saved whenever what it
+  // found changes, never more.
+  const checkInKey = checkIn ? JSON.stringify(checkIn) : null
+  useEffect(() => {
+    if (!checkInKey) return
+    saveFocusCheckIn(report.id, JSON.parse(checkInKey)).catch(() => {})
+  }, [report.id, checkInKey])
+
   // "Not right?" flags this teacher already left on this lesson. A failed
   // load just means none show as flagged; flagging still works.
   const [flagged, setFlagged] = useState<Set<string>>(new Set())
@@ -192,9 +236,24 @@ export default function InsightsPage({ report, slots }: { report: AudioSessionWi
     [flagged, flag],
   )
 
+  const sectionsByKey = { talk_pace: talk, questioning, clarity, climate, content_lens: content }
+  const focusActionFor = (section: SectionModel) => {
+    const candidate = focusFromTry(section, keepTryFor(section, notes))
+    if (!candidate) return undefined
+    const isPicked =
+      !!picked && picked.findingKey === candidate.findingKey && picked.text === candidate.text
+    return { picked: isPicked, saving: focusSaving, onPick: () => pick(candidate) }
+  }
+  const suggested = suggestFocus({ ...model, content }, (s) => keepTryFor(sectionsByKey[s.key] ?? s, notes))
+  const oneFocus: FocusCandidate | null = picked ?? suggested
+
   return (
     <QuoteFlagContext.Provider value={flagState}>
     <div className="min-w-0">
+      {previous && checkIn && (
+        <FocusCheckInCard focus={previous.next} checkIn={checkIn} teacherName={report.teacherName} />
+      )}
+
       <nav className="mb-4 flex flex-wrap gap-1.5" aria-label="Insights sections">
         {ORDER.map((key) => (
           <a
@@ -223,7 +282,7 @@ export default function InsightsPage({ report, slots }: { report: AudioSessionWi
           <EmptyEvidence>The lesson timeline is not available for this recording.</EmptyEvidence>
         )}
         <Findings model={talk} report={report} />
-        <KeepTry model={keepTryFor(talk, notes)} />
+        <KeepTry model={keepTryFor(talk, notes)} focusAction={focusActionFor(talk)} />
       </SectionCard>
 
       {/* 2 QUESTIONING */}
@@ -231,7 +290,7 @@ export default function InsightsPage({ report, slots }: { report: AudioSessionWi
         <CoachNote {...coachFor(questioning, notes)} />
         {questioning.squares.length > 0 && <QuestionSquares squares={questioning.squares} />}
         <Findings model={questioning} report={report} />
-        <KeepTry model={keepTryFor(questioning, notes)} />
+        <KeepTry model={keepTryFor(questioning, notes)} focusAction={focusActionFor(questioning)} />
       </SectionCard>
 
       {/* 3 CLARITY */}
@@ -239,7 +298,7 @@ export default function InsightsPage({ report, slots }: { report: AudioSessionWi
         <CoachNote {...coachFor(clarity, notes)} />
         {clarity.directions.length > 0 && <DirectionsGrid rows={clarity.directions} />}
         <Findings model={clarity} report={report} />
-        <KeepTry model={keepTryFor(clarity, notes)} />
+        <KeepTry model={keepTryFor(clarity, notes)} focusAction={focusActionFor(clarity)} />
       </SectionCard>
 
       {/* 4 CLIMATE */}
@@ -247,7 +306,7 @@ export default function InsightsPage({ report, slots }: { report: AudioSessionWi
         <CoachNote {...coachFor(climate, notes)} />
         <Findings model={climate} report={report} />
         {slots.climateExtra && <div className="mt-4 flex flex-col gap-4">{slots.climateExtra}</div>}
-        <KeepTry model={keepTryFor(climate, notes)} />
+        <KeepTry model={keepTryFor(climate, notes)} focusAction={focusActionFor(climate)} />
       </SectionCard>
 
       {/* 5 CONTENT LENS */}
@@ -297,7 +356,7 @@ export default function InsightsPage({ report, slots }: { report: AudioSessionWi
                 )}
               </div>
             )}
-            <KeepTry model={keepTryFor(content, notes)} />
+            <KeepTry model={keepTryFor(content, notes)} focusAction={focusActionFor(content)} />
             {(content.guidance.stuck.length > 0 || content.guidance.waysIn.length > 0) && (
               <div className="mt-3.5 rounded-xl bg-lavender-tint px-4 py-3 text-[13px] text-[#4A3F78]">
                 <b>General guidance · about the topic, not a reading of your lesson</b>
@@ -351,6 +410,17 @@ export default function InsightsPage({ report, slots }: { report: AudioSessionWi
           </>
         )}
       </SectionCard>
+
+      {oneFocus && (
+        <OneFocusCard
+          focus={oneFocus}
+          picked={!!picked}
+          teacherName={report.teacherName}
+          saving={focusSaving}
+          error={focusError}
+          onPick={() => pick(oneFocus)}
+        />
+      )}
 
       {!STUDENT_METRICS_ON && <UnavailablePanel items={NOT_IN_THIS_REPORT} />}
     </div>

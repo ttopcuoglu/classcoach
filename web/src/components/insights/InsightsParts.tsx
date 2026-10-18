@@ -278,7 +278,14 @@ export function FindingRow({ finding, segments }: { finding: Finding; segments: 
 /// for the line itself, which the coach notes do not produce yet; until they
 /// do, the Try shows the suggestion and the line it grew from, not an
 /// invented rewrite.
-export function KeepTry({ model }: { model: KeepTryModel }) {
+export function KeepTry({
+  model,
+  focusAction,
+}: {
+  model: KeepTryModel
+  /// "Make this my focus" on the Try, when it can be one.
+  focusAction?: { picked: boolean; saving: boolean; onPick: () => void }
+}) {
   if (!model.keep && !model.tryNext) return null
   return (
     <div className="mt-[18px] grid gap-2.5 sm:grid-cols-2">
@@ -313,6 +320,22 @@ export function KeepTry({ model }: { model: KeepTryModel }) {
           </>
         ) : (
           <span className="text-ink-soft">No suggestion was written for this section.</span>
+        )}
+        {model.tryNext && focusAction && (
+          <div className="mt-2">
+            {focusAction.picked ? (
+              <span className="text-[12.5px] font-semibold text-forest">✓ Your focus for next lesson</span>
+            ) : (
+              <button
+                type="button"
+                onClick={focusAction.onPick}
+                disabled={focusAction.saving}
+                className="text-[12.5px] font-semibold text-terracotta-600 underline decoration-dotted disabled:opacity-50"
+              >
+                Make this my focus
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
