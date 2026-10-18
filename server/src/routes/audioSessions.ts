@@ -2039,10 +2039,13 @@ export async function requestClassSummaryText(session: ClassSummarySource, segme
 /// Returns null when there is nothing to write (over the usage limit, or the
 /// model gave back no summary), so a caller that already has a report can
 /// keep it rather than lose it to this.
-async function writeClassSummary(
+export async function writeClassSummary(
   userId: string,
   session: ClassSummarySource,
   segments: Segment[],
+  /// False only for an operator backfill, which must not spend a teacher's
+  /// monthly allowance on a rewrite they did not ask for.
+  { countUsage = true }: { countUsage?: boolean } = {},
 ) {
   const exhibits = buildContentExhibits(segments)
 
@@ -2058,8 +2061,10 @@ async function writeClassSummary(
     })
   }
 
-  const denied = await checkAndLogUsage(userId, 'class_summary')
-  if (denied) throw new UsageLimitError(denied)
+  if (countUsage) {
+    const denied = await checkAndLogUsage(userId, 'class_summary')
+    if (denied) throw new UsageLimitError(denied)
+  }
 
   const text = await requestClassSummaryText(session, segments)
   flagIfUnsafe(text, 'audioSessions.classSummary')
