@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import test from 'node:test'
 import type { TranscriptSegment } from './api.ts'
-import { buildFlow, buildPace } from './talkFlow.ts'
+import { buildFlow } from './talkFlow.ts'
 
 const seg = (speakerLabel: string, startSec: number, endSec: number, text: string): TranscriptSegment => ({
   id: `${speakerLabel}-${startSec}`, speakerLabel, rawSpeakerTag: speakerLabel, startSec, endSec, text,
@@ -28,10 +28,4 @@ test('without an envelope, quiet and sound cannot be told apart', () => {
   assert.equal(flow.hasEnvelope, false)
   assert.equal(flow.shares.quiet + flow.shares.sound, 0)
   assert.equal(flow.shares.unknown, 60)
-})
-
-test('pace is your words a minute, and a minute with too little speech has none', () => {
-  const words = (n: number) => Array.from({ length: n }, () => 'w').join(' ')
-  const pace = buildPace([seg('Teacher', 0, 30, words(90)), seg('Teacher', 60, 65, words(20))], 120)
-  assert.deepEqual(pace.map((p) => p.wpm), [180, null])
 })

@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import test from 'node:test'
 import type { AudioSessionWithSegments, TranscriptSegment } from './api.ts'
-import { buildInsightsModel, contextLines, fastStretches, MAX_QUOTE_WORDS, splitCoachNote, trimQuote } from './insightsModel.ts'
+import { buildInsightsModel, contextLines, MAX_QUOTE_WORDS, splitCoachNote, trimQuote } from './insightsModel.ts'
 
 const seg = (speakerLabel: string, startSec: number, endSec: number, text: string): TranscriptSegment => ({
   id: `${speakerLabel}-${startSec}`,
@@ -36,14 +36,6 @@ test('context is the teacher’s own line before and after, never a student’s'
   const ctx = contextLines(segments, { segmentId: 'Teacher-18', endSegmentId: 'Teacher-18' })
   assert.equal(ctx.before?.text, 'Who has a character they just call my dad?', 'the student line is skipped')
   assert.equal(ctx.after?.text, 'Okay, so you might use a pseudonym.')
-})
-
-test('a fast stretch is sustained, not one quick line', () => {
-  // 100 words over 30 seconds of teacher talk = 200 words a minute.
-  const words = (n: number) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ')
-  const fast = [seg('Teacher', 0, 15, words(50)), seg('Teacher', 15.5, 30.5, words(50))]
-  assert.equal(fastStretches(fast).length, 1)
-  assert.equal(fastStretches([seg('Teacher', 0, 5, words(30))]).length, 0, 'too short to be a stretch')
 })
 
 test('the coach note leads with its first sentence', () => {
@@ -178,7 +170,8 @@ test('a line featured under one finding is not featured again in the same sectio
       ],
     }),
   )
-  const [higher, , checks] = model.questioning.findings
+  const higher = model.questioning.findings.find((f) => f.key === 'higher_order_questions')!
+  const checks = model.questioning.findings.find((f) => f.key === 'spoken_checks')!
   assert.equal(higher.featured?.full, line)
   assert.equal(checks.featured?.full, 'Does that make sense to everyone so far?')
 })
@@ -228,4 +221,10 @@ test('a line cut mid-clause is not featured while a complete one is available', 
   const inv = model.talk.findings[0]
   assert.equal(inv.evidence.find((e) => e.timestampSec === 10)?.cut, true)
   assert.equal(inv.featured?.full, 'Who else has a hook in mind?')
+})
+
+test('the pause sits right after higher-order questions, with answered-yourself beside it', () => {
+  const keys = buildInsightsModel(lesson({})).questioning.findings.map((f) => f.key)
+  assert.deepEqual(keys, ['higher_order_questions', 'pause_after_question', 'self_answered', 'spoken_checks'])
+  assert.ok(!buildInsightsModel(lesson({})).talk.findings.some((f) => f.key === 'fast_stretches'), 'fast stretches are gone')
 })

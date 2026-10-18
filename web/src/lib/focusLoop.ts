@@ -9,8 +9,10 @@
 import type { FocusCheckIn, FocusLine, NextFocus } from './api'
 import type { Evidence, Finding, InsightsModel, KeepTry, SectionModel } from './insightsModel'
 
-/// Findings where less is the goal: a focus on them is met by fewer.
-const FEWER_IS_THE_GOAL = new Set(['fast_stretches', 'self_answered'])
+/// Findings where less is the goal: a focus on them is met by fewer. A focus
+/// on a finding the report no longer has (fast stretches, removed) comes back
+/// as "couldn't be read" rather than a guess.
+const FEWER_IS_THE_GOAL = new Set(['self_answered'])
 
 /// The order a focus is suggested in: the moves a teacher can change in the
 /// next lesson's first five minutes come first.

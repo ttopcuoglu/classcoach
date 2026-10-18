@@ -1,5 +1,5 @@
-// What the recording held, second by second, and how fast the teacher spoke
-// across the lesson — the data behind the Talk & Pace charts.
+// What the recording held, second by second — the data behind the Talk &
+// Pace chart.
 //
 // "Other voices" is speech the transcript did not attribute to the teacher.
 // It is not called students: telling students from the teacher is the split
@@ -83,34 +83,4 @@ export function buildFlow(
     bins.push((['you', 'other', 'sound', 'quiet', 'unknown'] as const).reduce((best, k) => (tally[k] > tally[best] ? k : best), 'you'))
   }
   return { shares, bins, binSec, hasEnvelope: !!seconds }
-}
-
-export type PacePoint = { startSec: number; endSec: number; wpm: number | null }
-
-/// A minute with less of your speech than this has no pace: a rate off a few
-/// words would swing wildly and mean nothing.
-export const MIN_PACE_SPEECH_SEC = 15
-
-/// Your words a minute, minute by minute, from your own lines only. A line
-/// that crosses a minute boundary counts in each minute for the part spoken
-/// in it.
-export function buildPace(segments: TranscriptSegment[], durationSec: number, windowSec = 60): PacePoint[] {
-  const total = Math.ceil(durationSec)
-  if (total <= 0) return []
-  const teacher = segments.filter((s) => s.speakerLabel === 'Teacher' && s.text.trim() && s.endSec > s.startSec)
-  const points: PacePoint[] = []
-  for (let start = 0; start < total; start += windowSec) {
-    const end = Math.min(total, start + windowSec)
-    let speech = 0
-    let words = 0
-    for (const s of teacher) {
-      const overlap = Math.min(s.endSec, end) - Math.max(s.startSec, start)
-      if (overlap <= 0) continue
-      const length = s.endSec - s.startSec
-      speech += overlap
-      words += (s.text.trim().split(/\s+/).length * overlap) / length
-    }
-    points.push({ startSec: start, endSec: end, wpm: speech >= MIN_PACE_SPEECH_SEC ? Math.round((words / speech) * 60) : null })
-  }
-  return points
 }

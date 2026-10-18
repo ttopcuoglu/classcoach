@@ -33,7 +33,7 @@ import {
   type SectionModel,
 } from '../../lib/insightsModel'
 import { NOT_IN_THIS_REPORT, STUDENT_METRICS_ON } from '../../lib/teacherVoice'
-import { DirectionsGrid, PaceChart, QuestionSquares, TalkFlowChart } from './InsightsCharts'
+import { DirectionsGrid, QuestionSquares, TalkFlowChart } from './InsightsCharts'
 import { CoachNote, EmptyEvidence, FindingRow, KeepTry, SectionCard, UnavailablePanel, type SectionMeta } from './InsightsParts'
 import { QuoteFlagContext, type QuoteFlagState } from './quoteFlagContext'
 import { FocusCheckInCard, OneFocusCard } from './FocusCards'
@@ -50,7 +50,7 @@ const ORDER: SectionKey[] = ['talk_pace', 'questioning', 'clarity', 'climate', '
 /// How each section's numbers are made, in a sentence or two.
 const HOW_TO_READ: Record<SectionKey, string> = {
   talk_pace:
-    'Talk share is your speech as a share of the recording. Pace is words a minute of your own speaking time — everyday conversation runs about 150, an anchor rather than a target. A fast stretch is over 180 words a minute held for 30 seconds or more.',
+    'Talk share is your speech as a share of the recording; the rest is other voices, sound with no words, and quiet. Pace is words a minute of your own speaking time — everyday conversation runs about 150, an anchor rather than a target.',
   questioning:
     'Every question listed is one that was counted, so the number and the list always agree. The pause runs from the end of a question to the next thing you said, so it may include a student’s answer.',
   clarity:
@@ -277,7 +277,16 @@ export default function InsightsPage({ report, slots }: { report: AudioSessionWi
         ) : (
           <EmptyEvidence>The lesson timeline is not available for this recording.</EmptyEvidence>
         )}
-        <PaceChart pace={talk.pace} average={talk.wpm} />
+        {/* Pace as one number with its anchor: a minute-by-minute line was
+            noise that invited reading too much into single minutes. */}
+        {talk.wpm != null && (
+          <div className="mt-3.5 rounded-2xl bg-cream px-4 py-3">
+            <p className="m-0 text-sm text-ink">
+              <b>Your pace — {talk.wpm} words a minute.</b> Everyday conversation runs about 150.
+            </p>
+            <p className="m-0 mt-0.5 text-[12px] text-ink-soft">An anchor to place yourself against, not a target.</p>
+          </div>
+        )}
         <Findings model={talk} report={report} />
         <KeepTry model={keepTryFor(talk, notes)} focusAction={focusActionFor(talk)} />
       </SectionCard>

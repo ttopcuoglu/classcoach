@@ -19,7 +19,7 @@ import type {
 import { safeToQuote } from './quoteSafety.ts'
 import { pauseAfterQuestionsMetric } from './teacherVoice.ts'
 import { resolveVerbatim, teacherRuns } from './verbatim.ts'
-import { buildFlow, buildPace, type FlowModel, type PacePoint } from './talkFlow.ts'
+import { buildFlow, type FlowModel } from './talkFlow.ts'
 
 /// Three states, never a zero standing in for "we could not tell".
 export type FindingState = 'measured' | 'confirmed_none' | 'unavailable'
@@ -90,7 +90,6 @@ export type TimelineModel = {
   durationSec: number
   /// Spans attributed to the teacher.
   speech: { startSec: number; endSec: number }[]
-  fast: { startSec: number; endSec: number; wpm: number }[]
   invitations: number[]
   checks: number[]
 }
@@ -115,8 +114,6 @@ export type InsightsModel = {
     timeline: TimelineModel | null
     /// What the recording held, and its flow across the lesson.
     flow: FlowModel | null
-    /// Your words a minute, minute by minute.
-    pace: PacePoint[]
   }
   questioning: SectionModel & { squares: QuestionSquare[]; total: number | null }
   clarity: SectionModel & { directions: DirectionRow[] }
@@ -268,46 +265,6 @@ export function contextLines(
   return { before: teacher[first - 1] ?? null, lines: teacher.slice(first, last + 1), after: teacher[last + 1] ?? null }
 }
 
-// --- fast stretches ----------------------------------------------------------
-
-/// Faster than this, held for at least FAST_MIN_SEC, is a fast stretch.
-export const FAST_WPM = 180
-export const FAST_MIN_SEC = 30
-/// Teacher lines this close together are one stretch of talk.
-const STRETCH_JOIN_SEC = 1.5
-
-function wordCount(text: string): number {
-  return text.trim().split(/\s+/).filter(Boolean).length
-}
-
-export function fastStretches(
-  segments: TranscriptSegment[],
-): { startSec: number; endSec: number; wpm: number; line: TranscriptSegment }[] {
-  const teacher = segments
-    .filter((s) => s.speakerLabel === 'Teacher' && s.text.trim())
-    .sort((a, b) => a.startSec - b.startSec)
-  const runs: TranscriptSegment[][] = []
-  for (const s of teacher) {
-    const run = runs[runs.length - 1]
-    if (run && s.startSec - run[run.length - 1].endSec <= STRETCH_JOIN_SEC) run.push(s)
-    else runs.push([s])
-  }
-  return runs
-    .map((run) => {
-      const startSec = run[0].startSec
-      const endSec = run[run.length - 1].endSec
-      const spoken = run.reduce((sum, s) => sum + Math.max(0, s.endSec - s.startSec), 0)
-      const words = run.reduce((sum, s) => sum + wordCount(s.text), 0)
-      const wpm = spoken > 0 ? Math.round((words / spoken) * 60) : 0
-      // The run's longest line stands for it: the quote has to be one line,
-      // never stitched across two.
-      const line = [...run].sort((a, b) => b.endSec - b.startSec - (a.endSec - a.startSec))[0]
-      return { startSec, endSec, wpm, line }
-    })
-    .filter((r) => r.endSec - r.startSec >= FAST_MIN_SEC && r.wpm > FAST_WPM)
-    .sort((a, b) => b.wpm - a.wpm)
-}
-
 // --- the sections -----------------------------------------------------------
 
 /// "Worth double-checking" notes on a possible factual slip. Off by default:
@@ -334,10 +291,6 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
 
   // ---- 1. Talk & Pace
   const invitations = (moves?.invitations ?? []).map((q, i) => evidenceFrom(`inv-${i}`, q, 'Opened the floor', 'strength'))
-  const fast = fastStretches(segments)
-  const fastEvidence = fast.map((r, i) =>
-    evidenceFrom(`fast-${i}`, { quote: r.line.text, timestampSec: r.line.startSec }, `${r.wpm} words a minute`, 'growth'),
-  )
   const wpm = typeof detail.teacherWordsPerMinute === 'number' ? detail.teacherWordsPerMinute : null
   const talkFindings: Finding[] = [
     finding({
@@ -349,38 +302,26 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
       evidence: invitations,
       allNoun: 'invitations',
     }),
-    finding({
-      key: 'fast_stretches',
-      label: 'Fast stretches',
-      state: segments.length === 0 ? 'unavailable' : fast.length > 0 ? 'measured' : 'confirmed_none',
-      value: segments.length === 0 ? null : String(fast.length),
-      caveat: `Over ${FAST_WPM} words a minute for ${FAST_MIN_SEC}s or more`,
-      note: fast.length === 0 ? `No stretch ran over ${FAST_WPM} words a minute for ${FAST_MIN_SEC} seconds.` : undefined,
-      evidence: fastEvidence,
-      prefer: 'growth',
-      allNoun: 'stretches',
-    }),
   ]
   const talkKeep = pickFeatured(invitations)
-  const talkTryLine = pickFeatured(fastEvidence, 'growth')
   const talk: InsightsModel['talk'] = {
     key: 'talk_pace',
     coach: splitCoachNote(report.talkNarrative),
     findings: talkFindings,
     keepTry: {
       keep: talkKeep ? { text: 'You opened the floor here.', line: talkKeep } : null,
-      tryNext: report.nextSteps?.talk ? { text: report.nextSteps.talk, line: talkTryLine } : null,
+      // Talk & Pace has no growth line of its own, so its Try stands on its
+      // own words — the coach notes may still point it at a line.
+      tryNext: report.nextSteps?.talk ? { text: report.nextSteps.talk, line: null } : null,
     },
     talkPct: report.teacherTalkPct,
     wpm,
     flow: report.durationSec ? buildFlow(segments, report.durationSec, report.soundTimeline?.seconds ?? null, report.teacherTalkPct) : null,
-    pace: report.durationSec ? buildPace(segments, report.durationSec) : [],
     timeline:
       report.durationSec && segments.length > 0
         ? {
             durationSec: report.durationSec,
             speech: segments.filter((s) => s.speakerLabel === 'Teacher').map((s) => ({ startSec: s.startSec, endSec: s.endSec })),
-            fast: fast.map(({ startSec, endSec, wpm: w }) => ({ startSec, endSec, wpm: w })),
             invitations: invitations.map((e) => e.timestampSec),
             checks: (report.cfuLog ?? []).map((c) => c.timestampSec),
           }
@@ -429,6 +370,20 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
         { label: `Recall · ${questionEvidence.length - higher.length}`, items: questionEvidence.filter((e) => e.polarity !== 'strength') },
       ],
     },
+    // The pause, then the questions with no pause at all — the two halves of
+    // one story, read together.
+    {
+      key: 'pause_after_question',
+      label: 'Pause before you spoke again',
+      state: pause.state === 'measured' ? 'measured' : pause.state === 'confirmed_none' ? 'confirmed_none' : 'unavailable',
+      value: null,
+      caveat:
+        pause.timed > 0
+          ? `${pause.long} of ${pause.timed} had 3s+ · may include student answers`
+          : (pause.reason ?? 'Not timed for this lesson'),
+      evidence: [],
+      featured: null,
+    },
     finding({
       key: 'self_answered',
       label: 'Questions you answered yourself',
@@ -448,18 +403,6 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
       evidence: checks,
       allNoun: 'checks',
     }),
-    {
-      key: 'pause_after_question',
-      label: 'Pause before you spoke again',
-      state: pause.state === 'measured' ? 'measured' : pause.state === 'confirmed_none' ? 'confirmed_none' : 'unavailable',
-      value: null,
-      caveat:
-        pause.timed > 0
-          ? `${pause.long} of ${pause.timed} had 3s+ · may include student answers`
-          : (pause.reason ?? 'Not timed for this lesson'),
-      evidence: [],
-      featured: null,
-    },
   ]
   const questionKeep = pickFeatured(higher)
   const questionTryLine = pickFeatured(selfEvidence, 'growth')
