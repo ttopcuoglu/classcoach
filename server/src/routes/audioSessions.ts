@@ -8,7 +8,7 @@ import { readTeachingMoves } from '../lib/teachingMoves.ts'
 import { LONG_PAUSE_SEC, pauseAfterQuestions, STUDENT_METRICS_ON } from '../lib/teacherVoice.ts'
 import { parseLevelTrace, splitNonSpeech, teacherIntervals } from '../lib/settleTime.ts'
 import { buildSoundTimeline } from '../lib/soundTimeline.ts'
-import { enrichLessonContent, flattenTeacherSpeech, normalizeForMatch } from '../lib/lessonObjective.ts'
+import { enrichLessonContent, flattenTeacherSpeech, isNoneAnswer, normalizeForMatch } from '../lib/lessonObjective.ts'
 import { checkFeatureAccess, hasActivePlan, startOfCurrentMonth } from '../lib/billing.ts'
 import { cachedSystem, cacheStats } from '../lib/promptCache.ts'
 import {
@@ -174,9 +174,10 @@ function parseMisconceptions(text: string): string[] {
 
 function parseLines(text: string, tag: string, max: number): string[] {
   const block = extractTag(text, tag)
-  if (!block || block.toUpperCase().includes('NONE')) return []
+  if (!block) return []
   return block
     .split('\n')
+    .filter((line) => !isNoneAnswer(line))
     .map((line) => line.replace(/^[-•*\d.\s]+/, '').trim())
     .filter((line) => line.length > 20)
     // A reply that ran into the token ceiling ends mid-sentence; half a

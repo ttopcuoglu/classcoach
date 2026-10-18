@@ -19,6 +19,7 @@ import { extractTag } from './extractTag.ts'
 import {
   flattenTeacherSpeech,
   normalizeForMatch,
+  isNoneAnswer,
   parseQuotedLines,
   startSecAtOffset,
   transcriptForModel,
@@ -137,10 +138,11 @@ export function countMoves(moves: ClassroomMoves): number {
 /// "sentence @ m:ss | what it checked" — the quote verified against the
 /// teacher's speech like every other, the gloss taken as written since it is
 /// the model describing, not quoting.
-function readChecks(raw: string | null, flat: string, offsets: { at: number; startSec: number }[]): Checked[] {
-  if (!raw || raw.toUpperCase().includes('NONE')) return []
+export function readChecks(raw: string | null, flat: string, offsets: { at: number; startSec: number }[]): Checked[] {
+  if (!raw) return []
   const out: Checked[] = []
   for (const line of raw.split('\n')) {
+    if (isNoneAnswer(line)) continue
     // Timestamp optional, for the same reason as parseQuotedLines.
     const match = line.match(/^(.*?)(?:\s*@\s*(\d+):(\d{1,2}))?\s*(?:\|\s*(.*))?$/)
     if (!match) continue

@@ -30,6 +30,7 @@ import type { Segment } from './audioAnalysis.ts'
 import { extractTag } from './extractTag.ts'
 import {
   flattenTeacherSpeech,
+  isNoneAnswer,
   normalizeForMatch,
   startSecAtOffset,
   transcriptForModel,
@@ -182,12 +183,12 @@ export function inScopeSegments(segments: Segment[]): Segment[] {
 
 export function parseBids(text: string, segments: Segment[]): AttentionBid[] {
   const body = extractTag(text, 'bids')
-  if (!body || body.toUpperCase().includes('NONE')) return []
+  if (!body) return []
   const { flat, offsets } = flattenTeacherSpeech(inScopeSegments(segments))
   const bids: AttentionBid[] = []
   const seen = new Set<string>()
   for (const line of body.split('\n')) {
-    if (!line.trim()) continue
+    if (!line.trim() || isNoneAnswer(line)) continue
     const parts = line.split('|')
     const match = (parts[0] ?? '').match(/^(.*?)(?:\s*@\s*(\d+):(\d{1,2}))?\s*$/)
     if (!match) continue
