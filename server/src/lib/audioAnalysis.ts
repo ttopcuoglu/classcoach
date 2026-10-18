@@ -85,6 +85,9 @@ export type AnalysisResult = {
     /// Every follow-up question, in order. Absent before it was kept; the
     /// highlights carry only the first.
     followUpLog?: { timestampSec: number; text: string }[]
+    /// When each of those heard answers started, and whether the teacher
+    /// followed it up. Absent before it was kept.
+    answerLog?: { timestampSec: number; followed: boolean }[]
     /// Tasks that asked students to reason rather than follow steps — read
     /// from the transcript, so absent on sessions analyzed before that.
     thinkingTaskCount?: number
@@ -882,6 +885,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
   let answersFollowedUpCount = 0
   let followedThisAnswer = false
   const followUpLog: { timestampSec: number; text: string }[] = []
+  const answerLog: { timestampSec: number; followed: boolean }[] = []
   const waitCandidates: { wait: number; segment: Segment }[] = []
   /// Wait time 2: a student turn ending, then the teacher's next turn. Capped
   /// at 30s because a longer gap is independent work or a recording artifact
@@ -1051,6 +1055,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
           if (!followedThisAnswer) {
             answersFollowedUpCount++
             followedThisAnswer = true
+            if (answerLog.length > 0) answerLog[answerLog.length - 1].followed = true
           }
           // Push the entry itself (not a copy) so a wait-time assigned to it
           // later actually sticks — followUps is typed narrower but the
@@ -1085,7 +1090,10 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       addressedWords.push(...capitalized.addressed)
       contentWords.push(...capitalized.content)
     } else {
-      if (awaitingStudentAnswer) answersHeardCount++
+      if (awaitingStudentAnswer) {
+        answersHeardCount++
+        answerLog.push({ timestampSec: round(segment.startSec, 1), followed: false })
+      }
       readyForFollowUp = awaitingStudentAnswer
       followedThisAnswer = false
       awaitingStudentAnswer = false
@@ -1160,6 +1168,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       answersHeardCount,
       answersFollowedUpCount,
       followUpLog,
+      answerLog,
       waitTimeSampleCount: waitTimes.length,
       teacherWordsPerMinute:
         teacherTalkSec >= MIN_TEACHER_SEC_FOR_RATE ? Math.round((teacherWords / teacherTalkSec) * 60) : null,

@@ -4,7 +4,7 @@ import { analyzeTranscript, type Segment } from '../lib/audioAnalysis.ts'
 import { prisma } from '../lib/prisma.ts'
 
 // Fills in how many student answers were heard, how many were followed up,
-// and every follow-up's words, for lessons analyzed before those were kept.
+// when each answer came, and every follow-up's words, for lessons analyzed before those were kept.
 //
 // Recomputed from the stored transcript with the same phrase scan the
 // analysis runs — no model call. The follow-up count is rewritten with
@@ -56,6 +56,7 @@ for (const session of sessions) {
           answersHeardCount: m.answersHeardCount,
           answersFollowedUpCount: m.answersFollowedUpCount,
           followUpLog: m.followUpLog,
+          answerLog: m.answerLog,
         } as Prisma.InputJsonValue,
       },
     })

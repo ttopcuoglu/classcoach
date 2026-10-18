@@ -19,6 +19,11 @@ test('answers heard, answers followed up (once each), and every follow-up kept',
   assert.equal(m.answersHeardCount, 3, 'three student turns came straight after a question')
   assert.equal(m.answersFollowedUpCount, 1, 'two follow-up questions on one answer count once')
   assert.equal(m.followUpQuestionCount, 2)
+  assert.deepEqual(m.answerLog, [
+    { timestampSec: 4, followed: true },
+    { timestampSec: 12, followed: false },
+    { timestampSec: 24, followed: false },
+  ])
   assert.deepEqual(
     m.followUpLog?.map((f) => f.text),
     ['Why does the cold matter', 'What makes you think so'],

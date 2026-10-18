@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, MicIcon, PlayIcon } from '../components/icons'
+import BroughtStudentsIn from '../components/BroughtStudentsIn'
 import TalkFlowStrip, { FLOW_COLOR, type ShareSlice } from '../components/TalkFlowStrip'
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
@@ -5530,65 +5531,6 @@ function recordingShares(
   ]
 }
 
-const INVITE_FORMAT_LABEL = {
-  hands: 'Hands up',
-  call_out: 'Call out',
-  turn_and_talk: 'Turn and talk',
-  write_first: 'Write first',
-  show_me: 'Everyone shows',
-  choral: 'All together',
-  open: 'Open to the room',
-} as const
-const EXTEND_KIND_LABEL = { probe: 'Probing', reasoning: 'Asking for reasoning', build_on_peer: 'Building on a classmate' } as const
-
-/// "Hands up 3 · Turn and talk 1" — what a list held, by kind.
-function tally<K extends string>(rows: { [k: string]: unknown }[], key: string, labels: Record<K, string>): string {
-  const counts = new Map<K, number>()
-  for (const r of rows) counts.set(r[key] as K, (counts.get(r[key] as K) ?? 0) + 1)
-  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${labels[k]} ${n}`).join(' · ')
-}
-
-/// The three ways a teacher brings students in. Falls back to the older
-/// invitation and revision-prompt reads on lessons read before the
-/// participation read existed; the third shows only with evidence, because
-/// none heard is not none done.
-function BroughtStudentsIn({ session }: { session: AudioSessionWithSegments }) {
-  const moves = session.teachingMoves
-  const p = moves?.participation
-  const detail = (session.metricsDetail ?? {}) as Record<string, unknown>
-  const heard = typeof detail.answersHeardCount === 'number' ? detail.answersHeardCount : null
-  const followed = typeof detail.answersFollowedUpCount === 'number' ? detail.answersFollowedUpCount : null
-  const invitations = p?.invitations ?? moves?.invitations
-  const extending = p?.extending ?? moves?.revisionPrompts
-  const rate =
-    heard != null && followed != null && heard >= MIN_ANSWERS_FOR_FOLLOW_UP_RATE
-      ? `You followed up on ${followed} of the ${heard} student answers the recording could hear.`
-      : null
-  if (!invitations?.length && !extending?.length && !p?.widening.length && !rate) return null
-  return (
-    <div className="flex flex-col gap-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">How you brought students in</p>
-      <InlineEvidence
-        title="You invited students to contribute"
-        rows={invitations}
-        noun="Invitation"
-        summary={p ? tally(p.invitations, 'format', INVITE_FORMAT_LABEL) : undefined}
-        tag={p ? (r) => INVITE_FORMAT_LABEL[(r as unknown as { format: keyof typeof INVITE_FORMAT_LABEL }).format] : undefined}
-      />
-      <InlineEvidence
-        title="You encouraged students to explain and build on ideas"
-        rows={extending}
-        noun="Follow-up"
-        summary={[rate, p ? tally(p.extending, 'kind', EXTEND_KIND_LABEL) : null].filter(Boolean).join(' ') || undefined}
-        tag={p ? (r) => EXTEND_KIND_LABEL[(r as unknown as { kind: keyof typeof EXTEND_KIND_LABEL }).kind] : undefined}
-      />
-      {p && p.widening.length > 0 && (
-        <InlineEvidence title="You opened the conversation to more voices" rows={p.widening} noun="Beyond volunteers" />
-      )}
-    </div>
-  )
-}
-
 const BREAK_MOVE = {
   check: 'a quick check would fit there',
   pause: 'a pause would let it land',
@@ -5659,47 +5601,6 @@ function LongestStretchCard({
   )
 }
 
-/// A list of moments with the first one shown and the rest a click away.
-function InlineEvidence({
-  title,
-  rows,
-  noun,
-  summary,
-  tag,
-}: {
-  title: string
-  rows: { quote: string; timestampSec: number }[] | undefined
-  noun: string
-  summary?: string
-  tag?: (row: { quote: string; timestampSec: number }) => string
-}) {
-  const [open, setOpen] = useState(false)
-  if (!rows || rows.length === 0) return null
-  const shown = open ? rows : rows.slice(0, 1)
-  return (
-    <div className="flex flex-col gap-2">
-      <p className="text-sm font-semibold text-forest">
-        {title} · {rows.length}
-      </p>
-      {summary && <p className="-mt-1 text-xs text-ink-soft">{summary}</p>}
-      {shown.map((row, i) => (
-        <div key={`${row.timestampSec}-${i}`} className="rounded-r-xl border-l-4 border-forest/70 bg-cream-card px-3 py-2.5">
-          <div className="flex justify-between text-xs font-semibold uppercase tracking-wide text-ink-soft">
-            <span>{tag ? tag(row) : noun}</span>
-            <span>{formatTime(row.timestampSec)}</span>
-          </div>
-          <p className="mt-1 text-sm text-ink">“{row.quote}”</p>
-        </div>
-      ))}
-      {rows.length > 1 && (
-        <button type="button" onClick={() => setOpen((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 hover:underline">
-          {open ? 'Show less' : `See ${rows.length - 1} more`}
-        </button>
-      )}
-    </div>
-  )
-}
-
 function WaitTimeChips({ questionLog }: { questionLog: AudioQuestionLogEntry[] | null }) {
   const waits = (questionLog ?? []).map((q) => q.waitTimeSec).filter((w): w is number => w != null)
   if (waits.length === 0) return null
@@ -5764,10 +5665,6 @@ function EvidenceItemCard({
     </div>
   )
 }
-
-/// Fewer heard answers than this and "X of Y" says more about the microphone
-/// than about the teacher.
-const MIN_ANSWERS_FOR_FOLLOW_UP_RATE = 3
 
 function QuestioningCheckingTab({
   questionCount,
