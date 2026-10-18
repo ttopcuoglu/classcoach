@@ -893,6 +893,15 @@ export type AudioTeachingMoves = {
     extending: (AudioMoveQuote & { kind: 'probe' | 'reasoning' | 'build_on_peer' })[]
     widening: AudioMoveQuote[]
   }
+  /// The longest stretch of teacher talk, read once (server
+  /// lib/stretchBreak.ts): what it was about, and a break only where the
+  /// content plainly offers one.
+  stretch?: {
+    startSec: number
+    endSec: number
+    about: string | null
+    breakAfter: { quote: string; atSec: number; closes: string; move: 'check' | 'pause' | 'question' } | null
+  }
 }
 
 /// In order of force. The index is the severity.

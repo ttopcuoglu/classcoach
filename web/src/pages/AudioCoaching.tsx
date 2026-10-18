@@ -5451,25 +5451,13 @@ function TalkParticipationTab({
           something a recording from the front of the room can show. */}
       <BroughtStudentsIn session={session} />
 
+      {stretch && <LongestStretchCard stretch={stretch} read={session.teachingMoves?.stretch ?? null} segments={session.segments} />}
+
       <SectionNextStep text={session.nextSteps?.talk} />
 
       <DetailRows>
         <DetailRow title="Explore details">
           <DetailRows>
-            {stretch && (
-              <DetailRow
-                title={`Your longest stretch of talk · about ${Math.round(stretch.durationSec / 60)} min, from ${formatTime(stretch.startSec)}`}
-              >
-                <p className="text-sm text-ink">
-                  From {formatTime(stretch.startSec)} to {formatTime(stretch.endSec)}, opening with:
-                </p>
-                <p className="border-l-2 border-hairline pl-3 text-sm text-ink-soft">"{stretch.opening}…"</p>
-                <p className="text-sm text-ink-soft">
-                  A stretch ends when a student is heard or you pause for more than ten seconds. A student the microphone
-                  missed does not end it, so check it against what you remember of that part of the lesson.
-                </p>
-              </DetailRow>
-            )}
             <DetailRow title="How to read these numbers">
               <p className="text-sm text-ink-soft">
                 Talk time describes the recording, not the room: it doesn't show how many students took part or whether
@@ -5597,6 +5585,76 @@ function BroughtStudentsIn({ session }: { session: AudioSessionWithSegments }) {
       {p && p.widening.length > 0 && (
         <InlineEvidence title="You opened the conversation to more voices" rows={p.widening} noun="Beyond volunteers" />
       )}
+    </div>
+  )
+}
+
+const BREAK_MOVE = {
+  check: 'a quick check would fit there',
+  pause: 'a pause would let it land',
+  question: 'a question to the room would fit there',
+} as const
+
+/// The longest unbroken stretch of your talk: how long, what it was doing,
+/// its words behind "Show transcript", and a place to break it only when the
+/// stretch read found one — most stretches read best whole, and the card says
+/// nothing rather than suggest cutting an idea in half.
+function LongestStretchCard({
+  stretch,
+  read,
+  segments,
+}: {
+  stretch: { startSec: number; endSec: number; durationSec: number; opening: string }
+  read: NonNullable<AudioSessionWithSegments['teachingMoves']>['stretch'] | null
+  segments: TranscriptSegment[]
+}) {
+  const [open, setOpen] = useState(false)
+  // The read belongs to this stretch only if it found the same one.
+  const matched = read && Math.abs(read.startSec - stretch.startSec) < 1 ? read : null
+  const lines = segments.filter(
+    (s) => s.speakerLabel === 'Teacher' && s.text.trim() && s.startSec >= stretch.startSec - 0.01 && s.endSec <= stretch.endSec + 0.01,
+  )
+  const brk = matched?.breakAfter ?? null
+  // The first line that says something: a stretch often opens on a fragment
+  // ("Alright. So").
+  const opening = (lines.find((l) => l.text.trim().split(/\s+/).length >= 6) ?? lines[0])?.text.trim() ?? stretch.opening
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm font-semibold text-forest">
+        Your longest explanation · about {Math.max(1, Math.round(stretch.durationSec / 60))} min, from {formatTime(stretch.startSec)}
+      </p>
+      {matched?.about && <p className="-mt-1 text-xs text-ink-soft">{matched.about[0].toUpperCase() + matched.about.slice(1)}</p>}
+      <div className="rounded-r-xl border-l-4 border-forest/70 bg-cream-card px-3 py-2.5">
+        <div className="flex justify-between text-xs font-semibold uppercase tracking-wide text-ink-soft">
+          <span>From the stretch</span>
+          <span>{formatTime(stretch.startSec)}–{formatTime(stretch.endSec)}</span>
+        </div>
+        <p className="mt-1 text-sm text-ink">“{opening}”</p>
+        {open && (
+          <div className="mt-2 flex flex-col gap-1.5 border-t border-hairline pt-2">
+            {lines.filter((l) => l.text.trim() !== opening).map((l) => (
+              <p key={l.id} className="text-sm text-ink-soft">
+                <span className="mr-2 font-mono text-xs">{formatTime(l.startSec)}</span>
+                {l.text.trim()}
+              </p>
+            ))}
+          </div>
+        )}
+      </div>
+      {lines.length > 1 && (
+        <button type="button" onClick={() => setOpen((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 hover:underline">
+          {open ? 'Hide transcript' : 'Show transcript'}
+        </button>
+      )}
+      {brk && (
+        <p className="rounded-xl bg-cream px-3 py-2 text-sm text-ink">
+          <span className="font-semibold">A place to break it up:</span> after “{brk.quote}” ({formatTime(brk.atSec)}) — {brk.closes} is
+          complete there, and {BREAK_MOVE[brk.move]}.
+        </p>
+      )}
+      <p className="text-xs text-ink-soft">
+        A stretch ends when a student is heard or you pause for more than ten seconds. A student the microphone missed does not end it.
+      </p>
     </div>
   )
 }
