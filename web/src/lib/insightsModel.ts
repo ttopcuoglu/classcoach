@@ -19,6 +19,7 @@ import type {
 import { safeToQuote } from './quoteSafety.ts'
 import { pauseAfterQuestionsMetric } from './teacherVoice.ts'
 import { resolveVerbatim, teacherRuns } from './verbatim.ts'
+import { buildFlow, buildPace, type FlowModel, type PacePoint } from './talkFlow.ts'
 
 /// Three states, never a zero standing in for "we could not tell".
 export type FindingState = 'measured' | 'confirmed_none' | 'unavailable'
@@ -112,6 +113,10 @@ export type InsightsModel = {
     talkPct: number | null
     wpm: number | null
     timeline: TimelineModel | null
+    /// What the recording held, and its flow across the lesson.
+    flow: FlowModel | null
+    /// Your words a minute, minute by minute.
+    pace: PacePoint[]
   }
   questioning: SectionModel & { squares: QuestionSquare[]; total: number | null }
   clarity: SectionModel & { directions: DirectionRow[] }
@@ -368,6 +373,8 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
     },
     talkPct: report.teacherTalkPct,
     wpm,
+    flow: report.durationSec ? buildFlow(segments, report.durationSec, report.soundTimeline?.seconds ?? null, report.teacherTalkPct) : null,
+    pace: report.durationSec ? buildPace(segments, report.durationSec) : [],
     timeline:
       report.durationSec && segments.length > 0
         ? {

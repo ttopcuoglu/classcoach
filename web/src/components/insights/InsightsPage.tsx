@@ -33,7 +33,7 @@ import {
   type SectionModel,
 } from '../../lib/insightsModel'
 import { NOT_IN_THIS_REPORT, STUDENT_METRICS_ON } from '../../lib/teacherVoice'
-import { DirectionsGrid, LessonTimeline, QuestionSquares } from './InsightsCharts'
+import { DirectionsGrid, PaceChart, QuestionSquares, TalkFlowChart } from './InsightsCharts'
 import { CoachNote, EmptyEvidence, FindingRow, KeepTry, SectionCard, UnavailablePanel, type SectionMeta } from './InsightsParts'
 import { QuoteFlagContext, type QuoteFlagState } from './quoteFlagContext'
 import { FocusCheckInCard, OneFocusCard } from './FocusCards'
@@ -271,16 +271,13 @@ export default function InsightsPage({ report, slots }: { report: AudioSessionWi
 
       {/* 1 TALK & PACE */}
       <SectionCard id="insights-talk_pace" meta={META.talk_pace} footer={<Footer section="talk_pace" slots={slots} />}>
-        <div className="mt-3 flex flex-wrap gap-2 text-[12.5px]">
-          {talk.talkPct != null && <span className="rounded-full bg-cream px-3 py-1">You spoke {Math.round(talk.talkPct)}% of the recording</span>}
-          {talk.wpm != null && <span className="rounded-full bg-cream px-3 py-1">{talk.wpm} words a minute · an anchor, not a target</span>}
-        </div>
         <CoachNote {...coachFor(talk, notes)} />
-        {talk.timeline ? (
-          <LessonTimeline model={talk.timeline} />
+        {talk.flow ? (
+          <TalkFlowChart flow={talk.flow} timeline={talk.timeline} />
         ) : (
           <EmptyEvidence>The lesson timeline is not available for this recording.</EmptyEvidence>
         )}
+        <PaceChart pace={talk.pace} average={talk.wpm} />
         <Findings model={talk} report={report} />
         <KeepTry model={keepTryFor(talk, notes)} focusAction={focusActionFor(talk)} />
       </SectionCard>
