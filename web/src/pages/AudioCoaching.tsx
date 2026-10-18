@@ -85,6 +85,7 @@ import type { SectionKey as InsightsV3Section } from '../lib/insightsModel'
 import {
   FOLLOW_UPS_OFF,
   heldOpenMetric,
+  realChecks,
   heldOpenStat,
   HELD_OPEN_LABEL,
   STUDENT_METRICS_ON,
@@ -2331,7 +2332,8 @@ function ReportPanel({
 
   // Checking Understanding
   const cfuMetric = getCountMetric({
-    count: report.cfuCount,
+    // Insights' count: the checks read drops the ones that were not checks.
+    count: report.cfuLog?.some((c) => c.loop) ? (realChecks(report.cfuLog)?.length ?? null) : report.cfuCount,
     recordedSec,
     minDurationSec: MIN_DURATION_FOR_CFU_DETECTION_SEC,
   })

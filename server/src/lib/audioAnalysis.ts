@@ -5,6 +5,7 @@
 // Phrase lists are exported so they stay easy to tune without touching the
 // analysis logic itself.
 
+import type { CheckLoop } from './checksLoop.ts'
 import type { HeldOpen } from './heldOpen.ts'
 import { longestTeacherStretch } from './teacherStretch.ts'
 
@@ -52,7 +53,14 @@ export type QuestionLogEntry = {
 // — never a claim about the specific content of what was checked, since
 // that would require actually understanding the question, not just
 // matching a fixed phrase.
-export type CfuLogEntry = { timestampSec: number; text: string; whatItChecked: string }
+export type CfuLogEntry = {
+  timestampSec: number
+  text: string
+  whatItChecked: string
+  /// Who the check asked and whether the teacher acted on it
+  /// (lib/checksLoop.ts). Absent where it was not read.
+  loop?: CheckLoop
+}
 // One entry per teacher turn counted toward genericFeedbackCount/
 // specificFeedbackCount — text is the teacher's own turn; the preceding
 // student turn (for real evidence context) is recovered from the

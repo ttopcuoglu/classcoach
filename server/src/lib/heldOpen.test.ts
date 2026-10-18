@@ -103,3 +103,25 @@ test('words Deepgram doubts are the teacher’s never reach the read', () => {
   const prompt = heldOpenPrompt(p)
   assert.doesNotMatch(prompt, /shadow|I think it is the sun/)
 })
+
+test('follow-ups keep the question open and are kept; a logged follow-up is folded into its question', () => {
+  const segments: Segment[] = [
+    { speakerLabel: 'Teacher', startSec: 10, endSec: 13, text: 'Why do leaves change colour?' },
+    { speakerLabel: 'Student', startSec: 15, endSec: 17, text: 'Because it gets cold.' },
+    { speakerLabel: 'Teacher', startSec: 18, endSec: 21, text: 'Why do you think the cold matters?' },
+    { speakerLabel: 'Student', startSec: 23, endSec: 26, text: 'Less sun.' },
+    { speakerLabel: 'Teacher', startSec: 27, endSec: 30, text: 'Yes, less light. Good.' },
+  ]
+  const log = [q(10, 'Why do leaves change colour?'), q(18, 'Why do you think the cold matters?')]
+  const p = prepareQuestions(log, segments)
+  const held = parseHeldOpen(
+    '<held>\nQ1 | explain\nL1 | follow_up | Why do you think the cold matters?\nL2 | close | confirmed | Yes, less light.\nQ2 | explain\nL1 | close | confirmed | Yes, less light.\n</held>',
+    p,
+  )
+  const first = held.get(1)!
+  assert.equal(first.outcome, 'closed')
+  assert.ok(first.sec! >= 14, 'timed to the close, not to the follow-up')
+  assert.deepEqual(first.followUps, [{ text: 'Why do you think the cold matters?', atSec: 18 }])
+  assert.equal(held.get(2)!.outcome, 'follow_up')
+  assert.equal(held.get(2)!.partOfSec, 10)
+})

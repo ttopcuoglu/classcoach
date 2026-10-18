@@ -17,7 +17,7 @@ import type {
   TranscriptSegment,
 } from './api'
 import { safeToQuote } from './quoteSafety.ts'
-import { heldOpenMetric, HELD_OPEN_WINDOW_SEC, LONG_PAUSE_SEC, type HeldOpenQuestion } from './teacherVoice.ts'
+import { heldOpenMetric, HELD_OPEN_WINDOW_SEC, LONG_PAUSE_SEC, realChecks, type HeldOpenQuestion } from './teacherVoice.ts'
 import { resolveVerbatim, teacherRuns } from './verbatim.ts'
 import { buildFlow, type FlowModel } from './talkFlow.ts'
 
@@ -118,13 +118,7 @@ export type InsightsModel = {
     /// What the recording held, and its flow across the lesson.
     flow: FlowModel | null
   }
-  questioning: SectionModel & {
-    squares: QuestionSquare[]
-    total: number | null
-    /// One bar per thinking question that could be timed, in lesson order.
-    heldOpen: HeldOpenQuestion[]
-    heldTypicalSec: number | null
-  }
+  questioning: SectionModel & { squares: QuestionSquare[]; total: number | null }
   clarity: SectionModel & { directions: DirectionRow[] }
   climate: SectionModel
   content: SectionModel & {
@@ -291,6 +285,9 @@ const CONNECTION_LABEL = { prior: 'Prior learning', purpose: 'Why it matters', c
 /// same moment — the two come from different reads of the transcript.
 const SAME_MOMENT_SEC = 4
 
+/// Who a check asked, as the evidence list names it.
+const CHECK_WHO = { everyone: 'Everyone answered', few: 'A few answered', asked_if_understood: 'Asked if they understood' } as const
+
 /// What the closing line did, as the evidence list names it.
 const CLOSED_BY: Record<NonNullable<HeldOpenQuestion['how']>, string> = {
   confirmed: 'Closed when you said:',
@@ -339,7 +336,7 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
             durationSec: report.durationSec,
             speech: segments.filter((s) => s.speakerLabel === 'Teacher').map((s) => ({ startSec: s.startSec, endSec: s.endSec })),
             invitations: invitations.map((e) => e.timestampSec),
-            checks: (report.cfuLog ?? []).map((c) => c.timestampSec),
+            checks: (realChecks(report.cfuLog) ?? []).map((c) => c.timestampSec),
           }
         : null,
   }
@@ -366,9 +363,26 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
   )
   const higher = questionEvidence.filter((e) => e.polarity === 'strength')
   const selfEvidence = selfAnswered.map((q, i) => evidenceFrom(`sa-${i}`, q, 'You answered it', 'growth'))
-  const checks = (report.cfuLog ?? []).map((c, i) =>
-    evidenceFrom(`cfu-${i}`, { quote: c.text, timestampSec: c.timestampSec }, 'Spoken check', 'strength'),
-  )
+  // Checks for understanding: who each asked, and whether you acted on what
+  // came back (server lib/checksLoop.ts). The ones the read found were not
+  // checks are left out — the same count Summary shows.
+  const realCheckLog = realChecks(report.cfuLog)
+  const checksRead = (report.cfuLog ?? []).some((c) => c.loop)
+  const checks = (realCheckLog ?? []).map((c, i) => {
+    const who = c.loop?.who
+    const e = evidenceFrom(
+      `cfu-${i}`,
+      { quote: c.text, timestampSec: c.timestampSec },
+      who ? CHECK_WHO[who as Exclude<typeof who, 'not_a_check'>] : 'Check',
+      who === 'everyone' ? 'strength' : who === 'asked_if_understood' ? 'growth' : 'neutral',
+    )
+    const acted = c.loop?.acted
+    return acted?.text && safeToQuote(acted.text)
+      ? { ...e, why: `“${acted.text}”`, whyLabel: acted.how === 'adjusted' ? 'You changed course:' : 'You saw they had it and moved on:' }
+      : e
+  })
+  const checksBy = (who: string) => checks.filter((_, i) => realCheckLog?.[i]?.loop?.who === who)
+  const actedOn = (realCheckLog ?? []).filter((c) => c.loop?.acted).length
   const held = heldOpenMetric(report.questionLog, selfAnswered)
   // Lessons transcribed with Deepgram's speaker confidence had the words it
   // doubted were the teacher's left out of this read; older ones did not.
@@ -380,13 +394,22 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
     const e = evidenceFrom(
       `ho-${i}`,
       { quote: q.text, timestampSec: q.timestampSec },
-      q.sec == null ? 'Still open after 2 min' : `Held ${Math.round(q.sec)}s`,
+      (q.sec == null ? 'Still open after 2 min' : `Held ${Math.round(q.sec)}s`) +
+        (q.followUps > 0 ? ` · ${q.followUps} follow-up${q.followUps === 1 ? '' : 's'}` : ''),
       (q.sec ?? HELD_OPEN_WINDOW_SEC) >= LONG_PAUSE_SEC ? 'strength' : 'growth',
     )
     return q.closedBy && safeToQuote(q.closedBy)
       ? { ...e, why: `“${q.closedBy}”`, whyLabel: CLOSED_BY[q.how ?? 'moved_on'] }
       : e
   })
+  // Follow-ups that kept a thinking question open — "why do you think that?",
+  // "who can add on?" — asked while it was still open. Counted only on the
+  // questions held open, as that measure counts them.
+  const heldRead = (report.questionLog ?? []).some((q) => q.heldOpen)
+  const followUpEvidence = (report.questionLog ?? [])
+    .filter((q) => q.heldOpen && ['closed', 'open', 'task'].includes(q.heldOpen.outcome))
+    .flatMap((q) => q.heldOpen!.followUps ?? [])
+    .map((f, i) => evidenceFrom(`fu-${i}`, { quote: f.text, timestampSec: f.atSec }, 'Follow-up', 'strength'))
   const questioningFindings: Finding[] = [
     {
       ...finding({
@@ -430,6 +453,20 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
       listDetail: true,
     },
     finding({
+      key: 'follow_ups',
+      label: 'Follow-ups that kept them thinking',
+      state: !heldRead ? 'unavailable' : followUpEvidence.length > 0 ? 'measured' : 'confirmed_none',
+      value: heldRead ? String(followUpEvidence.length) : null,
+      caveat: followUpEvidence.length > 0 ? 'Asked while a thinking question was still open — part of its held-open time' : undefined,
+      note: !heldRead
+        ? 'This lesson was analyzed before follow-ups were read.'
+        : followUpEvidence.length === 0
+          ? 'No follow-ups were heard on your thinking questions.'
+          : undefined,
+      evidence: followUpEvidence,
+      allNoun: 'follow-ups',
+    }),
+    finding({
       key: 'self_answered',
       label: 'Questions you answered yourself',
       state: listState(moves?.selfAnswered, movesRan),
@@ -438,16 +475,36 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
       evidence: selfEvidence,
       prefer: 'growth',
     }),
-    finding({
-      key: 'spoken_checks',
-      label: 'Spoken checks for understanding',
-      state: report.cfuLog == null ? 'unavailable' : checks.length > 0 ? 'measured' : 'confirmed_none',
-      value: report.cfuLog == null ? null : String(checks.length),
-      caveat: 'Spoken checks only — hand signals and written work leave no trace',
-      note: report.cfuLog != null && checks.length === 0 ? 'No spoken check was heard.' : undefined,
-      evidence: checks,
-      allNoun: 'checks',
-    }),
+    {
+      ...finding({
+        key: 'checks_for_understanding',
+        label: 'Checks for understanding',
+        state: report.cfuLog == null ? 'unavailable' : checks.length > 0 ? 'measured' : 'confirmed_none',
+        value: report.cfuLog == null ? null : String(checks.length),
+        caveat:
+          checks.length === 0
+            ? undefined
+            : checksRead
+              ? `${checksBy('everyone').length} everyone answered · ${checksBy('few').length} a few answered · ` +
+                `${checksBy('asked_if_understood').length} asked if they understood · ` +
+                `you acted on what you saw after ${actedOn} of ${checks.length} · silent checks leave no trace`
+              : 'Who answered and what you did next were not read for this lesson',
+        note: report.cfuLog != null && checks.length === 0 ? 'No check for understanding was heard.' : undefined,
+        evidence: checks,
+        prefer: 'strength',
+        allNoun: 'checks',
+      }),
+      ...(checksRead
+        ? {
+            groups: [
+              { label: `Everyone answered · ${checksBy('everyone').length}`, items: checksBy('everyone') },
+              { label: `A few answered · ${checksBy('few').length}`, items: checksBy('few') },
+              { label: `Asked if they understood · ${checksBy('asked_if_understood').length}`, items: checksBy('asked_if_understood') },
+            ],
+            listDetail: true,
+          }
+        : {}),
+    },
   ]
   const questionKeep = pickFeatured(higher)
   const questionTryLine = pickFeatured(selfEvidence, 'growth')
@@ -461,8 +518,6 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
     },
     squares,
     total,
-    heldOpen: held.questions,
-    heldTypicalSec: held.typicalSec,
   }
 
   // ---- 3. Clarity

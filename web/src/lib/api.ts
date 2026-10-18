@@ -755,15 +755,29 @@ export type AudioQuestionLogEntry = {
   heldOpen?: {
     /// closed / open count toward the typical time; task (set as work),
     /// self_answered and not_thinking (not one of the six kinds) do not.
-    outcome: 'closed' | 'open' | 'task' | 'self_answered' | 'not_thinking'
+    outcome: 'closed' | 'open' | 'task' | 'self_answered' | 'not_thinking' | 'follow_up'
     questionType: 'explain' | 'justify' | 'compare' | 'evaluate' | 'predict' | 'opinion' | null
     sec: number | null
     closedBy: string | null
     closedAtSec: number | null
     how: 'confirmed' | 'gave_answer' | 'moved_on' | null
+    /// Follow-ups that pushed further while it was open; they keep it open.
+    followUps?: { text: string; atSec: number }[]
+    /// For a follow_up: when the question it belongs to was asked.
+    partOfSec?: number
   }
 }
-export type AudioCfuLogEntry = { timestampSec: number; text: string; whatItChecked: string }
+export type AudioCfuLogEntry = {
+  timestampSec: number
+  text: string
+  whatItChecked: string
+  /// Who the check asked and whether the teacher acted on what came back
+  /// (server lib/checksLoop.ts). Absent where it was not read.
+  loop?: {
+    who: 'everyone' | 'few' | 'asked_if_understood' | 'not_a_check'
+    acted: { how: 'adjusted' | 'confirmed'; text: string | null; atSec: number } | null
+  }
+}
 export type AudioFeedbackLogEntry = { timestampSec: number; kind: 'generic' | 'specific'; text: string }
 export type AudioDirectiveLogEntry = { timestampSec: number; text: string }
 export type AudioToneLogEntry = { timestampSec: number; kind: 'positive' | 'corrective'; text: string }

@@ -12,7 +12,7 @@ import {
   type Accent,
 } from '../components/report'
 import { getAudioSession, type AudioEscalationRung, type AudioQuote, type AudioSessionWithSegments } from '../lib/api'
-import { HELD_OPEN_LABEL, heldOpenStat, STUDENT_METRICS_ON, teacherVoiceView } from '../lib/teacherVoice'
+import { HELD_OPEN_LABEL, heldOpenStat, realChecks, STUDENT_METRICS_ON, teacherVoiceView } from '../lib/teacherVoice'
 import { buildCorrectionBalance, coverageCaveatLine, DETECTION_CAVEAT } from '../lib/correctionBalance'
 import {
   formatRatio,
@@ -154,7 +154,7 @@ export default function AudioCoachingExport() {
     recordedSec,
   })
   const cfu = getCountMetric({
-    count: session.cfuCount,
+    count: session.cfuLog?.some((c) => c.loop) ? (realChecks(session.cfuLog)?.length ?? null) : session.cfuCount,
     recordedSec,
     minDurationSec: MIN_DURATION_FOR_CFU_DETECTION_SEC,
   })

@@ -171,7 +171,7 @@ test('a line featured under one finding is not featured again in the same sectio
     }),
   )
   const higher = model.questioning.findings.find((f) => f.key === 'higher_order_questions')!
-  const checks = model.questioning.findings.find((f) => f.key === 'spoken_checks')!
+  const checks = model.questioning.findings.find((f) => f.key === 'checks_for_understanding')!
   assert.equal(higher.featured?.full, line)
   assert.equal(checks.featured?.full, 'Does that make sense to everyone so far?')
 })
@@ -225,7 +225,7 @@ test('a line cut mid-clause is not featured while a complete one is available', 
 
 test('held open sits right after higher-order questions, with answered-yourself beside it', () => {
   const keys = buildInsightsModel(lesson({})).questioning.findings.map((f) => f.key)
-  assert.deepEqual(keys, ['higher_order_questions', 'held_open', 'self_answered', 'spoken_checks'])
+  assert.deepEqual(keys, ['higher_order_questions', 'held_open', 'follow_ups', 'self_answered', 'checks_for_understanding'])
   assert.ok(!buildInsightsModel(lesson({})).talk.findings.some((f) => f.key === 'fast_stretches'), 'fast stretches are gone')
 })
 
@@ -260,7 +260,6 @@ test('held open: thinking questions only, typical is the median, self-answered l
   assert.equal(held.value, 'Typically 9s')
   assert.match(held.caveat ?? '', /^2 of 3 held 3s\+/)
   assert.match(held.caveat ?? '', /an estimate: recorded before voice checks/, 'no speaker confidence on these lines')
-  assert.equal(model.questioning.heldOpen.length, 3)
   assert.equal(held.evidence.find((e) => e.full === 'Why would they sign it then?')?.polarity, 'growth')
   assert.equal(held.evidence.find((e) => e.full === 'What would you have done?')?.tag, 'Still open after 2 min')
 })
@@ -296,5 +295,47 @@ test('held open: a question set as a task is listed but not timed', () => {
   assert.equal(held.value, 'Typically 7s')
   assert.match(held.caveat ?? '', /1 set as a task, not counted/)
   assert.doesNotMatch(held.caveat ?? '', /estimate/, 'voice-checked lines are not an estimate')
-  assert.equal(model.questioning.heldOpen.length, 1, 'the task gets no bar')
+})
+
+test('checks: who each asked, what you did with it, and not-a-check left out of the count', () => {
+  const loop = (who: string, acted: object | null = null) => ({ who, acted })
+  const model = buildInsightsModel(
+    lesson({
+      segments: said([10, 'Boards up, show me your answer.'], [16, 'I am seeing a lot of B, let us look again.'], [60, 'Does that make sense?'], [90, 'Right?']),
+      cfuLog: [
+        { timestampSec: 10, text: 'Boards up, show me your answer.', whatItChecked: 'x', loop: loop('everyone', { how: 'adjusted', text: 'I am seeing a lot of B', atSec: 16 }) },
+        { timestampSec: 60, text: 'Does that make sense?', whatItChecked: 'x', loop: loop('asked_if_understood') },
+        { timestampSec: 90, text: 'Right?', whatItChecked: 'x', loop: loop('not_a_check') },
+      ] as never,
+    }),
+  )
+  const checks = model.questioning.findings.find((f) => f.key === 'checks_for_understanding')!
+  assert.equal(checks.value, '2')
+  assert.match(checks.caveat ?? '', /^1 everyone answered · 0 a few answered · 1 asked if they understood · you acted on what you saw after 1 of 2/)
+  assert.equal(checks.featured?.full, 'Boards up, show me your answer.')
+  assert.equal(checks.featured?.whyLabel, 'You changed course:')
+  assert.equal(checks.evidence.find((e) => e.full === 'Does that make sense?')?.polarity, 'growth')
+})
+
+test('follow-ups asked while a thinking question was open are listed', () => {
+  const model = buildInsightsModel(
+    lesson({
+      segments: said([10, 'Why do leaves change colour?'], [18, 'Why do you think the cold matters?']),
+      questionLog: [
+        {
+          timestampSec: 10, type: 'higher_order', waitTimeSec: null, text: 'Why do leaves change colour?', followUps: [],
+          heldOpen: { outcome: 'closed', questionType: 'explain', sec: 17, closedBy: null, closedAtSec: 30, how: 'confirmed', followUps: [{ text: 'Why do you think the cold matters?', atSec: 18 }] },
+        },
+        {
+          timestampSec: 18, type: 'higher_order', waitTimeSec: null, text: 'Why do you think the cold matters?', followUps: [],
+          heldOpen: { outcome: 'follow_up', questionType: 'explain', sec: null, closedBy: null, closedAtSec: null, how: null, partOfSec: 10 },
+        },
+      ] as never,
+    }),
+  )
+  const fu = model.questioning.findings.find((f) => f.key === 'follow_ups')!
+  assert.equal(fu.value, '1')
+  const held = model.questioning.findings.find((f) => f.key === 'held_open')!
+  assert.equal(held.value, 'Typically 17s', 'the follow-up is timed with its question, not on its own')
+  assert.equal(held.evidence[0].tag, 'Held 17s · 1 follow-up')
 })

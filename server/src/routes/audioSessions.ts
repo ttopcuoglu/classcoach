@@ -1,3 +1,4 @@
+import { readChecksLoop } from '../lib/checksLoop.ts'
 import { readHeldOpen } from '../lib/heldOpen.ts'
 import { Router } from 'express'
 import multer from 'multer'
@@ -1032,13 +1033,16 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
   // How long each thinking question stayed open needs the rebuilt question
   // log, so it rides along with this one rather than the reads above. Null
   // means the read failed and the log stands as it was.
-  const [studentTalkFocus, heldOpenLog] = await Promise.all([
+  // Who each check asked and whether it was acted on needs the rebuilt
+  // checks log, likewise.
+  const [studentTalkFocus, heldOpenLog, checksLog] = await Promise.all([
     readStudentTalkFocus(segments, {
       objective: lessonContent.statedObjective?.quote ?? null,
       summary: lessonContent.summary ?? null,
       subject: lessonContent.subject ?? null,
     }),
     readHeldOpen(analysis.questionLog, segments),
+    readChecksLoop(analysis.cfuLog, segments),
   ])
 
   // Notes are no longer auto-generated from raw metrics here — they're
@@ -1081,7 +1085,7 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
       highlights: analysis.highlights,
       phases: analysis.phases,
       questionLog: (heldOpenLog ?? analysis.questionLog) as unknown as Prisma.InputJsonValue,
-      cfuLog: analysis.cfuLog,
+      cfuLog: (checksLog ?? analysis.cfuLog) as unknown as Prisma.InputJsonValue,
       feedbackLog: analysis.feedbackLog,
       directiveLog: analysis.directiveLog,
       toneLog: analysis.toneLog,

@@ -9,7 +9,7 @@
 // server/src/lib/teacherVoice.ts. The values are still stored; turning this
 // on needs no re-analysis.
 
-import type { AudioQuestionLogEntry, AudioSessionWithSegments } from './api'
+import type { AudioCfuLogEntry, AudioQuestionLogEntry, AudioSessionWithSegments } from './api'
 import type { ConfidentMetric } from './reportConfidence'
 
 export const STUDENT_METRICS_ON = false
@@ -113,6 +113,8 @@ export type HeldOpenQuestion = {
   sec: number | null
   closedBy: string | null
   how: 'confirmed' | 'gave_answer' | 'moved_on' | null
+  /// Follow-ups asked while it was open.
+  followUps: number
 }
 
 /// How long the teacher held thinking questions open: from the end of the
@@ -136,6 +138,7 @@ export function heldOpenMetric(
     sec: q.heldOpen!.outcome === 'open' ? null : q.heldOpen!.sec,
     closedBy: q.heldOpen!.closedBy,
     how: q.heldOpen!.how,
+    followUps: q.heldOpen!.followUps?.length ?? 0,
   })
   const answeredNear = (q: AudioQuestionLogEntry) =>
     selfAnswered.some((s) => Math.abs(s.timestampSec - q.timestampSec) <= SAME_MOMENT_SEC)
@@ -162,6 +165,13 @@ export function heldOpenMetric(
     questions,
     tasks,
   }
+}
+
+/// The checks the report counts: every logged check, except ones the checks
+/// read found were not checks after all (rhetorical, logistics). One number
+/// for Insights, Summary and the export.
+export function realChecks<T extends AudioCfuLogEntry>(cfuLog: T[] | null): T[] | null {
+  return cfuLog ? cfuLog.filter((c) => c.loop?.who !== 'not_a_check') : null
 }
 
 /// The held-open measure as one stat tile: the typical seconds, shown with an

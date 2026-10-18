@@ -22,6 +22,7 @@ import { prisma } from '../lib/prisma.ts'
 
 const args = process.argv.slice(2)
 const write = args.includes('--write')
+const redo = args.includes('--redo')
 const flag = (name: string) => {
   const i = args.indexOf(name)
   return i === -1 ? null : args[i + 1]
@@ -46,7 +47,7 @@ const sessions = await prisma.audioSession.findMany({
   select: { id: true, createdAt: true, questionLog: true, user: { select: { email: true } } },
 })
 
-const tally = { lessons: 0, read: 0, failed: 0, questions: 0, closed: 0, open: 0, task: 0, self: 0, skipped: 0, unmatched: 0 }
+const tally = { lessons: 0, read: 0, failed: 0, questions: 0, closed: 0, open: 0, task: 0, self: 0, skipped: 0, unmatched: 0, nested: 0, followUps: 0 }
 const allSecs: number[] = []
 
 for (const session of sessions) {
@@ -55,7 +56,7 @@ for (const session of sessions) {
   const log = (Array.isArray(session.questionLog) ? session.questionLog : []) as unknown as QuestionLogEntry[]
   const thinking = log.filter((q) => q.type === 'higher_order')
   if (thinking.length === 0) continue
-  if (thinking.every((q) => q.heldOpen !== undefined)) continue
+  if (!redo && thinking.every((q) => q.heldOpen !== undefined)) continue
   tally.lessons++
 
   const segments: Segment[] = (
@@ -68,7 +69,7 @@ for (const session of sessions) {
     speakerConfidence: s.speakerConfidence,
   }))
 
-  const updated = await readHeldOpen(log, segments)
+  const updated = await readHeldOpen(redo ? log.map(({ heldOpen: _h, ...rest }) => rest) : log, segments)
   console.log(`\n${session.id}  ${session.user.email}  ${session.createdAt.toISOString().slice(0, 10)}`)
   if (!updated) {
     tally.failed++
@@ -86,6 +87,9 @@ for (const session of sessions) {
     } else if (h.outcome === 'not_thinking') {
       tally.skipped++
       console.log(`${head}\n      — not a thinking question`)
+    } else if (h.outcome === 'follow_up') {
+      tally.nested++
+      console.log(`${head}\n      — a follow-up inside the question at ${mmss(h.partOfSec ?? 0)}, timed with it`)
     } else if (h.outcome === 'self_answered') {
       tally.self++
       console.log(`${head}\n      — ${h.questionType}; you answered it in the same breath`)
@@ -99,6 +103,10 @@ for (const session of sessions) {
       tally.closed++
       allSecs.push(h.sec ?? 0)
       console.log(`${head}\n      — ${h.questionType}; ${h.sec}s, ${h.how}${h.closedBy ? `: "${h.closedBy}"` : ' (phrase not found in the line)'}`)
+    }
+    for (const f of h?.followUps ?? []) {
+      tally.followUps++
+      console.log(`        follow-up at ${mmss(f.atSec)}: "${f.text}"`)
     }
   }
 
@@ -118,7 +126,8 @@ const median = typical.length ? (typical.length % 2 ? typical[mid] : (typical[mi
 console.log(
   `\n${tally.lessons} lessons, ${tally.read} read, ${tally.failed} failed${write ? ' (written)' : ' (dry run — nothing written)'}.` +
     `\n${tally.questions} higher-order questions: ${tally.skipped} not thinking questions, ${tally.self} answered in the same breath, ` +
-    `${tally.task} set as tasks, ${tally.closed} closed, ${tally.open} still open, ${tally.unmatched} not measured.` +
+    `${tally.task} set as tasks, ${tally.nested} follow-ups folded into an earlier question, ` +
+    `${tally.closed} closed, ${tally.open} still open, ${tally.unmatched} not measured; ${tally.followUps} follow-ups heard.` +
     (median != null
       ? `\nTypical time held open: ${Math.round((median as number) * 10) / 10}s over ${typical.length}; ${typical.filter((s) => s >= 3).length} of ${typical.length} held 3s+.`
       : ''),
