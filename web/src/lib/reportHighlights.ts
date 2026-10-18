@@ -61,7 +61,7 @@ export function pickTop(candidates: NoticeCandidate[], preferredFocusMetric?: Fo
   }
   return sorted[0]
 }
-export function highlightCandidates(
+function highlightCandidates(
   highlights: AudioHighlight[] | null,
   label: string,
   id: string,

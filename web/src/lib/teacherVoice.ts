@@ -9,7 +9,7 @@
 // server/src/lib/teacherVoice.ts. The values are still stored; turning this
 // on needs no re-analysis.
 
-import type { AudioQuestionLogEntry, AudioSessionWithSegments, TranscriptSegment } from './api'
+import type { AudioQuestionLogEntry, AudioSessionWithSegments } from './api'
 import type { ConfidentMetric } from './reportConfidence'
 
 export const STUDENT_METRICS_ON = false
@@ -37,9 +37,9 @@ const FOLLOW_UP_HIGHLIGHT = 'Follow-up / probing question'
 /// same fields, and a gate at the display would have to be remembered in
 /// every one of them. Nulls already render as "not available" throughout.
 ///
-/// Segments are left whole. The longest-stretch reading needs to know where
-/// another voice cut in, and the transcript tab is the teacher's own record.
-/// Exchanges drawn from them are filtered with `teacherLinesOnly`.
+/// Segments are left whole: the talk-flow chart needs to know where another
+/// voice came in, and the transcript tab is the teacher's own record. Insights
+/// quotes only the teacher's lines (lib/verbatim.ts, contextLines).
 export function teacherVoiceView(session: AudioSessionWithSegments): AudioSessionWithSegments {
   if (STUDENT_METRICS_ON) return session
   return {
@@ -89,13 +89,6 @@ function questionsInOrder(log: AudioQuestionLogEntry[]): AudioQuestionLogEntry[]
   return flat
     .map((q) => ({ ...q, waitTimeSec: null, followUps: [] }))
     .sort((a, b) => a.timestampSec - b.timestampSec)
-}
-
-/// An exchange shown as evidence, minus every line not attributed to the
-/// teacher. The student line beside a teacher's is exactly the attribution
-/// this report does not trust.
-export function teacherLinesOnly(lines: TranscriptSegment[]): TranscriptSegment[] {
-  return STUDENT_METRICS_ON ? lines : lines.filter((s) => s.speakerLabel === 'Teacher')
 }
 
 /// What follow-ups show while they are off: they are found by a teacher
