@@ -1,3 +1,4 @@
+import { readParticipation } from '../lib/participation.ts'
 import { Router } from 'express'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
@@ -787,7 +788,7 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
   // The escalation read rides along with these: it needs the teacher's speech
   // and the coverage figure the phrase scan already computed, and nothing
   // from the other reads.
-  const [analysis, lessonContent, momentToRevisit, escalation, teachingMoves] = await Promise.all([
+  const [analysis, lessonContent, momentToRevisit, escalation, teachingMoves, participation] = await Promise.all([
     enrichClassroomMoves(scanned, segments),
     enrichLessonContent(detectLessonContent(segments, scanned.phases), segments),
     readMomentToRevisit(segments),
@@ -795,6 +796,8 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
     // Rides along with the others: it reads the teacher's side of the same
     // transcript and needs nothing any of them produce.
     readTeachingMoves(segments),
+    // How the teacher brought students in — stored with the teaching moves.
+    readParticipation(segments),
   ])
 
   // What the student talk was ABOUT, which needs the objective and so cannot
@@ -863,7 +866,9 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
       // again cannot leave a moment chosen from the old labels.
       momentToRevisit: momentToRevisit ?? Prisma.DbNull,
       escalation: escalation ?? Prisma.DbNull,
-      teachingMoves: teachingMoves ?? Prisma.DbNull,
+      teachingMoves: teachingMoves
+        ? ({ ...teachingMoves, ...(participation ? { participation } : {}) } as unknown as Prisma.InputJsonValue)
+        : Prisma.DbNull,
     },
     include: { segments: { orderBy: { startSec: 'asc' } } },
   })

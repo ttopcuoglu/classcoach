@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, MicIcon, PlayIcon } from '../components/icons'
+import TalkFlowStrip from '../components/TalkFlowStrip'
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import { ProgressRing, ThinkingIndicator, WorkingRing } from '../components/ProgressRing'
@@ -49,7 +50,6 @@ import {
   type AudioRubricLens,
   type AudioSession,
   type AudioSessionWithSegments,
-  type SoundTimeline,
   type AudioToneLogEntry,
   type ApiError,
   type FocusMetric,
@@ -2793,7 +2793,6 @@ function ReportPanel({
                 cfuLog={session.cfuLog}
                 feedbackLog={session.feedbackLog}
                 segments={session.segments}
-                metricsDetail={session.metricsDetail}
                 lastRow={sectionHardLook}
               />
             )}
@@ -5280,145 +5279,6 @@ function ClimateRoutinesTab({
   )
 }
 
-// Chart #2 — Pacing & Rhythm Timeline: buckets the session's already-fetched
-// per-utterance segments (session.segments, sent with every getAudioSession
-// call) into equal-duration bins spanning the full recording, and colors
-// each by whether teacher or student speech dominated it. A bin with no
-// segment overlap at all (a real coverage gap) hatches rather than being
-// skipped — the timeline always spans the full lesson duration.
-const PACING_TIMELINE_BINS = 24
-
-type PacingBin = 'teacher' | 'student' | 'sound' | 'quiet' | 'unavailable'
-
-// A bin with no words in it used to be one hatched "no dominant speaker"
-// block, which covered a quiet room and a room the microphone could not
-// resolve alike. Where the recording carried a loudness envelope the server
-// says which each second was, so the bin takes whichever of the two filled
-// more of it. Without one, it stays the combined block — still the honest
-// answer when there is nothing to tell them apart with.
-function emptyBinKind(seconds: string | undefined, binStart: number, binEnd: number): PacingBin {
-  if (!seconds) return 'unavailable'
-  let sound = 0
-  let quiet = 0
-  for (let sec = Math.floor(binStart); sec < Math.ceil(binEnd) && sec < seconds.length; sec++) {
-    if (seconds[sec] === 's') sound++
-    else if (seconds[sec] === 'q') quiet++
-  }
-  if (sound === 0 && quiet === 0) return 'unavailable'
-  return sound >= quiet ? 'sound' : 'quiet'
-}
-
-function minutesPhrase(sec: number): string {
-  if (sec < 60) return 'under a minute'
-  const m = Math.round(sec / 60)
-  return `${m} minute${m === 1 ? '' : 's'}`
-}
-
-/// One sentence of what the recording did and did not catch, and where.
-/// Never a reason: the teacher was in the room and knows what 18:00 was.
-function soundTimelineSentence(t: SoundTimeline): string {
-  const cap = (x: string) => x[0].toUpperCase() + x.slice(1)
-  const verb = (sec: number) => (sec < 90 ? 'was' : 'were')
-  const parts = [`Words came through for ${minutesPhrase(t.wordsSec)} of ${minutesPhrase(t.seconds.length)}.`]
-  if (t.soundSec >= 30) {
-    const where = t.soundRuns.map((r) => `${formatTime(r.startSec)}–${formatTime(r.endSec)}`).join(', ')
-    parts.push(`${cap(minutesPhrase(t.soundSec))} had sound but no words${where ? ` (${where})` : ''}.`)
-  }
-  if (t.quietSec >= 30) parts.push(`${cap(minutesPhrase(t.quietSec))} ${verb(t.quietSec)} quiet.`)
-  return parts.join(' ')
-}
-
-function buildPacingTimeline(segments: TranscriptSegment[], durationSec: number, seconds?: string): PacingBin[] {
-  const binSec = durationSec / PACING_TIMELINE_BINS
-  const bins: PacingBin[] = []
-  for (let i = 0; i < PACING_TIMELINE_BINS; i++) {
-    const binStart = i * binSec
-    const binEnd = binStart + binSec
-    let teacherSec = 0
-    let studentSec = 0
-    for (const seg of segments) {
-      const overlap = Math.min(seg.endSec, binEnd) - Math.max(seg.startSec, binStart)
-      if (overlap <= 0) continue
-      if (seg.speakerLabel === 'Teacher') teacherSec += overlap
-      else if (seg.speakerLabel === 'Student') studentSec += overlap
-    }
-    bins.push(
-      teacherSec === 0 && studentSec === 0
-        ? emptyBinKind(seconds, binStart, binEnd)
-        : teacherSec >= studentSec
-          ? 'teacher'
-          : 'student',
-    )
-  }
-  return bins
-}
-
-function PacingTimeline({
-  segments,
-  durationSec,
-  soundTimeline,
-}: {
-  segments: TranscriptSegment[]
-  durationSec: number | null
-  soundTimeline?: SoundTimeline | null
-}) {
-  if (durationSec == null || durationSec <= 0 || segments.length === 0) {
-    return <HatchedBar label="Talk flow unavailable this session." className="h-6 rounded-lg" />
-  }
-  const bins = buildPacingTimeline(segments, durationSec, soundTimeline?.seconds)
-  return (
-    <div>
-      <div className="flex h-6 w-full overflow-hidden rounded-lg">
-        {bins.map((bin, i) =>
-          // Hatched means the same thing here as in the talk bar above: sound
-          // the transcript has no words for, or, with no envelope, a block
-          // we cannot read at all.
-          bin === 'unavailable' || bin === 'sound' ? (
-            <div key={i} className="h-full flex-1" style={HATCH_STYLE} />
-          ) : bin === 'quiet' ? (
-            <div key={i} className="h-full flex-1 bg-hairline" />
-          ) : (
-            // Same teacher/student colors as TalkParticipationBar below, so
-            // the timeline and the distribution bar read as one consistent
-            // color language rather than two different "student" colors.
-            <div key={i} className={`h-full flex-1 ${bin === 'teacher' ? 'bg-terracotta' : 'bg-gold'}`} />
-          ),
-        )}
-      </div>
-      <div className="mt-1.5 flex justify-between text-[11px] text-ink-soft">
-        <span>0:00</span>
-        <span>{formatTime(durationSec)}</span>
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-soft">
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-terracotta" /> Teacher-heavy
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-gold" /> Student-heavy
-        </span>
-        {soundTimeline ? (
-          <>
-            <span className="flex items-center gap-1.5">
-              <HatchedSwatch /> Sound, no words
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-hairline" /> Quiet
-            </span>
-          </>
-        ) : (
-          <span className="flex items-center gap-1.5">
-            {/* Not labeled "unclear audio" — without an envelope this bucket
-                also covers genuine silence (think-time, quiet reading), which
-                nothing in the recording can tell apart from lost audio. */}
-            <HatchedSwatch /> No dominant speaker
-          </span>
-        )}
-      </div>
-      {soundTimeline && <p className="mt-3 text-sm text-ink">{soundTimelineSentence(soundTimeline)}</p>}
-    </div>
-  )
-}
-
 // Chart #3 — Questioning & Thinking Mix: the only two question types this
 // app actually detects are recall and higher-order (see questionLog/
 // higherOrderQuestionCount in audioAnalysis.ts) — shown as fractions, matching
@@ -5579,10 +5439,10 @@ function TalkParticipationTab({
 
       {talkInsight && <CoachNote text={talkInsight} />}
 
-      {/* The invitations, with one shown: evidence a click away is evidence
-          nobody reads. Whether anyone took the floor is not something a
-          recording from the front of the room can show. */}
-      <InlineEvidence title="You opened the floor" rows={session.teachingMoves?.invitations} noun="invitation" />
+      {/* How you brought students in: three moves in your own words, each
+          with one quote shown. Whether anyone took the floor is not
+          something a recording from the front of the room can show. */}
+      <BroughtStudentsIn session={session} />
 
       <SectionNextStep text={session.nextSteps?.talk} />
 
@@ -5590,10 +5450,12 @@ function TalkParticipationTab({
         <DetailRow title="Explore details">
           <DetailRows>
             <DetailRow title="Talk flow across the lesson">
-              <PacingTimeline
+              <TalkFlowStrip
                 segments={session.segments}
                 durationSec={session.durationSec}
-                soundTimeline={session.soundTimeline}
+                seconds={session.soundTimeline?.seconds ?? null}
+                invitations={(session.teachingMoves?.invitations ?? []).map((q) => q.timestampSec)}
+                checks={(session.cfuLog ?? []).map((c) => c.timestampSec)}
               />
             </DetailRow>
             {stretch && (
@@ -5679,20 +5541,92 @@ function TalkSplitBar({ teacherPct, studentPct }: { teacherPct: number | null; s
   )
 }
 
+const INVITE_FORMAT_LABEL = {
+  hands: 'Hands up',
+  call_out: 'Call out',
+  turn_and_talk: 'Turn and talk',
+  write_first: 'Write first',
+  show_me: 'Everyone shows',
+  choral: 'All together',
+  open: 'Open to the room',
+} as const
+const EXTEND_KIND_LABEL = { probe: 'Probing', reasoning: 'Asking for reasoning', build_on_peer: 'Building on a classmate' } as const
+
+/// "Hands up 3 · Turn and talk 1" — what a list held, by kind.
+function tally<K extends string>(rows: { [k: string]: unknown }[], key: string, labels: Record<K, string>): string {
+  const counts = new Map<K, number>()
+  for (const r of rows) counts.set(r[key] as K, (counts.get(r[key] as K) ?? 0) + 1)
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${labels[k]} ${n}`).join(' · ')
+}
+
+/// The three ways a teacher brings students in. Falls back to the older
+/// invitation and revision-prompt reads on lessons read before the
+/// participation read existed; the third shows only with evidence, because
+/// none heard is not none done.
+function BroughtStudentsIn({ session }: { session: AudioSessionWithSegments }) {
+  const moves = session.teachingMoves
+  const p = moves?.participation
+  const detail = (session.metricsDetail ?? {}) as Record<string, unknown>
+  const heard = typeof detail.answersHeardCount === 'number' ? detail.answersHeardCount : null
+  const followed = typeof detail.answersFollowedUpCount === 'number' ? detail.answersFollowedUpCount : null
+  const invitations = p?.invitations ?? moves?.invitations
+  const extending = p?.extending ?? moves?.revisionPrompts
+  const rate =
+    heard != null && followed != null && heard >= MIN_ANSWERS_FOR_FOLLOW_UP_RATE
+      ? `You followed up on ${followed} of the ${heard} student answers the recording could hear.`
+      : null
+  if (!invitations?.length && !extending?.length && !p?.widening.length && !rate) return null
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">How you brought students in</p>
+      <InlineEvidence
+        title="You invited students to contribute"
+        rows={invitations}
+        noun="Invitation"
+        summary={p ? tally(p.invitations, 'format', INVITE_FORMAT_LABEL) : undefined}
+        tag={p ? (r) => INVITE_FORMAT_LABEL[(r as unknown as { format: keyof typeof INVITE_FORMAT_LABEL }).format] : undefined}
+      />
+      <InlineEvidence
+        title="You encouraged students to explain and build on ideas"
+        rows={extending}
+        noun="Follow-up"
+        summary={[rate, p ? tally(p.extending, 'kind', EXTEND_KIND_LABEL) : null].filter(Boolean).join(' ') || undefined}
+        tag={p ? (r) => EXTEND_KIND_LABEL[(r as unknown as { kind: keyof typeof EXTEND_KIND_LABEL }).kind] : undefined}
+      />
+      {p && p.widening.length > 0 && (
+        <InlineEvidence title="You opened the conversation to more voices" rows={p.widening} noun="Beyond volunteers" />
+      )}
+    </div>
+  )
+}
+
 /// A list of moments with the first one shown and the rest a click away.
-function InlineEvidence({ title, rows, noun }: { title: string; rows: { quote: string; timestampSec: number }[] | undefined; noun: string }) {
+function InlineEvidence({
+  title,
+  rows,
+  noun,
+  summary,
+  tag,
+}: {
+  title: string
+  rows: { quote: string; timestampSec: number }[] | undefined
+  noun: string
+  summary?: string
+  tag?: (row: { quote: string; timestampSec: number }) => string
+}) {
   const [open, setOpen] = useState(false)
   if (!rows || rows.length === 0) return null
   const shown = open ? rows : rows.slice(0, 1)
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm font-semibold text-forest">
-        {title} {rows.length} time{rows.length === 1 ? '' : 's'}
+        {title} · {rows.length}
       </p>
+      {summary && <p className="-mt-1 text-xs text-ink-soft">{summary}</p>}
       {shown.map((row, i) => (
         <div key={`${row.timestampSec}-${i}`} className="rounded-r-xl border-l-4 border-forest/70 bg-cream-card px-3 py-2.5">
           <div className="flex justify-between text-xs font-semibold uppercase tracking-wide text-ink-soft">
-            <span>{noun}</span>
+            <span>{tag ? tag(row) : noun}</span>
             <span>{formatTime(row.timestampSec)}</span>
           </div>
           <p className="mt-1 text-sm text-ink">“{row.quote}”</p>
@@ -5776,57 +5710,6 @@ function EvidenceItemCard({
 /// than about the teacher.
 const MIN_ANSWERS_FOR_FOLLOW_UP_RATE = 3
 
-/// How often a heard student answer got a follow-up. The denominator is the
-/// answers the recording caught straight after a question — the only ones a
-/// follow-up can be spotted after — so a lesson where the microphone heard
-/// few students is not read as a teacher who never followed up.
-function FollowUpCard({
-  metricsDetail,
-  waitTime2Sec,
-}: {
-  metricsDetail: AudioSessionWithSegments['metricsDetail']
-  waitTime2Sec: number | null
-}) {
-  const detail = (metricsDetail ?? {}) as Record<string, unknown>
-  const heard = typeof detail.answersHeardCount === 'number' ? detail.answersHeardCount : null
-  const followed = typeof detail.answersFollowedUpCount === 'number' ? detail.answersFollowedUpCount : null
-  if (heard == null || followed == null || heard < MIN_ANSWERS_FOR_FOLLOW_UP_RATE) return null
-  const log = Array.isArray(detail.followUpLog) ? (detail.followUpLog as { timestampSec: number; text: string }[]) : []
-  // The clearest one: a line that opens like a question and says something,
-  // not a fragment the phrase scan caught ("You know what").
-  const example = log
-    .filter((f) => f.text.trim().split(/\s+/).length >= 4 && /^(why|how|what|who|which|when|where|can|could|do|does|did|is|are|would|will|so)\b/i.test(f.text.trim()))
-    .sort((a, b) => a.text.length - b.text.length)[0]
-  return (
-    <div className="flex flex-col gap-2 rounded-xl border border-hairline bg-cream-card p-4">
-      <p className="text-xs font-semibold text-ink-soft">Follow-ups</p>
-      <p className="text-sm text-ink">
-        You followed up on{' '}
-        <span className="font-heading text-xl font-extrabold text-ink">
-          {followed} of {heard}
-        </span>{' '}
-        student answers the recording could hear.
-      </p>
-      {example && (
-        <div className="rounded-r-xl border-l-4 border-forest/70 bg-cream px-3 py-2">
-          <div className="flex justify-between text-xs font-semibold uppercase tracking-wide text-ink-soft">
-            <span>Follow-up</span>
-            <span>{formatTime(example.timestampSec)}</span>
-          </div>
-          <p className="mt-1 text-sm text-ink">“{example.text.trim().replace(/[?.]?$/, '?')}”</p>
-        </div>
-      )}
-      {waitTime2Sec != null && (
-        <p className="text-xs text-ink-soft">
-          After a student finished, you left about {waitTime2Sec}s on average before speaking — a follow-up needs a gap to
-          fit in.
-        </p>
-      )}
-      <p className="text-xs text-ink-soft">Only answers the microphone picked up are counted.</p>
-    </div>
-  )
-}
-
 function QuestioningCheckingTab({
   questionCount,
   questionLog,
@@ -5848,7 +5731,6 @@ function QuestioningCheckingTab({
   cfuLog,
   feedbackLog,
   segments,
-  metricsDetail,
   lastRow,
 }: {
   questionCount: number | null
@@ -5873,7 +5755,6 @@ function QuestioningCheckingTab({
   cfuLog: AudioCfuLogEntry[] | null
   feedbackLog: AudioFeedbackLogEntry[] | null
   segments: TranscriptSegment[]
-  metricsDetail: AudioSessionWithSegments['metricsDetail']
   /// The section's Hard Look, as the final row of its list.
   lastRow: React.ReactNode
 }) {
@@ -5925,8 +5806,6 @@ function QuestioningCheckingTab({
         totalCount={questionCount}
         state={higherOrderRatio?.state ?? 'not_measurable'}
       />
-
-      <FollowUpCard metricsDetail={metricsDetail} waitTime2Sec={waitTime2Sec} />
 
       <SectionNextStep text={nextStep} />
 
@@ -6021,11 +5900,6 @@ function QuestioningCheckingTab({
           tag={(row: { kind: string }) => row.kind}
         />
 
-        <MoveEvidence
-          title="When you pushed a student further"
-          blurb="Responses that asked a student to go on, back it up, or try again — rather than closing the exchange."
-          rows={teachingMoves?.revisionPrompts}
-        />
 
         {questionLog !== null && questionLog.length > 0 && (
           <DetailRow title={`Your questions, in order (${questionLog.length})`}>

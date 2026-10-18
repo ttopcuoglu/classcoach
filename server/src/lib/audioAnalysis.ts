@@ -483,7 +483,7 @@ export function detectLessonContent(segments: Segment[], phases: Phase[]): Lesso
 // Capitalized words that are never a student being addressed: discourse
 // markers, praise words, days, months, subjects, and ways of addressing the
 // whole room.
-const NAME_MENTION_STOPWORDS = new Set([
+export const NAME_MENTION_STOPWORDS = new Set([
   'okay', 'ok', 'so', 'now', 'well', 'great', 'good', 'alright', 'first',
   'next', 'then', 'today', 'yes', 'no', 'yeah', 'yep', 'nope', 'actually',
   'basically', 'obviously', 'remember', 'also', 'again', 'ready', 'here',
@@ -558,6 +558,17 @@ function extractCapitalizedWords(text: string): { addressed: string[]; content: 
     }
   }
   return { addressed, content }
+}
+
+/// Every name the teacher addressed someone by, across the lesson — for
+/// keeping students' names out of quotes shown in the report.
+export function addressedNamesIn(segments: Segment[]): string[] {
+  const names = new Set<string>()
+  for (const s of segments) {
+    if (s.speakerLabel !== 'Teacher') continue
+    for (const name of extractCapitalizedWords(s.text).addressed) names.add(name)
+  }
+  return [...names]
 }
 
 // Session-level filter over every teacher segment's capitalized words.

@@ -885,6 +885,14 @@ export type AudioTeachingMoves = {
   invitations?: AudioMoveQuote[]
   redirections?: (AudioMoveQuote & { clarity: 'actionable' | 'vague' })[]
   connections?: (AudioMoveQuote & { kind: AudioConnectionKind })[]
+  /// How the teacher brought students in (server lib/participation.ts).
+  /// Absent on lessons read before it existed. Names the teacher addressed
+  /// students by are already "[name]".
+  participation?: {
+    invitations: (AudioMoveQuote & { format: 'hands' | 'call_out' | 'turn_and_talk' | 'write_first' | 'show_me' | 'choral' | 'open' })[]
+    extending: (AudioMoveQuote & { kind: 'probe' | 'reasoning' | 'build_on_peer' })[]
+    widening: AudioMoveQuote[]
+  }
 }
 
 /// In order of force. The index is the severity.

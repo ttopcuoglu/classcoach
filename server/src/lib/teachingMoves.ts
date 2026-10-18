@@ -155,14 +155,14 @@ sentence @ m:ss | actionable or vague
 sentence @ m:ss | prior or purpose or closing
 </connections>`
 
-type Flat = { flat: string; offsets: { at: number; startSec: number }[] }
+export type Flat = { flat: string; offsets: { at: number; startSec: number }[] }
 
 /// One line to a verified quote plus whatever followed the pipe.
 ///
 /// The transcript decides whether it was said — the same rule as every other
 /// model read here. A quote the teacher's own speech does not contain is
 /// dropped rather than shown, however plausible it reads.
-function readLines(raw: string | null, { flat, offsets }: Flat): (Quoted & { attr: string })[] {
+export function readLines(raw: string | null, { flat, offsets }: Flat): (Quoted & { attr: string })[] {
   if (!raw) return []
   const out: (Quoted & { attr: string })[] = []
   const seen = new Set<string>()
