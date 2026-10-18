@@ -19,7 +19,7 @@ import type {
 import { safeToQuote } from './quoteSafety.ts'
 import { heldOpenMetric, HELD_OPEN_WINDOW_SEC, LONG_PAUSE_SEC, realChecks, type HeldOpenQuestion } from './teacherVoice.ts'
 import { resolveVerbatim, teacherRuns } from './verbatim.ts'
-import { buildFlow, type FlowModel } from './talkFlow.ts'
+import { longestTeacherStretch, type TeacherStretch } from './teacherStretch.ts'
 
 /// Three states, never a zero standing in for "we could not tell".
 export type FindingState = 'measured' | 'confirmed_none' | 'unavailable'
@@ -94,7 +94,6 @@ export type TimelineModel = {
   /// Spans attributed to the teacher.
   speech: { startSec: number; endSec: number }[]
   invitations: number[]
-  checks: number[]
 }
 
 export type QuestionSquare = { timestampSec: number; higherOrder: boolean; selfAnswered: boolean; text: string }
@@ -115,8 +114,8 @@ export type InsightsModel = {
     talkPct: number | null
     wpm: number | null
     timeline: TimelineModel | null
-    /// What the recording held, and its flow across the lesson.
-    flow: FlowModel | null
+    /// The longest unbroken stretch of your talk (lib/teacherStretch.ts).
+    longestStretch: TeacherStretch | null
   }
   questioning: SectionModel & { squares: QuestionSquare[]; total: number | null }
   clarity: SectionModel & { directions: DirectionRow[] }
@@ -305,7 +304,30 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
   // ---- 1. Talk & Pace
   const invitations = (moves?.invitations ?? []).map((q, i) => evidenceFrom(`inv-${i}`, q, 'Opened the floor', 'strength'))
   const wpm = typeof detail.teacherWordsPerMinute === 'number' ? detail.teacherWordsPerMinute : null
+  // The longest stretch, with the line it opened on. Shown as one of the
+  // three numbers and as a finding, so it comes with its words.
+  const stretch = longestTeacherStretch(segments)
+  // The first line of it that can be shown: the opening often names a
+  // student or is a fragment, and a withheld quote says nothing.
+  const stretchCandidates = stretch
+    ? stretch.lines
+        .map((l) => evidenceFrom('stretch-0', { quote: l.text, timestampSec: l.startSec }, `In the stretch ${mmss(stretch.startSec)}–${mmss(stretch.endSec)}`, 'neutral'))
+        .filter((e) => !e.withheld && !e.cut)
+    : []
+  // A real sentence over a fragment ("what we got today,") when there is one.
+  const stretchLine =
+    stretchCandidates.find((e) => e.quote.split(/\s+/).length >= 6 && /[.?!]["”]?$/.test(e.quote.trim())) ?? stretchCandidates[0] ?? null
+  const stretchEvidence = stretchLine ? [stretchLine] : []
   const talkFindings: Finding[] = [
+    finding({
+      key: 'longest_stretch',
+      label: 'Your longest stretch of talk',
+      state: segments.length === 0 ? 'unavailable' : stretch ? 'measured' : 'confirmed_none',
+      value: stretch ? mmss(stretch.durationSec) : null,
+      caveat: stretch ? 'Ends when another voice is heard or you pause for more than 10 seconds' : undefined,
+      note: segments.length === 0 ? 'No transcript for this lesson.' : !stretch ? 'None of the transcript was yours.' : undefined,
+      evidence: stretchEvidence,
+    }),
     finding({
       key: 'invitations',
       label: 'Invitations to participate',
@@ -329,14 +351,13 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
     },
     talkPct: report.teacherTalkPct,
     wpm,
-    flow: report.durationSec ? buildFlow(segments, report.durationSec, report.soundTimeline?.seconds ?? null, report.teacherTalkPct) : null,
+    longestStretch: stretch,
     timeline:
       report.durationSec && segments.length > 0
         ? {
             durationSec: report.durationSec,
             speech: segments.filter((s) => s.speakerLabel === 'Teacher').map((s) => ({ startSec: s.startSec, endSec: s.endSec })),
             invitations: invitations.map((e) => e.timestampSec),
-            checks: (realChecks(report.cfuLog) ?? []).map((c) => c.timestampSec),
           }
         : null,
   }
@@ -838,7 +859,10 @@ function featureOnce(section: SectionModel): void {
     if (used.has(f.featured.timestampSec)) {
       const others = f.evidence.filter((e) => !used.has(e.timestampSec))
       const next = pickFeatured(others, f.featured.polarity)
-      if (next) f.featured = next
+      // Never trade a line for a worse one — withheld, or cut mid-clause where
+      // the repeated one was whole: pickFeatured falls back to those when
+      // nothing else is left, and saying a line twice beats saying nothing.
+      if (next && !next.withheld && (!next.cut || f.featured.cut)) f.featured = next
     }
     used.add(f.featured.timestampSec)
   }

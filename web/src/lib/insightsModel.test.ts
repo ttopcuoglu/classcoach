@@ -108,11 +108,11 @@ test('every count is the evidence it shows', () => {
 
 test('a read that never ran is unavailable; one that found nothing is none', () => {
   const never = buildInsightsModel(lesson({ teachingMoves: null }))
-  assert.equal(never.talk.findings[0].state, 'unavailable')
-  assert.equal(never.talk.findings[0].value, null, 'never rendered as zero')
+  assert.equal(never.talk.findings.find((f) => f.key === 'invitations')!.state, 'unavailable')
+  assert.equal(never.talk.findings.find((f) => f.key === 'invitations')!.value, null, 'never rendered as zero')
   const none = buildInsightsModel(lesson({ teachingMoves: { invitations: [] } }))
-  assert.equal(none.talk.findings[0].state, 'confirmed_none')
-  assert.equal(none.talk.findings[0].value, '0')
+  assert.equal(none.talk.findings.find((f) => f.key === 'invitations')!.state, 'confirmed_none')
+  assert.equal(none.talk.findings.find((f) => f.key === 'invitations')!.value, '0')
 })
 
 test('an unsafe line is withheld, never featured over a safe one', () => {
@@ -127,7 +127,7 @@ test('an unsafe line is withheld, never featured over a safe one', () => {
       },
     }),
   )
-  const inv = model.talk.findings[0]
+  const inv = model.talk.findings.find((f) => f.key === 'invitations')!
   assert.equal(inv.featured?.full, 'Who else has a hook in mind?')
   assert.equal(inv.evidence.find((e) => e.timestampSec === 5)?.withheld, 'unsafe')
 })
@@ -140,7 +140,7 @@ test('a quote that cannot be found word for word is counted but not shown', () =
       teachingMoves: { invitations: [{ quote: 'Does anyone else want to share their hook with us?', timestampSec: 30 }] },
     }),
   )
-  const inv = model.talk.findings[0]
+  const inv = model.talk.findings.find((f) => f.key === 'invitations')!
   assert.equal(inv.value, '1', 'still counted — the moment was read')
   assert.equal(inv.evidence[0].withheld, 'unmatched')
   assert.equal(inv.evidence[0].segmentId, undefined)
@@ -153,7 +153,7 @@ test('a shown quote carries the line it came from, in the transcript’s exact w
       teachingMoves: { invitations: [{ quote: 'who else has a hook in mind', timestampSec: 30 }] },
     }),
   )
-  const e = model.talk.findings[0].featured!
+  const e = model.talk.findings.find((f) => f.key === 'invitations')!.featured!
   assert.equal(e.full, 'Who else has a hook in mind?')
   assert.equal(e.segmentId, 'Teacher-30')
 })
@@ -218,7 +218,7 @@ test('a line cut mid-clause is not featured while a complete one is available', 
       },
     }),
   )
-  const inv = model.talk.findings[0]
+  const inv = model.talk.findings.find((f) => f.key === 'invitations')!
   assert.equal(inv.evidence.find((e) => e.timestampSec === 10)?.cut, true)
   assert.equal(inv.featured?.full, 'Who else has a hook in mind?')
 })
@@ -338,4 +338,13 @@ test('follow-ups asked while a thinking question was open are listed', () => {
   const held = model.questioning.findings.find((f) => f.key === 'held_open')!
   assert.equal(held.value, 'Typically 17s', 'the follow-up is timed with its question, not on its own')
   assert.equal(held.evidence[0].tag, 'Held 17s · 1 follow-up')
+})
+
+test('Talk & Pace leads with the longest stretch, quoted from the line it opened on', () => {
+  const model = buildInsightsModel(lesson({ segments: said([10, 'Okay, here are the directions for today.'], [14, 'First you read the passage.']) }))
+  assert.deepEqual(model.talk.findings.map((f) => f.key), ['longest_stretch', 'invitations'])
+  const s = model.talk.findings[0]
+  assert.equal(s.value, '0:07')
+  assert.equal(s.featured?.full, 'Okay, here are the directions for today.')
+  assert.equal(model.talk.longestStretch?.startSec, 10)
 })
