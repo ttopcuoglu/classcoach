@@ -94,6 +94,8 @@ import {
   pickTop,
   type NoticeCandidate,
 } from '../lib/reportHighlights'
+import InsightsPage from '../components/insights/InsightsPage'
+import type { SectionKey as InsightsV3Section } from '../lib/insightsModel'
 import {
   FOLLOW_UPS_OFF,
   LONG_PAUSE_SEC,
@@ -103,6 +105,32 @@ import {
   teacherLinesOnly,
   teacherVoiceView,
 } from '../lib/teacherVoice'
+
+/// The v3 Insights layout (components/insights) while it is compared against
+/// the current one on real lessons. `?insights=new` turns it on for this
+/// browser and `?insights=old` turns it off; the choice is remembered so a
+/// teacher clicking between lessons stays in one layout.
+function wantsNewInsights(): boolean {
+  const param = new URLSearchParams(window.location.search).get('insights')
+  try {
+    if (param === 'new') localStorage.setItem('wivozaInsightsNew', '1')
+    if (param === 'old') localStorage.removeItem('wivozaInsightsNew')
+    return localStorage.getItem('wivozaInsightsNew') === '1'
+  } catch {
+    return param === 'new'
+  }
+}
+
+/// Which of the old four sections' Hard Look and Discuss each new section
+/// carries. Clarity has none of its own: the old "content" critiques belong
+/// to the Content Lens, and showing them twice would say them twice.
+const V3_OLD_SECTION: Record<InsightsV3Section, InsightsSection | null> = {
+  talk_pace: 'talk',
+  questioning: 'questions',
+  clarity: null,
+  climate: 'routines',
+  content_lens: 'content',
+}
 
 function formatTime(sec: number): string {
   const m = Math.floor(sec / 60)
@@ -2498,6 +2526,7 @@ function ReportPanel({
   // value removed while student metrics are off (lib/teacherVoice.ts).
   // `session` stays the whole record, because every update is spread from it.
   const report = useMemo(() => teacherVoiceView(session), [session])
+  const [newInsights] = useState(wantsNewInsights)
   const metrics = report.metricsDetail ?? {}
   const recordedSec = report.durationSec ?? 0
   const coverage = getCoverage(report.durationSec, report.phases, report.metricsDetail)
@@ -2875,7 +2904,63 @@ function ReportPanel({
         />
       )}
 
-      {tab === 'insights' && (
+      {tab === 'insights' && newInsights && (
+        <InsightsPage
+          report={report}
+          slots={{
+            footer: (section) => {
+              const old = V3_OLD_SECTION[section]
+              return (
+                <>
+                  {old && !(locked && !session.hardLook) && (
+                    <SectionHardLook
+                      section={old}
+                      hardLook={session.hardLook}
+                      locked={locked}
+                      sending={hardLookSending}
+                      error={hardLookError}
+                      onGenerate={handleGenerateHardLook}
+                    />
+                  )}
+                  {old && (
+                    <DiscussFooter
+                      compact
+                      label="Discuss with Wivoza Coach"
+                      onClick={() =>
+                        handleDiscussWithCoach({
+                          id: `insights-${section}`,
+                          observation: `${INSIGHTS_SECTIONS.find((s) => s.key === old)?.label ?? 'This section'} in this lesson`,
+                          whyItMatters: "Let's talk through what this part of the report showed.",
+                          timestampSec: null,
+                          excerpt: null,
+                          durationSec: null,
+                          weight: 0,
+                          focusMetric: null,
+                          detail: narrativeForSection(report, old) ?? undefined,
+                        })
+                      }
+                    />
+                  )}
+                </>
+              )
+            },
+            climateExtra: (
+              <>
+                <EscalationCard escalation={report.escalation ?? null} />
+                <CorrectionBalanceCard metricsDetail={report.metricsDetail} capturedSharePct={coverage.capturedSharePct} />
+              </>
+            ),
+            contentNotes: {
+              sending: contentNotesSending,
+              error: contentNotesError,
+              locked,
+              onGenerate: handleGenerateContentNotes,
+            },
+          }}
+        />
+      )}
+
+      {tab === 'insights' && !newInsights && (
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
           <InsightsNav section={insightsSection} onSelect={setInsightsSection} />
           <div className="min-w-0 flex-1">
