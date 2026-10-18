@@ -1483,32 +1483,6 @@ function buildSingleTurnExchange(segments: TranscriptSegment[], timestampSec: nu
   return exchange
 }
 
-// A "longest uninterrupted teacher monologue" highlight's own timestamp is
-// only the START of that stretch — a symmetric +/-15s window centered on
-// it mostly misses a genuinely long monologue (e.g. a real 40s stretch)
-// while still pulling in whatever unrelated line happens to sit just
-// before it starts. Return the actual span instead: every segment from
-// startSec up to (but not including) startSec + durationSec, which by
-// construction is exactly the run of consecutive teacher turns that made
-// up the monologue (a student turn would have already ended the streak).
-function buildFollowUpExchange(
-  segments: TranscriptSegment[],
-  questionLog: AudioQuestionLogEntry[] | null,
-  followUpTimestampSec: number,
-): TranscriptSegment[] {
-  const root = (questionLog ?? []).find((q) => q.followUps.some((f) => f.timestampSec === followUpTimestampSec))
-  if (!root) return []
-  const ordered = [...segments].sort((a, b) => a.startSec - b.startSec)
-  const pickWithAnswer = (ts: number): TranscriptSegment[] => {
-    const idx = ordered.findIndex((s) => s.startSec === ts)
-    if (idx === -1) return []
-    const pair = [ordered[idx]]
-    if (idx + 1 < ordered.length && ordered[idx + 1].speakerLabel === 'Student') pair.push(ordered[idx + 1])
-    return pair
-  }
-  return [...pickWithAnswer(root.timestampSec), ...pickWithAnswer(followUpTimestampSec)]
-}
-
 // Coach-voice interpretations of the category stats — deterministic
 // templates, no Claude call (the analysis-time notes generation was
 // removed for exactly this reason: two independent AI summaries of the
@@ -2819,6 +2793,7 @@ function ReportPanel({
                 cfuLog={session.cfuLog}
                 feedbackLog={session.feedbackLog}
                 segments={session.segments}
+                metricsDetail={session.metricsDetail}
                 lastRow={sectionHardLook}
               />
             )}
@@ -5524,52 +5499,6 @@ function QuestioningMixChart({
   )
 }
 
-// Shared by "Review an exchange" and the "Longest teacher-talk stretch"
-// card below — a highlight with the real transcript turns around it
-// (since there's no audio to play back, the transcript itself is the
-// evidence) plus a "why it matters" line and a way to bring it into a
-// live conversation with Coach.
-function TranscriptEvidenceCard({
-  candidate,
-  segments,
-  questionLog,
-}: {
-  candidate: NoticeCandidate
-  segments: TranscriptSegment[]
-  questionLog: AudioQuestionLogEntry[] | null
-}) {
-  // Each highlight type has its own precise, reconstructable exchange — a
-  // generic time window either misses the real span (a monologue) or can't
-  // tell which nearby line is actually part of it (a follow-up question's
-  // root question and answer aren't always close enough to guess at).
-  const window =
-    candidate.timestampSec == null
-      ? []
-      : candidate.observation === 'Follow-up / probing question'
-        ? buildFollowUpExchange(segments, questionLog, candidate.timestampSec)
-        : buildTranscriptWindow(segments, candidate.timestampSec)
-  return (
-    <div className="rounded-2xl border border-hairline bg-cream-card p-6">
-      <p className="text-xs font-semibold uppercase tracking-wide text-forest">
-        {formatCandidateHeadline(candidate)}
-      </p>
-      {window.length > 0 ? (
-        <div className="mt-2 flex flex-col gap-1.5">
-          {window.map((s, i) => (
-            <p key={i} className="text-sm text-ink">
-              <span className="font-medium">{s.speakerLabel}:</span> "{s.text}"
-            </p>
-          ))}
-        </div>
-      ) : (
-        candidate.excerpt && <p className="mt-2 text-sm text-ink">"{candidate.excerpt}"</p>
-      )}
-      <p className="mt-2 text-sm text-ink-soft">{candidate.whyItMatters}</p>
-      {/* The page carries one Discuss action at its end — see DiscussFooter. */}
-    </div>
-  )
-}
-
 /// What the audible student talk was about.
 ///
 /// Every other number on this page is a duration, and a duration cannot tell
@@ -5621,13 +5550,6 @@ function TalkParticipationTab({
   /// The section's Hard Look, as the final row of its list.
   lastRow: React.ReactNode
 }) {
-  const exampleCandidate = highlightCandidates(
-    session.highlights,
-    'Follow-up / probing question',
-    'talk-exchange',
-    0,
-    'Following up on a student answer pushes their thinking further instead of stopping at the first response.',
-  )[0]
   // What students talked about is no longer shown. The count could only ever
   // describe the turns the microphone caught, and those are the ones spoken
   // loudly towards the teacher — on-topic by construction. The worst-captured
@@ -5686,11 +5608,6 @@ function TalkParticipationTab({
                   A stretch ends when a student is heard or you pause for more than ten seconds. A student the microphone
                   missed does not end it, so check it against what you remember of that part of the lesson.
                 </p>
-              </DetailRow>
-            )}
-            {exampleCandidate && (
-              <DetailRow title="An exchange to review">
-                <TranscriptEvidenceCard candidate={exampleCandidate} segments={session.segments} questionLog={session.questionLog} />
               </DetailRow>
             )}
             <DetailRow title="How to read these numbers">
@@ -5855,6 +5772,61 @@ function EvidenceItemCard({
   )
 }
 
+/// Fewer heard answers than this and "X of Y" says more about the microphone
+/// than about the teacher.
+const MIN_ANSWERS_FOR_FOLLOW_UP_RATE = 3
+
+/// How often a heard student answer got a follow-up. The denominator is the
+/// answers the recording caught straight after a question — the only ones a
+/// follow-up can be spotted after — so a lesson where the microphone heard
+/// few students is not read as a teacher who never followed up.
+function FollowUpCard({
+  metricsDetail,
+  waitTime2Sec,
+}: {
+  metricsDetail: AudioSessionWithSegments['metricsDetail']
+  waitTime2Sec: number | null
+}) {
+  const detail = (metricsDetail ?? {}) as Record<string, unknown>
+  const heard = typeof detail.answersHeardCount === 'number' ? detail.answersHeardCount : null
+  const followed = typeof detail.answersFollowedUpCount === 'number' ? detail.answersFollowedUpCount : null
+  if (heard == null || followed == null || heard < MIN_ANSWERS_FOR_FOLLOW_UP_RATE) return null
+  const log = Array.isArray(detail.followUpLog) ? (detail.followUpLog as { timestampSec: number; text: string }[]) : []
+  // The clearest one: a line that opens like a question and says something,
+  // not a fragment the phrase scan caught ("You know what").
+  const example = log
+    .filter((f) => f.text.trim().split(/\s+/).length >= 4 && /^(why|how|what|who|which|when|where|can|could|do|does|did|is|are|would|will|so)\b/i.test(f.text.trim()))
+    .sort((a, b) => a.text.length - b.text.length)[0]
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-hairline bg-cream-card p-4">
+      <p className="text-xs font-semibold text-ink-soft">Follow-ups</p>
+      <p className="text-sm text-ink">
+        You followed up on{' '}
+        <span className="font-heading text-xl font-extrabold text-ink">
+          {followed} of {heard}
+        </span>{' '}
+        student answers the recording could hear.
+      </p>
+      {example && (
+        <div className="rounded-r-xl border-l-4 border-forest/70 bg-cream px-3 py-2">
+          <div className="flex justify-between text-xs font-semibold uppercase tracking-wide text-ink-soft">
+            <span>Follow-up</span>
+            <span>{formatTime(example.timestampSec)}</span>
+          </div>
+          <p className="mt-1 text-sm text-ink">“{example.text.trim().replace(/[?.]?$/, '?')}”</p>
+        </div>
+      )}
+      {waitTime2Sec != null && (
+        <p className="text-xs text-ink-soft">
+          After a student finished, you left about {waitTime2Sec}s on average before speaking — a follow-up needs a gap to
+          fit in.
+        </p>
+      )}
+      <p className="text-xs text-ink-soft">Only answers the microphone picked up are counted.</p>
+    </div>
+  )
+}
+
 function QuestioningCheckingTab({
   questionCount,
   questionLog,
@@ -5876,6 +5848,7 @@ function QuestioningCheckingTab({
   cfuLog,
   feedbackLog,
   segments,
+  metricsDetail,
   lastRow,
 }: {
   questionCount: number | null
@@ -5900,6 +5873,7 @@ function QuestioningCheckingTab({
   cfuLog: AudioCfuLogEntry[] | null
   feedbackLog: AudioFeedbackLogEntry[] | null
   segments: TranscriptSegment[]
+  metricsDetail: AudioSessionWithSegments['metricsDetail']
   /// The section's Hard Look, as the final row of its list.
   lastRow: React.ReactNode
 }) {
@@ -5951,6 +5925,8 @@ function QuestioningCheckingTab({
         totalCount={questionCount}
         state={higherOrderRatio?.state ?? 'not_measurable'}
       />
+
+      <FollowUpCard metricsDetail={metricsDetail} waitTime2Sec={waitTime2Sec} />
 
       <SectionNextStep text={nextStep} />
 

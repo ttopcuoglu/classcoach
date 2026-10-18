@@ -76,6 +76,15 @@ export type AnalysisResult = {
     recallQuestionCount: number
     higherOrderQuestionCount: number
     followUpQuestionCount: number
+    /// Student answers heard right after a teacher question — the only
+    /// answers a follow-up can be spotted after — and how many of them the
+    /// teacher followed up on (at most once each, so it never exceeds the
+    /// first). Absent on sessions analyzed before these were kept.
+    answersHeardCount?: number
+    answersFollowedUpCount?: number
+    /// Every follow-up question, in order. Absent before it was kept; the
+    /// highlights carry only the first.
+    followUpLog?: { timestampSec: number; text: string }[]
     /// Tasks that asked students to reason rather than follow steps — read
     /// from the transcript, so absent on sessions analyzed before that.
     thinkingTaskCount?: number
@@ -858,6 +867,10 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
   // checked and consumed.
   let awaitingStudentAnswer = false
   let readyForFollowUp = false
+  let answersHeardCount = 0
+  let answersFollowedUpCount = 0
+  let followedThisAnswer = false
+  const followUpLog: { timestampSec: number; text: string }[] = []
   const waitCandidates: { wait: number; segment: Segment }[] = []
   /// Wait time 2: a student turn ending, then the teacher's next turn. Capped
   /// at 30s because a longer gap is independent work or a recording artifact
@@ -1023,6 +1036,11 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
 
         if (precedingWasStudent && readyForFollowUp) {
           followUpQuestionCount++
+          followUpLog.push({ timestampSec: round(segment.startSec, 1), text: sentence.trim() })
+          if (!followedThisAnswer) {
+            answersFollowedUpCount++
+            followedThisAnswer = true
+          }
           // Push the entry itself (not a copy) so a wait-time assigned to it
           // later actually sticks — followUps is typed narrower but the
           // extra fields are harmless via structural typing.
@@ -1056,7 +1074,9 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       addressedWords.push(...capitalized.addressed)
       contentWords.push(...capitalized.content)
     } else {
+      if (awaitingStudentAnswer) answersHeardCount++
       readyForFollowUp = awaitingStudentAnswer
+      followedThisAnswer = false
       awaitingStudentAnswer = false
     }
   })
@@ -1126,6 +1146,9 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       recallQuestionCount,
       higherOrderQuestionCount,
       followUpQuestionCount,
+      answersHeardCount,
+      answersFollowedUpCount,
+      followUpLog,
       waitTimeSampleCount: waitTimes.length,
       teacherWordsPerMinute:
         teacherTalkSec >= MIN_TEACHER_SEC_FOR_RATE ? Math.round((teacherWords / teacherTalkSec) * 60) : null,
