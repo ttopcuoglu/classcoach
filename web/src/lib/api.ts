@@ -2145,6 +2145,28 @@ export function getAudioSession(id: string): Promise<AudioSessionWithSegments> {
   return request(`/api/audio-sessions/${id}`)
 }
 
+/// The v3 Insights coach notes, written on the server from the findings the
+/// page sends and checked there before they are stored (server
+/// lib/insightsNotes.ts). Evidence ids are the page's own.
+export type InsightsSectionNote = {
+  lead: string | null
+  more: string[]
+  findingRefs: string[]
+  keep: { evidenceId: string; text: string } | null
+  try: { evidenceId: string; text: string; rewrite: string } | null
+  source: 'model' | 'template' | 'unavailable'
+}
+export type InsightsNotes = {
+  version: number
+  inputHash: string
+  generatedAt: string
+  sections: Partial<Record<'talk_pace' | 'questioning' | 'clarity' | 'climate' | 'content_lens', InsightsSectionNote>>
+}
+
+export function writeInsightsNotes(sessionId: string, input: unknown): Promise<InsightsNotes> {
+  return request(`/api/audio-sessions/${sessionId}/insights-notes`, { method: 'POST', body: JSON.stringify(input) })
+}
+
 /// "Not right?" on an Insights quote. Recorded, never acted on: the quote
 /// stays where it is (server lib/quoteFlags.ts).
 export type QuoteFlag = { findingKey: string; segmentId: string; createdAt: string }

@@ -677,6 +677,11 @@ model AudioSession {
   // actually has. The same judgments about students were dropped because it
   // does not.
   teachingMoves    Json?
+  // The v3 Insights coach notes (lib/insightsNotes.ts): per section a lead,
+  // Read more, Keep and Try with a rewrite, written from the page's findings
+  // and checked before storing. Keyed by a hash of those findings, so they
+  // are rewritten only when what they are about changes.
+  insightsNotes    Json?
 
   // A loudness envelope for the recording — one RMS sample per second,
   // measured on the device while recording. NOT audio: speech cannot be

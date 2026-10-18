@@ -72,7 +72,9 @@ export type CoachText = { lead: string; more: string | null } | null
 
 export type KeepTry = {
   keep: { text: string; line: Evidence | null } | null
-  tryNext: { text: string; line: Evidence | null } | null
+  /// `rewrite` is the line as it could be said next time, from the coach
+  /// notes; absent until they are written.
+  tryNext: { text: string; line: Evidence | null; rewrite?: string } | null
 }
 
 export type TimelineModel = {
@@ -661,6 +663,69 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
 
   for (const section of [talk, questioning, clarity, climate, content]) featureOnce(section)
   return { talk, questioning, clarity, climate, content }
+}
+
+// --- what the coach notes are written from ------------------------------------
+
+/// Lines per finding the notes see: the featured one first, then the rest.
+const NOTES_EVIDENCE_PER_FINDING = 8
+
+const SECTION_TITLE: Record<SectionKey, string> = {
+  talk_pace: 'Talk & Pace',
+  questioning: 'Questioning & Checking',
+  clarity: 'Clarity',
+  climate: 'Climate & Routines',
+  content_lens: 'Content Lens',
+}
+
+/// The findings and their quotes, and nothing else, for the server to write
+/// the coach notes from (server lib/insightsNotes.ts). Withheld lines are left
+/// out: what a note can quote is what the page can show.
+export function buildNotesInput(model: InsightsModel) {
+  const findingFor = (f: Finding, forceUnavailable = false) => ({
+    key: f.key,
+    label: f.label,
+    state: forceUnavailable ? ('unavailable' as const) : f.state,
+    value: f.value,
+    ...(f.caveat ? { caveat: f.caveat } : {}),
+    evidence: [...(f.featured ? [f.featured] : []), ...f.evidence.filter((e) => e !== f.featured)]
+      .filter((e) => !e.withheld)
+      .slice(0, NOTES_EVIDENCE_PER_FINDING)
+      .map((e) => ({
+        id: e.id,
+        tag: e.tag,
+        polarity: e.polarity,
+        quote: e.quote,
+        time: mmss(e.timestampSec),
+        ...(e.why ? { why: e.why } : {}),
+      })),
+  })
+  const plain = (key: string, label: string, value: string) => ({ key, label, state: 'measured' as const, value, evidence: [] })
+  const { talk, questioning, clarity, climate, content } = model
+  return {
+    sections: [
+      {
+        key: 'talk_pace' as const,
+        title: SECTION_TITLE.talk_pace,
+        findings: [
+          ...(talk.talkPct != null ? [plain('talk_share', 'Your share of the recording', `${Math.round(talk.talkPct)}%`)] : []),
+          ...(talk.wpm != null ? [plain('pace', 'Your pace', `${talk.wpm} words a minute`)] : []),
+          ...talk.findings.map((f) => findingFor(f)),
+        ],
+      },
+      { key: 'questioning' as const, title: SECTION_TITLE.questioning, findings: questioning.findings.map((f) => findingFor(f)) },
+      { key: 'clarity' as const, title: SECTION_TITLE.clarity, findings: clarity.findings.map((f) => findingFor(f)) },
+      { key: 'climate' as const, title: SECTION_TITLE.climate, findings: climate.findings.map((f) => findingFor(f)) },
+      {
+        key: 'content_lens' as const,
+        title: SECTION_TITLE.content_lens,
+        ...(content.topic ? { context: `Topic, read from the teacher's speech: ${content.topic}` } : {}),
+        // No topic means no content lens: every finding goes unavailable so
+        // the section gets no note rather than a guess.
+        findings: content.findings.map((f) => findingFor(f, content.state === 'unavailable')),
+      },
+    ],
+  }
 }
 
 /// Each line is featured once per section. Two findings can rest on the same

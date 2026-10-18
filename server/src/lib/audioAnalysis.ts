@@ -551,6 +551,15 @@ function extractCapitalizedWords(text: string): { addressed: string[]; content: 
   return { addressed, content }
 }
 
+/// Names a teacher used to address a student in these lines ("Jared, will you
+/// start us off?"). The same direct-address rule the name count uses, so a
+/// character or an author named in the lesson is not taken for a student.
+export function addressedNames(lines: string[]): Set<string> {
+  const names = new Set<string>()
+  for (const line of lines) for (const name of extractCapitalizedWords(line).addressed) names.add(name)
+  return names
+}
+
 // Session-level filter over every teacher segment's capitalized words.
 function resolveNameMentions(addressed: string[], content: string[], hasStudentTalk: boolean): string[] {
   // No student voice anywhere means nobody was there to be called on.

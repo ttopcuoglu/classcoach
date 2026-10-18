@@ -41,8 +41,18 @@ export function SectionCard({
 }
 
 /// The coach's lead, always shown, with the rest behind "Read more".
-export function CoachNote({ coach }: { coach: CoachText }) {
+export function CoachNote({ coach, pending }: { coach: CoachText; pending?: boolean }) {
   const [open, setOpen] = useState(false)
+  if (pending) {
+    return (
+      <div className="mt-3.5 flex items-center gap-3 rounded-2xl bg-mint-tint px-4 py-3.5 text-sm text-ink-soft">
+        <span className="flex h-[30px] w-[30px] flex-none animate-pulse items-center justify-center rounded-full bg-forest font-heading text-sm font-extrabold text-gold">
+          W
+        </span>
+        Writing your coach note…
+      </div>
+    )
+  }
   if (!coach) return null
   return (
     <div className="mt-3.5 flex items-start gap-3 rounded-2xl bg-mint-tint px-4 py-3.5">
@@ -51,7 +61,13 @@ export function CoachNote({ coach }: { coach: CoachText }) {
       </span>
       <div className="min-w-0">
         <p className="m-0 text-[15.5px] leading-relaxed text-ink">{coach.lead}</p>
-        {coach.more && open && <p className="mt-2 text-sm leading-relaxed text-[#33413A]">{coach.more}</p>}
+        {coach.more &&
+          open &&
+          coach.more.split(/\n\s*\n/).map((para, i) => (
+            <p key={i} className="mt-2 text-sm leading-relaxed text-[#33413A]">
+              {para}
+            </p>
+          ))}
         {coach.more && (
           <button type="button" onClick={() => setOpen(!open)} className="mt-1.5 text-[13px] font-semibold text-terracotta-600">
             {open ? 'Show less' : 'Read more'}
@@ -276,16 +292,37 @@ export function KeepTry({ model }: { model: KeepTryModel }) {
         {model.tryNext ? (
           <>
             {model.tryNext.text}
-            {model.tryNext.line && !model.tryNext.line.withheld && (
-              <p className="mt-1 text-[13px] text-[#8F8572]">
-                From your lesson, {mmss(model.tryNext.line.timestampSec)}: “{model.tryNext.line.quote}”
-              </p>
+            {model.tryNext.line && !model.tryNext.line.withheld && model.tryNext.rewrite ? (
+              <BeforeAfter before={model.tryNext.line} after={model.tryNext.rewrite} />
+            ) : (
+              model.tryNext.line &&
+              !model.tryNext.line.withheld && (
+                <p className="mt-1 text-[13px] text-[#8F8572]">
+                  From your lesson, {mmss(model.tryNext.line.timestampSec)}: “{model.tryNext.line.quote}”
+                </p>
+              )
             )}
           </>
         ) : (
           <span className="text-ink-soft">No suggestion was written for this section.</span>
         )}
       </div>
+    </div>
+  )
+}
+
+/// Your line as you said it, struck through, and the same line as you could
+/// say it next time. The first is a quote; the second is a suggestion and is
+/// labelled as one.
+export function BeforeAfter({ before, after }: { before: Evidence; after: string }) {
+  return (
+    <div className="mt-1.5 text-[13px]">
+      <p className="m-0 text-[#8F8572]">
+        <span className="font-mono">{mmss(before.timestampSec)}</span> <s>“{before.quote}”</s>
+      </p>
+      <p className="m-0 mt-0.5 font-semibold text-forest">
+        <span className="font-normal text-ink-soft">Next time: </span>“{after}”
+      </p>
     </div>
   )
 }

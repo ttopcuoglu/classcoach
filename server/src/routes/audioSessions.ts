@@ -7,6 +7,14 @@ import { readEscalation } from '../lib/escalation.ts'
 import { readTeachingMoves } from '../lib/teachingMoves.ts'
 import { LONG_PAUSE_SEC, pauseAfterQuestions, STUDENT_METRICS_ON } from '../lib/teacherVoice.ts'
 import { parseQuoteFlag } from '../lib/quoteFlags.ts'
+import {
+  hashNotesInput,
+  keepTeacherQuotes,
+  NOTES_VERSION,
+  parseNotesInput,
+  writeInsightsNotes,
+  type InsightsNotes,
+} from '../lib/insightsNotes.ts'
 import { parseLevelTrace, splitNonSpeech, teacherIntervals } from '../lib/settleTime.ts'
 import { buildSoundTimeline } from '../lib/soundTimeline.ts'
 import { enrichLessonContent, flattenTeacherSpeech, isNoneAnswer, normalizeForMatch } from '../lib/lessonObjective.ts'
@@ -379,6 +387,49 @@ audioSessionsRouter.post('/', async (req, res) => {
     },
   })
   res.status(201).json(session)
+})
+
+/// A lesson's notes are written at most this many times. Each write is one
+/// model call; the findings change only when the lesson is re-read, so this
+/// is generous for real use and a ceiling on anything that is not.
+const MAX_NOTES_WRITES = 5
+
+/// The v3 Insights coach notes (lib/insightsNotes.ts). The page sends the
+/// findings it shows; the notes stored for those exact findings come back
+/// without a model call, and are written only when the findings changed.
+audioSessionsRouter.post('/:id/insights-notes', async (req, res) => {
+  const parsed = parseNotesInput(req.body)
+  if ('error' in parsed) {
+    res.status(400).json({ error: parsed.error })
+    return
+  }
+  const session = await prisma.audioSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+    select: { id: true, insightsNotes: true, segments: { select: { speakerLabel: true, startSec: true, endSec: true, text: true } } },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  const input = keepTeacherQuotes(parsed, session.segments)
+  const inputHash = hashNotesInput(input)
+  const stored = session.insightsNotes as (InsightsNotes & { writes?: number }) | null
+  if (stored && stored.version === NOTES_VERSION && stored.inputHash === inputHash) {
+    res.json(stored)
+    return
+  }
+  // A new version of the notes starts its own count: a prompt change has to
+  // reach lessons that already used theirs up.
+  const writes = stored?.version === NOTES_VERSION ? (stored.writes ?? 0) : 0
+  if (stored && writes >= MAX_NOTES_WRITES) {
+    // Past the ceiling the last notes stand, even if slightly out of date.
+    res.json(stored)
+    return
+  }
+  const notes = await writeInsightsNotes(input, inputHash)
+  const saved = { ...notes, writes: writes + 1 }
+  await prisma.audioSession.update({ where: { id: session.id }, data: { insightsNotes: saved } })
+  res.json(saved)
 })
 
 /// The teacher's own "Not right?" flags on this lesson's quotes, so the page

@@ -8,8 +8,23 @@
 // content notes — are passed in rather than rebuilt.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { flagQuote, getQuoteFlags, type AudioSessionWithSegments } from '../../lib/api'
-import { buildInsightsModel, type SectionKey, type SectionModel } from '../../lib/insightsModel'
+import {
+  flagQuote,
+  getQuoteFlags,
+  writeInsightsNotes,
+  type AudioSessionWithSegments,
+  type InsightsNotes,
+  type InsightsSectionNote,
+} from '../../lib/api'
+import {
+  buildInsightsModel,
+  buildNotesInput,
+  type CoachText,
+  type Evidence,
+  type KeepTry as KeepTryModel,
+  type SectionKey,
+  type SectionModel,
+} from '../../lib/insightsModel'
 import { NOT_IN_THIS_REPORT, STUDENT_METRICS_ON } from '../../lib/teacherVoice'
 import { DirectionsGrid, LessonTimeline, QuestionSquares } from './InsightsCharts'
 import { CoachNote, EmptyEvidence, FindingRow, KeepTry, SectionCard, UnavailablePanel, type SectionMeta } from './InsightsParts'
@@ -72,6 +87,34 @@ function Footer({ section, slots }: { section: SectionKey; slots: InsightsSlots 
   )
 }
 
+/// The coach note a section shows: the written one once it exists; nothing
+/// while it is being written; and the stored narrative only if writing failed.
+function coachFor(section: SectionModel, notes: NotesState): { coach: CoachText; pending: boolean } {
+  if (notes.status === 'pending') return { coach: null, pending: true }
+  const note = notes.status === 'ready' ? notes.notes.sections[section.key] : undefined
+  if (!note) return { coach: section.coach, pending: false }
+  if (note.source === 'unavailable' || !note.lead) return { coach: null, pending: false }
+  return { coach: { lead: note.lead, more: note.more.length > 0 ? note.more.join('\n\n') : null }, pending: false }
+}
+
+/// Keep / Try from the written note, pointing at the page's own lines. The
+/// built-in Keep / Try stands until the note exists, and wherever the note has
+/// none.
+function keepTryFor(section: SectionModel, notes: NotesState): KeepTryModel {
+  const note: InsightsSectionNote | undefined = notes.status === 'ready' ? notes.notes.sections[section.key] : undefined
+  if (!note || note.source !== 'model') return section.keepTry
+  const line = (id: string): Evidence | null =>
+    section.findings.flatMap((f) => f.evidence).find((e) => e.id === id) ?? null
+  return {
+    keep: note.keep ? { text: note.keep.text, line: line(note.keep.evidenceId) } : section.keepTry.keep,
+    tryNext: note.try
+      ? { text: note.try.text, line: line(note.try.evidenceId), rewrite: note.try.rewrite }
+      : section.keepTry.tryNext,
+  }
+}
+
+type NotesState = { status: 'pending' } | { status: 'ready'; notes: InsightsNotes } | { status: 'failed' }
+
 function Findings({ model, report }: { model: SectionModel; report: AudioSessionWithSegments }) {
   return (
     <>
@@ -85,6 +128,33 @@ function Findings({ model, report }: { model: SectionModel; report: AudioSession
 export default function InsightsPage({ report, slots }: { report: AudioSessionWithSegments; slots: InsightsSlots }) {
   const model = useMemo(() => buildInsightsModel(report), [report])
   const { talk, questioning, clarity, climate, content } = model
+
+  // The coach notes: stored ones come straight back, new findings are written
+  // once (server lib/insightsNotes.ts). The request is what the page shows,
+  // so it is keyed on that.
+  const notesInput = useMemo(() => buildNotesInput(model), [model])
+  const notesKey = useMemo(() => JSON.stringify(notesInput), [notesInput])
+  // The result is kept with the request it answered; anything else is still
+  // being written.
+  const [answered, setAnswered] = useState<{ key: string; state: NotesState } | null>(null)
+  const requestKey = `${report.id}:${notesKey}`
+  const notes: NotesState = answered?.key === requestKey ? answered.state : { status: 'pending' }
+  useEffect(() => {
+    let live = true
+    writeInsightsNotes(report.id, JSON.parse(notesKey))
+      // A reply without sections is a failed write, not notes.
+      .then((n) =>
+        live &&
+        setAnswered({
+          key: requestKey,
+          state: n && typeof n.sections === 'object' && n.sections ? { status: 'ready', notes: n } : { status: 'failed' },
+        }),
+      )
+      .catch(() => live && setAnswered({ key: requestKey, state: { status: 'failed' } }))
+    return () => {
+      live = false
+    }
+  }, [report.id, notesKey, requestKey])
 
   // "Not right?" flags this teacher already left on this lesson. A failed
   // load just means none show as flagged; flagging still works.
@@ -140,38 +210,38 @@ export default function InsightsPage({ report, slots }: { report: AudioSessionWi
           {talk.talkPct != null && <span className="rounded-full bg-cream px-3 py-1">You spoke {Math.round(talk.talkPct)}% of the recording</span>}
           {talk.wpm != null && <span className="rounded-full bg-cream px-3 py-1">{talk.wpm} words a minute · an anchor, not a target</span>}
         </div>
-        <CoachNote coach={talk.coach} />
+        <CoachNote {...coachFor(talk, notes)} />
         {talk.timeline ? (
           <LessonTimeline model={talk.timeline} />
         ) : (
           <EmptyEvidence>The lesson timeline is not available for this recording.</EmptyEvidence>
         )}
         <Findings model={talk} report={report} />
-        <KeepTry model={talk.keepTry} />
+        <KeepTry model={keepTryFor(talk, notes)} />
       </SectionCard>
 
       {/* 2 QUESTIONING */}
       <SectionCard id="insights-questioning" meta={META.questioning} footer={<Footer section="questioning" slots={slots} />}>
-        <CoachNote coach={questioning.coach} />
+        <CoachNote {...coachFor(questioning, notes)} />
         {questioning.squares.length > 0 && <QuestionSquares squares={questioning.squares} />}
         <Findings model={questioning} report={report} />
-        <KeepTry model={questioning.keepTry} />
+        <KeepTry model={keepTryFor(questioning, notes)} />
       </SectionCard>
 
       {/* 3 CLARITY */}
       <SectionCard id="insights-clarity" meta={META.clarity} footer={<Footer section="clarity" slots={slots} />}>
-        <CoachNote coach={clarity.coach} />
+        <CoachNote {...coachFor(clarity, notes)} />
         {clarity.directions.length > 0 && <DirectionsGrid rows={clarity.directions} />}
         <Findings model={clarity} report={report} />
-        <KeepTry model={clarity.keepTry} />
+        <KeepTry model={keepTryFor(clarity, notes)} />
       </SectionCard>
 
       {/* 4 CLIMATE */}
       <SectionCard id="insights-climate" meta={META.climate} footer={<Footer section="climate" slots={slots} />}>
-        <CoachNote coach={climate.coach} />
+        <CoachNote {...coachFor(climate, notes)} />
         <Findings model={climate} report={report} />
         {slots.climateExtra && <div className="mt-4 flex flex-col gap-4">{slots.climateExtra}</div>}
-        <KeepTry model={climate.keepTry} />
+        <KeepTry model={keepTryFor(climate, notes)} />
       </SectionCard>
 
       {/* 5 CONTENT LENS */}
@@ -183,7 +253,7 @@ export default function InsightsPage({ report, slots }: { report: AudioSessionWi
             <span className="mt-2.5 inline-block rounded-full bg-lavender-tint px-3 py-1 text-[12px] font-bold text-[#5B4C93]">
               Topic detected from your speech: {content.topic}
             </span>
-            <CoachNote coach={content.coach} />
+            <CoachNote {...coachFor(content, notes)} />
             {!content.notesGenerated && (
               <div className="mt-3 rounded-xl bg-cream px-4 py-3 text-sm">
                 {slots.contentNotes.sending ? (
@@ -221,7 +291,7 @@ export default function InsightsPage({ report, slots }: { report: AudioSessionWi
                 )}
               </div>
             )}
-            <KeepTry model={content.keepTry} />
+            <KeepTry model={keepTryFor(content, notes)} />
             {(content.guidance.stuck.length > 0 || content.guidance.waysIn.length > 0) && (
               <div className="mt-3.5 rounded-xl bg-lavender-tint px-4 py-3 text-[13px] text-[#4A3F78]">
                 <b>General guidance · about the topic, not a reading of your lesson</b>
