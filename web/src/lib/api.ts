@@ -744,6 +744,9 @@ export type AudioQuestionLogEntry = {
   timestampSec: number
   type: 'recall' | 'higher_order'
   waitTimeSec: number | null
+  /// How long before the teacher spoke again. May contain a student's answer.
+  /// Absent on lessons analyzed before it existed.
+  pauseSec?: number | null
   text: string
   followUps: { timestampSec: number; text: string }[]
 }

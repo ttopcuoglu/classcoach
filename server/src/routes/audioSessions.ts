@@ -1,10 +1,11 @@
 import { Router } from 'express'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
-import { analyzeTranscript, buildContentExhibits, detectLessonContent, type Segment } from '../lib/audioAnalysis.ts'
+import { analyzeTranscript, buildContentExhibits, detectLessonContent, type QuestionLogEntry, type Segment } from '../lib/audioAnalysis.ts'
 import { enrichClassroomMoves } from '../lib/classroomMoves.ts'
 import { readEscalation } from '../lib/escalation.ts'
 import { readTeachingMoves } from '../lib/teachingMoves.ts'
+import { LONG_PAUSE_SEC, pauseAfterQuestions, STUDENT_METRICS_ON } from '../lib/teacherVoice.ts'
 import { parseLevelTrace, splitNonSpeech, teacherIntervals } from '../lib/settleTime.ts'
 import { buildSoundTimeline } from '../lib/soundTimeline.ts'
 import { enrichLessonContent, flattenTeacherSpeech, normalizeForMatch } from '../lib/lessonObjective.ts'
@@ -1543,7 +1544,31 @@ export type ClassSummaryMetrics = {
   connections?: string[]
   vocabulary?: string[]
   subject?: string | null
+  /// Questions with a long pause before the teacher spoke again, out of those
+  /// that could be timed (lib/teacherVoice.ts). The teacher-voice stand-in
+  /// for wait time while student metrics are off.
+  pauseAfterQuestions?: { long: number; timed: number }
 }
+
+/// The talk note while student metrics are off (lib/teacherVoice.ts). The
+/// other version is written around the student share and what it can and
+/// cannot mean; with that share gone from the page, the note describes the
+/// teacher's own talk and the moments they opened the floor, and says nothing
+/// about how much students spoke.
+const TEACHER_VOICE_TALK_NOTE = `Then THE TALK NOTE: one paragraph about the shape of the teacher's own talk
+across the lesson. The teacher's share of the recording is on that screen, so
+do not restate it. Pace is worth saying: how fast the teacher spoke is a
+number a teacher will not have in mind, so where the pace is notably quick for
+explaining new material, say so plainly and in their own terms — not as a
+verdict, since there is no correct rate and a fast stretch of storytelling is
+not a fault. Where the recording caught nothing for the first minutes, say
+that too. Say where the long teacher stretches fell and what they were doing
+(explaining, setting up, recapping), where the teacher stepped back, and
+whether the shape changed across the lesson. Where the teacher opened the
+floor, name that moment from the invitations list. Say nothing about how much
+students talked or how they took part: this report does not measure it, and
+the rest of the recording may be students, other voices, quiet work or sound
+the microphone could not make out.`
 
 export function buildClassSummarySystemPrompt(
   exhibits: { text: string; timestampSec: number }[],
@@ -1560,14 +1585,23 @@ export function buildClassSummarySystemPrompt(
   const measured = metrics
     ? `What the recording measured. You may cite these numbers and no others:
 - teacher talk: ${metrics.teacherTalkPct ?? 'not measured'}%
-- student talk: ${metrics.studentTalkPct ?? 'not measured'}%${metrics.studentVoiceDetected ? '' : ' (NO student voice was separately detected at all)'}
-- questions asked: ${metrics.questionCount ?? 'not measured'}
+${
+        STUDENT_METRICS_ON
+          ? `- student talk: ${metrics.studentTalkPct ?? 'not measured'}%${metrics.studentVoiceDetected ? '' : ' (NO student voice was separately detected at all)'}\n`
+          : ''
+      }- questions asked: ${metrics.questionCount ?? 'not measured'}
 - of those, higher-order: ${
         metrics.higherOrderCount != null && metrics.questionCount != null
           ? `${metrics.higherOrderCount} of ${metrics.questionCount}`
           : 'not measured'
       } (a count — never restate it as a percentage)
-- average wait time after a question: ${metrics.avgWaitTimeSec ?? 'not measured'}s
+${
+        STUDENT_METRICS_ON
+          ? `- average wait time after a question: ${metrics.avgWaitTimeSec ?? 'not measured'}s`
+          : metrics.pauseAfterQuestions && metrics.pauseAfterQuestions.timed > 0
+            ? `- questions followed by ${LONG_PAUSE_SEC} seconds or more before the teacher spoke again: ${metrics.pauseAfterQuestions.long} of ${metrics.pauseAfterQuestions.timed} that could be timed (a count — never a percentage). This pause runs to the teacher's next line and may contain a student's answer, so never call it wait time or think time.`
+            : '- pause after a question: not measured'
+      }
 - check-for-understanding moves heard: ${metrics.cfuCount ?? 'not measured'}`
     : ''
 
@@ -1581,7 +1615,11 @@ Structure, when the recording is long enough for three paragraphs:
 
 2. WHAT WENT WELL. Name specific things this teacher actually did — a connection they drew, a question they asked, a routine that worked, a moment they gave students room. Several of them, each tied to the moment it came from, not one line of praise. Be concrete and generous. Vague praise is worse than none.
 
-3. WHAT MIGHT BE WORTH A LOOK. Offered as questions for the teacher to weigh, not verdicts. And every one of them must be tied to the single most important caveat: THIS IS A MICROPHONE IN A ROOM. It hears the teacher clearly and students poorly. A student who spoke quietly, from the back, or in a group did not reach it. A low student-talk number may mean the room was quiet, or may mean the recording could not hear it, and you must say so rather than letting the teacher read it as a verdict on their teaching. Never tell a teacher what happened in their room that you could not hear. Where you are unsure, say what the recording could and could not show and let them judge.
+3. WHAT MIGHT BE WORTH A LOOK. Offered as questions for the teacher to weigh, not verdicts. And every one of them must be tied to the single most important caveat: THIS IS A MICROPHONE IN A ROOM. It hears the teacher clearly and students poorly. A student who spoke quietly, from the back, or in a group did not reach it. ${
+    STUDENT_METRICS_ON
+      ? 'A low student-talk number may mean the room was quiet, or may mean the recording could not hear it, and you must say so rather than letting the teacher read it as a verdict on their teaching.'
+      : 'This report is built from the teacher\'s voice only. It does not measure how much students spoke, what they said, or how long they took to answer, so never estimate any of those or describe student participation.'
+  } Never tell a teacher what happened in their room that you could not hear. Where you are unsure, say what the recording could and could not show and let them judge.
 
 If a number is missing or the transcript is too thin to support a paragraph, say so plainly and write less. Writing less is always allowed — but only for want of evidence. Where the transcript does support it, write the full paragraph.
 
@@ -1691,12 +1729,15 @@ ${
 Student names: ${metrics?.nameMentions ?? 'not measured'} mentions across ${metrics?.uniqueNames ?? 'not measured'} names.
 ${metrics?.teacherWordsPerMinute != null ? `Teacher speaking pace: about ${metrics.teacherWordsPerMinute} words a minute of their own speaking time (everyday conversation runs about 150).` : 'Teacher speaking pace: not measured.'}
 ${
-    metrics?.waitTime2Sec != null
+    !STUDENT_METRICS_ON
+      ? ''
+      : metrics?.waitTime2Sec != null
       ? `Pause after a student finished answering, before the teacher spoke: about ${metrics.waitTime2Sec}s across ${metrics.waitTime2SampleCount ?? 0} exchanges. This is a different number from the wait time above, which is the pause AFTER THE QUESTION.`
       : 'Pause after a student answer: not measured.'
   }
 ${metrics?.firstWordSec != null && metrics.firstWordSec >= 30 ? `Nothing was transcribed until ${mmss(metrics.firstWordSec)}, so that much of the silence is the recorder running before the lesson got going rather than quiet in the room.` : ''}
 ${(() => {
+    if (!STUDENT_METRICS_ON) return ''
     const f = metrics?.studentTalkFocus as
       | { classified?: number; onTopic?: number; procedural?: number; offTopic?: number; unclear?: number }
       | null
@@ -1706,7 +1747,7 @@ ${(() => {
       : 'What the student talk was about: not measured for this lesson (too few audible student turns to characterise).'
   })()}
 
-Then THE TALK NOTE: one paragraph about who was heard and for how long,
+${STUDENT_METRICS_ON ? `Then THE TALK NOTE: one paragraph about who was heard and for how long,
 covering both the shape of the teacher's talk and where students got
 the floor, and what that does and does not tell us.
 The numbers — teacher talk, student talk, silence — are on that screen, so do
@@ -1731,19 +1772,29 @@ student talk was ABOUT, and when that is given above you may use it: say so
 plainly, in proportions rather than percentages, and treat a large unclear
 share as the microphone's limit rather than the students'. When it is not
 given, say what was audible and leave the reading of it to the teacher, who
-was in the room.
+was in the room.` : TEACHER_VOICE_TALK_NOTE}
 
 Then THE QUESTIONS NOTE: one paragraph about the questioning, covering both
-what was asked and what happened after it was asked. Two pauses matter here
+what was asked and what happened after it was asked. ${
+    STUDENT_METRICS_ON
+      ? `Two pauses matter here
 and they are different: the one after the question, and the one after a
 student's answer. The second is the one with nothing in this report before
 now, and it is usually what explains a low follow-up count — a pause of a few
 tenths of a second leaves nowhere for a follow-up to go. Where that is what
 the numbers show, say it, because it turns a count the teacher cannot act on
-into one they can. Again the
+into one they can.`
+      : `The one pause this report has is the
+time from the end of a question to the teacher's next line. It may contain a
+student's answer, so describe it only as how long the teacher left before
+speaking again, never as think time or as what students did with it.`
+  } Again the
 counts are already on screen. Say what kinds of questions these were, whether
-they built on each other or moved on, what happened after one was asked, and
-whether answers were followed up or accepted. When you mention how many were
+they built on each other or moved on, ${
+    STUDENT_METRICS_ON
+      ? 'what happened after one was asked, and whether answers were followed up or accepted'
+      : 'and what the teacher said next'
+  }. When you mention how many were
 higher-order, give it as a count — "three of the seven" — and never as a
 percentage: with a handful of questions a percentage reads as a score. State
 it once, plainly, and move on to the questions themselves — do not comment on
@@ -1864,6 +1915,7 @@ type ClassSummarySource = {
     lessonContent: unknown
     studentTalkFocus?: unknown
     teachingMoves?: unknown
+    questionLog?: unknown
   }
 
 /// The quotable moment lists, from whatever the teaching-moves read stored.
@@ -1957,6 +2009,7 @@ export async function requestClassSummaryText(session: ClassSummarySource, segme
       waitTime2SampleCount: metricNumber(session.metricsDetail, 'waitTime2SampleCount'),
       firstWordSec: metricNumber(session.metricsDetail, 'firstWordSec'),
       studentTalkFocus: session.studentTalkFocus ?? null,
+      pauseAfterQuestions: pauseAfterQuestions(Array.isArray(session.questionLog) ? (session.questionLog as QuestionLogEntry[]) : null),
       cfuMoments: ((session.cfuLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 12),
       feedbackMoments: ((session.feedbackLog ?? []) as { kind: string; timestampSec: number; text: string }[]).slice(0, 12),
       directionMoments: ((session.directiveLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 10),

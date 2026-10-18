@@ -4,6 +4,7 @@ import { enrichLessonContent } from '../lib/lessonObjective.ts'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { buildContentExhibits } from '../lib/audioAnalysis.ts'
 import { extractTag } from '../lib/extractTag.ts'
+import { pauseAfterQuestions } from '../lib/teacherVoice.ts'
 import { buildClassSummarySystemPrompt, normalizeParagraphs, teachingMomentsFor } from '../routes/audioSessions.ts'
 import { prisma } from '../lib/prisma.ts'
 
@@ -124,6 +125,7 @@ async function main() {
         questionCount: analysis.questionCount,
         higherOrderPct: analysis.higherOrderPct,
         avgWaitTimeSec: analysis.avgWaitTimeSec,
+        pauseAfterQuestions: pauseAfterQuestions(analysis.questionLog),
         // The quotable moment lists, exactly as the route passes them. This
         // script builds the prompt itself rather than calling
         // requestClassSummaryText, so anything added there has to be added

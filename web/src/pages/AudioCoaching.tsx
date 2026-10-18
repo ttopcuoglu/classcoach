@@ -95,6 +95,15 @@ import {
   pickTop,
   type NoticeCandidate,
 } from '../lib/reportHighlights'
+import {
+  FOLLOW_UPS_OFF,
+  LONG_PAUSE_SEC,
+  NOT_IN_THIS_REPORT,
+  pauseAfterQuestionsMetric,
+  STUDENT_METRICS_ON,
+  teacherLinesOnly,
+  teacherVoiceView,
+} from '../lib/teacherVoice'
 
 function formatTime(sec: number): string {
   const m = Math.floor(sec / 60)
@@ -1553,6 +1562,12 @@ function buildTalkInsight(
   session: AudioSessionWithSegments,
   studentSegmentsMetric: ConfidentMetric,
 ): string | null {
+  if (!STUDENT_METRICS_ON) {
+    // The split and everything said about it rest on the student share.
+    return session.teacherTalkPct != null
+      ? `You spoke for about ${Math.round(session.teacherTalkPct)}% of the recording.`
+      : null
+  }
   let sentence = buildVoiceBalanceCaption(judgeTalkBalance(session.teacherTalkPct, session.studentTalkPct))
   if (studentSegmentsMetric.state === 'measured') {
     const count = Number(studentSegmentsMetric.display)
@@ -1578,6 +1593,15 @@ function buildQuestioningInsight(
     sentence = `A good chunk of today's questions pushed for real thinking (${higherOrderRatio.display} higher-order) — that's the harder kind of question to ask on the fly.`
   } else {
     sentence = "Most of today's questions were quick recall checks — a natural spot to slip in one 'why' or 'how' next time."
+  }
+  if (!STUDENT_METRICS_ON) {
+    // The same count the stat shows, and no reading of it: the pause runs to
+    // your next line and may hold a student's answer.
+    const pause = pauseAfterQuestionsMetric(session.questionLog)
+    if (pause.timed > 0) {
+      sentence += ` ${pause.long} of the ${pause.timed} questions that could be timed had ${LONG_PAUSE_SEC} seconds or more before you spoke again.`
+    }
+    return sentence
   }
   if (followUpMetric.state === 'measured') {
     sentence += ` You followed up on a question ${followUpMetric.display} time${followUpMetric.display === '1' ? '' : 's'} — that's a habit worth keeping.`
@@ -1940,6 +1964,45 @@ function nonSpeechSplit(
   return { quietPct: (quiet / durationSec) * 100, unresolvedPct: (unresolved / durationSec) * 100 }
 }
 
+/// What Insights leaves out on purpose while student metrics are off, said
+/// once at the foot of every section so a missing number reads as a decision
+/// rather than a gap.
+function NotInThisReport() {
+  const items = NOT_IN_THIS_REPORT.join(', ')
+  return (
+    <div className="mt-6 flex items-start gap-3 rounded-2xl border-2 border-dashed border-hairline bg-cream p-4 text-sm text-ink-soft">
+      <HatchedSwatch className="mt-1 h-3 w-3 shrink-0 rounded-sm" />
+      <p>
+        <span className="font-semibold text-ink">Not in this report:</span> {items[0].toUpperCase() + items.slice(1)}.
+        These need each voice told apart from yours, which a room recording can't yet do reliably, so this report is
+        built from your voice only.
+      </p>
+    </div>
+  )
+}
+
+/// What the hatched slice holds while student metrics are off.
+const NOT_YOUR_SPEECH_NOTE =
+  '“Not your speech” is the rest of the recording: students, other voices, quiet work, and sound the microphone couldn’t make out. This report is built from your voice, so it doesn’t split that up.'
+
+/// Pace used to be a trailing item in the talk legend, where it read as a
+/// fourth slice of the bar rather than a separate measure. It is the one
+/// number here a teacher can act on the same afternoon, so it gets its own
+/// line — with an anchor, because "181" means nothing on its own, and a target
+/// would be wrong: a lab demo and a read-aloud are different speeds and
+/// neither is a fault.
+function PaceAnchor({ wpm }: { wpm: number }) {
+  return (
+    <div className="rounded-xl bg-cream p-3">
+      <p className="text-sm text-ink">
+        <span className="font-semibold">Your pace — {wpm} words a minute.</span> Everyday conversation runs about
+        150.
+      </p>
+      <p className="mt-0.5 text-xs text-ink-soft">An anchor to place yourself against, not a target.</p>
+    </div>
+  )
+}
+
 // One stacked bar (Teacher / Students / the rest — all in one, not two
 // separate visualizations) plus a legend grid below it.
 //
@@ -1974,6 +2037,33 @@ function TalkParticipationBar({
   const barHeight = compact ? 'h-3' : 'h-4'
   if (teacherPct == null) {
     return <HatchedBar label="Talk balance unavailable this session" className={barHeight} />
+  }
+  if (!STUDENT_METRICS_ON) {
+    // Two parts: you, and everything else. Splitting the rest into students,
+    // quiet and sound needs the speaker split this report does not trust, so
+    // it stays one hatched slice — the same mark as everywhere else the
+    // recording could not say. Both shares are of the same span, so they add
+    // to 100.
+    const otherPct = Math.max(0, Math.round((100 - teacherPct) * 10) / 10)
+    const show = (pct: number) => (compact ? `${pct}%` : `${Math.round(pct)}%`)
+    return (
+      <div className="flex flex-col gap-3">
+        <div className={`flex w-full overflow-hidden rounded-full bg-cream ${barHeight}`}>
+          <div className="h-full bg-terracotta" style={{ width: `${teacherPct}%` }} />
+          <div className="h-full" style={{ width: `${otherPct}%`, ...HATCH_STYLE }} />
+        </div>
+        <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-ink-soft">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-terracotta" /> You {show(teacherPct)}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <HatchedSwatch className="h-2.5 w-2.5 rounded-sm" /> Not your speech {show(otherPct)}
+          </span>
+        </div>
+        {!compact && <p className="text-xs text-ink-soft">{NOT_YOUR_SPEECH_NOTE}</p>}
+        {paceWpm != null && <PaceAnchor wpm={paceWpm} />}
+      </div>
+    )
   }
   const remainder = Math.max(0, 100 - teacherPct - (studentPct ?? 0) - (silencePct ?? 0))
   return (
@@ -2036,22 +2126,7 @@ function TalkParticipationBar({
               usually voices — a video or noise from outside reads the same way.
             </p>
           )}
-          {/* Pace used to be a trailing item in that legend row, where it
-              read as a fourth slice of the bar rather than a separate
-              measure. It is the one number here a teacher can act on the
-              same afternoon, so it gets its own line — with an anchor,
-              because "181" means nothing on its own, and a target would be
-              wrong: a lab demo and a read-aloud are different speeds and
-              neither is a fault. */}
-          {paceWpm != null && (
-            <div className="rounded-xl bg-cream p-3">
-              <p className="text-sm text-ink">
-                <span className="font-semibold">Your pace — {paceWpm} words a minute.</span>{' '}
-                Everyday conversation runs about 150.
-              </p>
-              <p className="mt-0.5 text-xs text-ink-soft">An anchor to place yourself against, not a target.</p>
-            </div>
-          )}
+          {paceWpm != null && <PaceAnchor wpm={paceWpm} />}
         </>
       ) : (
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm text-ink-soft">
@@ -2115,11 +2190,12 @@ function WhoWasHeardCard({
 // no rate/percentage here (that's Insights > Questions & Thinking's job).
 function QuestionsOpenedCard({
   questionsMetric,
-  followUpMetric,
+  second,
   onExplore,
 }: {
   questionsMetric: ReturnType<typeof getCountMetric>
-  followUpMetric: ReturnType<typeof getCountMetric>
+  /// Follow-ups, or the pause after a question while student metrics are off.
+  second: { metric: ConfidentMetric; label: string }
   onExplore: () => void
 }) {
   return (
@@ -2131,8 +2207,8 @@ function QuestionsOpenedCard({
           <p className="text-xs text-ink-soft">Questions detected</p>
         </div>
         <div>
-          <p className="text-2xl font-semibold text-ink">{followUpMetric.display}</p>
-          <p className="text-xs text-ink-soft">Follow-up questions</p>
+          <p className="text-2xl font-semibold text-ink">{second.metric.display}</p>
+          <p className="text-xs text-ink-soft">{second.label}</p>
         </div>
       </div>
       <button
@@ -2418,38 +2494,50 @@ function ReportPanel({
       />
     )
 
-  const metrics = session.metricsDetail ?? {}
-  const recordedSec = session.durationSec ?? 0
-  const coverage = getCoverage(session.durationSec, session.phases, session.metricsDetail)
+  // Summary and Insights read the lesson through this: every student-derived
+  // value removed while student metrics are off (lib/teacherVoice.ts).
+  // `session` stays the whole record, because every update is spread from it.
+  const report = useMemo(() => teacherVoiceView(session), [session])
+  const metrics = report.metricsDetail ?? {}
+  const recordedSec = report.durationSec ?? 0
+  const coverage = getCoverage(report.durationSec, report.phases, report.metricsDetail)
   const num = (key: string) => (typeof metrics[key] === 'number' ? (metrics[key] as number) : null)
 
   // Talk & Participation
-  const teacherTalkMetric = getPresenceMetric(session.teacherTalkPct)
-  const studentTalkMetric = getPresenceMetric(session.studentTalkPct)
+  const teacherTalkMetric = getPresenceMetric(report.teacherTalkPct)
+  const studentTalkMetric = getPresenceMetric(report.studentTalkPct)
   // One decimal, like the two talk shares it is shown beside — rounded to a
   // whole number it made the three add up to 100.4.
   const silencePct =
-    session.teacherTalkPct != null && session.studentTalkPct != null
-      ? Math.max(0, Math.round((100 - session.teacherTalkPct - session.studentTalkPct) * 10) / 10)
+    report.teacherTalkPct != null && report.studentTalkPct != null
+      ? Math.max(0, Math.round((100 - report.teacherTalkPct - report.studentTalkPct) * 10) / 10)
       : null
   const silenceMetric = getPresenceMetric(silencePct)
   const studentSegmentsMetric = getCountMetric({ count: num('studentVoiceSegments'), recordedSec })
 
   // Questioning & Thinking
-  const questionsMetric = getCountMetric({ count: session.questionCount, recordedSec })
+  const questionsMetric = getCountMetric({ count: report.questionCount, recordedSec })
   const higherOrderCount = num('higherOrderQuestionCount')
   const higherOrderRatio =
-    session.questionCount != null ? formatRatio(higherOrderCount ?? 0, session.questionCount) : null
-  const followUpMetric = getFollowUpMetric({
-    count: num('followUpQuestionCount'),
-    studentVoiceSegments: num('studentVoiceSegments'),
-    recordedSec,
-  })
-  const waitTimeMetric = waitTimeMetricOf(session.avgWaitTimeSec, session.questionCount)
+    report.questionCount != null ? formatRatio(higherOrderCount ?? 0, report.questionCount) : null
+  const followUpMetric = STUDENT_METRICS_ON
+    ? getFollowUpMetric({
+        count: num('followUpQuestionCount'),
+        studentVoiceSegments: num('studentVoiceSegments'),
+        recordedSec,
+      })
+    : FOLLOW_UPS_OFF
+  // The teacher-voice stand-in for wait time, and what a "wait time" focus
+  // reads while student metrics are off. One value, shown the same way on
+  // Summary, Insights and the export.
+  const pauseMetric = pauseAfterQuestionsMetric(report.questionLog)
+  const waitTimeMetric = STUDENT_METRICS_ON
+    ? waitTimeMetricOf(report.avgWaitTimeSec, report.questionCount)
+    : pauseMetric
 
   // Checking Understanding
   const cfuMetric = getCountMetric({
-    count: session.cfuCount,
+    count: report.cfuCount,
     recordedSec,
     minDurationSec: MIN_DURATION_FOR_CFU_DETECTION_SEC,
   })
@@ -2480,19 +2568,19 @@ function ReportPanel({
       ? formatRatio(positiveCount, positiveCount + correctiveCount)
       : { state: 'not_measurable' as const, display: '—', reason: 'No positive or corrective phrases detected.' }
 
-  const reflectContext = buildReflectContext(session, cfuMetric, redirectionMetric, directiveMetric, coverage)
+  const reflectContext = buildReflectContext(report, cfuMetric, redirectionMetric, directiveMetric, coverage)
 
   // The written narrative when the report has one, and the rule-assembled
   // sentence as the fallback for reports made before it existed. The
   // rule-based version can only restate the metrics; the written one can say
   // that a 9.3% higher-order figure undercounts the thinking actually asked
   // for, which is the more useful thing for a teacher to read.
-  const talkInsight = session.talkNarrative ?? buildTalkInsight(session, studentSegmentsMetric)
+  const talkInsight = report.talkNarrative ?? buildTalkInsight(report, studentSegmentsMetric)
   const questioningInsight =
-    session.questionsNarrative ?? buildQuestioningInsight(session, higherOrderRatio, followUpMetric)
+    report.questionsNarrative ?? buildQuestioningInsight(report, higherOrderRatio, followUpMetric)
   const feedbackTotal = genericCount != null && specificCount != null ? genericCount + specificCount : null
   const cfuInsight = buildCfuInsight(cfuMetric, feedbackRatio, specificCount, feedbackTotal)
-  const hasRepeatedInstructionHighlight = (session.highlights ?? []).some((h) => h.label === 'Repeated instruction')
+  const hasRepeatedInstructionHighlight = (report.highlights ?? []).some((h) => h.label === 'Repeated instruction')
   const routinesInsight = buildRoutinesInsight(directiveMetric, hasRepeatedInstructionHighlight, transitionMetric)
   const climateInsight = buildClimateInsight(
     redirectionMetric,
@@ -2537,16 +2625,12 @@ function ReportPanel({
 
   // Computed once here (not per-tab) so the shared header can show it on
   // every tab, not just Summary.
-  const evidenceQuality = buildEvidenceQualityLine(coverage, [
-    teacherTalkMetric,
-    studentTalkMetric,
-    silenceMetric,
-    studentSegmentsMetric,
-    questionsMetric,
-    followUpMetric,
-      cfuMetric,
-    feedbackRatio,
-  ])
+  const evidenceQuality = buildEvidenceQualityLine(
+    coverage,
+    STUDENT_METRICS_ON
+      ? [teacherTalkMetric, studentTalkMetric, silenceMetric, studentSegmentsMetric, questionsMetric, followUpMetric, cfuMetric, feedbackRatio]
+      : [teacherTalkMetric, questionsMetric, pauseMetric, cfuMetric, feedbackRatio],
+  )
 
   function handleViewSource(sourceTab: ReportTab, sourceId: string, section?: InsightsSection) {
     setTab(sourceTab)
@@ -2684,12 +2768,13 @@ function ReportPanel({
 
       {tab === 'summary' && (
         <SummaryTab
-          session={session}
+          session={report}
           coverage={coverage}
           silencePct={silencePct}
           questionsMetric={questionsMetric}
           higherOrderRatio={higherOrderRatio}
           followUpMetric={followUpMetric}
+          pauseMetric={pauseMetric}
           cfuMetric={cfuMetric}
           feedbackRatio={feedbackRatio}
           talkInsight={talkInsight}
@@ -2798,41 +2883,42 @@ function ReportPanel({
             <InsightsSectionHeader section={insightsSection} />
             <SectionAccentContext.Provider value={INSIGHTS_SECTION_META[insightsSection].accent}>
             {insightsSection === 'talk' && (
-              <TalkParticipationTab session={session} silencePct={silencePct} talkInsight={talkInsight} lastRow={sectionHardLook} />
+              <TalkParticipationTab session={report} silencePct={silencePct} talkInsight={talkInsight} lastRow={sectionHardLook} />
             )}
 
             {insightsSection === 'questions' && (
               <QuestioningCheckingTab
-                questionCount={session.questionCount}
-                questionLog={session.questionLog}
-                teachingMoves={session.teachingMoves ?? null}
+                questionCount={report.questionCount}
+                questionLog={report.questionLog}
+                teachingMoves={report.teachingMoves ?? null}
                 questionsMetric={questionsMetric}
                 higherOrderRatio={higherOrderRatio}
                 higherOrderCount={higherOrderCount}
                 followUpMetric={followUpMetric}
-                heldSilenceSec={session.metricsDetail?.heldSilenceSec ?? null}
-                heldSilenceCount={session.metricsDetail?.heldSilenceSampleCount ?? 0}
-                waitTime2Sec={session.metricsDetail?.waitTime2Sec ?? null}
-                waitTime2SampleCount={session.metricsDetail?.waitTime2SampleCount ?? null}
-                thinkingTaskCount={session.metricsDetail?.thinkingTaskCount ?? null}
+                pauseMetric={pauseMetric}
+                heldSilenceSec={report.metricsDetail?.heldSilenceSec ?? null}
+                heldSilenceCount={report.metricsDetail?.heldSilenceSampleCount ?? 0}
+                waitTime2Sec={report.metricsDetail?.waitTime2Sec ?? null}
+                waitTime2SampleCount={report.metricsDetail?.waitTime2SampleCount ?? null}
+                thinkingTaskCount={report.metricsDetail?.thinkingTaskCount ?? null}
                 focusMetric={focusMetric}
                 questioningInsight={questioningInsight}
-                checksNarrative={session.checksNarrative ?? null}
-                nextStep={session.nextSteps?.questions}
-                highlights={session.highlights}
-                cfuLog={session.cfuLog}
-                feedbackLog={session.feedbackLog}
-                segments={session.segments}
+                checksNarrative={report.checksNarrative ?? null}
+                nextStep={report.nextSteps?.questions}
+                highlights={report.highlights}
+                cfuLog={report.cfuLog}
+                feedbackLog={report.feedbackLog}
+                segments={report.segments}
                 lastRow={sectionHardLook}
               />
             )}
 
             {insightsSection === 'content' && (
               <LessonContentTab
-                lessonContent={session.lessonContent}
-                contentNotes={session.contentNotes}
-                teachingMoves={session.teachingMoves ?? null}
-                narrative={session.contentNarrative ?? null}
+                lessonContent={report.lessonContent}
+                contentNotes={report.contentNotes}
+                teachingMoves={report.teachingMoves ?? null}
+                narrative={report.contentNarrative ?? null}
                 isShort={coverage.isShort}
                 sending={contentNotesSending}
                 error={contentNotesError}
@@ -2843,16 +2929,16 @@ function ReportPanel({
 
             {insightsSection === 'routines' && (
               <ClimateRoutinesTab
-                climateNarrative={session.climateNarrative ?? null}
-                nextStep={session.nextSteps?.climate}
-                directiveLog={session.directiveLog}
-                toneLog={session.toneLog}
-                redirectionLog={session.redirectionLog}
-                escalation={session.escalation ?? null}
-                teachingMoves={session.teachingMoves ?? null}
-                metricsDetail={session.metricsDetail}
+                climateNarrative={report.climateNarrative ?? null}
+                nextStep={report.nextSteps?.climate}
+                directiveLog={report.directiveLog}
+                toneLog={report.toneLog}
+                redirectionLog={report.redirectionLog}
+                escalation={report.escalation ?? null}
+                teachingMoves={report.teachingMoves ?? null}
+                metricsDetail={report.metricsDetail}
                 capturedSharePct={coverage.capturedSharePct}
-                segments={session.segments}
+                segments={report.segments}
                 lastRow={sectionHardLook}
               />
             )}
@@ -2874,10 +2960,11 @@ function ReportPanel({
                   // The words the teacher just read, so the coach opens about
                   // THIS page rather than about the lesson in general. Without
                   // it the coach only ever got the section's name.
-                  detail: narrativeForSection(session, insightsSection) ?? undefined,
+                  detail: narrativeForSection(report, insightsSection) ?? undefined,
                 })
               }
             />
+            {!STUDENT_METRICS_ON && <NotInThisReport />}
             </SectionAccentContext.Provider>
           </div>
         </div>
@@ -2928,6 +3015,7 @@ function SummaryTab({
   questionsMetric,
   higherOrderRatio,
   followUpMetric,
+  pauseMetric,
   cfuMetric,
   feedbackRatio,
   talkInsight,
@@ -2947,6 +3035,8 @@ function SummaryTab({
   questionsMetric: ReturnType<typeof getCountMetric>
   higherOrderRatio: ReturnType<typeof formatRatio> | null
   followUpMetric: ReturnType<typeof getCountMetric>
+  /// Questions with a long pause before you spoke again (lib/teacherVoice.ts).
+  pauseMetric: ConfidentMetric
   cfuMetric: ReturnType<typeof getCountMetric>
   feedbackRatio: ConfidentMetric
   talkInsight: string | null
@@ -3009,6 +3099,24 @@ function SummaryTab({
             like a split of the talking when they are shares of the recording —
             22.6% and 7.9% read as a missing 70% rather than as a room that was
             quiet or working. The three add up to the whole recording. */}
+        {/* While student metrics are off the split is you and everything else,
+            on the same span so the two add to 100, and the pause is the
+            teacher-voice one Insights shows (lib/teacherVoice.ts). */}
+        {!STUDENT_METRICS_ON ? (
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <SummaryStat label="You spoke" metric={getPresenceMetric(session.teacherTalkPct)} unit="%" accent={ACCENTS.terracotta} />
+            <SummaryStat
+              label="Not your speech"
+              metric={getPresenceMetric(
+                session.teacherTalkPct != null ? Math.max(0, Math.round((100 - session.teacherTalkPct) * 10) / 10) : null,
+              )}
+              unit="%"
+              accent={ACCENTS.mint}
+            />
+            <SummaryStat label="Questions" metric={questionsMetric} accent={ACCENTS.mint} />
+            <SummaryStat label={`Paused ${LONG_PAUSE_SEC}s+ after a question`} metric={pauseMetric} accent={ACCENTS.forest} />
+          </div>
+        ) : (
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
           <SummaryStat label="You spoke" metric={getPresenceMetric(session.teacherTalkPct)} unit="%" accent={ACCENTS.terracotta} />
           <SummaryStat label="Students spoke" metric={getPresenceMetric(session.studentTalkPct)} unit="%" accent={ACCENTS.gold} />
@@ -3028,6 +3136,7 @@ function SummaryTab({
             accent={ACCENTS.forest}
           />
         </div>
+        )}
       </NumberedCard>
 
       {/* 2. A strength to keep */}
@@ -3104,7 +3213,11 @@ function SummaryTab({
           />
           <QuestionsOpenedCard
             questionsMetric={questionsMetric}
-            followUpMetric={followUpMetric}
+            second={
+              STUDENT_METRICS_ON
+                ? { metric: followUpMetric, label: 'Follow-up questions' }
+                : { metric: pauseMetric, label: `Paused ${LONG_PAUSE_SEC}s+ before you spoke again` }
+            }
             onExplore={() => onNavigateInsights('questions')}
           />
           {/* The moment to revisit used to sit here too. It is still read and
@@ -4418,7 +4531,18 @@ function LessonContentTab({
   const connectionIdeas = lessonContent?.connectionIdeas ?? contentNotes?.connectionIdeas ?? []
   const keyTerms = lessonContent?.keyTerms ?? []
   // Three is where "you kept saying it" starts; one or two uses is a mention.
-  const unheard = keyTerms.filter((t) => t.teacherCount >= 3 && t.studentCount === 0).map((t) => `"${t.term}"`)
+  const unheard = STUDENT_METRICS_ON
+    ? keyTerms.filter((t) => t.teacherCount >= 3 && t.studentCount === 0).map((t) => `"${t.term}"`)
+    : []
+  // The teacher-side version of that line: what you leaned on, and a move
+  // that hands the term to students. Says nothing about whether they used it.
+  const leanedOn = STUDENT_METRICS_ON
+    ? []
+    : [...keyTerms]
+        .filter((t) => t.teacherCount >= 3)
+        .sort((a, b) => b.teacherCount - a.teacherCount)
+        .slice(0, 2)
+        .map((t) => `"${t.term}"`)
 
   const misconceptions = contentNotes?.misconceptions ?? []
   // The same note "Try next time" on Summary carries for this section.
@@ -4440,7 +4564,7 @@ function LessonContentTab({
                 <tr className="border-b border-hairline text-xs uppercase tracking-wide text-ink-soft">
                   <th scope="col" className="px-4 py-2 text-left font-semibold">Term</th>
                   <th scope="col" className="px-4 py-2 text-right font-semibold">You</th>
-                  <th scope="col" className="px-4 py-2 text-right font-semibold">Students</th>
+                  {STUDENT_METRICS_ON && <th scope="col" className="px-4 py-2 text-right font-semibold">Students</th>}
                 </tr>
               </thead>
               <tbody>
@@ -4448,9 +4572,11 @@ function LessonContentTab({
                   <tr key={t.term} className="border-b border-hairline last:border-b-0">
                     <th scope="row" className="px-4 py-2 text-left font-medium text-ink">{t.term}</th>
                     <td className="px-4 py-2 text-right tabular-nums text-ink">{t.teacherCount}</td>
-                    <td className={`px-4 py-2 text-right tabular-nums ${t.studentCount === 0 ? 'text-ink-soft' : 'font-semibold text-forest'}`}>
-                      {t.studentCount}
-                    </td>
+                    {STUDENT_METRICS_ON && (
+                      <td className={`px-4 py-2 text-right tabular-nums ${t.studentCount === 0 ? 'text-ink-soft' : 'font-semibold text-forest'}`}>
+                        {t.studentCount}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -4463,6 +4589,13 @@ function LessonContentTab({
         <p className="text-sm text-ink">
           You said {new Intl.ListFormat('en', { type: 'conjunction' }).format(unheard)} three or more times
           {unheard.length === 1 ? '' : ' each'}, and no student was heard saying {unheard.length === 1 ? 'it' : 'them'}.
+        </p>
+      )}
+
+      {leanedOn.length > 0 && (
+        <p className="text-sm text-ink">
+          You leaned on {new Intl.ListFormat('en', { type: 'conjunction' }).format(leanedOn)}. Next time, have
+          students use {leanedOn.length === 1 ? 'it' : 'each one'} in a sentence of their own.
         </p>
       )}
 
@@ -5445,7 +5578,9 @@ function PacingTimeline({
           // Hatched means the same thing here as in the talk bar above: sound
           // the transcript has no words for, or, with no envelope, a block
           // we cannot read at all.
-          bin === 'unavailable' || bin === 'sound' ? (
+          // While student metrics are off a block of other voices is not
+          // called students: it joins the hatched "not your speech".
+          bin === 'unavailable' || bin === 'sound' || (bin === 'student' && !STUDENT_METRICS_ON) ? (
             <div key={i} className="h-full flex-1" style={HATCH_STYLE} />
           ) : bin === 'quiet' ? (
             <div key={i} className="h-full flex-1 bg-hairline" />
@@ -5462,13 +5597,31 @@ function PacingTimeline({
         <span>{formatTime(durationSec)}</span>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-soft">
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-terracotta" /> Teacher-heavy
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-gold" /> Student-heavy
-        </span>
-        {soundTimeline ? (
+        {STUDENT_METRICS_ON ? (
+          <>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-terracotta" /> Teacher-heavy
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-gold" /> Student-heavy
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-terracotta" /> Mostly you
+            </span>
+            <span className="flex items-center gap-1.5">
+              <HatchedSwatch /> Not your speech
+            </span>
+            {soundTimeline && (
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-hairline" /> Quiet
+              </span>
+            )}
+          </>
+        )}
+        {!STUDENT_METRICS_ON ? null : soundTimeline ? (
           <>
             <span className="flex items-center gap-1.5">
               <HatchedSwatch /> Sound, no words
@@ -5589,12 +5742,13 @@ function TranscriptEvidenceCard({
   // generic time window either misses the real span (a monologue) or can't
   // tell which nearby line is actually part of it (a follow-up question's
   // root question and answer aren't always close enough to guess at).
-  const window =
+  const window = teacherLinesOnly(
     candidate.timestampSec == null
       ? []
       : candidate.observation === 'Follow-up / probing question'
         ? buildFollowUpExchange(segments, questionLog, candidate.timestampSec)
-        : buildTranscriptWindow(segments, candidate.timestampSec)
+        : buildTranscriptWindow(segments, candidate.timestampSec),
+  )
   return (
     <div className="rounded-2xl border border-hairline bg-cream-card p-6">
       <p className="text-xs font-semibold uppercase tracking-wide text-forest">
@@ -5683,7 +5837,8 @@ function TalkParticipationTab({
   // answer came from the recording that heard least. It is still computed,
   // because the Hard Look uses it to avoid criticising airtime blind.
   const wpm = session.metricsDetail?.teacherWordsPerMinute ?? null
-  const silenceNote = (silencePct ?? 0) > 0 ? leadingSilenceNote(session.metricsDetail?.firstWordSec) : null
+  const notYoursPct = STUDENT_METRICS_ON ? silencePct : session.teacherTalkPct != null ? 100 - session.teacherTalkPct : null
+  const silenceNote = (notYoursPct ?? 0) > 0 ? leadingSilenceNote(session.metricsDetail?.firstWordSec) : null
   // Only when it is long enough to be worth a look: every lesson has a longest
   // stretch, and a 40-second one is not a finding.
   const stretch = useMemo(() => {
@@ -5752,10 +5907,17 @@ function TalkParticipationTab({
             Talk time describes the recording, not the room: it doesn't show how many students took part or whether
             they were engaged, and a microphone near you hears you far better than it hears them.
           </p>
-          <p className="text-sm text-ink-soft">
-            "Silence / other" is everything that was neither clearly you nor clearly a student — quiet work, several
-            voices at once, and audio too faint to place.
-          </p>
+          {STUDENT_METRICS_ON ? (
+            <p className="text-sm text-ink-soft">
+              "Silence / other" is everything that was neither clearly you nor clearly a student — quiet work, several
+              voices at once, and audio too faint to place.
+            </p>
+          ) : (
+            <p className="text-sm text-ink-soft">
+              This section is built from your voice only. Telling one voice from another on a room recording is not
+              yet reliable enough to say how much students spoke, so everything that wasn't you is one share.
+            </p>
+          )}
           {silenceNote && <p className="text-sm text-ink-soft">{silenceNote}</p>}
           {wpm != null && (
             <p className="text-sm text-ink-soft">
@@ -5807,12 +5969,13 @@ function EvidenceItemCard({
   // just happens to fall nearby in time) that make a single moment look
   // like it's citing several.
   const isFeedback = candidate.observation === 'Specific feedback'
-  const window =
+  const window = teacherLinesOnly(
     candidate.timestampSec == null
       ? []
       : isFeedback
         ? buildFeedbackExchange(segments, candidate.timestampSec)
-        : buildSingleTurnExchange(segments, candidate.timestampSec)
+        : buildSingleTurnExchange(segments, candidate.timestampSec),
+  )
   return (
     <div className="rounded-2xl border border-hairline bg-cream-card p-6">
       <p className="text-xs font-semibold uppercase tracking-wide text-forest">
@@ -5843,6 +6006,7 @@ function QuestioningCheckingTab({
   higherOrderRatio,
   higherOrderCount,
   followUpMetric,
+  pauseMetric,
   heldSilenceSec,
   heldSilenceCount,
   waitTime2Sec,
@@ -5865,6 +6029,8 @@ function QuestioningCheckingTab({
   higherOrderRatio: ReturnType<typeof formatRatio> | null
   higherOrderCount: number | null
   followUpMetric: ReturnType<typeof getCountMetric>
+  /// Questions with a long pause before you spoke again (lib/teacherVoice.ts).
+  pauseMetric: ConfidentMetric
   /// Median silence held after a question nobody answered aloud, and how many
   /// such questions there were.
   heldSilenceSec: number | null
@@ -5968,13 +6134,15 @@ function QuestioningCheckingTab({
               }
               sub="Things students had to reason through"
             />
-            <Stat
-              label="Your follow-up questions"
-              value={followUpMetric.display}
-              muted={isMissingState(followUpMetric.state)}
-              reason={followUpMetric.reason}
-              focused={focusMetric === 'followUpQuestionCount'}
-            />
+            {STUDENT_METRICS_ON && (
+              <Stat
+                label="Your follow-up questions"
+                value={followUpMetric.display}
+                muted={isMissingState(followUpMetric.state)}
+                reason={followUpMetric.reason}
+                focused={focusMetric === 'followUpQuestionCount'}
+              />
+            )}
             {/* Replaces "your average wait time", which needed an audible
                 student answer and so only ever described the questions where
                 waiting WORKED — 25 of them across this teacher's real
@@ -5983,6 +6151,26 @@ function QuestioningCheckingTab({
                 Pauses that contain an answer are excluded rather than
                 averaged in; those run to a median of 6.0s against 3.9s, and
                 are mostly the student talking. */}
+            {/* While student metrics are off: the pause from the end of a
+                question to your next line. It needs no speaker split, and may
+                hold a student's answer, so it is a pause and never think
+                time. */}
+            {!STUDENT_METRICS_ON ? (
+              <div id="stat-avgWaitTime">
+                <Stat
+                  label={`Paused ${LONG_PAUSE_SEC}s+ before you spoke again`}
+                  value={pauseMetric.display}
+                  muted={isMissingState(pauseMetric.state)}
+                  reason={pauseMetric.reason}
+                  sub={
+                    isMissingState(pauseMetric.state)
+                      ? undefined
+                      : 'Of the questions that could be timed · may include student answers'
+                  }
+                  focused={focusMetric === 'avgWaitTime'}
+                />
+              </div>
+            ) : (
             <div id="stat-avgWaitTime">
               <Stat
                 label="Silence you held after a question"
@@ -6001,9 +6189,10 @@ function QuestioningCheckingTab({
                 focused={focusMetric === 'avgWaitTime'}
               />
             </div>
+            )}
             {/* The other half of wait time: the pause after a student's answer,
                 which is where a follow-up has to fit. */}
-            <WaitTime2Stat waitTime2Sec={waitTime2Sec} sampleCount={waitTime2SampleCount} />
+            {STUDENT_METRICS_ON && <WaitTime2Stat waitTime2Sec={waitTime2Sec} sampleCount={waitTime2SampleCount} />}
           </StatGrid>
           <WaitTimeChips questionLog={questionLog} />
         </DetailRow>
@@ -6050,7 +6239,13 @@ function QuestioningCheckingTab({
                       </span>
                     )}
                     <span className="normal-case font-normal">
-                      {q.waitTimeSec != null ? `${q.waitTimeSec}s wait` : 'wait not measured'}
+                      {STUDENT_METRICS_ON
+                        ? q.waitTimeSec != null
+                          ? `${q.waitTimeSec}s wait`
+                          : 'wait not measured'
+                        : q.pauseSec != null
+                          ? `${q.pauseSec}s before you spoke again`
+                          : 'pause not timed'}
                     </span>
                   </div>
                   <p className="mt-1.5 text-sm text-ink">"{q.text}"</p>
@@ -6107,10 +6302,18 @@ function QuestioningCheckingTab({
           <p className="text-sm text-ink-soft">
             Questions and checks are read from your side of the transcript. {CFU_DETECTION_LIMITATION}
           </p>
-          <p className="text-sm text-ink-soft">
-            Wait time, follow-ups and feedback all need a student to be heard, so they are limited by how much of the
-            room the microphone reached. Where too little came through, the number says so rather than showing zero.
-          </p>
+          {STUDENT_METRICS_ON ? (
+            <p className="text-sm text-ink-soft">
+              Wait time, follow-ups and feedback all need a student to be heard, so they are limited by how much of the
+              room the microphone reached. Where too little came through, the number says so rather than showing zero.
+            </p>
+          ) : (
+            <p className="text-sm text-ink-soft">
+              The pause runs from the end of your question to the next thing you said, so it may include a student's
+              answer. Wait time before a student answered and follow-ups to an answer both need students to be told
+              apart from you, which a room recording can't yet do reliably, so they are not in this report.
+            </p>
+          )}
         </DetailRow>
         {lastRow}
       </DetailRows>

@@ -12,6 +12,7 @@ import {
   type Accent,
 } from '../components/report'
 import { getAudioSession, type AudioEscalationRung, type AudioQuote, type AudioSessionWithSegments } from '../lib/api'
+import { LONG_PAUSE_SEC, pauseAfterQuestionsMetric, STUDENT_METRICS_ON, teacherVoiceView } from '../lib/teacherVoice'
 import { buildCorrectionBalance, coverageCaveatLine, DETECTION_CAVEAT } from '../lib/correctionBalance'
 import {
   formatRatio,
@@ -108,7 +109,9 @@ export default function AudioCoachingExport() {
   useEffect(() => {
     if (!id) return
     getAudioSession(id)
-      .then(setSession)
+      // The printed report reads the lesson the way the screen does: with every
+      // student-derived value removed while student metrics are off.
+      .then((loaded) => setSession(teacherVoiceView(loaded)))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [id])
@@ -141,6 +144,8 @@ export default function AudioCoachingExport() {
       ? formatRatio(num('higherOrderQuestionCount'), session.questionCount)
       : null
   const waitTime = waitTimeMetric(session.avgWaitTimeSec, session.questionCount)
+  const pause = pauseAfterQuestionsMetric(session.questionLog)
+  const notYoursPct = teacherPct != null ? Math.max(0, Math.round((100 - teacherPct) * 10) / 10) : null
   const pace = speechRateMetric(rawNum('teacherWordsPerMinute'))
   const waitTime2 = waitTime2Metric(rawNum('waitTime2Sec'), rawNum('waitTime2SampleCount'))
   const followUps = getFollowUpMetric({
@@ -210,13 +215,22 @@ export default function AudioCoachingExport() {
         {/* Silence belongs beside the two talk shares: they are shares of the
             recording, not of the talking, and without it 22.6% and 7.9% read as
             a missing 70%. */}
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
-          <Stat label="You spoke" metric={teacherTalk} unit="%" accent={A.terracotta} />
-          <Stat label="Students spoke" metric={studentTalk} unit="%" accent={A.gold} />
-          <Stat label="Silence / other" metric={getPresenceMetric(silencePct)} unit="%" accent={A.mint} />
-          <Stat label="Questions" metric={questions} accent={A.mint} />
-          <Stat label="Avg. wait" metric={waitTime} unit="s" accent={A.forest} />
-        </div>
+        {STUDENT_METRICS_ON ? (
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <Stat label="You spoke" metric={teacherTalk} unit="%" accent={A.terracotta} />
+            <Stat label="Students spoke" metric={studentTalk} unit="%" accent={A.gold} />
+            <Stat label="Silence / other" metric={getPresenceMetric(silencePct)} unit="%" accent={A.mint} />
+            <Stat label="Questions" metric={questions} accent={A.mint} />
+            <Stat label="Avg. wait" metric={waitTime} unit="s" accent={A.forest} />
+          </div>
+        ) : (
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat label="You spoke" metric={teacherTalk} unit="%" accent={A.terracotta} />
+            <Stat label="Not your speech" metric={getPresenceMetric(notYoursPct)} unit="%" accent={A.mint} />
+            <Stat label="Questions" metric={questions} accent={A.mint} />
+            <Stat label={`Paused ${LONG_PAUSE_SEC}s+ after a question`} metric={pause} accent={A.forest} />
+          </div>
+        )}
 
         <p className="mt-4 text-xs text-ink-soft">
           Coverage: {formatTime(coverage.recordedSec)} recorded of {formatTime(coverage.totalSec)}. A dash means
@@ -238,6 +252,21 @@ export default function AudioCoachingExport() {
                 <span><span className="mr-1.5 inline-block h-3 w-3 rounded-full bg-hairline align-[-1px]" />Silence {silencePct ?? 0}%</span>
               </div>
             </>
+          ) : !STUDENT_METRICS_ON && teacherPct != null ? (
+            <>
+              <div className="flex h-8 w-full overflow-hidden rounded-full">
+                <div className="bg-terracotta" style={{ width: `${teacherPct}%` }} />
+                <div className="bg-hairline" style={{ width: `${notYoursPct ?? 0}%` }} />
+              </div>
+              <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm font-semibold text-ink">
+                <span><span className="mr-1.5 inline-block h-3 w-3 rounded-full bg-terracotta align-[-1px]" />You {Math.round(teacherPct)}%</span>
+                <span><span className="mr-1.5 inline-block h-3 w-3 rounded-full bg-hairline align-[-1px]" />Not your speech {Math.round(notYoursPct ?? 0)}%</span>
+              </div>
+              <p className="mt-2 text-xs text-ink-soft">
+                Not your speech is the rest of the recording: students, other voices, quiet work and sound the
+                microphone couldn’t make out. This report is built from your voice only.
+              </p>
+            </>
           ) : (
             <p className="text-sm text-ink-soft">
               Talk balance could not be measured for this recording — the speakers were not separable.
@@ -252,7 +281,7 @@ export default function AudioCoachingExport() {
             Words a minute of your own speaking time. Everyday conversation runs about {CONVERSATIONAL_WPM} — an anchor
             to place yourself against, not a target.
           </p>
-          {(silencePct ?? 0) > 0 && leadingSilenceNote(rawNum('firstWordSec')) && (
+          {((STUDENT_METRICS_ON ? silencePct : notYoursPct) ?? 0) > 0 && leadingSilenceNote(rawNum('firstWordSec')) && (
             <p className="text-xs text-ink-soft">{leadingSilenceNote(rawNum('firstWordSec'))}</p>
           )}
 
@@ -290,14 +319,22 @@ export default function AudioCoachingExport() {
 
           <p className="mt-1 text-[11px] font-bold uppercase tracking-wide text-forest">How you responded</p>
           <p className="text-xs text-ink-soft">
-            Limited by how much of the room the microphone reached — a quiet answer leaves nothing to measure.
+            {STUDENT_METRICS_ON
+              ? 'Limited by how much of the room the microphone reached — a quiet answer leaves nothing to measure.'
+              : 'Built from your voice only. The pause runs from the end of your question to the next thing you said, so it may include a student’s answer.'}
           </p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label="Avg. wait time" metric={waitTime} unit="s" accent={A.mint} />
-            {/* The pause after an ANSWER, which is where a follow-up has to
-                fit — and the reason the follow-up count beside it is low. */}
-            <Stat label="Pause after an answer" metric={waitTime2} accent={A.mint} />
-            <Stat label="Follow-ups" metric={followUps} accent={A.mint} />
+            {STUDENT_METRICS_ON ? (
+              <>
+                <Stat label="Avg. wait time" metric={waitTime} unit="s" accent={A.mint} />
+                {/* The pause after an ANSWER, which is where a follow-up has to
+                    fit — and the reason the follow-up count beside it is low. */}
+                <Stat label="Pause after an answer" metric={waitTime2} accent={A.mint} />
+                <Stat label="Follow-ups" metric={followUps} accent={A.mint} />
+              </>
+            ) : (
+              <Stat label={`Paused ${LONG_PAUSE_SEC}s+ before you spoke again`} metric={pause} accent={A.mint} />
+            )}
             {specificShare && <Stat label="Feedback that was specific" metric={specificShare} accent={A.mint} />}
             <Stat label="Feedback moments" metric={feedbackMoments} accent={A.mint} />
           </div>
