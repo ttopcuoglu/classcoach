@@ -52,16 +52,16 @@ const SYSTEM_PROMPT = `You are reading short stretches of a classroom recording.
 For each check, do two things.
 
 1. WHO. Say who the check asked:
-- everyone — every student has to show or say an answer: "boards up", "show me on your fingers", "thumbs up or down", "everyone write one sentence", "turn and tell your partner", "everyone say it together", an exit ticket.
-- few — put to the room and answered by volunteers or by one named student: "who can tell me…", "Jayden, what do you think?".
-- asked_if_understood — asks whether they understand rather than for an answer: "does that make sense?", "any questions?", "everyone good?", "are we clear?".
+- everyone — every student has to show, say or work out an answer: "boards up", "show me on your fingers", "thumbs up or down", "raise your hand if you picked A", "everyone write one sentence", "everyone say it together", an exit ticket. Partner and small-group talk counts as everyone — "turn and talk to your neighbor", "tell your partner", "think-pair-share" — even if only a few share with the room afterwards.
+- few — put to the room and answered by volunteers or by one named student: "who can tell me…", "does anyone want to share…", "Jayden, what do you think?".
+- asked_if_understood — asks students to say whether they understand or need help, rather than for an answer: "does that make sense?", "any questions?", "is it clear?", "everyone good?", "did anyone miss any of these?", "anyone need me to go back?", "is anybody feeling stuck?".
 - not_a_check — not a check after all: rhetorical and talked straight through, logistics, a direction, or asking one student for help.
 If not_a_check, write nothing more for that check.
 
 2. ACTED. Find the teacher's first line that shows they acted on what the check showed them, if any:
 - adjusted — they respond to what they saw or heard and change course: reteach, go back, explain again a different way, regroup or pull a group, or address a mistake they noticed ("I'm seeing a lot of B's, let's look at this again", "a few of you are mixing up…").
-- confirmed — they say the room has it and move on because of that ("looks like most of you got it, let's keep going", "good, everyone has it").
-A plain "okay", moving on without referring to what came back, or praising one student's answer is NOT acting on the check. If no line shows it, write nothing for ACTED.
+- confirmed — they say the ROOM AS A WHOLE has it and move on because of that ("looks like most of you got it, let's keep going", "everyone has it", "no questions, so let's start"). Confirming or praising ONE student's answer ("good", "right", "the renaissance, good", "awesome", repeating the answer) is not this — that is feedback to a student, not acting on a check.
+It only counts when the line refers to what came back — what students showed, said or asked ("majority of you said a", "I'm seeing…", "a lot of you are…", "no questions, so…") — or answers a question a student raised in response. Carrying on with the lesson is NOT acting on the check, even when the next line is about the same topic: "Is it clear? So for the average rate of change, you can copy them" did not act on it. Neither is a plain "okay", a new instruction, or praising one student's answer. If no line shows it, write nothing for ACTED.
 For acted, copy the words that show it, under 15 words, EXACTLY as written in that line.
 
 Write nothing outside this tag:
