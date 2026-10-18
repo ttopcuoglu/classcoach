@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, MicIcon, PlayIcon } from '../components/icons'
-import TalkFlowStrip from '../components/TalkFlowStrip'
+import TalkFlowStrip, { FLOW_COLOR, type ShareSlice } from '../components/TalkFlowStrip'
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import { ProgressRing, ThinkingIndicator, WorkingRing } from '../components/ProgressRing'
@@ -5434,7 +5434,14 @@ function TalkParticipationTab({
           fast you spoke. Then the reading drawn from it. */}
       <div id="stat-talkRatio" className="flex flex-col gap-3">
         <TalkNumbers teacherPct={session.teacherTalkPct} studentPct={session.studentTalkPct} wpm={wpm} />
-        <TalkSplitBar teacherPct={session.teacherTalkPct} studentPct={session.studentTalkPct} />
+        <TalkFlowStrip
+          segments={session.segments}
+          durationSec={session.durationSec}
+          seconds={session.soundTimeline?.seconds ?? null}
+          invitations={(session.teachingMoves?.participation?.invitations ?? session.teachingMoves?.invitations ?? []).map((q) => q.timestampSec)}
+          checks={(session.cfuLog ?? []).map((c) => c.timestampSec)}
+          shares={recordingShares(session.teacherTalkPct, session.studentTalkPct, nonSpeech)}
+        />
       </div>
 
       {talkInsight && <CoachNote text={talkInsight} />}
@@ -5449,15 +5456,6 @@ function TalkParticipationTab({
       <DetailRows>
         <DetailRow title="Explore details">
           <DetailRows>
-            <DetailRow title="Talk flow across the lesson">
-              <TalkFlowStrip
-                segments={session.segments}
-                durationSec={session.durationSec}
-                seconds={session.soundTimeline?.seconds ?? null}
-                invitations={(session.teachingMoves?.invitations ?? []).map((q) => q.timestampSec)}
-                checks={(session.cfuLog ?? []).map((c) => c.timestampSec)}
-              />
-            </DetailRow>
             {stretch && (
               <DetailRow
                 title={`Your longest stretch of talk · about ${Math.round(stretch.durationSec / 60)} min, from ${formatTime(stretch.startSec)}`}
@@ -5478,9 +5476,9 @@ function TalkParticipationTab({
                 they were engaged, and a microphone near you hears you far better than it hears them.
               </p>
               <p className="text-sm text-ink-soft">
-                "No clear speech" is everything that was neither clearly you nor clearly a student
+                "Sound, no words" and "Quiet" are everything that was neither clearly you nor clearly a student
                 {nonSpeech
-                  ? ` — ${Math.round(nonSpeech.quietPct)}% of the recording was quiet, and ${Math.round(nonSpeech.unresolvedPct)}% was sound the microphone caught but couldn't turn into words. In a classroom that is usually voices; a video or noise from outside reads the same way.`
+                  ? '. In a classroom, sound with no words is usually voices the microphone could not make out; a video or noise from outside reads the same way.'
                   : ': quiet work, several voices at once, and audio too faint to place.'}
               </p>
               {silenceNote && <p className="text-sm text-ink-soft">{silenceNote}</p>}
@@ -5501,44 +5499,47 @@ function TalkParticipationTab({
 
 /// The three numbers Talk & Participation leads with.
 function TalkNumbers({ teacherPct, studentPct, wpm }: { teacherPct: number | null; studentPct: number | null; wpm: number | null }) {
-  const tile = (label: string, value: string, sub: string, color: string) => (
+  const tile = (label: string, value: string, sub: string, color: string | undefined) => (
     <div className="rounded-xl border border-hairline bg-cream-card px-4 py-3">
       <p className="text-xs font-semibold text-ink-soft">{label}</p>
-      <p className={`font-heading text-2xl font-extrabold leading-tight ${color}`}>{value}</p>
+      <p className="font-heading text-2xl font-extrabold leading-tight text-ink" style={color ? { color } : undefined}>
+        {value}
+      </p>
       <p className="text-xs text-ink-soft">{sub}</p>
     </div>
   )
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-      {tile('You', teacherPct != null ? `${Math.round(teacherPct)}%` : '—', teacherPct != null ? 'of the recording' : 'unavailable', 'text-terracotta-600')}
-      {tile('Students', studentPct != null ? `${Math.round(studentPct)}%` : '—', studentPct != null ? 'that came through as words' : 'unavailable', 'text-ink')}
-      {tile('Your pace', wpm != null ? String(Math.round(wpm)) : '—', wpm != null ? `words a minute · conversation runs about ${CONVERSATIONAL_WPM}` : 'unavailable', 'text-ink')}
+      {tile('You', teacherPct != null ? `${Math.round(teacherPct)}%` : '—', teacherPct != null ? 'of the recording' : 'unavailable', FLOW_COLOR.you)}
+      {tile('Students', studentPct != null ? `${Math.round(studentPct)}%` : '—', studentPct != null ? 'that came through as words' : 'unavailable', FLOW_COLOR.other)}
+      {tile('Your pace', wpm != null ? String(Math.round(wpm)) : '—', wpm != null ? `words a minute · conversation runs about ${CONVERSATIONAL_WPM}` : 'unavailable', undefined)}
     </div>
   )
 }
 
-/// You, students, and everything else as one grey slice — quiet and sound
-/// with no words are told apart under "How to read these numbers", not in
-/// the bar, where the larger of them used to dominate the picture.
-function TalkSplitBar({ teacherPct, studentPct }: { teacherPct: number | null; studentPct: number | null }) {
-  if (teacherPct == null) return <HatchedBar label="Talk balance unavailable this session" className="h-3" />
-  const rest = Math.max(0, 100 - teacherPct - (studentPct ?? 0))
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex h-3 w-full gap-[2px] overflow-hidden rounded-full bg-cream-card">
-        <div className="h-full bg-terracotta" style={{ width: `${teacherPct}%` }} />
-        {studentPct != null && <div className="h-full bg-gold" style={{ width: `${studentPct}%` }} />}
-        <div className="h-full bg-hairline" style={{ width: `${rest}%` }} />
-      </div>
-      <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink-soft">
-        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-terracotta" /> You {Math.round(teacherPct)}%</span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-gold" /> Students {studentPct != null ? `${Math.round(studentPct)}%` : 'unavailable'}
-        </span>
-        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-hairline" /> No clear speech {Math.round(rest)}%</span>
-      </div>
-    </div>
-  )
+/// The recording's split as the report states it: you and students as the
+/// tiles show them, and the rest shared between quiet and sound with no words
+/// in the proportion the envelope measured — or one "no reading" slice where
+/// there was no envelope to tell them apart.
+function recordingShares(
+  teacherPct: number | null,
+  studentPct: number | null,
+  nonSpeech: { quietPct: number; unresolvedPct: number } | null,
+): ShareSlice[] {
+  if (teacherPct == null) return []
+  const students = studentPct ?? 0
+  const rest = Math.max(0, 100 - teacherPct - students)
+  const split = nonSpeech && nonSpeech.quietPct + nonSpeech.unresolvedPct > 0 ? nonSpeech : null
+  return [
+    { kind: 'you', pct: teacherPct },
+    { kind: 'other', pct: students },
+    ...(split
+      ? [
+          { kind: 'sound' as const, pct: (rest * split.unresolvedPct) / (split.quietPct + split.unresolvedPct) },
+          { kind: 'quiet' as const, pct: (rest * split.quietPct) / (split.quietPct + split.unresolvedPct) },
+        ]
+      : [{ kind: 'unknown' as const, pct: rest }]),
+  ]
 }
 
 const INVITE_FORMAT_LABEL = {
