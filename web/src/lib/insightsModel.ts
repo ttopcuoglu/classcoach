@@ -18,6 +18,7 @@ import type {
 } from './api'
 import { safeToQuote } from './quoteSafety.ts'
 import { pauseAfterQuestionsMetric } from './teacherVoice.ts'
+import { resolveVerbatim, teacherRuns } from './verbatim.ts'
 
 /// Three states, never a zero standing in for "we could not tell".
 export type FindingState = 'measured' | 'confirmed_none' | 'unavailable'
@@ -36,8 +37,14 @@ export type Evidence = {
   tag: string
   polarity: Polarity
   elements?: ElementTag[]
-  /// Shown instead of the words when they are unsafe to attribute.
-  withheld?: boolean
+  /// The transcript line the words start in and end in. Absent when the
+  /// quote could not be found in the teacher's own speech.
+  segmentId?: string
+  endSegmentId?: string
+  /// Shown instead of the words: 'unsafe' when they are not words to put in
+  /// a teacher's mouth on a room microphone's say-so, 'unmatched' when they
+  /// could not be found word for word in one stretch of the teacher's speech.
+  withheld?: 'unsafe' | 'unmatched'
   /// One line on why the moment matters, when a reading supplies one.
   why?: string
 }
@@ -145,23 +152,32 @@ export function trimQuote(text: string): { quote: string; cut: boolean } {
   return { quote: head, cut: true }
 }
 
-function evidenceFrom(
-  id: string,
-  item: AudioMoveQuote,
-  tag: string,
-  polarity: Polarity,
-  elements?: ElementTag[],
-): Evidence {
-  const full = item.quote.trim()
-  return {
-    id,
-    quote: trimQuote(full).quote,
-    full,
-    timestampSec: item.timestampSec,
-    tag,
-    polarity,
-    ...(elements ? { elements } : {}),
-    ...(safeToQuote(full) ? {} : { withheld: true }),
+/// Evidence from a stored quote, in the transcript's exact words.
+///
+/// The stored string is what a model wrote, matched to the speech loosely; the
+/// words shown are the transcript's own characters for that match
+/// (lib/verbatim.ts). A quote that cannot be found that way is still counted —
+/// the moment was read — but its wording is withheld rather than shown in
+/// someone else's spelling of it.
+function makeEvidence(segments: TranscriptSegment[]) {
+  const runs = teacherRuns(segments)
+  return (id: string, item: AudioMoveQuote, tag: string, polarity: Polarity, elements?: ElementTag[]): Evidence => {
+    const found = resolveVerbatim(runs, item.quote, item.timestampSec)
+    if (!found) {
+      console.warn(`[insights] not shown: no exact match in the teacher's speech for ${JSON.stringify(item.quote)}`)
+    }
+    const full = found?.text ?? item.quote.trim()
+    return {
+      id,
+      quote: trimQuote(full).quote,
+      full,
+      timestampSec: item.timestampSec,
+      tag,
+      polarity,
+      ...(found ? { segmentId: found.segmentId, endSegmentId: found.endSegmentId } : {}),
+      ...(elements ? { elements } : {}),
+      ...(!found ? { withheld: 'unmatched' as const } : !safeToQuote(full) ? { withheld: 'unsafe' as const } : {}),
+    }
   }
 }
 
@@ -220,25 +236,13 @@ export function splitCoachNote(text: string | null | undefined): CoachText {
 /// attribution this report does not trust.
 export function contextLines(
   segments: TranscriptSegment[],
-  timestampSec: number,
-): { before: TranscriptSegment | null; line: TranscriptSegment | null; after: TranscriptSegment | null } {
+  evidence: Pick<Evidence, 'segmentId' | 'endSegmentId'>,
+): { before: TranscriptSegment | null; lines: TranscriptSegment[]; after: TranscriptSegment | null } {
   const teacher = segments.filter((s) => s.speakerLabel === 'Teacher').sort((a, b) => a.startSec - b.startSec)
-  // The stored timestamp is the start of the segment the quote begins in;
-  // the nearest start is the fallback for quotes stored before that held.
-  let idx = teacher.findIndex((s) => s.startSec === timestampSec)
-  if (idx === -1) {
-    let best = Infinity
-    teacher.forEach((s, i) => {
-      const d = Math.abs(s.startSec - timestampSec)
-      if (d < best) {
-        best = d
-        idx = i
-      }
-    })
-    if (best > 3) idx = -1
-  }
-  if (idx === -1) return { before: null, line: null, after: null }
-  return { before: teacher[idx - 1] ?? null, line: teacher[idx], after: teacher[idx + 1] ?? null }
+  const first = teacher.findIndex((s) => s.id === evidence.segmentId)
+  const last = teacher.findIndex((s) => s.id === (evidence.endSegmentId ?? evidence.segmentId))
+  if (first === -1 || last === -1) return { before: null, lines: [], after: null }
+  return { before: teacher[first - 1] ?? null, lines: teacher.slice(first, last + 1), after: teacher[last + 1] ?? null }
 }
 
 // --- fast stretches ----------------------------------------------------------
@@ -295,6 +299,7 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
   const moves = report.teachingMoves ?? null
   const movesRan = moves != null
   const segments = report.segments ?? []
+  const evidenceFrom = makeEvidence(segments)
   const detail = report.metricsDetail ?? {}
 
   // ---- 1. Talk & Pace

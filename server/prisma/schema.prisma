@@ -735,6 +735,7 @@ model AudioSession {
   updatedAt        DateTime  @updatedAt
 
   segments         TranscriptSegment[]
+  quoteFlags       QuoteFlag[]
 }
 
 model TranscriptSegment {
@@ -747,6 +748,31 @@ model TranscriptSegment {
   endSec        Float
   text          String
   createdAt     DateTime     @default(now())
+}
+
+// A teacher saying a quote in their report is wrong ("Not right?" in Insights).
+//
+// Recorded, never acted on: the quote stays on the page. Flags are the eval
+// set for the reads that pick quotes, so each one keeps the line it was about
+// and the words as they were shown, even if the report is later re-read and
+// the quote changes. One flag per teacher per finding per line — pressing it
+// twice is still one.
+model QuoteFlag {
+  id           String       @id @default(cuid())
+  sessionId    String
+  session      AudioSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId       String
+  // Which finding the quote stood for, e.g. "higher_order_questions".
+  findingKey   String
+  // The transcript line the quote starts in, and the words as shown.
+  segmentId    String
+  quote        String
+  timestampSec Float
+  reason       String?
+  createdAt    DateTime     @default(now())
+
+  @@unique([sessionId, userId, findingKey, segmentId])
+  @@index([sessionId])
 }
 
 // A school or district asking about Wivoza from the public /for-schools

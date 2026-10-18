@@ -31,8 +31,10 @@ test('context is the teacher’s own line before and after, never a student’s'
     seg('Teacher', 18, 22, 'Anybody else have a character who is unnamed?'),
     seg('Teacher', 23, 26, 'Okay, so you might use a pseudonym.'),
   ]
-  const ctx = contextLines(segments, 18)
-  assert.equal(ctx.before?.text, 'Who has a character they just call my dad?')
+  // The quoted line is 18s; 23s is a separate line 1s later, so the run is
+  // 18–26 and its neighbours are what came before it.
+  const ctx = contextLines(segments, { segmentId: 'Teacher-18', endSegmentId: 'Teacher-18' })
+  assert.equal(ctx.before?.text, 'Who has a character they just call my dad?', 'the student line is skipped')
   assert.equal(ctx.after?.text, 'Okay, so you might use a pseudonym.')
 })
 
@@ -51,6 +53,12 @@ test('the coach note leads with its first sentence', () => {
   })
   assert.equal(splitCoachNote('  '), null)
 })
+
+/// The teacher's lines, one per quote, spaced so none joins the next — the
+/// model only shows words it can find in the transcript.
+function said(...lines: [number, string][]): TranscriptSegment[] {
+  return lines.map(([at, text]) => seg('Teacher', at, at + 3, text))
+}
 
 function lesson(over: Partial<AudioSessionWithSegments>): AudioSessionWithSegments {
   return {
@@ -72,6 +80,13 @@ function lesson(over: Partial<AudioSessionWithSegments>): AudioSessionWithSegmen
 test('every count is the evidence it shows', () => {
   const model = buildInsightsModel(
     lesson({
+      segments: said(
+        [10, 'What did we read yesterday?'],
+        [40, 'Why would a name matter in a story?'],
+        [88, 'Anybody else have a character who is unnamed?'],
+        [302, 'Two minutes, write one hook, put it in the doc.'],
+        [750, 'Okay, keep working on it everyone.'],
+      ),
       questionLog: [
         { timestampSec: 10, type: 'recall', waitTimeSec: null, text: 'What did we read yesterday?', followUps: [] },
         { timestampSec: 40, type: 'higher_order', waitTimeSec: null, text: 'Why would a name matter in a story?', followUps: [] },
@@ -111,6 +126,7 @@ test('a read that never ran is unavailable; one that found nothing is none', () 
 test('an unsafe line is withheld, never featured over a safe one', () => {
   const model = buildInsightsModel(
     lesson({
+      segments: said([5, 'Shut up and listen, who has an idea?'], [9, 'Who else has a hook in mind?']),
       teachingMoves: {
         invitations: [
           { quote: 'Shut up and listen, who has an idea?', timestampSec: 5 },
@@ -121,13 +137,40 @@ test('an unsafe line is withheld, never featured over a safe one', () => {
   )
   const inv = model.talk.findings[0]
   assert.equal(inv.featured?.full, 'Who else has a hook in mind?')
-  assert.equal(inv.evidence.find((e) => e.timestampSec === 5)?.withheld, true)
+  assert.equal(inv.evidence.find((e) => e.timestampSec === 5)?.withheld, 'unsafe')
+})
+
+test('a quote that cannot be found word for word is counted but not shown', () => {
+  const model = buildInsightsModel(
+    lesson({
+      segments: said([30, 'Who else has a hook in mind?']),
+      // The model rewrote the line; nothing like it is in the transcript.
+      teachingMoves: { invitations: [{ quote: 'Does anyone else want to share their hook with us?', timestampSec: 30 }] },
+    }),
+  )
+  const inv = model.talk.findings[0]
+  assert.equal(inv.value, '1', 'still counted — the moment was read')
+  assert.equal(inv.evidence[0].withheld, 'unmatched')
+  assert.equal(inv.evidence[0].segmentId, undefined)
+})
+
+test('a shown quote carries the line it came from, in the transcript’s exact words', () => {
+  const model = buildInsightsModel(
+    lesson({
+      segments: said([30, 'Who else has a hook in mind? Just shout it.']),
+      teachingMoves: { invitations: [{ quote: 'who else has a hook in mind', timestampSec: 30 }] },
+    }),
+  )
+  const e = model.talk.findings[0].featured!
+  assert.equal(e.full, 'Who else has a hook in mind?')
+  assert.equal(e.segmentId, 'Teacher-30')
 })
 
 test('a line featured under one finding is not featured again in the same section', () => {
   const line = 'So who here knows what a transitional phrase is?'
   const model = buildInsightsModel(
     lesson({
+      segments: said([22, line], [60, 'Does that make sense to everyone so far?']),
       questionLog: [{ timestampSec: 22, type: 'higher_order', waitTimeSec: null, text: line, followUps: [] }],
       cfuLog: [
         { timestampSec: 22, text: line, whatItChecked: 'a term' },

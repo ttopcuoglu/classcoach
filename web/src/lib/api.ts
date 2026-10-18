@@ -2145,6 +2145,21 @@ export function getAudioSession(id: string): Promise<AudioSessionWithSegments> {
   return request(`/api/audio-sessions/${id}`)
 }
 
+/// "Not right?" on an Insights quote. Recorded, never acted on: the quote
+/// stays where it is (server lib/quoteFlags.ts).
+export type QuoteFlag = { findingKey: string; segmentId: string; createdAt: string }
+
+export function getQuoteFlags(sessionId: string): Promise<QuoteFlag[]> {
+  return request(`/api/audio-sessions/${sessionId}/quote-flags`)
+}
+
+export function flagQuote(
+  sessionId: string,
+  flag: { findingKey: string; segmentId: string; quote: string; timestampSec: number },
+): Promise<QuoteFlag> {
+  return request(`/api/audio-sessions/${sessionId}/quote-flags`, { method: 'POST', body: JSON.stringify(flag) })
+}
+
 export function createAudioSession(data: {
   teacherName?: string
   classSubject?: string

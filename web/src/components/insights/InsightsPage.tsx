@@ -7,12 +7,13 @@
 // Discuss with Coach, the escalation and correction cards, regenerating the
 // content notes — are passed in rather than rebuilt.
 
-import { useMemo, useState } from 'react'
-import type { AudioSessionWithSegments } from '../../lib/api'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { flagQuote, getQuoteFlags, type AudioSessionWithSegments } from '../../lib/api'
 import { buildInsightsModel, type SectionKey, type SectionModel } from '../../lib/insightsModel'
 import { NOT_IN_THIS_REPORT, STUDENT_METRICS_ON } from '../../lib/teacherVoice'
 import { DirectionsGrid, LessonTimeline, QuestionSquares } from './InsightsCharts'
 import { CoachNote, EmptyEvidence, FindingRow, KeepTry, SectionCard, UnavailablePanel, type SectionMeta } from './InsightsParts'
+import { QuoteFlagContext, type QuoteFlagState } from './quoteFlagContext'
 
 const META: Record<SectionKey, SectionMeta> = {
   talk_pace: { n: 1, title: 'Talk & Pace', sub: 'How much you spoke, how fast, and when you opened the floor.', chip: 'bg-terracotta' },
@@ -85,7 +86,38 @@ export default function InsightsPage({ report, slots }: { report: AudioSessionWi
   const model = useMemo(() => buildInsightsModel(report), [report])
   const { talk, questioning, clarity, climate, content } = model
 
+  // "Not right?" flags this teacher already left on this lesson. A failed
+  // load just means none show as flagged; flagging still works.
+  const [flagged, setFlagged] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    let live = true
+    getQuoteFlags(report.id)
+      .then((flags) => live && setFlagged(new Set(flags.map((f) => `${f.findingKey}:${f.segmentId}`))))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [report.id])
+  const flag = useCallback<QuoteFlagState['flag']>(
+    async (findingKey, evidence) => {
+      if (!evidence.segmentId) return
+      await flagQuote(report.id, {
+        findingKey,
+        segmentId: evidence.segmentId,
+        quote: evidence.quote,
+        timestampSec: evidence.timestampSec,
+      })
+      setFlagged((prev) => new Set(prev).add(`${findingKey}:${evidence.segmentId}`))
+    },
+    [report.id],
+  )
+  const flagState = useMemo<QuoteFlagState>(
+    () => ({ isFlagged: (findingKey, segmentId) => flagged.has(`${findingKey}:${segmentId}`), flag }),
+    [flagged, flag],
+  )
+
   return (
+    <QuoteFlagContext.Provider value={flagState}>
     <div className="min-w-0">
       <nav className="mb-4 flex flex-wrap gap-1.5" aria-label="Insights sections">
         {ORDER.map((key) => (
@@ -221,5 +253,6 @@ export default function InsightsPage({ report, slots }: { report: AudioSessionWi
 
       {!STUDENT_METRICS_ON && <UnavailablePanel items={NOT_IN_THIS_REPORT} />}
     </div>
+    </QuoteFlagContext.Provider>
   )
 }

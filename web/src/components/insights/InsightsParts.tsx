@@ -2,11 +2,12 @@
 // five sections — a section that needs something different changes the
 // model, not a copy of the component.
 
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 import type { TranscriptSegment } from '../../lib/api'
 import { contextLines, mmss, type CoachText, type ElementTag, type Evidence, type Finding, type KeepTry as KeepTryModel } from '../../lib/insightsModel'
 import { HATCH_STYLE } from '../../lib/chartPatterns'
 import { HatchedSwatch } from '../unavailableChart'
+import { QuoteFlagContext } from './quoteFlagContext'
 
 export type SectionMeta = { n: number; title: string; sub: string; chip: string }
 
@@ -85,9 +86,24 @@ const BORDER: Record<Evidence['polarity'], string> = {
 
 /// One of the teacher's lines: what it is, when, the words, and the lines
 /// either side of it on demand.
-export function QuoteCard({ evidence, segments }: { evidence: Evidence; segments: TranscriptSegment[] }) {
+export function QuoteCard({
+  evidence,
+  segments,
+  findingKey,
+}: {
+  evidence: Evidence
+  segments: TranscriptSegment[]
+  /// The finding this line stands for, which is what a flag is about.
+  findingKey?: string
+}) {
   const [showContext, setShowContext] = useState(false)
-  const ctx = showContext ? contextLines(segments, evidence.timestampSec) : null
+  const flags = useContext(QuoteFlagContext)
+  const [saving, setSaving] = useState<'idle' | 'saving' | 'failed'>('idle')
+  // Only a line found in the transcript can be flagged: a flag has to say
+  // which line it was about.
+  const canFlag = !!(flags && findingKey && evidence.segmentId && !evidence.withheld)
+  const flagged = canFlag && flags!.isFlagged(findingKey!, evidence.segmentId!)
+  const ctx = showContext ? contextLines(segments, evidence) : null
   const trimmed = evidence.quote !== evidence.full
   return (
     <div className={`mt-2 rounded-r-xl border-l-4 bg-[#FBF5EA] px-3.5 py-2.5 ${BORDER[evidence.polarity]}`}>
@@ -99,8 +115,9 @@ export function QuoteCard({ evidence, segments }: { evidence: Evidence; segments
       </div>
       {evidence.withheld ? (
         <p className="m-0 text-[13.5px] italic text-ink-soft">
-          The wording is withheld: it contains words this report will not attribute to you on the strength of a room
-          microphone.
+          {evidence.withheld === 'unsafe'
+            ? 'The wording is withheld: it contains words this report will not attribute to you on the strength of a room microphone.'
+            : 'The wording is withheld: it could not be matched word for word to your own speech.'}
         </p>
       ) : (
         <p className="m-0 text-[14.5px] text-ink">
@@ -109,10 +126,29 @@ export function QuoteCard({ evidence, segments }: { evidence: Evidence; segments
       )}
       {evidence.why && <p className="mb-0 mt-1.5 text-[13.5px] text-ink">{evidence.why}</p>}
       {!evidence.withheld && (
-        <div className="mt-1.5 flex gap-3 text-[11.5px]">
+        <div className="mt-1.5 flex flex-wrap gap-3 text-[11.5px]">
           <button type="button" onClick={() => setShowContext(!showContext)} className="text-ink-soft underline decoration-dotted">
             {showContext ? 'Hide context' : 'Show context'}
           </button>
+          {canFlag &&
+            (flagged ? (
+              <span className="text-terracotta-600">Flagged · thanks, we’ll review it</span>
+            ) : (
+              <button
+                type="button"
+                disabled={saving === 'saving'}
+                onClick={() => {
+                  setSaving('saving')
+                  flags!
+                    .flag(findingKey!, evidence)
+                    .then(() => setSaving('idle'))
+                    .catch(() => setSaving('failed'))
+                }}
+                className="text-ink-soft underline decoration-dotted disabled:opacity-50"
+              >
+                {saving === 'failed' ? 'Couldn’t save that — try again' : 'Not right?'}
+              </button>
+            ))}
         </div>
       )}
       {ctx && (
@@ -122,9 +158,10 @@ export function QuoteCard({ evidence, segments }: { evidence: Evidence; segments
               <span className="font-mono">{mmss(ctx.before.startSec)}</span> Before: “{ctx.before.text}”
             </p>
           )}
-          {trimmed && ctx.line && (
+          {trimmed && ctx.lines.length > 0 && (
             <p className="m-0 text-ink">
-              <span className="font-mono">{mmss(ctx.line.startSec)}</span> The whole line: “{ctx.line.text}”
+              <span className="font-mono">{mmss(ctx.lines[0].startSec)}</span> The whole line: “
+              {ctx.lines.map((l) => l.text.trim()).join(' ')}”
             </p>
           )}
           {ctx.after && (
@@ -203,7 +240,9 @@ export function FindingRow({ finding, segments }: { finding: Finding; segments: 
       </div>
       {finding.state === 'unavailable' && finding.note && <EmptyEvidence>{finding.note}</EmptyEvidence>}
       {finding.state === 'confirmed_none' && finding.note && <EmptyEvidence>{finding.note}</EmptyEvidence>}
-      {finding.state === 'measured' && finding.featured && <QuoteCard evidence={finding.featured} segments={segments} />}
+      {finding.state === 'measured' && finding.featured && (
+        <QuoteCard evidence={finding.featured} segments={segments} findingKey={finding.key} />
+      )}
       {finding.state === 'measured' && <ShowAllList finding={finding} />}
     </div>
   )

@@ -6,6 +6,7 @@ import { enrichClassroomMoves } from '../lib/classroomMoves.ts'
 import { readEscalation } from '../lib/escalation.ts'
 import { readTeachingMoves } from '../lib/teachingMoves.ts'
 import { LONG_PAUSE_SEC, pauseAfterQuestions, STUDENT_METRICS_ON } from '../lib/teacherVoice.ts'
+import { parseQuoteFlag } from '../lib/quoteFlags.ts'
 import { parseLevelTrace, splitNonSpeech, teacherIntervals } from '../lib/settleTime.ts'
 import { buildSoundTimeline } from '../lib/soundTimeline.ts'
 import { enrichLessonContent, flattenTeacherSpeech, isNoneAnswer, normalizeForMatch } from '../lib/lessonObjective.ts'
@@ -378,6 +379,58 @@ audioSessionsRouter.post('/', async (req, res) => {
     },
   })
   res.status(201).json(session)
+})
+
+/// The teacher's own "Not right?" flags on this lesson's quotes, so the page
+/// can show which ones they already flagged.
+audioSessionsRouter.get('/:id/quote-flags', async (req, res) => {
+  const session = await prisma.audioSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+    select: { id: true },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  const flags = await prisma.quoteFlag.findMany({
+    where: { sessionId: session.id, userId: req.user!.userId },
+    select: { findingKey: true, segmentId: true, createdAt: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  res.json(flags)
+})
+
+/// "Not right?" on a quote. Recorded, never acted on (lib/quoteFlags.ts).
+/// Flagging the same quote twice is still one flag.
+audioSessionsRouter.post('/:id/quote-flags', async (req, res) => {
+  const input = parseQuoteFlag(req.body)
+  if ('error' in input) {
+    res.status(400).json({ error: input.error })
+    return
+  }
+  // The line has to be in this lesson: a flag pointing at someone else's
+  // transcript is refused rather than stored against this one.
+  const segment = await prisma.transcriptSegment.findFirst({
+    where: { id: input.segmentId, session: { id: req.params.id, userId: req.user!.userId } },
+    select: { sessionId: true },
+  })
+  if (!segment) {
+    res.status(404).json({ error: 'That line is not in this lesson' })
+    return
+  }
+  const key = {
+    sessionId: segment.sessionId,
+    userId: req.user!.userId,
+    findingKey: input.findingKey,
+    segmentId: input.segmentId,
+  }
+  const flag = await prisma.quoteFlag.upsert({
+    where: { sessionId_userId_findingKey_segmentId: key },
+    create: { ...key, quote: input.quote, timestampSec: input.timestampSec, reason: input.reason },
+    update: input.reason ? { reason: input.reason } : {},
+    select: { findingKey: true, segmentId: true, createdAt: true },
+  })
+  res.status(201).json(flag)
 })
 
 audioSessionsRouter.patch('/:id', async (req, res) => {
