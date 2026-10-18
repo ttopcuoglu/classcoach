@@ -5644,81 +5644,148 @@ function TalkParticipationTab({
     return longest && longest.durationSec >= MIN_STRETCH_TO_SHOW_SEC ? longest : null
   }, [session.segments])
 
+  const nonSpeech = nonSpeechSplit(session.metricsDetail, session.durationSec)
+
   return (
-    <div className="flex flex-col gap-6">
-      {/* The reading before the numbers it was drawn from. */}
+    <div className="flex flex-col gap-5">
+      {/* The answer to the section's question first: who was heard, and how
+          fast you spoke. Then the reading drawn from it. */}
+      <div id="stat-talkRatio" className="flex flex-col gap-3">
+        <TalkNumbers teacherPct={session.teacherTalkPct} studentPct={session.studentTalkPct} wpm={wpm} />
+        <TalkSplitBar teacherPct={session.teacherTalkPct} studentPct={session.studentTalkPct} />
+      </div>
+
       {talkInsight && <CoachNote text={talkInsight} />}
 
-      {/* One picture of the split. It used to be here three times — as tiles,
-          as this bar, and as the bar's legend. */}
-      <div id="stat-talkRatio">
-        <TalkParticipationBar
-          teacherPct={session.teacherTalkPct}
-          studentPct={session.studentTalkPct}
-          silencePct={silencePct}
-          nonSpeech={nonSpeechSplit(session.metricsDetail, session.durationSec)}
-          paceWpm={wpm}
-        />
-      </div>
+      {/* The invitations, with one shown: evidence a click away is evidence
+          nobody reads. Whether anyone took the floor is not something a
+          recording from the front of the room can show. */}
+      <InlineEvidence title="You opened the floor" rows={session.teachingMoves?.invitations} noun="invitation" />
 
       <SectionNextStep text={session.nextSteps?.talk} />
 
       <DetailRows>
-        {/* The one participation signal a teacher-side microphone can carry
-            honestly. Airtime says how long students spoke; this says whether
-            the floor was opened, which is the part the teacher controls. It
-            records the invitation ONLY — never whether anyone took it up,
-            because this recording cannot show that. */}
-        <MoveEvidence
-          title="You opened the floor"
-          blurb="Moments you invited students in. Whether anyone took it up is not something a recording from the front of the room can show."
-          rows={session.teachingMoves?.invitations}
-        />
-        <DetailRow title="Talk flow across the lesson">
-          <PacingTimeline
-            segments={session.segments}
-            durationSec={session.durationSec}
-            soundTimeline={session.soundTimeline}
-          />
+        <DetailRow title="Explore details">
+          <DetailRows>
+            <DetailRow title="Talk flow across the lesson">
+              <PacingTimeline
+                segments={session.segments}
+                durationSec={session.durationSec}
+                soundTimeline={session.soundTimeline}
+              />
+            </DetailRow>
+            {stretch && (
+              <DetailRow
+                title={`Your longest stretch of talk · about ${Math.round(stretch.durationSec / 60)} min, from ${formatTime(stretch.startSec)}`}
+              >
+                <p className="text-sm text-ink">
+                  From {formatTime(stretch.startSec)} to {formatTime(stretch.endSec)}, opening with:
+                </p>
+                <p className="border-l-2 border-hairline pl-3 text-sm text-ink-soft">"{stretch.opening}…"</p>
+                <p className="text-sm text-ink-soft">
+                  A stretch ends when a student is heard or you pause for more than ten seconds. A student the microphone
+                  missed does not end it, so check it against what you remember of that part of the lesson.
+                </p>
+              </DetailRow>
+            )}
+            {exampleCandidate && (
+              <DetailRow title="An exchange to review">
+                <TranscriptEvidenceCard candidate={exampleCandidate} segments={session.segments} questionLog={session.questionLog} />
+              </DetailRow>
+            )}
+            <DetailRow title="How to read these numbers">
+              <p className="text-sm text-ink-soft">
+                Talk time describes the recording, not the room: it doesn't show how many students took part or whether
+                they were engaged, and a microphone near you hears you far better than it hears them.
+              </p>
+              <p className="text-sm text-ink-soft">
+                "No clear speech" is everything that was neither clearly you nor clearly a student
+                {nonSpeech
+                  ? ` — ${Math.round(nonSpeech.quietPct)}% of the recording was quiet, and ${Math.round(nonSpeech.unresolvedPct)}% was sound the microphone caught but couldn't turn into words. In a classroom that is usually voices; a video or noise from outside reads the same way.`
+                  : ': quiet work, several voices at once, and audio too faint to place.'}
+              </p>
+              {silenceNote && <p className="text-sm text-ink-soft">{silenceNote}</p>}
+              {wpm != null && (
+                <p className="text-sm text-ink-soft">
+                  Pace is words a minute of your own speaking time. Everyday conversation runs about {CONVERSATIONAL_WPM} —
+                  an anchor to place yourself against, not a target.
+                </p>
+              )}
+            </DetailRow>
+            {lastRow}
+          </DetailRows>
         </DetailRow>
-        {stretch && (
-          <DetailRow
-            title={`Your longest stretch of talk · about ${Math.round(stretch.durationSec / 60)} min, from ${formatTime(stretch.startSec)}`}
-          >
-            <p className="text-sm text-ink">
-              From {formatTime(stretch.startSec)} to {formatTime(stretch.endSec)}, opening with:
-            </p>
-            <p className="border-l-2 border-hairline pl-3 text-sm text-ink-soft">"{stretch.opening}…"</p>
-            <p className="text-sm text-ink-soft">
-              A stretch ends when a student is heard or you pause for more than ten seconds. A student the microphone
-              missed does not end it, so check it against what you remember of that part of the lesson.
-            </p>
-          </DetailRow>
-        )}
-        {exampleCandidate && (
-          <DetailRow title="An exchange to review">
-            <TranscriptEvidenceCard candidate={exampleCandidate} segments={session.segments} questionLog={session.questionLog} />
-          </DetailRow>
-        )}
-        <DetailRow title="How to read these numbers">
-          <p className="text-sm text-ink-soft">
-            Talk time describes the recording, not the room: it doesn't show how many students took part or whether
-            they were engaged, and a microphone near you hears you far better than it hears them.
-          </p>
-          <p className="text-sm text-ink-soft">
-            "Silence / other" is everything that was neither clearly you nor clearly a student — quiet work, several
-            voices at once, and audio too faint to place.
-          </p>
-          {silenceNote && <p className="text-sm text-ink-soft">{silenceNote}</p>}
-          {wpm != null && (
-            <p className="text-sm text-ink-soft">
-              Pace is words a minute of your own speaking time. Everyday conversation runs about {CONVERSATIONAL_WPM} —
-              an anchor to place yourself against, not a target.
-            </p>
-          )}
-        </DetailRow>
-        {lastRow}
       </DetailRows>
+    </div>
+  )
+}
+
+/// The three numbers Talk & Participation leads with.
+function TalkNumbers({ teacherPct, studentPct, wpm }: { teacherPct: number | null; studentPct: number | null; wpm: number | null }) {
+  const tile = (label: string, value: string, sub: string, color: string) => (
+    <div className="rounded-xl border border-hairline bg-cream-card px-4 py-3">
+      <p className="text-xs font-semibold text-ink-soft">{label}</p>
+      <p className={`font-heading text-2xl font-extrabold leading-tight ${color}`}>{value}</p>
+      <p className="text-xs text-ink-soft">{sub}</p>
+    </div>
+  )
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {tile('You', teacherPct != null ? `${Math.round(teacherPct)}%` : '—', teacherPct != null ? 'of the recording' : 'unavailable', 'text-terracotta-600')}
+      {tile('Students', studentPct != null ? `${Math.round(studentPct)}%` : '—', studentPct != null ? 'that came through as words' : 'unavailable', 'text-ink')}
+      {tile('Your pace', wpm != null ? String(Math.round(wpm)) : '—', wpm != null ? `words a minute · conversation runs about ${CONVERSATIONAL_WPM}` : 'unavailable', 'text-ink')}
+    </div>
+  )
+}
+
+/// You, students, and everything else as one grey slice — quiet and sound
+/// with no words are told apart under "How to read these numbers", not in
+/// the bar, where the larger of them used to dominate the picture.
+function TalkSplitBar({ teacherPct, studentPct }: { teacherPct: number | null; studentPct: number | null }) {
+  if (teacherPct == null) return <HatchedBar label="Talk balance unavailable this session" className="h-3" />
+  const rest = Math.max(0, 100 - teacherPct - (studentPct ?? 0))
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex h-3 w-full gap-[2px] overflow-hidden rounded-full bg-cream-card">
+        <div className="h-full bg-terracotta" style={{ width: `${teacherPct}%` }} />
+        {studentPct != null && <div className="h-full bg-gold" style={{ width: `${studentPct}%` }} />}
+        <div className="h-full bg-hairline" style={{ width: `${rest}%` }} />
+      </div>
+      <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink-soft">
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-terracotta" /> You {Math.round(teacherPct)}%</span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-gold" /> Students {studentPct != null ? `${Math.round(studentPct)}%` : 'unavailable'}
+        </span>
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-hairline" /> No clear speech {Math.round(rest)}%</span>
+      </div>
+    </div>
+  )
+}
+
+/// A list of moments with the first one shown and the rest a click away.
+function InlineEvidence({ title, rows, noun }: { title: string; rows: { quote: string; timestampSec: number }[] | undefined; noun: string }) {
+  const [open, setOpen] = useState(false)
+  if (!rows || rows.length === 0) return null
+  const shown = open ? rows : rows.slice(0, 1)
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm font-semibold text-forest">
+        {title} {rows.length} time{rows.length === 1 ? '' : 's'}
+      </p>
+      {shown.map((row, i) => (
+        <div key={`${row.timestampSec}-${i}`} className="rounded-r-xl border-l-4 border-forest/70 bg-cream-card px-3 py-2.5">
+          <div className="flex justify-between text-xs font-semibold uppercase tracking-wide text-ink-soft">
+            <span>{noun}</span>
+            <span>{formatTime(row.timestampSec)}</span>
+          </div>
+          <p className="mt-1 text-sm text-ink">“{row.quote}”</p>
+        </div>
+      ))}
+      {rows.length > 1 && (
+        <button type="button" onClick={() => setOpen((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 hover:underline">
+          {open ? 'Show less' : `See ${rows.length - 1} more`}
+        </button>
+      )}
     </div>
   )
 }
@@ -6219,7 +6286,9 @@ function DetailRow({ title, children }: { title: string; children: React.ReactNo
     <details className="group">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-3 text-sm font-semibold text-forest marker:hidden hover:text-terracotta-600">
         <span>{title}</span>
-        <RowChevron className="group-open:rotate-180" />
+        {/* Its own row only: group-open would also flip it whenever a row
+            it is nested in is open. */}
+        <RowChevron className="[details[open]>summary>&]:rotate-180" />
       </summary>
       <div className="flex flex-col gap-4 pb-5 pt-1">{children}</div>
     </details>
