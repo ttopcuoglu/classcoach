@@ -1,26 +1,13 @@
-import { readChecksLoop } from '../lib/checksLoop.ts'
-import { readHeldOpen } from '../lib/heldOpen.ts'
 import { Router } from 'express'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
-import { analyzeTranscript, buildContentExhibits, detectLessonContent, type QuestionLogEntry, type Segment } from '../lib/audioAnalysis.ts'
+import { analyzeTranscript, buildContentExhibits, detectLessonContent, type Segment } from '../lib/audioAnalysis.ts'
 import { enrichClassroomMoves } from '../lib/classroomMoves.ts'
 import { readEscalation } from '../lib/escalation.ts'
 import { readTeachingMoves } from '../lib/teachingMoves.ts'
-import { heldOpenSummary, LONG_PAUSE_SEC, STUDENT_METRICS_ON } from '../lib/teacherVoice.ts'
-import { parseQuoteFlag } from '../lib/quoteFlags.ts'
-import { parseCheckIn, parseNextFocus, teacherKey, type LessonFocus } from '../lib/lessonFocus.ts'
-import {
-  hashNotesInput,
-  keepTeacherQuotes,
-  NOTES_VERSION,
-  parseNotesInput,
-  writeInsightsNotes,
-  type InsightsNotes,
-} from '../lib/insightsNotes.ts'
 import { parseLevelTrace, splitNonSpeech, teacherIntervals } from '../lib/settleTime.ts'
 import { buildSoundTimeline } from '../lib/soundTimeline.ts'
-import { enrichLessonContent, flattenTeacherSpeech, isNoneAnswer, normalizeForMatch } from '../lib/lessonObjective.ts'
+import { enrichLessonContent } from '../lib/lessonObjective.ts'
 import { checkFeatureAccess, hasActivePlan, startOfCurrentMonth } from '../lib/billing.ts'
 import { cachedSystem, cacheStats } from '../lib/promptCache.ts'
 import {
@@ -123,11 +110,6 @@ const MAX_CONNECTION_IDEAS = 3
 /// it's shown.
 const MAX_MISCONCEPTIONS = 3
 const MIN_CONTENT_EXHIBITS = 3
-/// "Write these notes again" is allowed this many times a report. Each run is
-/// a different reading, and with no limit a teacher could keep asking until
-/// one said what they hoped — so the notes would mean nothing. Earlier
-/// versions are kept with the notes rather than lost.
-export const MAX_CONTENT_NOTE_REWRITES = 2
 const NOT_ENOUGH_CONTENT_ERROR = 'This recording caught too little of what you said to write content notes.'
 
 type ContentNote = { id: string; label: string; text: string; timestampSec: number; excerpt: string }
@@ -160,8 +142,6 @@ Never invent or assume standards, curriculum, or grade-level expectations not ev
 
 Below are numbered excerpts from the transcript, each an exact quote. Write 4 to 6 notes, each grounded in exactly one excerpt below — reference it only by its number, never quote or restate the excerpt text yourself. At least two should be "What worked" and at least two "Where it could go further", so the teacher gets both. Use "Worth double-checking" only if something genuinely warrants it.
 
-A note is about what the teacher said and did, never about what students thought, felt, understood or were confused by — the recording cannot show that. "Students often…" belongs only in the misconceptions block below, as subject knowledge.
-
 A "What worked" note names the content move that was effective and why it works for this topic — not just that it was good. A "Where it could go further" note names one concrete, specific thing to try: a representation, a question to ask, an order to put two ideas in, a distinction to draw. It is a suggestion for next time, never a verdict on the teacher. Two sentences at most each.
 
 ${exhibits.map((e, i) => `[${i + 1}] ${e.text}`).join('\n')}
@@ -193,10 +173,9 @@ function parseMisconceptions(text: string): string[] {
 
 function parseLines(text: string, tag: string, max: number): string[] {
   const block = extractTag(text, tag)
-  if (!block) return []
+  if (!block || block.toUpperCase().includes('NONE')) return []
   return block
     .split('\n')
-    .filter((line) => !isNoneAnswer(line))
     .map((line) => line.replace(/^[-•*\d.\s]+/, '').trim())
     .filter((line) => line.length > 20)
     // A reply that ran into the token ceiling ends mid-sentence; half a
@@ -397,206 +376,6 @@ audioSessionsRouter.post('/', async (req, res) => {
     },
   })
   res.status(201).json(session)
-})
-
-/// The focus picked on this lesson's report for the teacher's next lesson
-/// (lib/lessonFocus.ts). Picking again replaces it.
-audioSessionsRouter.put('/:id/lesson-focus/next', async (req, res) => {
-  const parsed = parseNextFocus(req.body)
-  if ('error' in parsed) {
-    res.status(400).json({ error: parsed.error })
-    return
-  }
-  const session = await prisma.audioSession.findFirst({
-    where: { id: req.params.id, userId: req.user!.userId },
-    select: { id: true, lessonFocus: true },
-  })
-  if (!session) {
-    res.status(404).json({ error: 'Session not found' })
-    return
-  }
-  // A line named by id has to be in this lesson.
-  if (parsed.line?.segmentId) {
-    const inLesson = await prisma.transcriptSegment.count({ where: { id: parsed.line.segmentId, sessionId: session.id } })
-    if (!inLesson) parsed.line.segmentId = null
-  }
-  const focus: LessonFocus = {
-    ...((session.lessonFocus as LessonFocus | null) ?? {}),
-    next: { ...parsed, pickedAt: new Date().toISOString() },
-  }
-  await prisma.audioSession.update({ where: { id: session.id }, data: { lessonFocus: focus as Prisma.InputJsonValue } })
-  res.json(focus)
-})
-
-audioSessionsRouter.delete('/:id/lesson-focus/next', async (req, res) => {
-  const session = await prisma.audioSession.findFirst({
-    where: { id: req.params.id, userId: req.user!.userId },
-    select: { id: true, lessonFocus: true },
-  })
-  if (!session) {
-    res.status(404).json({ error: 'Session not found' })
-    return
-  }
-  const focus: LessonFocus = { ...((session.lessonFocus as LessonFocus | null) ?? {}), next: null }
-  await prisma.audioSession.update({ where: { id: session.id }, data: { lessonFocus: focus as Prisma.InputJsonValue } })
-  res.json(focus)
-})
-
-/// The focus this lesson should be checked against: the one picked on the
-/// most recent earlier lesson with the same teacher name. None when this
-/// lesson has no teacher name — one account records many teachers' classes,
-/// and comparing two of them would be comparing two different people.
-audioSessionsRouter.get('/:id/lesson-focus/previous', async (req, res) => {
-  const session = await prisma.audioSession.findFirst({
-    where: { id: req.params.id, userId: req.user!.userId },
-    select: { id: true, teacherName: true, sessionDate: true },
-  })
-  if (!session) {
-    res.status(404).json({ error: 'Session not found' })
-    return
-  }
-  const key = teacherKey(session.teacherName)
-  if (!key) {
-    res.json({ previous: null, reason: 'no_teacher_name' })
-    return
-  }
-  const earlier = await prisma.audioSession.findMany({
-    where: {
-      userId: req.user!.userId,
-      id: { not: session.id },
-      sessionDate: { lt: session.sessionDate },
-      status: { in: ['analyzed', 'locked'] },
-    },
-    orderBy: { sessionDate: 'desc' },
-    select: { id: true, teacherName: true, sessionDate: true, lessonFocus: true },
-  })
-  const previous = earlier.find((s) => teacherKey(s.teacherName) === key)
-  const next = (previous?.lessonFocus as LessonFocus | null)?.next ?? null
-  res.json(
-    previous && next
-      ? { previous: { sessionId: previous.id, sessionDate: previous.sessionDate, next } }
-      : { previous: null, reason: previous ? 'no_focus_picked' : 'no_earlier_lesson' },
-  )
-})
-
-/// What this lesson's report found for the previous lesson's focus, kept so
-/// My Growth can list it without re-reading every lesson.
-audioSessionsRouter.put('/:id/lesson-focus/check-in', async (req, res) => {
-  const parsed = parseCheckIn(req.body)
-  if ('error' in parsed) {
-    res.status(400).json({ error: parsed.error })
-    return
-  }
-  const session = await prisma.audioSession.findFirst({
-    where: { id: req.params.id, userId: req.user!.userId },
-    select: { id: true, lessonFocus: true },
-  })
-  const from = await prisma.audioSession.count({ where: { id: parsed.fromSessionId, userId: req.user!.userId } })
-  if (!session || !from) {
-    res.status(404).json({ error: 'Session not found' })
-    return
-  }
-  const focus: LessonFocus = {
-    ...((session.lessonFocus as LessonFocus | null) ?? {}),
-    checkIn: { ...parsed, checkedAt: new Date().toISOString() },
-  }
-  await prisma.audioSession.update({ where: { id: session.id }, data: { lessonFocus: focus as Prisma.InputJsonValue } })
-  res.json(focus)
-})
-
-/// A lesson's notes are written at most this many times. Each write is one
-/// model call; the findings change only when the lesson is re-read, so this
-/// is generous for real use and a ceiling on anything that is not.
-const MAX_NOTES_WRITES = 5
-
-/// The v3 Insights coach notes (lib/insightsNotes.ts). The page sends the
-/// findings it shows; the notes stored for those exact findings come back
-/// without a model call, and are written only when the findings changed.
-audioSessionsRouter.post('/:id/insights-notes', async (req, res) => {
-  const parsed = parseNotesInput(req.body)
-  if ('error' in parsed) {
-    res.status(400).json({ error: parsed.error })
-    return
-  }
-  const session = await prisma.audioSession.findFirst({
-    where: { id: req.params.id, userId: req.user!.userId },
-    select: { id: true, insightsNotes: true, segments: { select: { speakerLabel: true, startSec: true, endSec: true, text: true } } },
-  })
-  if (!session) {
-    res.status(404).json({ error: 'Session not found' })
-    return
-  }
-  const input = keepTeacherQuotes(parsed, session.segments)
-  const inputHash = hashNotesInput(input)
-  const stored = session.insightsNotes as (InsightsNotes & { writes?: number }) | null
-  if (stored && stored.version === NOTES_VERSION && stored.inputHash === inputHash) {
-    res.json(stored)
-    return
-  }
-  // A new version of the notes starts its own count: a prompt change has to
-  // reach lessons that already used theirs up.
-  const writes = stored?.version === NOTES_VERSION ? (stored.writes ?? 0) : 0
-  if (stored && writes >= MAX_NOTES_WRITES) {
-    // Past the ceiling the last notes stand, even if slightly out of date.
-    res.json(stored)
-    return
-  }
-  const notes = await writeInsightsNotes(input, inputHash)
-  const saved = { ...notes, writes: writes + 1 }
-  await prisma.audioSession.update({ where: { id: session.id }, data: { insightsNotes: saved } })
-  res.json(saved)
-})
-
-/// The teacher's own "Not right?" flags on this lesson's quotes, so the page
-/// can show which ones they already flagged.
-audioSessionsRouter.get('/:id/quote-flags', async (req, res) => {
-  const session = await prisma.audioSession.findFirst({
-    where: { id: req.params.id, userId: req.user!.userId },
-    select: { id: true },
-  })
-  if (!session) {
-    res.status(404).json({ error: 'Session not found' })
-    return
-  }
-  const flags = await prisma.quoteFlag.findMany({
-    where: { sessionId: session.id, userId: req.user!.userId },
-    select: { findingKey: true, segmentId: true, createdAt: true },
-    orderBy: { createdAt: 'asc' },
-  })
-  res.json(flags)
-})
-
-/// "Not right?" on a quote. Recorded, never acted on (lib/quoteFlags.ts).
-/// Flagging the same quote twice is still one flag.
-audioSessionsRouter.post('/:id/quote-flags', async (req, res) => {
-  const input = parseQuoteFlag(req.body)
-  if ('error' in input) {
-    res.status(400).json({ error: input.error })
-    return
-  }
-  // The line has to be in this lesson: a flag pointing at someone else's
-  // transcript is refused rather than stored against this one.
-  const segment = await prisma.transcriptSegment.findFirst({
-    where: { id: input.segmentId, session: { id: req.params.id, userId: req.user!.userId } },
-    select: { sessionId: true },
-  })
-  if (!segment) {
-    res.status(404).json({ error: 'That line is not in this lesson' })
-    return
-  }
-  const key = {
-    sessionId: segment.sessionId,
-    userId: req.user!.userId,
-    findingKey: input.findingKey,
-    segmentId: input.segmentId,
-  }
-  const flag = await prisma.quoteFlag.upsert({
-    where: { sessionId_userId_findingKey_segmentId: key },
-    create: { ...key, quote: input.quote, timestampSec: input.timestampSec, reason: input.reason },
-    update: input.reason ? { reason: input.reason } : {},
-    select: { findingKey: true, segmentId: true, createdAt: true },
-  })
-  res.status(201).json(flag)
 })
 
 audioSessionsRouter.patch('/:id', async (req, res) => {
@@ -962,13 +741,7 @@ audioSessionsRouter.post('/:id/tag-speaker', async (req, res) => {
       where: { sessionId: session.id },
       orderBy: { startSec: 'asc' },
     })
-  ).map((s) => ({
-    speakerLabel: s.speakerLabel,
-    startSec: s.startSec,
-    endSec: s.endSec,
-    text: s.text,
-    speakerConfidence: s.speakerConfidence,
-  }))
+  ).map((s) => ({ speakerLabel: s.speakerLabel, startSec: s.startSec, endSec: s.endSec, text: s.text }))
 
   // Clients that poll say so. The ones that don't are builds already in
   // teachers' hands, which wait on the request exactly as they always have.
@@ -1030,20 +803,11 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
   // student-talk number is a duration, and both rooms produce the same
   // durations. Best-effort like the rest: null means not measured, and the
   // report says so rather than filling it in.
-  // How long each thinking question stayed open needs the rebuilt question
-  // log, so it rides along with this one rather than the reads above. Null
-  // means the read failed and the log stands as it was.
-  // Who each check asked and whether it was acted on needs the rebuilt
-  // checks log, likewise.
-  const [studentTalkFocus, heldOpenLog, checksLog] = await Promise.all([
-    readStudentTalkFocus(segments, {
-      objective: lessonContent.statedObjective?.quote ?? null,
-      summary: lessonContent.summary ?? null,
-      subject: lessonContent.subject ?? null,
-    }),
-    readHeldOpen(analysis.questionLog, segments),
-    readChecksLoop(analysis.cfuLog, segments),
-  ])
+  const studentTalkFocus = await readStudentTalkFocus(segments, {
+    objective: lessonContent.statedObjective?.quote ?? null,
+    summary: lessonContent.summary ?? null,
+    subject: lessonContent.subject ?? null,
+  })
 
   // Notes are no longer auto-generated from raw metrics here — they're
   // populated later from the Reflect tab's actual coaching conversation
@@ -1084,8 +848,8 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
       },
       highlights: analysis.highlights,
       phases: analysis.phases,
-      questionLog: (heldOpenLog ?? analysis.questionLog) as unknown as Prisma.InputJsonValue,
-      cfuLog: (checksLog ?? analysis.cfuLog) as unknown as Prisma.InputJsonValue,
+      questionLog: analysis.questionLog,
+      cfuLog: analysis.cfuLog,
       feedbackLog: analysis.feedbackLog,
       directiveLog: analysis.directiveLog,
       toneLog: analysis.toneLog,
@@ -1428,21 +1192,6 @@ audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
     return
   }
 
-  const existing = session.contentNotes as {
-    notes?: Prisma.InputJsonValue[]
-    misconceptions?: string[]
-    writtenAt?: string
-    rewrites?: number
-    previous?: Prisma.InputJsonValue[]
-  } | null
-  const rewrites = existing?.rewrites ?? 0
-  if (existing && rewrites >= MAX_CONTENT_NOTE_REWRITES) {
-    res.status(429).json({
-      error: `These notes have been written again ${MAX_CONTENT_NOTE_REWRITES} times, the most for one report.`,
-    })
-    return
-  }
-
   const denied = await checkAndLogUsage(req.user!.userId, 'content_notes')
   if (denied) {
     res.status(429).json({ error: denied })
@@ -1475,16 +1224,6 @@ audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
           subject,
           notes,
           misconceptions: parseMisconceptions(text),
-          writtenAt: new Date().toISOString(),
-          // The first set is not a rewrite; every later one is, and the one
-          // it replaces is kept, so two readings never silently disagree.
-          rewrites: existing ? rewrites + 1 : 0,
-          previous: existing
-            ? [
-                ...(existing.previous ?? []),
-                { notes: existing.notes ?? [], misconceptions: existing.misconceptions ?? [], writtenAt: existing.writtenAt ?? null },
-              ]
-            : [],
         },
       },
       include: { segments: { orderBy: { startSec: 'asc' } } },
@@ -1787,15 +1526,6 @@ export type ClassSummaryMetrics = {
   directionMoments?: { timestampSec: number; text: string }[]
   toneMoments?: { kind: string; timestampSec: number; text: string }[]
   redirectionMoments?: { timestampSec: number; text: string }[]
-  /// Moments from the teaching-moves read — the teacher's own sentences,
-  /// already verified against their speech. These are the ONLY strings the
-  /// note may quote.
-  invitationMoments?: { timestampSec: number; text: string }[]
-  revisionMoments?: { timestampSec: number; text: string }[]
-  selfAnsweredMoments?: { timestampSec: number; text: string }[]
-  explanationMoments?: { timestampSec: number; text: string; kind: string }[]
-  connectionMoments?: { timestampSec: number; text: string; kind: string }[]
-  directionPartMoments?: { timestampSec: number; text: string; parts: string[] }[]
   nameMentions?: number | null
   uniqueNames?: number | null
   /// Already read out of the transcript by `lessonObjective.ts`. Handed to
@@ -1806,30 +1536,7 @@ export type ClassSummaryMetrics = {
   connections?: string[]
   vocabulary?: string[]
   subject?: string | null
-  /// How long thinking questions stayed open (lib/teacherVoice.ts). The
-  /// teacher-voice stand-in for wait time while student metrics are off.
-  heldOpen?: { typicalSec: number; long: number; questions: number } | null
 }
-
-/// The talk note while student metrics are off (lib/teacherVoice.ts). The
-/// other version is written around the student share and what it can and
-/// cannot mean; with that share gone from the page, the note describes the
-/// teacher's own talk and the moments they opened the floor, and says nothing
-/// about how much students spoke.
-const TEACHER_VOICE_TALK_NOTE = `Then THE TALK NOTE: one paragraph about the shape of the teacher's own talk
-across the lesson. The teacher's share of the recording is on that screen, so
-do not restate it. Pace is worth saying: how fast the teacher spoke is a
-number a teacher will not have in mind, so where the pace is notably quick for
-explaining new material, say so plainly and in their own terms — not as a
-verdict, since there is no correct rate and a fast stretch of storytelling is
-not a fault. Where the recording caught nothing for the first minutes, say
-that too. Say where the long teacher stretches fell and what they were doing
-(explaining, setting up, recapping), where the teacher stepped back, and
-whether the shape changed across the lesson. Where the teacher opened the
-floor, name that moment from the invitations list. Say nothing about how much
-students talked or how they took part: this report does not measure it, and
-the rest of the recording may be students, other voices, quiet work or sound
-the microphone could not make out.`
 
 export function buildClassSummarySystemPrompt(
   exhibits: { text: string; timestampSec: number }[],
@@ -1846,23 +1553,14 @@ export function buildClassSummarySystemPrompt(
   const measured = metrics
     ? `What the recording measured. You may cite these numbers and no others:
 - teacher talk: ${metrics.teacherTalkPct ?? 'not measured'}%
-${
-        STUDENT_METRICS_ON
-          ? `- student talk: ${metrics.studentTalkPct ?? 'not measured'}%${metrics.studentVoiceDetected ? '' : ' (NO student voice was separately detected at all)'}\n`
-          : ''
-      }- questions asked: ${metrics.questionCount ?? 'not measured'}
+- student talk: ${metrics.studentTalkPct ?? 'not measured'}%${metrics.studentVoiceDetected ? '' : ' (NO student voice was separately detected at all)'}
+- questions asked: ${metrics.questionCount ?? 'not measured'}
 - of those, higher-order: ${
         metrics.higherOrderCount != null && metrics.questionCount != null
           ? `${metrics.higherOrderCount} of ${metrics.questionCount}`
           : 'not measured'
       } (a count — never restate it as a percentage)
-${
-        STUDENT_METRICS_ON
-          ? `- average wait time after a question: ${metrics.avgWaitTimeSec ?? 'not measured'}s`
-          : metrics.heldOpen
-            ? `- how long the teacher held thinking (higher-order) questions open, until they confirmed an answer, gave it, or moved on: typically ${metrics.heldOpen.typicalSec >= 120 ? 'more than two minutes' : `${metrics.heldOpen.typicalSec} seconds`}; ${metrics.heldOpen.long} of ${metrics.heldOpen.questions} were held ${LONG_PAUSE_SEC} seconds or more (a count — never a percentage). Students may have answered inside that time, so never call it wait time or silence.`
-            : '- how long thinking questions were held open: not measured'
-      }
+- average wait time after a question: ${metrics.avgWaitTimeSec ?? 'not measured'}s
 - check-for-understanding moves heard: ${metrics.cfuCount ?? 'not measured'}`
     : ''
 
@@ -1876,23 +1574,13 @@ Structure, when the recording is long enough for three paragraphs:
 
 2. WHAT WENT WELL. Name specific things this teacher actually did — a connection they drew, a question they asked, a routine that worked, a moment they gave students room. Several of them, each tied to the moment it came from, not one line of praise. Be concrete and generous. Vague praise is worse than none.
 
-3. WHAT MIGHT BE WORTH A LOOK. Offered as questions for the teacher to weigh, not verdicts. And every one of them must be tied to the single most important caveat: THIS IS A MICROPHONE IN A ROOM. It hears the teacher clearly and students poorly. A student who spoke quietly, from the back, or in a group did not reach it. ${
-    STUDENT_METRICS_ON
-      ? 'A low student-talk number may mean the room was quiet, or may mean the recording could not hear it, and you must say so rather than letting the teacher read it as a verdict on their teaching.'
-      : 'This report is built from the teacher\'s voice only. It does not measure how much students spoke, what they said, or how long they took to answer, so never estimate any of those or describe student participation.'
-  } Never tell a teacher what happened in their room that you could not hear. Where you are unsure, say what the recording could and could not show and let them judge.
+3. WHAT MIGHT BE WORTH A LOOK. Offered as questions for the teacher to weigh, not verdicts. And every one of them must be tied to the single most important caveat: THIS IS A MICROPHONE IN A ROOM. It hears the teacher clearly and students poorly. A student who spoke quietly, from the back, or in a group did not reach it. A low student-talk number may mean the room was quiet, or may mean the recording could not hear it, and you must say so rather than letting the teacher read it as a verdict on their teaching. Never tell a teacher what happened in their room that you could not hear. Where you are unsure, say what the recording could and could not show and let them judge.
 
 If a number is missing or the transcript is too thin to support a paragraph, say so plainly and write less. Writing less is always allowed — but only for want of evidence. Where the transcript does support it, write the full paragraph.
 
 ${measured}
 
-Below are numbered excerpts of what the teacher said, in order. Paraphrase these — do not quote them or use quotation marks around them. They are raw transcript and may be mis-transcribed.
-
-QUOTING. There is one exception, and it matters more than anything else here. The MOMENT LISTS further down hold sentences already checked word-for-word against what the teacher said. You may quote from those, verbatim, inside quotation marks. Copy the words exactly; changing so much as a word makes it a sentence the teacher did not say.
-
-ANCHOR EVERY NOTE ON ONE MOMENT. A coach who was in the room does not say "you followed up once" — they say what happened: when a student gave you half an answer you said "I'm not the answer. Take a guess." and they came back with the whole thing. Each section note below must name ONE real moment that way, quoted from the lists and given its timestamp, and say why that moment mattered. One moment, not three: a note listing six observations is a report with a friendlier voice, not coaching.
-
-Where a section has no moment worth anchoring on, write the note without a quote rather than reaching for a weak one. A general note is better than a forced quote.
+Below are numbered excerpts of what the teacher said, in order. Paraphrase only — do not quote them directly or use quotation marks.
 
 ${exhibits.map((e, i) => `[${i + 1}] ${e.text}`).join('\n')}
 
@@ -1924,18 +1612,6 @@ ${
       : 'No feedback moments were detected.'
   }
 
-${
-    metrics?.revisionMoments?.length
-      ? `MOMENT LIST — times you pushed a student further (quotable):\n${metrics.revisionMoments.map((m) => `- ${mmss(m.timestampSec)} "${m.text}"`).join('\n')}`
-      : ''
-  }
-
-${
-    metrics?.selfAnsweredMoments?.length
-      ? `MOMENT LIST — questions you answered yourself (quotable):\n${metrics.selfAnsweredMoments.map((m) => `- ${mmss(m.timestampSec)} "${m.text}"`).join('\n')}`
-      : ''
-  }
-
 Then THE CLIMATE NOTE: one paragraph for a section about routines,
 directions and classroom language, covering both how the class was moved
 between activities and how the teacher spoke to students. These moments are
@@ -1945,32 +1621,6 @@ and never explain the detector to the teacher. A zero still means only that
 nothing of that kind was heard: encouragement carried by tone, a look that
 settles a room, and anything said too quietly for the mic leave no trace. If
 there is genuinely nothing to say, one honest sentence is the right answer.
-
-${
-    metrics?.invitationMoments?.length
-      ? `MOMENT LIST — times you opened the floor (quotable):\n${metrics.invitationMoments.map((m) => `- ${mmss(m.timestampSec)} "${m.text}"`).join('\n')}`
-      : ''
-  }
-
-${
-    metrics?.directionPartMoments?.length
-      ? `MOMENT LIST — directions, and which of task/steps/time/product each named (quotable):\n${metrics.directionPartMoments
-          .map((m) => `- ${mmss(m.timestampSec)} [${m.parts.length ? m.parts.join('+') : 'named none of the four'}] "${m.text}"`)
-          .join('\n')}`
-      : ''
-  }
-
-${
-    metrics?.connectionMoments?.length
-      ? `MOMENT LIST — how you tied the lesson together (quotable):\n${metrics.connectionMoments.map((m) => `- ${mmss(m.timestampSec)} [${m.kind}] "${m.text}"`).join('\n')}`
-      : ''
-  }
-
-${
-    metrics?.explanationMoments?.length
-      ? `MOMENT LIST — how you opened the content up (quotable):\n${metrics.explanationMoments.map((m) => `- ${mmss(m.timestampSec)} [${m.kind}] "${m.text}"`).join('\n')}`
-      : ''
-  }
 
 ${
     metrics?.directionMoments?.length
@@ -1990,15 +1640,12 @@ ${
 Student names: ${metrics?.nameMentions ?? 'not measured'} mentions across ${metrics?.uniqueNames ?? 'not measured'} names.
 ${metrics?.teacherWordsPerMinute != null ? `Teacher speaking pace: about ${metrics.teacherWordsPerMinute} words a minute of their own speaking time (everyday conversation runs about 150).` : 'Teacher speaking pace: not measured.'}
 ${
-    !STUDENT_METRICS_ON
-      ? ''
-      : metrics?.waitTime2Sec != null
+    metrics?.waitTime2Sec != null
       ? `Pause after a student finished answering, before the teacher spoke: about ${metrics.waitTime2Sec}s across ${metrics.waitTime2SampleCount ?? 0} exchanges. This is a different number from the wait time above, which is the pause AFTER THE QUESTION.`
       : 'Pause after a student answer: not measured.'
   }
 ${metrics?.firstWordSec != null && metrics.firstWordSec >= 30 ? `Nothing was transcribed until ${mmss(metrics.firstWordSec)}, so that much of the silence is the recorder running before the lesson got going rather than quiet in the room.` : ''}
 ${(() => {
-    if (!STUDENT_METRICS_ON) return ''
     const f = metrics?.studentTalkFocus as
       | { classified?: number; onTopic?: number; procedural?: number; offTopic?: number; unclear?: number }
       | null
@@ -2008,7 +1655,7 @@ ${(() => {
       : 'What the student talk was about: not measured for this lesson (too few audible student turns to characterise).'
   })()}
 
-${STUDENT_METRICS_ON ? `Then THE TALK NOTE: one paragraph about who was heard and for how long,
+Then THE TALK NOTE: one paragraph about who was heard and for how long,
 covering both the shape of the teacher's talk and where students got
 the floor, and what that does and does not tell us.
 The numbers — teacher talk, student talk, silence — are on that screen, so do
@@ -2033,29 +1680,19 @@ student talk was ABOUT, and when that is given above you may use it: say so
 plainly, in proportions rather than percentages, and treat a large unclear
 share as the microphone's limit rather than the students'. When it is not
 given, say what was audible and leave the reading of it to the teacher, who
-was in the room.` : TEACHER_VOICE_TALK_NOTE}
+was in the room.
 
 Then THE QUESTIONS NOTE: one paragraph about the questioning, covering both
-what was asked and what happened after it was asked. ${
-    STUDENT_METRICS_ON
-      ? `Two pauses matter here
+what was asked and what happened after it was asked. Two pauses matter here
 and they are different: the one after the question, and the one after a
 student's answer. The second is the one with nothing in this report before
 now, and it is usually what explains a low follow-up count — a pause of a few
 tenths of a second leaves nowhere for a follow-up to go. Where that is what
 the numbers show, say it, because it turns a count the teacher cannot act on
-into one they can.`
-      : `The one pause this report has is the
-time from the end of a question to the teacher's next line. It may contain a
-student's answer, so describe it only as how long the teacher left before
-speaking again, never as think time or as what students did with it.`
-  } Again the
+into one they can. Again the
 counts are already on screen. Say what kinds of questions these were, whether
-they built on each other or moved on, ${
-    STUDENT_METRICS_ON
-      ? 'what happened after one was asked, and whether answers were followed up or accepted'
-      : 'and what the teacher said next'
-  }. When you mention how many were
+they built on each other or moved on, what happened after one was asked, and
+whether answers were followed up or accepted. When you mention how many were
 higher-order, give it as a count — "three of the seven" — and never as a
 percentage: with a handful of questions a percentage reads as a score. State
 it once, plainly, and move on to the questions themselves — do not comment on
@@ -2175,75 +1812,7 @@ type ClassSummarySource = {
     metricsDetail: unknown
     lessonContent: unknown
     studentTalkFocus?: unknown
-    teachingMoves?: unknown
-    questionLog?: unknown
   }
-
-/// The quotable moment lists, from whatever the teaching-moves read stored.
-///
-/// Defensive about shape because this is stored JSON: a report written before
-/// a category existed simply has no entry, and a malformed one yields an
-/// empty list rather than throwing inside the summary call.
-export function teachingMomentsFor(raw: unknown): Record<string, unknown[]> {
-  const m = (raw ?? {}) as Record<string, { quote?: string; timestampSec?: number; kind?: string; parts?: string[] }[]>
-  const take = (key: string, limit: number) =>
-    (Array.isArray(m[key]) ? m[key] : [])
-      .filter((x) => typeof x?.quote === 'string' && typeof x?.timestampSec === 'number')
-      .slice(0, limit)
-  const plain = (key: string, limit: number) =>
-    take(key, limit).map((x) => ({ timestampSec: x.timestampSec as number, text: x.quote as string }))
-  return {
-    invitationMoments: plain('invitations', 8),
-    revisionMoments: plain('revisionPrompts', 8),
-    selfAnsweredMoments: plain('selfAnswered', 5),
-    explanationMoments: take('explanations', 8).map((x) => ({
-      timestampSec: x.timestampSec as number,
-      text: x.quote as string,
-      kind: x.kind ?? 'example',
-    })),
-    connectionMoments: take('connections', 8).map((x) => ({
-      timestampSec: x.timestampSec as number,
-      text: x.quote as string,
-      kind: x.kind ?? 'prior',
-    })),
-    directionPartMoments: take('directions', 8).map((x) => ({
-      timestampSec: x.timestampSec as number,
-      text: x.quote as string,
-      parts: Array.isArray(x.parts) ? x.parts : [],
-    })),
-  }
-}
-
-/// Every quoted span in a note must be something the teacher actually said.
-///
-/// The prompt now allows verbatim quoting, which it did not before — the old
-/// rule was "paraphrase only", and that rule was the only thing standing
-/// between a teacher and a sentence they never said. Replacing it with an
-/// instruction is not enough: a model that quotes a moment list is still a
-/// model, and the one thing this report has is that a teacher can check it.
-///
-/// A note carrying a quote that fails is DISCARDED rather than shown. The
-/// section renders without a note, which is a known, handled state. Showing
-/// a misquote is not.
-///
-/// WHERE THIS STOPS. Matching is normalized, so it catches a sentence the
-/// teacher never said and a sentence whose WORDS have been changed — "I am
-/// not the answer" against "I'm not the answer" is rejected. It does NOT
-/// catch punctuation or capitalisation drift: "So what was it, so which
-/// two?" passes for "So what was it? So which two?". That is the right
-/// trade. Rejecting a real moment over a comma was tried elsewhere in this
-/// codebase and turned a genuine objective into "not said aloud", which is
-/// a worse lie than the comma. The harm being prevented here is words the
-/// teacher did not say, not a model's punctuation.
-export function noteQuotesAreReal(note: string | null, segments: Segment[]): boolean {
-  if (!note) return true
-  const { flat } = flattenTeacherSpeech(segments)
-  // Short spans inside quotes are usually a word being highlighted rather
-  // than a claim about what was said, and are not worth rejecting a whole
-  // note over.
-  const quoted = [...note.matchAll(/[\u201C"]([^\u201D"]{12,})[\u201D"]/g)].map((m) => m[1])
-  return quoted.every((q) => flat.includes(normalizeForMatch(q)))
-}
 
 /// The model call behind the class summary, on its own so a script can see
 /// what comes back for a real lesson without writing it (scripts/tryNextSteps).
@@ -2270,19 +1839,11 @@ export async function requestClassSummaryText(session: ClassSummarySource, segme
       waitTime2SampleCount: metricNumber(session.metricsDetail, 'waitTime2SampleCount'),
       firstWordSec: metricNumber(session.metricsDetail, 'firstWordSec'),
       studentTalkFocus: session.studentTalkFocus ?? null,
-      heldOpen: heldOpenSummary(
-        Array.isArray(session.questionLog) ? (session.questionLog as QuestionLogEntry[]) : null,
-        (session.teachingMoves as { selfAnswered?: { timestampSec: number }[] } | null)?.selfAnswered ?? [],
-      ),
       cfuMoments: ((session.cfuLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 12),
       feedbackMoments: ((session.feedbackLog ?? []) as { kind: string; timestampSec: number; text: string }[]).slice(0, 12),
       directionMoments: ((session.directiveLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 10),
       toneMoments: ((session.toneLog ?? []) as { kind: string; timestampSec: number; text: string }[]).slice(0, 10),
       redirectionMoments: ((session.redirectionLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 10),
-      // The teaching-moves read's own quotes, already verified word-for-word
-      // against the teacher's speech when it stored them. They are the only
-      // strings the note is allowed to put in quotation marks.
-      ...teachingMomentsFor(session.teachingMoves),
       nameMentions: metricNumber(session.metricsDetail, 'nameMentionCount'),
       uniqueNames: metricNumber(session.metricsDetail, 'uniqueNameCount'),
       statedObjective: lessonContentField(session.lessonContent, 'statedObjective', 'quote'),
@@ -2302,13 +1863,10 @@ export async function requestClassSummaryText(session: ClassSummarySource, segme
 /// Returns null when there is nothing to write (over the usage limit, or the
 /// model gave back no summary), so a caller that already has a report can
 /// keep it rather than lose it to this.
-export async function writeClassSummary(
+async function writeClassSummary(
   userId: string,
   session: ClassSummarySource,
   segments: Segment[],
-  /// False only for an operator backfill, which must not spend a teacher's
-  /// monthly allowance on a rewrite they did not ask for.
-  { countUsage = true }: { countUsage?: boolean } = {},
 ) {
   const exhibits = buildContentExhibits(segments)
 
@@ -2324,10 +1882,8 @@ export async function writeClassSummary(
     })
   }
 
-  if (countUsage) {
-    const denied = await checkAndLogUsage(userId, 'class_summary')
-    if (denied) throw new UsageLimitError(denied)
-  }
+  const denied = await checkAndLogUsage(userId, 'class_summary')
+  if (denied) throw new UsageLimitError(denied)
 
   const text = await requestClassSummaryText(session, segments)
   flagIfUnsafe(text, 'audioSessions.classSummary')
@@ -2347,32 +1903,15 @@ export async function writeClassSummary(
   if (!classSummary) return null
   const nextSteps = parseNextSteps(text)
 
-  // Every note is checked before it is stored. The prompt now allows verbatim
-  // quoting, and an instruction is not a guarantee — a note carrying a
-  // sentence the teacher did not say is dropped rather than shown. The
-  // section then renders without a note, which is a state the UI already
-  // handles; a misquote is not.
-  const verified = (note: string | null): string | null => {
-    if (!note) return null
-    if (noteQuotesAreReal(note, segments)) return note
-    console.error('[class-summary] note dropped: it quoted something not in the teacher\u2019s speech')
-    return null
-  }
-  const safeChecks = verified(checksNarrative)
-  const safeClimate = verified(climateNarrative)
-  const safeTalk = verified(talkNarrative)
-  const safeQuestions = verified(questionsNarrative)
-  const safeContent = verified(contentNarrative)
-
   return prisma.audioSession.update({
     where: { id: session.id },
     data: {
       classSummary: normalizeParagraphs(classSummary),
-      ...(safeChecks ? { checksNarrative: normalizeParagraphs(safeChecks) } : {}),
-      ...(safeClimate ? { climateNarrative: normalizeParagraphs(safeClimate) } : {}),
-      ...(safeTalk ? { talkNarrative: normalizeParagraphs(safeTalk) } : {}),
-      ...(safeQuestions ? { questionsNarrative: normalizeParagraphs(safeQuestions) } : {}),
-      ...(safeContent ? { contentNarrative: normalizeParagraphs(safeContent) } : {}),
+      ...(checksNarrative ? { checksNarrative: normalizeParagraphs(checksNarrative) } : {}),
+      ...(climateNarrative ? { climateNarrative: normalizeParagraphs(climateNarrative) } : {}),
+      ...(talkNarrative ? { talkNarrative: normalizeParagraphs(talkNarrative) } : {}),
+      ...(questionsNarrative ? { questionsNarrative: normalizeParagraphs(questionsNarrative) } : {}),
+      ...(contentNarrative ? { contentNarrative: normalizeParagraphs(contentNarrative) } : {}),
       ...(connectionIdeas.length > 0 && lessonContent ? { lessonContent: { ...lessonContent, connectionIdeas } } : {}),
       // Always written, even empty: "this summary suggested nothing" is an
       // answer, and null is what tells the report to ask (/:id/next-steps).

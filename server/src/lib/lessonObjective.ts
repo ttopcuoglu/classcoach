@@ -183,25 +183,15 @@ export type ObjectiveFromModel = {
 /// Each line is "the teacher's sentence @ m:ss". Verified the same way the
 /// objective is — against the teacher's speech flattened into one string — so
 /// a sentence nobody said is dropped rather than shown to a teacher as theirs.
-/// The model answered NONE, as opposed to writing a sentence that happens to
-/// contain the word. Checking `.includes('NONE')` — which every parser here
-/// used to — threw away a whole category, or an objective, whenever a real
-/// sentence said "none": "none of you should be on your phones" wiped out
-/// every redirection in the lesson. teachingMoves found and fixed this first.
-export function isNoneAnswer(raw: string): boolean {
-  return /^\s*NONE\.?\s*$/i.test(raw)
-}
-
 export function parseQuotedLines(
   raw: string | null,
   flat: string,
   offsets: { at: number; startSec: number }[],
   max: number,
 ): Quoted[] {
-  if (!raw) return []
+  if (!raw || raw.toUpperCase().includes(NONE)) return []
   const out: Quoted[] = []
   for (const line of raw.split('\n')) {
-    if (isNoneAnswer(line)) continue
     // The "@ m:ss" is optional. Requiring it threw away real moments by the
     // handful whenever the model left it off — one lesson's directions came
     // back 0, 4, 0, 7 across four runs purely on whether it remembered the
@@ -225,7 +215,7 @@ export function parseQuotedLines(
 function parseSubject(raw: string | null): string | null {
   if (!raw) return null
   const value = raw.trim().replace(/[.]+$/, '')
-  if (!value || isNoneAnswer(value)) return null
+  if (!value || value.toUpperCase().includes(NONE)) return null
   if (!/^[A-Za-z][A-Za-z '-]{1,28}$/.test(value)) return null
   if (value.split(/\s+/).length > 3) return null
   return value.toLowerCase()
@@ -256,7 +246,7 @@ export async function readLessonObjective(segments: Segment[]): Promise<Objectiv
 
     const rawQuote = extractTag(text, 'objective')
     const rawSummary = extractTag(text, 'summary')
-    const summary = !rawSummary || isNoneAnswer(rawSummary) ? null : rawSummary
+    const summary = !rawSummary || rawSummary.toUpperCase().includes(NONE) ? null : rawSummary
     const subject = parseSubject(extractTag(text, 'subject'))
 
     const { flat, offsets } = flattenTeacherSpeech(segments)
@@ -264,7 +254,7 @@ export async function readLessonObjective(segments: Segment[]): Promise<Objectiv
     const vocabulary = parseQuotedLines(extractTag(text, 'vocabulary'), flat, offsets, 2)
     const keyTerms = parseKeyTermLines(extractTag(text, 'key_terms'))
 
-    if (!rawQuote || isNoneAnswer(rawQuote)) {
+    if (!rawQuote || rawQuote.toUpperCase().includes(NONE)) {
       return { quote: null, timestampSec: null, summary, subject, connections, vocabulary, keyTerms }
     }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, MicIcon, PlayIcon } from '../components/icons'
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
@@ -12,6 +12,7 @@ import { UPLOAD_STAGE, transcribeEstimateSec, transcribeHint, transcribeStage } 
 import { HATCH_STYLE } from '../lib/chartPatterns'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import { setPlanningPrefill } from '../lib/communicationsPrefill'
+import { MIN_STRETCH_TO_SHOW_SEC, longestTeacherStretch } from '../lib/teacherStretch'
 import { createPlaybackQueue, primeAudioElement, splitIntoSentences, type PlaybackQueue } from '../lib/voicePlayback'
 import {
   createAudioSession,
@@ -32,15 +33,24 @@ import {
   updateAudioSession,
   updateProfile,
   generateContentNotes,
+  type AudioCfuLogEntry,
+  type AudioContentNotes,
+  type AudioDirectiveLogEntry,
+  type AudioFeedbackLogEntry,
   type AudioHighlight,
   type AudioLessonContent,
+  type AudioQuestionLogEntry,
   type AudioReflectMessage,
   type AudioEscalation,
+  type AudioTeachingMoves,
   type AudioEscalationRung,
+  type AudioRedirectionLogEntry,
   type AudioHardLook,
   type AudioRubricLens,
   type AudioSession,
   type AudioSessionWithSegments,
+  type SoundTimeline,
+  type AudioToneLogEntry,
   type ApiError,
   type FocusMetric,
   type ReflectChatErrorKind,
@@ -52,13 +62,15 @@ import { THIN_AUDIBLE_SHARE_PCT, useCaptureMonitor } from '../hooks/useCaptureMo
 import { buildCorrectionBalance, coverageCaveatLine, DETECTION_CAVEAT } from '../lib/correctionBalance'
 import {
   buildEvidenceQualityLine,
-  evidenceLabel,
+  evidenceTier,
+  EVIDENCE_TIER_LABELS,
   formatRatio,
   getCoverage,
   getCountMetric,
   getFollowUpMetric,
   feedbackMeasurable,
   getPresenceMetric,
+  hasEnoughWaitTimeSamples,
   isConfidentState,
   isMissingState,
   judgeTalkBalance,
@@ -70,46 +82,20 @@ import {
   STUDENT_TALK_CAVEAT,
   waitTimeMetric as waitTimeMetricOf,
   type ConfidentMetric,
+  type MetricState,
   type TalkBalanceJudgment,
+  waitTime2Metric,
+  leadingSilenceNote,
+  CONVERSATIONAL_WPM,
 } from '../lib/reportConfidence'
 import {
   buildNextTimeItems,
   buildStrengthCandidates,
   formatCandidateHeadline,
+  highlightCandidates,
   pickTop,
   type NoticeCandidate,
 } from '../lib/reportHighlights'
-import InsightsPage from '../components/insights/InsightsPage'
-import { FocusCheckInHistory } from '../components/insights/FocusCards'
-import type { SectionKey as InsightsV3Section } from '../lib/insightsModel'
-import {
-  FOLLOW_UPS_OFF,
-  heldOpenMetric,
-  realChecks,
-  heldOpenStat,
-  HELD_OPEN_LABEL,
-  STUDENT_METRICS_ON,
-  teacherVoiceView,
-} from '../lib/teacherVoice'
-
-/// Which of the old four sections' Hard Look and Discuss each new section
-/// carries. Clarity has none of its own: the old "content" critiques belong
-/// to the Content Lens, and showing them twice would say them twice.
-/// And the other way: where on the page an old section name now points.
-const V3_SECTION_FOR: Record<InsightsSection, InsightsV3Section> = {
-  talk: 'talk_pace',
-  questions: 'questioning',
-  content: 'content_lens',
-  routines: 'climate',
-}
-
-const V3_OLD_SECTION: Record<InsightsV3Section, InsightsSection | null> = {
-  talk_pace: 'talk',
-  questioning: 'questions',
-  clarity: null,
-  climate: 'routines',
-  content_lens: 'content',
-}
 
 function formatTime(sec: number): string {
   const m = Math.floor(sec / 60)
@@ -1246,6 +1232,42 @@ const INSIGHTS_SECTIONS: { key: InsightsSection; label: string }[] = [
   { key: 'routines', label: 'Climate & Routines' },
 ]
 
+// The printed report's numbers, one-line descriptions and colours for these
+// four sections (see AudioCoachingExport), so the screen and the paper look
+// like one report and a teacher holding the printout can find "section 3" here.
+//
+// One honest gap: the printout skips Clarity & Content when a lesson produced
+// no content quotes, so on those lessons its Climate & Routines is numbered 3
+// while this screen, which always lists all four, still says 4.
+const INSIGHTS_SECTION_META: Record<InsightsSection, { n: number; blurb: string; accent: Accent }> = {
+  talk: { n: 1, blurb: 'Who was heard, and for how long.', accent: ACCENTS.terracotta },
+  questions: { n: 2, blurb: 'What you asked, how you checked, and how you responded.', accent: ACCENTS.gold },
+  content: { n: 3, blurb: 'What the lesson said it was about, in its own words.', accent: ACCENTS.forest },
+  routines: { n: 4, blurb: 'Directions, praise and redirections, as they sounded.', accent: ACCENTS.terracotta },
+}
+
+// Lets the stat groups inside a section tint themselves with that section's
+// colour without every Insights tab having to pass it down by hand.
+const SectionAccentContext = createContext<Accent>(ACCENTS.mint)
+
+function InsightsSectionHeader({ section }: { section: InsightsSection }) {
+  const meta = INSIGHTS_SECTION_META[section]
+  const label = INSIGHTS_SECTIONS.find((s) => s.key === section)?.label ?? ''
+  return (
+    <div className="mb-6 flex items-center gap-4">
+      <span
+        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${meta.accent.band} font-heading text-xl font-bold text-cream`}
+      >
+        {meta.n}
+      </span>
+      <div>
+        <h2 className="font-heading text-2xl font-extrabold leading-tight text-forest">{label}</h2>
+        <p className="mt-0.5 text-sm text-ink-soft">{meta.blurb}</p>
+      </div>
+    </div>
+  )
+}
+
 // Same bridge the printed report uses: an unmeasurable value shows a dash with
 // its reason, never a zero.
 function SummaryStat({ label, metric, unit, accent }: { label: string; metric: ConfidentMetric; unit?: string; accent: Accent }) {
@@ -1258,6 +1280,31 @@ function SummaryStat({ label, metric, unit, accent }: { label: string; metric: C
       hint={confident ? undefined : metric.reason}
       accent={accent}
     />
+  )
+}
+
+function insightsNavButtonClass(active: boolean) {
+  return `rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
+    active ? 'bg-cream-card font-semibold text-forest shadow-sm' : 'text-ink-soft hover:bg-cream-card/60 hover:text-ink'
+  }`
+}
+
+function InsightsNav({ section, onSelect }: { section: InsightsSection; onSelect: (s: InsightsSection) => void }) {
+  return (
+    <nav className="flex shrink-0 flex-col gap-0.5 lg:w-52">
+      {INSIGHTS_SECTIONS.map(({ key, label }) => (
+        <button key={key} type="button" onClick={() => onSelect(key)} className={insightsNavButtonClass(section === key)}>
+          <span className="flex items-center gap-2.5">
+            <span
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${INSIGHTS_SECTION_META[key].accent.band} text-xs font-bold text-cream`}
+            >
+              {INSIGHTS_SECTION_META[key].n}
+            </span>
+            {label}
+          </span>
+        </button>
+      ))}
+    </nav>
   )
 }
 
@@ -1404,6 +1451,64 @@ function buildTranscriptWindow(
     .sort((a, b) => a.startSec - b.startSec)
 }
 
+// A feedback moment is specifically the ONE teacher turn right after a
+// student turn — not a window of surrounding talk, which in a
+// densely-packed transcript can sweep in unrelated lines (the opening
+// statement, a later follow-up question) that look like more "moments"
+// than were actually counted. Returns exactly the pair that was counted,
+// or [] if the segment isn't found.
+function buildFeedbackExchange(segments: TranscriptSegment[], timestampSec: number): TranscriptSegment[] {
+  const ordered = [...segments].sort((a, b) => a.startSec - b.startSec)
+  const idx = ordered.findIndex((s) => s.startSec === timestampSec)
+  if (idx <= 0) return []
+  return [ordered[idx - 1], ordered[idx]]
+}
+
+// A single phrase-matched teacher turn — a check for understanding, a
+// clear direction, a positive/corrective tone moment, a redirection — is
+// its own segment, full stop; anything before it just happens to be
+// nearby in time and is often a completely unrelated exchange (see the
+// "What is one half plus one half?" / "One whole!" pair that a plain +/-15s
+// window pulled in ahead of an unrelated "Turn and talk..." CFU prompt).
+// The one thing worth keeping is a student's response immediately after,
+// since that's a genuine reaction to the moment, not surrounding noise.
+function buildSingleTurnExchange(segments: TranscriptSegment[], timestampSec: number): TranscriptSegment[] {
+  const ordered = [...segments].sort((a, b) => a.startSec - b.startSec)
+  const idx = ordered.findIndex((s) => s.startSec === timestampSec)
+  if (idx === -1) return []
+  const exchange = [ordered[idx]]
+  if (idx + 1 < ordered.length && ordered[idx + 1].speakerLabel === 'Student') {
+    exchange.push(ordered[idx + 1])
+  }
+  return exchange
+}
+
+// A "longest uninterrupted teacher monologue" highlight's own timestamp is
+// only the START of that stretch — a symmetric +/-15s window centered on
+// it mostly misses a genuinely long monologue (e.g. a real 40s stretch)
+// while still pulling in whatever unrelated line happens to sit just
+// before it starts. Return the actual span instead: every segment from
+// startSec up to (but not including) startSec + durationSec, which by
+// construction is exactly the run of consecutive teacher turns that made
+// up the monologue (a student turn would have already ended the streak).
+function buildFollowUpExchange(
+  segments: TranscriptSegment[],
+  questionLog: AudioQuestionLogEntry[] | null,
+  followUpTimestampSec: number,
+): TranscriptSegment[] {
+  const root = (questionLog ?? []).find((q) => q.followUps.some((f) => f.timestampSec === followUpTimestampSec))
+  if (!root) return []
+  const ordered = [...segments].sort((a, b) => a.startSec - b.startSec)
+  const pickWithAnswer = (ts: number): TranscriptSegment[] => {
+    const idx = ordered.findIndex((s) => s.startSec === ts)
+    if (idx === -1) return []
+    const pair = [ordered[idx]]
+    if (idx + 1 < ordered.length && ordered[idx + 1].speakerLabel === 'Student') pair.push(ordered[idx + 1])
+    return pair
+  }
+  return [...pickWithAnswer(root.timestampSec), ...pickWithAnswer(followUpTimestampSec)]
+}
+
 // Coach-voice interpretations of the category stats — deterministic
 // templates, no Claude call (the analysis-time notes generation was
 // removed for exactly this reason: two independent AI summaries of the
@@ -1449,12 +1554,6 @@ function buildTalkInsight(
   session: AudioSessionWithSegments,
   studentSegmentsMetric: ConfidentMetric,
 ): string | null {
-  if (!STUDENT_METRICS_ON) {
-    // The split and everything said about it rest on the student share.
-    return session.teacherTalkPct != null
-      ? `You spoke for about ${Math.round(session.teacherTalkPct)}% of the recording.`
-      : null
-  }
   let sentence = buildVoiceBalanceCaption(judgeTalkBalance(session.teacherTalkPct, session.studentTalkPct))
   if (studentSegmentsMetric.state === 'measured') {
     const count = Number(studentSegmentsMetric.display)
@@ -1471,6 +1570,7 @@ function buildQuestioningInsight(
   session: AudioSessionWithSegments,
   higherOrderRatio: ConfidentMetric | null,
   followUpMetric: ConfidentMetric,
+  waitTimeMetric: ConfidentMetric,
 ): string | null {
   if (!higherOrderRatio || isMissingState(higherOrderRatio.state)) return null
   let sentence: string
@@ -1481,31 +1581,16 @@ function buildQuestioningInsight(
   } else {
     sentence = "Most of today's questions were quick recall checks — a natural spot to slip in one 'why' or 'how' next time."
   }
-  if (!STUDENT_METRICS_ON) {
-    // The same count the stat shows, and no reading of it: the pause runs to
-    // your next line and may hold a student's answer.
-    const held = heldOpenMetric(session.questionLog, session.teachingMoves?.selfAnswered ?? [])
-    if (held.state === 'measured' && held.typicalSec != null) {
-      sentence += ` Your thinking questions typically stayed open ${held.typicalSec >= 120 ? 'past two minutes' : `${held.typicalSec} seconds`} before you confirmed an answer, gave it, or moved on.`
-    }
-    return sentence
-  }
   if (followUpMetric.state === 'measured') {
     sentence += ` You followed up on a question ${followUpMetric.display} time${followUpMetric.display === '1' ? '' : 's'} — that's a habit worth keeping.`
   } else if (followUpMetric.state === 'confirmed_none') {
     sentence += ' No follow-up questions were detected after a student answer today — a quick "say more about that" can go a long way.'
   }
-  // Reads the SAME number the stat card shows. It used to cite
-  // avgWaitTimeSec while the card beside it had been changed to held
-  // silence, so Summary said "your average wait time was 1.8s" next to a
-  // card reading "—". A report that contradicts itself on one screen spends
-  // trust it cannot earn back.
-  const heldSilence = session.metricsDetail?.heldSilenceSec
-  if (heldSilence != null) {
+  if (waitTimeMetric.state === 'measured' && session.avgWaitTimeSec != null && hasEnoughWaitTimeSamples(session.metricsDetail)) {
     sentence +=
-      heldSilence >= 3
-        ? ` When nobody answered, you held the silence for ${heldSilence.toFixed(1)}s on average — that's real thinking room.`
-        : ` When nobody answered, you held the silence for ${heldSilence.toFixed(1)}s on average — waiting a beat longer can bring more students into a response.`
+      session.avgWaitTimeSec >= 3
+        ? ` Your average wait time was ${session.avgWaitTimeSec.toFixed(1)}s — that's real thinking room.`
+        : ` Your average wait time was ${session.avgWaitTimeSec.toFixed(1)}s — waiting a beat longer can bring more students into a response.`
   }
   return sentence
 }
@@ -1620,6 +1705,56 @@ function splitParagraphs(text: string): string[] {
     .filter(Boolean)
 }
 
+/// The opening of a note: whole sentences, up to about three lines of text.
+/// Always at least one sentence, however long it runs.
+function noteOpening(text: string): string {
+  const sentences = text.replace(/\s+/g, ' ').trim().split(/(?<=[.!?])\s+/)
+  let opening = sentences[0] ?? ''
+  for (const sentence of sentences.slice(1, 3)) {
+    if (opening.length + sentence.length + 1 > 330) break
+    opening += ` ${sentence}`
+  }
+  return opening
+}
+
+// A section's note opens with its first two or three sentences and keeps the
+// rest behind "Read more". The note is the reading of the section; the page
+// below it is the evidence, and a teacher should reach the evidence without
+// scrolling past a paragraph first. Short notes are shown whole.
+function CoachNote({ text }: { text: string | null }) {
+  const [open, setOpen] = useState(false)
+  if (!text) return null
+  const full = text.trim()
+  const opening = noteOpening(full)
+  // Not worth a button to reveal one more short sentence.
+  const folds = full.length - opening.length > 80
+  const paragraphs = open || !folds ? splitParagraphs(full) : [opening]
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-mint-tint bg-mint-tint/60 p-4">
+      <ChatBubbleIcon className="mt-0.5 h-4 w-4 shrink-0 text-forest" />
+      <div className="flex flex-col gap-2">
+        {paragraphs.map((para, i) => (
+          <p key={i} className="text-sm text-ink">
+            {para}
+            {folds && i === paragraphs.length - 1 && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  onClick={() => setOpen((v) => !v)}
+                  className="font-semibold text-forest underline decoration-hairline underline-offset-4 hover:text-terracotta-600"
+                >
+                  {open ? 'Show less' : 'Read more'}
+                </button>
+              </>
+            )}
+          </p>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // Summary's "spotlight" card — one themed headline + the existing coach
 // note as its body, picking a single topic rather than stitching all
 // three insights into one paragraph. Deterministic (no new Claude call),
@@ -1659,8 +1794,7 @@ const FOCUS_METRIC_TRY_NEXT: Record<FocusMetric, string> = {
 
 type FocusSnapshot = {
   label: string
-  /// The status pill (evidenceLabel): "2 instances", "Clear pattern"...
-  pill: string
+  tier: ReturnType<typeof evidenceTier>
   statusLine: string | null
   capturedLine: string
   // The bare formatted value ("42.6%", "2.8s"), with no label prefix, for
@@ -1702,7 +1836,7 @@ function buildFocusSnapshot(
   const confident = isConfidentState(metric.state)
   return {
     label,
-    pill: evidenceLabel(metric),
+    tier: evidenceTier(metric.state),
     statusLine,
     capturedLine: confident
       ? `${label}: ${metric.display}${FOCUS_METRIC_UNIT_SUFFIX[focusMetric] ?? ''}`
@@ -1788,26 +1922,18 @@ function StrengthCard({
 // the teacher has to interpret.
 
 
-/// What the hatched slice holds while student metrics are off.
-const NOT_YOUR_SPEECH_NOTE =
-  '“Not your speech” is the rest of the recording: students, other voices, quiet work, and sound the microphone couldn’t make out. This report is built from your voice, so it doesn’t split that up.'
-
-/// Pace used to be a trailing item in the talk legend, where it read as a
-/// fourth slice of the bar rather than a separate measure. It is the one
-/// number here a teacher can act on the same afternoon, so it gets its own
-/// line — with an anchor, because "181" means nothing on its own, and a target
-/// would be wrong: a lab demo and a read-aloud are different speeds and
-/// neither is a fault.
-function PaceAnchor({ wpm }: { wpm: number }) {
-  return (
-    <div className="rounded-xl bg-cream p-3">
-      <p className="text-sm text-ink">
-        <span className="font-semibold">Your pace — {wpm} words a minute.</span> Everyday conversation runs about
-        150.
-      </p>
-      <p className="mt-0.5 text-xs text-ink-soft">An anchor to place yourself against, not a target.</p>
-    </div>
-  )
+/// The quiet / could-not-make-out split as percentages of the recording,
+/// from the seconds the analysis stored. Null whenever there is no envelope
+/// behind it, which is every recording made before envelopes existed — the
+/// combined "Silence or other" slice is the honest answer there.
+function nonSpeechSplit(
+  metricsDetail: AudioSessionWithSegments['metricsDetail'],
+  durationSec: number | null,
+): { quietPct: number; unresolvedPct: number } | null {
+  const quiet = metricsDetail?.quietSec
+  const unresolved = metricsDetail?.unresolvedSec
+  if (quiet == null || unresolved == null || !durationSec || durationSec <= 0) return null
+  return { quietPct: (quiet / durationSec) * 100, unresolvedPct: (unresolved / durationSec) * 100 }
 }
 
 // One stacked bar (Teacher / Students / the rest — all in one, not two
@@ -1844,33 +1970,6 @@ function TalkParticipationBar({
   const barHeight = compact ? 'h-3' : 'h-4'
   if (teacherPct == null) {
     return <HatchedBar label="Talk balance unavailable this session" className={barHeight} />
-  }
-  if (!STUDENT_METRICS_ON) {
-    // Two parts: you, and everything else. Splitting the rest into students,
-    // quiet and sound needs the speaker split this report does not trust, so
-    // it stays one hatched slice — the same mark as everywhere else the
-    // recording could not say. Both shares are of the same span, so they add
-    // to 100.
-    const otherPct = Math.max(0, Math.round((100 - teacherPct) * 10) / 10)
-    const show = (pct: number) => (compact ? `${pct}%` : `${Math.round(pct)}%`)
-    return (
-      <div className="flex flex-col gap-3">
-        <div className={`flex w-full overflow-hidden rounded-full bg-cream ${barHeight}`}>
-          <div className="h-full bg-terracotta" style={{ width: `${teacherPct}%` }} />
-          <div className="h-full" style={{ width: `${otherPct}%`, ...HATCH_STYLE }} />
-        </div>
-        <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-ink-soft">
-          <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-terracotta" /> You {show(teacherPct)}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <HatchedSwatch className="h-2.5 w-2.5 rounded-sm" /> Not your speech {show(otherPct)}
-          </span>
-        </div>
-        {!compact && <p className="text-xs text-ink-soft">{NOT_YOUR_SPEECH_NOTE}</p>}
-        {paceWpm != null && <PaceAnchor wpm={paceWpm} />}
-      </div>
-    )
   }
   const remainder = Math.max(0, 100 - teacherPct - (studentPct ?? 0) - (silencePct ?? 0))
   return (
@@ -1933,7 +2032,22 @@ function TalkParticipationBar({
               usually voices — a video or noise from outside reads the same way.
             </p>
           )}
-          {paceWpm != null && <PaceAnchor wpm={paceWpm} />}
+          {/* Pace used to be a trailing item in that legend row, where it
+              read as a fourth slice of the bar rather than a separate
+              measure. It is the one number here a teacher can act on the
+              same afternoon, so it gets its own line — with an anchor,
+              because "181" means nothing on its own, and a target would be
+              wrong: a lab demo and a read-aloud are different speeds and
+              neither is a fault. */}
+          {paceWpm != null && (
+            <div className="rounded-xl bg-cream p-3">
+              <p className="text-sm text-ink">
+                <span className="font-semibold">Your pace — {paceWpm} words a minute.</span>{' '}
+                Everyday conversation runs about 150.
+              </p>
+              <p className="mt-0.5 text-xs text-ink-soft">An anchor to place yourself against, not a target.</p>
+            </div>
+          )}
         </>
       ) : (
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm text-ink-soft">
@@ -1997,12 +2111,11 @@ function WhoWasHeardCard({
 // no rate/percentage here (that's Insights > Questions & Thinking's job).
 function QuestionsOpenedCard({
   questionsMetric,
-  second,
+  followUpMetric,
   onExplore,
 }: {
   questionsMetric: ReturnType<typeof getCountMetric>
-  /// Follow-ups, or the pause after a question while student metrics are off.
-  second: { metric: ConfidentMetric; label: string; unit?: string }
+  followUpMetric: ReturnType<typeof getCountMetric>
   onExplore: () => void
 }) {
   return (
@@ -2014,11 +2127,8 @@ function QuestionsOpenedCard({
           <p className="text-xs text-ink-soft">Questions detected</p>
         </div>
         <div>
-          <p className="text-2xl font-semibold text-ink">
-            {second.metric.display}
-            {second.unit && isConfidentState(second.metric.state) ? second.unit : ''}
-          </p>
-          <p className="text-xs text-ink-soft">{second.label}</p>
+          <p className="text-2xl font-semibold text-ink">{followUpMetric.display}</p>
+          <p className="text-xs text-ink-soft">Follow-up questions</p>
         </div>
       </div>
       <button
@@ -2051,6 +2161,7 @@ function ReportPanel({
 }) {
   // TEMPORARY preview params — removed before commit.
   const [tab, setTab] = useState<ReportTab>('summary')
+  const [insightsSection, setInsightsSection] = useState<InsightsSection>('talk')
   const [hardLookOpen, setHardLookOpen] = useState(false)
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null)
   const locked = session.status === 'locked'
@@ -2291,49 +2402,50 @@ function ReportPanel({
 
   // The hard read of one section, as the last row under the evidence it was
   // drawn from. Null on a locked report that never had one.
-  // Summary and Insights read the lesson through this: every student-derived
-  // value removed while student metrics are off (lib/teacherVoice.ts).
-  // `session` stays the whole record, because every update is spread from it.
-  const report = useMemo(() => teacherVoiceView(session), [session])
-  const metrics = report.metricsDetail ?? {}
-  const recordedSec = report.durationSec ?? 0
-  const coverage = getCoverage(report.durationSec, report.phases, report.metricsDetail)
+  const sectionHardLook =
+    locked && !session.hardLook ? null : (
+      <SectionHardLook
+        section={insightsSection}
+        hardLook={session.hardLook}
+        locked={locked}
+        sending={hardLookSending}
+        error={hardLookError}
+        onGenerate={handleGenerateHardLook}
+      />
+    )
+
+  const metrics = session.metricsDetail ?? {}
+  const recordedSec = session.durationSec ?? 0
+  const coverage = getCoverage(session.durationSec, session.phases, session.metricsDetail)
   const num = (key: string) => (typeof metrics[key] === 'number' ? (metrics[key] as number) : null)
 
   // Talk & Participation
-  const teacherTalkMetric = getPresenceMetric(report.teacherTalkPct)
+  const teacherTalkMetric = getPresenceMetric(session.teacherTalkPct)
+  const studentTalkMetric = getPresenceMetric(session.studentTalkPct)
   // One decimal, like the two talk shares it is shown beside — rounded to a
   // whole number it made the three add up to 100.4.
   const silencePct =
-    report.teacherTalkPct != null && report.studentTalkPct != null
-      ? Math.max(0, Math.round((100 - report.teacherTalkPct - report.studentTalkPct) * 10) / 10)
+    session.teacherTalkPct != null && session.studentTalkPct != null
+      ? Math.max(0, Math.round((100 - session.teacherTalkPct - session.studentTalkPct) * 10) / 10)
       : null
+  const silenceMetric = getPresenceMetric(silencePct)
   const studentSegmentsMetric = getCountMetric({ count: num('studentVoiceSegments'), recordedSec })
 
   // Questioning & Thinking
-  const questionsMetric = getCountMetric({ count: report.questionCount, recordedSec })
+  const questionsMetric = getCountMetric({ count: session.questionCount, recordedSec })
   const higherOrderCount = num('higherOrderQuestionCount')
   const higherOrderRatio =
-    report.questionCount != null ? formatRatio(higherOrderCount ?? 0, report.questionCount) : null
-  const followUpMetric = STUDENT_METRICS_ON
-    ? getFollowUpMetric({
-        count: num('followUpQuestionCount'),
-        studentVoiceSegments: num('studentVoiceSegments'),
-        recordedSec,
-      })
-    : FOLLOW_UPS_OFF
-  // The teacher-voice stand-in for wait time, and what a "wait time" focus
-  // reads while student metrics are off. One value, shown the same way on
-  // Summary, Insights and the export.
-  const pauseMetric = heldOpenStat(report.questionLog, report.teachingMoves?.selfAnswered ?? [])
-  const waitTimeMetric = STUDENT_METRICS_ON
-    ? waitTimeMetricOf(report.avgWaitTimeSec, report.questionCount)
-    : pauseMetric
+    session.questionCount != null ? formatRatio(higherOrderCount ?? 0, session.questionCount) : null
+  const followUpMetric = getFollowUpMetric({
+    count: num('followUpQuestionCount'),
+    studentVoiceSegments: num('studentVoiceSegments'),
+    recordedSec,
+  })
+  const waitTimeMetric = waitTimeMetricOf(session.avgWaitTimeSec, session.questionCount)
 
   // Checking Understanding
   const cfuMetric = getCountMetric({
-    // Insights' count: the checks read drops the ones that were not checks.
-    count: report.cfuLog?.some((c) => c.loop) ? (realChecks(report.cfuLog)?.length ?? null) : report.cfuCount,
+    count: session.cfuCount,
     recordedSec,
     minDurationSec: MIN_DURATION_FOR_CFU_DETECTION_SEC,
   })
@@ -2364,19 +2476,19 @@ function ReportPanel({
       ? formatRatio(positiveCount, positiveCount + correctiveCount)
       : { state: 'not_measurable' as const, display: '—', reason: 'No positive or corrective phrases detected.' }
 
-  const reflectContext = buildReflectContext(report, cfuMetric, redirectionMetric, directiveMetric, coverage)
+  const reflectContext = buildReflectContext(session, cfuMetric, redirectionMetric, directiveMetric, coverage)
 
   // The written narrative when the report has one, and the rule-assembled
   // sentence as the fallback for reports made before it existed. The
   // rule-based version can only restate the metrics; the written one can say
   // that a 9.3% higher-order figure undercounts the thinking actually asked
   // for, which is the more useful thing for a teacher to read.
-  const talkInsight = report.talkNarrative ?? buildTalkInsight(report, studentSegmentsMetric)
+  const talkInsight = session.talkNarrative ?? buildTalkInsight(session, studentSegmentsMetric)
   const questioningInsight =
-    report.questionsNarrative ?? buildQuestioningInsight(report, higherOrderRatio, followUpMetric)
+    session.questionsNarrative ?? buildQuestioningInsight(session, higherOrderRatio, followUpMetric, waitTimeMetric)
   const feedbackTotal = genericCount != null && specificCount != null ? genericCount + specificCount : null
   const cfuInsight = buildCfuInsight(cfuMetric, feedbackRatio, specificCount, feedbackTotal)
-  const hasRepeatedInstructionHighlight = (report.highlights ?? []).some((h) => h.label === 'Repeated instruction')
+  const hasRepeatedInstructionHighlight = (session.highlights ?? []).some((h) => h.label === 'Repeated instruction')
   const routinesInsight = buildRoutinesInsight(directiveMetric, hasRepeatedInstructionHighlight, transitionMetric)
   const climateInsight = buildClimateInsight(
     redirectionMetric,
@@ -2421,12 +2533,21 @@ function ReportPanel({
 
   // Computed once here (not per-tab) so the shared header can show it on
   // every tab, not just Summary.
-  const evidenceQuality = buildEvidenceQualityLine(coverage)
+  const evidenceQuality = buildEvidenceQualityLine(coverage, [
+    teacherTalkMetric,
+    studentTalkMetric,
+    silenceMetric,
+    studentSegmentsMetric,
+    questionsMetric,
+    followUpMetric,
+      cfuMetric,
+    feedbackRatio,
+  ])
 
   function handleViewSource(sourceTab: ReportTab, sourceId: string, section?: InsightsSection) {
     setTab(sourceTab)
-    // Insights is one page now: a section is a place on it to scroll to.
-    setPendingScrollId(section ? `insights-${V3_SECTION_FOR[section]}` : sourceId)
+    if (section) setInsightsSection(section)
+    setPendingScrollId(sourceId)
   }
 
   function handleDiscussWithCoach(candidate: NoticeCandidate) {
@@ -2458,7 +2579,7 @@ function ReportPanel({
       setPendingScrollId(null)
     }, 50)
     return () => clearTimeout(timeout)
-  }, [tab, pendingScrollId])
+  }, [tab, insightsSection, pendingScrollId])
 
   async function handleRetag() {
     setRetagLoading(true)
@@ -2540,17 +2661,6 @@ function ReportPanel({
             <p className={`mt-3 text-xs ${evidenceQuality.tone === 'warn' ? 'font-semibold text-gold' : 'text-cream/60'}`}>
               {evidenceQuality.text}
             </p>
-            {/* What the report is built from, said once at the top. Replaces
-                "8 of 8 metrics measured confidently", which counted any
-                metric that was not empty. */}
-            {!STUDENT_METRICS_ON && (
-              <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                <span className="rounded-full bg-forest-soft px-3 py-1 text-cream">Built from your voice</span>
-                <span className="rounded-full border border-dashed border-cream/50 px-3 py-1 text-cream/70">
-                  Student metrics off
-                </span>
-              </div>
-            )}
             {coverage.isTinyRecording && (
               <span className="mt-4 inline-block rounded-full bg-gold px-3 py-1 text-xs font-bold uppercase tracking-wide text-forest">
                 Short excerpt
@@ -2570,13 +2680,12 @@ function ReportPanel({
 
       {tab === 'summary' && (
         <SummaryTab
-          session={report}
+          session={session}
           coverage={coverage}
           silencePct={silencePct}
           questionsMetric={questionsMetric}
           higherOrderRatio={higherOrderRatio}
           followUpMetric={followUpMetric}
-          pauseMetric={pauseMetric}
           cfuMetric={cfuMetric}
           feedbackRatio={feedbackRatio}
           talkInsight={talkInsight}
@@ -2674,59 +2783,100 @@ function ReportPanel({
       )}
 
       {tab === 'insights' && (
-        <InsightsPage
-          report={report}
-          slots={{
-            footer: (section) => {
-              const old = V3_OLD_SECTION[section]
-              return (
-                <>
-                  {old && !(locked && !session.hardLook) && (
-                    <SectionHardLook
-                      section={old}
-                      hardLook={session.hardLook}
-                      locked={locked}
-                      sending={hardLookSending}
-                      error={hardLookError}
-                      onGenerate={handleGenerateHardLook}
-                    />
-                  )}
-                  {old && (
-                    <DiscussFooter
-                      compact
-                      label="Discuss with Wivoza Coach"
-                      onClick={() =>
-                        handleDiscussWithCoach({
-                          id: `insights-${section}`,
-                          observation: `${INSIGHTS_SECTIONS.find((s) => s.key === old)?.label ?? 'This section'} in this lesson`,
-                          whyItMatters: "Let's talk through what this part of the report showed.",
-                          timestampSec: null,
-                          excerpt: null,
-                          durationSec: null,
-                          weight: 0,
-                          focusMetric: null,
-                          detail: narrativeForSection(report, old) ?? undefined,
-                        })
-                      }
-                    />
-                  )}
-                </>
-              )
-            },
-            climateExtra: (
-              <>
-                <EscalationCard escalation={report.escalation ?? null} />
-                <CorrectionBalanceCard metricsDetail={report.metricsDetail} capturedSharePct={coverage.capturedSharePct} />
-              </>
-            ),
-            contentNotes: {
-              sending: contentNotesSending,
-              error: contentNotesError,
-              locked,
-              onGenerate: handleGenerateContentNotes,
-            },
-          }}
-        />
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+          <InsightsNav section={insightsSection} onSelect={setInsightsSection} />
+          <div className="min-w-0 flex-1">
+            {/* Heading first, always. The two lenses used to sit above it, so
+                choosing "Talk & Participation" showed two unrelated cards and
+                then, fourth down the page, the heading for the thing you had
+                just chosen — with its name already printed in the picker above.
+                Lenses now come after the content they are lenses on. */}
+            <InsightsSectionHeader section={insightsSection} />
+            <SectionAccentContext.Provider value={INSIGHTS_SECTION_META[insightsSection].accent}>
+            {insightsSection === 'talk' && (
+              <TalkParticipationTab session={session} silencePct={silencePct} talkInsight={talkInsight} lastRow={sectionHardLook} />
+            )}
+
+            {insightsSection === 'questions' && (
+              <QuestioningCheckingTab
+                questionCount={session.questionCount}
+                questionLog={session.questionLog}
+                teachingMoves={session.teachingMoves ?? null}
+                questionsMetric={questionsMetric}
+                higherOrderRatio={higherOrderRatio}
+                higherOrderCount={higherOrderCount}
+                followUpMetric={followUpMetric}
+                heldSilenceSec={session.metricsDetail?.heldSilenceSec ?? null}
+                heldSilenceCount={session.metricsDetail?.heldSilenceSampleCount ?? 0}
+                waitTime2Sec={session.metricsDetail?.waitTime2Sec ?? null}
+                waitTime2SampleCount={session.metricsDetail?.waitTime2SampleCount ?? null}
+                thinkingTaskCount={session.metricsDetail?.thinkingTaskCount ?? null}
+                focusMetric={focusMetric}
+                questioningInsight={questioningInsight}
+                checksNarrative={session.checksNarrative ?? null}
+                nextStep={session.nextSteps?.questions}
+                highlights={session.highlights}
+                cfuLog={session.cfuLog}
+                feedbackLog={session.feedbackLog}
+                segments={session.segments}
+                lastRow={sectionHardLook}
+              />
+            )}
+
+            {insightsSection === 'content' && (
+              <LessonContentTab
+                lessonContent={session.lessonContent}
+                contentNotes={session.contentNotes}
+                teachingMoves={session.teachingMoves ?? null}
+                narrative={session.contentNarrative ?? null}
+                isShort={coverage.isShort}
+                sending={contentNotesSending}
+                error={contentNotesError}
+                onGenerate={handleGenerateContentNotes}
+                lastRow={sectionHardLook}
+              />
+            )}
+
+            {insightsSection === 'routines' && (
+              <ClimateRoutinesTab
+                climateNarrative={session.climateNarrative ?? null}
+                nextStep={session.nextSteps?.climate}
+                directiveLog={session.directiveLog}
+                toneLog={session.toneLog}
+                redirectionLog={session.redirectionLog}
+                escalation={session.escalation ?? null}
+                teachingMoves={session.teachingMoves ?? null}
+                metricsDetail={session.metricsDetail}
+                capturedSharePct={coverage.capturedSharePct}
+                segments={session.segments}
+                lastRow={sectionHardLook}
+              />
+            )}
+
+
+            <DiscussFooter
+              compact
+              label="Discuss this with Wivoza Coach"
+              onClick={() =>
+                handleDiscussWithCoach({
+                  id: `insights-${insightsSection}`,
+                  observation: `${INSIGHTS_SECTIONS.find((s) => s.key === insightsSection)?.label ?? 'This section'} in this lesson`,
+                  whyItMatters: "Let's talk through what this part of the report showed.",
+                  timestampSec: null,
+                  excerpt: null,
+                  durationSec: null,
+                  weight: 0,
+                  focusMetric: null,
+                  // The words the teacher just read, so the coach opens about
+                  // THIS page rather than about the lesson in general. Without
+                  // it the coach only ever got the section's name.
+                  detail: narrativeForSection(session, insightsSection) ?? undefined,
+                })
+              }
+            />
+            </SectionAccentContext.Provider>
+          </div>
+        </div>
       )}
 
       {/* Its own tab rather than a card inside Insights: it reads the whole
@@ -2774,7 +2924,6 @@ function SummaryTab({
   questionsMetric,
   higherOrderRatio,
   followUpMetric,
-  pauseMetric,
   cfuMetric,
   feedbackRatio,
   talkInsight,
@@ -2794,8 +2943,6 @@ function SummaryTab({
   questionsMetric: ReturnType<typeof getCountMetric>
   higherOrderRatio: ReturnType<typeof formatRatio> | null
   followUpMetric: ReturnType<typeof getCountMetric>
-  /// Questions with a long pause before you spoke again (lib/teacherVoice.ts).
-  pauseMetric: ConfidentMetric
   cfuMetric: ReturnType<typeof getCountMetric>
   feedbackRatio: ConfidentMetric
   talkInsight: string | null
@@ -2858,24 +3005,6 @@ function SummaryTab({
             like a split of the talking when they are shares of the recording —
             22.6% and 7.9% read as a missing 70% rather than as a room that was
             quiet or working. The three add up to the whole recording. */}
-        {/* While student metrics are off the split is you and everything else,
-            on the same span so the two add to 100, and the pause is the
-            teacher-voice one Insights shows (lib/teacherVoice.ts). */}
-        {!STUDENT_METRICS_ON ? (
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <SummaryStat label="You spoke" metric={getPresenceMetric(session.teacherTalkPct)} unit="%" accent={ACCENTS.terracotta} />
-            <SummaryStat
-              label="Not your speech"
-              metric={getPresenceMetric(
-                session.teacherTalkPct != null ? Math.max(0, Math.round((100 - session.teacherTalkPct) * 10) / 10) : null,
-              )}
-              unit="%"
-              accent={ACCENTS.mint}
-            />
-            <SummaryStat label="Questions" metric={questionsMetric} accent={ACCENTS.mint} />
-            <SummaryStat label={HELD_OPEN_LABEL} metric={pauseMetric} unit="s" accent={ACCENTS.forest} />
-          </div>
-        ) : (
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
           <SummaryStat label="You spoke" metric={getPresenceMetric(session.teacherTalkPct)} unit="%" accent={ACCENTS.terracotta} />
           <SummaryStat label="Students spoke" metric={getPresenceMetric(session.studentTalkPct)} unit="%" accent={ACCENTS.gold} />
@@ -2895,7 +3024,6 @@ function SummaryTab({
             accent={ACCENTS.forest}
           />
         </div>
-        )}
       </NumberedCard>
 
       {/* 2. A strength to keep */}
@@ -2914,7 +3042,7 @@ function SummaryTab({
           subtitle="The one area you chose to work on, in this lesson"
           aside={
             <span className="shrink-0 rounded-full bg-cream-card px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-terracotta-600">
-              {focusSnapshot.pill}
+              {EVIDENCE_TIER_LABELS[focusSnapshot.tier]}
             </span>
           }
         >
@@ -2972,11 +3100,7 @@ function SummaryTab({
           />
           <QuestionsOpenedCard
             questionsMetric={questionsMetric}
-            second={
-              STUDENT_METRICS_ON
-                ? { metric: followUpMetric, label: 'Follow-up questions' }
-                : { metric: pauseMetric, label: HELD_OPEN_LABEL, unit: 's' }
-            }
+            followUpMetric={followUpMetric}
             onExplore={() => onNavigateInsights('questions')}
           />
           {/* The moment to revisit used to sit here too. It is still read and
@@ -3286,10 +3410,6 @@ function MyGrowthTab({
           Choose a focus above to see your growth trend for that metric.
         </div>
       )}
-
-      {/* The focus loop's data point (Insights): what each next-lesson focus
-          found on the lesson after it. */}
-      <FocusCheckInHistory sessions={sessions} />
 
       <p className="text-xs text-ink-soft">
         Showing your last {analyzed.length} analyzed session{analyzed.length === 1 ? '' : 's'} over{' '}
@@ -4240,6 +4360,258 @@ function ReflectTab({
   )
 }
 
+/// Clarity & Content is one narrative now: Content Specialist Notes.
+///
+/// It used to be a list of separate detections — topic-term clouds, the stated
+/// objective, real-world connections, defined vocabulary, then a notes block —
+/// each of which could read "None detected" while the lesson plainly contained
+/// the thing. A teacher tying ratios to cooking saw "Real-world connections:
+/// none". Everything still detected feeds the narrative instead of being
+/// listed beside it, so the section says what a subject specialist who
+/// listened would say, about the content and about how it was delivered.
+const CONTENT_NOTE_LABEL_STYLES: Record<string, string> = {
+  'What worked': 'bg-mint-tint/60 text-forest',
+  'Where it could go further': 'bg-gold-tint text-terracotta-600',
+  'Worth double-checking': 'bg-peach-tint text-terracotta-600',
+  // Labels from before specialist notes were strengths-and-next-steps.
+  Clarity: 'bg-mint-tint/60 text-forest',
+  Vocabulary: 'bg-mint-tint/60 text-forest',
+  'Engagement with content': 'bg-mint-tint/60 text-forest',
+}
+/// Content Specialist Notes, and nothing else.
+///
+/// The section used to list separate detections — topic-term clouds, the
+/// stated objective, real-world connections, defined vocabulary — each of
+/// which could read "None detected" while the lesson plainly contained the
+/// thing. The subject expertise is what a teacher came here for; the page
+/// closes with the same Discuss action every other page does.
+function LessonContentTab({
+  lessonContent,
+  contentNotes,
+  teachingMoves,
+  narrative,
+  isShort,
+  sending,
+  error,
+  onGenerate,
+  lastRow,
+}: {
+  lessonContent: AudioLessonContent | null
+  contentNotes: AudioContentNotes | null
+  teachingMoves: AudioTeachingMoves | null
+  narrative: string | null
+  isShort: boolean
+  sending: boolean
+  error: string | null
+  onGenerate: () => void
+  /// The section's Hard Look, as the final row of its list.
+  lastRow: React.ReactNode
+}) {
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  const visibleNotes = contentNotes?.notes.filter((n) => !dismissed.has(n.id)) ?? []
+  const connections = lessonContent?.connections ?? []
+
+  const connectionIdeas = lessonContent?.connectionIdeas ?? contentNotes?.connectionIdeas ?? []
+  const keyTerms = lessonContent?.keyTerms ?? []
+  // Three is where "you kept saying it" starts; one or two uses is a mention.
+  const unheard = keyTerms.filter((t) => t.teacherCount >= 3 && t.studentCount === 0).map((t) => `"${t.term}"`)
+
+  const misconceptions = contentNotes?.misconceptions ?? []
+  // The same note "Try next time" on Summary carries for this section.
+  const takeFurther = contentNotes?.notes.find((n) => n.label === 'Where it could go further')?.text
+
+  return (
+    <div className="flex flex-col gap-6">
+      {narrative && <CoachNote text={narrative} />}
+
+      {/* The terms are chosen by the read of the transcript and counted by
+          the server (keyTerms.ts). Hidden when there are none — older reports
+          have no list at all. */}
+      {keyTerms.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Academic vocabulary</h2>
+          <div className="overflow-hidden rounded-xl border border-hairline bg-cream-card">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-hairline text-xs uppercase tracking-wide text-ink-soft">
+                  <th scope="col" className="px-4 py-2 text-left font-semibold">Term</th>
+                  <th scope="col" className="px-4 py-2 text-right font-semibold">You</th>
+                  <th scope="col" className="px-4 py-2 text-right font-semibold">Students</th>
+                </tr>
+              </thead>
+              <tbody>
+                {keyTerms.map((t) => (
+                  <tr key={t.term} className="border-b border-hairline last:border-b-0">
+                    <th scope="row" className="px-4 py-2 text-left font-medium text-ink">{t.term}</th>
+                    <td className="px-4 py-2 text-right tabular-nums text-ink">{t.teacherCount}</td>
+                    <td className={`px-4 py-2 text-right tabular-nums ${t.studentCount === 0 ? 'text-ink-soft' : 'font-semibold text-forest'}`}>
+                      {t.studentCount}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {unheard.length > 0 && (
+        <p className="text-sm text-ink">
+          You said {new Intl.ListFormat('en', { type: 'conjunction' }).format(unheard)} three or more times
+          {unheard.length === 1 ? '' : ' each'}, and no student was heard saying {unheard.length === 1 ? 'it' : 'them'}.
+        </p>
+      )}
+
+      <SectionNextStep text={takeFurther} />
+
+      <DetailRows>
+        {/* How the content was opened up, in the teacher's own words. The
+            vocabulary table above says which terms were used; this says what
+            was done to make them land. */}
+        <MoveEvidence
+          title="How you opened the content up"
+          blurb="Examples, analogies, meanings given for a term, and moments you thought aloud through your own reasoning."
+          rows={teachingMoves?.explanations}
+          tag={(row: { kind: string }) => row.kind}
+        />
+        <MoveEvidence
+          title="How you tied the lesson together"
+          blurb="Links back to earlier learning, statements of why this matters, and drawing it together at the end."
+          rows={teachingMoves?.connections}
+          tag={(row: { kind: string }) =>
+            row.kind === 'prior' ? 'prior learning' : row.kind === 'purpose' ? 'why it matters' : 'closing'
+          }
+        />
+        {/* Offered for every lesson, and asked for when the report opens. The
+            button stays for the case where that request failed, and to write
+            them again. */}
+        <DetailRow title={contentNotes ? `Content specialist notes (${visibleNotes.length})` : 'Content specialist notes'}>
+          {!contentNotes ? (
+            <>
+              <button
+                type="button"
+                onClick={onGenerate}
+                disabled={sending}
+                className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+              >
+                {sending ? 'Writing the notes…' : 'Generate content specialist notes'}
+              </button>
+              <WorkingRing active={sending} estimatedMs={14000} label="Writing content specialist notes" className="text-forest" />
+            </>
+          ) : (
+            <>
+              {isShort && (
+                <p className="text-xs font-semibold text-terracotta-600">
+                  This session is under {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes — content feedback from a
+                  short sample is especially limited.
+                </p>
+              )}
+              {visibleNotes.length === 0 ? (
+                <p className="text-sm text-ink-soft">No notes to show.</p>
+              ) : (
+                visibleNotes.map((note) => (
+                  <div key={note.id} className="rounded-xl border border-hairline bg-cream-card p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${CONTENT_NOTE_LABEL_STYLES[note.label] ?? 'bg-cream text-ink-soft'}`}
+                      >
+                        {note.label}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setDismissed((prev) => new Set(prev).add(note.id))}
+                        aria-label="Dismiss note"
+                        className="shrink-0 text-ink-soft hover:text-ink"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <p className="mt-2 text-sm text-ink">{note.text}</p>
+                    <p className="mt-2 text-xs text-ink-soft">
+                      "{note.excerpt}" ({formatTime(note.timestampSec)})
+                    </p>
+                  </div>
+                ))
+              )}
+              {/* Notes are written once and kept, so this is the way to ask
+                  for the current specialist's version of an older set. */}
+              <button
+                type="button"
+                onClick={onGenerate}
+                disabled={sending}
+                className="self-start text-sm font-medium text-ink-soft hover:text-terracotta-600 disabled:opacity-60"
+              >
+                {sending ? 'Writing new notes...' : 'Write these notes again ↻'}
+              </button>
+              <WorkingRing active={sending} estimatedMs={16000} label="Writing content specialist notes" className="text-forest" />
+            </>
+          )}
+          {error && <p className="text-sm text-terracotta-600">{error}</p>}
+        </DetailRow>
+
+        {/* Only when the lesson actually contained one: silence is the right
+            answer when nothing was found. */}
+        {connections.length > 0 && (
+          <DetailRow title={`Connections you made (${connections.length})`}>
+            {connections.map((c) => (
+              <div key={`${c.timestampSec}-${c.quote.slice(0, 24)}`} className="rounded-xl border border-hairline bg-cream-card p-4">
+                <p className="text-sm text-ink">"{c.quote}"</p>
+                <p className="mt-1 text-xs text-ink-soft">{formatTime(c.timestampSec)}</p>
+              </div>
+            ))}
+          </DetailRow>
+        )}
+
+        {connectionIdeas.length > 0 && (
+          <DetailRow title="Ways into this topic, for next time">
+            <p className="text-xs text-ink-soft">
+              Suggestions from a specialist in {lessonContent?.subject || contentNotes?.subject || 'this subject'}, not a
+              reading of your lesson.
+            </p>
+            <ul className="flex list-disc flex-col gap-1.5 pl-5">
+              {connectionIdeas.map((idea) => (
+                <li key={idea.slice(0, 32)} className="text-sm text-ink">
+                  {idea}
+                </li>
+              ))}
+            </ul>
+          </DetailRow>
+        )}
+
+        {misconceptions.length > 0 && (
+          <DetailRow title="Where students usually get stuck on this topic">
+            <p className="text-xs text-ink-soft">
+              Subject knowledge about {contentNotes?.subject || 'this topic'}, not a reading of your lesson — you may well
+              have covered it.
+            </p>
+            <ul className="flex list-disc flex-col gap-1.5 pl-5">
+              {misconceptions.map((m) => (
+                <li key={m.slice(0, 32)} className="text-sm text-ink">
+                  {m}
+                </li>
+              ))}
+            </ul>
+          </DetailRow>
+        )}
+
+        <DetailRow title="How to read this section">
+          {keyTerms.length > 0 && (
+            <p className="text-sm text-ink-soft">
+              Vocabulary is counted from the transcript, so read the counts as "at least": unusual terms are the words a
+              recording most often mishears, and student counts include only what the microphone picked up.
+            </p>
+          )}
+          <p className="text-sm text-ink-soft">
+            The specialist notes are written from excerpts of what you said and may miss context. They're a starting
+            point for your own reflection, not a factual review — your subject expertise is the final word.
+          </p>
+        </DetailRow>
+        {lastRow}
+      </DetailRows>
+    </div>
+  )
+}
+
 // On demand only — nothing here is built until the teacher asks, and once
 // built it's kept (see the /:id/rubric-lens route). Never shows a level.
 function RubricLensTab({
@@ -4769,6 +5141,435 @@ function Tally({ n, label }: { n: number; label: string }) {
   )
 }
 
+// One shape for everything teachingMoves produces: a heading, a line saying
+// what it is, and the teacher's own sentences with timestamps.
+//
+// Quotes rather than counts, deliberately. "5 clear directions" told a
+// teacher nothing they could act on; the sentence they actually said, and
+// which of task/steps/time/product it named, is a thing they can look at and
+// disagree with. Everything here is checkable against their own lesson, which
+// is the only authority this report has.
+function MoveEvidence({
+  title,
+  blurb,
+  rows,
+  tag,
+  emptyNote,
+}: {
+  title: string
+  blurb?: string
+  rows: { quote: string; timestampSec: number }[] | undefined
+  /// A short label per row — the kind, the clarity, or which parts a
+  /// direction named.
+  tag?: (row: never) => string | null
+  /// Shown when the read ran and found none. Absent means show nothing at
+  /// all, which is right wherever "none" is unremarkable.
+  emptyNote?: string
+}) {
+  if (!rows) return null
+  if (rows.length === 0) {
+    return emptyNote ? <p className="text-sm text-ink-soft">{emptyNote}</p> : null
+  }
+  return (
+    <DetailRow title={`${title} (${rows.length})`}>
+      {blurb && <p className="text-sm text-ink-soft">{blurb}</p>}
+      <div className="flex flex-col gap-2">
+        {rows.map((row, i) => {
+          const label = tag ? tag(row as never) : null
+          return (
+            <div key={`${row.timestampSec}-${i}`} className="rounded-xl border border-hairline bg-cream-card p-3">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                <span>{formatTime(row.timestampSec)}</span>
+                {label && <span className="rounded-full bg-cream px-2 py-0.5">{label}</span>}
+              </div>
+              <p className="mt-1 text-sm italic text-ink">“{row.quote}”</p>
+            </div>
+          )
+        })}
+      </div>
+    </DetailRow>
+  )
+}
+
+/// Which of task / steps / time / product a direction named. An empty list is
+/// a real result — a direction that named none of them is "off you go" — so
+/// it reads as that rather than as a missing label.
+function directionTag(row: { parts: string[] }): string {
+  return row.parts.length > 0 ? row.parts.join(' · ') : 'named none of the four'
+}
+
+function ClimateRoutinesTab({
+  climateNarrative,
+  nextStep,
+  directiveLog,
+  toneLog,
+  redirectionLog,
+  escalation,
+  teachingMoves,
+  metricsDetail,
+  capturedSharePct,
+  segments,
+  lastRow,
+}: {
+  climateNarrative: string | null
+  nextStep: string | null | undefined
+  directiveLog: AudioDirectiveLogEntry[] | null
+  toneLog: AudioToneLogEntry[] | null
+  redirectionLog: AudioRedirectionLogEntry[] | null
+  escalation: AudioEscalation | null
+  teachingMoves: AudioTeachingMoves | null
+  metricsDetail: AudioSessionWithSegments['metricsDetail']
+  capturedSharePct: number | null
+  segments: TranscriptSegment[]
+  /// The section's Hard Look, as the final row of its list.
+  lastRow: React.ReactNode
+}) {
+  const directiveCandidates: NoticeCandidate[] = (directiveLog ?? []).map((entry, i) => ({
+    id: `directive-log-${i}`,
+    observation: 'Clear direction',
+    whyItMatters: 'Clear, specific directions help students know exactly what to do next.',
+    timestampSec: entry.timestampSec,
+    excerpt: entry.text,
+    durationSec: null,
+    weight: 0,
+    focusMetric: 'directiveCount',
+  }))
+  const positiveCandidates: NoticeCandidate[] = (toneLog ?? [])
+    .filter((entry) => entry.kind === 'positive')
+    .map((entry, i) => ({
+      id: `positive-log-${i}`,
+      observation: 'Positive language',
+      whyItMatters: "Naming what's going well reinforces it and helps build trust.",
+      timestampSec: entry.timestampSec,
+      excerpt: entry.text,
+      durationSec: null,
+      weight: 0,
+      focusMetric: 'toneRatio',
+    }))
+  const redirectionCandidates: NoticeCandidate[] = (redirectionLog ?? []).map((entry, i) => ({
+    id: `redirection-log-${i}`,
+    observation: 'Redirection',
+    whyItMatters: 'A brief, direct redirection keeps the lesson moving without dwelling on it.',
+    timestampSec: entry.timestampSec,
+    excerpt: entry.text,
+    durationSec: null,
+    weight: 0,
+    focusMetric: 'redirectionCount',
+  }))
+  const evidenceCandidates = [...directiveCandidates, ...positiveCandidates, ...redirectionCandidates].sort(
+    (a, b) => (a.timestampSec ?? 0) - (b.timestampSec ?? 0),
+  )
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* The note, then what to try, then the moments it was read from. There
+          is no numbers card here on purpose — a count of directions says
+          nothing about whether they landed — and no stock tip: the next step
+          is this lesson's own, or absent. */}
+      {climateNarrative && <CoachNote text={climateNarrative} />}
+
+      <EscalationCard escalation={escalation} />
+
+      <CorrectionBalanceCard metricsDetail={metricsDetail} capturedSharePct={capturedSharePct} />
+
+      <SectionNextStep text={nextStep} />
+
+      <DetailRows>
+        {/* Replaces a bare count of directions, which was never
+            interpretable — more directions is not better or worse, and a lab
+            has more than a seminar. What a direction NAMED is interpretable:
+            a teacher can look at one that named only the task and decide
+            whether the class knew how long they had. */}
+        <MoveEvidence
+          title="What your directions named"
+          blurb="Of the four things a direction can carry — the task, the order of steps, how long, and what to hand in — these are the ones each named."
+          rows={teachingMoves?.directions}
+          tag={directionTag}
+        />
+        <MoveEvidence
+          title="What your redirections asked for"
+          blurb="Whether each one said what to DO, or only what to stop. Quotes too rough in the transcript to put in your mouth are left out rather than shown."
+          rows={teachingMoves?.redirections}
+          tag={(row: { clarity: string }) => (row.clarity === 'actionable' ? 'says what to do' : 'says only what to stop')}
+        />
+        {evidenceCandidates.length > 0 && (
+          <DetailRow title={`Directions, praise and redirections, in your words (${evidenceCandidates.length})`}>
+            {evidenceCandidates.map((candidate) => (
+              <EvidenceItemCard key={candidate.id} candidate={candidate} segments={segments} />
+            ))}
+          </DetailRow>
+        )}
+        {lastRow}
+      </DetailRows>
+    </div>
+  )
+}
+
+// Chart #2 — Pacing & Rhythm Timeline: buckets the session's already-fetched
+// per-utterance segments (session.segments, sent with every getAudioSession
+// call) into equal-duration bins spanning the full recording, and colors
+// each by whether teacher or student speech dominated it. A bin with no
+// segment overlap at all (a real coverage gap) hatches rather than being
+// skipped — the timeline always spans the full lesson duration.
+const PACING_TIMELINE_BINS = 24
+
+type PacingBin = 'teacher' | 'student' | 'sound' | 'quiet' | 'unavailable'
+
+// A bin with no words in it used to be one hatched "no dominant speaker"
+// block, which covered a quiet room and a room the microphone could not
+// resolve alike. Where the recording carried a loudness envelope the server
+// says which each second was, so the bin takes whichever of the two filled
+// more of it. Without one, it stays the combined block — still the honest
+// answer when there is nothing to tell them apart with.
+function emptyBinKind(seconds: string | undefined, binStart: number, binEnd: number): PacingBin {
+  if (!seconds) return 'unavailable'
+  let sound = 0
+  let quiet = 0
+  for (let sec = Math.floor(binStart); sec < Math.ceil(binEnd) && sec < seconds.length; sec++) {
+    if (seconds[sec] === 's') sound++
+    else if (seconds[sec] === 'q') quiet++
+  }
+  if (sound === 0 && quiet === 0) return 'unavailable'
+  return sound >= quiet ? 'sound' : 'quiet'
+}
+
+function minutesPhrase(sec: number): string {
+  if (sec < 60) return 'under a minute'
+  const m = Math.round(sec / 60)
+  return `${m} minute${m === 1 ? '' : 's'}`
+}
+
+/// One sentence of what the recording did and did not catch, and where.
+/// Never a reason: the teacher was in the room and knows what 18:00 was.
+function soundTimelineSentence(t: SoundTimeline): string {
+  const cap = (x: string) => x[0].toUpperCase() + x.slice(1)
+  const verb = (sec: number) => (sec < 90 ? 'was' : 'were')
+  const parts = [`Words came through for ${minutesPhrase(t.wordsSec)} of ${minutesPhrase(t.seconds.length)}.`]
+  if (t.soundSec >= 30) {
+    const where = t.soundRuns.map((r) => `${formatTime(r.startSec)}–${formatTime(r.endSec)}`).join(', ')
+    parts.push(`${cap(minutesPhrase(t.soundSec))} had sound but no words${where ? ` (${where})` : ''}.`)
+  }
+  if (t.quietSec >= 30) parts.push(`${cap(minutesPhrase(t.quietSec))} ${verb(t.quietSec)} quiet.`)
+  return parts.join(' ')
+}
+
+function buildPacingTimeline(segments: TranscriptSegment[], durationSec: number, seconds?: string): PacingBin[] {
+  const binSec = durationSec / PACING_TIMELINE_BINS
+  const bins: PacingBin[] = []
+  for (let i = 0; i < PACING_TIMELINE_BINS; i++) {
+    const binStart = i * binSec
+    const binEnd = binStart + binSec
+    let teacherSec = 0
+    let studentSec = 0
+    for (const seg of segments) {
+      const overlap = Math.min(seg.endSec, binEnd) - Math.max(seg.startSec, binStart)
+      if (overlap <= 0) continue
+      if (seg.speakerLabel === 'Teacher') teacherSec += overlap
+      else if (seg.speakerLabel === 'Student') studentSec += overlap
+    }
+    bins.push(
+      teacherSec === 0 && studentSec === 0
+        ? emptyBinKind(seconds, binStart, binEnd)
+        : teacherSec >= studentSec
+          ? 'teacher'
+          : 'student',
+    )
+  }
+  return bins
+}
+
+function PacingTimeline({
+  segments,
+  durationSec,
+  soundTimeline,
+}: {
+  segments: TranscriptSegment[]
+  durationSec: number | null
+  soundTimeline?: SoundTimeline | null
+}) {
+  if (durationSec == null || durationSec <= 0 || segments.length === 0) {
+    return <HatchedBar label="Talk flow unavailable this session." className="h-6 rounded-lg" />
+  }
+  const bins = buildPacingTimeline(segments, durationSec, soundTimeline?.seconds)
+  return (
+    <div>
+      <div className="flex h-6 w-full overflow-hidden rounded-lg">
+        {bins.map((bin, i) =>
+          // Hatched means the same thing here as in the talk bar above: sound
+          // the transcript has no words for, or, with no envelope, a block
+          // we cannot read at all.
+          bin === 'unavailable' || bin === 'sound' ? (
+            <div key={i} className="h-full flex-1" style={HATCH_STYLE} />
+          ) : bin === 'quiet' ? (
+            <div key={i} className="h-full flex-1 bg-hairline" />
+          ) : (
+            // Same teacher/student colors as TalkParticipationBar below, so
+            // the timeline and the distribution bar read as one consistent
+            // color language rather than two different "student" colors.
+            <div key={i} className={`h-full flex-1 ${bin === 'teacher' ? 'bg-terracotta' : 'bg-gold'}`} />
+          ),
+        )}
+      </div>
+      <div className="mt-1.5 flex justify-between text-[11px] text-ink-soft">
+        <span>0:00</span>
+        <span>{formatTime(durationSec)}</span>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-soft">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-terracotta" /> Teacher-heavy
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-gold" /> Student-heavy
+        </span>
+        {soundTimeline ? (
+          <>
+            <span className="flex items-center gap-1.5">
+              <HatchedSwatch /> Sound, no words
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-hairline" /> Quiet
+            </span>
+          </>
+        ) : (
+          <span className="flex items-center gap-1.5">
+            {/* Not labeled "unclear audio" — without an envelope this bucket
+                also covers genuine silence (think-time, quiet reading), which
+                nothing in the recording can tell apart from lost audio. */}
+            <HatchedSwatch /> No dominant speaker
+          </span>
+        )}
+      </div>
+      {soundTimeline && <p className="mt-3 text-sm text-ink">{soundTimelineSentence(soundTimeline)}</p>}
+    </div>
+  )
+}
+
+// Chart #3 — Questioning & Thinking Mix: the only two question types this
+// app actually detects are recall and higher-order (see questionLog/
+// higherOrderQuestionCount in audioAnalysis.ts) — shown as fractions, matching
+// this report's existing small-N convention, never a percentage.
+// Small "i" hover/focus tooltip — same pattern already established in
+// AdminDashboard.tsx, reused here verbatim rather than a new convention.
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="group relative inline-flex">
+      <span
+        tabIndex={0}
+        aria-label={text}
+        className="flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border border-ink-soft/40 text-[9px] font-semibold text-ink-soft"
+      >
+        i
+      </span>
+      <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 w-56 -translate-x-1/2 rounded-lg bg-ink px-2.5 py-1.5 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        {text}
+      </span>
+    </span>
+  )
+}
+
+// One stacked bar (Recall / Higher-order, same visual language as
+// TalkParticipationBar's Teacher/Student segments) instead of two
+// separate bars — makes the split easier to compare at a glance.
+function QuestioningMixChart({
+  higherOrderCount,
+  totalCount,
+  state,
+}: {
+  higherOrderCount: number | null
+  totalCount: number | null
+  state: MetricState
+}) {
+  const unavailable = isMissingState(state) || totalCount == null || higherOrderCount == null
+  // A distribution bar reads as a stable rate even at the smallest sample —
+  // "1 of 1 higher-order" fills the whole bar exactly like "18 of 18" would.
+  // Below the same MIN_N_FOR_PERCENT floor the rest of this report already
+  // uses for a percentage, show the plain count instead of the chart.
+  const tooFewToCharacterize = !unavailable && state === 'possible_detection'
+  const recallCount = unavailable ? 0 : totalCount - higherOrderCount
+  const recallPct = unavailable || totalCount === 0 ? 0 : Math.round((recallCount / totalCount) * 100)
+  const higherOrderPct = unavailable || totalCount === 0 ? 0 : Math.round((higherOrderCount / totalCount) * 100)
+  return (
+    <div>
+      <div className="flex items-center gap-1.5">
+        <h3 className="text-sm font-semibold text-ink">Questioning mix</h3>
+        <InfoTooltip text="Higher-order questions invite students to analyze, justify, interpret, connect, evaluate, or create — not simply remember information." />
+      </div>
+      {unavailable ? (
+        <div className="mt-2">
+          <HatchedBar label="Question-type mix unavailable this session." />
+        </div>
+      ) : tooFewToCharacterize ? (
+        <p className="mt-2 text-sm text-ink-soft">
+          {totalCount} question{totalCount === 1 ? '' : 's'} detected ({higherOrderCount} higher-order) — too few to
+          characterize the mix as a pattern.
+        </p>
+      ) : (
+        <div className="mt-3">
+          <div className="flex h-4 w-full overflow-hidden rounded-full bg-cream">
+            <div className="h-full bg-gold" style={{ width: `${recallPct}%` }} />
+            <div className="h-full bg-terracotta" style={{ width: `${higherOrderPct}%` }} />
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-soft">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-gold" /> Recall · {recallCount} · {recallPct}%
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-terracotta" /> Higher-order · {higherOrderCount} ·{' '}
+              {higherOrderPct}%
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Shared by "Review an exchange" and the "Longest teacher-talk stretch"
+// card below — a highlight with the real transcript turns around it
+// (since there's no audio to play back, the transcript itself is the
+// evidence) plus a "why it matters" line and a way to bring it into a
+// live conversation with Coach.
+function TranscriptEvidenceCard({
+  candidate,
+  segments,
+  questionLog,
+}: {
+  candidate: NoticeCandidate
+  segments: TranscriptSegment[]
+  questionLog: AudioQuestionLogEntry[] | null
+}) {
+  // Each highlight type has its own precise, reconstructable exchange — a
+  // generic time window either misses the real span (a monologue) or can't
+  // tell which nearby line is actually part of it (a follow-up question's
+  // root question and answer aren't always close enough to guess at).
+  const window =
+    candidate.timestampSec == null
+      ? []
+      : candidate.observation === 'Follow-up / probing question'
+        ? buildFollowUpExchange(segments, questionLog, candidate.timestampSec)
+        : buildTranscriptWindow(segments, candidate.timestampSec)
+  return (
+    <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+      <p className="text-xs font-semibold uppercase tracking-wide text-forest">
+        {formatCandidateHeadline(candidate)}
+      </p>
+      {window.length > 0 ? (
+        <div className="mt-2 flex flex-col gap-1.5">
+          {window.map((s, i) => (
+            <p key={i} className="text-sm text-ink">
+              <span className="font-medium">{s.speakerLabel}:</span> "{s.text}"
+            </p>
+          ))}
+        </div>
+      ) : (
+        candidate.excerpt && <p className="mt-2 text-sm text-ink">"{candidate.excerpt}"</p>
+      )}
+      <p className="mt-2 text-sm text-ink-soft">{candidate.whyItMatters}</p>
+      {/* The page carries one Discuss action at its end — see DiscussFooter. */}
+    </div>
+  )
+}
+
 /// What the audible student talk was about.
 ///
 /// Every other number on this page is a duration, and a duration cannot tell
@@ -4781,6 +5582,490 @@ function Tally({ n, label }: { n: number; label: string }) {
 ///
 /// Counts rather than percentages, deliberately: "54% on topic" is a score,
 /// and there is no correct figure here.
+
+function WaitTime2Stat({
+  waitTime2Sec: sec,
+  sampleCount: samples,
+}: {
+  waitTime2Sec: number | null
+  sampleCount: number | null
+}) {
+  const metric = waitTime2Metric(sec, samples)
+  return (
+    <Stat
+      label="Your pause after an answer"
+      value={metric.display}
+      muted={isMissingState(metric.state)}
+      reason={
+        metric.reason ??
+        'How long you left after a student finished before speaking. The pause above is the one after your question; this is the one after their answer, and it is where a follow-up has to fit.'
+      }
+      sub={
+        !isMissingState(metric.state) && (samples ?? 0) > 0
+          ? `Based on ${samples} exchange${samples === 1 ? '' : 's'}`
+          : undefined
+      }
+    />
+  )
+}
+
+function TalkParticipationTab({
+  session,
+  silencePct,
+  talkInsight,
+  lastRow,
+}: {
+  session: AudioSessionWithSegments
+  silencePct: number | null
+  talkInsight: string | null
+  /// The section's Hard Look, as the final row of its list.
+  lastRow: React.ReactNode
+}) {
+  const exampleCandidate = highlightCandidates(
+    session.highlights,
+    'Follow-up / probing question',
+    'talk-exchange',
+    0,
+    'Following up on a student answer pushes their thinking further instead of stopping at the first response.',
+  )[0]
+  // What students talked about is no longer shown. The count could only ever
+  // describe the turns the microphone caught, and those are the ones spoken
+  // loudly towards the teacher — on-topic by construction. The worst-captured
+  // real lesson returned 24 of 24 on-topic with zero unclear, while lessons
+  // captured at 44% and 48% returned 23 and 17 unclear; the cleanest-looking
+  // answer came from the recording that heard least. It is still computed,
+  // because the Hard Look uses it to avoid criticising airtime blind.
+  const wpm = session.metricsDetail?.teacherWordsPerMinute ?? null
+  const silenceNote = (silencePct ?? 0) > 0 ? leadingSilenceNote(session.metricsDetail?.firstWordSec) : null
+  // Only when it is long enough to be worth a look: every lesson has a longest
+  // stretch, and a 40-second one is not a finding.
+  const stretch = useMemo(() => {
+    const longest = longestTeacherStretch(session.segments)
+    return longest && longest.durationSec >= MIN_STRETCH_TO_SHOW_SEC ? longest : null
+  }, [session.segments])
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* The reading before the numbers it was drawn from. */}
+      {talkInsight && <CoachNote text={talkInsight} />}
+
+      {/* One picture of the split. It used to be here three times — as tiles,
+          as this bar, and as the bar's legend. */}
+      <div id="stat-talkRatio">
+        <TalkParticipationBar
+          teacherPct={session.teacherTalkPct}
+          studentPct={session.studentTalkPct}
+          silencePct={silencePct}
+          nonSpeech={nonSpeechSplit(session.metricsDetail, session.durationSec)}
+          paceWpm={wpm}
+        />
+      </div>
+
+      <SectionNextStep text={session.nextSteps?.talk} />
+
+      <DetailRows>
+        {/* The one participation signal a teacher-side microphone can carry
+            honestly. Airtime says how long students spoke; this says whether
+            the floor was opened, which is the part the teacher controls. It
+            records the invitation ONLY — never whether anyone took it up,
+            because this recording cannot show that. */}
+        <MoveEvidence
+          title="You opened the floor"
+          blurb="Moments you invited students in. Whether anyone took it up is not something a recording from the front of the room can show."
+          rows={session.teachingMoves?.invitations}
+        />
+        <DetailRow title="Talk flow across the lesson">
+          <PacingTimeline
+            segments={session.segments}
+            durationSec={session.durationSec}
+            soundTimeline={session.soundTimeline}
+          />
+        </DetailRow>
+        {stretch && (
+          <DetailRow
+            title={`Your longest stretch of talk · about ${Math.round(stretch.durationSec / 60)} min, from ${formatTime(stretch.startSec)}`}
+          >
+            <p className="text-sm text-ink">
+              From {formatTime(stretch.startSec)} to {formatTime(stretch.endSec)}, opening with:
+            </p>
+            <p className="border-l-2 border-hairline pl-3 text-sm text-ink-soft">"{stretch.opening}…"</p>
+            <p className="text-sm text-ink-soft">
+              A stretch ends when a student is heard or you pause for more than ten seconds. A student the microphone
+              missed does not end it, so check it against what you remember of that part of the lesson.
+            </p>
+          </DetailRow>
+        )}
+        {exampleCandidate && (
+          <DetailRow title="An exchange to review">
+            <TranscriptEvidenceCard candidate={exampleCandidate} segments={session.segments} questionLog={session.questionLog} />
+          </DetailRow>
+        )}
+        <DetailRow title="How to read these numbers">
+          <p className="text-sm text-ink-soft">
+            Talk time describes the recording, not the room: it doesn't show how many students took part or whether
+            they were engaged, and a microphone near you hears you far better than it hears them.
+          </p>
+          <p className="text-sm text-ink-soft">
+            "Silence / other" is everything that was neither clearly you nor clearly a student — quiet work, several
+            voices at once, and audio too faint to place.
+          </p>
+          {silenceNote && <p className="text-sm text-ink-soft">{silenceNote}</p>}
+          {wpm != null && (
+            <p className="text-sm text-ink-soft">
+              Pace is words a minute of your own speaking time. Everyday conversation runs about {CONVERSATIONAL_WPM} —
+              an anchor to place yourself against, not a target.
+            </p>
+          )}
+        </DetailRow>
+        {lastRow}
+      </DetailRows>
+    </div>
+  )
+}
+
+function WaitTimeChips({ questionLog }: { questionLog: AudioQuestionLogEntry[] | null }) {
+  const waits = (questionLog ?? []).map((q) => q.waitTimeSec).filter((w): w is number => w != null)
+  if (waits.length === 0) return null
+  const mean = Math.round((waits.reduce((a, b) => a + b, 0) / waits.length) * 10) / 10
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-ink">Measured wait times</h3>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {waits.map((w, i) => (
+          <span key={i} className="rounded-lg border border-hairline bg-cream px-3 py-1.5 text-sm font-medium text-ink">
+            {w}s
+          </span>
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-ink-soft">Average: {mean} seconds.</p>
+      <p className="mt-1.5 text-sm text-ink-soft">Try next: {FOCUS_METRIC_TRY_NEXT.avgWaitTime}</p>
+    </div>
+  )
+}
+
+const CFU_DETECTION_LIMITATION =
+  'Spoken checks only — hand signals and written work are invisible to a recording.'
+
+
+function EvidenceItemCard({
+  candidate,
+  segments,
+}: {
+  candidate: NoticeCandidate
+  segments: TranscriptSegment[]
+}) {
+  // Both kinds of evidence here are one precise, real exchange — not a
+  // window of surrounding talk, which in a densely-packed transcript can
+  // sweep in unrelated lines (an unconnected question-and-answer that
+  // just happens to fall nearby in time) that make a single moment look
+  // like it's citing several.
+  const isFeedback = candidate.observation === 'Specific feedback'
+  const window =
+    candidate.timestampSec == null
+      ? []
+      : isFeedback
+        ? buildFeedbackExchange(segments, candidate.timestampSec)
+        : buildSingleTurnExchange(segments, candidate.timestampSec)
+  return (
+    <div className="rounded-2xl border border-hairline bg-cream-card p-6">
+      <p className="text-xs font-semibold uppercase tracking-wide text-forest">
+        {formatCandidateHeadline(candidate)}
+      </p>
+      {window.length > 0 ? (
+        <div className="mt-2 flex flex-col gap-1.5">
+          {window.map((s, i) => (
+            <p key={i} className="text-sm text-ink">
+              <span className="font-medium">{s.speakerLabel}:</span> "{s.text}"
+            </p>
+          ))}
+        </div>
+      ) : (
+        candidate.excerpt && <p className="mt-2 text-sm text-ink">"{candidate.excerpt}"</p>
+      )}
+      <p className="mt-2 text-sm text-ink-soft">{candidate.whyItMatters}</p>
+      {/* The page carries one Discuss action at its end — see DiscussFooter. */}
+    </div>
+  )
+}
+
+function QuestioningCheckingTab({
+  questionCount,
+  questionLog,
+  teachingMoves,
+  questionsMetric,
+  higherOrderRatio,
+  higherOrderCount,
+  followUpMetric,
+  heldSilenceSec,
+  heldSilenceCount,
+  waitTime2Sec,
+  waitTime2SampleCount,
+  thinkingTaskCount,
+  focusMetric,
+  questioningInsight,
+  checksNarrative,
+  nextStep,
+  highlights,
+  cfuLog,
+  feedbackLog,
+  segments,
+  lastRow,
+}: {
+  questionCount: number | null
+  questionLog: AudioQuestionLogEntry[] | null
+  teachingMoves: AudioTeachingMoves | null
+  questionsMetric: ReturnType<typeof getCountMetric>
+  higherOrderRatio: ReturnType<typeof formatRatio> | null
+  higherOrderCount: number | null
+  followUpMetric: ReturnType<typeof getCountMetric>
+  /// Median silence held after a question nobody answered aloud, and how many
+  /// such questions there were.
+  heldSilenceSec: number | null
+  heldSilenceCount: number
+  waitTime2Sec: number | null
+  waitTime2SampleCount: number | null
+  thinkingTaskCount: number | null
+  focusMetric: FocusMetric | null
+  questioningInsight: string | null
+  checksNarrative: string | null
+  nextStep: string | null | undefined
+  highlights: AudioHighlight[] | null
+  cfuLog: AudioCfuLogEntry[] | null
+  feedbackLog: AudioFeedbackLogEntry[] | null
+  segments: TranscriptSegment[]
+  /// The section's Hard Look, as the final row of its list.
+  lastRow: React.ReactNode
+}) {
+  // Older sessions predate waitTimeSampleCount; their root-question count is the best available.
+  const followUpToKeep = highlightCandidates(
+    highlights,
+    'Follow-up / probing question',
+    'questions-strength',
+    0,
+    'Following up on a student answer pushes their thinking further instead of stopping at the first response.',
+  )[0]
+
+  const cfuCandidates: NoticeCandidate[] = (cfuLog ?? []).map((entry, i) => ({
+    id: `cfu-log-${i}`,
+    observation: 'Check for understanding',
+    whyItMatters: entry.whatItChecked,
+    timestampSec: entry.timestampSec,
+    excerpt: entry.text,
+    durationSec: null,
+    weight: 0,
+    focusMetric: 'cfuCount',
+  }))
+  const feedbackCandidates: NoticeCandidate[] = (feedbackLog ?? [])
+    .filter((entry) => entry.kind === 'specific')
+    .map((entry, i) => ({
+      id: `feedback-log-${i}`,
+      observation: 'Specific feedback',
+      whyItMatters:
+        "Naming something specific in a student's response gives clearer information than general praise alone.",
+      timestampSec: entry.timestampSec,
+      excerpt: entry.text,
+      durationSec: null,
+      weight: 0,
+      focusMetric: 'feedbackSpecificity',
+    }))
+  const evidenceCandidates = [...cfuCandidates, ...feedbackCandidates].sort(
+    (a, b) => (a.timestampSec ?? 0) - (b.timestampSec ?? 0),
+  )
+
+  return (
+    <div className="flex flex-col gap-6">
+      {questioningInsight && <CoachNote text={questioningInsight} />}
+
+      {/* The mix below is this section's one finding, and it states the count
+          itself — as "detected", not "you asked", because a student's question
+          can be picked up as one of them. A count, never a share. */}
+      <QuestioningMixChart
+        higherOrderCount={higherOrderCount}
+        totalCount={questionCount}
+        state={higherOrderRatio?.state ?? 'not_measurable'}
+      />
+
+      <SectionNextStep text={nextStep} />
+
+      <DetailRows>
+        <DetailRow title="The numbers">
+          <StatGrid>
+            <div id="stat-higherOrderPct">
+              <Stat
+                label="Questions you asked"
+                value={questionsMetric.display}
+                muted={isMissingState(questionsMetric.state)}
+                reason={questionsMetric.reason}
+                focused={focusMetric === 'higherOrderPct'}
+              />
+            </div>
+            <div id="stat-higherOrderCount">
+              <Stat
+                label="Higher-order questions"
+                value={higherOrderCount != null ? (questionCount ? `${higherOrderCount} of ${questionCount}` : String(higherOrderCount)) : '—'}
+                muted={higherOrderCount == null}
+                reason={higherOrderCount == null ? 'This session was analyzed before questions were classified.' : undefined}
+              />
+            </div>
+            {/* A lesson can be built on reasoning without a single higher-order
+                question in it — a simulation task can ask for more thinking than
+                anything said out loud did. */}
+            <Stat
+              label="Thinking tasks"
+              value={thinkingTaskCount != null ? String(thinkingTaskCount) : '—'}
+              muted={thinkingTaskCount == null}
+              reason={
+                thinkingTaskCount == null
+                  ? 'This session was analyzed before thinking tasks were read from the transcript.'
+                  : undefined
+              }
+              sub="Things students had to reason through"
+            />
+            <Stat
+              label="Your follow-up questions"
+              value={followUpMetric.display}
+              muted={isMissingState(followUpMetric.state)}
+              reason={followUpMetric.reason}
+              focused={focusMetric === 'followUpQuestionCount'}
+            />
+            {/* Replaces "your average wait time", which needed an audible
+                student answer and so only ever described the questions where
+                waiting WORKED — 25 of them across this teacher's real
+                lessons, against 65 here. This is the half they control: they
+                asked, nobody spoke, and this is how long they left it.
+                Pauses that contain an answer are excluded rather than
+                averaged in; those run to a median of 6.0s against 3.9s, and
+                are mostly the student talking. */}
+            <div id="stat-avgWaitTime">
+              <Stat
+                label="Silence you held after a question"
+                value={heldSilenceSec != null ? `${heldSilenceSec}s` : '—'}
+                muted={heldSilenceSec == null}
+                reason={
+                  heldSilenceSec == null
+                    ? 'Every question here was either answered aloud or came too close to the next thing you said to time a silence.'
+                    : undefined
+                }
+                sub={
+                  heldSilenceSec != null && heldSilenceCount > 0
+                    ? `Median across ${heldSilenceCount} question${heldSilenceCount === 1 ? '' : 's'} nobody answered aloud`
+                    : undefined
+                }
+                focused={focusMetric === 'avgWaitTime'}
+              />
+            </div>
+            {/* The other half of wait time: the pause after a student's answer,
+                which is where a follow-up has to fit. */}
+            <WaitTime2Stat waitTime2Sec={waitTime2Sec} sampleCount={waitTime2SampleCount} />
+          </StatGrid>
+          <WaitTimeChips questionLog={questionLog} />
+        </DetailRow>
+
+        {/* Counted nowhere else: the question detector excludes a question
+            the teacher answers themselves, so the move most worth noticing
+            left no trace at all. Shown without comment — it is a move, not a
+            fault, and a teacher can decide what it meant. */}
+        <MoveEvidence
+          title="Questions you answered yourself"
+          blurb="Asked and answered in the same breath. Sometimes that is the right call; sometimes it is the pause that got away."
+          rows={teachingMoves?.selfAnswered}
+        />
+
+        <MoveEvidence
+          title="What your questions asked for"
+          blurb="What answering would have required of a student — finer than the recall and higher-order split above, and shown as examples rather than a score."
+          rows={teachingMoves?.questionKinds}
+          tag={(row: { kind: string }) => row.kind}
+        />
+
+        <MoveEvidence
+          title="When you pushed a student further"
+          blurb="Responses that asked a student to go on, back it up, or try again — rather than closing the exchange."
+          rows={teachingMoves?.revisionPrompts}
+        />
+
+        {questionLog !== null && questionLog.length > 0 && (
+          <DetailRow title={`Your questions, in order (${questionLog.length})`}>
+            <div className="flex flex-col gap-3">
+              {questionLog.map((q, i) => (
+                <div key={i} className="rounded-xl border border-hairline bg-cream-card p-4">
+                  <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                    <span>{formatTime(q.timestampSec)}</span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 ${
+                        q.type === 'higher_order' ? 'bg-mint-tint/60 text-forest' : 'bg-cream text-ink-soft'
+                      }`}
+                    >
+                      {q.type === 'higher_order' ? 'Higher-order' : 'Recall'}
+                    </span>
+                    <span className="normal-case font-normal">
+                      {q.waitTimeSec != null ? `${q.waitTimeSec}s wait` : 'wait not measured'}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-sm text-ink">"{q.text}"</p>
+                  {q.followUps.length > 0 && (
+                    <div className="mt-2 flex flex-col gap-1.5 border-l-2 border-hairline pl-3">
+                      {q.followUps.map((f, j) => (
+                        <p key={j} className="text-sm text-ink-soft">
+                          <span className="text-xs font-semibold uppercase tracking-wide">
+                            Follow-up · {formatTime(f.timestampSec)}
+                          </span>{' '}
+                          "{f.text}"
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </DetailRow>
+        )}
+
+        {/* The section's second note — checks for understanding and what was
+            done with students' answers. It sat on the page under the first,
+            so this was the one section with two paragraphs to read before
+            anything else; it belongs with the evidence it describes. */}
+        {checksNarrative && (
+          <DetailRow title="How you checked and responded">
+            {splitParagraphs(checksNarrative).map((para, i) => (
+              <p key={i} className="text-sm text-ink">
+                {para}
+              </p>
+            ))}
+          </DetailRow>
+        )}
+
+        {evidenceCandidates.length > 0 && (
+          <DetailRow title={`Checks and feedback, in your words (${evidenceCandidates.length})`}>
+            {evidenceCandidates.map((candidate) => (
+              <EvidenceItemCard key={candidate.id} candidate={candidate} segments={segments} />
+            ))}
+          </DetailRow>
+        )}
+
+        {followUpToKeep && (
+          <DetailRow title="A follow-up worth keeping">
+            <div className="rounded-xl border border-hairline bg-cream-card p-4">
+              <p className="text-sm text-ink">{formatCandidateHeadline(followUpToKeep)}</p>
+              {followUpToKeep.excerpt && <p className="mt-1 text-sm text-ink-soft">"{followUpToKeep.excerpt}"</p>}
+            </div>
+          </DetailRow>
+        )}
+
+        <DetailRow title="How to read these numbers">
+          <p className="text-sm text-ink-soft">
+            Questions and checks are read from your side of the transcript. {CFU_DETECTION_LIMITATION}
+          </p>
+          <p className="text-sm text-ink-soft">
+            Wait time, follow-ups and feedback all need a student to be heard, so they are limited by how much of the
+            room the microphone reached. Where too little came through, the number says so rather than showing zero.
+          </p>
+        </DetailRow>
+        {lastRow}
+      </DetailRows>
+    </div>
+  )
+}
 
 /// One way to reach the coach, at the end of a page.
 ///
@@ -4903,6 +6188,15 @@ function TryNextTimeCard({ n, session }: { n: number; session: AudioSessionWithS
   )
 }
 
+// Every Insights section has the same shape: the note, one picture, one
+// finding, one thing to try, and then everything else folded into rows. The
+// rows are where the evidence lives — lists of quotes, the full set of numbers,
+// how to read them — so a teacher who wants it is one tap away and a teacher
+// who does not is not made to scroll past it.
+function DetailRows({ children }: { children: React.ReactNode }) {
+  return <div className="divide-y divide-hairline border-y border-hairline">{children}</div>
+}
+
 function RowChevron({ className = '' }: { className?: string }) {
   return (
     <svg
@@ -4920,6 +6214,32 @@ function RowChevron({ className = '' }: { className?: string }) {
   )
 }
 
+function DetailRow({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <details className="group">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-3 text-sm font-semibold text-forest marker:hidden hover:text-terracotta-600">
+        <span>{title}</span>
+        <RowChevron className="group-open:rotate-180" />
+      </summary>
+      <div className="flex flex-col gap-4 pb-5 pt-1">{children}</div>
+    </details>
+  )
+}
+
+// The section's own line from "Try next time" on Summary, shown where the
+// evidence for it is. Written with the class summary, so a report summarized
+// before that existed has none — and a section with nothing worth suggesting
+// says nothing rather than reaching for a stock tip.
+function SectionNextStep({ text }: { text: string | null | undefined }) {
+  if (!text?.trim()) return null
+  return (
+    <div className="rounded-xl bg-gold-tint/50 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Try next time</p>
+      <p className="mt-1 text-sm text-ink">{text}</p>
+    </div>
+  )
+}
+
 function DiscussFooter({ label, onClick, compact }: { label: string; onClick: () => void; compact?: boolean }) {
   return (
     <button
@@ -4933,6 +6253,51 @@ function DiscussFooter({ label, onClick, compact }: { label: string; onClick: ()
     >
       {label} →
     </button>
+  )
+}
+
+function StatGrid({ children }: { children: React.ReactNode }) {
+  const accent = useContext(SectionAccentContext)
+  return <div className={`grid grid-cols-2 gap-4 rounded-2xl ${accent.chip} p-6 sm:grid-cols-3`}>{children}</div>
+}
+
+function Stat({
+  label,
+  value,
+  sub,
+  muted,
+  reason,
+  focused,
+}: {
+  label: React.ReactNode
+  value: string
+  sub?: string
+  muted?: boolean
+  reason?: string
+  focused?: boolean
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-1.5">
+        <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
+        {focused && (
+          <span className="rounded-full bg-mint-tint/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-forest">
+            Your focus
+          </span>
+        )}
+      </div>
+      <p
+        className={`mt-1 text-xl font-semibold ${muted ? 'text-ink-soft' : 'text-ink'}`}
+        title={reason}
+      >
+        {value}
+      </p>
+      {muted && reason ? (
+        <p className="text-xs text-ink-soft">{reason}</p>
+      ) : (
+        sub && <p className="text-xs text-ink-soft">{sub}</p>
+      )}
+    </div>
   )
 }
 

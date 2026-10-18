@@ -5,8 +5,6 @@
 // Phrase lists are exported so they stay easy to tune without touching the
 // analysis logic itself.
 
-import type { CheckLoop } from './checksLoop.ts'
-import type { HeldOpen } from './heldOpen.ts'
 import { longestTeacherStretch } from './teacherStretch.ts'
 
 export type Segment = {
@@ -14,9 +12,6 @@ export type Segment = {
   startSec: number
   endSec: number
   text: string
-  /// Deepgram's per-word speaker confidence (lib/deepgram.ts). Absent on
-  /// lines transcribed before it was kept.
-  speakerConfidence?: unknown
 }
 
 export type Highlight = { label: string; timestampSec: number; excerpt: string; durationSec?: number }
@@ -44,23 +39,12 @@ export type QuestionLogEntry = {
   studentAudibleInPause: boolean
   text: string
   followUps: { timestampSec: number; text: string }[]
-  /// Higher-order questions only: how long the question stayed open until
-  /// the teacher confirmed an answer, gave it, or moved on (lib/heldOpen.ts).
-  /// Absent where it was not read.
-  heldOpen?: HeldOpen
 }
 // whatItChecked is a short, phrase-based gloss (see CFU_PHRASE_DESCRIPTIONS)
 // — never a claim about the specific content of what was checked, since
 // that would require actually understanding the question, not just
 // matching a fixed phrase.
-export type CfuLogEntry = {
-  timestampSec: number
-  text: string
-  whatItChecked: string
-  /// Who the check asked and whether the teacher acted on it
-  /// (lib/checksLoop.ts). Absent where it was not read.
-  loop?: CheckLoop
-}
+export type CfuLogEntry = { timestampSec: number; text: string; whatItChecked: string }
 // One entry per teacher turn counted toward genericFeedbackCount/
 // specificFeedbackCount — text is the teacher's own turn; the preceding
 // student turn (for real evidence context) is recovered from the
@@ -565,15 +549,6 @@ function extractCapitalizedWords(text: string): { addressed: string[]; content: 
     }
   }
   return { addressed, content }
-}
-
-/// Names a teacher used to address a student in these lines ("Jared, will you
-/// start us off?"). The same direct-address rule the name count uses, so a
-/// character or an author named in the lesson is not taken for a student.
-export function addressedNames(lines: string[]): Set<string> {
-  const names = new Set<string>()
-  for (const line of lines) for (const name of extractCapitalizedWords(line).addressed) names.add(name)
-  return names
 }
 
 // Session-level filter over every teacher segment's capitalized words.

@@ -1,31 +1,23 @@
-// The longest stretch of unbroken teacher talk — the web twin of the
-// server's lib/teacherStretch.ts, kept to the same rule so the page and the
-// stored metric agree on one number.
+// The longest stretch of unbroken teacher talk. Mirrors
+// server/src/lib/teacherStretch.ts, which has the reasoning: a stretch ends
+// when a student is heard OR the teacher pauses for longer than a breath, so a
+// video, a hand-out or a quiet room is no longer counted as talking.
 //
-// A stretch ends when another voice is heard, or when the teacher stops for
-// longer than a pause: silence that long is students working, a video, or a
-// voice the microphone missed — not the teacher still talking. It is
-// reported as the time it took in the room, with the words it opened on.
+// Computed here from the transcript the report already holds, rather than
+// read from the stored highlight, so reports analyzed before the measure was
+// corrected show the corrected one too.
 
-import type { TranscriptSegment } from './api'
-
-/// Longer than a breath or a glance at notes; shorter than waiting on a room.
 export const STRETCH_PAUSE_BREAK_SEC = 10
+/// Shorter than this is not a "long stretch" of anything, and is not shown.
+export const MIN_STRETCH_TO_SHOW_SEC = 120
 
-export type TeacherStretch = {
-  startSec: number
-  endSec: number
-  durationSec: number
-  /// The first line of the stretch, as said.
-  opening: string
-  /// Every line in it, in order — so the page can quote the first one that
-  /// is safe to show when the opening is not.
-  lines: { text: string; startSec: number }[]
-}
+export type TeacherStretch = { startSec: number; endSec: number; durationSec: number; opening: string }
 
-export function longestTeacherStretch(segments: TranscriptSegment[]): TeacherStretch | null {
+type Seg = { speakerLabel: string; startSec: number; endSec: number; text: string }
+
+export function longestTeacherStretch(segments: Seg[]): TeacherStretch | null {
   let best: TeacherStretch | null = null
-  let run: { startSec: number; endSec: number; opening: string; lines: { text: string; startSec: number }[] } | null = null
+  let run: { startSec: number; endSec: number; opening: string } | null = null
   const close = () => {
     if (!run) return
     const durationSec = run.endSec - run.startSec
@@ -40,9 +32,11 @@ export function longestTeacherStretch(segments: TranscriptSegment[]): TeacherStr
     }
     if (!text) continue
     if (run && segment.startSec - run.endSec > STRETCH_PAUSE_BREAK_SEC) close()
-    if (!run) run = { startSec: segment.startSec, endSec: segment.endSec, opening: text, lines: [] }
-    else run.endSec = Math.max(run.endSec, segment.endSec)
-    run.lines.push({ text, startSec: segment.startSec })
+    if (!run) run = { startSec: segment.startSec, endSec: segment.endSec, opening: text }
+    else {
+      run.endSec = Math.max(run.endSec, segment.endSec)
+      if (run.opening.length < 120) run.opening = `${run.opening} ${text}`
+    }
   }
   close()
   return best

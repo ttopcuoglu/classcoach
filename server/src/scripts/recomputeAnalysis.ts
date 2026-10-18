@@ -4,8 +4,7 @@ import { enrichLessonContent } from '../lib/lessonObjective.ts'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { buildContentExhibits } from '../lib/audioAnalysis.ts'
 import { extractTag } from '../lib/extractTag.ts'
-import { heldOpenSummary } from '../lib/teacherVoice.ts'
-import { buildClassSummarySystemPrompt, normalizeParagraphs, teachingMomentsFor } from '../routes/audioSessions.ts'
+import { buildClassSummarySystemPrompt, normalizeParagraphs } from '../routes/audioSessions.ts'
 import { prisma } from '../lib/prisma.ts'
 
 // Re-runs the analysis over a session's stored transcript.
@@ -125,14 +124,6 @@ async function main() {
         questionCount: analysis.questionCount,
         higherOrderPct: analysis.higherOrderPct,
         avgWaitTimeSec: analysis.avgWaitTimeSec,
-        heldOpen: heldOpenSummary(analysis.questionLog),
-        // The quotable moment lists, exactly as the route passes them. This
-        // script builds the prompt itself rather than calling
-        // requestClassSummaryText, so anything added there has to be added
-        // here too or this prints a prompt production does not use — which
-        // is how the first run of the anchored notes came back in the old
-        // metrics voice and looked like the prompt had failed.
-        ...teachingMomentsFor(session.teachingMoves),
         cfuCount: analysis.cfuCount,
         studentVoiceDetected: segments.some((s) => s.speakerLabel === 'Student'),
         cfuMoments: analysis.cfuLog.slice(0, 12),

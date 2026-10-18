@@ -61,7 +61,7 @@ export function pickTop(candidates: NoticeCandidate[], preferredFocusMetric?: Fo
   }
   return sorted[0]
 }
-function highlightCandidates(
+export function highlightCandidates(
   highlights: AudioHighlight[] | null,
   label: string,
   id: string,
@@ -117,7 +117,7 @@ export function buildStrengthCandidates(
   ) {
     candidates.push({
       id: 'questioning',
-      observation: `${session.metricsDetail?.higherOrderQuestionCount ?? higherOrderRatio.display.split(' of ')[0]} of your ${session.questionCount} questions were higher-order`,
+      observation: `${session.higherOrderPct}% of your questions were higher-order`,
       whyItMatters: "That's the harder kind of question to ask on the fly — it pushes for real thinking, not just recall.",
       timestampSec: null,
       excerpt: null,

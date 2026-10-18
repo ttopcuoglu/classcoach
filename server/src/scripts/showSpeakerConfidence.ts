@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import { VOICE_DOUBT_BELOW, type SpeakerConfidenceRuns } from '../lib/deepgram.ts'
+import type { SpeakerConfidenceRuns } from '../lib/deepgram.ts'
 import { prisma } from '../lib/prisma.ts'
 
 // The readout for Deepgram's per-word speaker confidence: does it pick out
@@ -11,7 +11,7 @@ import { prisma } from '../lib/prisma.ts'
 // recording's own story ("that was a student") before anything relies on
 // it. Read-only.
 //
-//   tsx src/scripts/showSpeakerConfidence.ts <sessionId> [--below 0.35]
+//   tsx src/scripts/showSpeakerConfidence.ts <sessionId> [--below 0.4]
 //   tsx src/scripts/showSpeakerConfidence.ts --user you@example.com --latest
 
 const args = process.argv.slice(2)
@@ -19,7 +19,7 @@ const flag = (name: string) => {
   const i = args.indexOf(name)
   return i === -1 ? null : args[i + 1]
 }
-const below = Number(flag('--below') ?? VOICE_DOUBT_BELOW)
+const below = Number(flag('--below') ?? 0.4)
 const userEmail = flag('--user')
 const sessionId = args.find((a) => !a.startsWith('--') && a !== userEmail && a !== flag('--below'))
 

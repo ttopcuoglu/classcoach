@@ -255,10 +255,7 @@ export function formatRatio(numerator: number, denominator: number): ConfidentMe
       reason: `Only ${denominator} to go on — too few to characterize as a pattern.`,
     }
   }
-  // Still a fraction at any size. "40%" of fifteen questions reads as a
-  // stable rate and a score; "6 of 15" is what happened. Percentages are kept
-  // for shares of time, where they mean what they say.
-  return { state: 'measured', display: `${numerator} of ${denominator}` }
+  return { state: 'measured', display: `${Math.round((numerator / denominator) * 100)}%` }
 }
 
 // For a plain count metric (CFUs, questions, student voice segments,
@@ -343,27 +340,21 @@ export function getPresenceMetric(value: number | null | undefined): ConfidentMe
     : { state: 'measured', display: String(value) }
 }
 
-/// Below this many instances, a count is instances, not a pattern.
-export const MIN_FOR_PATTERN = 3
+// A coarser, teacher-facing 3-tier read on a metric's confidence, for
+// surfaces (like Summary's "My Focus" card) that want a plain status pill
+// rather than the full 7-state model above.
+export type EvidenceTier = 'pattern' | 'moment' | 'insufficient'
 
-/// The plain status pill for a metric, as on Summary's "My Focus" card.
-///
-/// Says what the evidence is rather than grading it. It used to map every
-/// measured state to "Clear pattern", so one check for understanding — or a
-/// wait time from a single sample — was called a clear pattern. A count now
-/// says how many it was until there are enough to be one; a measurement that
-/// is not a count (a share of time, a pace) is just "Measured".
-export function evidenceLabel(metric: ConfidentMetric): string {
-  if (isMissingState(metric.state)) return 'Not enough evidence yet'
-  if (metric.state === 'confirmed_none') return 'None heard'
-  // "4" or "4 of 7": the leading number is how many there were.
-  const count = metric.display.match(/^(\d+)(?: of \d+)?$/)
-  if (count) {
-    const n = Number(count[1])
-    if (n < MIN_FOR_PATTERN || metric.state !== 'measured') return `${n} instance${n === 1 ? '' : 's'}`
-    return 'Clear pattern'
-  }
-  return 'Measured'
+export function evidenceTier(state: MetricState): EvidenceTier {
+  if (state === 'measured' || state === 'confirmed_none') return 'pattern'
+  if (state === 'possible_detection') return 'moment'
+  return 'insufficient'
+}
+
+export const EVIDENCE_TIER_LABELS: Record<EvidenceTier, string> = {
+  pattern: 'Clear pattern',
+  moment: 'One moment captured',
+  insufficient: 'Not enough evidence yet',
 }
 
 // "N of M metrics available" for a category's header — counts any
@@ -388,17 +379,16 @@ export function formatDuration(sec: number): string {
 // One consolidated read on how much to trust this session's numbers,
 // replacing the old scattered "recorded X of Y" line + separate
 // short-session banner with a single line and a good/warn tone.
-//
-// It no longer tallies "N of M metrics measured confidently". The tally
-// counted any metric that was not empty as confident — a "1 of 4" with a
-// reason attached said "too few to characterise" counted — so it was a
-// promise the line could not keep. What it can honestly say is how much was
-// recorded and how much of that came through.
-export function buildEvidenceQualityLine(coverage: CoverageInfo): { text: string; tone: 'good' | 'warn' } {
+export function buildEvidenceQualityLine(
+  coverage: CoverageInfo,
+  metrics: ConfidentMetric[],
+): { text: string; tone: 'good' | 'warn' } {
+  const total = metrics.length
+  const measured = metrics.filter((m) => isConfidentState(m.state)).length
   // A recording the microphone largely lost is the strongest warning here,
   // and until now it was the one thing this line could not say.
   const lowCapture = coverage.capturedSharePct != null && coverage.capturedSharePct < LOW_CAPTURE_PCT
-  const warn = coverage.isShort || lowCapture
+  const warn = coverage.isShort || lowCapture || (total > 0 && measured / total < 0.6)
   const parts: string[] = [`Recorded ${formatDuration(coverage.recordedSec)}`]
   if (coverage.isShort) {
     parts.push(`under ${Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} min — treat metrics as indicative, not conclusive`)
@@ -408,12 +398,21 @@ export function buildEvidenceQualityLine(coverage: CoverageInfo): { text: string
     // go unmeasured on these lessons because the speech was never captured,
     // not because the lesson lacked the thing being measured.
     parts.push(
-      `only ${coverage.capturedSharePct}% came through as audible speech, so every number here describes that part`,
+      `only ${coverage.capturedSharePct}% came through as audible speech — the quiet stretches are as likely to be distance or overlapping voices as a quiet room`,
     )
   }
+  // "Measured confidently" directly after "only 15% came through" reads as a
+  // reassurance that cancels the warning. The metrics were measured on the
+  // captured minority, and saying so is the difference between a caveat and
+  // a contradiction.
+  parts.push(
+    lowCapture
+      ? `${measured} of ${total} metrics measured from that portion`
+      : `${measured} of ${total} metrics measured confidently`,
+  )
   if (coverage.uncapturedPhases.length > 0) {
-    // "Not clearly captured" read as if it contradicted the metrics — it's
-    // actually a narrower claim about
+    // "Not clearly captured" read as if it contradicted the confident-
+    // metrics count right before it — it's actually a narrower claim about
     // phase *timing* (Opening/Instruction/Work Time/Closing boundaries),
     // not about the metrics or the lesson's content.
     const phaseWord = coverage.uncapturedPhases.length === 1 ? 'phase' : 'phases'

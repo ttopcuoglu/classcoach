@@ -19,7 +19,6 @@ import { extractTag } from './extractTag.ts'
 import {
   flattenTeacherSpeech,
   normalizeForMatch,
-  isNoneAnswer,
   parseQuotedLines,
   startSecAtOffset,
   transcriptForModel,
@@ -73,7 +72,7 @@ QUESTIONS — first decide what IS one, then which kind. A question is an uttera
 NOT questions, no matter the punctuation: discourse markers the teacher talks straight through ("right?", "okay?", "you know?"); a question the teacher answers themselves in the same breath; housekeeping that isn't about the learning ("does everyone have a Chromebook?", "can you get the light?"); and a request phrased politely ("can you read that paragraph for us?" is a direction, not a question).
 
 Then, for each question, ask what a correct answer would require of the student:
-- HIGHER-ORDER if answering needs reasoning the student has to construct — explaining why or how, predicting, comparing, weighing a trade-off, applying an idea to a new case, justifying with evidence, or interpreting something in front of them. Phrasing does not decide this: "so what's happening there?" about a model is higher-order, and "why did you pick that one?" is too. An open question asking for a student's own view or experience, where there is no single right answer ("what would you have done?", "which side do you agree with, and why?"), is higher-order too.
+- HIGHER-ORDER if answering needs reasoning the student has to construct — explaining why or how, predicting, comparing, weighing a trade-off, applying an idea to a new case, justifying with evidence, or interpreting something in front of them. Phrasing does not decide this: "so what's happening there?" about a model is higher-order, and "why did you pick that one?" is too.
 - RECALL if answering needs only a fact, name, number, definition, or step the class already has.
 
 THINKING TASKS — things students were asked to DO that require reasoning rather than following steps: predict what a model will show and check it, compare two cases, explain their reasoning to a partner, work out a quantity from something they know. The sentence that sets the task, plus what students had to think about after a pipe. Procedural instructions ("grab your Chromebooks", "write your name") are not thinking tasks.
@@ -138,11 +137,10 @@ export function countMoves(moves: ClassroomMoves): number {
 /// "sentence @ m:ss | what it checked" — the quote verified against the
 /// teacher's speech like every other, the gloss taken as written since it is
 /// the model describing, not quoting.
-export function readChecks(raw: string | null, flat: string, offsets: { at: number; startSec: number }[]): Checked[] {
-  if (!raw) return []
+function readChecks(raw: string | null, flat: string, offsets: { at: number; startSec: number }[]): Checked[] {
+  if (!raw || raw.toUpperCase().includes('NONE')) return []
   const out: Checked[] = []
   for (const line of raw.split('\n')) {
-    if (isNoneAnswer(line)) continue
     // Timestamp optional, for the same reason as parseQuotedLines.
     const match = line.match(/^(.*?)(?:\s*@\s*(\d+):(\d{1,2}))?\s*(?:\|\s*(.*))?$/)
     if (!match) continue

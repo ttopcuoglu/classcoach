@@ -744,40 +744,10 @@ export type AudioQuestionLogEntry = {
   timestampSec: number
   type: 'recall' | 'higher_order'
   waitTimeSec: number | null
-  /// How long before the teacher spoke again. May contain a student's answer.
-  /// Absent on lessons analyzed before it existed.
-  pauseSec?: number | null
   text: string
   followUps: { timestampSec: number; text: string }[]
-  /// Higher-order questions only: how long the question stayed open until
-  /// the teacher confirmed an answer, gave it, or moved on. `sec` is null
-  /// when it was still open two minutes on. Absent where it was not read.
-  heldOpen?: {
-    /// closed / open count toward the typical time; task (set as work),
-    /// self_answered and not_thinking (not one of the six kinds) do not.
-    outcome: 'closed' | 'open' | 'task' | 'self_answered' | 'not_thinking' | 'follow_up'
-    questionType: 'explain' | 'justify' | 'compare' | 'evaluate' | 'predict' | 'opinion' | null
-    sec: number | null
-    closedBy: string | null
-    closedAtSec: number | null
-    how: 'confirmed' | 'gave_answer' | 'moved_on' | null
-    /// Follow-ups that pushed further while it was open; they keep it open.
-    followUps?: { text: string; atSec: number }[]
-    /// For a follow_up: when the question it belongs to was asked.
-    partOfSec?: number
-  }
 }
-export type AudioCfuLogEntry = {
-  timestampSec: number
-  text: string
-  whatItChecked: string
-  /// Who the check asked and whether the teacher acted on what came back
-  /// (server lib/checksLoop.ts). Absent where it was not read.
-  loop?: {
-    who: 'everyone' | 'few' | 'asked_if_understood' | 'not_a_check'
-    acted: { how: 'adjusted' | 'confirmed'; text: string | null; atSec: number } | null
-  }
-}
+export type AudioCfuLogEntry = { timestampSec: number; text: string; whatItChecked: string }
 export type AudioFeedbackLogEntry = { timestampSec: number; kind: 'generic' | 'specific'; text: string }
 export type AudioDirectiveLogEntry = { timestampSec: number; text: string }
 export type AudioToneLogEntry = { timestampSec: number; kind: 'positive' | 'corrective'; text: string }
@@ -824,11 +794,6 @@ export type AudioContentNotes = {
   connectionIdeas?: string[]
   /** What trips students up in this topic — subject knowledge, not a reading of this lesson. */
   misconceptions?: string[]
-  /** How many times "Write these notes again" has been used; capped per report. */
-  rewrites?: number
-  writtenAt?: string | null
-  /** The versions each rewrite replaced, oldest first. */
-  previous?: { notes: AudioContentNote[]; misconceptions: string[]; writtenAt: string | null }[]
 }
 
 // Rubric Lens — the session's evidence organised under a teaching
@@ -1026,8 +991,6 @@ export type AudioSession = {
   // summary. A section with nothing worth suggesting is absent; the whole
   // field is absent on reports summarized before this existed.
   nextSteps?: { talk?: string; questions?: string; climate?: string } | null
-  /// The focus loop; absent until a focus is picked on this lesson's report.
-  lessonFocus?: LessonFocus | null
   classSummary: string | null
   strengths: string | null
   growthAreas: string | null
@@ -1044,9 +1007,6 @@ export type TranscriptSegment = {
   startSec: number
   endSec: number
   text: string
-  /// Deepgram's per-word speaker confidence as [words, confidence] runs.
-  /// Null on lines transcribed before it was kept (2026-10-18).
-  speakerConfidence?: [number, number][] | null
 }
 
 // Worked out by the server from the loudness envelope, for recordings that
@@ -2180,84 +2140,6 @@ export function getAudioSessions(): Promise<AudioSession[]> {
 
 export function getAudioSession(id: string): Promise<AudioSessionWithSegments> {
   return request(`/api/audio-sessions/${id}`)
-}
-
-/// The focus loop (server lib/lessonFocus.ts). `next` is the focus picked on
-/// this lesson's report for the teacher's next lesson; `checkIn` is what this
-/// lesson's report found for the focus picked on the previous lesson with the
-/// same teacher name.
-export type FocusLine = { quote: string; timestampSec: number; segmentId: string | null }
-export type NextFocus = {
-  findingKey: string
-  findingLabel: string
-  text: string
-  value: string | null
-  line: FocusLine | null
-  rewrite: string | null
-  pickedAt: string
-}
-export type FocusCheckIn = {
-  fromSessionId: string
-  findingKey: string
-  text: string
-  lastValue: string | null
-  thisValue: string | null
-  outcome: 'heard' | 'not_yet' | 'unavailable'
-  line: FocusLine | null
-  checkedAt: string
-}
-export type LessonFocus = { next?: NextFocus | null; checkIn?: FocusCheckIn | null }
-
-export function setNextFocus(sessionId: string, focus: Omit<NextFocus, 'pickedAt'>): Promise<LessonFocus> {
-  return request(`/api/audio-sessions/${sessionId}/lesson-focus/next`, { method: 'PUT', body: JSON.stringify(focus) })
-}
-
-export function getPreviousFocus(
-  sessionId: string,
-): Promise<{ previous: { sessionId: string; sessionDate: string; next: NextFocus } | null; reason?: string }> {
-  return request(`/api/audio-sessions/${sessionId}/lesson-focus/previous`)
-}
-
-export function saveFocusCheckIn(sessionId: string, checkIn: Omit<FocusCheckIn, 'checkedAt'>): Promise<LessonFocus> {
-  return request(`/api/audio-sessions/${sessionId}/lesson-focus/check-in`, { method: 'PUT', body: JSON.stringify(checkIn) })
-}
-
-/// The v3 Insights coach notes, written on the server from the findings the
-/// page sends and checked there before they are stored (server
-/// lib/insightsNotes.ts). Evidence ids are the page's own.
-export type InsightsSectionNote = {
-  lead: string | null
-  more: string[]
-  findingRefs: string[]
-  keep: { evidenceId: string; text: string } | null
-  try: { evidenceId: string; text: string; rewrite: string } | null
-  guidanceLinks?: { stuckIndex: number; evidenceId: string }[]
-  source: 'model' | 'template' | 'unavailable'
-}
-export type InsightsNotes = {
-  version: number
-  inputHash: string
-  generatedAt: string
-  sections: Partial<Record<'talk_pace' | 'questioning' | 'clarity' | 'climate' | 'content_lens', InsightsSectionNote>>
-}
-
-export function writeInsightsNotes(sessionId: string, input: unknown): Promise<InsightsNotes> {
-  return request(`/api/audio-sessions/${sessionId}/insights-notes`, { method: 'POST', body: JSON.stringify(input) })
-}
-
-/// "Not right?" on an Insights quote. Recorded, never acted on: the quote
-/// stays where it is (server lib/quoteFlags.ts).
-export type QuoteFlag = { findingKey: string; segmentId: string; createdAt: string }
-
-export function getQuoteFlags(sessionId: string): Promise<QuoteFlag[]> {
-  return request(`/api/audio-sessions/${sessionId}/quote-flags`)
-}
-
-export function flagQuote(
-  sessionId: string,
-  flag: { findingKey: string; segmentId: string; quote: string; timestampSec: number },
-): Promise<QuoteFlag> {
-  return request(`/api/audio-sessions/${sessionId}/quote-flags`, { method: 'POST', body: JSON.stringify(flag) })
 }
 
 export function createAudioSession(data: {
