@@ -17,8 +17,10 @@ import {
   type InsightsSectionNote,
 } from '../../lib/api'
 import {
+  applyGuidanceLinks,
   buildInsightsModel,
   buildNotesInput,
+  mmss,
   type CoachText,
   type Evidence,
   type KeepTry as KeepTryModel,
@@ -127,7 +129,7 @@ function Findings({ model, report }: { model: SectionModel; report: AudioSession
 
 export default function InsightsPage({ report, slots }: { report: AudioSessionWithSegments; slots: InsightsSlots }) {
   const model = useMemo(() => buildInsightsModel(report), [report])
-  const { talk, questioning, clarity, climate, content } = model
+  const { talk, questioning, clarity, climate } = model
 
   // The coach notes: stored ones come straight back, new findings are written
   // once (server lib/insightsNotes.ts). The request is what the page shows,
@@ -155,6 +157,10 @@ export default function InsightsPage({ report, slots }: { report: AudioSessionWi
       live = false
     }
   }, [report.id, notesKey, requestKey])
+
+  // The Content Lens with any guidance links the notes made.
+  const contentLinks = notes.status === 'ready' ? notes.notes.sections.content_lens?.guidanceLinks : undefined
+  const content = useMemo(() => applyGuidanceLinks(model.content, contentLinks ?? []), [model.content, contentLinks])
 
   // "Not right?" flags this teacher already left on this lesson. A failed
   // load just means none show as flagged; flagging still works.
@@ -301,21 +307,46 @@ export default function InsightsPage({ report, slots }: { report: AudioSessionWi
                   </p>
                 )}
                 {content.guidance.stuck.length > 0 && (
-                  <p className="mt-1">
-                    <b>Where students often get stuck:</b> {content.guidance.stuck.join(' · ')}
-                  </p>
+                  <>
+                    <p className="mb-0 mt-1">
+                      <b>Where students often get stuck:</b>
+                    </p>
+                    <ul className="m-0 mt-0.5 list-disc pl-5">
+                      {content.guidance.stuck.map((item, i) => (
+                        <li key={i}>
+                          {item}
+                          {content.guidance.stuckLinks[i] != null && (
+                            <span className="font-bold text-terracotta-600">
+                              {' '}
+                              → linked to your line at {mmss(content.guidance.stuckLinks[i])}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
                 )}
               </div>
             )}
             {content.notesGenerated && !slots.contentNotes.locked && (
-              <button
-                type="button"
-                onClick={slots.contentNotes.onGenerate}
-                disabled={slots.contentNotes.sending}
-                className="mt-3 text-[13px] font-semibold text-terracotta-600 disabled:opacity-50"
-              >
-                {slots.contentNotes.sending ? 'Writing the notes again…' : 'Write these notes again ↻'}
-              </button>
+              // Capped per report: each rewrite is a different reading, and
+              // the earlier ones are kept rather than silently replaced.
+              content.rewritesLeft > 0 ? (
+                <button
+                  type="button"
+                  onClick={slots.contentNotes.onGenerate}
+                  disabled={slots.contentNotes.sending}
+                  className="mt-3 text-[13px] font-semibold text-terracotta-600 disabled:opacity-50"
+                >
+                  {slots.contentNotes.sending
+                    ? 'Writing the notes again…'
+                    : `Write these notes again ↻ (${content.rewritesLeft} left)`}
+                </button>
+              ) : (
+                <p className="mt-3 text-[12.5px] text-ink-soft">
+                  These notes have been written again twice, the most for one report.
+                </p>
+              )
             )}
           </>
         )}

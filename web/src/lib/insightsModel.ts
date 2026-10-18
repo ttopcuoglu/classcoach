@@ -45,8 +45,16 @@ export type Evidence = {
   /// a teacher's mouth on a room microphone's say-so, 'unmatched' when they
   /// could not be found word for word in one stretch of the teacher's speech.
   withheld?: 'unsafe' | 'unmatched'
-  /// One line on why the moment matters, when a reading supplies one.
+  /// One line on why the moment matters, when a reading supplies one, and
+  /// what to call it ("Why it works in history:", "Next move:").
   why?: string
+  whyLabel?: string
+  /// True when the line had no sentence or clause boundary within reach and
+  /// was cut at a word. Never featured while a complete line is available.
+  cut?: boolean
+  /// General "where students get stuck" guidance this line bears on, linked
+  /// by the coach notes (Content Lens).
+  linked?: string
 }
 
 export type Finding = {
@@ -113,8 +121,11 @@ export type InsightsModel = {
     topic: string | null
     terms: { term: string; count: number }[]
     leanedOn: string[]
-    guidance: { stuck: string[]; waysIn: string[] }
+    /// stuckLinks: a stuck item's index, and the time of the line it is
+    /// linked to (applyGuidanceLinks).
+    guidance: { stuck: string[]; waysIn: string[]; stuckLinks: Record<number, number> }
     notesGenerated: boolean
+    rewritesLeft: number
   }
 }
 
@@ -169,10 +180,12 @@ function makeEvidence(segments: TranscriptSegment[]) {
       console.warn(`[insights] not shown: no exact match in the teacher's speech for ${JSON.stringify(item.quote)}`)
     }
     const full = found?.text ?? item.quote.trim()
+    const trimmed = trimQuote(full)
     return {
       id,
-      quote: trimQuote(full).quote,
+      quote: trimmed.quote,
       full,
+      ...(trimmed.cut ? { cut: true } : {}),
       timestampSec: item.timestampSec,
       tag,
       polarity,
@@ -194,7 +207,10 @@ function ordered(evidence: Evidence[]): Evidence[] {
 /// The clearest instance: one that can be quoted, short enough to read at a
 /// glance, preferring the wanted polarity.
 function pickFeatured(evidence: Evidence[], prefer: Polarity = 'strength'): Evidence | null {
-  const quotable = evidence.filter((e) => !e.withheld)
+  const shown = evidence.filter((e) => !e.withheld)
+  // A line cut mid-clause is shown only when nothing complete is left.
+  const whole = shown.filter((e) => !e.cut)
+  const quotable = whole.length > 0 ? whole : shown
   const pool = quotable.filter((e) => e.polarity === prefer)
   const from = pool.length > 0 ? pool : quotable
   if (from.length === 0) return evidence[0] ?? null
@@ -288,6 +304,13 @@ export function fastStretches(
 }
 
 // --- the sections -----------------------------------------------------------
+
+/// "Worth double-checking" notes on a possible factual slip. Off by default:
+/// the plan asks for them only behind a switch.
+export const CONTENT_ACCURACY_FLAGS_ON = false
+
+/// "Write these notes again" per report — the server's MAX_CONTENT_NOTE_REWRITES.
+export const MAX_CONTENT_NOTE_REWRITES = 2
 
 const DIRECTION_PARTS: AudioDirectionPart[] = ['task', 'steps', 'time', 'product']
 const PART_LABEL: Record<AudioDirectionPart, string> = { task: 'Task', steps: 'Steps', time: 'Time', product: 'Product' }
@@ -590,15 +613,24 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
   // ---- 5. Content Lens
   const lc = report.lessonContent
   const notes = report.contentNotes?.notes ?? []
-  const noteEvidence = (label: string, polarity: Polarity) =>
+  const subjectName = lc?.subject?.trim() || null
+  const noteEvidence = (label: string, polarity: Polarity, whyLabel: string) =>
     notes
       .filter((n) => n.label === label)
       .map((n) =>
         // The note's text is the reading; the excerpt is the teacher's line.
-        ({ ...evidenceFrom(`note-${n.id}`, { quote: n.excerpt, timestampSec: n.timestampSec }, label, polarity), why: n.text }),
+        ({
+          ...evidenceFrom(`note-${n.id}`, { quote: n.excerpt, timestampSec: n.timestampSec }, label, polarity),
+          why: n.text,
+          whyLabel,
+        }),
       )
-  const worked = noteEvidence('What worked', 'strength')
-  const further = noteEvidence('Where it could go further', 'growth')
+  const worked = noteEvidence('What worked', 'strength', subjectName ? `Why it works in ${subjectName}:` : 'Why it works:')
+  const further = noteEvidence('Where it could go further', 'growth', 'Next move:')
+  // Off unless switched on (CONTENT_ACCURACY_FLAGS_ON): a note that a fact
+  // might be wrong is the one reading most likely to be the transcriber's
+  // mistake rather than the teacher's.
+  const doubleCheck = CONTENT_ACCURACY_FLAGS_ON ? noteEvidence('Worth double-checking', 'neutral', 'Worth double-checking:') : []
   const explanations = (moves?.explanations ?? []).map((e, i) =>
     evidenceFrom(`exp-${i}`, e, { example: 'Example', analogy: 'Analogy', vocabulary: 'Definition', modeling: 'Thinking aloud' }[e.kind], 'strength'),
   )
@@ -621,6 +653,18 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
       evidence: further,
       prefer: 'growth',
     }),
+    ...(doubleCheck.length > 0
+      ? [
+          finding({
+            key: 'worth_double_checking',
+            label: 'Worth double-checking',
+            state: 'measured',
+            value: String(doubleCheck.length),
+            evidence: doubleCheck,
+            prefer: 'neutral',
+          }),
+        ]
+      : []),
     {
       ...finding({
         key: 'explanations',
@@ -657,8 +701,10 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
     guidance: {
       stuck: report.contentNotes?.misconceptions ?? [],
       waysIn: lc?.connectionIdeas ?? report.contentNotes?.connectionIdeas ?? [],
+      stuckLinks: {},
     },
     notesGenerated,
+    rewritesLeft: Math.max(0, MAX_CONTENT_NOTE_REWRITES - (report.contentNotes?.rewrites ?? 0)),
   }
 
   for (const section of [talk, questioning, clarity, climate, content]) featureOnce(section)
@@ -723,6 +769,7 @@ export function buildNotesInput(model: InsightsModel) {
         // No topic means no content lens: every finding goes unavailable so
         // the section gets no note rather than a guess.
         findings: content.findings.map((f) => findingFor(f, content.state === 'unavailable')),
+        ...(content.guidance.stuck.length > 0 ? { stuck: content.guidance.stuck } : {}),
       },
     ],
   }
@@ -743,4 +790,36 @@ function featureOnce(section: SectionModel): void {
     }
     used.add(f.featured.timestampSec)
   }
+}
+
+/// The Content Lens with the coach notes' guidance links applied: each linked
+/// Take it further line names the general guidance it bears on, and each
+/// linked guidance item knows the moment in the lesson it bears on.
+export function applyGuidanceLinks(
+  content: InsightsModel['content'],
+  links: { stuckIndex: number; evidenceId: string }[],
+): InsightsModel['content'] {
+  if (links.length === 0) return content
+  const byLine = new Map(links.map((l) => [l.evidenceId, l.stuckIndex]))
+  const link = (e: Evidence): Evidence => {
+    const i = byLine.get(e.id)
+    return i != null && content.guidance.stuck[i] ? { ...e, linked: content.guidance.stuck[i] } : e
+  }
+  const findings = content.findings.map((f) =>
+    f.key !== 'take_it_further'
+      ? f
+      : {
+          ...f,
+          evidence: f.evidence.map(link),
+          featured: f.featured ? link(f.featured) : null,
+          groups: f.groups?.map((g) => ({ ...g, items: g.items.map(link) })),
+        },
+  )
+  const lines = findings.find((f) => f.key === 'take_it_further')?.evidence ?? []
+  const stuckLinks: Record<number, number> = {}
+  for (const l of links) {
+    const line = lines.find((e) => e.id === l.evidenceId)
+    if (line && content.guidance.stuck[l.stuckIndex]) stuckLinks[l.stuckIndex] = line.timestampSec
+  }
+  return { ...content, findings, guidance: { ...content.guidance, stuckLinks } }
 }

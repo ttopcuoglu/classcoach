@@ -120,6 +120,11 @@ const MAX_CONNECTION_IDEAS = 3
 /// it's shown.
 const MAX_MISCONCEPTIONS = 3
 const MIN_CONTENT_EXHIBITS = 3
+/// "Write these notes again" is allowed this many times a report. Each run is
+/// a different reading, and with no limit a teacher could keep asking until
+/// one said what they hoped — so the notes would mean nothing. Earlier
+/// versions are kept with the notes rather than lost.
+export const MAX_CONTENT_NOTE_REWRITES = 2
 const NOT_ENOUGH_CONTENT_ERROR = 'This recording caught too little of what you said to write content notes.'
 
 type ContentNote = { id: string; label: string; text: string; timestampSec: number; excerpt: string }
@@ -151,6 +156,8 @@ Focus on how this particular content was taught: the explanation, the representa
 Never invent or assume standards, curriculum, or grade-level expectations not evident in the transcript.
 
 Below are numbered excerpts from the transcript, each an exact quote. Write 4 to 6 notes, each grounded in exactly one excerpt below — reference it only by its number, never quote or restate the excerpt text yourself. At least two should be "What worked" and at least two "Where it could go further", so the teacher gets both. Use "Worth double-checking" only if something genuinely warrants it.
+
+A note is about what the teacher said and did, never about what students thought, felt, understood or were confused by — the recording cannot show that. "Students often…" belongs only in the misconceptions block below, as subject knowledge.
 
 A "What worked" note names the content move that was effective and why it works for this topic — not just that it was good. A "Where it could go further" note names one concrete, specific thing to try: a representation, a question to ask, an order to put two ideas in, a distinction to draw. It is a suggestion for next time, never a verdict on the teacher. Two sentences at most each.
 
@@ -1296,6 +1303,21 @@ audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
     return
   }
 
+  const existing = session.contentNotes as {
+    notes?: Prisma.InputJsonValue[]
+    misconceptions?: string[]
+    writtenAt?: string
+    rewrites?: number
+    previous?: Prisma.InputJsonValue[]
+  } | null
+  const rewrites = existing?.rewrites ?? 0
+  if (existing && rewrites >= MAX_CONTENT_NOTE_REWRITES) {
+    res.status(429).json({
+      error: `These notes have been written again ${MAX_CONTENT_NOTE_REWRITES} times, the most for one report.`,
+    })
+    return
+  }
+
   const denied = await checkAndLogUsage(req.user!.userId, 'content_notes')
   if (denied) {
     res.status(429).json({ error: denied })
@@ -1328,6 +1350,16 @@ audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
           subject,
           notes,
           misconceptions: parseMisconceptions(text),
+          writtenAt: new Date().toISOString(),
+          // The first set is not a rewrite; every later one is, and the one
+          // it replaces is kept, so two readings never silently disagree.
+          rewrites: existing ? rewrites + 1 : 0,
+          previous: existing
+            ? [
+                ...(existing.previous ?? []),
+                { notes: existing.notes ?? [], misconceptions: existing.misconceptions ?? [], writtenAt: existing.writtenAt ?? null },
+              ]
+            : [],
         },
       },
       include: { segments: { orderBy: { startSec: 'asc' } } },

@@ -140,7 +140,15 @@ export function QuoteCard({
           “{evidence.quote}”{trimmed && <span className="text-ink-soft"> …</span>}
         </p>
       )}
-      {evidence.why && <p className="mb-0 mt-1.5 text-[13.5px] text-ink">{evidence.why}</p>}
+      {evidence.why && (
+        <p className="mb-0 mt-1.5 text-[13.5px] text-ink">
+          {evidence.whyLabel && <b className="text-forest">{evidence.whyLabel} </b>}
+          {evidence.why}
+        </p>
+      )}
+      {evidence.linked && (
+        <p className="mb-0 mt-1.5 text-[12.5px] text-[#5B4C93]">↳ Linked general guidance: {evidence.linked}</p>
+      )}
       {!evidence.withheld && (
         <div className="mt-1.5 flex flex-wrap gap-3 text-[11.5px]">
           <button type="button" onClick={() => setShowContext(!showContext)} className="text-ink-soft underline decoration-dotted">

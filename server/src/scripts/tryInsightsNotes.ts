@@ -56,6 +56,10 @@ for (const id of ids) {
     for (const p of note.more) console.log(`  more: ${p}`)
     if (note.keep) console.log(`  keep: ${note.keep.text}  (${note.keep.evidenceId})`)
     if (note.try) console.log(`  try:  ${note.try.text}  (${note.try.evidenceId})\n        → ${note.try.rewrite}`)
+    for (const l of note.guidanceLinks ?? []) {
+      const stuck = input.sections.find((s) => s.key === key)?.stuck?.[l.stuckIndex]
+      console.log(`  link: "${stuck}"  ↔  ${l.evidenceId}`)
+    }
   }
 }
 console.log(`\n${tally.sections} sections: ${tally.model} written, ${tally.template} fell back, ${tally.unavailable} unavailable`)

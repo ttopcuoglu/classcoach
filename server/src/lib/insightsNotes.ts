@@ -16,7 +16,7 @@ import { flattenTeacherSpeech, normalizeForMatch } from './lessonObjective.ts'
 // plain one.
 
 /// Bumped when the prompt or the checks change, so stored notes are rewritten.
-export const NOTES_VERSION = 6
+export const NOTES_VERSION = 7
 
 export const SECTION_KEYS = ['talk_pace', 'questioning', 'clarity', 'climate', 'content_lens'] as const
 export type SectionKey = (typeof SECTION_KEYS)[number]
@@ -41,7 +41,15 @@ export type NotesFinding = {
   evidence: NotesEvidence[]
 }
 
-export type NotesSection = { key: SectionKey; title: string; context?: string; findings: NotesFinding[] }
+export type NotesSection = {
+  key: SectionKey
+  title: string
+  context?: string
+  findings: NotesFinding[]
+  /// Content Lens only: the general "where students often get stuck" items,
+  /// in order, so a note can link one to the line it bears on.
+  stuck?: string[]
+}
 export type NotesInput = { sections: NotesSection[] }
 
 export type SectionNote = {
@@ -50,6 +58,9 @@ export type SectionNote = {
   findingRefs: string[]
   keep: { evidenceId: string; text: string } | null
   try: { evidenceId: string; text: string; rewrite: string } | null
+  /// A general "where students get stuck" item and the Take it further line
+  /// it bears on. Content Lens only.
+  guidanceLinks: { stuckIndex: number; evidenceId: string }[]
   /// 'template' when the written note failed its checks twice.
   source: 'model' | 'template' | 'unavailable'
 }
@@ -110,11 +121,13 @@ export function parseNotesInput(body: unknown): NotesInput | { error: string } {
         evidence,
       })
     }
+    const stuck = (Array.isArray(s.stuck) ? s.stuck : []).slice(0, 3).map((x) => str(x, LIMITS.text)).filter((x): x is string => !!x)
     sections.push({
       key,
       title: str(s.title, 60) ?? key,
       ...(str(s.context, LIMITS.text) ? { context: str(s.context, LIMITS.text)! } : {}),
       findings,
+      ...(key === 'content_lens' && stuck.length > 0 ? { stuck } : {}),
     })
   }
   return sections.length > 0 ? { sections } : { error: 'no usable sections' }
@@ -274,10 +287,30 @@ export function dropBadPointers(note: SectionNote, section: NotesSection): Secti
   const byId = new Map(section.findings.flatMap((f) => f.evidence).map((e) => [e.id, e]))
   const keepLine = note.keep ? byId.get(note.keep.evidenceId) : undefined
   const tryLine = note.try ? byId.get(note.try.evidenceId) : undefined
+  // A link holds only between a real stuck item and a real Take it further
+  // line, once each; anything else is dropped and the two show unlinked.
+  const further = new Set(section.findings.find((f) => f.key === 'take_it_further')?.evidence.map((e) => e.id) ?? [])
+  const usedStuck = new Set<number>()
+  const usedLine = new Set<string>()
+  const guidanceLinks = (note.guidanceLinks ?? []).filter((l) => {
+    const ok =
+      Number.isInteger(l.stuckIndex) &&
+      l.stuckIndex >= 0 &&
+      l.stuckIndex < (section.stuck?.length ?? 0) &&
+      further.has(l.evidenceId) &&
+      !usedStuck.has(l.stuckIndex) &&
+      !usedLine.has(l.evidenceId)
+    if (ok) {
+      usedStuck.add(l.stuckIndex)
+      usedLine.add(l.evidenceId)
+    }
+    return ok
+  })
   return {
     ...note,
     keep: note.keep && keepLine && keepLine.polarity !== 'growth' ? note.keep : null,
     try: note.try && tryLine ? note.try : null,
+    guidanceLinks,
   }
 }
 
@@ -296,6 +329,7 @@ export function templateNote(section: NotesSection): SectionNote {
     findingRefs: top ? [top.key] : [],
     keep: null,
     try: null,
+    guidanceLinks: [],
     source: 'template',
   }
 }
@@ -326,7 +360,8 @@ Rules. Every one is checked, and a note that breaks one is thrown away:
 - Never use a student's name, even one that appears in a line; say "a student". Do not quote a line for the sake of a name in it.
 - Your share of the recording says nothing about students. Do not read room, voice or participation into it.
 - If a section has nothing to work with — every finding unavailable — return null for lead, keep and try, and empty lists.
-- For the content section, do not repeat a specialist note's text as the try.`
+- For the content section, do not repeat a specialist note's text as the try.
+- guidance_links: content section only. It may list "stuck" items — general subject knowledge about where students often get stuck. Where one is about the same idea as a line in the take_it_further finding, link them: the item's position in the list (from 0) and that line's id. Only clear matches on the same idea; most lessons have none or one. Every other section: an empty list.`
 
 /// One note's shape, described once. The format used to name each section as
 /// its own property, repeating this five times; the API refused the grammar
@@ -335,7 +370,7 @@ Rules. Every one is checked, and a note that breaks one is thrown away:
 const NOTE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['section', 'lead', 'more', 'finding_refs', 'keep', 'try'],
+  required: ['section', 'lead', 'more', 'finding_refs', 'keep', 'try', 'guidance_links'],
   properties: {
     section: { type: 'string', enum: [...SECTION_KEYS] },
     lead: { anyOf: [{ type: 'string' }, { type: 'null' }] },
@@ -363,6 +398,15 @@ const NOTE_SCHEMA = {
         },
       ],
     },
+    guidance_links: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['stuck_index', 'evidence_id'],
+        properties: { stuck_index: { type: 'integer' }, evidence_id: { type: 'string' } },
+      },
+    },
   },
 } as const
 
@@ -380,6 +424,7 @@ type RawNote = {
   finding_refs: string[]
   keep: { evidence_id: string; text: string } | null
   try: { evidence_id: string; text: string; rewrite: string } | null
+  guidance_links?: { stuck_index: number; evidence_id: string }[]
 }
 
 export function toSectionNote(raw: RawNote): SectionNote {
@@ -389,6 +434,7 @@ export function toSectionNote(raw: RawNote): SectionNote {
     findingRefs: raw.finding_refs ?? [],
     keep: raw.keep ? { evidenceId: raw.keep.evidence_id, text: raw.keep.text.trim() } : null,
     try: raw.try ? { evidenceId: raw.try.evidence_id, text: raw.try.text.trim(), rewrite: raw.try.rewrite.trim() } : null,
+    guidanceLinks: (raw.guidance_links ?? []).map((l) => ({ stuckIndex: l.stuck_index, evidenceId: l.evidence_id })),
     source: 'model',
   }
 }
@@ -443,7 +489,7 @@ export async function writeInsightsNotes(input: NotesInput, inputHash: string): 
   const writable: SectionKey[] = []
   for (const s of input.sections) {
     if (sectionUnavailable(s)) {
-      sections[s.key] = { lead: null, more: [], findingRefs: [], keep: null, try: null, source: 'unavailable' }
+      sections[s.key] = { lead: null, more: [], findingRefs: [], keep: null, try: null, guidanceLinks: [], source: 'unavailable' }
     } else {
       writable.push(s.key)
     }

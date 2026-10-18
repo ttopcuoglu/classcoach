@@ -797,6 +797,11 @@ export type AudioContentNotes = {
   connectionIdeas?: string[]
   /** What trips students up in this topic — subject knowledge, not a reading of this lesson. */
   misconceptions?: string[]
+  /** How many times "Write these notes again" has been used; capped per report. */
+  rewrites?: number
+  writtenAt?: string | null
+  /** The versions each rewrite replaced, oldest first. */
+  previous?: { notes: AudioContentNote[]; misconceptions: string[]; writtenAt: string | null }[]
 }
 
 // Rubric Lens — the session's evidence organised under a teaching
@@ -2154,6 +2159,7 @@ export type InsightsSectionNote = {
   findingRefs: string[]
   keep: { evidenceId: string; text: string } | null
   try: { evidenceId: string; text: string; rewrite: string } | null
+  guidanceLinks?: { stuckIndex: number; evidenceId: string }[]
   source: 'model' | 'template' | 'unavailable'
 }
 export type InsightsNotes = {

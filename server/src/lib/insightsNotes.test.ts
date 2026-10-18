@@ -48,6 +48,7 @@ const GOOD: SectionNote = {
     text: 'Hold the answer for three seconds.',
     rewrite: 'What should I see? Tell your partner first.',
   },
+  guidanceLinks: [],
   source: 'model',
 }
 
@@ -147,7 +148,33 @@ test('a student the teacher called on by name is never named in a note', () => {
       },
     ],
   }
-  const note: SectionNote = { lead: 'You opened the floor, inviting Jared to begin.', more: [], findingRefs: ['invitations'], keep: null, try: null, source: 'model' }
+  const note: SectionNote = { lead: 'You opened the floor, inviting Jared to begin.', more: [], findingRefs: ['invitations'], keep: null, try: null, guidanceLinks: [], source: 'model' }
   assert.ok(checkSectionNote(note, section).includes('names a student: Jared'))
   assert.deepEqual(checkSectionNote({ ...note, lead: 'You opened the floor, inviting a student to begin.' }, section), [])
+})
+
+test('a guidance link holds only between a real stuck item and a real Take it further line', async () => {
+  const { dropBadPointers } = await import('./insightsNotes.ts')
+  const content: NotesSection = {
+    key: 'content_lens',
+    title: 'Content Lens',
+    stuck: ['Students often treat anonymous and confidential reporting as the same thing.'],
+    findings: [
+      {
+        key: 'take_it_further',
+        label: 'Take it further',
+        state: 'measured',
+        value: '1',
+        evidence: [{ id: 'note-1', tag: 'Where it could go further', polarity: 'growth', quote: 'What options does the code provide for confidential or anonymous reporting?', time: '2:37' }],
+      },
+    ],
+  }
+  const base: SectionNote = { lead: 'You built the lesson around a real document.', more: [], findingRefs: ['take_it_further'], keep: null, try: null, guidanceLinks: [], source: 'model' }
+  const kept = dropBadPointers({ ...base, guidanceLinks: [{ stuckIndex: 0, evidenceId: 'note-1' }] }, content)
+  assert.deepEqual(kept.guidanceLinks, [{ stuckIndex: 0, evidenceId: 'note-1' }])
+  const dropped = dropBadPointers(
+    { ...base, guidanceLinks: [{ stuckIndex: 3, evidenceId: 'note-1' }, { stuckIndex: 0, evidenceId: 'made-up' }] },
+    content,
+  )
+  assert.deepEqual(dropped.guidanceLinks, [])
 })

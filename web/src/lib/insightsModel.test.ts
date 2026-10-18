@@ -182,3 +182,50 @@ test('a line featured under one finding is not featured again in the same sectio
   assert.equal(higher.featured?.full, line)
   assert.equal(checks.featured?.full, 'Does that make sense to everyone so far?')
 })
+
+test('specialist notes read as "why it works" and "next move", and a linked one names its guidance', async () => {
+  const { applyGuidanceLinks } = await import('./insightsModel.ts')
+  const model = buildInsightsModel(
+    lesson({
+      segments: said([157, 'What options does the code provide for confidential or anonymous reporting?'], [118, 'Matches our prediction pretty perfectly.']),
+      lessonContent: { subject: 'business', summary: 'Codes of conduct and ethics', connections: [], vocabulary: [], topicTerms: [], statedObjective: { found: false, quote: null, timestampSec: null } },
+      contentNotes: {
+        subject: 'business',
+        notes: [
+          { id: 'a', label: 'What worked', text: 'Checking predictions against a real code.', timestampSec: 118, excerpt: 'Matches our prediction pretty perfectly.' },
+          { id: 'b', label: 'Where it could go further', text: 'Draw the line between the two terms.', timestampSec: 157, excerpt: 'What options does the code provide for confidential or anonymous reporting?' },
+        ],
+        misconceptions: ['Students often treat anonymous and confidential reporting as the same thing.'],
+        rewrites: 1,
+      },
+    }),
+  )
+  const worked = model.content.findings.find((f) => f.key === 'what_worked')!
+  assert.equal(worked.featured?.whyLabel, 'Why it works in business:')
+  const further = model.content.findings.find((f) => f.key === 'take_it_further')!
+  assert.equal(further.featured?.whyLabel, 'Next move:')
+  assert.equal(model.content.rewritesLeft, 1)
+
+  const linked = applyGuidanceLinks(model.content, [{ stuckIndex: 0, evidenceId: further.featured!.id }])
+  const linkedLine = linked.findings.find((f) => f.key === 'take_it_further')!.featured!
+  assert.match(linkedLine.linked!, /anonymous and confidential/)
+  assert.equal(linked.guidance.stuckLinks[0], 157, 'the guidance points back at the moment')
+})
+
+test('a line cut mid-clause is not featured while a complete one is available', () => {
+  const long = Array.from({ length: 40 }, (_, i) => `word${i}`).join(' ')
+  const model = buildInsightsModel(
+    lesson({
+      segments: said([10, long], [20, 'Who else has a hook in mind?']),
+      teachingMoves: {
+        invitations: [
+          { quote: long, timestampSec: 10 },
+          { quote: 'Who else has a hook in mind?', timestampSec: 20 },
+        ],
+      },
+    }),
+  )
+  const inv = model.talk.findings[0]
+  assert.equal(inv.evidence.find((e) => e.timestampSec === 10)?.cut, true)
+  assert.equal(inv.featured?.full, 'Who else has a hook in mind?')
+})
