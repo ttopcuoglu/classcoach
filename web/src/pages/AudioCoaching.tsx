@@ -62,8 +62,7 @@ import { THIN_AUDIBLE_SHARE_PCT, useCaptureMonitor } from '../hooks/useCaptureMo
 import { buildCorrectionBalance, coverageCaveatLine, DETECTION_CAVEAT } from '../lib/correctionBalance'
 import {
   buildEvidenceQualityLine,
-  evidenceTier,
-  EVIDENCE_TIER_LABELS,
+  evidenceLabel,
   formatRatio,
   getCoverage,
   getCountMetric,
@@ -1822,7 +1821,8 @@ const FOCUS_METRIC_TRY_NEXT: Record<FocusMetric, string> = {
 
 type FocusSnapshot = {
   label: string
-  tier: ReturnType<typeof evidenceTier>
+  /// The status pill (evidenceLabel): "2 instances", "Clear pattern"...
+  pill: string
   statusLine: string | null
   capturedLine: string
   // The bare formatted value ("42.6%", "2.8s"), with no label prefix, for
@@ -1864,7 +1864,7 @@ function buildFocusSnapshot(
   const confident = isConfidentState(metric.state)
   return {
     label,
-    tier: evidenceTier(metric.state),
+    pill: evidenceLabel(metric),
     statusLine,
     capturedLine: confident
       ? `${label}: ${metric.display}${FOCUS_METRIC_UNIT_SUFFIX[focusMetric] ?? ''}`
@@ -2505,14 +2505,12 @@ function ReportPanel({
 
   // Talk & Participation
   const teacherTalkMetric = getPresenceMetric(report.teacherTalkPct)
-  const studentTalkMetric = getPresenceMetric(report.studentTalkPct)
   // One decimal, like the two talk shares it is shown beside — rounded to a
   // whole number it made the three add up to 100.4.
   const silencePct =
     report.teacherTalkPct != null && report.studentTalkPct != null
       ? Math.max(0, Math.round((100 - report.teacherTalkPct - report.studentTalkPct) * 10) / 10)
       : null
-  const silenceMetric = getPresenceMetric(silencePct)
   const studentSegmentsMetric = getCountMetric({ count: num('studentVoiceSegments'), recordedSec })
 
   // Questioning & Thinking
@@ -2625,12 +2623,7 @@ function ReportPanel({
 
   // Computed once here (not per-tab) so the shared header can show it on
   // every tab, not just Summary.
-  const evidenceQuality = buildEvidenceQualityLine(
-    coverage,
-    STUDENT_METRICS_ON
-      ? [teacherTalkMetric, studentTalkMetric, silenceMetric, studentSegmentsMetric, questionsMetric, followUpMetric, cfuMetric, feedbackRatio]
-      : [teacherTalkMetric, questionsMetric, pauseMetric, cfuMetric, feedbackRatio],
-  )
+  const evidenceQuality = buildEvidenceQualityLine(coverage)
 
   function handleViewSource(sourceTab: ReportTab, sourceId: string, section?: InsightsSection) {
     setTab(sourceTab)
@@ -2749,6 +2742,17 @@ function ReportPanel({
             <p className={`mt-3 text-xs ${evidenceQuality.tone === 'warn' ? 'font-semibold text-gold' : 'text-cream/60'}`}>
               {evidenceQuality.text}
             </p>
+            {/* What the report is built from, said once at the top. Replaces
+                "8 of 8 metrics measured confidently", which counted any
+                metric that was not empty. */}
+            {!STUDENT_METRICS_ON && (
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-forest-soft px-3 py-1 text-cream">Built from your voice</span>
+                <span className="rounded-full border border-dashed border-cream/50 px-3 py-1 text-cream/70">
+                  Student metrics off
+                </span>
+              </div>
+            )}
             {coverage.isTinyRecording && (
               <span className="mt-4 inline-block rounded-full bg-gold px-3 py-1 text-xs font-bold uppercase tracking-wide text-forest">
                 Short excerpt
@@ -3155,7 +3159,7 @@ function SummaryTab({
           subtitle="The one area you chose to work on, in this lesson"
           aside={
             <span className="shrink-0 rounded-full bg-cream-card px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-terracotta-600">
-              {EVIDENCE_TIER_LABELS[focusSnapshot.tier]}
+              {focusSnapshot.pill}
             </span>
           }
         >
@@ -5711,11 +5715,11 @@ function QuestioningMixChart({
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-soft">
             <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-gold" /> Recall · {recallCount} · {recallPct}%
+              <span className="h-2 w-2 shrink-0 rounded-full bg-gold" /> Recall · {recallCount} of {totalCount}
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-terracotta" /> Higher-order · {higherOrderCount} ·{' '}
-              {higherOrderPct}%
+              <span className="h-2 w-2 shrink-0 rounded-full bg-terracotta" /> Higher-order · {higherOrderCount} of{' '}
+              {totalCount}
             </span>
           </div>
         </div>

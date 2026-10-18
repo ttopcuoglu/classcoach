@@ -55,12 +55,40 @@ export function teacherVoiceView(session: AudioSessionWithSegments): AudioSessio
       heldSilenceSampleCount: 0,
       followUpQuestionCount: null,
     },
-    questionLog: session.questionLog && session.questionLog.map((q) => ({ ...q, waitTimeSec: null, followUps: [] })),
+    questionLog: session.questionLog && questionsInOrder(session.questionLog),
     highlights: session.highlights && session.highlights.filter((h) => h.label !== FOLLOW_UP_HIGHLIGHT),
     // keyTerms keep their student counts: zeroing them would read as "no
     // student said it", which is a claim. The vocabulary list drops the
     // column instead (LessonContentTab).
   }
+}
+
+/// Every question the teacher asked, one entry each, in lesson order.
+///
+/// The phrase scan counts a follow-up as a question (questionCount) but files
+/// it under the question it followed, so a list of the log's entries came out
+/// shorter than the count beside it. A follow-up is found by a student answer
+/// coming between two questions, which this report does not trust — so the
+/// question stays, as a question, and only the "follow-up" reading goes. The
+/// list and the count then agree on every lesson, whichever read produced it.
+function questionsInOrder(log: AudioQuestionLogEntry[]): AudioQuestionLogEntry[] {
+  const flat = log.flatMap((q) => [
+    q,
+    ...q.followUps.map(
+      (f): AudioQuestionLogEntry => ({
+        // Stored as full entries by the scan; typed narrower on the way out.
+        type: (f as Partial<AudioQuestionLogEntry>).type ?? 'recall',
+        pauseSec: (f as Partial<AudioQuestionLogEntry>).pauseSec ?? null,
+        timestampSec: f.timestampSec,
+        text: f.text,
+        waitTimeSec: null,
+        followUps: [],
+      }),
+    ),
+  ])
+  return flat
+    .map((q) => ({ ...q, waitTimeSec: null, followUps: [] }))
+    .sort((a, b) => a.timestampSec - b.timestampSec)
 }
 
 /// An exchange shown as evidence, minus every line not attributed to the
