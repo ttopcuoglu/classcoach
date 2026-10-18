@@ -33,6 +33,37 @@ export type DeepgramUtterance = {
 /// would have hidden that.
 export type SpeakerConfidenceRuns = [number, number][]
 
+/// Below this, a word is not taken to be the speaker's. A starting point
+/// from the synthetic clip (its teacher voice 0.63–0.76, the others 0.11 and
+/// 0.00), to be set from real lessons with scripts/showSpeakerConfidence.ts.
+export const VOICE_DOUBT_BELOW = 0.35
+
+/// Which of a line's words Deepgram doubts are this speaker's, one flag per
+/// word of `text`. Null when there is no confidence to go on, or when
+/// Deepgram's words and the stored text part ways (smart formatting can join
+/// "twenty five" into "25") and the runs cannot be laid on the text.
+export function doubtfulWords(text: string, runs: unknown): boolean[] | null {
+  if (!Array.isArray(runs) || runs.length === 0) return null
+  const words = text.trim().split(/\s+/)
+  const flags: boolean[] = []
+  for (const run of runs as SpeakerConfidenceRuns) {
+    if (!Array.isArray(run) || typeof run[0] !== 'number' || typeof run[1] !== 'number') return null
+    for (let k = 0; k < run[0]; k++) flags.push(run[1] < VOICE_DOUBT_BELOW)
+  }
+  return flags.length === words.length ? flags : null
+}
+
+/// `words` with each doubtful stretch replaced by one `gap`.
+export function keepConfident(words: string[], doubt: boolean[] | null, gap = '…'): string {
+  if (!doubt) return words.join(' ')
+  const out: string[] = []
+  words.forEach((w, i) => {
+    if (!doubt[i]) out.push(w)
+    else if (out[out.length - 1] !== gap) out.push(gap)
+  })
+  return out.every((w) => w === gap) ? '' : out.join(' ')
+}
+
 /// Words grouped into runs of the same confidence (to two places), so a
 /// line is a few pairs rather than one number per word.
 export function speakerConfidenceRuns(words: unknown): SpeakerConfidenceRuns | null {

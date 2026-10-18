@@ -7,7 +7,7 @@
 // Discuss with Coach, the escalation and correction cards, regenerating the
 // content notes — are passed in rather than rebuilt.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   flagQuote,
   getPreviousFocus,
@@ -33,7 +33,7 @@ import {
   type SectionModel,
 } from '../../lib/insightsModel'
 import { NOT_IN_THIS_REPORT, STUDENT_METRICS_ON } from '../../lib/teacherVoice'
-import { DirectionsGrid, QuestionSquares, TalkFlowChart } from './InsightsCharts'
+import { DirectionsGrid, HeldOpenBars, QuestionSquares, TalkFlowChart } from './InsightsCharts'
 import { CoachNote, EmptyEvidence, FindingRow, KeepTry, SectionCard, UnavailablePanel, type SectionMeta } from './InsightsParts'
 import { QuoteFlagContext, type QuoteFlagState } from './quoteFlagContext'
 import { FocusCheckInCard, OneFocusCard } from './FocusCards'
@@ -123,11 +123,23 @@ function keepTryFor(section: SectionModel, notes: NotesState): KeepTryModel {
 
 type NotesState = { status: 'pending' } | { status: 'ready'; notes: InsightsNotes } | { status: 'failed' }
 
-function Findings({ model, report }: { model: SectionModel; report: AudioSessionWithSegments }) {
+/// `charts` puts a chart under the finding it draws.
+function Findings({
+  model,
+  report,
+  charts = {},
+}: {
+  model: SectionModel
+  report: AudioSessionWithSegments
+  charts?: Record<string, React.ReactNode>
+}) {
   return (
     <>
       {model.findings.map((f) => (
-        <FindingRow key={f.key} finding={f} segments={report.segments} />
+        <Fragment key={f.key}>
+          <FindingRow finding={f} segments={report.segments} />
+          {charts[f.key]}
+        </Fragment>
       ))}
     </>
   )
@@ -295,7 +307,15 @@ export default function InsightsPage({ report, slots }: { report: AudioSessionWi
       <SectionCard id="insights-questioning" meta={META.questioning} footer={<Footer section="questioning" slots={slots} />}>
         <CoachNote {...coachFor(questioning, notes)} />
         {questioning.squares.length > 0 && <QuestionSquares squares={questioning.squares} />}
-        <Findings model={questioning} report={report} />
+        <Findings
+          model={questioning}
+          report={report}
+          charts={{
+            held_open: questioning.heldOpen.length > 0 && (
+              <HeldOpenBars questions={questioning.heldOpen} typicalSec={questioning.heldTypicalSec} />
+            ),
+          }}
+        />
         <KeepTry model={keepTryFor(questioning, notes)} focusAction={focusActionFor(questioning)} />
       </SectionCard>
 

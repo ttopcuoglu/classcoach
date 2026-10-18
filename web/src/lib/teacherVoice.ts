@@ -99,34 +99,85 @@ export const FOLLOW_UPS_OFF: ConfidentMetric = {
   reason: 'Finding a follow-up needs a student’s answer to be heard, so it is not in this report.',
 }
 
-/// How many questions had LONG_PAUSE_SEC or more before the teacher spoke
-/// again, out of the questions where that could be timed.
-///
-/// The teacher-voice stand-in for wait time. It runs from the end of the
-/// question to the teacher's next line, so it may contain a student's answer
-/// and is never called think time.
-export function pauseAfterQuestionsMetric(questionLog: AudioQuestionLogEntry[] | null): ConfidentMetric & {
-  long: number
-  timed: number
-} {
-  const timed = (questionLog ?? []).filter((q) => typeof q.pauseSec === 'number')
-  const long = timed.filter((q) => (q.pauseSec as number) >= LONG_PAUSE_SEC).length
-  if (timed.length === 0) {
-    return {
-      state: 'not_measurable',
-      display: '—',
-      reason:
-        questionLog == null || questionLog.every((q) => q.pauseSec === undefined)
-          ? 'This lesson was analyzed before pauses were timed.'
-          : 'No question here could be timed against the next thing you said.',
-      long,
-      timed: 0,
-    }
+/// Past this a question counts as still open: the read looks no further.
+export const HELD_OPEN_WINDOW_SEC = 120
+
+/// Asked within this of a question the teacher answered themselves, a
+/// thinking question is that same moment, and was never held open.
+const SAME_MOMENT_SEC = 4
+
+export type HeldOpenQuestion = {
+  timestampSec: number
+  text: string
+  /// Null: still open after HELD_OPEN_WINDOW_SEC.
+  sec: number | null
+  closedBy: string | null
+  how: 'confirmed' | 'gave_answer' | 'moved_on' | null
+}
+
+/// How long the teacher held thinking questions open: from the end of the
+/// question to the first line that confirmed an answer, gave it, or moved
+/// on. Only the questions the read counted as one of the six thinking kinds,
+/// and not one the teacher answered themselves or set as a task. The typical value is the median, with a question still open
+/// at the window counted at the window — so it can only understate.
+export function heldOpenMetric(
+  questionLog: AudioQuestionLogEntry[] | null,
+  selfAnswered: { timestampSec: number }[] = [],
+): ConfidentMetric & { typicalSec: number | null; long: number; questions: HeldOpenQuestion[]; tasks: HeldOpenQuestion[] } {
+  const none = { typicalSec: null, long: 0, questions: [] as HeldOpenQuestion[], tasks: [] as HeldOpenQuestion[] }
+  if (questionLog == null) return { state: 'not_measurable', display: '—', reason: 'Questions were not read for this lesson.', ...none }
+  const higher = questionLog.filter((q) => q.type === 'higher_order')
+  if (higher.length > 0 && higher.every((q) => q.heldOpen === undefined)) {
+    return { state: 'not_measurable', display: '—', reason: 'This lesson was analyzed before this was read.', ...none }
+  }
+  const asQuestion = (q: AudioQuestionLogEntry): HeldOpenQuestion => ({
+    timestampSec: q.timestampSec,
+    text: q.text,
+    sec: q.heldOpen!.outcome === 'open' ? null : q.heldOpen!.sec,
+    closedBy: q.heldOpen!.closedBy,
+    how: q.heldOpen!.how,
+  })
+  const answeredNear = (q: AudioQuestionLogEntry) =>
+    selfAnswered.some((s) => Math.abs(s.timestampSec - q.timestampSec) <= SAME_MOMENT_SEC)
+  const questions = higher
+    .filter((q) => (q.heldOpen?.outcome === 'closed' || q.heldOpen?.outcome === 'open') && !answeredNear(q))
+    .map(asQuestion)
+  // Set as work rather than held open for the room: listed, never timed.
+  const tasks = higher.filter((q) => q.heldOpen?.outcome === 'task').map(asQuestion)
+  if (questions.length === 0) {
+    return tasks.length > 0
+      ? { state: 'not_measurable', display: '—', reason: 'Your thinking questions this lesson were set as tasks.', ...none, tasks }
+      : { state: 'confirmed_none', display: '0', reason: 'No thinking questions this lesson.', ...none }
+  }
+  const secs = questions.map((q) => q.sec ?? HELD_OPEN_WINDOW_SEC).sort((a, b) => a - b)
+  const mid = Math.floor(secs.length / 2)
+  const median = secs.length % 2 ? secs[mid] : (secs[mid - 1] + secs[mid]) / 2
+  const typicalSec = Math.round(median)
+  const long = secs.filter((s) => s >= LONG_PAUSE_SEC).length
+  return {
+    state: 'measured',
+    display: typicalSec >= HELD_OPEN_WINDOW_SEC ? '2 min+' : `${typicalSec}s`,
+    typicalSec,
+    long,
+    questions,
+    tasks,
+  }
+}
+
+/// The held-open measure as one stat tile: the typical seconds, shown with an
+/// "s" unit, and the reason in place of a number when there is none — a
+/// lesson with no thinking questions has no typical time, not a time of 0.
+export const HELD_OPEN_LABEL = 'Thinking questions held open (typical)'
+export function heldOpenStat(
+  questionLog: AudioQuestionLogEntry[] | null,
+  selfAnswered: { timestampSec: number }[] = [],
+): ConfidentMetric {
+  const m = heldOpenMetric(questionLog, selfAnswered)
+  if (m.state !== 'measured' || m.typicalSec == null) {
+    return { state: 'not_measurable', display: '—', reason: m.reason }
   }
   return {
-    state: long === 0 ? 'confirmed_none' : 'measured',
-    display: `${long} of ${timed.length}`,
-    long,
-    timed: timed.length,
+    state: 'measured',
+    display: m.typicalSec >= HELD_OPEN_WINDOW_SEC ? `${HELD_OPEN_WINDOW_SEC}+` : String(m.typicalSec),
   }
 }

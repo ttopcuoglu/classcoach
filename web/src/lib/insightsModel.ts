@@ -17,7 +17,7 @@ import type {
   TranscriptSegment,
 } from './api'
 import { safeToQuote } from './quoteSafety.ts'
-import { pauseAfterQuestionsMetric } from './teacherVoice.ts'
+import { heldOpenMetric, HELD_OPEN_WINDOW_SEC, LONG_PAUSE_SEC, type HeldOpenQuestion } from './teacherVoice.ts'
 import { resolveVerbatim, teacherRuns } from './verbatim.ts'
 import { buildFlow, type FlowModel } from './talkFlow.ts'
 
@@ -75,6 +75,9 @@ export type Finding = {
   showAllLabel?: string
   /// Optional grouping for the full list, in display order.
   groups?: { label: string; items: Evidence[] }[]
+  /// The full list shows each line's tag and why — when the tag is the
+  /// measure itself ("Held 21s").
+  listDetail?: boolean
 }
 
 export type CoachText = { lead: string; more: string | null } | null
@@ -115,7 +118,13 @@ export type InsightsModel = {
     /// What the recording held, and its flow across the lesson.
     flow: FlowModel | null
   }
-  questioning: SectionModel & { squares: QuestionSquare[]; total: number | null }
+  questioning: SectionModel & {
+    squares: QuestionSquare[]
+    total: number | null
+    /// One bar per thinking question that could be timed, in lesson order.
+    heldOpen: HeldOpenQuestion[]
+    heldTypicalSec: number | null
+  }
   clarity: SectionModel & { directions: DirectionRow[] }
   climate: SectionModel
   content: SectionModel & {
@@ -282,6 +291,13 @@ const CONNECTION_LABEL = { prior: 'Prior learning', purpose: 'Why it matters', c
 /// same moment — the two come from different reads of the transcript.
 const SAME_MOMENT_SEC = 4
 
+/// What the closing line did, as the evidence list names it.
+const CLOSED_BY: Record<NonNullable<HeldOpenQuestion['how']>, string> = {
+  confirmed: 'Closed when you said:',
+  gave_answer: 'Closed when you gave the answer:',
+  moved_on: 'Closed when you moved on:',
+}
+
 export function buildInsightsModel(report: AudioSessionWithSegments): InsightsModel {
   const moves = report.teachingMoves ?? null
   const movesRan = moves != null
@@ -353,7 +369,24 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
   const checks = (report.cfuLog ?? []).map((c, i) =>
     evidenceFrom(`cfu-${i}`, { quote: c.text, timestampSec: c.timestampSec }, 'Spoken check', 'strength'),
   )
-  const pause = pauseAfterQuestionsMetric(report.questionLog)
+  const held = heldOpenMetric(report.questionLog, selfAnswered)
+  // Lessons transcribed with Deepgram's speaker confidence had the words it
+  // doubted were the teacher's left out of this read; older ones did not.
+  const voiceChecked = segments.some((s) => Array.isArray(s.speakerConfidence))
+  const taskEvidence = held.tasks.map((q, i) =>
+    evidenceFrom(`hot-${i}`, { quote: q.text, timestampSec: q.timestampSec }, 'Set as a task, not timed', 'neutral'),
+  )
+  const heldEvidence = held.questions.map((q, i) => {
+    const e = evidenceFrom(
+      `ho-${i}`,
+      { quote: q.text, timestampSec: q.timestampSec },
+      q.sec == null ? 'Still open after 2 min' : `Held ${Math.round(q.sec)}s`,
+      (q.sec ?? HELD_OPEN_WINDOW_SEC) >= LONG_PAUSE_SEC ? 'strength' : 'growth',
+    )
+    return q.closedBy && safeToQuote(q.closedBy)
+      ? { ...e, why: `“${q.closedBy}”`, whyLabel: CLOSED_BY[q.how ?? 'moved_on'] }
+      : e
+  })
   const questioningFindings: Finding[] = [
     {
       ...finding({
@@ -370,19 +403,31 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
         { label: `Recall · ${questionEvidence.length - higher.length}`, items: questionEvidence.filter((e) => e.polarity !== 'strength') },
       ],
     },
-    // The pause, then the questions with no pause at all — the two halves of
-    // one story, read together.
+    // How long thinking questions stayed open, then the questions that were
+    // never open at all — the two halves of one story, read together.
     {
-      key: 'pause_after_question',
-      label: 'Pause before you spoke again',
-      state: pause.state === 'measured' ? 'measured' : pause.state === 'confirmed_none' ? 'confirmed_none' : 'unavailable',
-      value: null,
-      caveat:
-        pause.timed > 0
-          ? `${pause.long} of ${pause.timed} had 3s+ · may include student answers`
-          : (pause.reason ?? 'Not timed for this lesson'),
-      evidence: [],
-      featured: null,
+      ...finding({
+        key: 'held_open',
+        label: 'How long you held thinking questions open',
+        state: held.state === 'measured' ? 'measured' : held.state === 'confirmed_none' ? 'confirmed_none' : 'unavailable',
+        value: held.state === 'measured' ? `Typically ${held.display}` : null,
+        caveat:
+          held.state === 'measured'
+            ? `${held.long} of ${held.questions.length} held ${LONG_PAUSE_SEC}s+ · until you confirmed an answer, gave it, or moved on` +
+              (taskEvidence.length > 0 ? ` · ${taskEvidence.length} set as a task, not counted` : '') +
+              (voiceChecked ? '' : ' · an estimate: recorded before voice checks, so a student line may be read as yours')
+            : undefined,
+        note: held.state === 'measured' ? undefined : held.reason,
+        evidence: [...heldEvidence, ...taskEvidence],
+        allNoun: 'thinking questions',
+      }),
+      // In lesson order, each with its seconds — the list is the chart's
+      // bars, then the questions set as tasks.
+      groups: [
+        { label: '', items: heldEvidence },
+        { label: `Set as a task · ${taskEvidence.length}`, items: taskEvidence },
+      ],
+      listDetail: true,
     },
     finding({
       key: 'self_answered',
@@ -416,6 +461,8 @@ export function buildInsightsModel(report: AudioSessionWithSegments): InsightsMo
     },
     squares,
     total,
+    heldOpen: held.questions,
+    heldTypicalSec: held.typicalSec,
   }
 
   // ---- 3. Clarity

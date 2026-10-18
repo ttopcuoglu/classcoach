@@ -226,8 +226,14 @@ export function ShowAllList({ finding }: { finding: Finding }) {
                 <div key={e.id} className="flex gap-2.5 border-b border-dashed border-hairline py-1.5 text-[13.5px]">
                   <span className="w-11 flex-none pt-0.5 font-mono text-[11.5px] text-forest">{mmss(e.timestampSec)}</span>
                   <span className="min-w-0">
+                    {finding.listDetail && <b className="mr-1.5 text-[12px] text-ink-soft">{e.tag}</b>}
                     {e.withheld ? <i className="text-ink-soft">wording withheld</i> : `“${e.quote}”`}{' '}
                     {e.elements && <ElementTags tags={e.elements} />}
+                    {finding.listDetail && e.why && (
+                      <span className="mt-0.5 block text-[12px] text-ink-soft">
+                        {e.whyLabel} {e.why}
+                      </span>
+                    )}
                   </span>
                 </div>
               ))}

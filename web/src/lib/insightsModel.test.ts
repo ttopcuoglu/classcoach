@@ -223,8 +223,78 @@ test('a line cut mid-clause is not featured while a complete one is available', 
   assert.equal(inv.featured?.full, 'Who else has a hook in mind?')
 })
 
-test('the pause sits right after higher-order questions, with answered-yourself beside it', () => {
+test('held open sits right after higher-order questions, with answered-yourself beside it', () => {
   const keys = buildInsightsModel(lesson({})).questioning.findings.map((f) => f.key)
-  assert.deepEqual(keys, ['higher_order_questions', 'pause_after_question', 'self_answered', 'spoken_checks'])
+  assert.deepEqual(keys, ['higher_order_questions', 'held_open', 'self_answered', 'spoken_checks'])
   assert.ok(!buildInsightsModel(lesson({})).talk.findings.some((f) => f.key === 'fast_stretches'), 'fast stretches are gone')
+})
+
+test('held open: thinking questions only, typical is the median, self-answered left out', () => {
+  const q = (timestampSec: number, type: 'recall' | 'higher_order', text: string, heldOpen?: object) => ({
+    timestampSec, type, waitTimeSec: null, text, followUps: [], ...(heldOpen ? { heldOpen } : {}),
+  })
+  const closed = (sec: number) => ({ outcome: 'closed', questionType: 'explain', sec, closedBy: 'Yes, exactly.', closedAtSec: 0, how: 'confirmed' })
+  const model = buildInsightsModel(
+    lesson({
+      segments: said(
+        [10, 'What year was it signed?'],
+        [40, 'Why would they sign it then?'],
+        [100, 'How does that compare to France?'],
+        [200, 'What would you have done?'],
+        [300, 'Why is it red? Because of the iron.'],
+      ),
+      questionLog: [
+        q(10, 'recall', 'What year was it signed?', closed(30)),
+        q(40, 'higher_order', 'Why would they sign it then?', closed(2)),
+        q(100, 'higher_order', 'How does that compare to France?', closed(9)),
+        q(200, 'higher_order', 'What would you have done?', { outcome: 'open', questionType: 'opinion', sec: null, closedBy: null, closedAtSec: null, how: null }),
+        q(300, 'higher_order', 'Why is it red?', closed(1)),
+      ] as never,
+      teachingMoves: { invitations: [], directions: [], selfAnswered: [{ quote: 'Why is it red? Because of the iron.', timestampSec: 300 }] } as never,
+    }),
+  )
+  const held = model.questioning.findings.find((f) => f.key === 'held_open')!
+  // 2, 9 and still-open (counted at 120): the recall question and the one
+  // answered in the same breath are not thinking questions held open.
+  assert.equal(held.state, 'measured')
+  assert.equal(held.value, 'Typically 9s')
+  assert.match(held.caveat ?? '', /^2 of 3 held 3s\+/)
+  assert.match(held.caveat ?? '', /an estimate: recorded before voice checks/, 'no speaker confidence on these lines')
+  assert.equal(model.questioning.heldOpen.length, 3)
+  assert.equal(held.evidence.find((e) => e.full === 'Why would they sign it then?')?.polarity, 'growth')
+  assert.equal(held.evidence.find((e) => e.full === 'What would you have done?')?.tag, 'Still open after 2 min')
+})
+
+test('held open: none and not-yet-read are told apart', () => {
+  const recallOnly = buildInsightsModel(
+    lesson({ questionLog: [{ timestampSec: 10, type: 'recall', waitTimeSec: null, text: 'What year?', followUps: [] }] }),
+  ).questioning.findings.find((f) => f.key === 'held_open')!
+  assert.equal(recallOnly.state, 'confirmed_none')
+  assert.equal(recallOnly.note, 'No thinking questions this lesson.')
+  const unread = buildInsightsModel(
+    lesson({ questionLog: [{ timestampSec: 10, type: 'higher_order', waitTimeSec: null, text: 'Why?', followUps: [] }] }),
+  ).questioning.findings.find((f) => f.key === 'held_open')!
+  assert.equal(unread.state, 'unavailable')
+  assert.equal(unread.note, 'This lesson was analyzed before this was read.')
+})
+
+test('held open: a question set as a task is listed but not timed', () => {
+  const ho = (outcome: string, sec: number | null) => ({ outcome, questionType: 'explain', sec, closedBy: null, closedAtSec: null, how: null })
+  const model = buildInsightsModel(
+    lesson({
+      segments: said([10, 'Why might a business have a code of conduct?'], [60, 'Why does that matter here?']).map((s) => ({
+        ...s,
+        speakerConfidence: [[s.text.split(' ').length, 0.8]] as [number, number][],
+      })),
+      questionLog: [
+        { timestampSec: 10, type: 'higher_order', waitTimeSec: null, text: 'Why might a business have a code of conduct?', followUps: [], heldOpen: ho('task', 11) },
+        { timestampSec: 60, type: 'higher_order', waitTimeSec: null, text: 'Why does that matter here?', followUps: [], heldOpen: ho('closed', 7) },
+      ] as never,
+    }),
+  )
+  const held = model.questioning.findings.find((f) => f.key === 'held_open')!
+  assert.equal(held.value, 'Typically 7s')
+  assert.match(held.caveat ?? '', /1 set as a task, not counted/)
+  assert.doesNotMatch(held.caveat ?? '', /estimate/, 'voice-checked lines are not an estimate')
+  assert.equal(model.questioning.heldOpen.length, 1, 'the task gets no bar')
 })

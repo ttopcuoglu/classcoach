@@ -12,7 +12,7 @@ import {
   type Accent,
 } from '../components/report'
 import { getAudioSession, type AudioEscalationRung, type AudioQuote, type AudioSessionWithSegments } from '../lib/api'
-import { LONG_PAUSE_SEC, pauseAfterQuestionsMetric, STUDENT_METRICS_ON, teacherVoiceView } from '../lib/teacherVoice'
+import { HELD_OPEN_LABEL, heldOpenStat, STUDENT_METRICS_ON, teacherVoiceView } from '../lib/teacherVoice'
 import { buildCorrectionBalance, coverageCaveatLine, DETECTION_CAVEAT } from '../lib/correctionBalance'
 import {
   formatRatio,
@@ -144,7 +144,7 @@ export default function AudioCoachingExport() {
       ? formatRatio(num('higherOrderQuestionCount'), session.questionCount)
       : null
   const waitTime = waitTimeMetric(session.avgWaitTimeSec, session.questionCount)
-  const pause = pauseAfterQuestionsMetric(session.questionLog)
+  const pause = heldOpenStat(session.questionLog, session.teachingMoves?.selfAnswered ?? [])
   const notYoursPct = teacherPct != null ? Math.max(0, Math.round((100 - teacherPct) * 10) / 10) : null
   const pace = speechRateMetric(rawNum('teacherWordsPerMinute'))
   const waitTime2 = waitTime2Metric(rawNum('waitTime2Sec'), rawNum('waitTime2SampleCount'))
@@ -228,7 +228,7 @@ export default function AudioCoachingExport() {
             <Stat label="You spoke" metric={teacherTalk} unit="%" accent={A.terracotta} />
             <Stat label="Not your speech" metric={getPresenceMetric(notYoursPct)} unit="%" accent={A.mint} />
             <Stat label="Questions" metric={questions} accent={A.mint} />
-            <Stat label={`Paused ${LONG_PAUSE_SEC}s+ after a question`} metric={pause} accent={A.forest} />
+            <Stat label={HELD_OPEN_LABEL} metric={pause} unit="s" accent={A.forest} />
           </div>
         )}
 
@@ -321,7 +321,7 @@ export default function AudioCoachingExport() {
           <p className="text-xs text-ink-soft">
             {STUDENT_METRICS_ON
               ? 'Limited by how much of the room the microphone reached — a quiet answer leaves nothing to measure.'
-              : 'Built from your voice only. The pause runs from the end of your question to the next thing you said, so it may include a student’s answer.'}
+              : 'Built from your voice only. A thinking question counts as held open until you confirmed an answer, gave it, or moved on.'}
           </p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {STUDENT_METRICS_ON ? (
@@ -333,7 +333,7 @@ export default function AudioCoachingExport() {
                 <Stat label="Follow-ups" metric={followUps} accent={A.mint} />
               </>
             ) : (
-              <Stat label={`Paused ${LONG_PAUSE_SEC}s+ before you spoke again`} metric={pause} accent={A.mint} />
+              <Stat label={HELD_OPEN_LABEL} metric={pause} unit="s" accent={A.mint} />
             )}
             {specificShare && <Stat label="Feedback that was specific" metric={specificShare} accent={A.mint} />}
             <Stat label="Feedback moments" metric={feedbackMoments} accent={A.mint} />

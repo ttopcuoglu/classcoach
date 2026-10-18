@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { HATCH_STYLE } from '../../lib/chartPatterns'
 import { mmss, type DirectionRow, type QuestionSquare, type TimelineModel } from '../../lib/insightsModel'
+import { HELD_OPEN_WINDOW_SEC, LONG_PAUSE_SEC, type HeldOpenQuestion } from '../../lib/teacherVoice'
 import type { FlowKind, FlowModel } from '../../lib/talkFlow'
 import { HatchedSwatch } from '../unavailableChart'
 import { FLOW_COLOR, FLOW_LABEL } from './flowColors'
@@ -136,6 +137,63 @@ export function QuestionSquares({ squares }: { squares: QuestionSquare[] }) {
         <span><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm bg-[#B8C9BC] align-[-1px]" />Recall {squares.length - higher}</span>
         <span><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm bg-forest align-[-1px]" />Higher-order {higher}</span>
         <span><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full border-[3px] border-[#B8C9BC] bg-white align-[-1px]" />You answered it {answered}</span>
+      </Key>
+    </ChartFrame>
+  )
+}
+
+const HELD_CHART_PX = 112
+/// The scale tops out at the longest question that was closed, rounded up
+/// to one of these — so a single two-minute question does not flatten the
+/// rest. Anything past the top runs to it and says how long it was.
+const HELD_TOPS = [10, 15, 20, 30, 45, 60]
+
+/// One bar per thinking question, in lesson order: how long it stayed open.
+/// A question still open at the window is drawn to the top and hatched — the
+/// read stopped there, the question did not.
+export function HeldOpenBars({ questions, typicalSec }: { questions: HeldOpenQuestion[]; typicalSec: number | null }) {
+  const closed = questions.map((q) => q.sec).filter((s): s is number => s != null)
+  const top = HELD_TOPS.find((t) => t >= Math.max(0, ...closed)) ?? HELD_TOPS[HELD_TOPS.length - 1]
+  const y = (sec: number) => (Math.min(sec, top) / top) * HELD_CHART_PX
+  const line = (sec: number, label: string, cls: string, side: 'left' | 'right') => (
+    <div className={`pointer-events-none absolute inset-x-0 border-t border-dashed ${cls}`} style={{ bottom: y(sec) }}>
+      <span className={`absolute ${side === 'left' ? '-top-[7px] left-0 w-7 text-right pr-1.5' : '-top-[15px] right-0 pl-1'} bg-cream text-[10.5px] font-bold leading-none`}>{label}</span>
+    </div>
+  )
+  const typicalShown = typicalSec != null && typicalSec <= top
+  return (
+    <ChartFrame
+      title={`Your ${questions.length} thinking question${questions.length === 1 ? '' : 's'}, in order`}
+      aside={`seconds held open · scale to ${top}s`}
+    >
+      <div className="relative flex items-end gap-1.5 pl-8 pt-4" style={{ height: HELD_CHART_PX + 16 }}>
+        {questions.map((q, i) => {
+          const open = q.sec == null
+          const over = open || q.sec! > top
+          return (
+            <div key={`${q.timestampSec}-${i}`} className="relative flex min-w-[6px] max-w-[36px] flex-1 flex-col items-center justify-end">
+              {over && (
+                <span className="absolute -top-4 whitespace-nowrap text-[10px] font-bold text-ink-soft">
+                  {open ? '2 min+' : `${Math.round(q.sec!)}s`}
+                </span>
+              )}
+              <i
+                title={`${mmss(q.timestampSec)} · ${open ? 'still open after 2 min' : `held ${Math.round(q.sec!)}s`} · ${q.text}`}
+                className="block w-full rounded-t-[4px] bg-forest"
+                style={{ height: Math.max(2, open ? HELD_CHART_PX : y(q.sec!)), ...(open ? HATCH_STYLE : {}) }}
+              />
+            </div>
+          )
+        })}
+        {line(LONG_PAUSE_SEC, `${LONG_PAUSE_SEC}s`, 'border-ink-soft/60 text-ink-soft', 'left')}
+        {typicalShown && line(typicalSec, `typical ${typicalSec}s`, 'border-terracotta text-terracotta-600', 'right')}
+      </div>
+      <Key>
+        <span><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm bg-forest align-[-1px]" />Held until you confirmed, gave the answer, or moved on</span>
+        {questions.some((q) => q.sec == null) && (
+          <span><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm align-[-1px]" style={HATCH_STYLE} />Still open after 2 min</span>
+        )}
+        {typicalSec != null && !typicalShown && <span>Typical: {typicalSec >= HELD_OPEN_WINDOW_SEC ? '2 min+' : `${typicalSec}s`}, past the top of the scale</span>}
       </Key>
     </ChartFrame>
   )

@@ -1,3 +1,4 @@
+import { readHeldOpen } from '../lib/heldOpen.ts'
 import { Router } from 'express'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
@@ -5,7 +6,7 @@ import { analyzeTranscript, buildContentExhibits, detectLessonContent, type Ques
 import { enrichClassroomMoves } from '../lib/classroomMoves.ts'
 import { readEscalation } from '../lib/escalation.ts'
 import { readTeachingMoves } from '../lib/teachingMoves.ts'
-import { LONG_PAUSE_SEC, pauseAfterQuestions, STUDENT_METRICS_ON } from '../lib/teacherVoice.ts'
+import { heldOpenSummary, LONG_PAUSE_SEC, STUDENT_METRICS_ON } from '../lib/teacherVoice.ts'
 import { parseQuoteFlag } from '../lib/quoteFlags.ts'
 import { parseCheckIn, parseNextFocus, teacherKey, type LessonFocus } from '../lib/lessonFocus.ts'
 import {
@@ -960,7 +961,13 @@ audioSessionsRouter.post('/:id/tag-speaker', async (req, res) => {
       where: { sessionId: session.id },
       orderBy: { startSec: 'asc' },
     })
-  ).map((s) => ({ speakerLabel: s.speakerLabel, startSec: s.startSec, endSec: s.endSec, text: s.text }))
+  ).map((s) => ({
+    speakerLabel: s.speakerLabel,
+    startSec: s.startSec,
+    endSec: s.endSec,
+    text: s.text,
+    speakerConfidence: s.speakerConfidence,
+  }))
 
   // Clients that poll say so. The ones that don't are builds already in
   // teachers' hands, which wait on the request exactly as they always have.
@@ -1022,11 +1029,17 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
   // student-talk number is a duration, and both rooms produce the same
   // durations. Best-effort like the rest: null means not measured, and the
   // report says so rather than filling it in.
-  const studentTalkFocus = await readStudentTalkFocus(segments, {
-    objective: lessonContent.statedObjective?.quote ?? null,
-    summary: lessonContent.summary ?? null,
-    subject: lessonContent.subject ?? null,
-  })
+  // How long each thinking question stayed open needs the rebuilt question
+  // log, so it rides along with this one rather than the reads above. Null
+  // means the read failed and the log stands as it was.
+  const [studentTalkFocus, heldOpenLog] = await Promise.all([
+    readStudentTalkFocus(segments, {
+      objective: lessonContent.statedObjective?.quote ?? null,
+      summary: lessonContent.summary ?? null,
+      subject: lessonContent.subject ?? null,
+    }),
+    readHeldOpen(analysis.questionLog, segments),
+  ])
 
   // Notes are no longer auto-generated from raw metrics here — they're
   // populated later from the Reflect tab's actual coaching conversation
@@ -1067,7 +1080,7 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
       },
       highlights: analysis.highlights,
       phases: analysis.phases,
-      questionLog: analysis.questionLog,
+      questionLog: (heldOpenLog ?? analysis.questionLog) as unknown as Prisma.InputJsonValue,
       cfuLog: analysis.cfuLog,
       feedbackLog: analysis.feedbackLog,
       directiveLog: analysis.directiveLog,
@@ -1789,10 +1802,9 @@ export type ClassSummaryMetrics = {
   connections?: string[]
   vocabulary?: string[]
   subject?: string | null
-  /// Questions with a long pause before the teacher spoke again, out of those
-  /// that could be timed (lib/teacherVoice.ts). The teacher-voice stand-in
-  /// for wait time while student metrics are off.
-  pauseAfterQuestions?: { long: number; timed: number }
+  /// How long thinking questions stayed open (lib/teacherVoice.ts). The
+  /// teacher-voice stand-in for wait time while student metrics are off.
+  heldOpen?: { typicalSec: number; long: number; questions: number } | null
 }
 
 /// The talk note while student metrics are off (lib/teacherVoice.ts). The
@@ -1843,9 +1855,9 @@ ${
 ${
         STUDENT_METRICS_ON
           ? `- average wait time after a question: ${metrics.avgWaitTimeSec ?? 'not measured'}s`
-          : metrics.pauseAfterQuestions && metrics.pauseAfterQuestions.timed > 0
-            ? `- questions followed by ${LONG_PAUSE_SEC} seconds or more before the teacher spoke again: ${metrics.pauseAfterQuestions.long} of ${metrics.pauseAfterQuestions.timed} that could be timed (a count — never a percentage). This pause runs to the teacher's next line and may contain a student's answer, so never call it wait time or think time.`
-            : '- pause after a question: not measured'
+          : metrics.heldOpen
+            ? `- how long the teacher held thinking (higher-order) questions open, until they confirmed an answer, gave it, or moved on: typically ${metrics.heldOpen.typicalSec >= 120 ? 'more than two minutes' : `${metrics.heldOpen.typicalSec} seconds`}; ${metrics.heldOpen.long} of ${metrics.heldOpen.questions} were held ${LONG_PAUSE_SEC} seconds or more (a count — never a percentage). Students may have answered inside that time, so never call it wait time or silence.`
+            : '- how long thinking questions were held open: not measured'
       }
 - check-for-understanding moves heard: ${metrics.cfuCount ?? 'not measured'}`
     : ''
@@ -2254,7 +2266,10 @@ export async function requestClassSummaryText(session: ClassSummarySource, segme
       waitTime2SampleCount: metricNumber(session.metricsDetail, 'waitTime2SampleCount'),
       firstWordSec: metricNumber(session.metricsDetail, 'firstWordSec'),
       studentTalkFocus: session.studentTalkFocus ?? null,
-      pauseAfterQuestions: pauseAfterQuestions(Array.isArray(session.questionLog) ? (session.questionLog as QuestionLogEntry[]) : null),
+      heldOpen: heldOpenSummary(
+        Array.isArray(session.questionLog) ? (session.questionLog as QuestionLogEntry[]) : null,
+        (session.teachingMoves as { selfAnswered?: { timestampSec: number }[] } | null)?.selfAnswered ?? [],
+      ),
       cfuMoments: ((session.cfuLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 12),
       feedbackMoments: ((session.feedbackLog ?? []) as { kind: string; timestampSec: number; text: string }[]).slice(0, 12),
       directionMoments: ((session.directiveLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 10),

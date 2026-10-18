@@ -749,6 +749,19 @@ export type AudioQuestionLogEntry = {
   pauseSec?: number | null
   text: string
   followUps: { timestampSec: number; text: string }[]
+  /// Higher-order questions only: how long the question stayed open until
+  /// the teacher confirmed an answer, gave it, or moved on. `sec` is null
+  /// when it was still open two minutes on. Absent where it was not read.
+  heldOpen?: {
+    /// closed / open count toward the typical time; task (set as work),
+    /// self_answered and not_thinking (not one of the six kinds) do not.
+    outcome: 'closed' | 'open' | 'task' | 'self_answered' | 'not_thinking'
+    questionType: 'explain' | 'justify' | 'compare' | 'evaluate' | 'predict' | 'opinion' | null
+    sec: number | null
+    closedBy: string | null
+    closedAtSec: number | null
+    how: 'confirmed' | 'gave_answer' | 'moved_on' | null
+  }
 }
 export type AudioCfuLogEntry = { timestampSec: number; text: string; whatItChecked: string }
 export type AudioFeedbackLogEntry = { timestampSec: number; kind: 'generic' | 'specific'; text: string }
@@ -1017,6 +1030,9 @@ export type TranscriptSegment = {
   startSec: number
   endSec: number
   text: string
+  /// Deepgram's per-word speaker confidence as [words, confidence] runs.
+  /// Null on lines transcribed before it was kept (2026-10-18).
+  speakerConfidence?: [number, number][] | null
 }
 
 // Worked out by the server from the loudness envelope, for recordings that

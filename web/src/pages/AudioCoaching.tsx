@@ -84,8 +84,9 @@ import { FocusCheckInHistory } from '../components/insights/FocusCards'
 import type { SectionKey as InsightsV3Section } from '../lib/insightsModel'
 import {
   FOLLOW_UPS_OFF,
-  LONG_PAUSE_SEC,
-  pauseAfterQuestionsMetric,
+  heldOpenMetric,
+  heldOpenStat,
+  HELD_OPEN_LABEL,
   STUDENT_METRICS_ON,
   teacherVoiceView,
 } from '../lib/teacherVoice'
@@ -1482,9 +1483,9 @@ function buildQuestioningInsight(
   if (!STUDENT_METRICS_ON) {
     // The same count the stat shows, and no reading of it: the pause runs to
     // your next line and may hold a student's answer.
-    const pause = pauseAfterQuestionsMetric(session.questionLog)
-    if (pause.timed > 0) {
-      sentence += ` ${pause.long} of the ${pause.timed} questions that could be timed had ${LONG_PAUSE_SEC} seconds or more before you spoke again.`
+    const held = heldOpenMetric(session.questionLog, session.teachingMoves?.selfAnswered ?? [])
+    if (held.state === 'measured' && held.typicalSec != null) {
+      sentence += ` Your thinking questions typically stayed open ${held.typicalSec >= 120 ? 'past two minutes' : `${held.typicalSec} seconds`} before you confirmed an answer, gave it, or moved on.`
     }
     return sentence
   }
@@ -2000,7 +2001,7 @@ function QuestionsOpenedCard({
 }: {
   questionsMetric: ReturnType<typeof getCountMetric>
   /// Follow-ups, or the pause after a question while student metrics are off.
-  second: { metric: ConfidentMetric; label: string }
+  second: { metric: ConfidentMetric; label: string; unit?: string }
   onExplore: () => void
 }) {
   return (
@@ -2012,7 +2013,10 @@ function QuestionsOpenedCard({
           <p className="text-xs text-ink-soft">Questions detected</p>
         </div>
         <div>
-          <p className="text-2xl font-semibold text-ink">{second.metric.display}</p>
+          <p className="text-2xl font-semibold text-ink">
+            {second.metric.display}
+            {second.unit && isConfidentState(second.metric.state) ? second.unit : ''}
+          </p>
           <p className="text-xs text-ink-soft">{second.label}</p>
         </div>
       </div>
@@ -2320,7 +2324,7 @@ function ReportPanel({
   // The teacher-voice stand-in for wait time, and what a "wait time" focus
   // reads while student metrics are off. One value, shown the same way on
   // Summary, Insights and the export.
-  const pauseMetric = pauseAfterQuestionsMetric(report.questionLog)
+  const pauseMetric = heldOpenStat(report.questionLog, report.teachingMoves?.selfAnswered ?? [])
   const waitTimeMetric = STUDENT_METRICS_ON
     ? waitTimeMetricOf(report.avgWaitTimeSec, report.questionCount)
     : pauseMetric
@@ -2867,7 +2871,7 @@ function SummaryTab({
               accent={ACCENTS.mint}
             />
             <SummaryStat label="Questions" metric={questionsMetric} accent={ACCENTS.mint} />
-            <SummaryStat label={`Paused ${LONG_PAUSE_SEC}s+ after a question`} metric={pauseMetric} accent={ACCENTS.forest} />
+            <SummaryStat label={HELD_OPEN_LABEL} metric={pauseMetric} unit="s" accent={ACCENTS.forest} />
           </div>
         ) : (
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -2969,7 +2973,7 @@ function SummaryTab({
             second={
               STUDENT_METRICS_ON
                 ? { metric: followUpMetric, label: 'Follow-up questions' }
-                : { metric: pauseMetric, label: `Paused ${LONG_PAUSE_SEC}s+ before you spoke again` }
+                : { metric: pauseMetric, label: HELD_OPEN_LABEL, unit: 's' }
             }
             onExplore={() => onNavigateInsights('questions')}
           />

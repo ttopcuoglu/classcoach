@@ -5,6 +5,7 @@
 // Phrase lists are exported so they stay easy to tune without touching the
 // analysis logic itself.
 
+import type { HeldOpen } from './heldOpen.ts'
 import { longestTeacherStretch } from './teacherStretch.ts'
 
 export type Segment = {
@@ -12,6 +13,9 @@ export type Segment = {
   startSec: number
   endSec: number
   text: string
+  /// Deepgram's per-word speaker confidence (lib/deepgram.ts). Absent on
+  /// lines transcribed before it was kept.
+  speakerConfidence?: unknown
 }
 
 export type Highlight = { label: string; timestampSec: number; excerpt: string; durationSec?: number }
@@ -39,6 +43,10 @@ export type QuestionLogEntry = {
   studentAudibleInPause: boolean
   text: string
   followUps: { timestampSec: number; text: string }[]
+  /// Higher-order questions only: how long the question stayed open until
+  /// the teacher confirmed an answer, gave it, or moved on (lib/heldOpen.ts).
+  /// Absent where it was not read.
+  heldOpen?: HeldOpen
 }
 // whatItChecked is a short, phrase-based gloss (see CFU_PHRASE_DESCRIPTIONS)
 // — never a claim about the specific content of what was checked, since

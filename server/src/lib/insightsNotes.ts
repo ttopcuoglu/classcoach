@@ -167,9 +167,12 @@ const BANNED = /\b(poor|poorly|weak|weakness|failed|fail(?:s|ing)?|should have|i
 /// never in a note about this lesson.
 const STUDENT_STATE =
   /\bstudents?\s+(?:were|was|felt|feel|seemed|seem|understood|understand|engaged|enjoyed|learned|got it|grasped|loved|were confused|were bored)\b/i
-/// What this report does not measure, so a note may not speak to it.
+/// What this report does not measure, so a note may not speak to it. How
+/// long a thinking QUESTION stayed open is measured (lib/heldOpen.ts), and a
+/// note may cite it from that finding; the floor staying open for students
+/// is not.
 const UNMEASURED =
-  /\b(?:student (?:voice|talk|participation)|room (?:in the lesson )?for students?|students? (?:had|got) (?:room|space|the floor)|(?:floor|question) stayed open|stayed open|landed with)\b/i
+  /\b(?:student (?:voice|talk|participation)|room (?:in the lesson )?for students?|students? (?:had|got) (?:room|space|the floor)|floor stayed open|landed with)\b/i
 const RUBRIC = /\b(?:domain|component)\s+\d|\b[1-4][a-f]\b/i
 
 function words(text: string): number {
