@@ -1,6 +1,7 @@
 import { cloneElement, createContext, isValidElement, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, MicIcon, PlayIcon } from '../components/icons'
+import BroughtStudentsIn from '../components/BroughtStudentsIn'
 import TalkFlowStrip, { FLOW_COLOR, type ShareSlice } from '../components/TalkFlowStrip'
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
@@ -1250,11 +1251,11 @@ const INSIGHTS_SECTION_META: Record<InsightsSection, { n: number; blurb: string;
 // colour without every Insights tab having to pass it down by hand.
 const SectionAccentContext = createContext<Accent>(ACCENTS.mint)
 
-function InsightsSectionHeader({ section }: { section: InsightsSection }) {
+function InsightsSectionHeader({ section, inCard }: { section: InsightsSection; inCard?: boolean }) {
   const meta = INSIGHTS_SECTION_META[section]
   const label = INSIGHTS_SECTIONS.find((s) => s.key === section)?.label ?? ''
   return (
-    <div className="mb-6 flex items-center gap-4">
+    <div className={`${inCard ? '' : 'mb-6 '}flex items-center gap-4`}>
       <span
         className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${meta.accent.band} font-heading text-xl font-bold text-cream`}
       >
@@ -1283,27 +1284,38 @@ function SummaryStat({ label, metric, unit, accent }: { label: string; metric: C
   )
 }
 
-function insightsNavButtonClass(active: boolean) {
-  return `rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
-    active ? 'bg-cream-card font-semibold text-forest shadow-sm' : 'text-ink-soft hover:bg-cream-card/60 hover:text-ink'
-  }`
+/// The sections as pills across the top; each opens as its own page.
+const INSIGHTS_PILL_LABEL: Record<InsightsSection, string> = {
+  talk: 'Talk & Participation',
+  questions: 'Questioning',
+  content: 'Clarity',
+  routines: 'Climate',
 }
 
 function InsightsNav({ section, onSelect }: { section: InsightsSection; onSelect: (s: InsightsSection) => void }) {
   return (
-    <nav className="flex shrink-0 flex-col gap-0.5 lg:w-52">
-      {INSIGHTS_SECTIONS.map(({ key, label }) => (
-        <button key={key} type="button" onClick={() => onSelect(key)} className={insightsNavButtonClass(section === key)}>
-          <span className="flex items-center gap-2.5">
+    <nav className="flex flex-wrap gap-2" aria-label="Insights sections">
+      {INSIGHTS_SECTIONS.map(({ key }) => {
+        const on = section === key
+        return (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onSelect(key)}
+            aria-current={on ? 'page' : undefined}
+            className={`flex items-center gap-2 rounded-full border bg-cream-card py-1.5 pl-1.5 pr-3.5 text-sm transition-colors ${
+              on ? 'border-forest font-semibold text-forest' : 'border-hairline text-ink hover:border-forest/40'
+            }`}
+          >
             <span
-              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${INSIGHTS_SECTION_META[key].accent.band} text-xs font-bold text-cream`}
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${INSIGHTS_SECTION_META[key].accent.band} text-xs font-bold text-cream`}
             >
               {INSIGHTS_SECTION_META[key].n}
             </span>
-            {label}
-          </span>
-        </button>
-      ))}
+            {INSIGHTS_PILL_LABEL[key] ?? key}
+          </button>
+        )
+      })}
     </nav>
   )
 }
@@ -2774,9 +2786,9 @@ function ReportPanel({
       )}
 
       {tab === 'insights' && (
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+        <div className="flex flex-col gap-5">
           <InsightsNav section={insightsSection} onSelect={setInsightsSection} />
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0">
             {/* Heading first, always. The two lenses used to sit above it, so
                 choosing "Talk & Participation" showed two unrelated cards and
                 then, fourth down the page, the heading for the thing you had
@@ -5443,9 +5455,6 @@ function TalkParticipationTab({
   const nonSpeech = nonSpeechSplit(session.metricsDetail, session.durationSec)
   const moves = session.teachingMoves
   const p = moves?.participation
-  const detail = (session.metricsDetail ?? {}) as Record<string, unknown>
-  const heard = typeof detail.answersHeardCount === 'number' ? detail.answersHeardCount : null
-  const followed = typeof detail.answersFollowedUpCount === 'number' ? detail.answersFollowedUpCount : null
   const invitations = (p?.invitations ?? moves?.invitations ?? []).map((q) => ({
     ...q,
     tag: 'format' in q ? (INVITE_FORMAT_LABEL[(q as { format: keyof typeof INVITE_FORMAT_LABEL }).format] ?? 'Opened the floor') : 'Opened the floor',
@@ -5459,7 +5468,7 @@ function TalkParticipationTab({
 
   return (
     <div className="flex flex-col gap-5 rounded-3xl border border-hairline bg-cream-card p-5 sm:p-6">
-      <InsightsSectionHeader section="talk" />
+      <InsightsSectionHeader section="talk" inCard />
 
       {talkInsight && <CoachNoteCard text={talkInsight} />}
 
@@ -5470,34 +5479,25 @@ function TalkParticipationTab({
           segments={session.segments}
           durationSec={session.durationSec}
           seconds={session.soundTimeline?.seconds ?? null}
-          invitations={invitations.map((q) => q.timestampSec)}
-          checks={(session.cfuLog ?? []).map((c) => c.timestampSec)}
+          marks={[
+            ...invitations.map((q) => ({ t: q.timestampSec, kind: 'invite' as const })),
+            ...followUps.map((q) => ({ t: q.timestampSec, kind: 'probe' as const })),
+            ...widening.map((q) => ({ t: q.timestampSec, kind: 'voices' as const })),
+            ...(session.cfuLog ?? []).map((c) => ({ t: c.timestampSec, kind: 'check' as const })),
+          ]}
           shares={recordingShares(session.teacherTalkPct, session.studentTalkPct, nonSpeech)}
         />
       </div>
 
-      {/* The evidence, one finding at a time: a count, one line shown, the
-          rest behind a button. Whether anyone took the floor is not something
-          a recording from the front of the room can show. */}
-      <FindingRow title="Invitations to participate" count={String(invitations.length)} rows={invitations} accent="#8B7BC2" noun="invitations" />
-      <FindingRow
-        title="Follow-ups that pushed students further"
-        count={String(followUps.length)}
-        caption={
-          heard != null && followed != null && heard >= 3
-            ? `You followed up on ${followed} of the ${heard} student answers the recording could hear.`
-            : undefined
-        }
-        rows={followUps}
-        accent="#3F7D58"
-        noun="follow-ups"
-      />
-      {widening.length > 0 && (
-        <FindingRow title="Reaching beyond volunteers" count={String(widening.length)} rows={widening} accent="#B88A1F" noun="moments" />
-      )}
+      {/* How you brought students in: your moves and the answers heard, on
+          one timeline, with every moment behind it. */}
+      <div className="border-t border-dashed border-hairline pt-5">
+        <BroughtStudentsIn session={session} />
+      </div>
+
       {stretch && <LongestStretchCard stretch={stretch} read={moves?.stretch ?? null} segments={session.segments} />}
 
-      <SectionNextStep text={session.nextSteps?.talk} />
+      <KeepAndTry keep={keepFrom(followUps, widening, invitations)} tryNext={session.nextSteps?.talk} />
 
       {/* The two lenses on this section, and the conversation about it. */}
       <div className="flex flex-col gap-3 border-t border-hairline pt-4">
@@ -5582,53 +5582,48 @@ function CoachNoteCard({ text }: { text: string }) {
   )
 }
 
-/// One finding: a title and its count, the first line shown, the rest behind
-/// a button.
-function FindingRow({
-  title,
-  count,
-  caption,
-  rows,
-  accent,
-  noun,
-}: {
-  title: string
-  count: string
-  caption?: string
-  rows: { quote: string; timestampSec: number; tag: string }[]
-  accent: string
-  noun: string
-}) {
-  const [open, setOpen] = useState(false)
-  const shown = open ? rows : rows.slice(0, 1)
+/// What to keep: one of your own moves from this lesson, said plainly — a
+/// follow-up first (asking for reasoning or building on a classmate before a
+/// plain probe), then reaching beyond volunteers, then an invitation. Never a
+/// claim about what it did for students; the recording cannot show that.
+type KeepLine = { text: string; quote: string; timestampSec: number }
+function keepFrom(
+  followUps: { quote: string; timestampSec: number; tag: string }[],
+  widening: { quote: string; timestampSec: number }[],
+  invitations: { quote: string; timestampSec: number }[],
+): KeepLine | null {
+  const byTag = (tag: string) => followUps.find((f) => f.tag === tag)
+  const pick =
+    (byTag('Building on a classmate') && { line: byTag('Building on a classmate')!, text: 'You asked students to build on each other’s ideas.' }) ||
+    (byTag('Asking for reasoning') && { line: byTag('Asking for reasoning')!, text: 'You asked a student for their reasoning, not just the answer.' }) ||
+    (followUps[0] && { line: followUps[0], text: 'You asked a student to say more.' }) ||
+    (widening[0] && { line: widening[0], text: 'You reached past the usual volunteers.' }) ||
+    (invitations[0] && { line: invitations[0], text: 'You opened the floor to the room.' }) ||
+    null
+  return pick ? { text: pick.text, quote: pick.line.quote, timestampSec: pick.line.timestampSec } : null
+}
+
+/// Keep and Try next time, side by side; one takes the full width when the
+/// other has nothing to say.
+function KeepAndTry({ keep, tryNext }: { keep: KeepLine | null; tryNext: string | null | undefined }) {
+  const tryText = tryNext?.trim()
+  if (!keep && !tryText) return null
   return (
-    <div className="flex flex-col gap-2 border-t border-dashed border-hairline pt-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="font-heading text-base font-bold text-forest">{title}</p>
-        <span className="font-heading text-base font-bold text-forest">{count}</span>
-      </div>
-      {caption && <p className="-mt-1 text-xs text-ink-soft">{caption}</p>}
-      {rows.length === 0 ? (
-        <p className="text-sm text-ink-soft">None heard in this lesson.</p>
-      ) : (
-        shown.map((r, i) => (
-          <div key={`${r.timestampSec}-${i}`} className="rounded-r-xl border-l-4 bg-cream px-3.5 py-2.5" style={{ borderColor: accent }}>
-            <div className="flex justify-between text-xs font-semibold text-ink-soft">
-              <span>{r.tag}</span>
-              <span className="font-mono">{formatTime(r.timestampSec)}</span>
-            </div>
-            <p className="mt-1 text-sm text-ink">“{r.quote}”</p>
-          </div>
-        ))
+    <div className={`grid gap-3 ${keep && tryText ? 'sm:grid-cols-2' : ''}`}>
+      {keep && (
+        <div className="rounded-2xl bg-mint-tint/70 p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-forest">Keep</p>
+          <p className="mt-1 text-sm text-ink">{keep.text}</p>
+          <p className="mt-1.5 text-sm text-ink-soft">
+            “{keep.quote}” <span className="font-mono text-xs">{formatTime(keep.timestampSec)}</span>
+          </p>
+        </div>
       )}
-      {rows.length > 1 && (
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="self-start rounded-xl border border-[#EBC9B6] bg-cream-card px-3 py-1 text-sm font-semibold text-terracotta-600"
-        >
-          {open ? 'Show fewer' : rows.length === 2 ? `Show both ${noun}` : `Show all ${rows.length} ${noun}`}
-        </button>
+      {tryText && (
+        <div className="rounded-2xl bg-peach-tint p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-terracotta-600">Try next time</p>
+          <p className="mt-1 text-sm text-ink">{tryText}</p>
+        </div>
       )}
     </div>
   )

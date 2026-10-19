@@ -40,20 +40,38 @@ function mmss(sec: number): string {
 
 export type ShareSlice = { kind: FlowKind; pct: number }
 
+/// What the strip marks above itself: the three ways you brought students in,
+/// and checks for understanding — the same shapes and colours as "How you
+/// brought students in" below it.
+export type StripMark = { t: number; kind: 'invite' | 'probe' | 'voices' | 'check' }
+const MARK: Record<StripMark['kind'], { label: string; color: string }> = {
+  invite: { label: 'Invitations to participate', color: '#B8674A' },
+  probe: { label: 'Follow-ups that pushed students further', color: '#3F7D58' },
+  voices: { label: 'Reaching beyond volunteers', color: '#B88A1F' },
+  check: { label: 'Check for understanding', color: 'var(--color-forest)' },
+}
+
+function MarkShape({ kind, x, y, size }: { kind: StripMark['kind']; x: number; y: number; size: number }) {
+  const h = size / 2
+  const c = MARK[kind].color
+  if (kind === 'invite') return <path d={`M ${x} ${y - h} L ${x + h} ${y + h} L ${x - h} ${y + h} Z`} fill={c} />
+  if (kind === 'probe') return <circle cx={x} cy={y} r={h} fill={c} />
+  if (kind === 'voices') return <path d={`M ${x} ${y - h} L ${x + h} ${y} L ${x} ${y + h} L ${x - h} ${y} Z`} fill={c} />
+  return <circle cx={x} cy={y} r={h - 1} fill="none" stroke={c} strokeWidth="2" />
+}
+
 export default function TalkFlowStrip({
   segments,
   durationSec,
   seconds,
-  invitations,
-  checks,
+  marks,
   shares,
 }: {
   segments: TranscriptSegment[]
   durationSec: number | null
   /// The loudness envelope, one character a second; absent on older recordings.
   seconds?: string | null
-  invitations: number[]
-  checks: number[]
+  marks: StripMark[]
   /// The whole recording's split, as the report states it.
   shares: ShareSlice[]
 }) {
@@ -108,15 +126,11 @@ export default function TalkFlowStrip({
             onMouseEnter={() => setHover(i)}
           />
         ))}
-        {invitations.map((t, i) => (
-          <path key={`i${i}`} d={`M ${x(t)} 4 l 5 9 l -10 0 z`} fill="var(--color-forest)">
-            <title>{`${mmss(t)} · you opened the floor`}</title>
-          </path>
-        ))}
-        {checks.map((t, i) => (
-          <circle key={`c${i}`} cx={x(t)} cy="9" r="4.5" fill="none" stroke="var(--color-forest)" strokeWidth="2">
-            <title>{`${mmss(t)} · a check for understanding`}</title>
-          </circle>
+        {marks.map((m, i) => (
+          <g key={i}>
+            <title>{`${mmss(m.t)} · ${MARK[m.kind].label.toLowerCase()}`}</title>
+            <MarkShape kind={m.kind} x={x(m.t)} y={9} size={10} />
+          </g>
         ))}
         <text x="0" y="76" fontSize="11" fill="var(--color-ink-soft)">0:00</text>
         <text x={W} y="76" fontSize="11" textAnchor="end" fill="var(--color-ink-soft)">{mmss(duration)}</text>
@@ -125,16 +139,16 @@ export default function TalkFlowStrip({
         {hover != null && `${mmss(hover * flow.binSec)}–${mmss((hover + 1) * flow.binSec)} · mostly ${label(flow.bins[hover]).toLowerCase()}`}
       </p>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-soft">
-        {invitations.length > 0 && (
-          <span className="flex items-center gap-1.5">
-            <svg width="10" height="10" aria-hidden="true"><path d="M 5 0 l 5 9 l -10 0 z" fill="var(--color-forest)" /></svg>You opened the floor
-          </span>
-        )}
-        {checks.length > 0 && (
-          <span className="flex items-center gap-1.5">
-            <svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="3.5" fill="none" stroke="var(--color-forest)" strokeWidth="2" /></svg>Check for understanding
-          </span>
-        )}
+        {(['invite', 'probe', 'voices', 'check'] as const)
+          .filter((k) => marks.some((m) => m.kind === k))
+          .map((k) => (
+            <span key={k} className="flex items-center gap-1.5">
+              <svg width="12" height="12" aria-hidden="true">
+                <MarkShape kind={k} x={6} y={6} size={10} />
+              </svg>
+              {MARK[k].label}
+            </span>
+          ))}
       </div>
       <p className="text-xs text-ink-soft">
         {flow.hasEnvelope && '“Sound, no words” is sound the microphone caught but couldn’t turn into words. '}
