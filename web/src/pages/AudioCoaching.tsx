@@ -1142,7 +1142,7 @@ function sessionTitle(session: { lessonContent?: AudioLessonContent | null; clas
   return session.classSubject || session.lessonContent?.subject || session.period || 'Untitled lesson'
 }
 
-type ReportTab = 'summary' | 'insights' | 'rubric' | 'reflect' | 'growth'
+type ReportTab = 'summary' | 'insights' | 'specialist' | 'rubric' | 'reflect' | 'growth'
 // Four sections, organised by how much a microphone can actually hear.
 // Everything the teacher says is captured well; everything that depends on
 // students answering out loud is not. Questioning and checking were two
@@ -1195,6 +1195,9 @@ const REFLECT_PATH_CARDS: {
 const REPORT_TABS: { key: ReportTab; label: string }[] = [
   { key: 'summary', label: 'Summary' },
   { key: 'insights', label: 'Insights' },
+  // Ideas for teaching the subject, not a read of the lesson — so it is not
+  // one of the Insights sections, which are.
+  { key: 'specialist', label: 'Content Specialist' },
   // A whole-report view, like every tab here except Insights — which is why it
   // sits at this level. It spent a while at the foot of the Insights column,
   // where a report-scoped thing repeated under all four sections and belonged
@@ -1210,7 +1213,6 @@ const INSIGHTS_SECTIONS: { key: InsightsSection; label: string }[] = [
   { key: 'questions', label: 'Questioning & Checking' },
   { key: 'content', label: 'Clarity & Content' },
   { key: 'routines', label: 'Climate & Routines' },
-  { key: 'topic', label: 'About this topic' },
 ]
 
 // The printed report's numbers, one-line descriptions and colours for these
@@ -1240,13 +1242,13 @@ const SectionAccentContext = createContext<Accent>(ACCENTS.mint)
 
 function InsightsSectionHeader({ section, inCard }: { section: InsightsSection; inCard?: boolean }) {
   const meta = INSIGHTS_SECTION_META[section]
-  const label = INSIGHTS_SECTIONS.find((s) => s.key === section)?.label ?? ''
+  const label = section === 'topic' ? 'Content Specialist' : (INSIGHTS_SECTIONS.find((s) => s.key === section)?.label ?? '')
   return (
     <div className={`${inCard ? '' : 'mb-6 '}flex items-center gap-4`}>
       <span
         className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${meta.accent.band} font-heading text-xl font-bold text-cream`}
       >
-        {meta.n}
+        {section === 'topic' ? '✦' : meta.n}
       </span>
       <div>
         <h2 className="font-heading text-2xl font-extrabold leading-tight text-forest">{label}</h2>
@@ -1262,7 +1264,7 @@ const INSIGHTS_PILL_LABEL: Record<InsightsSection, string> = {
   questions: 'Questioning',
   content: 'Clarity',
   routines: 'Climate',
-  topic: 'About this topic',
+  topic: 'Content Specialist',
 }
 
 function InsightsNav({ section, onSelect }: { section: InsightsSection; onSelect: (s: InsightsSection) => void }) {
@@ -1911,10 +1913,10 @@ function ReportPanel({
     )
 
   // Discuss the section on screen with the coach, opened about THIS page.
-  const discussThisSection = () =>
+  const discussSection = (section: InsightsSection) =>
     handleDiscussWithCoach({
-      id: `insights-${insightsSection}`,
-      observation: `${INSIGHTS_SECTIONS.find((s) => s.key === insightsSection)?.label ?? 'This section'} in this lesson`,
+      id: `insights-${section}`,
+      observation: `${section === 'topic' ? 'Content Specialist' : (INSIGHTS_SECTIONS.find((s) => s.key === section)?.label ?? 'This section')} in this lesson`,
       whyItMatters: "Let's talk through what this part of the report showed.",
       timestampSec: null,
       excerpt: null,
@@ -1924,8 +1926,9 @@ function ReportPanel({
       // The words the teacher just read, so the coach opens about
       // THIS page rather than about the lesson in general. Without
       // it the coach only ever got the section's name.
-      detail: narrativeForSection(session, insightsSection) ?? undefined,
+      detail: narrativeForSection(session, section) ?? undefined,
     })
+  const discussThisSection = () => discussSection(insightsSection)
 
   const metrics = session.metricsDetail ?? {}
   const recordedSec = session.durationSec ?? 0
@@ -2280,18 +2283,6 @@ function ReportPanel({
               />
             )}
 
-            {insightsSection === 'topic' && (
-              <TopicTab
-                lessonContent={session.lessonContent}
-                contentNotes={session.contentNotes}
-                isShort={coverage.isShort}
-                sending={contentNotesSending}
-                error={contentNotesError}
-                onGenerate={handleGenerateContentNotes}
-                onDiscuss={discussThisSection}
-              />
-            )}
-
             {insightsSection === 'routines' && (
               <ClimateRoutinesTab
                 session={session}
@@ -2308,6 +2299,20 @@ function ReportPanel({
             </SectionAccentContext.Provider>
           </div>
         </div>
+      )}
+
+      {tab === 'specialist' && (
+        <SectionAccentContext.Provider value={INSIGHTS_SECTION_META.topic.accent}>
+          <TopicTab
+            lessonContent={session.lessonContent}
+            contentNotes={session.contentNotes}
+            isShort={coverage.isShort}
+            sending={contentNotesSending}
+            error={contentNotesError}
+            onGenerate={handleGenerateContentNotes}
+            onDiscuss={() => discussSection('topic')}
+          />
+        </SectionAccentContext.Provider>
       )}
 
       {/* Its own tab rather than a card inside Insights: it reads the whole
@@ -4106,7 +4111,7 @@ function CategoryPicker({ options, tone, hint }: { options: PickOption[]; tone: 
   )
 }
 
-/// About this topic: a specialist's ideas for teaching the subject — notes on
+/// Content Specialist: a specialist's ideas for teaching the subject — notes on
 /// moments of this lesson, ways in next time, where students get stuck. Never
 /// a read of the lesson itself, and labelled so.
 function TopicTab({
@@ -4285,7 +4290,7 @@ function LessonContentTab({
         <>
           <p className="text-sm text-ink-soft">
             "From your lesson" is your own words, found in the transcript. Ideas for teaching {subject} — the specialist's
-            notes, ways in, and where students get stuck — are in About this topic.
+            notes, ways in, and where students get stuck — are in the Content Specialist tab.
           </p>
           {keyTerms.length > 0 && (
             <p className="text-sm text-ink-soft">
