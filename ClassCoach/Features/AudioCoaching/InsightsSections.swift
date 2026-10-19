@@ -695,13 +695,51 @@ struct BroughtStudentsInView: View {
                         .font(.heading(.headline)).foregroundStyle(AppTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                if !all.isEmpty { timeline(all, duration: duration, types: types) }
                 ForEach(types, id: \.self) { k in
                     moveCard(k, count: all.filter { $0.type == k }.count, answers: answers, heard: heard, followed: followed, showRate: showRate)
                 }
                 if !all.isEmpty { momentList(all) }
-                unavailableNote
             }
         }
+    }
+
+    /// Your moves across the lesson. The answers the recording heard are the
+    /// dots on the follow-up card, not a second row here.
+    private func timeline(_ all: [Moment], duration: Double, types: [MoveShape]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("When it happened")
+                Spacer()
+                Text(mmss(duration))
+            }
+            .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+            HStack(spacing: 8) {
+                Text("You").font(.caption2.weight(.semibold)).foregroundStyle(AppTheme.textSecondary).frame(width: 40, alignment: .leading)
+                GeometryReader { geo in
+                    ZStack(alignment: .topLeading) {
+                        Path { p in p.move(to: CGPoint(x: 0, y: 16)); p.addLine(to: CGPoint(x: geo.size.width, y: 16)) }
+                            .stroke(AppTheme.hairline, lineWidth: 2)
+                        ForEach(all) { m in
+                            m.type.view(size: 14)
+                                .opacity(filter == nil || filter == m.type ? 1 : 0.18)
+                                .position(x: min(geo.size.width - 7, max(7, geo.size.width * CGFloat(m.t / duration))), y: 16)
+                        }
+                    }
+                }
+                .frame(height: 32)
+            }
+            Divider().padding(.top, 4)
+            FlowLayout(spacing: 10) {
+                ForEach(types, id: \.self) { k in
+                    HStack(spacing: 4) { k.view(size: 10); Text(k == .invite ? "Invitation" : k == .probe ? "Follow-up" : "Beyond volunteers") }
+                }
+            }
+            .font(.caption2).foregroundStyle(AppTheme.textSecondary)
+        }
+        .padding(14)
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
     }
 
     private func moveCard(_ k: MoveShape, count: Int, answers: [AudioAnswer], heard: Int?, followed: Int?, showRate: Bool) -> some View {
@@ -779,21 +817,6 @@ struct BroughtStudentsInView: View {
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
             .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
         }
-    }
-
-    /// What this report cannot say, said rather than left out.
-    private var unavailableNote: some View {
-        HStack(spacing: 12) {
-            Text("\u{2014}").font(.heading(.title3)).foregroundStyle(AppTheme.textSecondary).frame(width: 26)
-            (Text("How many different students spoke").bold().foregroundColor(AppTheme.textPrimary)
-                + Text(" isn\u{2019}t available for this recording. The audio can\u{2019}t separate student voices reliably enough to count them."))
-                .font(.caption).foregroundStyle(AppTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(hex: 0xF4EFE6), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color(hex: 0xCFC6B6), style: StrokeStyle(lineWidth: 1.5, dash: [5, 3])))
     }
 }
 

@@ -1,7 +1,8 @@
-// How you brought students in — three moves in the teacher's own words. Where
-// they fell in the lesson is the talk strip above (TalkFlowStrip); the
-// answers the recording heard, and which were followed up, are the dots on
-// the follow-up card.
+// How you brought students in — three moves in the teacher's own words, on
+// one timeline. The student answers the recording heard, and which were
+// followed up, are the dots on the follow-up card: drawn on the timeline too,
+// their rings (from the answer pairing) sat at different times from the
+// follow-up marks (from the participation read).
 //
 // The moves come from the participation read (server lib/participation.ts);
 // lessons read before it fall back to the older invitation and revision-
@@ -87,10 +88,12 @@ export default function BroughtStudentsIn({ session }: { session: AudioSessionWi
 
   if (moments.length === 0 && !showRate) return null
   const duration = session.durationSec ?? Math.max(60, ...moments.map((m) => m.t), ...(answers ?? []).map((a) => a.timestampSec))
+  const x = (sec: number) => `${Math.min(100, Math.max(0, (sec / duration) * 100)).toFixed(2)}%`
   const firstHalf = moments.filter((m) => m.t < duration / 2).length
   const types = (Object.keys(TYPES) as MoveType[]).filter((k) => k !== 'voices' || moments.some((m) => m.type === 'voices'))
   const matching = moments.map((m, i) => ({ m, i })).filter(({ m }) => !filter || m.type === filter)
   const shown = filter || expanded ? matching : matching.slice(0, LIST_LIMIT)
+  const ticks = [0, 300, 600].filter((t) => t < duration - 120)
 
   return (
     <div className="flex flex-col gap-3">
@@ -104,6 +107,58 @@ export default function BroughtStudentsIn({ session }: { session: AudioSessionWi
           came in the first half.
         </p>
       )}
+
+      {/* When it happened: your moves across the lesson. The student answers
+          the recording heard are the dots on the follow-up card below. */}
+      <div className="rounded-2xl border border-hairline bg-cream-card px-4 py-3.5">
+        <div className="mb-2 flex justify-between text-xs font-semibold text-ink-soft">
+          <span>When it happened</span>
+          <span>{mmss(duration)}</span>
+        </div>
+        <Lane label="You">
+          {moments.map((m, i) => (
+            <button
+              key={i}
+              type="button"
+              title={`${mmss(m.t)} · ${m.tag}`}
+              onMouseEnter={() => setHot(i)}
+              onMouseLeave={() => setHot(null)}
+              onClick={() => {
+                if (filter && filter !== m.type) setFilter(null)
+                setExpanded(true)
+                setHot(i)
+              }}
+              className="absolute top-1/2 transition-transform"
+              style={{
+                left: x(m.t),
+                transform: `translate(-50%, -50%) scale(${hot === i ? 1.45 : 1})`,
+                opacity: filter && filter !== m.type ? 0.18 : 1,
+              }}
+            >
+              <Shape type={m.type} size={16} />
+            </button>
+          ))}
+        </Lane>
+        <div className="grid grid-cols-[72px_1fr] text-xs text-ink-soft">
+          <span />
+          <div className="relative h-4">
+            {ticks.map((t) => (
+              <span key={t} className="absolute -translate-x-1/2 first:translate-x-0" style={{ left: x(t) }}>
+                {mmss(t)}
+              </span>
+            ))}
+            <span className="absolute right-0">{mmss(duration)}</span>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-hairline pt-3 text-xs text-ink-soft">
+          {types.map((k) => (
+            <span key={k} className="flex items-center gap-1.5">
+              <Shape type={k} size={12} />
+              {TYPES[k].tag}
+            </span>
+          ))}
+        </div>
+      </div>
 
       {/* The three moves, as filters. */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -199,17 +254,17 @@ export default function BroughtStudentsIn({ session }: { session: AudioSessionWi
           </div>
         </>
       )}
+    </div>
+  )
+}
 
-      {/* What this report cannot say, said rather than left out. */}
-      <div
-        className="flex items-center gap-3.5 rounded-2xl border-[1.5px] border-dashed border-[#CFC6B6] px-4 py-3"
-        style={{ background: 'repeating-linear-gradient(135deg,#F1EBE0 0 6px,#F8F4EC 6px 12px)' }}
-      >
-        <span className="min-w-[30px] text-center font-heading text-xl font-bold text-ink-soft">—</span>
-        <p className="text-sm text-ink-soft">
-          <b className="font-semibold text-ink">How many different students spoke</b> isn’t available for this recording. The audio
-          can’t separate student voices reliably enough to count them.
-        </p>
+function Lane({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid h-10 grid-cols-[72px_1fr] items-center">
+      <span className="text-xs font-semibold text-ink-soft">{label}</span>
+      <div className="relative h-full">
+        <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 bg-hairline" />
+        {children}
       </div>
     </div>
   )
