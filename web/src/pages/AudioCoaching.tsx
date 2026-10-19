@@ -2350,12 +2350,13 @@ function ReportPanel({
 // live in ReportPanel's shared header (visible on every tab), not here.
 /// Try next time: what the report suggests, from every section, in one list —
 /// and the hand-off to Planning Coach with the ones the teacher chooses.
-function TryNextTimeList({ session }: { session: AudioSessionWithSegments }) {
+function TryNextTimeList({ session, focusText }: { session: AudioSessionWithSegments; focusText?: string | null }) {
   const navigate = useNavigate()
-  const items = buildNextTimeItems(session)
+  // The one focus has its own card above; it goes to planning first.
+  const items = buildNextTimeItems(session).filter((item) => item.text !== focusText)
   const [choosing, setChoosing] = useState(false)
   const [skipped, setSkipped] = useState<Set<string>>(new Set())
-  if (items.length === 0) return null
+  if (items.length === 0 && !focusText) return null
   const chosen = items.filter((item) => !skipped.has(item.id))
 
   function toggle(id: string) {
@@ -2373,6 +2374,7 @@ function TryNextTimeList({ session }: { session: AudioSessionWithSegments }) {
       gradeLevel: session.gradeLevel ?? undefined,
       additionalContext: [
         'From the debrief of my last lesson with this class, build these into the plan:',
+        ...(focusText ? [`- My one focus: ${focusText}`] : []),
         ...chosen.map((item) => `- ${item.lead ? `${item.lead}: ` : ''}${item.text}`),
       ].join('\n'),
       source: `${sessionTitle(session)}, ${new Date(session.sessionDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`,
@@ -2384,7 +2386,9 @@ function TryNextTimeList({ session }: { session: AudioSessionWithSegments }) {
     <div className="flex flex-col gap-4 rounded-3xl bg-peach-tint/70 p-5 sm:p-6">
       <div>
         <p className="text-xs font-bold uppercase tracking-wide text-[#8E3F22]">Try next time</p>
-        <p className="mt-0.5 text-sm text-ink-soft">What this report suggests, from every section, in one list.</p>
+        <p className="mt-0.5 text-sm text-ink-soft">
+          {focusText ? 'The rest of what this report suggests, alongside your one focus.' : 'What this report suggests, from every section, in one list.'}
+        </p>
       </div>
       <ul className="flex flex-col gap-3">
         {items.map((item) => (
@@ -2475,6 +2479,18 @@ function SummaryTab({
   const heard = typeof detail.answersHeardCount === 'number' ? detail.answersHeardCount : null
   const followed = typeof detail.answersFollowedUpCount === 'number' ? detail.answersFollowedUpCount : null
 
+  // One focus: the questioning Try when there is one — with a follow-up aim
+  // when enough answers were heard — otherwise the first section Try there is.
+  const withGoal = heard != null && followed != null && heard >= 3 && followed < heard && !!session.nextSteps?.questions
+  const focus = session.nextSteps?.questions
+    ? { text: session.nextSteps.questions, from: 'Questioning & Checking', section: 'questions' as InsightsSection }
+    : session.nextSteps?.talk
+      ? { text: session.nextSteps.talk, from: 'Talk & Participation', section: 'talk' as InsightsSection }
+      : session.nextSteps?.climate
+        ? { text: session.nextSteps.climate, from: 'Climate & Routines', section: 'routines' as InsightsSection }
+        : null
+  const goalTarget = withGoal ? Math.min(heard!, followed! + 2) : 0
+
   // The four section cards — each number the one its section leads with.
   const nonSpeech = nonSpeechSplit(session.metricsDetail, session.durationSec)
   const shares = recordingShares(session.teacherTalkPct, session.studentTalkPct, nonSpeech)
@@ -2563,6 +2579,42 @@ function SummaryTab({
         </div>
       ) : (
         spotlight && <CoachNoteCard text={`${spotlight.headline} ${spotlight.body}`} />
+      )}
+
+      {/* Your one focus for next lesson. */}
+      {focus && (
+        <div className="grid items-center gap-5 rounded-3xl bg-peach-tint p-6 shadow-[6px_6px_0_var(--color-gold)] sm:grid-cols-[1fr_auto]">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-[#8E3F22]">Your one focus for next lesson</p>
+            <p className="mt-1.5 text-lg leading-relaxed text-ink">{focus.text}</p>
+            <button type="button" onClick={() => onNavigateInsights(focus.section)} className="mt-2 text-sm text-[#6E4A3A] hover:underline">
+              From {focus.from} →
+            </button>
+          </div>
+          {withGoal && (
+            <div className="flex flex-col items-start gap-2">
+              <span className="flex max-w-[260px] flex-wrap gap-1.5" role="img" aria-label={`Aim: ${goalTarget} of ${heard} answers followed up, ${followed} today`}>
+                {Array.from({ length: heard! }, (_, i) => {
+                  const filled = i < followed!
+                  const goal = !filled && i < goalTarget
+                  return (
+                    <i
+                      key={i}
+                      className={`inline-block h-5 w-5 rounded-full border-2 ${goal ? 'border-dashed' : ''}`}
+                      style={{
+                        borderColor: filled || goal ? '#B4593A' : '#D8B9A4',
+                        background: filled ? '#B4593A' : 'var(--color-cream-card)',
+                      }}
+                    />
+                  )
+                })}
+              </span>
+              <span className="text-sm text-ink-soft">
+                {followed} of {heard} followed up today → aim for {goalTarget}
+              </span>
+            </div>
+          )}
+        </div>
       )}
 
       {/* One card per section: one fraction, its own picture, one sentence. */}
@@ -2677,7 +2729,7 @@ function SummaryTab({
         </div>
       )}
 
-      <TryNextTimeList session={session} />
+      <TryNextTimeList session={session} focusText={focus?.text} />
 
       {hardLookDoor}
 
