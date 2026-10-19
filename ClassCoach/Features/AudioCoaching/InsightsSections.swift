@@ -428,7 +428,8 @@ struct TalkSection: View {
             howToRead: read, hardLook: hardLook, onDiscuss: onDiscuss
         ) {
             talkNumbers
-            FlowStrip(session: session, marks: marks(moves))
+            // Your moves are drawn once, on "When it happened" below.
+            FlowStrip(session: session, marks: [])
             BroughtStudentsInView(session: session, moves: moves)
             if let stretch = TeacherStretch.longest(in: session.segments), stretch.durationSec >= TeacherStretch.minToShowSec {
                 LongestStretchView(stretch: stretch, read: session.teachingMoves?.stretch, segments: session.segments)
@@ -704,6 +705,12 @@ struct BroughtStudentsInView: View {
         }
     }
 
+    /// Checks for understanding, drawn on the timeline only — Questioning &
+    /// Checking lists them.
+    private var checks: [Double] {
+        (session.cfuLog ?? []).filter { $0.loop?.who != "not_a_check" }.map(\.timestampSec)
+    }
+
     /// Your moves across the lesson. The answers the recording heard are the
     /// dots on the follow-up card, not a second row here.
     private func timeline(_ all: [Moment], duration: Double, types: [MoveShape]) -> some View {
@@ -725,14 +732,19 @@ struct BroughtStudentsInView: View {
                                 .opacity(filter == nil || filter == m.type ? 1 : 0.18)
                                 .position(x: min(geo.size.width - 7, max(7, geo.size.width * CGFloat(m.t / duration))), y: 16)
                         }
+                        ForEach(Array(checks.enumerated()), id: \.offset) { _, t in
+                            MoveShape.check.view(size: 14)
+                                .opacity(filter == nil ? 1 : 0.18)
+                                .position(x: min(geo.size.width - 7, max(7, geo.size.width * CGFloat(t / duration))), y: 16)
+                        }
                     }
                 }
                 .frame(height: 32)
             }
             Divider().padding(.top, 4)
             FlowLayout(spacing: 10) {
-                ForEach(types, id: \.self) { k in
-                    HStack(spacing: 4) { k.view(size: 10); Text(k == .invite ? "Invitation" : k == .probe ? "Follow-up" : "Beyond volunteers") }
+                ForEach(types + (checks.isEmpty ? [] : [.check]), id: \.self) { k in
+                    HStack(spacing: 4) { k.view(size: 10); Text(k.markLabel) }
                 }
             }
             .font(.caption2).foregroundStyle(AppTheme.textSecondary)

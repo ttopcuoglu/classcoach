@@ -40,6 +40,24 @@ function mmss(sec: number): string {
   return `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 }
 
+/// The names the timeline's key uses — the same wording the talk strip used.
+const KEY_LABEL: Record<MoveType | 'check', string> = {
+  invite: 'Invitations to participate',
+  probe: 'Follow-ups that pushed students further',
+  voices: 'Reaching beyond volunteers',
+  check: 'Check for understanding',
+}
+
+/// A check for understanding: drawn on the timeline only — the checks
+/// themselves are listed in Questioning & Checking.
+function CheckShape({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true" className="block">
+      <circle cx="8" cy="8" r="5.5" fill="none" stroke="var(--color-forest)" strokeWidth="2.5" />
+    </svg>
+  )
+}
+
 function Shape({ type, size = 16 }: { type: MoveType; size?: number }) {
   const c = TYPES[type].color
   return (
@@ -82,6 +100,7 @@ export default function BroughtStudentsIn({ session }: { session: AudioSessionWi
     return [...invites, ...probes, ...voices].sort((a, b) => a.t - b.t)
   }, [p, moves])
 
+  const checks = (session.cfuLog ?? []).filter((c) => c.loop?.who !== 'not_a_check').map((c) => c.timestampSec)
   const [filter, setFilter] = useState<MoveType | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [hot, setHot] = useState<number | null>(null)
@@ -138,6 +157,16 @@ export default function BroughtStudentsIn({ session }: { session: AudioSessionWi
               <Shape type={m.type} size={16} />
             </button>
           ))}
+          {checks.map((t, i) => (
+            <span
+              key={`c${i}`}
+              title={`${mmss(t)} · check for understanding`}
+              className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2"
+              style={{ left: x(t), opacity: filter ? 0.18 : 1 }}
+            >
+              <CheckShape size={16} />
+            </span>
+          ))}
         </Lane>
         <div className="grid grid-cols-[72px_1fr] text-xs text-ink-soft">
           <span />
@@ -154,9 +183,15 @@ export default function BroughtStudentsIn({ session }: { session: AudioSessionWi
           {types.map((k) => (
             <span key={k} className="flex items-center gap-1.5">
               <Shape type={k} size={12} />
-              {TYPES[k].tag}
+              {KEY_LABEL[k]}
             </span>
           ))}
+          {checks.length > 0 && (
+            <span className="flex items-center gap-1.5">
+              <CheckShape size={12} />
+              {KEY_LABEL.check}
+            </span>
+          )}
         </div>
       </div>
 

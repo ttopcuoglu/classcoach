@@ -5109,12 +5109,8 @@ function TalkParticipationTab({
           segments={session.segments}
           durationSec={session.durationSec}
           seconds={session.soundTimeline?.seconds ?? null}
-          marks={[
-            ...invitations.map((q) => ({ t: q.timestampSec, kind: 'invite' as const })),
-            ...followUps.map((q) => ({ t: q.timestampSec, kind: 'probe' as const })),
-            ...widening.map((q) => ({ t: q.timestampSec, kind: 'voices' as const })),
-            ...(session.cfuLog ?? []).map((c) => ({ t: c.timestampSec, kind: 'check' as const })),
-          ]}
+          // Your moves are drawn once, on "When it happened" below.
+          marks={[]}
           shares={recordingShares(session.teacherTalkPct, session.studentTalkPct, nonSpeech)}
         />
       </div>
