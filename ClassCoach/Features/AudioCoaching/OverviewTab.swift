@@ -233,20 +233,32 @@ struct OverviewTab: View {
         }
     }
 
-    /// Wivo's note: the "W" mark beside the words, on mint.
+    @State private var noteOpen = false
+
+    /// Wivo's note: the "W" mark beside the words, on mint. A long one — the
+    /// lesson summary standing in for a headline — opens with its first few
+    /// sentences and keeps the rest behind "Read more", as CoachNoteView does.
     private func noteCard(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
+        let full = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let opening = CoachNoteView.opening(of: full)
+        let folds = full.count - opening.count > 80
+        let shown = noteOpen || !folds ? full : opening
+        return HStack(alignment: .top, spacing: 12) {
             Text("W")
                 .font(.heading(.subheadline)).foregroundStyle(AppTheme.gold)
                 .frame(width: 30, height: 30)
                 .background(AppTheme.forest, in: Circle())
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(
-                    text.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty },
+                    shown.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty },
                     id: \.self
                 ) { para in
                     Text(para).font(.body).foregroundStyle(AppTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
+                }
+                if folds {
+                    Button(noteOpen ? "Show less" : "Read more") { withAnimation { noteOpen.toggle() } }
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
                 }
             }
         }
