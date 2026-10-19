@@ -129,7 +129,7 @@ let focusAreas: [FocusArea] = [
             ("A parent opens a conference by criticizing your class", "conferences"),
             ("A phone call about a student who is going to fail", "delivering_hard_news"),
         ],
-        handoffNote: "Need the actual email drafted, or a conference prepared? That's Communication Coach, under More."
+        handoffNote: "Need the actual email drafted, or a conference prepared? That's Communication Coach, in Plan."
     ),
     FocusArea(
         value: "professionalism",
@@ -157,7 +157,7 @@ let focusAreas: [FocusArea] = [
             ("Your department decides something you think is wrong for kids", "talking_with_admin"),
             ("A colleague writes off a student you share", "disagreeing_with_a_peer"),
         ],
-        handoffNote: "Need to prepare a whole meeting, or draft the message first? That's Communication Coach, under More."
+        handoffNote: "Need to prepare a whole meeting, or draft the message first? That's Communication Coach, in Plan."
     ),
 ]
 
