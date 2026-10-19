@@ -1159,7 +1159,7 @@ type ReportTab = 'summary' | 'insights' | 'rubric' | 'reflect' | 'growth'
 // teacher reading two apologies for one cause — they are one section with two
 // halves now, and Rubric Lens is a lens over the whole report rather than a
 // section competing with them.
-type InsightsSection = 'talk' | 'questions' | 'content' | 'routines'
+type InsightsSection = 'talk' | 'questions' | 'content' | 'routines' | 'topic'
 type ReflectPath = 'full_report' | 'specific_moment' | 'how_it_felt' | 'ask_question'
 
 const REFLECT_PATH_CARDS: {
@@ -1219,6 +1219,7 @@ const INSIGHTS_SECTIONS: { key: InsightsSection; label: string }[] = [
   { key: 'questions', label: 'Questioning & Checking' },
   { key: 'content', label: 'Clarity & Content' },
   { key: 'routines', label: 'Climate & Routines' },
+  { key: 'topic', label: 'About this topic' },
 ]
 
 // The printed report's numbers, one-line descriptions and colours for these
@@ -1233,6 +1234,13 @@ const INSIGHTS_SECTION_META: Record<InsightsSection, { n: number; blurb: string;
   questions: { n: 2, blurb: 'What you asked, how you checked, and how you responded.', accent: ACCENTS.gold },
   content: { n: 3, blurb: 'What the lesson said it was about, in its own words.', accent: ACCENTS.forest },
   routines: { n: 4, blurb: 'Directions, praise and redirections, as they sounded.', accent: ACCENTS.terracotta },
+  // Lavender, the colour this page always used for ideas that are not a read
+  // of the lesson.
+  topic: {
+    n: 5,
+    blurb: 'A specialist’s ideas for teaching this subject.',
+    accent: { band: 'bg-[#6E62A0]', chip: 'bg-[#ECE8F4]', tint: 'bg-[#ECE8F4]/50', ink: 'text-[#6E62A0]' },
+  },
 }
 
 // Lets the stat groups inside a section tint themselves with that section's
@@ -1278,6 +1286,7 @@ const INSIGHTS_PILL_LABEL: Record<InsightsSection, string> = {
   questions: 'Questioning',
   content: 'Clarity',
   routines: 'Climate',
+  topic: 'About this topic',
 }
 
 function InsightsNav({ section, onSelect }: { section: InsightsSection; onSelect: (s: InsightsSection) => void }) {
@@ -2740,11 +2749,19 @@ function ReportPanel({
                 contentNotes={session.contentNotes}
                 teachingMoves={session.teachingMoves ?? null}
                 narrative={session.contentNarrative ?? null}
+                lastRow={sectionHardLook}
+                onDiscuss={discussThisSection}
+              />
+            )}
+
+            {insightsSection === 'topic' && (
+              <TopicTab
+                lessonContent={session.lessonContent}
+                contentNotes={session.contentNotes}
                 isShort={coverage.isShort}
                 sending={contentNotesSending}
                 error={contentNotesError}
                 onGenerate={handleGenerateContentNotes}
-                lastRow={sectionHardLook}
                 onDiscuss={discussThisSection}
               />
             )}
@@ -4317,6 +4334,106 @@ function CategoryPicker({ options, tone, hint }: { options: PickOption[]; tone: 
   )
 }
 
+/// About this topic: a specialist's ideas for teaching the subject — notes on
+/// moments of this lesson, ways in next time, where students get stuck. Never
+/// a read of the lesson itself, and labelled so.
+function TopicTab({
+  lessonContent,
+  contentNotes,
+  isShort,
+  sending,
+  error,
+  onGenerate,
+  onDiscuss,
+}: {
+  lessonContent: AudioLessonContent | null
+  contentNotes: AudioContentNotes | null
+  isShort: boolean
+  sending: boolean
+  error: string | null
+  onGenerate: () => void
+  onDiscuss: () => void
+}) {
+  const subject = lessonContent?.subject || contentNotes?.subject || 'this subject'
+  const notes = contentNotes?.notes ?? []
+  const topicOptions: PickOption[] = [
+    {
+      key: 'notes',
+      label: 'Specialist notes',
+      desc: `What a ${subject} specialist would want you to know, from excerpts of this lesson.`,
+      items: notes.map((n) => ({ tag: n.label, text: n.text, quote: n.excerpt, timestampSec: n.timestampSec })),
+    },
+    {
+      key: 'ways',
+      label: 'Ways in, next time',
+      desc: 'Other entry points into this content.',
+      items: (lessonContent?.connectionIdeas ?? contentNotes?.connectionIdeas ?? []).map((t) => ({ tag: 'Way in', text: t })),
+    },
+    {
+      key: 'stuck',
+      label: 'Where students get stuck',
+      desc: 'Common misconceptions on this topic — you may well have covered them.',
+      items: (contentNotes?.misconceptions ?? []).map((t) => ({ tag: 'Misconception', text: t })),
+    },
+  ]
+  return (
+    <SectionShell
+      section="topic"
+      note={null}
+      keep={null}
+      tryNext={null}
+      lastRow={null}
+      onDiscuss={onDiscuss}
+      howToRead={
+        <p className="text-sm text-ink-soft">
+          These are a specialist's ideas for teaching {subject}, written from excerpts of what you said. They may miss
+          context, they are a starting point for your own reflection rather than a review, and your subject expertise is
+          the final word.
+        </p>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <span className="self-start rounded-full bg-[#ECE8F4] px-3 py-1 text-xs font-semibold text-[#6E62A0]">
+          ✦ Ideas for teaching {subject}, not a read of this lesson
+        </span>
+        {isShort && contentNotes && (
+          <p className="text-xs font-semibold text-terracotta-600">
+            This session is under {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes — content feedback from a short
+            sample is especially limited.
+          </p>
+        )}
+        {!contentNotes ? (
+          <>
+            <button
+              type="button"
+              onClick={onGenerate}
+              disabled={sending}
+              className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+            >
+              {sending ? 'Writing the notes…' : 'Generate content specialist notes'}
+            </button>
+            <WorkingRing active={sending} estimatedMs={14000} label="Writing content specialist notes" className="text-forest" />
+          </>
+        ) : (
+          <>
+            <CategoryPicker options={topicOptions} tone="lavender" />
+            <button
+              type="button"
+              onClick={onGenerate}
+              disabled={sending}
+              className="self-start text-sm font-medium text-ink-soft hover:text-terracotta-600 disabled:opacity-60"
+            >
+              {sending ? 'Writing new notes...' : 'Write these notes again ↻'}
+            </button>
+            <WorkingRing active={sending} estimatedMs={16000} label="Writing content specialist notes" className="text-forest" />
+          </>
+        )}
+        {error && <p className="text-sm text-terracotta-600">{error}</p>}
+      </div>
+    </SectionShell>
+  )
+}
+
 /// Clarity & Content: how the lesson moved, what you did to make the content
 /// clear (your own words), ideas about the topic (a specialist's, not a read
 /// of this lesson), and the academic vocabulary as an optional extra.
@@ -4325,10 +4442,6 @@ function LessonContentTab({
   contentNotes,
   teachingMoves,
   narrative,
-  isShort,
-  sending,
-  error,
-  onGenerate,
   lastRow,
   onDiscuss,
 }: {
@@ -4336,10 +4449,6 @@ function LessonContentTab({
   contentNotes: AudioContentNotes | null
   teachingMoves: AudioTeachingMoves | null
   narrative: string | null
-  isShort: boolean
-  sending: boolean
-  error: string | null
-  onGenerate: () => void
   lastRow: React.ReactNode
   onDiscuss: () => void
 }) {
@@ -4371,26 +4480,6 @@ function LessonContentTab({
 
   const subject = lessonContent?.subject || contentNotes?.subject || 'this subject'
   const notes = contentNotes?.notes ?? []
-  const topicOptions: PickOption[] = [
-    {
-      key: 'notes',
-      label: 'Specialist notes',
-      desc: `What a ${subject} specialist would want you to know, from excerpts of this lesson.`,
-      items: notes.map((n) => ({ tag: n.label, text: n.text, quote: n.excerpt, timestampSec: n.timestampSec })),
-    },
-    {
-      key: 'ways',
-      label: 'Ways in, next time',
-      desc: 'Other entry points into this content.',
-      items: (lessonContent?.connectionIdeas ?? contentNotes?.connectionIdeas ?? []).map((t) => ({ tag: 'Way in', text: t })),
-    },
-    {
-      key: 'stuck',
-      label: 'Where students get stuck',
-      desc: 'Common misconceptions on this topic — you may well have covered them.',
-      items: (contentNotes?.misconceptions ?? []).map((t) => ({ tag: 'Misconception', text: t })),
-    },
-  ]
 
   const keyTerms = lessonContent?.keyTerms ?? []
   const studentUsed = keyTerms.filter((t) => t.studentCount > 0)
@@ -4423,9 +4512,8 @@ function LessonContentTab({
       howToRead={
         <>
           <p className="text-sm text-ink-soft">
-            "From your lesson" is your own words, found in the transcript. "About this topic" is a specialist's ideas for
-            teaching {subject} — written from excerpts of what you said, it may miss context, and your subject expertise
-            is the final word.
+            "From your lesson" is your own words, found in the transcript. Ideas for teaching {subject} — the specialist's
+            notes, ways in, and where students get stuck — are in About this topic.
           </p>
           {keyTerms.length > 0 && (
             <p className="text-sm text-ink-soft">
@@ -4471,47 +4559,6 @@ function LessonContentTab({
         ) : (
           <CategoryPicker options={lessonOptions} tone="forest" hint="Tap a category to see its moments" />
         )}
-      </div>
-
-      {/* About this topic: a specialist's ideas, never a read of the lesson. */}
-      <div className="flex flex-col gap-4 border-t border-dashed border-hairline pt-5">
-        <p className="font-heading text-xl font-bold text-forest">About this topic</p>
-        <span className="self-start rounded-full bg-[#ECE8F4] px-3 py-1 text-xs font-semibold text-[#6E62A0]">
-          ✦ Ideas for teaching {subject}, not a read of this lesson
-        </span>
-        {isShort && contentNotes && (
-          <p className="text-xs font-semibold text-terracotta-600">
-            This session is under {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes — content feedback from a short
-            sample is especially limited.
-          </p>
-        )}
-        {!contentNotes ? (
-          <>
-            <button
-              type="button"
-              onClick={onGenerate}
-              disabled={sending}
-              className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
-            >
-              {sending ? 'Writing the notes…' : 'Generate content specialist notes'}
-            </button>
-            <WorkingRing active={sending} estimatedMs={14000} label="Writing content specialist notes" className="text-forest" />
-          </>
-        ) : (
-          <>
-            <CategoryPicker options={topicOptions} tone="lavender" />
-            <button
-              type="button"
-              onClick={onGenerate}
-              disabled={sending}
-              className="self-start text-sm font-medium text-ink-soft hover:text-terracotta-600 disabled:opacity-60"
-            >
-              {sending ? 'Writing new notes...' : 'Write these notes again ↻'}
-            </button>
-            <WorkingRing active={sending} estimatedMs={16000} label="Writing content specialist notes" className="text-forest" />
-          </>
-        )}
-        {error && <p className="text-sm text-terracotta-600">{error}</p>}
       </div>
 
       {/* Optional: the academic vocabulary and who said it. */}
@@ -5537,7 +5584,7 @@ function SectionShell({
       <KeepAndTry keep={keep} tryNext={tryNext} tryGoal={tryGoal} />
       <div className="flex flex-col gap-3 border-t border-hairline pt-4">
         <div className="flex flex-wrap items-center gap-2">
-          {(['read', 'hard'] as const).map((k) => (
+          {(lastRow ? (['read', 'hard'] as const) : (['read'] as const)).map((k) => (
             <button
               key={k}
               type="button"
@@ -5817,6 +5864,7 @@ function narrativeForSection(session: AudioSession, section: InsightsSection): s
 
     case 'routines':
       return session.climateNarrative ?? null
+    case 'topic':
     case 'content': {
       const notes = session.contentNotes?.notes ?? []
       return notes.length > 0 ? notes.map((n) => `${n.label}: ${n.text}`).join(' ') : null
