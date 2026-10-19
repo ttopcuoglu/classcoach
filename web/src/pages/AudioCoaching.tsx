@@ -2348,6 +2348,96 @@ function ReportPanel({
 // 2x2 grid (1 column on mobile) of compact cards linking out to the fuller
 // detail in Insights. Lesson identity and the evidence-quality read now
 // live in ReportPanel's shared header (visible on every tab), not here.
+/// Try next time: what the report suggests, from every section, in one list —
+/// and the hand-off to Planning Coach with the ones the teacher chooses.
+function TryNextTimeList({ session }: { session: AudioSessionWithSegments }) {
+  const navigate = useNavigate()
+  const items = buildNextTimeItems(session)
+  const [choosing, setChoosing] = useState(false)
+  const [skipped, setSkipped] = useState<Set<string>>(new Set())
+  if (items.length === 0) return null
+  const chosen = items.filter((item) => !skipped.has(item.id))
+
+  function toggle(id: string) {
+    setSkipped((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function planNextLesson() {
+    setPlanningPrefill({
+      subject: session.classSubject ?? session.lessonContent?.subject ?? undefined,
+      gradeLevel: session.gradeLevel ?? undefined,
+      additionalContext: [
+        'From the debrief of my last lesson with this class, build these into the plan:',
+        ...chosen.map((item) => `- ${item.lead ? `${item.lead}: ` : ''}${item.text}`),
+      ].join('\n'),
+      source: `${sessionTitle(session)}, ${new Date(session.sessionDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`,
+    })
+    navigate('/lesson-planning')
+  }
+
+  return (
+    <div className="flex flex-col gap-4 rounded-3xl bg-peach-tint/70 p-5 sm:p-6">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-wide text-[#8E3F22]">Try next time</p>
+        <p className="mt-0.5 text-sm text-ink-soft">What this report suggests, from every section, in one list.</p>
+      </div>
+      <ul className="flex flex-col gap-3">
+        {items.map((item) => (
+          <li key={item.id}>
+            <label className={`flex items-start gap-3 ${choosing ? 'cursor-pointer' : ''}`}>
+              {choosing && (
+                <input
+                  type="checkbox"
+                  checked={!skipped.has(item.id)}
+                  onChange={() => toggle(item.id)}
+                  className="mt-1 h-4 w-4 shrink-0 accent-forest"
+                />
+              )}
+              <span>
+                <span className="block text-xs font-semibold uppercase tracking-wide text-terracotta-600">{item.from}</span>
+                <span className="mt-0.5 block text-sm text-ink">{item.text}</span>
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <div className="border-t border-[#E8C9B4] pt-4">
+        {!choosing ? (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <p className="text-sm font-semibold text-ink">Would you like to plan your next class with this in mind?</p>
+            <button
+              type="button"
+              onClick={() => setChoosing(true)}
+              className="rounded-full bg-forest px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-forest/90"
+            >
+              Yes, choose what to include
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <button
+              type="button"
+              onClick={planNextLesson}
+              disabled={chosen.length === 0}
+              className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+            >
+              Plan the next lesson with {chosen.length === items.length ? 'all of these' : `${chosen.length} of these`} →
+            </button>
+            <button type="button" onClick={() => setChoosing(false)} className="text-sm font-medium text-ink-soft hover:text-ink">
+              Not now
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function SummaryTab({
   session,
   coverage,
@@ -2382,39 +2472,8 @@ function SummaryTab({
   // Coverage: what the recording could support, before any number.
   const captured = coverage.capturedSharePct
 
-  // One focus: the questioning Try when it comes with a follow-up goal,
-  // otherwise the first section Try there is.
   const heard = typeof detail.answersHeardCount === 'number' ? detail.answersHeardCount : null
   const followed = typeof detail.answersFollowedUpCount === 'number' ? detail.answersFollowedUpCount : null
-  const answers = Array.isArray(detail.answerLog) ? (detail.answerLog as { timestampSec: number; followed: boolean }[]) : []
-  const withGoal = heard != null && followed != null && heard >= 3 && followed < heard && !!session.nextSteps?.questions
-  const focus = withGoal
-    ? { text: session.nextSteps!.questions!, from: 'Questioning & Checking', section: 'questions' as InsightsSection }
-    : session.nextSteps?.questions
-      ? { text: session.nextSteps.questions, from: 'Questioning & Checking', section: 'questions' as InsightsSection }
-      : session.nextSteps?.talk
-        ? { text: session.nextSteps.talk, from: 'Talk & Participation', section: 'talk' as InsightsSection }
-        : session.nextSteps?.climate
-          ? { text: session.nextSteps.climate, from: 'Climate & Routines', section: 'routines' as InsightsSection }
-          : null
-  const goalTarget = withGoal ? Math.min(heard!, followed! + 2) : 0
-  // The hand-off to Planning Coach: the focus first, then every section's Try,
-  // as the old Try next time list carried them.
-  const navigate = useNavigate()
-  function planNextLesson() {
-    const items = buildNextTimeItems(session)
-    const lines = [
-      ...(focus ? [`- My one focus: ${focus.text}`] : []),
-      ...items.filter((item) => item.text !== focus?.text).map((item) => `- ${item.lead ? `${item.lead}: ` : ''}${item.text}`),
-    ]
-    setPlanningPrefill({
-      subject: session.classSubject ?? session.lessonContent?.subject ?? undefined,
-      gradeLevel: session.gradeLevel ?? undefined,
-      additionalContext: ['From the debrief of my last lesson with this class, build these into the plan:', ...lines].join('\n'),
-      source: `${sessionTitle(session)}, ${new Date(session.sessionDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`,
-    })
-    navigate('/lesson-planning')
-  }
 
   // The four section cards — each number the one its section leads with.
   const nonSpeech = nonSpeechSplit(session.metricsDetail, session.durationSec)
@@ -2501,51 +2560,6 @@ function SummaryTab({
         </div>
       ) : (
         spotlight && <CoachNoteCard text={`${spotlight.headline} ${spotlight.body}`} />
-      )}
-
-      {/* Your one focus for next lesson. */}
-      {focus && (
-        <div className="grid items-center gap-5 rounded-3xl bg-peach-tint p-6 shadow-[6px_6px_0_var(--color-gold)] sm:grid-cols-[1fr_auto]">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-[#8E3F22]">Your one focus for next lesson</p>
-            <p className="mt-1.5 text-lg leading-relaxed text-ink">{focus.text}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-              <button type="button" onClick={() => onNavigateInsights(focus.section)} className="text-sm text-[#6E4A3A] hover:underline">
-                From {focus.from} →
-              </button>
-              <button
-                type="button"
-                onClick={planNextLesson}
-                className="rounded-xl bg-forest px-3.5 py-2 text-sm font-semibold text-cream hover:bg-forest/90"
-              >
-                Plan the next lesson with this →
-              </button>
-            </div>
-          </div>
-          {withGoal && answers.length > 0 && (
-            <div className="flex flex-col items-start gap-2">
-              <span className="flex flex-wrap gap-1.5" role="img" aria-label={`Goal: ${goalTarget} of ${heard} answers followed up, currently ${followed}`}>
-                {answers.map((_, i) => {
-                  const filled = i < followed!
-                  const goal = !filled && i < goalTarget
-                  return (
-                    <i
-                      key={i}
-                      className={`inline-block h-5 w-5 rounded-full border-2 ${goal ? 'border-dashed' : ''}`}
-                      style={{
-                        borderColor: filled || goal ? '#B4593A' : '#D8B9A4',
-                        background: filled ? '#B4593A' : 'var(--color-cream-card)',
-                      }}
-                    />
-                  )
-                })}
-              </span>
-              <span className="text-sm text-ink-soft">
-                {followed} of {heard} followed up today → aim for {goalTarget}
-              </span>
-            </div>
-          )}
-        </div>
       )}
 
       {/* One card per section: one fraction, its own picture, one sentence. */}
@@ -2659,6 +2673,8 @@ function SummaryTab({
           </p>
         </div>
       )}
+
+      <TryNextTimeList session={session} />
 
       {hardLookDoor}
 
