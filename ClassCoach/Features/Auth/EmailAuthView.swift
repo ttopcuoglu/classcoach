@@ -111,9 +111,9 @@ struct EmailAuthView: View {
                         if isSignUp {
                             VStack(alignment: .leading, spacing: 10) {
                                 consentRow(isOn: $termsAccepted) {
-                                    // What is sent to Anthropic and Deepgram is asked once,
-                                    // after sign-in, on AIConsentView.
-                                    (Text("I agree to the ") + Text("Terms of Service").underline() + Text("."))
+                                    (Text("I agree to the ")
+                                        + Text("Terms of Service").underline()
+                                        + Text(" and that my responses, recordings, and messages may be sent to Anthropic's Claude AI (for coaching feedback and chat) and Deepgram (for transcription and voice playback), as described in the Privacy Policy."))
                                 }
                                 consentRow(isOn: $ageConfirmed) {
                                     Text("I confirm I am 13 or older.")

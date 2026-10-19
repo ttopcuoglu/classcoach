@@ -12,10 +12,7 @@ struct WelcomeView: View {
     @EnvironmentObject private var authManager: AuthManager
     @State private var errorMessage: String?
     @State private var isSubmitting = false
-    /// The AI-sharing consent, at the foot of the screen. Signing up through
-    /// Apple, Google or email waits for it.
-    @State private var aiAccepted = false
-    @State private var showingShared = false
+    @State private var aiDisclosureAccepted = false
 
     var body: some View {
         ScrollView {
@@ -51,12 +48,12 @@ struct WelcomeView: View {
                             .signInWithAppleButtonStyle(.black)
                             .frame(height: 50)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .disabled(!aiAccepted)
-                            .opacity(aiAccepted ? 1 : 0.4)
+                            .disabled(!aiDisclosureAccepted)
+                            .opacity(aiDisclosureAccepted ? 1 : 0.4)
 
                         GoogleSignInButton(style: .wide, action: signInWithGoogle)
-                            .disabled(!aiAccepted)
-                            .opacity(aiAccepted ? 1 : 0.4)
+                            .disabled(!aiDisclosureAccepted)
+                            .opacity(aiDisclosureAccepted ? 1 : 0.4)
 
                         NavigationLink {
                             EmailAuthView(initialMode: "signup")
@@ -71,8 +68,6 @@ struct WelcomeView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(AppTheme.primary)
-                        .disabled(!aiAccepted)
-                        .opacity(aiAccepted ? 1 : 0.4)
 
                         NavigationLink {
                             EmailAuthView(initialMode: "login")
@@ -94,23 +89,23 @@ struct WelcomeView: View {
                         .padding(.horizontal)
                 }
 
-                // Short, at the foot: who receives what, with the detail one tap
-                // away. Apple rejected the app without a yes before sharing
-                // (Guideline 5.1.1(i)/5.1.2(i), 2026-09-08).
+                // At the foot of the screen, under the buttons it unlocks. Apple
+                // rejected the app without a yes before sharing (Guideline
+                // 5.1.1(i)/5.1.2(i), 2026-09-08).
                 HStack(alignment: .top, spacing: 8) {
-                    Button { aiAccepted.toggle() } label: {
-                        Image(systemName: aiAccepted ? "checkmark.square.fill" : "square")
-                            .foregroundStyle(aiAccepted ? AppTheme.primary : AppTheme.textSecondary)
+                    Button {
+                        aiDisclosureAccepted.toggle()
+                    } label: {
+                        Image(systemName: aiDisclosureAccepted ? "checkmark.square.fill" : "square")
+                            .foregroundStyle(aiDisclosureAccepted ? AppTheme.primary : AppTheme.textSecondary)
                     }
-                    (Text("I agree my recordings and messages are sent to Anthropic (Claude AI) and Deepgram to run Wivoza. ")
-                        + Text("What\u{2019}s shared").foregroundColor(AppTheme.primary).fontWeight(.semibold))
+                    Text("I agree that responses, recordings, and messages I submit are sent to Anthropic's Claude AI (for coaching feedback and chat) and Deepgram (for transcription and voice playback), as described in our [Privacy Policy](https://www.wivoza.com/terms).")
                         .font(.caption)
                         .foregroundStyle(AppTheme.textSecondary)
-                        .onTapGesture { showingShared = true }
+                        .tint(AppTheme.primary)
                 }
                 .padding(.horizontal, 28)
                 .padding(.top, 8)
-                .sheet(isPresented: $showingShared) { AISharedDetails() }
 
                 VStack(spacing: 6) {
                     HStack(spacing: 6) {
@@ -196,41 +191,4 @@ extension UIApplication {
         WelcomeView()
     }
     .environmentObject(AuthManager.shared)
-}
-
-
-/// What "What's shared" opens: who receives a teacher's data and what each
-/// gets — the disclosure Apple asks for (Guideline 5.1.1(i)/5.1.2(i)).
-struct AISharedDetails: View {
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 14) {
-                row("Anthropic (Claude AI)", "Your messages, responses and lesson transcripts, for coaching feedback and chat.")
-                row("Deepgram", "Your lesson recordings and voice, for transcription and voice playback.")
-                Text("Audio is never stored: it is sent once for transcription and discarded.")
-                    .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Link("Privacy Policy", destination: URL(string: "https://www.wivoza.com/terms")!)
-                    .font(.subheadline.weight(.semibold)).tint(AppTheme.primary)
-                Spacer()
-            }
-            .padding(24)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.background.ignoresSafeArea())
-            .navigationTitle("What\u{2019}s shared")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-        }
-        .presentationDetents([.medium])
-    }
-
-    private func row(_ who: String, _ what: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(who).font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
-            Text(what).font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
 }
