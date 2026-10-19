@@ -535,10 +535,13 @@ struct SubsectionHeading: View {
 /// Mirrors `CoachNote` in AudioCoaching.tsx.
 struct CoachNoteView: View {
     let text: String?
+    /// How many sentences show before "Read more". The Insights sections show
+    /// one on the phone; elsewhere up to three.
+    var sentences = 3
     @State private var open = false
 
     /// Whole sentences, up to about three lines' worth; always at least one.
-    static func opening(of text: String) -> String {
+    static func opening(of text: String, sentences limit: Int = 3) -> String {
         let flat = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         var sentences: [String] = []
         var current = ""
@@ -551,7 +554,7 @@ struct CoachNoteView: View {
         }
         if !current.isEmpty { sentences.append(current) }
         var result = sentences.first ?? ""
-        for sentence in sentences.dropFirst().prefix(2) {
+        for sentence in sentences.dropFirst().prefix(max(0, limit - 1)) {
             if result.count + sentence.count + 1 > 330 { break }
             result += " \(sentence)"
         }
@@ -561,9 +564,9 @@ struct CoachNoteView: View {
     var body: some View {
         if let text {
             let full = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            let opening = Self.opening(of: full)
+            let opening = Self.opening(of: full, sentences: sentences)
             // Not worth a button to reveal one more short sentence.
-            let folds = full.count - opening.count > 80
+            let folds = full.count - opening.count > (sentences == 1 ? 0 : 80)
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "bubble.left.fill").foregroundStyle(AppTheme.forest).padding(.top, 2)
                 VStack(alignment: .leading, spacing: 6) {

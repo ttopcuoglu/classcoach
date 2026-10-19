@@ -5141,17 +5141,25 @@ const INVITE_FORMAT_LABEL = {
 } as const
 const EXTEND_KIND_LABEL = { probe: 'Probing', reasoning: 'Asking for reasoning', build_on_peer: 'Building on a classmate' } as const
 
-/// The lesson summary on Summary: every paragraph shown, beside Wivo's mark.
+/// The lesson summary on Summary: the first paragraph — what the lesson was
+/// about — with the other two behind "Read more", beside Wivo's mark.
 function SummaryNoteCard({ text }: { text: string }) {
+  const [open, setOpen] = useState(false)
+  const paras = splitParagraphs(text.trim())
   return (
     <div className="flex items-start gap-3 rounded-2xl bg-mint-tint/70 p-5">
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-forest font-heading text-sm font-bold text-gold">W</span>
       <div className="flex flex-col gap-3">
-        {splitParagraphs(text.trim()).map((para, i) => (
+        {(open ? paras : paras.slice(0, 1)).map((para, i) => (
           <p key={i} className="text-base leading-relaxed text-ink">
             {para}
           </p>
         ))}
+        {paras.length > 1 && (
+          <button type="button" onClick={() => setOpen((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 hover:underline">
+            {open ? 'Show less' : 'Read more'}
+          </button>
+        )}
       </div>
     </div>
   )

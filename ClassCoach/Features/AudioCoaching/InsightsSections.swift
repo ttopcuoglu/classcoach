@@ -44,7 +44,8 @@ struct SectionCard<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             InsightsSectionHeader(section: section)
-            CoachNoteView(text: note?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty)
+            // One sentence of the note on the phone; the rest behind Read more.
+            CoachNoteView(text: note?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty, sentences: 1)
             content
             KeepAndTryView(keep: keep, tryNext: tryNext, tryGoal: tryGoal)
             footer

@@ -236,22 +236,25 @@ struct OverviewTab: View {
         }
     }
 
-    /// Wivo's note: the "W" mark beside every paragraph of the summary, on
-    /// mint. Shown whole, at the teacher's request.
+    @State private var noteOpen = false
+
+    /// Wivo's note: the "W" mark beside the summary's first paragraph — what
+    /// the lesson was about — with the other two behind "Read more".
     private func noteCard(_ text: String) -> some View {
-        let shown = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let paras = text.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         return HStack(alignment: .top, spacing: 12) {
             Text("W")
                 .font(.heading(.subheadline)).foregroundStyle(AppTheme.gold)
                 .frame(width: 30, height: 30)
                 .background(AppTheme.forest, in: Circle())
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(
-                    shown.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty },
-                    id: \.self
-                ) { para in
+                ForEach(noteOpen ? paras : Array(paras.prefix(1)), id: \.self) { para in
                     Text(para).font(.body).foregroundStyle(AppTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
+                }
+                if paras.count > 1 {
+                    Button(noteOpen ? "Show less" : "Read more") { withAnimation { noteOpen.toggle() } }
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
                 }
             }
         }
