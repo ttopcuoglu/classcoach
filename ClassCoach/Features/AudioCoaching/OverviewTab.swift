@@ -309,8 +309,9 @@ struct OverviewTab: View {
                     Text(chosen != nil ? "Your choice ·"
                          : headlineSection.flatMap { Self.headlineItem[$0] } == suggested?.id ? "Suggested: where today\u{2019}s pattern points ·"
                          : "Suggested ·")
-                    if let chosen, let suggested, suggested.id != chosen.id {
-                        Button("Back to the suggestion") { chooseFocus(nil) }.fontWeight(.semibold)
+                    // With no suggestion to go back to, the way out is to clear it.
+                    if let chosen, suggested?.id != chosen.id {
+                        Button(suggested == nil ? "Clear my focus" : "Back to the suggestion") { chooseFocus(nil) }.fontWeight(.semibold)
                     } else {
                         Text("pick another from Try next time below")
                     }

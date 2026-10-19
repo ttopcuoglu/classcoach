@@ -2641,9 +2641,10 @@ function SummaryTab({
                     ? 'Suggested: where today’s pattern points'
                     : 'Suggested'}
                 {' · '}
-                {chosenFocus && suggested && suggested.id !== chosenFocus.id ? (
+                {/* With no suggestion to go back to, the way out is to clear it. */}
+                {chosenFocus && suggested?.id !== chosenFocus.id ? (
                   <button type="button" onClick={() => void chooseFocus(null)} className="font-semibold hover:underline">
-                    Back to the suggestion
+                    {suggested ? 'Back to the suggestion' : 'Clear my focus'}
                   </button>
                 ) : (
                   'pick another from Try next time below'
