@@ -12,6 +12,10 @@ struct WelcomeView: View {
     @EnvironmentObject private var authManager: AuthManager
     @State private var errorMessage: String?
     @State private var isSubmitting = false
+    /// The AI-sharing consent, at the foot of the screen. Signing up through
+    /// Apple, Google or email waits for it.
+    @State private var aiAccepted = false
+    @State private var showingShared = false
 
     var body: some View {
         ScrollView {
@@ -47,8 +51,12 @@ struct WelcomeView: View {
                             .signInWithAppleButtonStyle(.black)
                             .frame(height: 50)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .disabled(!aiAccepted)
+                            .opacity(aiAccepted ? 1 : 0.4)
 
                         GoogleSignInButton(style: .wide, action: signInWithGoogle)
+                            .disabled(!aiAccepted)
+                            .opacity(aiAccepted ? 1 : 0.4)
 
                         NavigationLink {
                             EmailAuthView(initialMode: "signup")
@@ -63,6 +71,8 @@ struct WelcomeView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(AppTheme.primary)
+                        .disabled(!aiAccepted)
+                        .opacity(aiAccepted ? 1 : 0.4)
 
                         NavigationLink {
                             EmailAuthView(initialMode: "login")
@@ -83,6 +93,24 @@ struct WelcomeView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                 }
+
+                // Short, at the foot: who receives what, with the detail one tap
+                // away. Apple rejected the app without a yes before sharing
+                // (Guideline 5.1.1(i)/5.1.2(i), 2026-09-08).
+                HStack(alignment: .top, spacing: 8) {
+                    Button { aiAccepted.toggle() } label: {
+                        Image(systemName: aiAccepted ? "checkmark.square.fill" : "square")
+                            .foregroundStyle(aiAccepted ? AppTheme.primary : AppTheme.textSecondary)
+                    }
+                    (Text("I agree my recordings and messages are sent to Anthropic (Claude AI) and Deepgram to run Wivoza. ")
+                        + Text("What\u{2019}s shared").foregroundColor(AppTheme.primary).fontWeight(.semibold))
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .onTapGesture { showingShared = true }
+                }
+                .padding(.horizontal, 28)
+                .padding(.top, 8)
+                .sheet(isPresented: $showingShared) { AISharedDetails() }
 
                 VStack(spacing: 6) {
                     HStack(spacing: 6) {
@@ -171,60 +199,31 @@ extension UIApplication {
 }
 
 
-/// Asked once per account on this phone, right after sign-in and before
-/// anything is sent to either provider — Apple requires the app to name who
-/// receives a teacher's data, say what, and get a yes first (Guideline
-/// 5.1.1(i)/5.1.2(i); the app was rejected without it on 2026-09-08). Signing
-/// in sends nothing to Anthropic or Deepgram, so asking here, not on the
-/// first screen, still asks before any data is shared.
-struct AIConsentView: View {
-    let onAgree: () -> Void
-    let onDecline: () -> Void
-    @State private var details = false
+/// What "What's shared" opens: who receives a teacher's data and what each
+/// gets — the disclosure Apple asks for (Guideline 5.1.1(i)/5.1.2(i)).
+struct AISharedDetails: View {
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("Before you start").font(.heading(.title)).foregroundStyle(AppTheme.forest)
-                Text("Your recordings and messages are sent to Anthropic (Claude AI) and Deepgram so Wivoza can coach you.")
-                    .font(.body).foregroundStyle(AppTheme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button {
-                    withAnimation { details.toggle() }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text("What\u{2019}s shared")
-                        Image(systemName: "chevron.down").rotationEffect(.degrees(details ? 180 : 0))
-                    }
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.primary)
-                }
-                if details {
-                    VStack(alignment: .leading, spacing: 10) {
-                        row("Anthropic (Claude AI)", "Your messages, responses and lesson transcripts, for coaching feedback and chat.")
-                        row("Deepgram", "Your lesson recordings and voice, for transcription and voice playback.")
-                        Text("Audio is never stored: it is sent once for transcription and discarded.")
-                            .font(.caption).foregroundStyle(AppTheme.textSecondary)
-                        Link("Privacy Policy", destination: URL(string: "https://www.wivoza.com/terms")!)
-                            .font(.caption.weight(.semibold)).tint(AppTheme.primary)
-                    }
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
-                }
-                Button(action: onAgree) {
-                    Text("I agree, continue").fontWeight(.semibold).frame(maxWidth: .infinity).frame(height: 50)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(AppTheme.primary)
-                .padding(.top, 6)
-                Button("Not now \u{2014} sign out", action: onDecline)
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 14) {
+                row("Anthropic (Claude AI)", "Your messages, responses and lesson transcripts, for coaching feedback and chat.")
+                row("Deepgram", "Your lesson recordings and voice, for transcription and voice playback.")
+                Text("Audio is never stored: it is sent once for transcription and discarded.")
                     .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-                    .frame(maxWidth: .infinity)
+                    .fixedSize(horizontal: false, vertical: true)
+                Link("Privacy Policy", destination: URL(string: "https://www.wivoza.com/terms")!)
+                    .font(.subheadline.weight(.semibold)).tint(AppTheme.primary)
+                Spacer()
             }
             .padding(24)
-            .padding(.top, 40)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.background.ignoresSafeArea())
+            .navigationTitle("What\u{2019}s shared")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
-        .background(AppTheme.background.ignoresSafeArea())
+        .presentationDetents([.medium])
     }
 
     private func row(_ who: String, _ what: String) -> some View {
