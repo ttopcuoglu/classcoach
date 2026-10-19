@@ -1,7 +1,6 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { cloneElement, createContext, isValidElement, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, MicIcon, PlayIcon } from '../components/icons'
-import BroughtStudentsIn from '../components/BroughtStudentsIn'
 import TalkFlowStrip, { FLOW_COLOR, type ShareSlice } from '../components/TalkFlowStrip'
 import { DashedLinePoint, HatchedBar, HatchedSwatch, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
@@ -2389,6 +2388,23 @@ function ReportPanel({
       />
     )
 
+  // Discuss the section on screen with the coach, opened about THIS page.
+  const discussThisSection = () =>
+    handleDiscussWithCoach({
+      id: `insights-${insightsSection}`,
+      observation: `${INSIGHTS_SECTIONS.find((s) => s.key === insightsSection)?.label ?? 'This section'} in this lesson`,
+      whyItMatters: "Let's talk through what this part of the report showed.",
+      timestampSec: null,
+      excerpt: null,
+      durationSec: null,
+      weight: 0,
+      focusMetric: null,
+      // The words the teacher just read, so the coach opens about
+      // THIS page rather than about the lesson in general. Without
+      // it the coach only ever got the section's name.
+      detail: narrativeForSection(session, insightsSection) ?? undefined,
+    })
+
   const metrics = session.metricsDetail ?? {}
   const recordedSec = session.durationSec ?? 0
   const coverage = getCoverage(session.durationSec, session.phases, session.metricsDetail)
@@ -2766,10 +2782,17 @@ function ReportPanel({
                 then, fourth down the page, the heading for the thing you had
                 just chosen — with its name already printed in the picker above.
                 Lenses now come after the content they are lenses on. */}
-            <InsightsSectionHeader section={insightsSection} />
+            {/* Talk & Participation carries its own header, inside its card. */}
+            {insightsSection !== 'talk' && <InsightsSectionHeader section={insightsSection} />}
             <SectionAccentContext.Provider value={INSIGHTS_SECTION_META[insightsSection].accent}>
             {insightsSection === 'talk' && (
-              <TalkParticipationTab session={session} silencePct={silencePct} talkInsight={talkInsight} lastRow={sectionHardLook} />
+              <TalkParticipationTab
+                session={session}
+                silencePct={silencePct}
+                talkInsight={talkInsight}
+                lastRow={sectionHardLook}
+                onDiscuss={discussThisSection}
+              />
             )}
 
             {insightsSection === 'questions' && (
@@ -2829,26 +2852,10 @@ function ReportPanel({
             )}
 
 
-            <DiscussFooter
-              compact
-              label="Discuss this with Wivoza Coach"
-              onClick={() =>
-                handleDiscussWithCoach({
-                  id: `insights-${insightsSection}`,
-                  observation: `${INSIGHTS_SECTIONS.find((s) => s.key === insightsSection)?.label ?? 'This section'} in this lesson`,
-                  whyItMatters: "Let's talk through what this part of the report showed.",
-                  timestampSec: null,
-                  excerpt: null,
-                  durationSec: null,
-                  weight: 0,
-                  focusMetric: null,
-                  // The words the teacher just read, so the coach opens about
-                  // THIS page rather than about the lesson in general. Without
-                  // it the coach only ever got the section's name.
-                  detail: narrativeForSection(session, insightsSection) ?? undefined,
-                })
-              }
-            />
+            {/* Talk & Participation has this in its card's footer. */}
+            {insightsSection !== 'talk' && (
+              <DiscussFooter compact label="Discuss this with Wivoza Coach" onClick={discussThisSection} />
+            )}
             </SectionAccentContext.Provider>
           </div>
         </div>
@@ -4735,6 +4742,7 @@ function SectionHardLook({
   sending,
   error,
   onGenerate,
+  bare,
 }: {
   section: InsightsSection
   hardLook: AudioHardLook | null
@@ -4742,8 +4750,11 @@ function SectionHardLook({
   sending: boolean
   error: string | null
   onGenerate: () => void
+  /// Shown already open, with no row of its own — when a button elsewhere
+  /// (Talk & Participation's footer) is what opened it.
+  bare?: boolean
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(!!bare)
   const critiques = (hardLook?.critiques ?? []).filter((c) => c.section === section)
   const cleared = (hardLook?.cleared ?? []).find((c) => c.section === section)
 
@@ -4754,8 +4765,8 @@ function SectionHardLook({
     // The last row of the section's list, like the evidence rows above it:
     // a card of its own made the hard reading the loudest thing on a page it
     // is meant to be an option on.
-    <div className="flex flex-col">
-      <button
+    <div className={`flex flex-col ${bare ? 'pt-4' : ''}`}>
+      {!bare && <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
@@ -4763,7 +4774,7 @@ function SectionHardLook({
       >
         <span>The hard look on this section</span>
         <RowChevron className={open ? 'rotate-180' : ''} />
-      </button>
+      </button>}
 
       {open && !hardLook && (
         <div className="flex flex-col gap-3 pb-5">
@@ -5404,12 +5415,14 @@ function TalkParticipationTab({
   silencePct,
   talkInsight,
   lastRow,
+  onDiscuss,
 }: {
   session: AudioSessionWithSegments
   silencePct: number | null
   talkInsight: string | null
-  /// The section's Hard Look, as the final row of its list.
+  /// The section's Hard Look, opened from the card's footer.
   lastRow: React.ReactNode
+  onDiscuss: () => void
 }) {
   // What students talked about is no longer shown. The count could only ever
   // describe the turns the microphone caught, and those are the ones spoken
@@ -5428,60 +5441,195 @@ function TalkParticipationTab({
   }, [session.segments])
 
   const nonSpeech = nonSpeechSplit(session.metricsDetail, session.durationSec)
+  const moves = session.teachingMoves
+  const p = moves?.participation
+  const detail = (session.metricsDetail ?? {}) as Record<string, unknown>
+  const heard = typeof detail.answersHeardCount === 'number' ? detail.answersHeardCount : null
+  const followed = typeof detail.answersFollowedUpCount === 'number' ? detail.answersFollowedUpCount : null
+  const invitations = (p?.invitations ?? moves?.invitations ?? []).map((q) => ({
+    ...q,
+    tag: 'format' in q ? (INVITE_FORMAT_LABEL[(q as { format: keyof typeof INVITE_FORMAT_LABEL }).format] ?? 'Opened the floor') : 'Opened the floor',
+  }))
+  const followUps = (p?.extending ?? moves?.revisionPrompts ?? []).map((q) => ({
+    ...q,
+    tag: 'kind' in q ? (EXTEND_KIND_LABEL[(q as { kind: keyof typeof EXTEND_KIND_LABEL }).kind] ?? 'Follow-up') : 'Follow-up',
+  }))
+  const widening = (p?.widening ?? []).map((q) => ({ ...q, tag: 'Beyond volunteers' }))
+  const [panel, setPanel] = useState<'read' | 'hard' | null>(null)
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* The answer to the section's question first: who was heard, and how
-          fast you spoke. Then the reading drawn from it. */}
+    <div className="flex flex-col gap-5 rounded-3xl border border-hairline bg-cream-card p-5 sm:p-6">
+      <InsightsSectionHeader section="talk" />
+
+      {talkInsight && <CoachNoteCard text={talkInsight} />}
+
+      {/* Who was heard and how fast, then the lesson minute by minute. */}
       <div id="stat-talkRatio" className="flex flex-col gap-3">
         <TalkNumbers teacherPct={session.teacherTalkPct} studentPct={session.studentTalkPct} wpm={wpm} />
         <TalkFlowStrip
           segments={session.segments}
           durationSec={session.durationSec}
           seconds={session.soundTimeline?.seconds ?? null}
-          invitations={(session.teachingMoves?.participation?.invitations ?? session.teachingMoves?.invitations ?? []).map((q) => q.timestampSec)}
+          invitations={invitations.map((q) => q.timestampSec)}
           checks={(session.cfuLog ?? []).map((c) => c.timestampSec)}
           shares={recordingShares(session.teacherTalkPct, session.studentTalkPct, nonSpeech)}
         />
       </div>
 
-      {talkInsight && <CoachNote text={talkInsight} />}
-
-      {/* How you brought students in: three moves in your own words, each
-          with one quote shown. Whether anyone took the floor is not
-          something a recording from the front of the room can show. */}
-      <BroughtStudentsIn session={session} />
-
-      {stretch && <LongestStretchCard stretch={stretch} read={session.teachingMoves?.stretch ?? null} segments={session.segments} />}
+      {/* The evidence, one finding at a time: a count, one line shown, the
+          rest behind a button. Whether anyone took the floor is not something
+          a recording from the front of the room can show. */}
+      <FindingRow title="Invitations to participate" count={String(invitations.length)} rows={invitations} accent="#8B7BC2" noun="invitations" />
+      <FindingRow
+        title="Follow-ups that pushed students further"
+        count={String(followUps.length)}
+        caption={
+          heard != null && followed != null && heard >= 3
+            ? `You followed up on ${followed} of the ${heard} student answers the recording could hear.`
+            : undefined
+        }
+        rows={followUps}
+        accent="#3F7D58"
+        noun="follow-ups"
+      />
+      {widening.length > 0 && (
+        <FindingRow title="Reaching beyond volunteers" count={String(widening.length)} rows={widening} accent="#B88A1F" noun="moments" />
+      )}
+      {stretch && <LongestStretchCard stretch={stretch} read={moves?.stretch ?? null} segments={session.segments} />}
 
       <SectionNextStep text={session.nextSteps?.talk} />
 
-      <DetailRows>
-        <DetailRow title="Explore details">
-          <DetailRows>
-            <DetailRow title="How to read these numbers">
+      {/* The two lenses on this section, and the conversation about it. */}
+      <div className="flex flex-col gap-3 border-t border-hairline pt-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {(['read', 'hard'] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setPanel(panel === k ? null : k)}
+              aria-expanded={panel === k}
+              className={`rounded-xl border px-3 py-1.5 text-sm ${panel === k ? 'border-forest text-forest' : 'border-hairline text-ink'} hover:border-forest`}
+            >
+              {k === 'read' ? 'How to read this' : 'The hard look'}
+            </button>
+          ))}
+          <button type="button" onClick={onDiscuss} className="ml-auto text-sm font-semibold text-terracotta-600 hover:underline">
+            Discuss with Wivoza Coach →
+          </button>
+        </div>
+        {panel === 'read' && (
+          <div className="flex flex-col gap-2 rounded-2xl bg-cream p-4">
+            <p className="text-sm text-ink-soft">
+              Talk time describes the recording, not the room: it doesn't show how many students took part or whether
+              they were engaged, and a microphone near you hears you far better than it hears them.
+            </p>
+            <p className="text-sm text-ink-soft">
+              "Sound, no words" and "Quiet" are everything that was neither clearly you nor clearly a student
+              {nonSpeech
+                ? '. In a classroom, sound with no words is usually voices the microphone could not make out; a video or noise from outside reads the same way.'
+                : ': quiet work, several voices at once, and audio too faint to place.'}
+            </p>
+            {silenceNote && <p className="text-sm text-ink-soft">{silenceNote}</p>}
+            {wpm != null && (
               <p className="text-sm text-ink-soft">
-                Talk time describes the recording, not the room: it doesn't show how many students took part or whether
-                they were engaged, and a microphone near you hears you far better than it hears them.
+                Pace is words a minute of your own speaking time. Everyday conversation runs about {CONVERSATIONAL_WPM} — an
+                anchor to place yourself against, not a target.
               </p>
-              <p className="text-sm text-ink-soft">
-                "Sound, no words" and "Quiet" are everything that was neither clearly you nor clearly a student
-                {nonSpeech
-                  ? '. In a classroom, sound with no words is usually voices the microphone could not make out; a video or noise from outside reads the same way.'
-                  : ': quiet work, several voices at once, and audio too faint to place.'}
-              </p>
-              {silenceNote && <p className="text-sm text-ink-soft">{silenceNote}</p>}
-              {wpm != null && (
-                <p className="text-sm text-ink-soft">
-                  Pace is words a minute of your own speaking time. Everyday conversation runs about {CONVERSATIONAL_WPM} —
-                  an anchor to place yourself against, not a target.
-                </p>
-              )}
-            </DetailRow>
-            {lastRow}
-          </DetailRows>
-        </DetailRow>
-      </DetailRows>
+            )}
+          </div>
+        )}
+        {panel === 'hard' && (
+          <div className="rounded-2xl bg-cream px-4">
+            {isValidElement<{ bare?: boolean }>(lastRow) ? cloneElement(lastRow, { bare: true }) : lastRow}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const INVITE_FORMAT_LABEL = {
+  hands: 'Hands up',
+  call_out: 'Call out',
+  turn_and_talk: 'Turn and talk',
+  write_first: 'Write first',
+  show_me: 'Everyone shows',
+  choral: 'All together',
+  open: 'Opened the floor',
+} as const
+const EXTEND_KIND_LABEL = { probe: 'Probing', reasoning: 'Asking for reasoning', build_on_peer: 'Building on a classmate' } as const
+
+/// The coach note as the card leads with it: the first sentence large, the
+/// rest a click away.
+function CoachNoteCard({ text }: { text: string }) {
+  const [open, setOpen] = useState(false)
+  const full = text.trim()
+  const lead = noteOpening(full)
+  const rest = splitParagraphs(full.slice(lead.length).trim())
+  return (
+    <div className="flex items-start gap-3 rounded-2xl bg-mint-tint/70 p-4">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-forest font-heading text-sm font-bold text-gold">W</span>
+      <div className="flex flex-col gap-2">
+        <p className="text-base text-ink">{lead}</p>
+        {open && rest.map((para, i) => <p key={i} className="text-sm text-ink-soft">{para}</p>)}
+        {rest.length > 0 && (
+          <button type="button" onClick={() => setOpen((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 hover:underline">
+            {open ? 'Show less' : 'Read more'}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/// One finding: a title and its count, the first line shown, the rest behind
+/// a button.
+function FindingRow({
+  title,
+  count,
+  caption,
+  rows,
+  accent,
+  noun,
+}: {
+  title: string
+  count: string
+  caption?: string
+  rows: { quote: string; timestampSec: number; tag: string }[]
+  accent: string
+  noun: string
+}) {
+  const [open, setOpen] = useState(false)
+  const shown = open ? rows : rows.slice(0, 1)
+  return (
+    <div className="flex flex-col gap-2 border-t border-dashed border-hairline pt-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="font-heading text-base font-bold text-forest">{title}</p>
+        <span className="font-heading text-base font-bold text-forest">{count}</span>
+      </div>
+      {caption && <p className="-mt-1 text-xs text-ink-soft">{caption}</p>}
+      {rows.length === 0 ? (
+        <p className="text-sm text-ink-soft">None heard in this lesson.</p>
+      ) : (
+        shown.map((r, i) => (
+          <div key={`${r.timestampSec}-${i}`} className="rounded-r-xl border-l-4 bg-cream px-3.5 py-2.5" style={{ borderColor: accent }}>
+            <div className="flex justify-between text-xs font-semibold text-ink-soft">
+              <span>{r.tag}</span>
+              <span className="font-mono">{formatTime(r.timestampSec)}</span>
+            </div>
+            <p className="mt-1 text-sm text-ink">“{r.quote}”</p>
+          </div>
+        ))
+      )}
+      {rows.length > 1 && (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="self-start rounded-xl border border-[#EBC9B6] bg-cream-card px-3 py-1 text-sm font-semibold text-terracotta-600"
+        >
+          {open ? 'Show fewer' : rows.length === 2 ? `Show both ${noun}` : `Show all ${rows.length} ${noun}`}
+        </button>
+      )}
     </div>
   )
 }
@@ -5561,12 +5709,13 @@ function LongestStretchCard({
   // ("Alright. So").
   const opening = (lines.find((l) => l.text.trim().split(/\s+/).length >= 6) ?? lines[0])?.text.trim() ?? stretch.opening
   return (
-    <div className="flex flex-col gap-2">
-      <p className="text-sm font-semibold text-forest">
-        Your longest explanation · about {Math.max(1, Math.round(stretch.durationSec / 60))} min, from {formatTime(stretch.startSec)}
-      </p>
+    <div className="flex flex-col gap-2 border-t border-dashed border-hairline pt-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="font-heading text-base font-bold text-forest">Your longest explanation</p>
+        <span className="font-heading text-base font-bold text-forest">about {Math.max(1, Math.round(stretch.durationSec / 60))} min</span>
+      </div>
       {matched?.about && <p className="-mt-1 text-xs text-ink-soft">{matched.about[0].toUpperCase() + matched.about.slice(1)}</p>}
-      <div className="rounded-r-xl border-l-4 border-forest/70 bg-cream-card px-3 py-2.5">
+      <div className="rounded-r-xl border-l-4 border-terracotta bg-cream px-3.5 py-2.5">
         <div className="flex justify-between text-xs font-semibold uppercase tracking-wide text-ink-soft">
           <span>From the stretch</span>
           <span>{formatTime(stretch.startSec)}–{formatTime(stretch.endSec)}</span>

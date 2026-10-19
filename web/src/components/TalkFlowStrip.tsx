@@ -66,7 +66,7 @@ export default function TalkFlowStrip({
   const label = (k: FlowKind) => (k === 'unknown' && !flow.hasEnvelope ? 'No words' : LABEL[k])
   const slices = shares.filter((s) => s.pct >= 0.5)
   return (
-    <div className="flex flex-col gap-2 rounded-2xl bg-cream-card px-4 py-3.5">
+    <div className="flex flex-col gap-2 rounded-2xl bg-cream px-4 py-3.5">
       <div className="flex justify-between text-xs font-bold text-ink-soft">
         <span>Your recording, minute by minute</span>
         <span>{mmss(duration)}</span>
