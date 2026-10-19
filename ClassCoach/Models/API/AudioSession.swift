@@ -396,6 +396,24 @@ struct AudioLessonFocus: Decodable {
     let next: Next?
 }
 
+/// A number, or nothing for any other JSON value — so one unexpected value
+/// in metricsDetail is skipped instead of failing the whole lesson.
+struct LenientNumber: Decodable {
+    let value: Double?
+    init(from decoder: Decoder) throws {
+        value = try? decoder.singleValueContainer().decode(Double.self)
+    }
+}
+
+struct AudioAnswer: Decodable {
+    let timestampSec: Double
+    let followed: Bool
+}
+
+private struct MetricsLogs: Decodable {
+    let answerLog: [AudioAnswer]?
+}
+
 struct AudioSession: Decodable, Identifiable {
     let id: String
     let teacherName: String?
@@ -418,6 +436,9 @@ struct AudioSession: Decodable, Identifiable {
     let avgWaitTimeSec: Double?
     let cfuCount: Int?
     let metricsDetail: [String: Double]?
+    /// Each student answer the recording heard, and whether you followed it
+    /// up — sent as metricsLogs.answerLog. Absent on older lessons.
+    let answerLog: [AudioAnswer]?
     let highlights: [AudioHighlight]?
     let phases: [AudioPhase]?
     let questionLog: [AudioQuestionLogEntry]?
@@ -470,7 +491,7 @@ struct AudioSession: Decodable, Identifiable {
              durationSec, transcribeStartedAt, failureReason,
              teacherTalkPct, studentTalkPct, questionCount, higherOrderPct, avgWaitTimeSec,
              cfuCount, metricsDetail, highlights, phases, questionLog, reflectConversation, lessonContent,
-             contentNotes, teachingMoves, lessonFocus, rubricLens, hardLook, escalation, studentTalkFocus, momentToRevisit, nextSteps, classSummary, checksNarrative, climateNarrative, contentNarrative, talkNarrative, questionsNarrative, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
+             contentNotes, teachingMoves, lessonFocus, metricsLogs, rubricLens, hardLook, escalation, studentTalkFocus, momentToRevisit, nextSteps, classSummary, checksNarrative, climateNarrative, contentNarrative, talkNarrative, questionsNarrative, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -501,8 +522,15 @@ struct AudioSession: Decodable, Identifiable {
         // the same list response — from the UI with no visible error.
         // Decoding as [String: Double?] and dropping null entries matches
         // how every call site already treats a missing key.
-        let rawMetrics = try container.decodeIfPresent([String: Double?].self, forKey: .metricsDetail)
-        metricsDetail = rawMetrics?.compactMapValues { $0 }
+        //
+        // Anything that is not a number is skipped, not thrown on. Lists went
+        // into metricsDetail on the server (answerLog, followUpLog) and one
+        // list failed the decode of every lesson in the list — an empty list
+        // here, and uploads cancelled as unknown to the server. The server now
+        // sends them as metricsLogs; this keeps the next such field harmless.
+        let rawMetrics = try? container.decodeIfPresent([String: LenientNumber].self, forKey: .metricsDetail)
+        metricsDetail = rawMetrics?.compactMapValues { $0.value }
+        answerLog = (try? container.decodeIfPresent(MetricsLogs.self, forKey: .metricsLogs))?.answerLog
         highlights = try container.decodeIfPresent([AudioHighlight].self, forKey: .highlights)
         phases = try container.decodeIfPresent([AudioPhase].self, forKey: .phases)
         questionLog = try container.decodeIfPresent([AudioQuestionLogEntry].self, forKey: .questionLog)
@@ -585,6 +613,7 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
     var avgWaitTimeSec: Double? { session.avgWaitTimeSec }
     var cfuCount: Int? { session.cfuCount }
     var metricsDetail: [String: Double]? { session.metricsDetail }
+    var answerLog: [AudioAnswer]? { session.answerLog }
     var highlights: [AudioHighlight]? { session.highlights }
     var phases: [AudioPhase]? { session.phases }
     var questionLog: [AudioQuestionLogEntry]? { session.questionLog }

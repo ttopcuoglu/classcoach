@@ -5450,7 +5450,8 @@ function QuestioningCheckingTab({
 
   // Follow-ups: one dot per heard answer, filled where you followed up.
   const detail = (session.metricsDetail ?? {}) as Record<string, unknown>
-  const answers = Array.isArray(detail.answerLog) ? (detail.answerLog as { timestampSec: number; followed: boolean }[]) : []
+  const log = session.metricsLogs?.answerLog ?? detail.answerLog
+  const answers = Array.isArray(log) ? (log as { timestampSec: number; followed: boolean }[]) : []
   const heard = typeof detail.answersHeardCount === 'number' ? detail.answersHeardCount : null
   const followed = typeof detail.answersFollowedUpCount === 'number' ? detail.answersFollowedUpCount : null
   const checksAll = (session.cfuLog ?? []).filter((c) => c.loop?.who !== 'not_a_check')

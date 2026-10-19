@@ -54,8 +54,18 @@ import { readStudentTalkFocus } from '../lib/studentTalkFocus.ts'
 import { readMomentToRevisit } from '../lib/momentToRevisit.ts'
 import { parseNextSteps, writeNextStepsFromNotes } from '../lib/nextSteps.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
+import { splitMetricLogs } from '../lib/metricsForClient.ts'
 
 export const audioSessionsRouter = Router()
+
+// Every lesson this router sends has its metricsDetail lists moved to
+// metricsLogs — the iPhone app cannot decode a list inside metricsDetail
+// (lib/metricsForClient.ts).
+audioSessionsRouter.use((_req, res, next) => {
+  const json = res.json.bind(res)
+  res.json = (body?: unknown) => json(splitMetricLogs(body))
+  next()
+})
 
 // Audio only ever lives in memory long enough to reach Deepgram — never on
 // disk, never attached to the session row.

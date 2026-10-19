@@ -57,7 +57,8 @@ export default function BroughtStudentsIn({ session }: { session: AudioSessionWi
   const moves = session.teachingMoves
   const p = moves?.participation
   const detail = (session.metricsDetail ?? {}) as Record<string, unknown>
-  const answers = Array.isArray(detail.answerLog) ? (detail.answerLog as { timestampSec: number; followed: boolean }[]) : null
+  const log = session.metricsLogs?.answerLog ?? detail.answerLog
+  const answers = Array.isArray(log) ? (log as { timestampSec: number; followed: boolean }[]) : null
   const heard = typeof detail.answersHeardCount === 'number' ? detail.answersHeardCount : null
   const followed = typeof detail.answersFollowedUpCount === 'number' ? detail.answersFollowedUpCount : null
   const showRate = heard != null && followed != null && heard >= MIN_ANSWERS_FOR_RATE
