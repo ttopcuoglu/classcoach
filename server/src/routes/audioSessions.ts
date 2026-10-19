@@ -1,3 +1,4 @@
+import { readRoutines } from '../lib/routines.ts'
 import { readLessonArc } from '../lib/lessonArc.ts'
 import { readStretch } from '../lib/stretchBreak.ts'
 import { readParticipation } from '../lib/participation.ts'
@@ -806,6 +807,10 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
     readLessonArc(segments, segments.reduce((max, seg) => Math.max(max, seg.endSec), 0)),
   ])
 
+  // What each set of directions was for, and invitations to ask for help.
+  // Needs the directions the teaching-moves read found, so it runs after it.
+  const routines = teachingMoves ? await readRoutines(segments, teachingMoves.directions) : null
+
   // What the student talk was ABOUT, which needs the objective and so cannot
   // run alongside the two reads above. It is the only thing in this report
   // that can tell a discussion from a room talking over itself — every other
@@ -878,6 +883,7 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
             ...(participation ? { participation } : {}),
             ...(stretch ? { stretch } : {}),
             ...(arc ? { arc } : {}),
+            ...(routines ? { routines } : {}),
           } as unknown as Prisma.InputJsonValue)
         : Prisma.DbNull,
     },

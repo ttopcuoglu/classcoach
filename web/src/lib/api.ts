@@ -909,6 +909,12 @@ export type AudioTeachingMoves = {
   /// The longest stretch of teacher talk, read once (server
   /// lib/stretchBreak.ts): what it was about, and a break only where the
   /// content plainly offers one.
+  /// What each set of directions was for, and invitations to ask for help
+  /// (server lib/routines.ts).
+  routines?: {
+    directionTypes: { timestampSec: number; type: 'start' | 'transition' | 'materials' | 'help' | 'finish' | 'other' }[]
+    helpInvites: AudioMoveQuote[]
+  }
   /// How the lesson moved, stage by stage (server lib/lessonArc.ts).
   arc?: { role: 'opened' | 'built' | 'applied' | 'practiced' | 'closed'; title: string; startSec: number; endSec: number }[]
   stretch?: {

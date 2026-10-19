@@ -36,19 +36,14 @@ import {
   updateProfile,
   generateContentNotes,
   type AudioContentNotes,
-  type AudioDirectiveLogEntry,
   type AudioHighlight,
   type AudioLessonContent,
   type AudioReflectMessage,
-  type AudioEscalation,
   type AudioTeachingMoves,
-  type AudioEscalationRung,
-  type AudioRedirectionLogEntry,
   type AudioHardLook,
   type AudioRubricLens,
   type AudioSession,
   type AudioSessionWithSegments,
-  type AudioToneLogEntry,
   type ApiError,
   type FocusMetric,
   type ReflectChatErrorKind,
@@ -57,7 +52,6 @@ import {
   type TranscriptSegment,
 } from '../lib/api'
 import { THIN_AUDIBLE_SHARE_PCT, useCaptureMonitor } from '../hooks/useCaptureMonitor'
-import { buildCorrectionBalance, coverageCaveatLine, DETECTION_CAVEAT } from '../lib/correctionBalance'
 import {
   buildEvidenceQualityLine,
   evidenceTier,
@@ -1457,38 +1451,6 @@ function buildTranscriptWindow(
     .sort((a, b) => a.startSec - b.startSec)
 }
 
-// A feedback moment is specifically the ONE teacher turn right after a
-// student turn — not a window of surrounding talk, which in a
-// densely-packed transcript can sweep in unrelated lines (the opening
-// statement, a later follow-up question) that look like more "moments"
-// than were actually counted. Returns exactly the pair that was counted,
-// or [] if the segment isn't found.
-function buildFeedbackExchange(segments: TranscriptSegment[], timestampSec: number): TranscriptSegment[] {
-  const ordered = [...segments].sort((a, b) => a.startSec - b.startSec)
-  const idx = ordered.findIndex((s) => s.startSec === timestampSec)
-  if (idx <= 0) return []
-  return [ordered[idx - 1], ordered[idx]]
-}
-
-// A single phrase-matched teacher turn — a check for understanding, a
-// clear direction, a positive/corrective tone moment, a redirection — is
-// its own segment, full stop; anything before it just happens to be
-// nearby in time and is often a completely unrelated exchange (see the
-// "What is one half plus one half?" / "One whole!" pair that a plain +/-15s
-// window pulled in ahead of an unrelated "Turn and talk..." CFU prompt).
-// The one thing worth keeping is a student's response immediately after,
-// since that's a genuine reaction to the moment, not surrounding noise.
-function buildSingleTurnExchange(segments: TranscriptSegment[], timestampSec: number): TranscriptSegment[] {
-  const ordered = [...segments].sort((a, b) => a.startSec - b.startSec)
-  const idx = ordered.findIndex((s) => s.startSec === timestampSec)
-  if (idx === -1) return []
-  const exchange = [ordered[idx]]
-  if (idx + 1 < ordered.length && ordered[idx + 1].speakerLabel === 'Student') {
-    exchange.push(ordered[idx + 1])
-  }
-  return exchange
-}
-
 // Coach-voice interpretations of the category stats — deterministic
 // templates, no Claude call (the analysis-time notes generation was
 // removed for exactly this reason: two independent AI summaries of the
@@ -1695,44 +1657,6 @@ function noteOpening(text: string): string {
     opening += ` ${sentence}`
   }
   return opening
-}
-
-// A section's note opens with its first two or three sentences and keeps the
-// rest behind "Read more". The note is the reading of the section; the page
-// below it is the evidence, and a teacher should reach the evidence without
-// scrolling past a paragraph first. Short notes are shown whole.
-function CoachNote({ text }: { text: string | null }) {
-  const [open, setOpen] = useState(false)
-  if (!text) return null
-  const full = text.trim()
-  const opening = noteOpening(full)
-  // Not worth a button to reveal one more short sentence.
-  const folds = full.length - opening.length > 80
-  const paragraphs = open || !folds ? splitParagraphs(full) : [opening]
-  return (
-    <div className="flex items-start gap-3 rounded-xl border border-mint-tint bg-mint-tint/60 p-4">
-      <ChatBubbleIcon className="mt-0.5 h-4 w-4 shrink-0 text-forest" />
-      <div className="flex flex-col gap-2">
-        {paragraphs.map((para, i) => (
-          <p key={i} className="text-sm text-ink">
-            {para}
-            {folds && i === paragraphs.length - 1 && (
-              <>
-                {' '}
-                <button
-                  type="button"
-                  onClick={() => setOpen((v) => !v)}
-                  className="font-semibold text-forest underline decoration-hairline underline-offset-4 hover:text-terracotta-600"
-                >
-                  {open ? 'Show less' : 'Read more'}
-                </button>
-              </>
-            )}
-          </p>
-        ))}
-      </div>
-    </div>
-  )
 }
 
 // Summary's "spotlight" card — one themed headline + the existing coach
@@ -2789,7 +2713,6 @@ function ReportPanel({
                 just chosen — with its name already printed in the picker above.
                 Lenses now come after the content they are lenses on. */}
             {/* Talk & Participation carries its own header, inside its card. */}
-            {insightsSection === 'routines' && <InsightsSectionHeader section={insightsSection} />}
             <SectionAccentContext.Provider value={INSIGHTS_SECTION_META[insightsSection].accent}>
             {insightsSection === 'talk' && (
               <TalkParticipationTab
@@ -2828,25 +2751,17 @@ function ReportPanel({
 
             {insightsSection === 'routines' && (
               <ClimateRoutinesTab
+                session={session}
                 climateNarrative={session.climateNarrative ?? null}
                 nextStep={session.nextSteps?.climate}
-                directiveLog={session.directiveLog}
-                toneLog={session.toneLog}
-                redirectionLog={session.redirectionLog}
-                escalation={session.escalation ?? null}
-                teachingMoves={session.teachingMoves ?? null}
-                metricsDetail={session.metricsDetail}
-                capturedSharePct={coverage.capturedSharePct}
-                segments={session.segments}
                 lastRow={sectionHardLook}
+                onDiscuss={discussThisSection}
               />
             )}
 
 
             {/* Talk & Participation has this in its card's footer. */}
-            {insightsSection === 'routines' && (
-              <DiscussFooter compact label="Discuss this with Wivoza Coach" onClick={discussThisSection} />
-            )}
+
             </SectionAccentContext.Provider>
           </div>
         </div>
@@ -5038,302 +4953,217 @@ function HardLookTab({
   )
 }
 
-// Whether a bid for the room's attention HELD.
-//
-// Deliberately not a count. A teacher with a hard group redirects more than
-// one with an easy group, and the count says which group she has — which is
-// why redirectionCount was retired from My Growth. What is worth saying is
-// the shape: asks in close succession mean the first did not land, and a run
-// that climbs toward a consequence is the spiral where each warning is worth
-// less than the last.
-//
-// Nothing here states how many bids there were. Across repeated readings of
-// the same lesson that number came back 11, 12, 13, 13 and 13 while the run
-// itself and the rung it reached never moved — so the run is what gets shown
-// and the number stays out of sight.
-const RUNG_PHRASE: Record<AudioEscalationRung, string> = {
-  attention: 'asking for the room’s attention',
-  behaviour: 'telling the room what to stop or start',
-  named: 'naming a student',
-  consequence: 'naming a consequence',
-  removal: 'separating a student from the group',
-}
-
-function EscalationCard({ escalation }: { escalation: AudioEscalation | null }) {
-  // Absent on every report analyzed before this existed. Saying nothing is
-  // right: this is not "no escalation", it is "not looked at".
-  if (!escalation) return null
-
-  if (escalation.state === 'not_measurable') {
-    return (
-      <div className="rounded-xl border border-hairline bg-cream p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Did your asks hold?</p>
-        <p className="mt-1 text-sm text-ink-soft">{escalation.reason}</p>
-      </div>
-    )
-  }
-
-  if (escalation.state === 'confirmed_none') {
-    return (
-      <p className="text-sm text-ink-soft">
-        No run of repeated asks in this lesson — when you asked for attention, the recording shows you moving on rather
-        than asking again.
-      </p>
-    )
-  }
-
-  const cluster = escalation.clusters[0] ?? null
-  const repeat = escalation.repeatedAsks[0] ?? null
-
-  return (
-    <div className="rounded-xl border border-gold bg-gold-tint/50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Did your asks hold?</p>
-      {cluster && (
-        <>
-          <p className="mt-1 text-sm font-semibold text-ink">
-            Around {formatTime(cluster.startSec)} you asked for the room several times in quick succession
-            {cluster.climbed ? `, rising from ${RUNG_PHRASE[cluster.fromRung]} to ${RUNG_PHRASE[cluster.topRung]}.` : '.'}
-          </p>
-          {cluster.quote ? (
-            <p className="mt-2 text-sm italic text-ink">“{cluster.quote}”</p>
-          ) : (
-            // The wording was too rough to attribute — see quoteSafety.ts. The
-            // moment is real; putting a garbled sentence in a teacher's mouth
-            // inside this section is not worth being right most of the time.
-            <p className="mt-2 text-xs text-ink-soft">
-              The transcript’s wording here was too rough to quote back to you, so only the moment is shown.
-            </p>
-          )}
-          <p className="mt-2 text-sm text-ink">
-            Asking again that soon means the first ask didn’t land. When that becomes the pattern, each one is worth less
-            than the last, and escalating is the only way left to be heard.
-          </p>
-        </>
-      )}
-      {repeat && (
-        <p className={`text-sm text-ink ${cluster ? 'mt-3' : 'mt-1'}`}>
-          {repeat.quote ? (
-            <>
-              At {formatTime(repeat.timestampSec)} you said you’d already asked — “{repeat.quote}”
-            </>
-          ) : (
-            <>At {formatTime(repeat.timestampSec)} your own words noted you’d already asked once.</>
-          )}
-        </p>
-      )}
-      <p className="mt-3 text-xs text-ink-soft">
-        Read from your speech alone. Whether the room actually settled isn’t something a room microphone can hear
-        {escalation.capturedSharePct != null ? `, and about ${escalation.capturedSharePct}% of this recording came through as speech` : ''}.
-      </p>
-    </div>
-  )
-}
-
-// Redirections set against encouragement. Both numbers have existed on every
-// lesson for months; the pairing is what was missing, and the pairing is the
-// part that means something — one real lesson carries six redirections and no
-// detected encouragement, which is the mechanism behind having to escalate.
-//
-// The counts are shown plainly and never as a score. There is no target ratio
-// here: the evidence is far too thin to hold a teacher to one.
-function CorrectionBalanceCard({
-  metricsDetail,
-  capturedSharePct,
-}: {
-  metricsDetail: AudioSessionWithSegments['metricsDetail']
-  capturedSharePct: number | null
-}) {
-  const balance = buildCorrectionBalance(metricsDetail, capturedSharePct)
-  if (balance.empty || !balance.line) return null
-  return (
-    <div className="rounded-xl border border-hairline bg-cream p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Correction and encouragement</p>
-      <div className="mt-2 flex flex-wrap gap-x-8 gap-y-2">
-        <Tally n={balance.redirections} label="redirections" />
-        {/* "detected" is in the label, not a footnote — a teacher reading a
-            zero must not read it as a verdict on their warmth. */}
-        <Tally n={balance.positives} label="encouragement detected" />
-        <Tally n={balance.correctives} label="corrective" />
-      </div>
-      <p className="mt-3 text-sm text-ink">{balance.line}</p>
-      {balance.detectionCaveat && <p className="mt-2 text-xs text-ink-soft">{DETECTION_CAVEAT}</p>}
-      {balance.coverageCaveat && (
-        <p className="mt-2 text-xs text-ink-soft">{coverageCaveatLine(capturedSharePct)}</p>
-      )}
-    </div>
-  )
-}
-
-function Tally({ n, label }: { n: number; label: string }) {
-  return (
-    <div>
-      <p className="text-2xl font-semibold text-ink">{n}</p>
-      <p className="text-xs text-ink-soft">{label}</p>
-    </div>
-  )
-}
-
-// One shape for everything teachingMoves produces: a heading, a line saying
-// what it is, and the teacher's own sentences with timestamps.
-//
-// Quotes rather than counts, deliberately. "5 clear directions" told a
-// teacher nothing they could act on; the sentence they actually said, and
-// which of task/steps/time/product it named, is a thing they can look at and
-// disagree with. Everything here is checkable against their own lesson, which
-// is the only authority this report has.
-function MoveEvidence({
+/// One compact card: a lesson-specific finding, one timestamped line shown,
+/// the rest behind "See more".
+function ClimateCard({
   title,
-  blurb,
+  finding,
+  note,
   rows,
-  tag,
-  emptyNote,
+  accent,
+  empty,
 }: {
   title: string
-  blurb?: string
-  rows: { quote: string; timestampSec: number }[] | undefined
-  /// A short label per row — the kind, the clarity, or which parts a
-  /// direction named.
-  tag?: (row: never) => string | null
-  /// Shown when the read ran and found none. Absent means show nothing at
-  /// all, which is right wherever "none" is unremarkable.
-  emptyNote?: string
+  finding: string | null
+  note?: React.ReactNode
+  rows: Evidence[]
+  accent: string
+  empty: string
 }) {
-  if (!rows) return null
-  if (rows.length === 0) {
-    return emptyNote ? <p className="text-sm text-ink-soft">{emptyNote}</p> : null
-  }
+  const [open, setOpen] = useState(false)
   return (
-    <DetailRow title={`${title} (${rows.length})`}>
-      {blurb && <p className="text-sm text-ink-soft">{blurb}</p>}
-      <div className="flex flex-col gap-2">
-        {rows.map((row, i) => {
-          const label = tag ? tag(row as never) : null
-          return (
-            <div key={`${row.timestampSec}-${i}`} className="rounded-xl border border-hairline bg-cream-card p-3">
-              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                <span>{formatTime(row.timestampSec)}</span>
-                {label && <span className="rounded-full bg-cream px-2 py-0.5">{label}</span>}
+    <div className="flex flex-col gap-3 border-t border-dashed border-hairline pt-5">
+      <p className="font-heading text-xl font-bold text-forest">{title}</p>
+      {finding && <p className="text-base font-semibold text-ink">{finding}</p>}
+      {note}
+      {rows.length === 0 ? (
+        <p className="text-sm text-ink-soft">{empty}</p>
+      ) : (
+        <>
+          {(open ? rows : rows.slice(0, 1)).map((r, i) => (
+            <div key={`${r.timestampSec}-${i}`} className="flex items-baseline justify-between gap-4 rounded-r-xl border-l-4 bg-cream px-3.5 py-3 text-sm text-ink" style={{ borderColor: accent }}>
+              <div>
+                <span className="mb-1 block text-xs font-semibold text-ink-soft">{r.tag}</span>“{r.quote}”
               </div>
-              <p className="mt-1 text-sm italic text-ink">“{row.quote}”</p>
+              <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(r.timestampSec)}</span>
             </div>
-          )
-        })}
-      </div>
-    </DetailRow>
+          ))}
+          {rows.length > 1 && (
+            <button type="button" onClick={() => setOpen((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 hover:underline">
+              {open ? 'Show less' : `See more (${rows.length - 1})`}
+            </button>
+          )}
+        </>
+      )}
+    </div>
   )
 }
 
-/// Which of task / steps / time / product a direction named. An empty list is
-/// a real result — a direction that named none of them is "off you go" — so
-/// it reads as that rather than as a missing label.
-function directionTag(row: { parts: string[] }): string {
-  return row.parts.length > 0 ? row.parts.join(' · ') : 'named none of the four'
+const ROUTINE_LABEL: Record<string, string> = {
+  start: 'Starting work',
+  transition: 'Changing activities',
+  materials: 'Materials',
+  help: 'Getting help',
+  finish: 'Finishing',
+  other: 'Directions',
 }
+const PART_WORD: Record<string, string> = { task: 'what to do', steps: 'the steps', time: 'how long', product: 'what to hand in' }
 
+/// Climate & Routines: directions and routines, redirection and the
+/// expectation it carried, and encouragement — from your own words. Language
+/// that might discourage participation is not judged here: a transcript
+/// cannot hear tone, and a student's line can be filed as yours. That reading
+/// belongs to The hard look, which a teacher chooses to open.
 function ClimateRoutinesTab({
+  session,
   climateNarrative,
   nextStep,
-  directiveLog,
-  toneLog,
-  redirectionLog,
-  escalation,
-  teachingMoves,
-  metricsDetail,
-  capturedSharePct,
-  segments,
   lastRow,
+  onDiscuss,
 }: {
+  session: AudioSessionWithSegments
   climateNarrative: string | null
   nextStep: string | null | undefined
-  directiveLog: AudioDirectiveLogEntry[] | null
-  toneLog: AudioToneLogEntry[] | null
-  redirectionLog: AudioRedirectionLogEntry[] | null
-  escalation: AudioEscalation | null
-  teachingMoves: AudioTeachingMoves | null
-  metricsDetail: AudioSessionWithSegments['metricsDetail']
-  capturedSharePct: number | null
-  segments: TranscriptSegment[]
-  /// The section's Hard Look, as the final row of its list.
   lastRow: React.ReactNode
+  onDiscuss: () => void
 }) {
-  const directiveCandidates: NoticeCandidate[] = (directiveLog ?? []).map((entry, i) => ({
-    id: `directive-log-${i}`,
-    observation: 'Clear direction',
-    whyItMatters: 'Clear, specific directions help students know exactly what to do next.',
-    timestampSec: entry.timestampSec,
-    excerpt: entry.text,
-    durationSec: null,
-    weight: 0,
-    focusMetric: 'directiveCount',
+  const moves = session.teachingMoves
+  // 1. Directions & routines.
+  const directions = moves?.directions ?? []
+  const typeAt = (sec: number) => moves?.routines?.directionTypes.find((d) => d.timestampSec === sec)?.type
+  const complete = directions.filter((d) => d.parts.length === 4)
+  const directionRows: Evidence[] = [...directions]
+    .sort((x, y) => y.parts.length - x.parts.length || x.timestampSec - y.timestampSec)
+    .map((d) => {
+      const t = typeAt(d.timestampSec)
+      const named = d.parts.length === 0 ? 'named none of the four' : `named ${d.parts.map((p) => PART_WORD[p] ?? p).join(', ')}`
+      return { quote: d.quote, timestampSec: d.timestampSec, tag: `${t ? `${ROUTINE_LABEL[t]} · ` : ''}${named}` }
+    })
+  const byType = new Map<string, number>()
+  for (const d of directions) {
+    const t = typeAt(d.timestampSec)
+    if (t && t !== 'other') byType.set(t, (byType.get(t) ?? 0) + 1)
+  }
+  const missingTime = directions.filter((d) => !d.parts.includes('time')).length
+  const directionFinding =
+    directions.length === 0
+      ? null
+      : directions.length === 1
+        ? `Your one set of directions ${directions[0].parts.length === 0 ? 'named none of the four parts' : `named ${directions[0].parts.map((p) => PART_WORD[p] ?? p).join(', ')}`}.`
+        : `${complete.length} of your ${directions.length} direction${directions.length === 1 ? '' : 's'} named all four: what to do, the steps, how long, and what to hand in.${
+          missingTime > 0 && complete.length < directions.length ? ` ${missingTime} didn’t say how long.` : ''
+        }`
+
+  // 2. Redirection & expectations.
+  const redirections = moves?.redirections ?? (session.redirectionLog ?? []).map((r) => ({ quote: r.text, timestampSec: r.timestampSec, clarity: null }))
+  const actionable = redirections.filter((r) => r.clarity === 'actionable')
+  const vague = redirections.filter((r) => r.clarity === 'vague')
+  const redirectRows: Evidence[] = [...actionable, ...vague, ...redirections.filter((r) => !r.clarity)].map((r) => ({
+    quote: r.quote,
+    timestampSec: r.timestampSec,
+    tag: r.clarity === 'actionable' ? 'Said what to do' : r.clarity === 'vague' ? 'Said only what to stop' : 'Redirection',
   }))
-  const positiveCandidates: NoticeCandidate[] = (toneLog ?? [])
-    .filter((entry) => entry.kind === 'positive')
-    .map((entry, i) => ({
-      id: `positive-log-${i}`,
-      observation: 'Positive language',
-      whyItMatters: "Naming what's going well reinforces it and helps build trust.",
-      timestampSec: entry.timestampSec,
-      excerpt: entry.text,
-      durationSec: null,
-      weight: 0,
-      focusMetric: 'toneRatio',
-    }))
-  const redirectionCandidates: NoticeCandidate[] = (redirectionLog ?? []).map((entry, i) => ({
-    id: `redirection-log-${i}`,
-    observation: 'Redirection',
-    whyItMatters: 'A brief, direct redirection keeps the lesson moving without dwelling on it.',
-    timestampSec: entry.timestampSec,
-    excerpt: entry.text,
-    durationSec: null,
-    weight: 0,
-    focusMetric: 'redirectionCount',
-  }))
-  const evidenceCandidates = [...directiveCandidates, ...positiveCandidates, ...redirectionCandidates].sort(
-    (a, b) => (a.timestampSec ?? 0) - (b.timestampSec ?? 0),
-  )
+  const redirectFinding =
+    redirections.length === 0
+      ? null
+      : redirections.length === 1 && redirections[0].clarity
+        ? redirections[0].clarity === 'actionable'
+          ? 'Your one redirection told students what to do.'
+          : 'Your one redirection said what to stop, not what to do instead.'
+        : actionable.length + vague.length > 0
+        ? `${actionable.length} of your ${redirections.length} redirection${redirections.length === 1 ? '' : 's'} told students what to do, not just what to stop.`
+        : `${redirections.length} redirection${redirections.length === 1 ? '' : 's'}.`
+  const esc = session.escalation
+  // Whether an ask held — never the number of bids.
+  const escNote =
+    esc?.state === 'found' && esc.clusters[0] ? (
+      <p className="text-sm text-ink-soft">
+        One ask needed repeating around {formatTime(esc.clusters[0].startSec)}
+        {esc.clusters[0].quote ? <> — “{esc.clusters[0].quote.replace(/[.!?]+$/, '')}”</> : null}.
+      </p>
+    ) : esc?.state === 'confirmed_none' ? (
+      <p className="text-sm text-ink-soft">Your asks held: none needed repeating.</p>
+    ) : null
+
+  // 3. Encouragement & respect.
+  const feedback = session.feedbackLog ?? []
+  const specific = feedback.filter((f) => f.kind === 'specific')
+  const corrective = (session.toneLog ?? []).filter((t) => t.kind === 'corrective')
+  const help = moves?.routines?.helpInvites ?? []
+  const encourageRows: Evidence[] = [
+    ...specific.map((f) => ({ quote: f.text, timestampSec: f.timestampSec, tag: 'Named what was right' })),
+    ...help.map((h) => ({ quote: h.quote, timestampSec: h.timestampSec, tag: 'Invited students to ask for help' })),
+    ...corrective.map((t) => ({ quote: t.text, timestampSec: t.timestampSec, tag: 'Responded to a mistake' })),
+    ...feedback.filter((f) => f.kind === 'generic').map((f) => ({ quote: f.text, timestampSec: f.timestampSec, tag: 'General praise' })),
+  ]
+  const encourageFinding =
+    feedback.length > 0
+      ? `${specific.length} of the ${feedback.length} times you responded to a student named what was right or wrong${help.length > 0 ? `, and you invited students to ask for help ${help.length} time${help.length === 1 ? '' : 's'}` : ''}.`
+      : help.length > 0
+        ? `You invited students to ask for help ${help.length} time${help.length === 1 ? '' : 's'}.`
+        : null
+
+  const keep: KeepLine | null =
+    (specific[0] && { text: 'You named what was right, not just “good”.', quote: specific[0].text, timestampSec: specific[0].timestampSec }) ||
+    (actionable[0] && { text: 'Your redirection told students what to do.', quote: actionable[0].quote, timestampSec: actionable[0].timestampSec }) ||
+    (complete[0] && { text: 'Your directions named what to do, the steps, how long, and what to hand in.', quote: complete[0].quote, timestampSec: complete[0].timestampSec }) ||
+    null
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* The note, then what to try, then the moments it was read from. There
-          is no numbers card here on purpose — a count of directions says
-          nothing about whether they landed — and no stock tip: the next step
-          is this lesson's own, or absent. */}
-      {climateNarrative && <CoachNote text={climateNarrative} />}
-
-      <EscalationCard escalation={escalation} />
-
-      <CorrectionBalanceCard metricsDetail={metricsDetail} capturedSharePct={capturedSharePct} />
-
-      <SectionNextStep text={nextStep} />
-
-      <DetailRows>
-        {/* Replaces a bare count of directions, which was never
-            interpretable — more directions is not better or worse, and a lab
-            has more than a seminar. What a direction NAMED is interpretable:
-            a teacher can look at one that named only the task and decide
-            whether the class knew how long they had. */}
-        <MoveEvidence
-          title="What your directions named"
-          blurb="Of the four things a direction can carry — the task, the order of steps, how long, and what to hand in — these are the ones each named."
-          rows={teachingMoves?.directions}
-          tag={directionTag}
-        />
-        <MoveEvidence
-          title="What your redirections asked for"
-          blurb="Whether each one said what to DO, or only what to stop. Quotes too rough in the transcript to put in your mouth are left out rather than shown."
-          rows={teachingMoves?.redirections}
-          tag={(row: { clarity: string }) => (row.clarity === 'actionable' ? 'says what to do' : 'says only what to stop')}
-        />
-        {evidenceCandidates.length > 0 && (
-          <DetailRow title={`Directions, praise and redirections, in your words (${evidenceCandidates.length})`}>
-            {evidenceCandidates.map((candidate) => (
-              <EvidenceItemCard key={candidate.id} candidate={candidate} segments={segments} />
-            ))}
-          </DetailRow>
-        )}
-        {lastRow}
-      </DetailRows>
-    </div>
+    <SectionShell
+      section="routines"
+      note={climateNarrative}
+      keep={keep}
+      tryNext={nextStep}
+      lastRow={lastRow}
+      onDiscuss={onDiscuss}
+      howToRead={
+        <>
+          <p className="text-sm text-ink-soft">
+            Everything here is from your own words. A direction is counted once however many sentences it runs to, and
+            each says which of the four parts it named: what to do, the steps, how long, and what to hand in.
+          </p>
+          <p className="text-sm text-ink-soft">
+            Tone isn't judged on this page: a transcript can't hear warmth or sarcasm, and a student's line can be filed as
+            yours. The hard look is where a stricter reading lives, if you want one.
+          </p>
+        </>
+      }
+    >
+      <ClimateCard
+        title="Directions & routines"
+        finding={directionFinding}
+        note={
+          byType.size > 0 ? (
+            <div className="flex flex-wrap gap-2 text-sm">
+              {[...byType.entries()].map(([t, n]) => (
+                <span key={t} className="rounded-full bg-cream px-3 py-1 text-ink">
+                  {ROUTINE_LABEL[t]} <b>{n}</b>
+                </span>
+              ))}
+            </div>
+          ) : undefined
+        }
+        rows={directionRows}
+        accent="#1F3A2E"
+        empty="No directions were found in this lesson."
+      />
+      <ClimateCard
+        title="Redirection & expectations"
+        finding={redirectFinding}
+        note={escNote}
+        rows={redirectRows}
+        accent="#B4593A"
+        empty="No redirections were heard."
+      />
+      <ClimateCard
+        title="Encouragement & respect"
+        finding={encourageFinding}
+        rows={encourageRows}
+        accent="#3F7D58"
+        empty="No feedback to a student was heard."
+      />
+    </SectionShell>
   )
 }
 
@@ -5646,47 +5476,6 @@ function LongestStretchCard({
       <p className="text-xs text-ink-soft">
         A stretch ends when a student is heard or you pause for more than ten seconds. A student the microphone missed does not end it.
       </p>
-    </div>
-  )
-}
-
-function EvidenceItemCard({
-  candidate,
-  segments,
-}: {
-  candidate: NoticeCandidate
-  segments: TranscriptSegment[]
-}) {
-  // Both kinds of evidence here are one precise, real exchange — not a
-  // window of surrounding talk, which in a densely-packed transcript can
-  // sweep in unrelated lines (an unconnected question-and-answer that
-  // just happens to fall nearby in time) that make a single moment look
-  // like it's citing several.
-  const isFeedback = candidate.observation === 'Specific feedback'
-  const window =
-    candidate.timestampSec == null
-      ? []
-      : isFeedback
-        ? buildFeedbackExchange(segments, candidate.timestampSec)
-        : buildSingleTurnExchange(segments, candidate.timestampSec)
-  return (
-    <div className="rounded-2xl border border-hairline bg-cream-card p-6">
-      <p className="text-xs font-semibold uppercase tracking-wide text-forest">
-        {formatCandidateHeadline(candidate)}
-      </p>
-      {window.length > 0 ? (
-        <div className="mt-2 flex flex-col gap-1.5">
-          {window.map((s, i) => (
-            <p key={i} className="text-sm text-ink">
-              <span className="font-medium">{s.speakerLabel}:</span> "{s.text}"
-            </p>
-          ))}
-        </div>
-      ) : (
-        candidate.excerpt && <p className="mt-2 text-sm text-ink">"{candidate.excerpt}"</p>
-      )}
-      <p className="mt-2 text-sm text-ink-soft">{candidate.whyItMatters}</p>
-      {/* The page carries one Discuss action at its end — see DiscussFooter. */}
     </div>
   )
 }
@@ -6106,15 +5895,6 @@ function TryNextTimeCard({ n, session }: { n: number; session: AudioSessionWithS
   )
 }
 
-// Every Insights section has the same shape: the note, one picture, one
-// finding, one thing to try, and then everything else folded into rows. The
-// rows are where the evidence lives — lists of quotes, the full set of numbers,
-// how to read them — so a teacher who wants it is one tap away and a teacher
-// who does not is not made to scroll past it.
-function DetailRows({ children }: { children: React.ReactNode }) {
-  return <div className="divide-y divide-hairline border-y border-hairline">{children}</div>
-}
-
 function RowChevron({ className = '' }: { className?: string }) {
   return (
     <svg
@@ -6129,34 +5909,6 @@ function RowChevron({ className = '' }: { className?: string }) {
     >
       <path d="M5 7.5l5 5 5-5" />
     </svg>
-  )
-}
-
-function DetailRow({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <details className="group">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-3 text-sm font-semibold text-forest marker:hidden hover:text-terracotta-600">
-        <span>{title}</span>
-        {/* Its own row only: group-open would also flip it whenever a row
-            it is nested in is open. */}
-        <RowChevron className="[details[open]>summary>&]:rotate-180" />
-      </summary>
-      <div className="flex flex-col gap-4 pb-5 pt-1">{children}</div>
-    </details>
-  )
-}
-
-// The section's own line from "Try next time" on Summary, shown where the
-// evidence for it is. Written with the class summary, so a report summarized
-// before that existed has none — and a section with nothing worth suggesting
-// says nothing rather than reaching for a stock tip.
-function SectionNextStep({ text }: { text: string | null | undefined }) {
-  if (!text?.trim()) return null
-  return (
-    <div className="rounded-xl bg-gold-tint/50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Try next time</p>
-      <p className="mt-1 text-sm text-ink">{text}</p>
-    </div>
   )
 }
 
