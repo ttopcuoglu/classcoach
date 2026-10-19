@@ -2789,7 +2789,7 @@ function ReportPanel({
                 just chosen — with its name already printed in the picker above.
                 Lenses now come after the content they are lenses on. */}
             {/* Talk & Participation carries its own header, inside its card. */}
-            {insightsSection !== 'talk' && insightsSection !== 'questions' && <InsightsSectionHeader section={insightsSection} />}
+            {insightsSection === 'routines' && <InsightsSectionHeader section={insightsSection} />}
             <SectionAccentContext.Provider value={INSIGHTS_SECTION_META[insightsSection].accent}>
             {insightsSection === 'talk' && (
               <TalkParticipationTab
@@ -2822,6 +2822,7 @@ function ReportPanel({
                 error={contentNotesError}
                 onGenerate={handleGenerateContentNotes}
                 lastRow={sectionHardLook}
+                onDiscuss={discussThisSection}
               />
             )}
 
@@ -2843,7 +2844,7 @@ function ReportPanel({
 
 
             {/* Talk & Participation has this in its card's footer. */}
-            {insightsSection !== 'talk' && insightsSection !== 'questions' && (
+            {insightsSection === 'routines' && (
               <DiscussFooter compact label="Discuss this with Wivoza Coach" onClick={discussThisSection} />
             )}
             </SectionAccentContext.Provider>
@@ -4332,31 +4333,67 @@ function ReflectTab({
   )
 }
 
-/// Clarity & Content is one narrative now: Content Specialist Notes.
-///
-/// It used to be a list of separate detections — topic-term clouds, the stated
-/// objective, real-world connections, defined vocabulary, then a notes block —
-/// each of which could read "None detected" while the lesson plainly contained
-/// the thing. A teacher tying ratios to cooking saw "Real-world connections:
-/// none". Everything still detected feeds the narrative instead of being
-/// listed beside it, so the section says what a subject specialist who
-/// listened would say, about the content and about how it was delivered.
-const CONTENT_NOTE_LABEL_STYLES: Record<string, string> = {
-  'What worked': 'bg-mint-tint/60 text-forest',
-  'Where it could go further': 'bg-gold-tint text-terracotta-600',
-  'Worth double-checking': 'bg-peach-tint text-terracotta-600',
-  // Labels from before specialist notes were strengths-and-next-steps.
-  Clarity: 'bg-mint-tint/60 text-forest',
-  Vocabulary: 'bg-mint-tint/60 text-forest',
-  'Engagement with content': 'bg-mint-tint/60 text-forest',
+const ARC_ROLE_LABEL = { opened: 'Opened with', built: 'Built', applied: 'Applied to', practiced: 'Practiced', closed: 'Closed with' } as const
+const EXPLANATION_LABEL: Record<string, string> = { example: 'Gave an example', analogy: 'Used an analogy', vocabulary: 'Gave a meaning', modeling: 'Thought aloud' }
+const CONNECTION_LABEL: Record<string, string> = { prior: 'Linked to earlier learning', purpose: 'Said why it matters', closing: 'Drew it together' }
+
+type PickItem = { tag: string; text?: string; quote?: string; timestampSec?: number }
+type PickOption = { key: string; label: string; desc: string; items: PickItem[] }
+
+/// A row of pill buttons, one per category, and the chosen category's items
+/// below — "Opened it up · 4", tap to switch.
+function CategoryPicker({ options, tone, hint }: { options: PickOption[]; tone: 'forest' | 'lavender'; hint?: string }) {
+  const shown = options.filter((o) => o.items.length > 0)
+  const [selected, setSelected] = useState(shown[0]?.key ?? '')
+  const current = shown.find((o) => o.key === selected) ?? shown[0]
+  if (!current) return null
+  const on = tone === 'forest' ? { bg: '#1F3A2E' } : { bg: '#6E62A0' }
+  return (
+    <>
+      <div className="flex flex-wrap gap-2" role="group">
+        {shown.map((o) => {
+          const active = o.key === current.key
+          return (
+            <button
+              key={o.key}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setSelected(o.key)}
+              className={`flex min-h-[40px] items-center gap-2 rounded-full border-[1.5px] px-4 text-sm font-semibold ${active ? 'text-cream' : 'border-hairline bg-cream-card text-ink'}`}
+              style={active ? { background: on.bg, borderColor: on.bg } : undefined}
+            >
+              {o.label}
+              <span className={`rounded-full px-2 text-xs ${active ? 'bg-white/20 text-cream' : 'bg-cream text-ink-soft'}`}>{o.items.length}</span>
+            </button>
+          )
+        })}
+      </div>
+      <div className={`flex flex-col gap-3 rounded-2xl p-4 ${tone === 'forest' ? 'bg-cream' : 'bg-[#ECE8F4]'}`} aria-live="polite">
+        <div className="flex items-baseline justify-between gap-3">
+          <b className="text-sm text-forest">
+            {current.label} · {current.items.length}
+          </b>
+          {hint && <span className="text-xs text-ink-soft">{hint}</span>}
+        </div>
+        <p className="-mt-1 text-sm text-ink-soft">{current.desc}</p>
+        {current.items.map((it, i) => (
+          <div key={i} className="flex items-baseline justify-between gap-4 rounded-xl bg-cream-card px-3.5 py-3 text-sm text-ink">
+            <div>
+              <span className="mb-1 block text-xs font-semibold text-ink-soft">{it.tag}</span>
+              {it.text && <span className="block">{it.text}</span>}
+              {it.quote && <span className={`block ${it.text ? 'mt-1 text-ink-soft' : ''}`}>“{it.quote}”</span>}
+            </div>
+            {it.timestampSec != null && <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(it.timestampSec)}</span>}
+          </div>
+        ))}
+      </div>
+    </>
+  )
 }
-/// Content Specialist Notes, and nothing else.
-///
-/// The section used to list separate detections — topic-term clouds, the
-/// stated objective, real-world connections, defined vocabulary — each of
-/// which could read "None detected" while the lesson plainly contained the
-/// thing. The subject expertise is what a teacher came here for; the page
-/// closes with the same Discuss action every other page does.
+
+/// Clarity & Content: how the lesson moved, what you did to make the content
+/// clear (your own words), ideas about the topic (a specialist's, not a read
+/// of this lesson), and the academic vocabulary as an optional extra.
 function LessonContentTab({
   lessonContent,
   contentNotes,
@@ -4367,6 +4404,7 @@ function LessonContentTab({
   error,
   onGenerate,
   lastRow,
+  onDiscuss,
 }: {
   lessonContent: AudioLessonContent | null
   contentNotes: AudioContentNotes | null
@@ -4376,211 +4414,229 @@ function LessonContentTab({
   sending: boolean
   error: string | null
   onGenerate: () => void
-  /// The section's Hard Look, as the final row of its list.
   lastRow: React.ReactNode
+  onDiscuss: () => void
 }) {
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
-  const visibleNotes = contentNotes?.notes.filter((n) => !dismissed.has(n.id)) ?? []
+  const arc = teachingMoves?.arc ?? []
+  const explanations = teachingMoves?.explanations ?? []
+  const ties = teachingMoves?.connections ?? []
   const connections = lessonContent?.connections ?? []
+  const lessonOptions: PickOption[] = [
+    {
+      key: 'opened',
+      label: 'Opened it up',
+      desc: 'How you introduced the content and made it approachable — examples, analogies, meanings, thinking aloud.',
+      items: explanations.map((e) => ({ tag: EXPLANATION_LABEL[e.kind] ?? 'Opened it up', quote: e.quote, timestampSec: e.timestampSec })),
+    },
+    {
+      key: 'tied',
+      label: 'Tied it together',
+      desc: 'How you linked parts of the lesson to each other, to earlier learning, and to why it matters.',
+      items: ties.map((c) => ({ tag: CONNECTION_LABEL[c.kind] ?? 'Tied it together', quote: c.quote, timestampSec: c.timestampSec })),
+    },
+    {
+      key: 'connections',
+      label: 'Connections',
+      desc: 'Links you made to other texts, lessons, or students’ lives.',
+      items: connections.map((c) => ({ tag: 'Connection', quote: c.quote, timestampSec: c.timestampSec })),
+    },
+  ]
+  const lessonCount = lessonOptions.reduce((n, o) => n + o.items.length, 0)
 
-  const connectionIdeas = lessonContent?.connectionIdeas ?? contentNotes?.connectionIdeas ?? []
+  const subject = lessonContent?.subject || contentNotes?.subject || 'this subject'
+  const notes = contentNotes?.notes ?? []
+  const topicOptions: PickOption[] = [
+    {
+      key: 'notes',
+      label: 'Specialist notes',
+      desc: `What a ${subject} specialist would want you to know, from excerpts of this lesson.`,
+      items: notes.map((n) => ({ tag: n.label, text: n.text, quote: n.excerpt, timestampSec: n.timestampSec })),
+    },
+    {
+      key: 'ways',
+      label: 'Ways in, next time',
+      desc: 'Other entry points into this content.',
+      items: (lessonContent?.connectionIdeas ?? contentNotes?.connectionIdeas ?? []).map((t) => ({ tag: 'Way in', text: t })),
+    },
+    {
+      key: 'stuck',
+      label: 'Where students get stuck',
+      desc: 'Common misconceptions on this topic — you may well have covered them.',
+      items: (contentNotes?.misconceptions ?? []).map((t) => ({ tag: 'Misconception', text: t })),
+    },
+  ]
+
   const keyTerms = lessonContent?.keyTerms ?? []
-  // Three is where "you kept saying it" starts; one or two uses is a mention.
-  const unheard = keyTerms.filter((t) => t.teacherCount >= 3 && t.studentCount === 0).map((t) => `"${t.term}"`)
+  const studentUsed = keyTerms.filter((t) => t.studentCount > 0)
+  const onlyYou = keyTerms.filter((t) => t.studentCount === 0)
+  const pips = (n: number, color: string) => (
+    <span className="flex flex-wrap gap-1">
+      {Array.from({ length: Math.min(n, 10) }, (_, i) => (
+        <i key={i} className="inline-block h-3 w-3 rounded-full" style={{ background: color }} />
+      ))}
+      {n > 10 && <span className="text-xs text-ink-soft">+{n - 10}</span>}
+    </span>
+  )
 
-  const misconceptions = contentNotes?.misconceptions ?? []
-  // The same note "Try next time" on Summary carries for this section.
-  const takeFurther = contentNotes?.notes.find((n) => n.label === 'Where it could go further')?.text
+  const worked = notes.find((n) => n.label === 'What worked')
+  const keep: KeepLine | null = worked
+    ? { text: worked.text, quote: worked.excerpt, timestampSec: worked.timestampSec }
+    : explanations[0]
+      ? { text: `You ${(EXPLANATION_LABEL[explanations[0].kind] ?? 'opened the content up').toLowerCase()} to make the content concrete.`, quote: explanations[0].quote, timestampSec: explanations[0].timestampSec }
+      : null
+  const tryNext = notes.find((n) => n.label === 'Where it could go further')?.text
 
   return (
-    <div className="flex flex-col gap-6">
-      {narrative && <CoachNote text={narrative} />}
-
-      {/* The terms are chosen by the read of the transcript and counted by
-          the server (keyTerms.ts). Hidden when there are none — older reports
-          have no list at all. */}
-      {keyTerms.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Academic vocabulary</h2>
-          <div className="overflow-hidden rounded-xl border border-hairline bg-cream-card">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-hairline text-xs uppercase tracking-wide text-ink-soft">
-                  <th scope="col" className="px-4 py-2 text-left font-semibold">Term</th>
-                  <th scope="col" className="px-4 py-2 text-right font-semibold">You</th>
-                  <th scope="col" className="px-4 py-2 text-right font-semibold">Students</th>
-                </tr>
-              </thead>
-              <tbody>
-                {keyTerms.map((t) => (
-                  <tr key={t.term} className="border-b border-hairline last:border-b-0">
-                    <th scope="row" className="px-4 py-2 text-left font-medium text-ink">{t.term}</th>
-                    <td className="px-4 py-2 text-right tabular-nums text-ink">{t.teacherCount}</td>
-                    <td className={`px-4 py-2 text-right tabular-nums ${t.studentCount === 0 ? 'text-ink-soft' : 'font-semibold text-forest'}`}>
-                      {t.studentCount}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {unheard.length > 0 && (
-        <p className="text-sm text-ink">
-          You said {new Intl.ListFormat('en', { type: 'conjunction' }).format(unheard)} three or more times
-          {unheard.length === 1 ? '' : ' each'}, and no student was heard saying {unheard.length === 1 ? 'it' : 'them'}.
-        </p>
-      )}
-
-      <SectionNextStep text={takeFurther} />
-
-      <DetailRows>
-        {/* How the content was opened up, in the teacher's own words. The
-            vocabulary table above says which terms were used; this says what
-            was done to make them land. */}
-        <MoveEvidence
-          title="How you opened the content up"
-          blurb="Examples, analogies, meanings given for a term, and moments you thought aloud through your own reasoning."
-          rows={teachingMoves?.explanations}
-          tag={(row: { kind: string }) => row.kind}
-        />
-        <MoveEvidence
-          title="How you tied the lesson together"
-          blurb="Links back to earlier learning, statements of why this matters, and drawing it together at the end."
-          rows={teachingMoves?.connections}
-          tag={(row: { kind: string }) =>
-            row.kind === 'prior' ? 'prior learning' : row.kind === 'purpose' ? 'why it matters' : 'closing'
-          }
-        />
-        {/* Offered for every lesson, and asked for when the report opens. The
-            button stays for the case where that request failed, and to write
-            them again. */}
-        <DetailRow title={contentNotes ? `Content specialist notes (${visibleNotes.length})` : 'Content specialist notes'}>
-          {!contentNotes ? (
-            <>
-              <button
-                type="button"
-                onClick={onGenerate}
-                disabled={sending}
-                className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
-              >
-                {sending ? 'Writing the notes…' : 'Generate content specialist notes'}
-              </button>
-              <WorkingRing active={sending} estimatedMs={14000} label="Writing content specialist notes" className="text-forest" />
-            </>
-          ) : (
-            <>
-              {isShort && (
-                <p className="text-xs font-semibold text-terracotta-600">
-                  This session is under {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes — content feedback from a
-                  short sample is especially limited.
-                </p>
-              )}
-              {visibleNotes.length === 0 ? (
-                <p className="text-sm text-ink-soft">No notes to show.</p>
-              ) : (
-                visibleNotes.map((note) => (
-                  <div key={note.id} className="rounded-xl border border-hairline bg-cream-card p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${CONTENT_NOTE_LABEL_STYLES[note.label] ?? 'bg-cream text-ink-soft'}`}
-                      >
-                        {note.label}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setDismissed((prev) => new Set(prev).add(note.id))}
-                        aria-label="Dismiss note"
-                        className="shrink-0 text-ink-soft hover:text-ink"
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <p className="mt-2 text-sm text-ink">{note.text}</p>
-                    <p className="mt-2 text-xs text-ink-soft">
-                      "{note.excerpt}" ({formatTime(note.timestampSec)})
-                    </p>
-                  </div>
-                ))
-              )}
-              {/* Notes are written once and kept, so this is the way to ask
-                  for the current specialist's version of an older set. */}
-              <button
-                type="button"
-                onClick={onGenerate}
-                disabled={sending}
-                className="self-start text-sm font-medium text-ink-soft hover:text-terracotta-600 disabled:opacity-60"
-              >
-                {sending ? 'Writing new notes...' : 'Write these notes again ↻'}
-              </button>
-              <WorkingRing active={sending} estimatedMs={16000} label="Writing content specialist notes" className="text-forest" />
-            </>
-          )}
-          {error && <p className="text-sm text-terracotta-600">{error}</p>}
-        </DetailRow>
-
-        {/* Only when the lesson actually contained one: silence is the right
-            answer when nothing was found. */}
-        {connections.length > 0 && (
-          <DetailRow title={`Connections you made (${connections.length})`}>
-            {connections.map((c) => (
-              <div key={`${c.timestampSec}-${c.quote.slice(0, 24)}`} className="rounded-xl border border-hairline bg-cream-card p-4">
-                <p className="text-sm text-ink">"{c.quote}"</p>
-                <p className="mt-1 text-xs text-ink-soft">{formatTime(c.timestampSec)}</p>
-              </div>
-            ))}
-          </DetailRow>
-        )}
-
-        {connectionIdeas.length > 0 && (
-          <DetailRow title="Ways into this topic, for next time">
-            <p className="text-xs text-ink-soft">
-              Suggestions from a specialist in {lessonContent?.subject || contentNotes?.subject || 'this subject'}, not a
-              reading of your lesson.
-            </p>
-            <ul className="flex list-disc flex-col gap-1.5 pl-5">
-              {connectionIdeas.map((idea) => (
-                <li key={idea.slice(0, 32)} className="text-sm text-ink">
-                  {idea}
-                </li>
-              ))}
-            </ul>
-          </DetailRow>
-        )}
-
-        {misconceptions.length > 0 && (
-          <DetailRow title="Where students usually get stuck on this topic">
-            <p className="text-xs text-ink-soft">
-              Subject knowledge about {contentNotes?.subject || 'this topic'}, not a reading of your lesson — you may well
-              have covered it.
-            </p>
-            <ul className="flex list-disc flex-col gap-1.5 pl-5">
-              {misconceptions.map((m) => (
-                <li key={m.slice(0, 32)} className="text-sm text-ink">
-                  {m}
-                </li>
-              ))}
-            </ul>
-          </DetailRow>
-        )}
-
-        <DetailRow title="How to read this section">
+    <SectionShell
+      section="content"
+      note={narrative}
+      keep={keep}
+      tryNext={tryNext}
+      lastRow={lastRow}
+      onDiscuss={onDiscuss}
+      howToRead={
+        <>
+          <p className="text-sm text-ink-soft">
+            "From your lesson" is your own words, found in the transcript. "About this topic" is a specialist's ideas for
+            teaching {subject} — written from excerpts of what you said, it may miss context, and your subject expertise
+            is the final word.
+          </p>
           {keyTerms.length > 0 && (
             <p className="text-sm text-ink-soft">
               Vocabulary is counted from the transcript, so read the counts as "at least": unusual terms are the words a
               recording most often mishears, and student counts include only what the microphone picked up.
             </p>
           )}
-          <p className="text-sm text-ink-soft">
-            The specialist notes are written from excerpts of what you said and may miss context. They're a starting
-            point for your own reflection, not a factual review — your subject expertise is the final word.
+        </>
+      }
+    >
+      {/* How the lesson moved — only where the arc read found its stages. */}
+      {arc.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <p className="font-heading text-xl font-bold text-forest">How the lesson moved</p>
+          <div className="flex flex-col gap-1.5 sm:flex-row">
+            {arc.map((s, i) => (
+              <div
+                key={i}
+                className={`flex-1 rounded-xl bg-cream px-3.5 py-3 ${i === 0 ? 'sm:rounded-l-2xl' : ''} ${i === arc.length - 1 ? 'sm:rounded-r-2xl' : ''}`}
+              >
+                <span className="text-xs font-bold uppercase tracking-wide text-terracotta-600">{ARC_ROLE_LABEL[s.role]}</span>
+                <p className="mt-0.5 text-sm font-semibold leading-snug text-ink">{s.title}</p>
+                <span className="mt-1 block font-mono text-xs text-ink-soft">
+                  {formatTime(s.startSec)}–{i === arc.length - 1 ? 'end' : formatTime(s.endSec)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* From your lesson: your own words, by what they did. */}
+      <div className="flex flex-col gap-4 border-t border-dashed border-hairline pt-5">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="font-heading text-xl font-bold text-forest">From your lesson</p>
+          <span className="text-sm text-ink-soft">
+            {lessonCount} moment{lessonCount === 1 ? '' : 's'}
+          </span>
+        </div>
+        <p className="text-base font-semibold text-ink">What you did to make the content clear, in your own words.</p>
+        {lessonCount === 0 ? (
+          <p className="text-sm text-ink-soft">None of these were found in this lesson.</p>
+        ) : (
+          <CategoryPicker options={lessonOptions} tone="forest" hint="Tap a category to see its moments" />
+        )}
+      </div>
+
+      {/* About this topic: a specialist's ideas, never a read of the lesson. */}
+      <div className="flex flex-col gap-4 border-t border-dashed border-hairline pt-5">
+        <p className="font-heading text-xl font-bold text-forest">About this topic</p>
+        <span className="self-start rounded-full bg-[#ECE8F4] px-3 py-1 text-xs font-semibold text-[#6E62A0]">
+          ✦ Ideas for teaching {subject}, not a read of this lesson
+        </span>
+        {isShort && contentNotes && (
+          <p className="text-xs font-semibold text-terracotta-600">
+            This session is under {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes — content feedback from a short
+            sample is especially limited.
           </p>
-        </DetailRow>
-        {lastRow}
-      </DetailRows>
-    </div>
+        )}
+        {!contentNotes ? (
+          <>
+            <button
+              type="button"
+              onClick={onGenerate}
+              disabled={sending}
+              className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+            >
+              {sending ? 'Writing the notes…' : 'Generate content specialist notes'}
+            </button>
+            <WorkingRing active={sending} estimatedMs={14000} label="Writing content specialist notes" className="text-forest" />
+          </>
+        ) : (
+          <>
+            <CategoryPicker options={topicOptions} tone="lavender" />
+            <button
+              type="button"
+              onClick={onGenerate}
+              disabled={sending}
+              className="self-start text-sm font-medium text-ink-soft hover:text-terracotta-600 disabled:opacity-60"
+            >
+              {sending ? 'Writing new notes...' : 'Write these notes again ↻'}
+            </button>
+            <WorkingRing active={sending} estimatedMs={16000} label="Writing content specialist notes" className="text-forest" />
+          </>
+        )}
+        {error && <p className="text-sm text-terracotta-600">{error}</p>}
+      </div>
+
+      {/* Optional: the academic vocabulary and who said it. */}
+      {keyTerms.length > 0 && (
+        <details className="group rounded-2xl border-[1.5px] border-hairline">
+          <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-4 px-5 py-4 marker:hidden">
+            <span className="flex-1">
+              <b className="block font-heading text-lg text-forest">Academic vocabulary</b>
+              <span className="text-sm text-ink-soft">
+                {studentUsed.length} of {keyTerms.length} key terms were heard from students.
+              </span>
+            </span>
+            <span className="rounded-full border border-hairline px-2.5 py-1 text-xs font-bold tracking-wide text-ink-soft">OPTIONAL</span>
+            <RowChevron className="group-open:rotate-180" />
+          </summary>
+          <div className="flex flex-col gap-1.5 px-5 pb-5">
+            <div className="flex flex-wrap gap-x-5 gap-y-1 pb-1 text-sm text-ink">
+              <span className="flex items-center gap-2"><i className="inline-block h-3 w-3 rounded-full bg-forest" />You</span>
+              <span className="flex items-center gap-2"><i className="inline-block h-3 w-3 rounded-full bg-gold" />Students</span>
+              <span className="text-ink-soft">Each dot = one time said</span>
+            </div>
+            {[
+              { title: `STUDENTS USED THESE · ${studentUsed.length}`, rows: studentUsed },
+              { title: `ONLY YOU SAID THESE · ${onlyYou.length}`, rows: onlyYou },
+            ]
+              .filter((g) => g.rows.length > 0)
+              .map((g) => (
+                <div key={g.title}>
+                  <p className="mt-2.5 text-xs font-bold tracking-wide text-forest">{g.title}</p>
+                  {g.rows.map((t) => (
+                    <div key={t.term} className="grid grid-cols-2 items-center gap-3 border-b border-dashed border-hairline py-2 text-sm sm:grid-cols-[200px_1fr_1fr]">
+                      <span className="col-span-2 sm:col-span-1">
+                        {t.term}
+                        {t.studentCount > t.teacherCount && (
+                          <span className="ml-2 rounded bg-mint-tint px-2 py-0.5 text-xs font-bold text-forest">students led</span>
+                        )}
+                      </span>
+                      {pips(t.teacherCount, 'var(--color-forest)')}
+                      {t.studentCount > 0 ? (
+                        pips(t.studentCount, 'var(--color-gold)')
+                      ) : (
+                        <span className="justify-self-start rounded border-[1.5px] border-dashed border-[#C9BFAD] px-2 text-xs text-ink-soft">not heard</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+          </div>
+        </details>
+      )}
+    </SectionShell>
   )
 }
 
@@ -5462,7 +5518,8 @@ function KeepAndTry({ keep, tryNext, tryGoal }: { keep: KeepLine | null; tryNext
           <p className="text-xs font-bold uppercase tracking-wide text-forest">Keep</p>
           <p className="mt-1 text-sm text-ink">{keep.text}</p>
           <p className="mt-1.5 text-sm text-ink-soft">
-            “{keep.quote}” <span className="font-mono text-xs">{formatTime(keep.timestampSec)}</span>
+            “{keep.quote.split(/\s+/).length > 25 ? `${keep.quote.split(/\s+/).slice(0, 25).join(' ')}…` : keep.quote}”{' '}
+            <span className="font-mono text-xs">{formatTime(keep.timestampSec)}</span>
           </p>
         </div>
       )}

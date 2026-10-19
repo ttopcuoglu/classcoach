@@ -909,6 +909,8 @@ export type AudioTeachingMoves = {
   /// The longest stretch of teacher talk, read once (server
   /// lib/stretchBreak.ts): what it was about, and a break only where the
   /// content plainly offers one.
+  /// How the lesson moved, stage by stage (server lib/lessonArc.ts).
+  arc?: { role: 'opened' | 'built' | 'applied' | 'practiced' | 'closed'; title: string; startSec: number; endSec: number }[]
   stretch?: {
     startSec: number
     endSec: number

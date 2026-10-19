@@ -1,3 +1,4 @@
+import { readLessonArc } from '../lib/lessonArc.ts'
 import { readStretch } from '../lib/stretchBreak.ts'
 import { readParticipation } from '../lib/participation.ts'
 import { Router } from 'express'
@@ -789,7 +790,7 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
   // The escalation read rides along with these: it needs the teacher's speech
   // and the coverage figure the phrase scan already computed, and nothing
   // from the other reads.
-  const [analysis, lessonContent, momentToRevisit, escalation, teachingMoves, participation, stretch] = await Promise.all([
+  const [analysis, lessonContent, momentToRevisit, escalation, teachingMoves, participation, stretch, arc] = await Promise.all([
     enrichClassroomMoves(scanned, segments),
     enrichLessonContent(detectLessonContent(segments, scanned.phases), segments),
     readMomentToRevisit(segments),
@@ -801,6 +802,8 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
     readParticipation(segments),
     // The longest stretch: what it was about, and a break where one fits.
     readStretch(segments),
+    // How the lesson moved, stage by stage.
+    readLessonArc(segments, segments.reduce((max, seg) => Math.max(max, seg.endSec), 0)),
   ])
 
   // What the student talk was ABOUT, which needs the objective and so cannot
@@ -870,7 +873,12 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
       momentToRevisit: momentToRevisit ?? Prisma.DbNull,
       escalation: escalation ?? Prisma.DbNull,
       teachingMoves: teachingMoves
-        ? ({ ...teachingMoves, ...(participation ? { participation } : {}), ...(stretch ? { stretch } : {}) } as unknown as Prisma.InputJsonValue)
+        ? ({
+            ...teachingMoves,
+            ...(participation ? { participation } : {}),
+            ...(stretch ? { stretch } : {}),
+            ...(arc ? { arc } : {}),
+          } as unknown as Prisma.InputJsonValue)
         : Prisma.DbNull,
     },
     include: { segments: { orderBy: { startSec: 'asc' } } },
