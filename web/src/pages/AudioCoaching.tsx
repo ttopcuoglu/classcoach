@@ -2606,12 +2606,12 @@ function SummaryTab({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* The headline: the one pattern across the sections, else what the
-          lesson came to. */}
-      {session.teachingMoves?.headline ? (
-        <CoachNoteCard text={session.teachingMoves.headline.text} />
-      ) : classSummary ? (
-        <CoachNoteCard text={classSummary} />
+      {/* The lesson summary, whole: what the lesson was about, what went
+          well, and what might be worth a look — three paragraphs, at the
+          teacher's request, not folded to a line. The short pattern headline
+          is not shown; it still picks the suggested focus below. */}
+      {classSummary ? (
+        <SummaryNoteCard text={classSummary} />
       ) : classSummarySending ? (
         <div className="flex justify-center rounded-3xl bg-mint-tint/70 p-6 text-forest">
           <ProgressRing progress={classSummaryProgress} label="Putting together a summary of this lesson" hint="Reading the whole transcript, not just the start." />
@@ -5140,6 +5140,22 @@ const INVITE_FORMAT_LABEL = {
   open: 'Opened the floor',
 } as const
 const EXTEND_KIND_LABEL = { probe: 'Probing', reasoning: 'Asking for reasoning', build_on_peer: 'Building on a classmate' } as const
+
+/// The lesson summary on Summary: every paragraph shown, beside Wivo's mark.
+function SummaryNoteCard({ text }: { text: string }) {
+  return (
+    <div className="flex items-start gap-3 rounded-2xl bg-mint-tint/70 p-5">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-forest font-heading text-sm font-bold text-gold">W</span>
+      <div className="flex flex-col gap-3">
+        {splitParagraphs(text.trim()).map((para, i) => (
+          <p key={i} className="text-base leading-relaxed text-ink">
+            {para}
+          </p>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 /// The coach note as the card leads with it: the first sentence large, the
 /// rest a click away.

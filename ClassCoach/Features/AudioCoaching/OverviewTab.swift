@@ -218,7 +218,10 @@ struct OverviewTab: View {
     // MARK: Headline
 
     @ViewBuilder private var headlineCard: some View {
-        if let text = session.teachingMoves?.headline?.text ?? session.classSummary {
+        // The lesson summary, whole — what the lesson was about, what went
+        // well, what might be worth a look. The short pattern headline is not
+        // shown; it still picks the suggested focus.
+        if let text = session.classSummary {
             noteCard(text)
         } else if summarizing {
             ProgressRing(
@@ -233,16 +236,10 @@ struct OverviewTab: View {
         }
     }
 
-    @State private var noteOpen = false
-
-    /// Wivo's note: the "W" mark beside the words, on mint. A long one — the
-    /// lesson summary standing in for a headline — opens with its first few
-    /// sentences and keeps the rest behind "Read more", as CoachNoteView does.
+    /// Wivo's note: the "W" mark beside every paragraph of the summary, on
+    /// mint. Shown whole, at the teacher's request.
     private func noteCard(_ text: String) -> some View {
-        let full = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let opening = CoachNoteView.opening(of: full)
-        let folds = full.count - opening.count > 80
-        let shown = noteOpen || !folds ? full : opening
+        let shown = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return HStack(alignment: .top, spacing: 12) {
             Text("W")
                 .font(.heading(.subheadline)).foregroundStyle(AppTheme.gold)
@@ -255,10 +252,6 @@ struct OverviewTab: View {
                 ) { para in
                     Text(para).font(.body).foregroundStyle(AppTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
-                }
-                if folds {
-                    Button(noteOpen ? "Show less" : "Read more") { withAnimation { noteOpen.toggle() } }
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
                 }
             }
         }
