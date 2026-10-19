@@ -744,10 +744,23 @@ export type AudioQuestionLogEntry = {
   timestampSec: number
   type: 'recall' | 'higher_order'
   waitTimeSec: number | null
+  /// How long before the teacher spoke again. May contain a student's answer.
+  /// Absent on lessons analyzed before it was timed.
+  pauseSec?: number | null
   text: string
   followUps: { timestampSec: number; text: string }[]
 }
-export type AudioCfuLogEntry = { timestampSec: number; text: string; whatItChecked: string }
+export type AudioCfuLogEntry = {
+  timestampSec: number
+  text: string
+  whatItChecked: string
+  /// Who the check asked and whether the teacher acted on what came back.
+  /// Present on lessons the checks read covered (2026-10-18); absent elsewhere.
+  loop?: {
+    who: 'everyone' | 'few' | 'asked_if_understood' | 'not_a_check'
+    acted: { how: 'adjusted' | 'confirmed'; text: string | null; atSec: number } | null
+  }
+}
 export type AudioFeedbackLogEntry = { timestampSec: number; kind: 'generic' | 'specific'; text: string }
 export type AudioDirectiveLogEntry = { timestampSec: number; text: string }
 export type AudioToneLogEntry = { timestampSec: number; kind: 'positive' | 'corrective'; text: string }
