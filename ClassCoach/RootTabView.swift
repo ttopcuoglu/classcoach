@@ -2,11 +2,19 @@ import SwiftUI
 
 struct RootTabView: View {
     @EnvironmentObject private var authManager: AuthManager
+    /// Account ids that agreed to the AI-sharing notice on this phone.
+    @AppStorage("aiConsentUserIds") private var consentedIds = ""
 
     var body: some View {
         Group {
             if authManager.isRestoringSession {
                 ProgressView()
+            } else if let user = authManager.currentUser, !consentedIds.split(separator: ",").contains(Substring(user.id)) {
+                // Before anything goes to Anthropic or Deepgram.
+                AIConsentView(
+                    onAgree: { consentedIds = (consentedIds.isEmpty ? "" : consentedIds + ",") + user.id },
+                    onDecline: { authManager.signOut() }
+                )
             } else if authManager.currentUser != nil {
                 // Five slots, the same five the web's bar settled on: Home,
                 // Talk, Grow, Plan, You. Five is also the most a phone's
