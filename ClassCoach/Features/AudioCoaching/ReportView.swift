@@ -6,12 +6,13 @@ enum ReportTab: String, CaseIterable {
     /// foot of the Insights column, where a report-scoped thing repeated under
     /// all four sections and belonged to none of them, and a teacher who came
     /// looking for it had to scroll a section to the end to find it.
-    case summary, insights, rubric, reflect, myGrowth
+    case summary, insights, specialist, rubric, reflect, myGrowth
 
     var label: String {
         switch self {
         case .summary: return "Summary"
         case .insights: return "Insights"
+        case .specialist: return "Content Specialist"
         case .rubric: return "Rubric lens"
         case .reflect: return "Reflect"
         case .myGrowth: return "My Growth"
@@ -80,6 +81,15 @@ struct ReflectFocus: Equatable {
             label: "The summary of this lesson",
             focus: "what the report says about the summary of this lesson",
             detail: session.classSummary
+        )
+    }
+
+    static func forSpecialist(_ session: AudioSessionWithSegments) -> ReflectFocus {
+        let notes = session.contentNotes?.notes ?? []
+        return ReflectFocus(
+            label: "Content Specialist in this lesson",
+            focus: "what the report says about Content Specialist in this lesson",
+            detail: notes.isEmpty ? nil : notes.map { "\($0.label): \($0.text)" }.joined(separator: " ")
         )
     }
 
@@ -216,8 +226,8 @@ struct ReportView: View {
                         session: session,
                         summarizing: summarizing,
                         readingMoment: readingMoment,
-                        onNavigateInsights: { target in section = target; tab = .insights },
-                        onDiscuss: discuss
+                        onUpdate: onUpdate,
+                        onNavigateInsights: { target in section = target; tab = .insights }
                     )
                     // The whole-lesson Hard Look, asked for here once. It used
                     // to open the Insights tab, above whichever section a
@@ -225,8 +235,15 @@ struct ReportView: View {
                     if !(locked && session.hardLook == nil) {
                         hardLookRow
                     }
+                    Text("\u{1F512} Audio was used for transcription only and is not stored.")
+                        .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                    // Reading the summary and wanting to talk about it is the
+                    // same impulse, so the way to do that ends the page.
+                    DiscussFooter(label: "Discuss with Wivoza Coach") { discuss(.forSummary(session)) }
                 case .insights:
                     insights
+                case .specialist:
+                    ContentSpecialistTab(session: session, onUpdate: onUpdate) { discuss(.forSpecialist(session)) }
                 case .rubric:
                     // Nothing collapsed here — a teacher who opened this tab
                     // has already said what they want.

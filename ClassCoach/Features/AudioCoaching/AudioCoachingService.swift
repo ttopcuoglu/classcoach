@@ -48,6 +48,27 @@ enum AudioCoachingService {
         )
     }
 
+    /// `focusItemId` is always sent — null is what puts the suggestion back,
+    /// so it cannot be left out the way the other fields are.
+    private struct FocusBody: Encodable {
+        let focusItemId: String?
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(focusItemId, forKey: .focusItemId)
+        }
+        private enum CodingKeys: String, CodingKey { case focusItemId }
+    }
+
+    /// The one focus for next lesson, picked from Try next time; nil goes back
+    /// to the suggested one. Mirrors `updateAudioSession(id, { focusItemId })`.
+    static func setLessonFocus(sessionId: String, itemId: String?) async throws {
+        let _: AudioSession = try await APIClient.shared.request(
+            "/api/audio-sessions/\(sessionId)",
+            method: "PATCH",
+            body: FocusBody(focusItemId: itemId)
+        )
+    }
+
     private struct TranscribeResponse: Decodable {
         let speakers: [SpeakerSample]
     }

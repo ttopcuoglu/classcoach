@@ -61,231 +61,35 @@ struct OverviewMetrics {
     }
 }
 
-/// The Summary tab — mirrors `AudioCoaching.tsx`'s `SummaryTab`: the lesson
-/// at a glance, four headline numbers, one strength, one focus, and who was
-/// heard. Everything else lives in Insights; talking it through is Reflect.
-struct OverviewTab: View {
-    let session: AudioSessionWithSegments
-    /// The written summary is on its way from the server — show the wait
-    /// rather than the numbers-only fallback, which would be replaced under
-    /// the teacher's eyes a few seconds later.
-    var summarizing = false
-    /// The transcript is being read for the moment to revisit.
-    var readingMoment = false
-    let onNavigateInsights: (InsightsSection) -> Void
-    let onDiscuss: (ReflectFocus) -> Void
+/// One of the report's suggestions, from whichever section made it — mirrors
+/// `NextTimeItem` in web/src/lib/reportHighlights.ts.
+struct NextTimeItem: Identifiable, Equatable {
+    let id: String
+    let from: String
+    let text: String
+    /// How the item is introduced once it leaves the report: a content note
+    /// is an observation, and a plan needs telling what to do with it.
+    var lead: String? = nil
 
-    private var m: OverviewMetrics { OverviewMetrics(session) }
-
-    /// Planning is asked as a question, and the ticks only appear on a yes: a
-    /// teacher reading their report should see what to try, not a form.
-    @State private var choosingForPlan = false
-    @State private var skippedForPlan: Set<String> = []
-
-    /// 100 minus the two talk shares — the quiet, the overlap and anything the
-    /// mic could not place. Mirrors the web report's own calculation.
-    private var silencePct: Double? {
-        guard let teacher = session.teacherTalkPct, let student = session.studentTalkPct else { return nil }
-        // One decimal, like the two shares beside it — whole numbers made the
-        // three add up to 100.4.
-        return max(0, ((100 - teacher - student) * 10).rounded() / 10)
-    }
-
-    private var talkInsight: String? { AudioInsights.buildTalkInsight(session) }
-    private var questioningInsight: String? { AudioInsights.buildQuestioningInsight(session, higherOrderRatio: m.higherOrderRatio) }
-    private var cfuInsight: String? { AudioInsights.buildCfuInsight(m.cfuMetric) }
-    private var noticedSummary: String? { AudioInsights.buildWivozaNoticedSummary([talkInsight, questioningInsight, cfuInsight]) }
-
-    private var strengthCandidate: AudioInsights.NoticeCandidate? {
-        AudioInsights.pickTop(AudioInsights.buildStrengthCandidates(session, cfuMetric: m.cfuMetric, feedbackRatio: m.feedbackRatio, higherOrderRatio: m.higherOrderRatio))
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if summarizing && session.classSummary == nil {
-                ProgressRing(
-                    active: true,
-                    estimatedSeconds: 18,
-                    label: "Putting together a summary of this lesson",
-                    hint: "Reading the whole transcript, not just the start."
-                )
-                .frame(maxWidth: .infinity)
-            } else if let glance = session.classSummary ?? noticedSummary {
-                VStack(alignment: .leading, spacing: 6) {
-                    eyebrow("Lesson at a glance", AppTheme.terracotta600)
-                    // Three paragraphs now — content, strengths, then what to
-                    // weigh. Any newline starts a new one, not only a blank
-                    // line: a summary whose paragraphs came back separated by
-                    // single newlines used to run together into a wall.
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(
-                            glance.components(separatedBy: .newlines)
-                                .map { $0.trimmingCharacters(in: .whitespaces) }
-                                .filter { !$0.isEmpty },
-                            id: \.self
-                        ) { para in
-                            Text(para)
-                                .font(.subheadline)
-                                .foregroundStyle(AppTheme.textPrimary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.goldTint.opacity(0.6), in: RoundedRectangle(cornerRadius: 18))
-                .overlay(alignment: .leading) {
-                    UnevenRoundedRectangle(topLeadingRadius: 18, bottomLeadingRadius: 18)
-                        .fill(AppTheme.gold)
-                        .frame(width: 7)
-                }
-            }
-
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                tile("You spoke", percent(session.teacherTalkPct), .terracotta)
-                tile("Students spoke", percent(session.studentTalkPct), .gold)
-                // Shares of the recording, not of the talking: without silence
-                // beside them, 22.6% and 7.9% read as a missing 70%.
-                tile("Silence / other", percent(silencePct), .teal)
-                tile("Questions", ReportConfidence.getCountMetric(count: session.questionCount, recordedSec: m.coverage.recordedSec), .teal)
-                tile("Avg. wait", waitMetric, .forest)
-            }
-
-            strengthCard
-            priorityCard
-            whoWasHeardCard
-            tryNextTimeCard
-
-            // Reading the summary and wanting to talk about it is the same
-            // impulse, so the way to do that sits at the end of the reading
-            // rather than under each card.
-            DiscussFooter { onDiscuss(.forSummary(session)) }
+    /// "Take further · Clarity & Content" → "Clarity & Content".
+    var section: String { from.components(separatedBy: " · ").last ?? from }
+    /// "Keep doing" is something to keep, not a change to aim at.
+    var focusable: Bool { id != "content-worked" }
+    var insightsSection: InsightsSection? {
+        switch id {
+        case "talk": return .talk
+        case "questions": return .questions
+        case "content-further", "content-worked": return .content
+        case "climate": return .routines
+        default: return nil
         }
-    }
-
-    // MARK: Pieces
-
-    private func eyebrow(_ text: String, _ color: Color) -> some View {
-        Text(text.uppercased()).font(.caption2.weight(.bold)).tracking(1.1).foregroundStyle(color)
-    }
-
-    private func tile(_ label: String, _ metric: ReportConfidence.ConfidentMetric, _ accent: ReportAccent) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label.uppercased()).font(.caption2.weight(.bold)).foregroundStyle(accent.ink)
-            Text(metric.display)
-                .font(.heading(.title))
-                .foregroundStyle(metric.state.isMissing ? AppTheme.textSecondary : AppTheme.forest)
-            if metric.state.isMissing, let reason = metric.reason {
-                Text(reason).font(.caption2).foregroundStyle(AppTheme.textSecondary).fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
-        .background(accent.tint, in: RoundedRectangle(cornerRadius: 18))
-    }
-
-    private func percent(_ value: Double?) -> ReportConfidence.ConfidentMetric {
-        guard let value else {
-            return ReportConfidence.ConfidentMetric(state: .notMeasurable, display: "—", reason: "Not enough data in this session to compute this.")
-        }
-        return ReportConfidence.ConfidentMetric(state: .measured, display: "\(ReportConfidence.formatNumber(value))%")
-    }
-
-    private var waitMetric: ReportConfidence.ConfidentMetric {
-        guard let wait = session.avgWaitTimeSec else {
-            return ReportConfidence.ConfidentMetric(state: .notMeasurable, display: "—", reason: "Not enough data in this session to compute this.")
-        }
-        return ReportConfidence.ConfidentMetric(state: .measured, display: "\(ReportConfidence.formatNumber(wait))s")
-    }
-
-    private func tintedCard(_ fill: Color, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 6) { content() }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(fill, in: RoundedRectangle(cornerRadius: 18))
-    }
-
-    private var strengthCard: some View {
-        tintedCard(AppTheme.mintTint.opacity(0.7)) {
-            eyebrow("A strength to keep", AppTheme.forest)
-            if let c = strengthCandidate {
-                Text(AudioInsights.formatCandidateHeadline(c)).font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
-                if let excerpt = c.excerpt { Text("\u{201C}\(excerpt)\u{201D}").font(.subheadline).foregroundStyle(AppTheme.textSecondary) }
-                Text(c.whyItMatters).font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-            } else {
-                Text("Not enough measured evidence yet for a stand-out strength this session.")
-                    .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-                Button("See the full breakdown in Insights →") { onNavigateInsights(.talk) }
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
-            }
-        }
-    }
-
-    /// The moment comes from a read of the transcript, not from ranking the
-    /// report's counts — that ranking put "longest monologue" on almost every
-    /// lesson. Mirrors `MomentToRevisitCard` in AudioCoaching.tsx, including
-    /// the three answers that decline to name one and say why.
-    @ViewBuilder private var priorityCard: some View {
-        if let moment = session.momentToRevisit {
-            tintedCard(AppTheme.goldTint.opacity(0.7)) {
-                eyebrow("A moment to revisit", AppTheme.terracotta600)
-                if moment.status == "found", let headline = moment.headline {
-                    Text(headline).font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let quote = moment.quote {
-                        Text("\u{201C}\(quote)\u{201D}\(moment.timestampSec.map { " · \(ReportConfidence.formatDuration($0))" } ?? "")")
-                            .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if let why = moment.whyItMatters {
-                        Text(why).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    // What to do about it is the first line of "Try next
-                    // time", below — one list of next steps, not one here and
-                    // more scattered through Insights.
-                } else {
-                    Text(momentWithoutOne(moment.status))
-                        .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        } else if readingMoment {
-            tintedCard(AppTheme.goldTint.opacity(0.7)) {
-                eyebrow("A moment to revisit", AppTheme.terracotta600)
-                Text("Reading the lesson for the moment most worth a second look…")
-                    .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-            }
-        }
-        // Not read and not being read — an older report whose request failed,
-        // or a locked one. Nothing beats a placeholder that never resolves.
-    }
-
-    private func momentWithoutOne(_ status: String) -> String {
-        switch status {
-        case "thin":
-            return "Not enough of this lesson came through clearly to pick one moment honestly. A recording with the phone nearer to where you teach gives this more to go on."
-        case "not_a_lesson":
-            return "This recording doesn\u{2019}t read as a class being taught, so there is no moment to pick out."
-        default:
-            return "Nothing in this lesson stood out as needing a second look."
-        }
-    }
-
-    private struct NextTimeItem: Identifiable {
-        let id: String
-        let from: String
-        let text: String
-        /// How the item is introduced once it leaves the report: a content
-        /// note is an observation, and a plan needs telling what to do with it.
-        var lead: String? = nil
     }
 
     /// Everything the report suggests, in one list — mirrors
-    /// `buildNextTimeItems` in AudioCoaching.tsx. "Worth double-checking"
-    /// notes are left out: a caution about possible content errors is not
-    /// something to build a lesson on.
-    private var nextTimeItems: [NextTimeItem] {
+    /// `buildNextTimeItems`. "Worth double-checking" notes are left out: a
+    /// caution about possible content errors is not something to build a
+    /// lesson on.
+    static func items(for session: AudioSessionWithSegments) -> [NextTimeItem] {
         var items: [NextTimeItem] = []
         func add(_ id: String, _ from: String, _ text: String?, lead: String? = nil) {
             guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return }
@@ -303,9 +107,378 @@ struct OverviewTab: View {
             notes.first { $0.label == "What worked" }?.text, lead: "Keep doing this")
         return items
     }
+}
 
-    private func planningPrefill(_ chosen: [NextTimeItem]) -> PlanningPrefill {
-        let lines = chosen.map { "- \($0.lead.map { "\($0): " } ?? "")\($0.text)" }
+/// Each counted question in one of three kinds — mirrors `classifyQuestions`
+/// in AudioCoaching.tsx, so Summary and the web count the same questions the
+/// same way: the finer read where it found the question, else the recall /
+/// higher-order split (higher-order without a finer kind reads as explain).
+enum QuestionMix: String, CaseIterable {
+    case recall, explain, reasoning
+
+    var color: Color {
+        switch self {
+        case .recall: return Color(hex: 0xCFC6B4)
+        case .explain: return Color(hex: 0x7FAE93)
+        case .reasoning: return Color(hex: 0x2E5E46)
+        }
+    }
+
+    static func classify(_ session: AudioSessionWithSegments) -> [(entry: AudioQuestionLogEntry, mix: QuestionMix)] {
+        let kinds = session.teachingMoves?.questionKinds ?? []
+        return (session.questionLog ?? []).map { q in
+            let kind = kinds.first { abs($0.timestampSec - q.timestampSec) <= 4 }?.kind
+            let mix: QuestionMix
+            switch kind {
+            case "recall": mix = .recall
+            case "explain": mix = .explain
+            case "justify", "compare", "evaluate": mix = .reasoning
+            case .some: mix = .recall
+            case .none: mix = q.type == "higher_order" ? .explain : .recall
+            }
+            return (q, mix)
+        }
+    }
+}
+
+/// The Summary tab — mirrors `SummaryTab` in AudioCoaching.tsx: the headline,
+/// your one focus for next lesson, one card per Insights section, keep doing,
+/// and Try next time. Everything else lives in Insights; talking it through
+/// is Reflect.
+struct OverviewTab: View {
+    let session: AudioSessionWithSegments
+    /// The written summary is on its way from the server — show the wait
+    /// rather than the numbers-only fallback, which would be replaced under
+    /// the teacher's eyes a few seconds later.
+    var summarizing = false
+    var readingMoment = false
+    let onUpdate: (AudioSessionWithSegments) -> Void
+    let onNavigateInsights: (InsightsSection) -> Void
+
+    private var m: OverviewMetrics { OverviewMetrics(session) }
+
+    /// Planning is asked as a question, and the ticks only appear on a yes: a
+    /// teacher reading their report should see what to try, not a form.
+    @State private var choosingForPlan = false
+    @State private var skippedForPlan: Set<String> = []
+
+    private var talkInsight: String? { AudioInsights.buildTalkInsight(session) }
+    private var questioningInsight: String? { AudioInsights.buildQuestioningInsight(session, higherOrderRatio: m.higherOrderRatio) }
+    private var cfuInsight: String? { AudioInsights.buildCfuInsight(m.cfuMetric) }
+    private var noticedSummary: String? { AudioInsights.buildWivozaNoticedSummary([talkInsight, questioningInsight, cfuInsight]) }
+
+    private var detail: [String: Double] { session.metricsDetail ?? [:] }
+    private var heard: Int? { detail["answersHeardCount"].map { Int($0) } }
+    private var followed: Int? { detail["answersFollowedUpCount"].map { Int($0) } }
+
+    // MARK: One focus
+
+    /// Which Try next time item each headline section suggests.
+    private static let headlineItem = ["talk": "talk", "questions": "questions", "content": "content-further", "routines": "climate"]
+
+    private var items: [NextTimeItem] { NextTimeItem.items(for: session) }
+    private var headlineSection: String? { session.teachingMoves?.headline?.section }
+    /// The section the headline's pattern points to; else questioning, talk,
+    /// climate in that order.
+    private var suggested: NextTimeItem? {
+        let all = items
+        if let s = headlineSection, let id = Self.headlineItem[s], let item = all.first(where: { $0.id == id }) { return item }
+        for id in ["questions", "talk", "climate"] {
+            if let item = all.first(where: { $0.id == id }) { return item }
+        }
+        return nil
+    }
+    private var chosen: NextTimeItem? {
+        guard let id = session.lessonFocus?.next?.itemId else { return nil }
+        return items.first { $0.id == id && $0.focusable }
+    }
+    private var focus: NextTimeItem? { chosen ?? suggested }
+
+    /// Saved with the lesson; shown at once, and put back if the save fails.
+    private func chooseFocus(_ itemId: String?) {
+        let before = session
+        var updated = session
+        updated.session.lessonFocus = itemId.map { AudioLessonFocus(itemId: $0) }
+        onUpdate(updated)
+        Task {
+            do { try await AudioCoachingService.setLessonFocus(sessionId: session.id, itemId: itemId) } catch { onUpdate(before) }
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            headlineCard
+            focusCard
+            sectionCards
+            keepDoingCard
+            tryNextTimeCard
+        }
+    }
+
+    // MARK: Headline
+
+    @ViewBuilder private var headlineCard: some View {
+        if let text = session.teachingMoves?.headline?.text ?? session.classSummary {
+            noteCard(text)
+        } else if summarizing {
+            ProgressRing(
+                active: true,
+                estimatedSeconds: 18,
+                label: "Putting together a summary of this lesson",
+                hint: "Reading the whole transcript, not just the start."
+            )
+            .frame(maxWidth: .infinity)
+        } else if let text = noticedSummary {
+            noteCard(text)
+        }
+    }
+
+    /// Wivo's note: the "W" mark beside the words, on mint.
+    private func noteCard(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("W")
+                .font(.heading(.subheadline)).foregroundStyle(AppTheme.gold)
+                .frame(width: 30, height: 30)
+                .background(AppTheme.forest, in: Circle())
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(
+                    text.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty },
+                    id: \.self
+                ) { para in
+                    Text(para).font(.body).foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.mintTint.opacity(0.7), in: RoundedRectangle(cornerRadius: 22))
+    }
+
+    // MARK: Focus card
+
+    @ViewBuilder private var focusCard: some View {
+        if let focus {
+            let withGoal = focus.id == "questions" && (heard ?? 0) >= 3 && (followed ?? Int.max) < (heard ?? 0)
+            VStack(alignment: .leading, spacing: 10) {
+                Text("YOUR ONE FOCUS FOR NEXT LESSON")
+                    .font(.caption2.weight(.bold)).tracking(1.1).foregroundStyle(Color(hex: 0x8E3F22))
+                Text(focus.text).font(.body).foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if withGoal, let heard, let followed {
+                    let target = min(heard, followed + 2)
+                    VStack(alignment: .leading, spacing: 6) {
+                        FlowLayout(spacing: 5) {
+                            ForEach(0..<heard, id: \.self) { i in
+                                let filled = i < followed
+                                let goal = !filled && i < target
+                                Circle()
+                                    .fill(filled ? AppTheme.terracotta : AppTheme.card)
+                                    .overlay(Circle().strokeBorder(
+                                        filled || goal ? AppTheme.terracotta : Color(hex: 0xD8B9A4),
+                                        style: StrokeStyle(lineWidth: 2, dash: goal ? [3, 2] : [])
+                                    ))
+                                    .frame(width: 18, height: 18)
+                            }
+                        }
+                        Text("\(followed) of \(heard) followed up today → aim for \(target)")
+                            .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Aim: \(target) of \(heard) answers followed up, \(followed) today")
+                }
+                if let section = focus.insightsSection {
+                    Button("From \(focus.section) →") { onNavigateInsights(section) }
+                        .font(.subheadline).foregroundStyle(Color(hex: 0x6E4A3A))
+                } else {
+                    Text("From \(focus.section)").font(.subheadline).foregroundStyle(Color(hex: 0x6E4A3A))
+                }
+                HStack(spacing: 4) {
+                    Text(chosen != nil ? "Your choice ·"
+                         : headlineSection.flatMap { Self.headlineItem[$0] } == suggested?.id ? "Suggested: where today\u{2019}s pattern points ·"
+                         : "Suggested ·")
+                    if let chosen, let suggested, suggested.id != chosen.id {
+                        Button("Back to the suggestion") { chooseFocus(nil) }.fontWeight(.semibold)
+                    } else {
+                        Text("pick another from Try next time below")
+                    }
+                }
+                .font(.caption).foregroundStyle(Color(hex: 0x6E4A3A))
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.peachTint, in: RoundedRectangle(cornerRadius: 22))
+            .background(AppTheme.gold, in: RoundedRectangle(cornerRadius: 22).offset(x: 5, y: 5))
+            .padding(.trailing, 5).padding(.bottom, 5)
+        }
+    }
+
+    // MARK: Section cards
+
+    private struct Slice: Identifiable {
+        let id: Int
+        let weight: Double
+        let color: Color
+        var hatched = false
+    }
+
+    private var hatch: [Slice] { [Slice(id: 0, weight: 1, color: .clear, hatched: true)] }
+
+    /// The recording's split as the Talk section states it: you, students,
+    /// and the rest as sound-with-no-words and quiet where the envelope
+    /// measured them, else one "no reading" slice. Mirrors `recordingShares`.
+    private var talkSlices: [Slice] {
+        guard let teacher = session.teacherTalkPct else { return hatch }
+        let students = session.studentTalkPct ?? 0
+        let rest = max(0, 100 - teacher - students)
+        var slices = [Slice(id: 0, weight: teacher, color: Color(hex: 0x2F855A)),
+                      Slice(id: 1, weight: students, color: Color(hex: 0x8B7BC2))]
+        if let quiet = detail["quietSec"], let unresolved = detail["unresolvedSec"], quiet + unresolved > 0 {
+            slices.append(Slice(id: 2, weight: rest * unresolved / (quiet + unresolved), color: Color(hex: 0xD08A2A)))
+            slices.append(Slice(id: 3, weight: rest * quiet / (quiet + unresolved), color: Color(hex: 0x3F8FD8)))
+        } else {
+            slices.append(Slice(id: 2, weight: rest, color: .clear, hatched: true))
+        }
+        return slices.filter { $0.weight >= 0.5 }
+    }
+
+    private func bar(_ slices: [Slice]) -> some View {
+        GeometryReader { geo in
+            let total = max(0.0001, slices.reduce(0) { $0 + $1.weight })
+            let gaps = CGFloat(max(0, slices.count - 1)) * 3
+            HStack(spacing: 3) {
+                ForEach(slices) { slice in
+                    let width = max(2, (geo.size.width - gaps) * CGFloat(slice.weight / total))
+                    if slice.hatched {
+                        RoundedRectangle(cornerRadius: 3)
+                            .strokeBorder(Color(hex: 0x9C9486), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+                            .frame(width: width)
+                    } else {
+                        RoundedRectangle(cornerRadius: 3).fill(slice.color).frame(width: width)
+                    }
+                }
+            }
+        }
+        .frame(height: 12)
+    }
+
+    private func sectionCard(_ section: InsightsSection, stat: String, statNote: String?, slices: [Slice], take: String?) -> some View {
+        Button { onNavigateInsights(section) } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    Text("\(section.number)")
+                        .font(.heading(.subheadline)).foregroundStyle(section.accent.onBand)
+                        .frame(width: 32, height: 32)
+                        .background(section.accent.band, in: RoundedRectangle(cornerRadius: 10))
+                    Text(section.title).font(.heading(.headline)).foregroundStyle(AppTheme.forest)
+                }
+                (Text(stat).font(.heading(.title)).foregroundColor(AppTheme.forest)
+                    + Text(statNote.map { "  \($0)" } ?? "").font(.subheadline).foregroundColor(AppTheme.textSecondary))
+                    .fixedSize(horizontal: false, vertical: true)
+                bar(slices)
+                if let take {
+                    Text(take).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text("Open \(section.title) →").font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
+            }
+            .multilineTextAlignment(.leading)
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 22))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private static let arcRoleLabel = ["opened": "opened with", "built": "built", "applied": "applied to", "practiced": "practiced", "closed": "closed with"]
+
+    @ViewBuilder private var sectionCards: some View {
+        let moves = session.teachingMoves
+        let invitations = (moves?.participation?.invitations ?? moves?.invitations ?? []).count
+        let questions = QuestionMix.classify(session)
+        let count = { (k: QuestionMix) in questions.filter { $0.mix == k }.count }
+        let arc = moves?.arc ?? []
+        let explanations = moves?.explanations?.count ?? 0
+        let keyTerms = session.lessonContent?.keyTerms ?? []
+        let directions = (moves?.directions ?? []).sorted { $0.timestampSec < $1.timestampSec }
+        let complete = directions.filter { $0.parts.count == 4 }.count
+        let redirections = moves?.redirections ?? []
+        let actionable = redirections.filter { $0.clarity == "actionable" }.count
+        let arcColors = [Color(hex: 0xCFC6B4), Color(hex: 0x7FAE93), Color(hex: 0x1F3A2E), Color(hex: 0x2E5E46)]
+
+        sectionCard(
+            .talk,
+            stat: session.teacherTalkPct.map { "\(Int($0.rounded()))%" } ?? "—",
+            statNote: session.teacherTalkPct != nil ? "of the recording was your voice" : nil,
+            slices: talkSlices,
+            take: invitations > 0 ? "You opened the floor \(invitations) time\(invitations == 1 ? "" : "s")." : nil
+        )
+        sectionCard(
+            .questions,
+            stat: questions.isEmpty ? "—" : "\(count(.explain) + count(.reasoning)) of \(questions.count)",
+            statNote: questions.isEmpty ? nil : "questions went beyond recall",
+            slices: questions.isEmpty ? hatch : QuestionMix.allCases.enumerated().compactMap { i, k in
+                count(k) > 0 ? Slice(id: i, weight: Double(count(k)), color: k.color) : nil
+            },
+            take: (heard ?? 0) >= 3 && followed != nil ? "You followed up on \(followed!) of \(heard!) answers the recording could hear." : nil
+        )
+        sectionCard(
+            .content,
+            stat: arc.isEmpty ? "—" : "\(arc.count)",
+            statNote: arc.isEmpty ? nil : "stages: " + arc.map { Self.arcRoleLabel[$0.role] ?? $0.role }.joined(separator: " → "),
+            slices: arc.isEmpty ? hatch : arc.enumerated().map { i, stage in
+                Slice(id: i, weight: max(1, stage.endSec - stage.startSec), color: arcColors[i % 4])
+            },
+            take: [
+                explanations > 0 ? "You opened the content up \(explanations) time\(explanations == 1 ? "" : "s")." : nil,
+                keyTerms.isEmpty ? nil : "\(keyTerms.filter { $0.studentCount > 0 }.count) of \(keyTerms.count) key terms heard from students.",
+            ].compactMap { $0 }.joined(separator: " ").nilIfEmpty
+        )
+        sectionCard(
+            .routines,
+            stat: directions.count == 1 ? "\(directions[0].parts.count) of 4" : directions.count > 1 ? "\(complete) of \(directions.count)" : "—",
+            statNote: directions.count == 1 ? "parts named in your one set of directions"
+                : directions.count > 1 ? "directions named all four parts" : nil,
+            slices: directions.isEmpty ? hatch : directions.enumerated().map { i, d in
+                Slice(id: i, weight: 1, color: d.parts.count == 4 ? Color(hex: 0x1F3A2E) : d.parts.count >= 2 ? Color(hex: 0x7FAE93) : Color(hex: 0xCFC6B4))
+            },
+            take: redirections.count == 1
+                ? (actionable == 1 ? "Your one redirection told students what to do." : "Your one redirection said what to stop, not what to do instead.")
+                : redirections.count > 1 ? "\(actionable) of \(redirections.count) redirections told students what to do." : nil
+        )
+    }
+
+    // MARK: Keep doing
+
+    @ViewBuilder private var keepDoingCard: some View {
+        let questions = QuestionMix.classify(session)
+        let reasoning = questions.filter { $0.mix == .reasoning }.count
+        let explain = questions.filter { $0.mix == .explain }.count
+        if let q = questions.first(where: { $0.mix == .reasoning }) ?? questions.first(where: { $0.mix == .explain }) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("KEEP DOING").font(.caption2.weight(.bold)).tracking(1.1).foregroundStyle(AppTheme.forest)
+                Text(reasoning > 0
+                     ? "Your \u{201C}why\u{201D} questions. \(reasoning) asked students to justify, compare or judge, not just answer."
+                     : "\(explain) of your questions asked students to explain why or how.")
+                    .font(.body).foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                (Text("\u{201C}\(Redaction.withoutAddressedNames(q.entry.text))\u{201D} ")
+                    + Text(ReportConfidence.formatDuration(q.entry.timestampSec)).font(.caption.monospacedDigit()))
+                    .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.mintTint.opacity(0.7), in: RoundedRectangle(cornerRadius: 22))
+        }
+    }
+
+    // MARK: Try next time
+
+    private func planningPrefill(_ chosenItems: [NextTimeItem]) -> PlanningPrefill {
+        let focusLine = focus.map { ["- My one focus: \($0.text)"] } ?? []
+        let lines = focusLine + chosenItems.map { "- \($0.lead.map { "\($0): " } ?? "")\($0.text)" }
         return PlanningPrefill(
             subject: session.classSubject ?? session.lessonContent?.subject,
             gradeLevel: session.gradeLevel,
@@ -315,90 +488,96 @@ struct OverviewTab: View {
     }
 
     @ViewBuilder private var tryNextTimeCard: some View {
-        let items = nextTimeItems
-        if !items.isEmpty {
-            let chosen = items.filter { !skippedForPlan.contains($0.id) }
-            tintedCard(AppTheme.card) {
-                Text("Try next time").font(.heading(.headline)).foregroundStyle(AppTheme.forest)
-                Text("What this report suggests, from every section, in one list")
+        // The one focus has its own card above; it goes to planning first.
+        let rest = items.filter { $0.id != focus?.id }
+        if !rest.isEmpty || focus != nil {
+            let chosenItems = rest.filter { !skippedForPlan.contains($0.id) }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("TRY NEXT TIME").font(.caption2.weight(.bold)).tracking(1.1).foregroundStyle(Color(hex: 0x8E3F22))
+                Text(focus != nil ? "The rest of what this report suggests, alongside your one focus." : "What this report suggests, from every section, in one list.")
                     .font(.caption).foregroundStyle(AppTheme.textSecondary)
-                ForEach(items) { item in
-                    Button {
-                        guard choosingForPlan else { return }
-                        if skippedForPlan.contains(item.id) { skippedForPlan.remove(item.id) } else { skippedForPlan.insert(item.id) }
-                    } label: {
-                        HStack(alignment: .top, spacing: 10) {
-                            if choosingForPlan {
+                ForEach(rest) { item in
+                    HStack(alignment: .top, spacing: 10) {
+                        if choosingForPlan {
+                            Button {
+                                if skippedForPlan.contains(item.id) { skippedForPlan.remove(item.id) } else { skippedForPlan.insert(item.id) }
+                            } label: {
                                 Image(systemName: skippedForPlan.contains(item.id) ? "square" : "checkmark.square.fill")
                                     .foregroundStyle(AppTheme.forest)
                             }
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(item.from.uppercased()).font(.caption2.weight(.bold)).foregroundStyle(AppTheme.terracotta600)
-                                Text(item.text).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-                                    .multilineTextAlignment(.leading)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            Spacer(minLength: 0)
+                            .buttonStyle(.plain)
                         }
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.from.uppercased()).font(.caption2.weight(.bold)).foregroundStyle(AppTheme.terracotta600)
+                            Text(item.text).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if !choosingForPlan && item.focusable {
+                                Button("Make this my focus") { chooseFocus(item.id) }
+                                    .font(.caption.weight(.semibold)).foregroundStyle(Color(hex: 0x8E3F22))
+                                    .padding(.top, 2)
+                            }
+                        }
+                        Spacer(minLength: 0)
                     }
-                    .buttonStyle(.plain)
-                    .padding(.top, 6)
+                    .padding(.top, 8)
                 }
-                Divider().padding(.vertical, 6)
+                Divider().overlay(Color(hex: 0xE8C9B4)).padding(.vertical, 8)
                 if !choosingForPlan {
                     Text("Would you like to plan your next class with this in mind?")
                         .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     Button("Yes, choose what to include") { choosingForPlan = true }
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
-                        .padding(.top, 2)
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.cream)
+                        .padding(.horizontal, 16).padding(.vertical, 9)
+                        .background(AppTheme.forest, in: Capsule())
+                        .padding(.top, 4)
                 } else {
                     NavigationLink {
-                        LessonPlanningView(prefill: planningPrefill(chosen))
+                        LessonPlanningView(prefill: planningPrefill(chosenItems))
                     } label: {
-                        Text(chosen.count == items.count ? "Plan the next lesson with all of these →" : "Plan the next lesson with \(chosen.count) of these →")
+                        Text(chosenItems.count == rest.count ? "Plan the next lesson with all of these →" : "Plan the next lesson with \(chosenItems.count) of these →")
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.cream)
+                            .padding(.horizontal, 16).padding(.vertical, 9)
+                            .background(AppTheme.terracotta, in: Capsule())
                     }
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
-                    .disabled(chosen.isEmpty)
+                    .disabled(chosenItems.isEmpty && focus == nil)
                     Button("Not now") { choosingForPlan = false }
                         .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                         .padding(.top, 2)
                 }
             }
-            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.peachTint.opacity(0.7), in: RoundedRectangle(cornerRadius: 22))
         }
     }
+}
 
-    private var whoWasHeardCard: some View {
-        tintedCard(AppTheme.card) {
-            Text("Who was heard?").font(.heading(.headline)).foregroundStyle(AppTheme.forest)
-            balanceBar(label: "You", pct: session.teacherTalkPct, color: AppTheme.terracotta)
-            balanceBar(label: "Students", pct: session.studentTalkPct, color: AppTheme.gold)
-            if let caption = AudioInsights.buildVoiceBalanceCaption(ReportConfidence.judgeTalkBalance(teacherPct: session.teacherTalkPct, studentPct: session.studentTalkPct)) {
-                Text(caption).font(.caption).foregroundStyle(AppTheme.textSecondary)
-            }
-            Button("Explore talk & participation →") { onNavigateInsights(.talk) }
-                .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
-                .padding(.top, 2)
-        }
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
-    }
+extension AudioLessonFocus {
+    init(itemId: String) { self.next = Next(itemId: itemId) }
+}
 
-    private func balanceBar(label: String, pct: Double?, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack {
-                Text(label).font(.caption.weight(.medium))
-                Spacer()
-                Text(pct.map { "\(Int($0))%" } ?? "—").font(.caption).foregroundStyle(AppTheme.textSecondary)
-            }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 5).fill(AppTheme.hairline)
-                    RoundedRectangle(cornerRadius: 5).fill(color)
-                        .frame(width: geo.size.width * CGFloat((pct ?? 0) / 100))
-                }
-            }
-            .frame(height: 10)
+extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
+/// Student names in quoted teacher speech, shown as "[name]" — mirrors
+/// `withoutAddressedNames` in AudioCoaching.tsx. A name is a capitalised word
+/// set off the way direct address is ("Shania, what…", "…do you think,
+/// Caleb?"); common openers are not names.
+enum Redaction {
+    private static let notNames: Set<String> = ["okay", "ok", "so", "now", "well", "yes", "yeah", "alright", "right", "and", "but", "guys", "everyone", "everybody", "class", "folks", "friends", "sure", "wait", "really", "hmm", "um", "good", "great", "perfect", "exactly", "nice"]
+    // swiftlint:disable:next force_try
+    private static let addressed = try! NSRegularExpression(pattern: "(^|[,.!?]\\s*)(\\p{Lu}\\p{Ll}+(?:['\u{2019}-]\\p{L}+)*)(?=\\s*[,?])")
+
+    static func withoutAddressedNames(_ text: String) -> String {
+        let ns = text as NSString
+        var result = text
+        for match in addressed.matches(in: text, range: NSRange(location: 0, length: ns.length)).reversed() {
+            let word = ns.substring(with: match.range(at: 2))
+            guard !notNames.contains(word.lowercased()), let range = Range(match.range(at: 2), in: result) else { continue }
+            result.replaceSubrange(range, with: "[name]")
         }
+        return result
     }
 }

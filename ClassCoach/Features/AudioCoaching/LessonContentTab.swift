@@ -14,9 +14,6 @@ struct LessonContentTab: View {
     let session: AudioSessionWithSegments
     let onUpdate: (AudioSessionWithSegments) -> Void
 
-    @State private var generating = false
-    @State private var error: String?
-    @State private var dismissed: Set<String> = []
 
     /// The lesson's own terms and who said them — the iOS twin of the web's
     /// "Academic vocabulary" table. Hidden when there are none, like the
@@ -56,15 +53,9 @@ struct LessonContentTab: View {
         }
     }
 
-    private var visibleNotes: [AudioContentNote] {
-        (session.contentNotes?.notes ?? []).filter { !dismissed.contains($0.id) }
-    }
-
     var body: some View {
         let terms = session.lessonContent?.keyTerms ?? []
         let connections = session.lessonContent?.connections ?? []
-        let ideas = session.lessonContent?.connectionIdeas ?? session.contentNotes?.connectionIdeas ?? []
-        let misconceptions = session.contentNotes?.misconceptions ?? []
         // The same note "Try next time" on Summary carries for this section.
         let takeFurther = session.contentNotes?.notes.first { $0.label == "Where it could go further" }?.text
         return VStack(alignment: .leading, spacing: 14) {
@@ -77,12 +68,6 @@ struct LessonContentTab: View {
             SectionNextStep(text: takeFurther)
 
             VStack(alignment: .leading, spacing: 0) {
-                // Offered for every lesson, and asked for when the report
-                // opens. The button stays for when that request failed, and to
-                // write them again.
-                DetailRow(title: session.contentNotes == nil ? "Content specialist notes" : "Content specialist notes (\(visibleNotes.count))") {
-                    contentNotesBody
-                }
                 // Only when the lesson actually contained one: silence is the
                 // right answer when nothing was found.
                 if !connections.isEmpty {
@@ -100,75 +85,175 @@ struct LessonContentTab: View {
                         }
                     }
                 }
-                if !ideas.isEmpty {
-                    DetailRow(title: "Ways into this topic, for next time") {
-                        readingNote("Suggestions from a subject specialist, not a reading of your lesson.")
-                        ForEach(ideas, id: \.self) { idea in
-                            Text("• \(idea)").font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
-                if !misconceptions.isEmpty {
-                    DetailRow(title: "Where students usually get stuck on this topic") {
-                        readingNote("Subject knowledge, not a reading of your lesson — you may well have covered it.")
-                        ForEach(misconceptions, id: \.self) { line in
-                            Text("• \(line)").font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
                 DetailRow(title: "How to read this section") {
                     if !terms.isEmpty {
                         readingNote("Vocabulary is counted from the transcript, so read the counts as \u{201C}at least\u{201D}: unusual terms are the words a recording most often mishears, and student counts include only what the microphone picked up.")
                     }
-                    readingNote("The specialist notes are written from excerpts of what you said and may miss context. They're a starting point for your own reflection, not a factual review — your subject expertise is the final word.")
+                    readingNote("Ideas for teaching this subject \u{2014} the specialist\u{2019}s notes, ways in, and where students get stuck \u{2014} are in the Content Specialist tab.")
                 }
                 Divider()
             }
         }
     }
+}
 
-    @ViewBuilder private var contentNotesBody: some View {
-        if session.contentNotes == nil {
-            Button(generating ? "Writing the notes…" : "Generate content specialist notes") {
-                Task { await generate() }
-            }
-            .disabled(generating)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(AppTheme.cream)
-            .padding(.horizontal, 20).padding(.vertical, 10)
-            .background(generating ? AppTheme.hairline : AppTheme.terracotta, in: Capsule())
-        } else {
-            ForEach(visibleNotes, id: \.id) { note in
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(note.label.uppercased())
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(AppTheme.forest)
-                        .padding(.horizontal, 10).padding(.vertical, 4)
-                        .background(AppTheme.mintTint.opacity(0.6), in: Capsule())
-                    Text(note.text).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("\"\(note.excerpt)\" (\(ReportConfidence.formatDuration(note.timestampSec)))")
-                        .font(.caption).foregroundStyle(AppTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
+/// Content Specialist: a specialist's ideas for teaching the subject — notes
+/// on moments of this lesson, ways in next time, where students get stuck.
+/// Never a read of the lesson itself, and labelled so. Its own report tab,
+/// beside Insights — mirrors `TopicTab` in AudioCoaching.tsx.
+struct ContentSpecialistTab: View {
+    let session: AudioSessionWithSegments
+    let onUpdate: (AudioSessionWithSegments) -> Void
+    let onDiscuss: () -> Void
+
+    @State private var generating = false
+    @State private var error: String?
+    @State private var pick = "notes"
+
+    static let lavender = Color(hex: 0x6E62A0)
+    static let lavenderTint = Color(hex: 0xECE8F4)
+
+    private var subject: String { session.lessonContent?.subject ?? session.contentNotes?.subject ?? "this subject" }
+
+    private struct Option {
+        let key: String
+        let label: String
+        let desc: String
+        let count: Int
+    }
+
+    private var options: [Option] {
+        [
+            Option(key: "notes", label: "Specialist notes",
+                   desc: "What a \(subject) specialist would want you to know, from excerpts of this lesson.",
+                   count: session.contentNotes?.notes.count ?? 0),
+            Option(key: "ways", label: "Ways in, next time", desc: "Other entry points into this content.",
+                   count: (session.lessonContent?.connectionIdeas ?? session.contentNotes?.connectionIdeas ?? []).count),
+            Option(key: "stuck", label: "Where students get stuck",
+                   desc: "Common misconceptions on this topic \u{2014} you may well have covered them.",
+                   count: (session.contentNotes?.misconceptions ?? []).count),
+        ].filter { $0.count > 0 }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 14) {
+                Text("\u{2726}")
+                    .font(.heading(.title3)).foregroundStyle(.white)
+                    .frame(width: 48, height: 48)
+                    .background(Self.lavender, in: RoundedRectangle(cornerRadius: 16))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Content Specialist").font(.heading(.title3)).foregroundStyle(AppTheme.forest)
+                    Text("A specialist\u{2019}s ideas for teaching this subject.").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                 }
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
             }
-            // Notes are written once and kept; this is the only way to ask
-            // for a fresh set once the specialist itself has improved.
-            Button(generating ? "Writing new notes…" : "Write these notes again ↻") {
-                Task { await generate() }
+            Text("\u{2726} Ideas for teaching \(subject), not a read of this lesson")
+                .font(.caption.weight(.semibold)).foregroundStyle(Self.lavender)
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(Self.lavenderTint, in: Capsule())
+
+            if session.contentNotes == nil {
+                Button(generating ? "Writing the notes\u{2026}" : "Generate content specialist notes") {
+                    Task { await generate() }
+                }
+                .disabled(generating)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AppTheme.cream)
+                .padding(.horizontal, 20).padding(.vertical, 10)
+                .background(generating ? AppTheme.hairline : AppTheme.terracotta, in: Capsule())
+                ProgressRing(active: generating, estimatedSeconds: 14, label: "Writing content specialist notes")
+            } else {
+                picker
+                Button(generating ? "Writing new notes\u{2026}" : "Write these notes again \u{21BB}") {
+                    Task { await generate() }
+                }
+                .font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textSecondary)
+                .disabled(generating)
+                ProgressRing(active: generating, estimatedSeconds: 16, label: "Writing content specialist notes")
             }
-            .font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textSecondary)
-            .disabled(generating)
-            ProgressRing(active: generating, estimatedSeconds: 16, label: "Writing content specialist notes")
+            if let error {
+                Text(error).font(.footnote).foregroundStyle(AppTheme.terracotta600)
+            }
+
+            VStack(alignment: .leading, spacing: 0) {
+                DetailRow(title: "How to read this") {
+                    readingNote("These are a specialist\u{2019}s ideas for teaching \(subject), written from excerpts of what you said. They may miss context, they are a starting point for your own reflection rather than a review, and your subject expertise is the final word.")
+                }
+                Divider()
+            }
+            DiscussFooter(action: onDiscuss)
         }
-        if let error {
-            Text(error).font(.footnote).foregroundStyle(AppTheme.terracotta600)
+    }
+
+    @ViewBuilder private var picker: some View {
+        let opts = options
+        let current = opts.first { $0.key == pick } ?? opts.first
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(opts, id: \.key) { o in
+                    let on = o.key == current?.key
+                    Button { pick = o.key } label: {
+                        HStack(spacing: 6) {
+                            Text(o.label)
+                            Text("\(o.count)").font(.caption2.weight(.bold))
+                                .padding(.horizontal, 6).padding(.vertical, 1)
+                                .background(on ? Color.white.opacity(0.25) : Self.lavenderTint, in: Capsule())
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(on ? Color.white : AppTheme.textPrimary)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(on ? Self.lavender : AppTheme.card, in: Capsule())
+                        .overlay(Capsule().strokeBorder(on ? Color.clear : AppTheme.hairline))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
+        if let current {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("\(current.label) \u{00B7} \(current.count)").font(.subheadline.weight(.bold)).foregroundStyle(AppTheme.forest)
+                Text(current.desc).font(.caption).foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                switch current.key {
+                case "notes":
+                    ForEach(session.contentNotes?.notes ?? [], id: \.id) { note in
+                        itemCard(tag: note.label, text: note.text, quote: note.excerpt, timestampSec: note.timestampSec)
+                    }
+                case "ways":
+                    ForEach(session.lessonContent?.connectionIdeas ?? session.contentNotes?.connectionIdeas ?? [], id: \.self) { idea in
+                        itemCard(tag: "Way in", text: idea)
+                    }
+                default:
+                    ForEach(session.contentNotes?.misconceptions ?? [], id: \.self) { line in
+                        itemCard(tag: "Misconception", text: line)
+                    }
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Self.lavenderTint.opacity(0.6), in: RoundedRectangle(cornerRadius: 20))
+        }
+    }
+
+    private func itemCard(tag: String, text: String, quote: String? = nil, timestampSec: Double? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(tag).font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+                Spacer()
+                if let timestampSec {
+                    Text(ReportConfidence.formatDuration(timestampSec)).font(.caption.monospacedDigit()).foregroundStyle(AppTheme.textSecondary)
+                }
+            }
+            Text(text).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let quote, !quote.isEmpty {
+                Text("\u{201C}\(Redaction.withoutAddressedNames(quote))\u{201D}").font(.caption).foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
     }
 
     private func generate() async {

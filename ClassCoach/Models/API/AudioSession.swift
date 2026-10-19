@@ -325,6 +325,77 @@ struct AudioHardLook: Decodable {
     let cleared: [AudioHardLookClear]
 }
 
+/// What the teacher said and did, read from the transcript — mirrors
+/// `AudioTeachingMoves` in web/src/lib/api.ts. Only the parts the Summary
+/// page reads are decoded; every field is optional and decoded with `try?`,
+/// so a shape this app does not know yet hides a card instead of the lesson.
+struct AudioTeachingMoves: Decodable {
+    struct Quoted: Decodable {
+        let quote: String
+        let timestampSec: Double
+    }
+    struct QuestionKind: Decodable {
+        let timestampSec: Double
+        let kind: String
+    }
+    struct Direction: Decodable {
+        let timestampSec: Double
+        let parts: [String]
+    }
+    struct Redirection: Decodable {
+        let timestampSec: Double
+        let clarity: String
+    }
+    struct Participation: Decodable {
+        let invitations: [Quoted]
+    }
+    struct ArcStage: Decodable {
+        let role: String
+        let title: String
+        let startSec: Double
+        let endSec: Double
+    }
+    /// The Summary headline: the one pattern across the sections (server
+    /// lib/summaryHeadline.ts). `section` is where it points the next step.
+    struct Headline: Decodable {
+        let text: String
+        let section: String?
+    }
+
+    let questionKinds: [QuestionKind]?
+    let directions: [Direction]?
+    let explanations: [Quoted]?
+    let invitations: [Quoted]?
+    let redirections: [Redirection]?
+    let participation: Participation?
+    let arc: [ArcStage]?
+    let headline: Headline?
+
+    private enum CodingKeys: String, CodingKey {
+        case questionKinds, directions, explanations, invitations, redirections, participation, arc, headline
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        questionKinds = try? c.decodeIfPresent([QuestionKind].self, forKey: .questionKinds)
+        directions = try? c.decodeIfPresent([Direction].self, forKey: .directions)
+        explanations = try? c.decodeIfPresent([Quoted].self, forKey: .explanations)
+        invitations = try? c.decodeIfPresent([Quoted].self, forKey: .invitations)
+        redirections = try? c.decodeIfPresent([Redirection].self, forKey: .redirections)
+        participation = try? c.decodeIfPresent(Participation.self, forKey: .participation)
+        arc = try? c.decodeIfPresent([ArcStage].self, forKey: .arc)
+        headline = try? c.decodeIfPresent(Headline.self, forKey: .headline)
+    }
+}
+
+/// The one focus for next lesson the teacher picked from Try next time.
+struct AudioLessonFocus: Decodable {
+    struct Next: Decodable {
+        let itemId: String
+    }
+    let next: Next?
+}
+
 struct AudioSession: Decodable, Identifiable {
     let id: String
     let teacherName: String?
@@ -353,6 +424,9 @@ struct AudioSession: Decodable, Identifiable {
     let reflectConversation: [AudioReflectMessage]?
     let lessonContent: AudioLessonContent?
     let contentNotes: AudioContentNotes?
+    let teachingMoves: AudioTeachingMoves?
+    /// `var` so a pick on Summary shows at once, before the save returns.
+    var lessonFocus: AudioLessonFocus?
 
     /// ISO-8601, with or without fractional seconds depending on the driver.
     var transcribeStartedAtDate: Date? {
@@ -396,7 +470,7 @@ struct AudioSession: Decodable, Identifiable {
              durationSec, transcribeStartedAt, failureReason,
              teacherTalkPct, studentTalkPct, questionCount, higherOrderPct, avgWaitTimeSec,
              cfuCount, metricsDetail, highlights, phases, questionLog, reflectConversation, lessonContent,
-             contentNotes, rubricLens, hardLook, escalation, studentTalkFocus, momentToRevisit, nextSteps, classSummary, checksNarrative, climateNarrative, contentNarrative, talkNarrative, questionsNarrative, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
+             contentNotes, teachingMoves, lessonFocus, rubricLens, hardLook, escalation, studentTalkFocus, momentToRevisit, nextSteps, classSummary, checksNarrative, climateNarrative, contentNarrative, talkNarrative, questionsNarrative, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -435,6 +509,8 @@ struct AudioSession: Decodable, Identifiable {
         reflectConversation = try container.decodeIfPresent([AudioReflectMessage].self, forKey: .reflectConversation)
         lessonContent = try container.decodeIfPresent(AudioLessonContent.self, forKey: .lessonContent)
         contentNotes = try container.decodeIfPresent(AudioContentNotes.self, forKey: .contentNotes)
+        teachingMoves = try? container.decodeIfPresent(AudioTeachingMoves.self, forKey: .teachingMoves)
+        lessonFocus = try? container.decodeIfPresent(AudioLessonFocus.self, forKey: .lessonFocus)
         // try? so an unexpected shape hides the lens instead of dropping the whole session.
         rubricLens = try? container.decodeIfPresent(AudioRubricLens.self, forKey: .rubricLens)
         hardLook = try? container.decodeIfPresent(AudioHardLook.self, forKey: .hardLook)
@@ -483,7 +559,7 @@ struct SoundTimeline: Decodable {
 
 struct AudioSessionWithSegments: Decodable, Identifiable {
     var id: String { session.id }
-    let session: AudioSession
+    var session: AudioSession
     let segments: [TranscriptSegment]
     var soundTimeline: SoundTimeline? = nil
 
@@ -518,6 +594,8 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
     /// list does — see AudioSession.displayTitle.
     var displayTitle: String { session.displayTitle }
     var contentNotes: AudioContentNotes? { session.contentNotes }
+    var teachingMoves: AudioTeachingMoves? { session.teachingMoves }
+    var lessonFocus: AudioLessonFocus? { session.lessonFocus }
     var rubricLens: AudioRubricLens? { session.rubricLens }
     var hardLook: AudioHardLook? { session.hardLook }
     var escalation: AudioEscalation? { session.escalation }
