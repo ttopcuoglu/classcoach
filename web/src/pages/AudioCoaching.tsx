@@ -4253,7 +4253,16 @@ const EXPLANATION_LABEL: Record<string, string> = { example: 'Gave an example', 
 const CONNECTION_LABEL: Record<string, string> = { prior: 'Linked to earlier learning', purpose: 'Said why it matters', closing: 'Drew it together' }
 
 type PickItem = { tag: string; text?: string; quote?: string; timestampSec?: number }
-type PickOption = { key: string; label: string; desc: string; items: PickItem[] }
+type PickOption = {
+  key: string
+  label: string
+  desc: string
+  items: PickItem[]
+  /// A lesson-specific finding, shown above the description.
+  finding?: string | null
+  /// Anything else the panel should say before its moments.
+  note?: React.ReactNode
+}
 
 /// A row of pill buttons, one per category, and the chosen category's items
 /// below — "Opened it up · 4", tap to switch.
@@ -4290,7 +4299,9 @@ function CategoryPicker({ options, tone, hint }: { options: PickOption[]; tone: 
           </b>
           {hint && <span className="text-xs text-ink-soft">{hint}</span>}
         </div>
+        {current.finding && <p className="-mt-1 text-sm font-semibold text-ink">{current.finding}</p>}
         <p className="-mt-1 text-sm text-ink-soft">{current.desc}</p>
+        {current.note}
         {current.items.map((it, i) => (
           <div key={i} className="flex items-baseline justify-between gap-4 rounded-xl bg-cream-card px-3.5 py-3 text-sm text-ink">
             <div>
@@ -4953,52 +4964,6 @@ function HardLookTab({
   )
 }
 
-/// One compact card: a lesson-specific finding, one timestamped line shown,
-/// the rest behind "See more".
-function ClimateCard({
-  title,
-  finding,
-  note,
-  rows,
-  accent,
-  empty,
-}: {
-  title: string
-  finding: string | null
-  note?: React.ReactNode
-  rows: Evidence[]
-  accent: string
-  empty: string
-}) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="flex flex-col gap-3 border-t border-dashed border-hairline pt-5">
-      <p className="font-heading text-xl font-bold text-forest">{title}</p>
-      {finding && <p className="text-base font-semibold text-ink">{finding}</p>}
-      {note}
-      {rows.length === 0 ? (
-        <p className="text-sm text-ink-soft">{empty}</p>
-      ) : (
-        <>
-          {(open ? rows : rows.slice(0, 1)).map((r, i) => (
-            <div key={`${r.timestampSec}-${i}`} className="flex items-baseline justify-between gap-4 rounded-r-xl border-l-4 bg-cream px-3.5 py-3 text-sm text-ink" style={{ borderColor: accent }}>
-              <div>
-                <span className="mb-1 block text-xs font-semibold text-ink-soft">{r.tag}</span>“{r.quote}”
-              </div>
-              <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(r.timestampSec)}</span>
-            </div>
-          ))}
-          {rows.length > 1 && (
-            <button type="button" onClick={() => setOpen((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 hover:underline">
-              {open ? 'Show less' : `See more (${rows.length - 1})`}
-            </button>
-          )}
-        </>
-      )}
-    </div>
-  )
-}
-
 const ROUTINE_LABEL: Record<string, string> = {
   start: 'Starting work',
   transition: 'Changing activities',
@@ -5037,7 +5002,8 @@ function ClimateRoutinesTab({
     .map((d) => {
       const t = typeAt(d.timestampSec)
       const named = d.parts.length === 0 ? 'named none of the four' : `named ${d.parts.map((p) => PART_WORD[p] ?? p).join(', ')}`
-      return { quote: d.quote, timestampSec: d.timestampSec, tag: `${t ? `${ROUTINE_LABEL[t]} · ` : ''}${named}` }
+      const tag = `${t ? `${ROUTINE_LABEL[t]} · ` : ''}${named}`
+      return { quote: d.quote, timestampSec: d.timestampSec, tag: tag[0].toUpperCase() + tag.slice(1) }
     })
   const byType = new Map<string, number>()
   for (const d of directions) {
@@ -5130,39 +5096,97 @@ function ClimateRoutinesTab({
         </>
       }
     >
-      <ClimateCard
-        title="Directions & routines"
-        finding={directionFinding}
-        note={
-          byType.size > 0 ? (
-            <div className="flex flex-wrap gap-2 text-sm">
-              {[...byType.entries()].map(([t, n]) => (
-                <span key={t} className="rounded-full bg-cream px-3 py-1 text-ink">
-                  {ROUTINE_LABEL[t]} <b>{n}</b>
-                </span>
+      {/* From your lesson: what your words did to set up and run the room. */}
+      <div className="flex flex-col gap-4 border-t border-dashed border-hairline pt-5">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="font-heading text-xl font-bold text-forest">From your lesson</p>
+          <span className="text-sm text-ink-soft">
+            {directionRows.length + redirectRows.length + encourageRows.length} moments
+          </span>
+        </div>
+        <p className="text-base font-semibold text-ink">How your words set up the work, kept it on track, and encouraged students.</p>
+        {directionRows.length + redirectRows.length + encourageRows.length === 0 ? (
+          <p className="text-sm text-ink-soft">No directions, redirections or feedback to a student were found in this lesson.</p>
+        ) : (
+          <CategoryPicker
+            tone="forest"
+            hint="Tap a category to see its moments"
+            options={[
+              {
+                key: 'directions',
+                label: 'Directions & routines',
+                finding: directionFinding,
+                desc: 'Directions for starting work, changing activities, materials, getting help and finishing — and which of the four parts each named.',
+                note:
+                  byType.size > 0 ? (
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      {[...byType.entries()].map(([t, n]) => (
+                        <span key={t} className="rounded-full bg-cream-card px-2.5 py-1 text-ink">
+                          {ROUTINE_LABEL[t]} <b>{n}</b>
+                        </span>
+                      ))}
+                    </div>
+                  ) : undefined,
+                items: directionRows.map((r) => ({ tag: r.tag, quote: r.quote, timestampSec: r.timestampSec })),
+              },
+              {
+                key: 'redirection',
+                label: 'Redirection & expectations',
+                finding: redirectFinding,
+                desc: 'Reminders and corrections, and whether each gave students a clear action to take.',
+                note: escNote,
+                items: redirectRows.map((r) => ({ tag: r.tag, quote: r.quote, timestampSec: r.timestampSec })),
+              },
+              {
+                key: 'encouragement',
+                label: 'Encouragement & respect',
+                finding: encourageFinding,
+                desc: 'What your words recognized, invitations to ask for help, and how you responded to mistakes.',
+                items: encourageRows.map((r) => ({ tag: r.tag, quote: r.quote, timestampSec: r.timestampSec })),
+              },
+            ]}
+          />
+        )}
+      </div>
+
+      {/* Optional: every set of directions against the four parts. */}
+      {directions.length > 0 && (
+        <details className="group rounded-2xl border-[1.5px] border-hairline">
+          <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-4 px-5 py-4 marker:hidden">
+            <span className="flex-1">
+              <b className="block font-heading text-lg text-forest">Your directions, part by part</b>
+              <span className="text-sm text-ink-soft">
+                {complete.length} of {directions.length} named all four parts.
+              </span>
+            </span>
+            <span className="rounded-full border border-hairline px-2.5 py-1 text-xs font-bold tracking-wide text-ink-soft">OPTIONAL</span>
+            <RowChevron className="group-open:rotate-180" />
+          </summary>
+          <div className="flex flex-col gap-1 px-5 pb-5">
+            <div className="grid grid-cols-[56px_repeat(4,minmax(0,1fr))] gap-1.5 pb-1 text-center text-xs font-bold text-ink-soft">
+              <span />
+              {['What to do', 'Steps', 'How long', 'Hand in'].map((h) => (
+                <span key={h}>{h}</span>
               ))}
             </div>
-          ) : undefined
-        }
-        rows={directionRows}
-        accent="#1F3A2E"
-        empty="No directions were found in this lesson."
-      />
-      <ClimateCard
-        title="Redirection & expectations"
-        finding={redirectFinding}
-        note={escNote}
-        rows={redirectRows}
-        accent="#B4593A"
-        empty="No redirections were heard."
-      />
-      <ClimateCard
-        title="Encouragement & respect"
-        finding={encourageFinding}
-        rows={encourageRows}
-        accent="#3F7D58"
-        empty="No feedback to a student was heard."
-      />
+            {[...directions]
+              .sort((x, y) => x.timestampSec - y.timestampSec)
+              .map((d, i) => (
+                <div key={i} className="grid grid-cols-[56px_repeat(4,minmax(0,1fr))] items-center gap-1.5" title={d.quote}>
+                  <span className="font-mono text-xs text-ink-soft">{formatTime(d.timestampSec)}</span>
+                  {(['task', 'steps', 'time', 'product'] as const).map((part) => (
+                    <i
+                      key={part}
+                      className={`block h-6 rounded-md ${d.parts.includes(part) ? 'bg-forest' : 'border-[1.5px] border-dashed border-[#C9BFAD]'}`}
+                      aria-label={`${PART_WORD[part]}: ${d.parts.includes(part) ? 'named' : 'not named'}`}
+                    />
+                  ))}
+                </div>
+              ))}
+            <p className="mt-2 text-xs text-ink-soft">A filled square is a part the direction named. Hover a row for its words.</p>
+          </div>
+        </details>
+      )}
     </SectionShell>
   )
 }
