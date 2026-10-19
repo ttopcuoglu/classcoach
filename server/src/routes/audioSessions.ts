@@ -384,7 +384,7 @@ audioSessionsRouter.post('/', async (req, res) => {
 })
 
 audioSessionsRouter.patch('/:id', async (req, res) => {
-  const { teacherName, classSubject, period, gradeLevel, sessionDate, status, strengths, growthAreas, nextStep, followUpDate, phases, durationSec } =
+  const { teacherName, classSubject, period, gradeLevel, sessionDate, status, strengths, growthAreas, nextStep, followUpDate, phases, durationSec, focusItemId } =
     req.body ?? {}
 
   if (status !== undefined && !isValidStatus(status)) {
@@ -393,6 +393,12 @@ audioSessionsRouter.patch('/:id', async (req, res) => {
   }
   if (phases !== undefined && !Array.isArray(phases)) {
     res.status(400).json({ error: 'phases must be an array' })
+    return
+  }
+  // The one focus for next lesson the teacher picked from Try next time — the
+  // id of that item; null goes back to the suggested one.
+  if (focusItemId !== undefined && focusItemId !== null && (typeof focusItemId !== 'string' || !/^[a-z-]{1,40}$/.test(focusItemId))) {
+    res.status(400).json({ error: 'Invalid focusItemId' })
     return
   }
 
@@ -411,6 +417,9 @@ audioSessionsRouter.patch('/:id', async (req, res) => {
       ...(followUpDate !== undefined ? { followUpDate: followUpDate ? new Date(followUpDate) : null } : {}),
       ...(phases !== undefined ? { phases } : {}),
       ...(durationSec !== undefined ? { durationSec } : {}),
+      ...(focusItemId !== undefined
+        ? { lessonFocus: focusItemId ? { next: { itemId: focusItemId, chosenAt: new Date().toISOString() } } : Prisma.DbNull }
+        : {}),
     },
   })
   if (count === 0) {

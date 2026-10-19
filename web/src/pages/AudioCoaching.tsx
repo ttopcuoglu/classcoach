@@ -2145,7 +2145,7 @@ function ReportPanel({
       {tab === 'summary' && (
         <SummaryTab
           session={session}
-          coverage={coverage}
+          onUpdate={onUpdate}
           talkInsight={talkInsight}
           questioningInsight={questioningInsight}
           cfuInsight={cfuInsight}
@@ -2348,12 +2348,40 @@ function ReportPanel({
 // 2x2 grid (1 column on mobile) of compact cards linking out to the fuller
 // detail in Insights. Lesson identity and the evidence-quality read now
 // live in ReportPanel's shared header (visible on every tab), not here.
+/// Which Try next time item each headline section suggests as the focus, and
+/// which Insights section each item opens.
+const HEADLINE_SECTION_ITEM: Record<'talk' | 'questions' | 'content' | 'routines', string> = {
+  talk: 'talk',
+  questions: 'questions',
+  content: 'content-further',
+  routines: 'climate',
+}
+const ITEM_SECTION: Record<string, InsightsSection> = {
+  talk: 'talk',
+  questions: 'questions',
+  'content-further': 'content',
+  'content-worked': 'content',
+  climate: 'routines',
+}
+/// "Keep doing" is something to keep, not a change to aim at.
+const FOCUSABLE = (id: string) => id !== 'content-worked'
+
 /// Try next time: what the report suggests, from every section, in one list —
 /// and the hand-off to Planning Coach with the ones the teacher chooses.
-function TryNextTimeList({ session, focusText }: { session: AudioSessionWithSegments; focusText?: string | null }) {
+function TryNextTimeList({
+  session,
+  focusText,
+  focusId,
+  onMakeFocus,
+}: {
+  session: AudioSessionWithSegments
+  focusText?: string | null
+  focusId?: string | null
+  onMakeFocus: (id: string) => void
+}) {
   const navigate = useNavigate()
   // The one focus has its own card above; it goes to planning first.
-  const items = buildNextTimeItems(session).filter((item) => item.text !== focusText)
+  const items = buildNextTimeItems(session).filter((item) => item.id !== focusId)
   const [choosing, setChoosing] = useState(false)
   const [skipped, setSkipped] = useState<Set<string>>(new Set())
   if (items.length === 0 && !focusText) return null
@@ -2405,6 +2433,15 @@ function TryNextTimeList({ session, focusText }: { session: AudioSessionWithSegm
               <span>
                 <span className="block text-xs font-semibold uppercase tracking-wide text-terracotta-600">{item.from}</span>
                 <span className="mt-0.5 block text-sm text-ink">{item.text}</span>
+                {!choosing && FOCUSABLE(item.id) && (
+                  <button
+                    type="button"
+                    onClick={() => onMakeFocus(item.id)}
+                    className="mt-1 text-xs font-semibold text-[#8E3F22] hover:underline"
+                  >
+                    Make this my focus
+                  </button>
+                )}
               </span>
             </label>
           </li>
@@ -2444,7 +2481,6 @@ function TryNextTimeList({ session, focusText }: { session: AudioSessionWithSegm
 
 function SummaryTab({
   session,
-  coverage,
   talkInsight,
   questioningInsight,
   cfuInsight,
@@ -2453,9 +2489,10 @@ function SummaryTab({
   hardLookDoor,
   onNavigateInsights,
   onDiscussWithCoach,
+  onUpdate,
 }: {
   session: AudioSessionWithSegments
-  coverage: ReturnType<typeof getCoverage>
+  onUpdate: (s: AudioSessionWithSegments) => void
   talkInsight: string | null
   questioningInsight: string | null
   cfuInsight: string | null
@@ -2473,23 +2510,37 @@ function SummaryTab({
   const moves = session.teachingMoves
   const detail = (session.metricsDetail ?? {}) as Record<string, unknown>
 
-  // Coverage: what the recording could support, before any number.
-  const captured = coverage.capturedSharePct
-
   const heard = typeof detail.answersHeardCount === 'number' ? detail.answersHeardCount : null
   const followed = typeof detail.answersFollowedUpCount === 'number' ? detail.answersFollowedUpCount : null
 
-  // One focus: the questioning Try when there is one — with a follow-up aim
-  // when enough answers were heard — otherwise the first section Try there is.
-  const withGoal = heard != null && followed != null && heard >= 3 && followed < heard && !!session.nextSteps?.questions
-  const focus = session.nextSteps?.questions
-    ? { text: session.nextSteps.questions, from: 'Questioning & Checking', section: 'questions' as InsightsSection }
-    : session.nextSteps?.talk
-      ? { text: session.nextSteps.talk, from: 'Talk & Participation', section: 'talk' as InsightsSection }
-      : session.nextSteps?.climate
-        ? { text: session.nextSteps.climate, from: 'Climate & Routines', section: 'routines' as InsightsSection }
-        : null
+  // One focus: the Try the teacher made their focus; else the one in the
+  // section the headline's pattern points to; else questioning, talk, climate
+  // in that order. Any Try next time item but "keep doing" can be the focus.
+  const tryItems = buildNextTimeItems(session)
+  const headlineSection = session.teachingMoves?.headline?.section
+  const suggested =
+    (headlineSection && tryItems.find((item) => item.id === HEADLINE_SECTION_ITEM[headlineSection])) ||
+    tryItems.find((item) => item.id === 'questions') ||
+    tryItems.find((item) => item.id === 'talk') ||
+    tryItems.find((item) => item.id === 'climate') ||
+    null
+  const chosenId = session.lessonFocus?.next?.itemId
+  const chosenFocus = tryItems.find((item) => item.id === chosenId && FOCUSABLE(item.id)) ?? null
+  const focus = chosenFocus ?? suggested
+  const focusSection = focus ? ITEM_SECTION[focus.id] : undefined
+  const withGoal = focus?.id === 'questions' && heard != null && followed != null && heard >= 3 && followed < heard
   const goalTarget = withGoal ? Math.min(heard!, followed! + 2) : 0
+  // Saved with the lesson; shown at once, and put back if the save fails.
+  async function chooseFocus(itemId: string | null) {
+    const before = session.lessonFocus ?? null
+    onUpdate({ ...session, lessonFocus: itemId ? { next: { itemId, chosenAt: new Date().toISOString() } } : null })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    try {
+      await updateAudioSession(session.id, { focusItemId: itemId })
+    } catch {
+      onUpdate({ ...session, lessonFocus: before })
+    }
+  }
 
   // The four section cards — each number the one its section leads with.
   const nonSpeech = nonSpeechSplit(session.metricsDetail, session.durationSec)
@@ -2550,23 +2601,6 @@ function SummaryTab({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* What the recording could hear — before any number. */}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-3xl bg-cream-card px-5 py-4 text-sm text-ink-soft">
-        <b className="text-ink">What the recording could hear</b>
-        <span className="flex items-center gap-2">
-          <i className={`inline-block h-2.5 w-2.5 rounded-full ${captured != null && captured >= 50 ? 'bg-[#7FAE93]' : 'bg-gold'}`} />
-          {captured != null ? `${Math.round(captured)}% of the recording came through as speech` : 'Speech coverage not measured'}
-        </span>
-        <span className="flex items-center gap-2">
-          <i className="inline-block h-2.5 w-5 rounded-sm border border-dashed border-[#9C9486]" style={HATCH_STYLE} />
-          Student voices: may be mixed with yours
-        </span>
-        <span className="flex items-center gap-2">
-          <i className="inline-block h-2.5 w-5 rounded-sm border border-dashed border-[#9C9486]" style={HATCH_STYLE} />
-          Small-group talk: not available
-        </span>
-      </div>
-
       {/* The headline: the one pattern across the sections, else what the
           lesson came to. */}
       {session.teachingMoves?.headline ? (
@@ -2587,9 +2621,30 @@ function SummaryTab({
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-[#8E3F22]">Your one focus for next lesson</p>
             <p className="mt-1.5 text-lg leading-relaxed text-ink">{focus.text}</p>
-            <button type="button" onClick={() => onNavigateInsights(focus.section)} className="mt-2 text-sm text-[#6E4A3A] hover:underline">
-              From {focus.from} →
-            </button>
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#6E4A3A]">
+              {focusSection ? (
+                <button type="button" onClick={() => onNavigateInsights(focusSection)} className="hover:underline">
+                  From {focus.from.split(' · ').pop()} →
+                </button>
+              ) : (
+                <span>From {focus.from.split(' · ').pop()}</span>
+              )}
+              <span>
+                {chosenFocus
+                  ? 'Your choice'
+                  : headlineSection && suggested?.id === HEADLINE_SECTION_ITEM[headlineSection]
+                    ? 'Suggested: where today’s pattern points'
+                    : 'Suggested'}
+                {' · '}
+                {chosenFocus && suggested && suggested.id !== chosenFocus.id ? (
+                  <button type="button" onClick={() => void chooseFocus(null)} className="font-semibold hover:underline">
+                    Back to the suggestion
+                  </button>
+                ) : (
+                  'pick another from Try next time below'
+                )}
+              </span>
+            </div>
           </div>
           {withGoal && (
             <div className="flex flex-col items-start gap-2">
@@ -2729,7 +2784,7 @@ function SummaryTab({
         </div>
       )}
 
-      <TryNextTimeList session={session} focusText={focus?.text} />
+      <TryNextTimeList session={session} focusText={focus?.text} focusId={focus?.id} onMakeFocus={(id) => void chooseFocus(id)} />
 
       {hardLookDoor}
 

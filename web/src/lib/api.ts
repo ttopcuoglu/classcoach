@@ -917,7 +917,7 @@ export type AudioTeachingMoves = {
   }
   /// The Summary headline: the one pattern across the sections, written
   /// from the facts they show and checked (server lib/summaryHeadline.ts).
-  headline?: { text: string; generatedAt: string }
+  headline?: { text: string; section?: 'talk' | 'questions' | 'content' | 'routines'; generatedAt: string }
   /// How the lesson moved, stage by stage (server lib/lessonArc.ts).
   arc?: { role: 'opened' | 'built' | 'applied' | 'practiced' | 'closed'; title: string; startSec: number; endSec: number }[]
   stretch?: {
@@ -1025,6 +1025,8 @@ export type AudioSession = {
   /// Absent on every report analyzed before this existed; re-analyzing fills
   /// it. Each category is independently absent when the read found none.
   teachingMoves?: AudioTeachingMoves | null
+  /// The one focus for next lesson the teacher picked from Try next time.
+  lessonFocus?: { next?: { itemId: string; chosenAt: string } } | null
   // Null or absent until the lesson has been read for it; the Summary tab
   // asks the first time it is opened.
   momentToRevisit?: AudioMomentToRevisit | null
@@ -2209,6 +2211,8 @@ export function updateAudioSession(
     followUpDate: string | null
     phases: AudioPhase[]
     durationSec: number
+    /// A Try next time item's id; null goes back to the suggested focus.
+    focusItemId: string | null
   }>,
 ): Promise<AudioSession> {
   return request(`/api/audio-sessions/${id}`, { method: 'PATCH', body: JSON.stringify(data) })

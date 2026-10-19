@@ -123,10 +123,13 @@ Rules:
 - Do not put "only" or "just" in front of a number.
 - If a Coverage line is present, start by saying the counts come from part of the lesson.
 
-Write nothing outside this tag:
+Then name the ONE section where the teacher's next step lies — the part of the lesson the pattern points to changing: talk (who talks and how students are brought in), questions (questions and follow-ups), content (explanations and key terms) or routines (directions and redirections).
+
+Write nothing outside these tags:
 <headline>
 the sentences
-</headline>`
+</headline>
+<section>talk, questions, content or routines</section>`
 
 const BANNED = /\b(poor|poorly|weak|weakness|failed|fail(?:s|ing)?|should have|ineffective|lacked|lacking|struggled|struggling)\b/i
 const STUDENT_STATE = /\bstudents?\s+(?:were|was|felt|feel|seemed|seem|understood|understand|engaged|enjoyed|learned|grasped|loved|were confused|were bored)\b/i
@@ -149,7 +152,12 @@ export function checkHeadline(text: string, facts: string): string | null {
   return null
 }
 
-export type SummaryHeadline = { text: string; generatedAt: string }
+export const HEADLINE_SECTIONS = ['talk', 'questions', 'content', 'routines'] as const
+export type HeadlineSection = (typeof HEADLINE_SECTIONS)[number]
+
+/// `section` is where the pattern points the teacher's next step — the
+/// Summary's default one focus. Absent on headlines written before it.
+export type SummaryHeadline = { text: string; section?: HeadlineSection; generatedAt: string }
 
 /// Null when there is too little to say, or both tries fail the checks.
 export async function writeHeadline(facts: HeadlineFacts): Promise<SummaryHeadline | null> {
@@ -173,7 +181,14 @@ export async function writeHeadline(facts: HeadlineFacts): Promise<SummaryHeadli
       const out = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n')
       const headline = (extractTag(out, 'headline') ?? '').trim().replace(/\s+/g, ' ')
       refusal = checkHeadline(headline, text)
-      if (!refusal) return { text: headline, generatedAt: new Date().toISOString() }
+      const section = (extractTag(out, 'section') ?? '').trim().toLowerCase() as HeadlineSection
+      if (!refusal) {
+        return {
+          text: headline,
+          ...(HEADLINE_SECTIONS.includes(section) ? { section } : {}),
+          generatedAt: new Date().toISOString(),
+        }
+      }
     } catch (error) {
       console.error('[summaryHeadline] read failed:', error)
       return null

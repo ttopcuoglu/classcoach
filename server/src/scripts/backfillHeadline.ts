@@ -47,7 +47,7 @@ for (const session of sessions) {
     continue
   }
   written++
-  console.log(`  ${headline.text}`)
+  console.log(`  [${headline.section ?? 'no section'}] ${headline.text}`)
   if (write) {
     await prisma.audioSession.update({ where: { id: session.id }, data: { teachingMoves: { ...moves, headline } as unknown as Prisma.InputJsonValue } })
   }
