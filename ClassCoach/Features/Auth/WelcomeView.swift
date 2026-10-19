@@ -12,7 +12,6 @@ struct WelcomeView: View {
     @EnvironmentObject private var authManager: AuthManager
     @State private var errorMessage: String?
     @State private var isSubmitting = false
-    @State private var aiDisclosureAccepted = false
 
     var body: some View {
         ScrollView {
@@ -48,12 +47,8 @@ struct WelcomeView: View {
                             .signInWithAppleButtonStyle(.black)
                             .frame(height: 50)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .disabled(!aiDisclosureAccepted)
-                            .opacity(aiDisclosureAccepted ? 1 : 0.4)
 
                         GoogleSignInButton(style: .wide, action: signInWithGoogle)
-                            .disabled(!aiDisclosureAccepted)
-                            .opacity(aiDisclosureAccepted ? 1 : 0.4)
 
                         NavigationLink {
                             EmailAuthView(initialMode: "signup")
@@ -88,24 +83,6 @@ struct WelcomeView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                 }
-
-                // At the foot of the screen, under the buttons it unlocks. Apple
-                // rejected the app without a yes before sharing (Guideline
-                // 5.1.1(i)/5.1.2(i), 2026-09-08).
-                HStack(alignment: .top, spacing: 8) {
-                    Button {
-                        aiDisclosureAccepted.toggle()
-                    } label: {
-                        Image(systemName: aiDisclosureAccepted ? "checkmark.square.fill" : "square")
-                            .foregroundStyle(aiDisclosureAccepted ? AppTheme.primary : AppTheme.textSecondary)
-                    }
-                    Text("I agree that responses, recordings, and messages I submit are sent to Anthropic's Claude AI (for coaching feedback and chat) and Deepgram (for transcription and voice playback), as described in our [Privacy Policy](https://www.wivoza.com/terms).")
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .tint(AppTheme.primary)
-                }
-                .padding(.horizontal, 28)
-                .padding(.top, 8)
 
                 VStack(spacing: 6) {
                     HStack(spacing: 6) {
@@ -191,4 +168,47 @@ extension UIApplication {
         WelcomeView()
     }
     .environmentObject(AuthManager.shared)
+}
+
+
+/// The AI-sharing consent, asked once per account on this phone right after
+/// sign-in and before anything is sent to either provider. Apple rejected the
+/// app without a yes before sharing (Guideline 5.1.1(i)/5.1.2(i),
+/// 2026-09-08); signing in sends nothing to Anthropic or Deepgram, so asking
+/// here still asks first. The wording is the one the approved build carried.
+struct AIConsentView: View {
+    let onAgree: () -> Void
+    let onDecline: () -> Void
+    @State private var accepted = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Spacer()
+            Text("Before you start").font(.heading(.title)).foregroundStyle(AppTheme.forest)
+            HStack(alignment: .top, spacing: 10) {
+                Button { accepted.toggle() } label: {
+                    Image(systemName: accepted ? "checkmark.square.fill" : "square")
+                        .font(.title3)
+                        .foregroundStyle(accepted ? AppTheme.primary : AppTheme.textSecondary)
+                }
+                Text("I agree that responses, recordings, and messages I submit are sent to Anthropic's Claude AI (for coaching feedback and chat) and Deepgram (for transcription and voice playback), as described in our [Privacy Policy](https://www.wivoza.com/terms).")
+                    .font(.body)
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .tint(AppTheme.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Button(action: onAgree) {
+                Text("Continue").fontWeight(.semibold).frame(maxWidth: .infinity).frame(height: 50)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(AppTheme.primary)
+            .disabled(!accepted)
+            Button("Not now \u{2014} sign out", action: onDecline)
+                .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                .frame(maxWidth: .infinity)
+            Spacer()
+        }
+        .padding(28)
+        .background(AppTheme.background.ignoresSafeArea())
+    }
 }
