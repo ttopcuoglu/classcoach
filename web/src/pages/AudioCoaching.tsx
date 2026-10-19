@@ -2551,8 +2551,11 @@ function SummaryTab({
         </span>
       </div>
 
-      {/* The headline: what the lesson came to. */}
-      {classSummary ? (
+      {/* The headline: the one pattern across the sections, else what the
+          lesson came to. */}
+      {session.teachingMoves?.headline ? (
+        <CoachNoteCard text={session.teachingMoves.headline.text} />
+      ) : classSummary ? (
         <CoachNoteCard text={classSummary} />
       ) : classSummarySending ? (
         <div className="flex justify-center rounded-3xl bg-mint-tint/70 p-6 text-forest">

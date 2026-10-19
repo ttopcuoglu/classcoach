@@ -1,4 +1,5 @@
 import { readRoutines } from '../lib/routines.ts'
+import { headlineFacts, writeHeadline } from '../lib/summaryHeadline.ts'
 import { readLessonArc } from '../lib/lessonArc.ts'
 import { readStretch } from '../lib/stretchBreak.ts'
 import { readParticipation } from '../lib/participation.ts'
@@ -845,6 +846,21 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
       )
     : null
 
+  // The Summary headline: the one pattern across the sections, written from
+  // the same facts the sections show. Needs every read above.
+  const headline = teachingMoves
+    ? await writeHeadline(
+        headlineFacts({
+          durationSec: stored?.durationSec ?? null,
+          teacherTalkPct: analysis.teacherTalkPct,
+          questionLog: analysis.questionLog,
+          teachingMoves: { ...teachingMoves, ...(participation ? { participation } : {}), ...(arc ? { arc } : {}) },
+          metricsDetail: analysis.metricsDetail,
+          lessonContent,
+        }),
+      )
+    : null
+
   const updated = await prisma.audioSession.update({
     where: { id: sessionId },
     data: {
@@ -884,6 +900,7 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
             ...(stretch ? { stretch } : {}),
             ...(arc ? { arc } : {}),
             ...(routines ? { routines } : {}),
+            ...(headline ? { headline } : {}),
           } as unknown as Prisma.InputJsonValue)
         : Prisma.DbNull,
     },

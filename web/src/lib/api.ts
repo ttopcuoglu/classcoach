@@ -915,6 +915,9 @@ export type AudioTeachingMoves = {
     directionTypes: { timestampSec: number; type: 'start' | 'transition' | 'materials' | 'help' | 'finish' | 'other' }[]
     helpInvites: AudioMoveQuote[]
   }
+  /// The Summary headline: the one pattern across the sections, written
+  /// from the facts they show and checked (server lib/summaryHeadline.ts).
+  headline?: { text: string; generatedAt: string }
   /// How the lesson moved, stage by stage (server lib/lessonArc.ts).
   arc?: { role: 'opened' | 'built' | 'applied' | 'practiced' | 'closed'; title: string; startSec: number; endSec: number }[]
   stretch?: {
