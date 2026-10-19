@@ -1,5 +1,7 @@
-// How you brought students in — three moves in the teacher's own words, on
-// one timeline with the student answers the recording could hear.
+// How you brought students in — three moves in the teacher's own words. Where
+// they fell in the lesson is the talk strip above (TalkFlowStrip); the
+// answers the recording heard, and which were followed up, are the dots on
+// the follow-up card.
 //
 // The moves come from the participation read (server lib/participation.ts);
 // lessons read before it fall back to the older invitation and revision-
@@ -28,7 +30,6 @@ const INVITE_FORMAT: Record<string, string> = {
   open: 'Open to the room',
 }
 const EXTEND_KIND: Record<string, string> = { probe: 'Probing', reasoning: 'Asking for reasoning', build_on_peer: 'Building on a classmate' }
-const STUDENT = '#8B7FC0'
 /// Fewer heard answers than this and "X of Y" says more about the microphone
 /// than about the teacher.
 const MIN_ANSWERS_FOR_RATE = 3
@@ -86,12 +87,10 @@ export default function BroughtStudentsIn({ session }: { session: AudioSessionWi
 
   if (moments.length === 0 && !showRate) return null
   const duration = session.durationSec ?? Math.max(60, ...moments.map((m) => m.t), ...(answers ?? []).map((a) => a.timestampSec))
-  const x = (sec: number) => `${Math.min(100, Math.max(0, (sec / duration) * 100)).toFixed(2)}%`
   const firstHalf = moments.filter((m) => m.t < duration / 2).length
   const types = (Object.keys(TYPES) as MoveType[]).filter((k) => k !== 'voices' || moments.some((m) => m.type === 'voices'))
   const matching = moments.map((m, i) => ({ m, i })).filter(({ m }) => !filter || m.type === filter)
   const shown = filter || expanded ? matching : matching.slice(0, LIST_LIMIT)
-  const ticks = [0, 300, 600].filter((t) => t < duration - 120)
 
   return (
     <div className="flex flex-col gap-3">
@@ -105,89 +104,6 @@ export default function BroughtStudentsIn({ session }: { session: AudioSessionWi
           came in the first half.
         </p>
       )}
-
-      {/* When it happened: your moves, and the answers the recording heard. */}
-      <div className="rounded-2xl border border-hairline bg-cream-card px-4 py-3.5">
-        <div className="mb-2 flex justify-between text-xs font-semibold text-ink-soft">
-          <span>When it happened</span>
-          <span>{mmss(duration)}</span>
-        </div>
-        <Lane label="You">
-          {moments.map((m, i) => (
-            <button
-              key={i}
-              type="button"
-              title={`${mmss(m.t)} · ${m.tag}`}
-              onMouseEnter={() => setHot(i)}
-              onMouseLeave={() => setHot(null)}
-              onClick={() => {
-                if (filter && filter !== m.type) setFilter(null)
-                setExpanded(true)
-                setHot(i)
-              }}
-              className="absolute top-1/2 transition-transform"
-              style={{
-                left: x(m.t),
-                transform: `translate(-50%, -50%) scale(${hot === i ? 1.45 : 1})`,
-                opacity: filter && filter !== m.type ? 0.18 : 1,
-              }}
-            >
-              <Shape type={m.type} size={16} />
-            </button>
-          ))}
-        </Lane>
-        {answers && answers.length > 0 && (
-          <Lane label="Students" dashed>
-            {answers.map((a, i) => (
-              <span
-                key={i}
-                title={`${mmss(a.timestampSec)} · student answer${a.followed ? ' — you followed up' : ''}`}
-                className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-sm"
-                style={{
-                  left: x(a.timestampSec),
-                  width: 4,
-                  height: a.followed ? 20 : 16,
-                  background: STUDENT,
-                  opacity: a.followed ? 1 : 0.55,
-                  outline: a.followed ? '2px solid #3F7D58' : undefined,
-                  outlineOffset: a.followed ? 3 : undefined,
-                }}
-              />
-            ))}
-          </Lane>
-        )}
-        <div className="grid grid-cols-[72px_1fr] text-xs text-ink-soft">
-          <span />
-          <div className="relative h-4">
-            {ticks.map((t) => (
-              <span key={t} className="absolute -translate-x-1/2 first:translate-x-0" style={{ left: x(t) }}>
-                {mmss(t)}
-              </span>
-            ))}
-            <span className="absolute right-0">{mmss(duration)}</span>
-          </div>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-hairline pt-3 text-xs text-ink-soft">
-          {types.map((k) => (
-            <span key={k} className="flex items-center gap-1.5">
-              <Shape type={k} size={12} />
-              {TYPES[k].tag}
-            </span>
-          ))}
-          {answers && answers.length > 0 && (
-            <>
-              <span className="flex items-center gap-1.5">
-                <i className="inline-block h-3 w-1 rounded-sm" style={{ background: STUDENT, opacity: 0.55 }} />
-                Student answer
-              </span>
-              <span className="flex items-center gap-1.5">
-                <i className="inline-block h-3 w-1 rounded-sm" style={{ background: STUDENT, outline: '2px solid #3F7D58', outlineOffset: 2 }} />
-                You followed up
-              </span>
-            </>
-          )}
-        </div>
-      </div>
 
       {/* The three moves, as filters. */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -294,21 +210,6 @@ export default function BroughtStudentsIn({ session }: { session: AudioSessionWi
           <b className="font-semibold text-ink">How many different students spoke</b> isn’t available for this recording. The audio
           can’t separate student voices reliably enough to count them.
         </p>
-      </div>
-    </div>
-  )
-}
-
-function Lane({ label, dashed, children }: { label: string; dashed?: boolean; children: React.ReactNode }) {
-  return (
-    <div className="grid h-10 grid-cols-[72px_1fr] items-center">
-      <span className="text-xs font-semibold text-ink-soft">{label}</span>
-      <div className="relative h-full">
-        <div
-          className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2"
-          style={{ background: dashed ? 'repeating-linear-gradient(90deg,var(--color-hairline) 0 6px,transparent 6px 10px)' : 'var(--color-hairline)' }}
-        />
-        {children}
       </div>
     </div>
   )

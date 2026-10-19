@@ -633,9 +633,8 @@ struct HatchFill: View {
     }
 }
 
-/// How you brought students in: your moves and the answers the recording
-/// heard on one timeline, the three moves as filters, and every moment —
-/// mirrors BroughtStudentsIn.tsx.
+/// How you brought students in: the three moves as filters, and every moment
+/// — mirrors BroughtStudentsIn.tsx. Where they fell is the flow strip above.
 struct BroughtStudentsInView: View {
     let session: AudioSessionWithSegments
     let moves: ParticipationMoves
@@ -696,78 +695,12 @@ struct BroughtStudentsInView: View {
                         .font(.heading(.headline)).foregroundStyle(AppTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                timeline(all, answers: answers, duration: duration, types: types)
                 ForEach(types, id: \.self) { k in
                     moveCard(k, count: all.filter { $0.type == k }.count, answers: answers, heard: heard, followed: followed, showRate: showRate)
                 }
                 if !all.isEmpty { momentList(all) }
                 unavailableNote
             }
-        }
-    }
-
-    private func timeline(_ all: [Moment], answers: [AudioAnswer], duration: Double, types: [MoveShape]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("When it happened")
-                Spacer()
-                Text(mmss(duration))
-            }
-            .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
-            lane("You") { width in
-                ForEach(all) { m in
-                    m.type.view(size: 14)
-                        .opacity(filter == nil || filter == m.type ? 1 : 0.18)
-                        .position(x: x(m.t, duration, width), y: 16)
-                }
-            }
-            if !answers.isEmpty {
-                lane("Students", dashed: true) { width in
-                    ForEach(Array(answers.enumerated()), id: \.offset) { _, a in
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Self.studentColor.opacity(a.followed ? 1 : 0.55))
-                            .frame(width: 4, height: a.followed ? 18 : 14)
-                            .overlay(RoundedRectangle(cornerRadius: 2).stroke(a.followed ? MoveShape.probe.color : .clear, lineWidth: 2).padding(-3))
-                            .position(x: x(a.timestampSec, duration, width), y: 16)
-                    }
-                }
-            }
-            Divider().padding(.top, 4)
-            FlowLayout(spacing: 10) {
-                ForEach(types, id: \.self) { k in
-                    HStack(spacing: 4) { k.view(size: 10); Text(k == .invite ? "Invitation" : k == .probe ? "Follow-up" : "Beyond volunteers") }
-                }
-                if !answers.isEmpty {
-                    HStack(spacing: 4) { RoundedRectangle(cornerRadius: 1).fill(Self.studentColor.opacity(0.55)).frame(width: 4, height: 11); Text("Student answer") }
-                    HStack(spacing: 4) {
-                        RoundedRectangle(cornerRadius: 1).fill(Self.studentColor).frame(width: 4, height: 11)
-                            .overlay(RoundedRectangle(cornerRadius: 2).stroke(MoveShape.probe.color, lineWidth: 2).padding(-2))
-                        Text("You followed up")
-                    }
-                }
-            }
-            .font(.caption2).foregroundStyle(AppTheme.textSecondary)
-        }
-        .padding(14)
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
-    }
-
-    private func x(_ t: Double, _ duration: Double, _ width: CGFloat) -> CGFloat {
-        min(width - 7, max(7, width * CGFloat(t / duration)))
-    }
-
-    private func lane<C: View>(_ label: String, dashed: Bool = false, @ViewBuilder content: @escaping (CGFloat) -> C) -> some View {
-        HStack(spacing: 8) {
-            Text(label).font(.caption2.weight(.semibold)).foregroundStyle(AppTheme.textSecondary).frame(width: 56, alignment: .leading)
-            GeometryReader { geo in
-                ZStack(alignment: .topLeading) {
-                    Path { p in p.move(to: CGPoint(x: 0, y: 16)); p.addLine(to: CGPoint(x: geo.size.width, y: 16)) }
-                        .stroke(AppTheme.hairline, style: StrokeStyle(lineWidth: 2, dash: dashed ? [6, 4] : []))
-                    content(geo.size.width)
-                }
-            }
-            .frame(height: 32)
         }
     }
 
