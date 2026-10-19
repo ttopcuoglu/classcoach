@@ -418,38 +418,35 @@ struct ReportView: View {
                 }
             }
 
-            // Heading first, always. The two lenses used to sit above it, so
-            // choosing "Talk & Participation" showed two unrelated cards and
-            // then, fourth down the page, the heading for the thing you had
-            // just chosen — with its name already printed in the picker above.
-            // Lenses now come after the content they are lenses on.
-            InsightsSectionHeader(section: section)
-
+            // One card per section in the web's design: header, note, the
+            // section's own evidence, Keep and Try, and a footer holding
+            // "How to read this", this section's hard look, and the coach.
             Group {
                 switch section {
-                case .talk: DiscourseDetailsTab(session: session, part: .talk)
-                case .questions: DiscourseDetailsTab(session: session, part: .questions)
-                case .content: LessonContentTab(session: session, onUpdate: onUpdate)
-                case .routines: ClimateRoutinesTab(session: session)
+                case .talk:
+                    TalkSection(session: session, note: AudioInsights.buildTalkInsight(session), hardLook: sectionHardLook, onDiscuss: discussSection)
+                case .questions:
+                    QuestionsSection(session: session, note: AudioInsights.buildQuestioningInsight(session, higherOrderRatio: m.higherOrderRatio),
+                                     hardLook: sectionHardLook, onDiscuss: discussSection)
+                case .content:
+                    ContentSection(session: session, hardLook: sectionHardLook, onDiscuss: discussSection)
+                case .routines:
+                    RoutinesSection(session: session, hardLook: sectionHardLook, onDiscuss: discussSection)
                 }
             }
-            .environment(\.reportAccent, section.accent)
-
-            // The hard read of THIS section, under the evidence it was drawn
-            // from. Its findings are grouped by section, so holding them all in
-            // one card at the top meant reading a section and then scrolling
-            // back past the page to find the half about it.
-            SectionHardLook(
-                section: section,
-                session: session,
-                locked: locked,
-                onUpdate: onUpdate
-            )
-
-            DiscussFooter { discuss(.forSection(section, in: session)) }
+            .id(section)
 
         }
     }
+
+    /// This section's part of the Hard Look, opened from the card's footer.
+    /// A locked report that never asked for one has none to show.
+    private var sectionHardLook: AnyView? {
+        if locked && session.hardLook == nil { return nil }
+        return AnyView(SectionHardLook(section: section, session: session, locked: locked, onUpdate: onUpdate))
+    }
+
+    private func discussSection() { discuss(.forSection(section, in: session)) }
 
     /// The other lens over the same four sections: the least generous reading
     /// rather than the framework's. Second, and closed, on purpose — a teacher

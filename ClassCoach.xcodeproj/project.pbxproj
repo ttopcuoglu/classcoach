@@ -67,6 +67,7 @@
 		7807370B33AFCFDE7E15E70E /* SessionFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0458FD6AC1BF20029DC80D /* SessionFlowView.swift */; };
 		F481C6FF3D7671AF43890601 /* ReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28E95128B4B476DE053AD46B /* ReportView.swift */; };
 		F4D4F9200F7F9DD87D2E6DCF /* OverviewTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C0CD7EF1403BCFCEF218B7F /* OverviewTab.swift */; };
+		A1B2C3D4E5F60718293A4B5C /* InsightsSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5A60718293A4B5D /* InsightsSections.swift */; };
 		CCCFF1F07FA64CEB7B8627B5 /* FocusMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F68B8E7CA6E94BDED9D840 /* FocusMetrics.swift */; };
 		75BA6626EB6627EA471DBEBF /* MyGrowthTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3E65D601C04B09766233D44 /* MyGrowthTab.swift */; };
 		D0383AB7AA54501B1C6C90D4 /* ReflectTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63DECA9CA7D3A0E56A4B0333 /* ReflectTab.swift */; };
@@ -146,6 +147,7 @@
 		BE0458FD6AC1BF20029DC80D /* SessionFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionFlowView.swift; sourceTree = "<group>"; };
 		28E95128B4B476DE053AD46B /* ReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportView.swift; sourceTree = "<group>"; };
 		6C0CD7EF1403BCFCEF218B7F /* OverviewTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewTab.swift; sourceTree = "<group>"; };
+		B1C2D3E4F5A60718293A4B5D /* InsightsSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightsSections.swift; sourceTree = "<group>"; };
 		09F68B8E7CA6E94BDED9D840 /* FocusMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusMetrics.swift; sourceTree = "<group>"; };
 		A3E65D601C04B09766233D44 /* MyGrowthTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyGrowthTab.swift; sourceTree = "<group>"; };
 		63DECA9CA7D3A0E56A4B0333 /* ReflectTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReflectTab.swift; sourceTree = "<group>"; };
@@ -269,6 +271,7 @@
 				BE0458FD6AC1BF20029DC80D /* SessionFlowView.swift */,
 				28E95128B4B476DE053AD46B /* ReportView.swift */,
 				6C0CD7EF1403BCFCEF218B7F /* OverviewTab.swift */,
+				B1C2D3E4F5A60718293A4B5D /* InsightsSections.swift */,
 				A3E65D601C04B09766233D44 /* MyGrowthTab.swift */,
 				63DECA9CA7D3A0E56A4B0333 /* ReflectTab.swift */,
 				20CF71C485DFFD882E16B3D0 /* LessonContentTab.swift */,
@@ -552,6 +555,7 @@
 				7807370B33AFCFDE7E15E70E /* SessionFlowView.swift in Sources */,
 				F481C6FF3D7671AF43890601 /* ReportView.swift in Sources */,
 				F4D4F9200F7F9DD87D2E6DCF /* OverviewTab.swift in Sources */,
+				A1B2C3D4E5F60718293A4B5C /* InsightsSections.swift in Sources */,
 				CCCFF1F07FA64CEB7B8627B5 /* FocusMetrics.swift in Sources */,
 				75BA6626EB6627EA471DBEBF /* MyGrowthTab.swift in Sources */,
 				D0383AB7AA54501B1C6C90D4 /* ReflectTab.swift in Sources */,
