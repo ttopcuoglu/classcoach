@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Segment } from './audioAnalysis.ts'
-import { findClusters, inScopeSegments, parseBids, type AttentionBid } from './escalation.ts'
+import { confirmInterruptions, findClusters, findEpisodes, inScopeSegments, parseBids, type AttentionBid } from './escalation.ts'
 import { safeToQuote } from './quoteSafety.ts'
 import { canClaimAbsence, capturedShare } from './transcriptCoverage.ts'
 
@@ -11,7 +11,7 @@ import { canClaimAbsence, capturedShare } from './transcriptCoverage.ts'
 // so the arithmetic is what gets pinned down.
 
 function bid(timestampSec: number, rung: AttentionBid['rung'], quote = 'Keep it down, everybody.'): AttentionBid {
-  return { timestampSec, rung, quote, backReference: false }
+  return { timestampSec, rung, quote, backReference: false, expectation: 'talking', interrupts: false }
 }
 
 test('two asks is not a cluster, three is', () => {
@@ -187,4 +187,91 @@ test('a back-reference is read from the words, and only when flagged', () => {
   assert.equal(bids[0].timestampSec, 100)
   assert.equal(bids[0].backReference, false)
   assert.equal(bids[1].backReference, true)
+})
+
+// Keeping learning on track. One reminder tells a teacher little; the
+// findings are the stretches where reminders came as a pattern.
+
+function ask(timestampSec: number, over: Partial<AttentionBid> = {}): AttentionBid {
+  return { ...bid(timestampSec, 'behaviour'), ...over }
+}
+
+test('reminders spread across a lesson about different things are routine, not a finding', () => {
+  const bids = [
+    ask(60, { expectation: 'talking' }),
+    ask(400, { expectation: 'devices' }),
+    ask(900, { expectation: 'work' }),
+  ]
+  assert.deepEqual(findEpisodes(bids), [])
+})
+
+test('the same expectation coming back within a stretch is a finding', () => {
+  const bids = [ask(100), ask(190), ask(280)]
+  const [episode] = findEpisodes(bids)
+  assert.equal(episode.expectation, 'talking')
+  assert.equal(episode.quickRepeats, false)
+  assert.equal(episode.interruptedExplanation, false)
+})
+
+test('one break in an explanation is routine; two in the same stretch are a pattern', () => {
+  assert.deepEqual(findEpisodes([ask(100, { interrupts: true, expectation: 'other' })]), [])
+  const [episode] = findEpisodes([
+    ask(100, { interrupts: true, expectation: 'other' }),
+    ask(170, { interrupts: true, expectation: 'attention' }),
+  ])
+  assert.equal(episode.interruptedExplanation, true)
+  assert.equal(episode.expectation, null)
+})
+
+test('the lead moment is an interruption when that is the pattern', () => {
+  const [episode] = findEpisodes([
+    ask(100, { quote: 'Keep it down over there.' }),
+    ask(150, { quote: 'Gotta keep it down, everybody.', interrupts: true }),
+    ask(200, { quote: 'One voice, please, one voice.', interrupts: true }),
+  ])
+  assert.equal(episode.lead.timestampSec, 150)
+  assert.equal(episode.more.length, 2)
+})
+
+test('the strongest pattern comes first', () => {
+  const episodes = findEpisodes([
+    ask(0), ask(5), ask(10),
+    ask(900, { interrupts: true }), ask(960, { interrupts: true }), ask(1020),
+  ])
+  assert.equal(episodes[0].startSec, 900)
+})
+
+const tseg = (startSec: number, text: string): Segment => ({ startSec, endSec: startSec + 5, speakerLabel: 'Teacher', text })
+
+test('an interruption needs teaching on both sides of the ask', () => {
+  const claimed = ask(100, { quote: 'Gotta keep it down, everybody.', interrupts: true })
+  // Resumed in the same breath — the real shape at 20:16 of the history lesson.
+  const same = [
+    tseg(80, 'So the best idea we have is that climate change caused the people who lived here to move.'),
+    tseg(100, 'Gotta keep it down, everybody. So climate change basically caused the people to move away from the river.'),
+  ]
+  assert.equal(confirmInterruptions([claimed], same)[0].interrupts, true)
+  // Nothing said after it: the explanation was not resumed, whatever the model thought.
+  const stopped = [tseg(80, 'So the best idea we have is that climate change caused the people to move.'), tseg(100, 'Gotta keep it down, everybody.')]
+  assert.equal(confirmInterruptions([claimed], stopped)[0].interrupts, false)
+})
+
+test('five-column bid lines carry the expectation and the interruption', () => {
+  const segments = [tseg(10, 'Put your phone away, please.')]
+  const [b] = parseBids('<bids>\nPut your phone away, please. @ 0:10 | behaviour | devices | no | no\n</bids>', segments)
+  assert.equal(b.expectation, 'devices')
+  assert.equal(b.interrupts, false)
+  assert.equal(b.backReference, false)
+})
+
+test('"like I said" joins the earlier ask about the same thing, minutes back', () => {
+  const bids = [
+    ask(275, { expectation: 'devices' }),
+    ask(735, { expectation: 'talking', quote: 'I want it to be silent. That is my expectation.' }),
+    ask(1010, { expectation: 'talking', backReference: true, quote: 'Like I said, independent and silent people.' }),
+  ]
+  const [episode] = findEpisodes(bids)
+  assert.equal(episode.backReference, true)
+  assert.equal(episode.lead.timestampSec, 1010)
+  assert.deepEqual(episode.more.map((m) => m.timestampSec), [735])
 })

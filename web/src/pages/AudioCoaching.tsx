@@ -38,6 +38,7 @@ import {
   updateProfile,
   generateContentNotes,
   type AudioContentNotes,
+  type AudioEscalation,
   type AudioHighlight,
   type AudioLessonContent,
   type AudioReflectMessage,
@@ -4883,6 +4884,63 @@ function HardLookTab({
   )
 }
 
+/// Keeping learning on track, in Climate & Routines: each stretch where
+/// reminders came as a pattern, as one teacher quote and its time, a short
+/// explanation, the related quotes behind "More evidence", and a next step
+/// only when the server judged the pattern specific enough to point at one.
+function OnTrackFindings({
+  escalation,
+  loneInterruptions,
+}: {
+  escalation: AudioEscalation
+  loneInterruptions: { timestampSec: number; quote: string | null }[]
+}) {
+  if (escalation.state === 'not_measurable') return <p className="text-sm text-ink-soft">{escalation.reason}</p>
+  const episodes = escalation.episodes ?? []
+  return (
+    <div className="flex flex-col gap-3">
+      {episodes.map((e) => (
+        <div key={`${e.startSec}-${e.title}`} className="flex flex-col gap-2 rounded-xl border-[1.5px] border-terracotta/30 bg-cream-card px-4 py-3.5">
+          <b className="text-sm text-ink">{e.title}</b>
+          <div className="flex items-baseline justify-between gap-4 text-sm text-ink">
+            <span>{e.lead.quote ? `“${e.lead.quote}”` : <span className="text-ink-soft">The wording here was too unclear to quote.</span>}</span>
+            <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(e.lead.timestampSec)}</span>
+          </div>
+          <p className="text-sm text-ink-soft">{e.pattern}</p>
+          {e.more.length > 0 && (
+            <DetailsOpenOnPaper className="group">
+              <summary className="cursor-pointer list-none text-sm font-semibold text-forest marker:hidden">
+                <span className="group-open:hidden">More evidence ▸</span>
+                <span className="hidden group-open:inline">More evidence ▾</span>
+              </summary>
+              <ul className="mt-2 flex flex-col gap-1.5">
+                {e.more.map((m) => (
+                  <li key={m.timestampSec} className="flex items-baseline justify-between gap-4 text-sm text-ink">
+                    <span>“{m.quote}”</span>
+                    <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(m.timestampSec)}</span>
+                  </li>
+                ))}
+              </ul>
+            </DetailsOpenOnPaper>
+          )}
+          {e.nextStep && (
+            <p className="rounded-lg bg-cream px-3 py-2 text-sm text-ink">
+              <b className="text-forest">Next step: </b>
+              {e.nextStep}
+            </p>
+          )}
+        </div>
+      ))}
+      {loneInterruptions.map((i) => (
+        <p key={i.timestampSec} className="text-sm text-ink-soft">
+          At {formatTime(i.timestampSec)} you paused an explanation to address behavior
+          {i.quote ? <> (“{i.quote.replace(/[.!?]+$/, '')}”)</> : null} and went straight back to it. Once on its own, that is a routine reminder.
+        </p>
+      ))}
+    </div>
+  )
+}
+
 const ROUTINE_LABEL: Record<string, string> = {
   start: 'Starting work',
   transition: 'Changing activities',
@@ -4959,9 +5017,20 @@ function ClimateRoutinesTab({
         ? `${actionable.length} of your ${redirections.length} redirection${redirections.length === 1 ? '' : 's'} told students what to do, not just what to stop.`
         : `${redirections.length} redirection${redirections.length === 1 ? '' : 's'}.`
   const esc = session.escalation
-  // Whether an ask held — never the number of bids.
+  // Keeping learning on track: the stretches where reminders came as a
+  // pattern. Reads made before episodes existed fall back to whether an ask
+  // held — never the number of bids.
+  const episodes = esc?.state === 'found' ? esc.episodes : undefined
+  const near = (a: number, b: number) => Math.abs(a - b) < 3
+  const inEpisode = (sec: number) => (episodes ?? []).some((e) => sec >= e.startSec - 1 && sec <= e.endSec + 1)
+  const loneInterruptions = (esc?.interruptions ?? []).filter((i) => !inEpisode(i.timestampSec))
+  const onTrackRows: Evidence[] = redirectRows.map((r) =>
+    (esc?.interruptions ?? []).some((i) => near(i.timestampSec, r.timestampSec)) ? { ...r, tag: `${r.tag} · Paused your explanation` } : r,
+  )
   const escNote =
-    esc?.state === 'found' && esc.clusters[0] ? (
+    episodes !== undefined || esc?.state === 'not_measurable' ? (
+      <OnTrackFindings escalation={esc!} loneInterruptions={loneInterruptions} />
+    ) : esc?.state === 'found' && esc.clusters[0] ? (
       <p className="text-sm text-ink-soft">
         One ask needed repeating around {formatTime(esc.clusters[0].startSec)}
         {esc.clusters[0].quote ? <> — “{esc.clusters[0].quote.replace(/[.!?]+$/, '')}”</> : null}.
@@ -4969,6 +5038,16 @@ function ClimateRoutinesTab({
     ) : esc?.state === 'confirmed_none' ? (
       <p className="text-sm text-ink-soft">Your asks held: none needed repeating.</p>
     ) : null
+  const onTrackFinding =
+    episodes && episodes.length > 0
+      ? episodes.length === 1
+        ? 'One stretch of the lesson where reminders came as a pattern, not one at a time.'
+        : 'More than one stretch where reminders came as a pattern, not one at a time. The strongest is first.'
+      : esc?.state === 'confirmed_none' || (episodes && episodes.length === 0)
+        ? redirections.length > 0
+          ? 'Your reminders were routine: none came back as a repeated pattern.'
+          : null
+        : redirectFinding
 
   // 3. Encouragement & respect.
   const feedback = session.feedbackLog ?? []
@@ -5050,11 +5129,14 @@ function ClimateRoutinesTab({
               },
               {
                 key: 'redirection',
-                label: 'Redirection & expectations',
-                finding: redirectFinding,
-                desc: 'Reminders and corrections, and whether each gave students a clear action to take.',
+                label: 'Keeping learning on track',
+                finding: onTrackFinding,
+                desc: 'Your words addressing behavior, apart from corrections about the content. One reminder tells little; what is worth a second look is the same reminder coming back, or an explanation that kept stopping.',
                 note: escNote,
-                items: redirectRows.map((r) => ({ tag: r.tag, quote: r.quote, timestampSec: r.timestampSec })),
+                items: (onTrackRows.length > 0
+                  ? onTrackRows
+                  : (episodes ?? []).map((e) => ({ quote: e.lead.quote ?? '', timestampSec: e.lead.timestampSec, tag: e.title }))
+                ).filter((r) => r.quote).map((r) => ({ tag: r.tag, quote: r.quote, timestampSec: r.timestampSec })),
               },
               {
                 key: 'encouragement',

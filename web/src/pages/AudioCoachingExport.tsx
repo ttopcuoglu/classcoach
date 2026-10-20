@@ -364,9 +364,35 @@ export default function AudioCoachingExport() {
               run and the rung it reached do not. */}
           {session.escalation && session.escalation.state !== 'confirmed_none' && (
             <div className="mt-4 break-inside-avoid rounded-2xl bg-gold-tint/50 p-5">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-terracotta-600">Did your asks hold?</p>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-terracotta-600">
+                {session.escalation.episodes ? 'Keeping learning on track' : 'Did your asks hold?'}
+              </p>
               {session.escalation.state === 'not_measurable' ? (
                 <p className="mt-2 text-sm text-forest">{session.escalation.reason}</p>
+              ) : session.escalation.episodes ? (
+                <>
+                  {/* Same findings, same server-written copy, as the in-app panel. */}
+                  {session.escalation.episodes.map((e) => (
+                    <div key={`${e.startSec}-${e.title}`} className="mt-3">
+                      <p className="text-sm font-semibold text-forest">{e.title}</p>
+                      {e.lead.quote && (
+                        <p className="mt-1 text-sm italic text-forest">
+                          “{e.lead.quote}” · {formatTime(e.lead.timestampSec)}
+                        </p>
+                      )}
+                      <p className="mt-1 text-sm text-forest">{e.pattern}</p>
+                      {e.more.length > 0 && (
+                        <p className="mt-1 text-xs text-forest/80">
+                          More evidence: {e.more.map((m) => `“${m.quote}” (${formatTime(m.timestampSec)})`).join(' · ')}
+                        </p>
+                      )}
+                      {e.nextStep && <p className="mt-1 text-sm text-forest"><b>Next step:</b> {e.nextStep}</p>}
+                    </div>
+                  ))}
+                  {session.escalation.episodes.length === 0 && (
+                    <p className="mt-2 text-sm text-forest">Your reminders were routine: none came back as a repeated pattern.</p>
+                  )}
+                </>
               ) : (
                 <>
                   {session.escalation.clusters[0] && (

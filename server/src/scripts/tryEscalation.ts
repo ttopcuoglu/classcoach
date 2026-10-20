@@ -54,7 +54,9 @@ for (const id of sessionIds) {
   console.log((session.classSummary ?? '').slice(0, 140))
 
   for (let run = 1; run <= runs; run++) {
-    const read = await readEscalation(segments, session.metricsDetail as never, session.durationSec)
+    const read = await readEscalation(segments, session.metricsDetail as never, session.durationSec, args.includes('--bids')
+      ? (bids) => { for (const b of bids) console.log(`    bid ${mmss(b.timestampSec)} ${b.rung}/${b.expectation}${b.interrupts ? ' INTERRUPTS' : ''}${b.backReference ? ' back-ref' : ''}: ${JSON.stringify(b.quote.slice(0, 80))}`) }
+      : undefined)
     if (!read) { console.log(`  run ${run}: read failed`); continue }
     console.log(`\n  run ${run}: state=${read.state}  captured=${read.capturedSharePct}%  peakRung=${read.peakRung ?? '—'}`)
     if (read.reason) console.log(`    reason: ${read.reason}`)
@@ -67,6 +69,19 @@ for (const id of sessionIds) {
     }
     for (const r of read.repeatedAsks) {
       console.log(`    repeated ask at ${mmss(r.timestampSec)}: ${r.quote == null ? '(withheld)' : JSON.stringify(r.quote.slice(0, 90))}`)
+    }
+    for (const e of read.episodes ?? []) {
+      const flags = [
+        e.expectation && `same:${e.expectation}`,
+        e.interruptedExplanation && 'INTERRUPTED',
+        e.quickRepeats && 'quick-repeats',
+        e.climbed && 'climbed',
+        e.backReference && 'back-ref',
+      ].filter(Boolean).join(' ')
+      console.log(`    episode ${mmss(e.startSec)}-${mmss(e.endSec)}  ${flags}`)
+      console.log(`      ${e.title}\n      ${e.pattern}\n      next: ${e.nextStep ?? '—'}`)
+      console.log(`      lead ${mmss(e.lead.timestampSec)}: ${e.lead.quote == null ? '(withheld)' : JSON.stringify(e.lead.quote.slice(0, 90))}`)
+      for (const m of e.more) console.log(`        more ${mmss(m.timestampSec)}: ${JSON.stringify(m.quote.slice(0, 80))}`)
     }
     if (read.state === 'confirmed_none') console.log('    nothing like this in what the recording caught, and enough was caught to mean it')
   }

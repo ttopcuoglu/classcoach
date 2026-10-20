@@ -975,6 +975,29 @@ export type AudioEscalation = {
   clusters: AudioEscalationCluster[]
   repeatedAsks: { timestampSec: number; quote: string | null }[]
   capturedSharePct: number | null
+  /// Keeping learning on track: stretches where reminders came as a pattern,
+  /// strongest first. Absent on reads made before it existed.
+  episodes?: AudioOnTrackEpisode[]
+  /// Every ask that broke into an explanation, which then resumed.
+  interruptions?: { timestampSec: number; quote: string | null }[]
+}
+
+/// One stretch of reminders that came as a pattern
+/// (server/src/lib/escalation.ts findEpisodes). The copy is written on the
+/// server so web and iOS say the same thing; it never carries a count.
+export type AudioOnTrackEpisode = {
+  startSec: number
+  endSec: number
+  expectation: 'talking' | 'devices' | 'attention' | 'work' | 'movement' | 'other' | null
+  interruptedExplanation: boolean
+  quickRepeats: boolean
+  climbed: boolean
+  backReference: boolean
+  lead: { quote: string | null; timestampSec: number }
+  more: { quote: string; timestampSec: number }[]
+  title: string
+  pattern: string
+  nextStep: string | null
 }
 
 // The one moment most worth a second look, chosen by a read of the transcript
