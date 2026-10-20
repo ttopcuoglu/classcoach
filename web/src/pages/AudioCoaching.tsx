@@ -2560,12 +2560,26 @@ function SummaryTab({
   const studentPct = session.studentTalkPct
   const silencePct =
     teacherPct != null && studentPct != null ? Math.max(0, Math.round((100 - teacherPct - studentPct) * 10) / 10) : null
+  const tawt = tawtOf(session)
   const tiles: { label: string; metric: ConfidentMetric; unit?: string; accent: Accent }[] = [
     { label: 'You spoke', metric: getPresenceMetric(teacherPct), unit: '%', accent: ACCENTS.terracotta },
     { label: 'Students spoke', metric: getPresenceMetric(studentPct), unit: '%', accent: ACCENTS.gold },
     { label: 'Silence / other', metric: getPresenceMetric(silencePct), unit: '%', accent: ACCENTS.mint },
     { label: 'Questions', metric: getCountMetric({ count: session.questionCount, recordedSec: session.durationSec ?? 0 }), accent: ACCENTS.mint },
-    { label: 'Avg. wait', metric: waitTimeMetricOf(session.avgWaitTimeSec, session.questionCount), unit: 's', accent: ACCENTS.forest },
+    // Teacher-Anchored Wait Time, the same number Questioning & Checking shows.
+    {
+      label: 'TAWT',
+      metric:
+        tawt.average != null
+          ? { state: 'measured', display: tawt.average.toFixed(1) }
+          : {
+              state: 'not_measurable',
+              display: '—',
+              reason: tawt.thinking.length === 0 ? 'No question asked students to explain or reason.' : 'No pause after a thinking question could be timed.',
+            },
+      unit: 's',
+      accent: ACCENTS.forest,
+    },
   ]
 
   // Keep doing: a reasoning question, else one of the talk moves.
@@ -5519,7 +5533,7 @@ function QuestioningCheckingTab({
     >
       {/* Your questions and checks, on one lesson timeline; a key item shows
           its moments. */}
-      <QuestionsChecksPart session={session} questions={questions} />
+      <QuestionsChecksPart session={session} />
 
       {/* Also heard: question marks that were not questions. Not counted. */}
       {(tags.length > 0 || housekeeping.length > 0) && (
@@ -5581,6 +5595,19 @@ const sameMoment = (a: { timestampSec: number; quote: string }, b: { timestampSe
   return Math.abs(a.timestampSec - b.timestampSec) <= 8 && na.length > 0 && nb.length > 0 && (na.startsWith(nb.slice(0, 20)) || nb.startsWith(na.slice(0, 20)))
 }
 
+/// Teacher-Anchored Wait Time, worked out once for the Summary tile and the
+/// Questioning & Checking card so the two never disagree: the questions left
+/// with students (a question you answered yourself is not one), the thinking
+/// ones among them (explain or reasoning), each one's pause until you spoke
+/// again, and their average.
+function tawtOf(session: AudioSessionWithSegments) {
+  const selfAnswered = (session.teachingMoves?.selfAnswered ?? []).map((q) => ({ timestampSec: q.timestampSec, quote: withoutAddressedNames(q.quote) }))
+  const questions = classifyQuestions(session).filter((q) => !selfAnswered.some((sa) => sameMoment(q, sa)))
+  const thinking = questions.filter((q) => q.mix !== 'recall')
+  const pauses = pausesAfter(session.segments ?? [], thinking)
+  return { selfAnswered, questions, thinking, pauses, average: averagePause(pauses) }
+}
+
 /// Your questions and checks for understanding on one lesson timeline: each
 /// question a dot in its kind's colour — recall, explain, reasoning, answered
 /// yourself, follow-up — and each check a ring (solid when it asked everyone,
@@ -5589,16 +5616,9 @@ const sameMoment = (a: { timestampSec: number; quote: string }, b: { timestampSe
 /// answered yourself is shown as that and only that, not also as a question
 /// left with students. Checks the read found were not checks are left out.
 /// Never a claim that students understood.
-function QuestionsChecksPart({
-  session,
-  questions: allQuestions,
-}: {
-  session: AudioSessionWithSegments
-  questions: ReturnType<typeof classifyQuestions>
-}) {
+function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments }) {
   const checks = (session.cfuLog ?? []).filter((c) => c.loop?.who !== 'not_a_check')
-  const selfAnswered = (session.teachingMoves?.selfAnswered ?? []).map((q) => ({ timestampSec: q.timestampSec, quote: withoutAddressedNames(q.quote) }))
-  const questions = allQuestions.filter((q) => !selfAnswered.some((sa) => sameMoment(q, sa)))
+  const { selfAnswered, questions, thinking: thinkingQuestions, pauses: thinkingPauses, average: thinkingPause } = tawtOf(session)
   // The follow-ups the answer log paired with a student answer — the same
   // ones the follow-up count rests on.
   const detail = (session.metricsDetail ?? {}) as Record<string, unknown>
@@ -5607,9 +5627,6 @@ function QuestionsChecksPart({
     timestampSec: f.timestampSec,
     quote: withoutAddressedNames(f.text),
   }))
-  const thinkingQuestions = questions.filter((q) => q.mix !== 'recall')
-  const thinkingPauses = pausesAfter(session.segments ?? [], thinkingQuestions)
-  const thinkingPause = averagePause(thinkingPauses)
   const count = (k: MixKey) => questions.filter((q) => q.mix === k).length
   const beyond = count('explain') + count('reasoning')
   const [pick, setPick] = useState<QPick>(
