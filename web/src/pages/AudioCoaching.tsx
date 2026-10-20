@@ -7,11 +7,10 @@ import { DashedLinePoint, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import { ProgressRing, ThinkingIndicator, WorkingRing } from '../components/ProgressRing'
 import { NumberedCard } from '../components/AnswerSection'
-import { ACCENT_CYCLE, ACCENTS, type Accent } from '../components/report'
+import { ACCENT_CYCLE, ACCENTS, StatTile, type Accent } from '../components/report'
 import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { UPLOAD_STAGE, transcribeEstimateSec, transcribeHint, transcribeStage } from '../lib/transcribeStages'
-import { HATCH_STYLE } from '../lib/chartPatterns'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import { setPlanningPrefill } from '../lib/communicationsPrefill'
 import { MIN_STRETCH_TO_SHOW_SEC, longestTeacherStretch } from '../lib/teacherStretch'
@@ -61,6 +60,7 @@ import {
   feedbackMeasurable,
   getPresenceMetric,
   hasEnoughWaitTimeSamples,
+  isConfidentState,
   isMissingState,
   judgeTalkBalance,
   MIN_DURATION_FOR_CFU_DETECTION_SEC,
@@ -2547,21 +2547,24 @@ function SummaryTab({
     }
   }
 
-  // The four section cards — each number the one its section leads with.
-  const nonSpeech = nonSpeechSplit(session.metricsDetail, session.durationSec)
-  const shares = recordingShares(session.teacherTalkPct, session.studentTalkPct, nonSpeech)
-  const invitationCount = (moves?.participation?.invitations ?? moves?.invitations ?? []).length
+  // How the lesson moved, then the lesson's numbers: the same five tiles, from
+  // the same measures, as the printable report, so the screen and the paper
+  // open the same way. Silence sits beside the two talk shares because they
+  // are shares of the recording, not of the talking.
   const questions = classifyQuestions(session)
   const mixCount = (k: MixKey) => questions.filter((q) => q.mix === k).length
-  const beyond = mixCount('explain') + mixCount('reasoning')
   const arc = moves?.arc ?? []
-  const explanations = (moves?.explanations ?? []).length
-  const keyTerms = session.lessonContent?.keyTerms ?? []
-  const directions = moves?.directions ?? []
-  const complete = directions.filter((d) => d.parts.length === 4).length
-  const redirections = moves?.redirections ?? []
-  const actionable = redirections.filter((r) => r.clarity === 'actionable').length
-  const arcDuration = arc.length > 0 ? arc[arc.length - 1].endSec - arc[0].startSec : 0
+  const teacherPct = session.teacherTalkPct
+  const studentPct = session.studentTalkPct
+  const silencePct =
+    teacherPct != null && studentPct != null ? Math.max(0, Math.round((100 - teacherPct - studentPct) * 10) / 10) : null
+  const tiles: { label: string; metric: ConfidentMetric; unit?: string; accent: Accent }[] = [
+    { label: 'You spoke', metric: getPresenceMetric(teacherPct), unit: '%', accent: ACCENTS.terracotta },
+    { label: 'Students spoke', metric: getPresenceMetric(studentPct), unit: '%', accent: ACCENTS.gold },
+    { label: 'Silence / other', metric: getPresenceMetric(silencePct), unit: '%', accent: ACCENTS.mint },
+    { label: 'Questions', metric: getCountMetric({ count: session.questionCount, recordedSec: session.durationSec ?? 0 }), accent: ACCENTS.mint },
+    { label: 'Avg. wait', metric: waitTimeMetricOf(session.avgWaitTimeSec, session.questionCount), unit: 's', accent: ACCENTS.forest },
+  ]
 
   // Keep doing: a reasoning question, else one of the talk moves.
   const reasoningQ = questions.find((q) => q.mix === 'reasoning') ?? questions.find((q) => q.mix === 'explain')
@@ -2575,34 +2578,6 @@ function SummaryTab({
         timestampSec: reasoningQ.timestampSec,
       }
     : null
-
-  const sectionCard = (
-    n: number,
-    color: string,
-    title: string,
-    section: InsightsSection,
-    stat: React.ReactNode,
-    viz: React.ReactNode,
-    take: string | null,
-  ) => (
-    <button
-      type="button"
-      onClick={() => onNavigateInsights(section)}
-      className="flex flex-col gap-3 rounded-3xl border-[1.5px] border-transparent bg-cream-card p-5 text-left transition-colors hover:border-hairline"
-    >
-      <span className="flex items-center gap-3">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl font-heading text-base font-bold text-cream" style={{ background: color }}>
-          {n}
-        </span>
-        <span className="font-heading text-lg font-bold text-forest">{title}</span>
-      </span>
-      <span className="font-heading text-3xl font-extrabold leading-none text-forest">{stat}</span>
-      <span className="flex h-3.5 gap-1">{viz}</span>
-      {take && <span className="text-sm leading-relaxed text-ink">{take}</span>}
-      <span className="mt-auto text-sm font-semibold text-terracotta-600">Open {title} →</span>
-    </button>
-  )
-  const hatch = <i className="flex-1 rounded-sm border border-dashed border-[#9C9486]" style={HATCH_STYLE} />
 
   return (
     <div className="flex flex-col gap-4">
@@ -2678,105 +2653,42 @@ function SummaryTab({
         </div>
       )}
 
-      {/* One card per section: one fraction, its own picture, one sentence. */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        {sectionCard(
-          1,
-          '#C96A45',
-          'Talk & Participation',
-          'talk',
-          session.teacherTalkPct != null ? (
-            <>
-              {Math.round(session.teacherTalkPct)}%<small className="ml-1.5 font-sans text-sm font-medium text-ink-soft">of the recording was your voice</small>
-            </>
-          ) : (
-            '—'
-          ),
-          shares.length > 0
-            ? shares.filter((x) => x.pct >= 0.5).map((x) => (
-                <i key={x.kind} className="rounded-sm" style={{ flex: x.pct, ...(x.kind === 'unknown' ? HATCH_STYLE : { background: FLOW_COLOR[x.kind as Exclude<typeof x.kind, 'unknown'>] }) }} />
-              ))
-            : hatch,
-          invitationCount > 0 ? `You opened the floor ${invitationCount} time${invitationCount === 1 ? '' : 's'}.` : null,
-        )}
-        {sectionCard(
-          2,
-          '#E2BC5C',
-          'Questioning & Checking',
-          'questions',
-          questions.length > 0 ? (
-            <>
-              {beyond} of {questions.length}
-              <small className="ml-1.5 font-sans text-sm font-medium text-ink-soft">questions went beyond recall</small>
-            </>
-          ) : (
-            '—'
-          ),
-          questions.length > 0
-            ? (Object.keys(MIX) as MixKey[])
-                .filter((k) => mixCount(k) > 0)
-                .map((k) => <i key={k} className="rounded-sm" style={{ flex: mixCount(k), background: MIX[k].color }} />)
-            : hatch,
-          heard != null && followed != null && heard >= 3 ? `You followed up on ${followed} of ${heard} answers the recording could hear.` : null,
-        )}
-        {sectionCard(
-          3,
-          '#1F3A2E',
-          'Clarity & Content',
-          'content',
-          arc.length > 0 ? (
-            <>
-              {arc.length}
-              <small className="ml-1.5 font-sans text-sm font-medium text-ink-soft">
-                stages: {arc.map((x) => ARC_ROLE_LABEL[x.role].toLowerCase()).join(' → ')}
-              </small>
-            </>
-          ) : (
-            '—'
-          ),
-          arc.length > 0
-            ? arc.map((x, i) => (
-                <i key={i} className="rounded-sm" style={{ flex: Math.max(1, x.endSec - x.startSec) / Math.max(1, arcDuration), background: ['#CFC6B4', '#7FAE93', '#1F3A2E', '#2E5E46'][i % 4] }} />
-              ))
-            : hatch,
-          [
-            explanations > 0 ? `You opened the content up ${explanations} time${explanations === 1 ? '' : 's'}.` : null,
-            keyTerms.length > 0 ? `${keyTerms.filter((t) => t.studentCount > 0).length} of ${keyTerms.length} key terms heard from students.` : null,
-          ]
-            .filter(Boolean)
-            .join(' ') || null,
-        )}
-        {sectionCard(
-          4,
-          '#C96A45',
-          'Climate & Routines',
-          'routines',
-          directions.length === 1 ? (
-            <>
-              {directions[0].parts.length} of 4
-              <small className="ml-1.5 font-sans text-sm font-medium text-ink-soft">parts named in your one set of directions</small>
-            </>
-          ) : directions.length > 1 ? (
-            <>
-              {complete} of {directions.length}
-              <small className="ml-1.5 font-sans text-sm font-medium text-ink-soft">directions named all four parts</small>
-            </>
-          ) : (
-            '—'
-          ),
-          directions.length > 0
-            ? [...directions]
-                .sort((x, y) => x.timestampSec - y.timestampSec)
-                .map((d, i) => <i key={i} className="flex-1 rounded-sm" style={{ background: d.parts.length === 4 ? '#1F3A2E' : d.parts.length >= 2 ? '#7FAE93' : '#CFC6B4' }} />)
-            : hatch,
-          redirections.length === 1
-            ? actionable === 1
-              ? 'Your one redirection told students what to do.'
-              : 'Your one redirection said what to stop, not what to do instead.'
-            : redirections.length > 1
-              ? `${actionable} of ${redirections.length} redirections told students what to do.`
-              : null,
-        )}
+      {/* How the lesson moved — only where the arc read found its stages. */}
+      {arc.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-3xl bg-cream-card p-5">
+          <p className="font-heading text-xl font-bold text-forest">How the lesson moved</p>
+          <div className="flex flex-col gap-1.5 sm:flex-row">
+            {arc.map((st, i) => (
+              <div
+                key={i}
+                className={`flex-1 rounded-xl bg-cream px-3.5 py-3 ${i === 0 ? 'sm:rounded-l-2xl' : ''} ${i === arc.length - 1 ? 'sm:rounded-r-2xl' : ''}`}
+              >
+                <span className="text-xs font-bold uppercase tracking-wide text-terracotta-600">{ARC_ROLE_LABEL[st.role]}</span>
+                <p className="mt-0.5 text-sm font-semibold leading-snug text-ink">{st.title}</p>
+                <span className="mt-1 block font-mono text-xs text-ink-soft">
+                  {formatTime(st.startSec)}–{i === arc.length - 1 ? 'end' : formatTime(st.endSec)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* The lesson's numbers. Insights, a tab away, has each one in full. */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        {tiles.map((t) => {
+          const confident = isConfidentState(t.metric.state)
+          return (
+            <StatTile
+              key={t.label}
+              label={t.label}
+              value={t.metric.display}
+              unit={confident ? t.unit : undefined}
+              hint={confident ? undefined : t.metric.reason}
+              accent={t.accent}
+            />
+          )
+        })}
       </div>
 
       {/* Keep doing. */}
