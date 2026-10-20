@@ -41,7 +41,7 @@ import {
   updateSchoolInquiryStatus,
   type SchoolInquiry,
 } from '../lib/api'
-import { ACCENT_CYCLE, type Accent } from '../components/report'
+import { ACCENT_CYCLE, ACCENTS, type Accent } from '../components/report'
 import { CardBoundary } from '../components/CardBoundary'
 import { categoryLabel } from '../lib/categories'
 import {
@@ -1515,7 +1515,17 @@ function buildTallyInsight(
 // Confidence-gated: only speaks up once a stat has cleared the same "full"
 // bar every other number on this page uses (see dataConfidence in
 // server/src/routes/admin.ts), not the old ad hoc >=5/>=10 thresholds.
-function buildInstructionalGroupInsight(data: InstructionalAverages): string | null {
+//
+// One note per Lesson Insights section, each built only from that section's
+// own numbers, so a note never sits under a card it isn't about.
+function buildTalkInsight(data: InstructionalAverages): string | null {
+  if (data.paceConfidence === 'full' && data.avgTeacherPaceWpm != null && data.avgTeacherPaceWpm >= 200) {
+    return `Staff speak at about ${Math.round(data.avgTeacherPaceWpm)} words a minute on average, against roughly 150 in everyday conversation — a concrete, low-stakes thing to notice together, though there is no correct rate and a fast stretch is not a fault.`
+  }
+  return null
+}
+
+function buildQuestioningInsight(data: InstructionalAverages): string | null {
   if (data.higherOrderConfidence === 'full' && data.higherOrderPct != null && data.higherOrderPct < 30) {
     return `Higher-order questions are a stretch area staff-wide (${data.higherOrderPct}% of questions) — a good theme for a shared PD session on questioning technique.`
   }
@@ -1532,15 +1542,11 @@ function buildInstructionalGroupInsight(data: InstructionalAverages): string | n
   if (data.waitTime2Confidence === 'full' && data.avgWaitTime2Sec != null && data.avgWaitTime2Sec < 1) {
     return `Staff wait ${data.avgWaitTime2Sec.toFixed(1)}s on average after a student finishes answering before speaking again — there is no room in that for a follow-up, which is worth naming before asking anyone to ask more of them.`
   }
-  if (data.paceConfidence === 'full' && data.avgTeacherPaceWpm != null && data.avgTeacherPaceWpm >= 200) {
-    return `Staff speak at about ${Math.round(data.avgTeacherPaceWpm)} words a minute on average, against roughly 150 in everyday conversation — a concrete, low-stakes thing to notice together, though there is no correct rate and a fast stretch is not a fault.`
-  }
   if (data.higherOrderConfidence === 'full' && data.higherOrderPct != null && data.higherOrderPct >= 40) {
     return `Higher-order questioning is a real strength staff-wide (${data.higherOrderPct}% of questions) — worth naming and reinforcing.`
   }
   return null
 }
-
 function buildClimateGroupInsight(data: ClimateAverages): string | null {
   if (
     data.redirectionMeasuredConfidence === 'full' &&
@@ -1630,47 +1636,34 @@ function StatRow({
   )
 }
 
-function InstructionalAveragesCard({ n, data, insight }: { n: number; data: InstructionalAverages; insight?: string | null }) {
-  const sampleOr = (n: number, unit: string) => (n > 0 ? `based on ${n} ${unit}` : 'not enough data yet')
+// The four Lesson Insights sections a teacher sees on their own Lesson
+// Debrief, in the same order, names and colours (INSIGHTS_SECTIONS and
+// INSIGHTS_SECTION_META in AudioCoaching.tsx), so a principal and a teacher
+// talking about "Questioning & Checking" mean the same part of the report.
+// Each staff-wide number sits under the section whose lesson page shows it.
+const LESSON_SECTION_ACCENT = {
+  talk: ACCENTS.terracotta,
+  questions: ACCENTS.gold,
+  content: ACCENTS.forest,
+  routines: ACCENTS.terracotta,
+} as const
+
+const sampleOr = (n: number, unit: string) => (n > 0 ? `based on ${n} ${unit}` : 'not enough data yet')
+
+function TalkParticipationCard({ data, insight }: { data: InstructionalAverages; insight?: string | null }) {
   const otherPct =
     data.avgTeacherTalkPct != null && data.avgStudentTalkPct != null
       ? Math.max(0, Math.round(100 - data.avgTeacherTalkPct - data.avgStudentTalkPct))
       : null
   return (
     <AdminCard
-      n={n}
-      title="How lessons are taught"
-      question="Averages across every recorded lesson, with what a good sign looks like for each."
-      howToRead="Each measure only counts lessons with real evidence for it. A short recording without enough questions, for example, isn't counted toward questioning. Where there are too few lessons behind a number, it says so instead of guessing."
+      n={1}
+      accent={LESSON_SECTION_ACCENT.talk}
+      title="Talk & Participation"
+      question="Who was heard, and for how long, across your staff's recorded lessons."
+      howToRead="Each measure only counts lessons with real evidence for it. Where there are too few lessons behind a number, it says so instead of guessing."
     >
       <div className="flex flex-col">
-        <StatRow
-          label="Average wait time after a question"
-          goal="A good sign: 3 seconds or more, so more students have time to think."
-          value={data.avgWaitTimeSec != null ? `${data.avgWaitTimeSec.toFixed(1)}s` : '—'}
-          sampleNote={sampleOr(data.waitTimeSampleSize, 'sessions')}
-          confidence={data.waitTimeConfidence}
-          tooltip="Median seconds of silence between a question and the teacher speaking again — median rather than average so one unusually long pause doesn't swing a small sample."
-        />
-        {/* The pause after an ANSWER, beside the pause after a question. On
-            real classroom audio it is measurable about three and a half times
-            as often, so a staff-wide figure rests on more sessions. */}
-        <StatRow
-          label="Avg. pause after an answer"
-          value={data.avgWaitTime2Sec != null ? `${data.avgWaitTime2Sec.toFixed(1)}s` : '—'}
-          sampleNote={sampleOr(data.waitTime2SampleSize, 'sessions')}
-          confidence={data.waitTime2Confidence}
-          tooltip="Median seconds between a student finishing an answer and the teacher speaking again. Different from the pause above, which is the one after the question — and measurable far more often, since it needs only a student turn followed by a teacher turn."
-          goal="A good sign: 2 seconds or more, which is the room a follow-up question has to fit into."
-        />
-        <StatRow
-          label="Avg. speaking pace"
-          value={data.avgTeacherPaceWpm != null ? `${Math.round(data.avgTeacherPaceWpm)} wpm` : '—'}
-          sampleNote={sampleOr(data.paceSampleSize, 'sessions')}
-          confidence={data.paceConfidence}
-          tooltip="Median words a minute of teachers' own speaking time, not of the lesson. Exact arithmetic rather than a detection, so it is available on almost every lesson with a minute of teacher speech."
-          goal="Everyday conversation runs about 150. An anchor to compare against, not a target — there is no correct rate."
-        />
         <StatRow
           label="Teacher talk vs. student talk"
           goal="A lesson where the teacher talks 65% or more of the time is flagged as a growth area."
@@ -1684,6 +1677,30 @@ function InstructionalAveragesCard({ n, data, insight }: { n: number; data: Inst
           tooltip="Share of recorded audio classified as teacher speech vs. student speech. 'Other' is the remainder — silence, group work, or audio the transcript couldn't confidently attribute."
         />
         <StatRow
+          label="Avg. speaking pace"
+          value={data.avgTeacherPaceWpm != null ? `${Math.round(data.avgTeacherPaceWpm)} wpm` : '—'}
+          sampleNote={sampleOr(data.paceSampleSize, 'sessions')}
+          confidence={data.paceConfidence}
+          tooltip="Median words a minute of teachers' own speaking time, not of the lesson. Exact arithmetic rather than a detection, so it is available on almost every lesson with a minute of teacher speech."
+          goal="Everyday conversation runs about 150. An anchor to compare against, not a target — there is no correct rate."
+        />
+      </div>
+      {insight !== undefined && <AdminCoachNote text={insight} />}
+    </AdminCard>
+  )
+}
+
+function QuestioningCheckingCard({ data, insight }: { data: InstructionalAverages; insight?: string | null }) {
+  return (
+    <AdminCard
+      n={2}
+      accent={LESSON_SECTION_ACCENT.questions}
+      title="Questioning & Checking"
+      question="What teachers asked, how they checked, and how they responded to answers."
+      howToRead="Each measure only counts lessons with real evidence for it. A short recording without enough questions, for example, isn't counted toward questioning."
+    >
+      <div className="flex flex-col">
+        <StatRow
           label="Higher-order questions"
           goal="Questions that ask students to explain, compare or reason. 40% or more is a staff strength."
           value={data.higherOrderPct != null ? `${data.higherOrderPct}%` : '—'}
@@ -1692,20 +1709,12 @@ function InstructionalAveragesCard({ n, data, insight }: { n: number; data: Inst
           tooltip="Percentage of all detected questions that use higher-order starters (why, explain, compare, justify) rather than simple recall."
         />
         <StatRow
-          label="Sessions with a real-life example or connection"
-          goal="Lessons that tie the content to real life or earlier learning. 60% or more is a strength."
-          value={data.realLifeConnectionRatePct != null ? `${data.realLifeConnectionRatePct}%` : '—'}
-          sampleNote={sampleOr(data.realLifeConnectionSampleSize, 'sessions')}
-          confidence={data.realLifeConnectionConfidence}
-          tooltip="Percentage of sessions with lesson-content analysis where at least one real-world connection or example was detected."
-        />
-        <StatRow
-          label="Follow-up questions"
-          goal="A second question that builds on a student's answer. More means deeper discussion."
-          value={data.avgFollowUpPer10Min != null ? `${data.avgFollowUpPer10Min.toFixed(1)} per 10 min` : '—'}
-          sampleNote={sampleOr(data.followUpSampleSize, 'sessions')}
-          confidence={data.followUpConfidence}
-          tooltip="Median rate of follow-up questions (a second question building on a student's answer) per 10 minutes of class."
+          label="Average wait time after a question"
+          goal="A good sign: 3 seconds or more, so more students have time to think."
+          value={data.avgWaitTimeSec != null ? `${data.avgWaitTimeSec.toFixed(1)}s` : '—'}
+          sampleNote={sampleOr(data.waitTimeSampleSize, 'sessions')}
+          confidence={data.waitTimeConfidence}
+          tooltip="Median seconds of silence between a question and the teacher speaking again — median rather than average so one unusually long pause doesn't swing a small sample."
         />
         <StatRow
           label="Sessions with a check for understanding"
@@ -1715,27 +1724,88 @@ function InstructionalAveragesCard({ n, data, insight }: { n: number; data: Inst
           confidence={data.cfuConfidence}
           tooltip="Percentage of sessions long enough to reliably detect a check-for-understanding moment that had at least one."
         />
+        {/* The pause after an ANSWER, beside the pause after a question. On
+            real classroom audio it is measurable about three and a half times
+            as often, so a staff-wide figure rests on more sessions. */}
+        <StatRow
+          label="Avg. pause after an answer"
+          value={data.avgWaitTime2Sec != null ? `${data.avgWaitTime2Sec.toFixed(1)}s` : '—'}
+          sampleNote={sampleOr(data.waitTime2SampleSize, 'sessions')}
+          confidence={data.waitTime2Confidence}
+          tooltip="Median seconds between a student finishing an answer and the teacher speaking again. Different from the wait time above, which is the one after the question — and measurable far more often, since it needs only a student turn followed by a teacher turn."
+          goal="A good sign: 2 seconds or more, which is the room a follow-up question has to fit into."
+        />
+        <StatRow
+          label="Follow-up questions"
+          goal="A second question that builds on a student's answer. More means deeper discussion."
+          value={data.avgFollowUpPer10Min != null ? `${data.avgFollowUpPer10Min.toFixed(1)} per 10 min` : '—'}
+          sampleNote={sampleOr(data.followUpSampleSize, 'sessions')}
+          confidence={data.followUpConfidence}
+          tooltip="Median rate of follow-up questions (a second question building on a student's answer) per 10 minutes of class."
+        />
       </div>
-      <p className="mt-3 text-xs text-ink-soft">
-        Averaged across {data.totalAnalyzedSessions} Lesson Debrief session
-        {data.totalAnalyzedSessions === 1 ? '' : 's'} with enough clear audio — each stat only counts sessions with
-        real evidence for it, never padded with sessions where it wasn&rsquo;t measured.
-      </p>
       {insight !== undefined && <AdminCoachNote text={insight} />}
     </AdminCard>
   )
 }
 
-function ClimateAveragesCard({ n, data, insight }: { n: number; data: ClimateAverages; insight?: string | null }) {
-  const sampleOr = (n: number, unit: string) => (n > 0 ? `based on ${n} ${unit}` : 'not enough data yet')
+function ClarityContentCard({ data }: { data: InstructionalAverages }) {
   return (
     <AdminCard
-      n={n}
-      title="Classroom climate"
-      question="How calm and well-run classrooms sound, across your staff."
+      n={3}
+      accent={LESSON_SECTION_ACCENT.content}
+      title="Clarity & Content"
+      question="How lessons tie the content to students' lives and earlier learning."
+      howToRead="Only counts lessons with lesson-content analysis. The subject-matter notes themselves are never shown here — card 6 below groups them by theme."
+    >
+      <div className="flex flex-col">
+        <StatRow
+          label="Sessions with a real-world connection"
+          goal="Lessons that tie the content to real life or earlier learning. 60% or more is a strength."
+          value={data.realLifeConnectionRatePct != null ? `${data.realLifeConnectionRatePct}%` : '—'}
+          sampleNote={sampleOr(data.realLifeConnectionSampleSize, 'sessions')}
+          confidence={data.realLifeConnectionConfidence}
+          tooltip="Percentage of sessions with lesson-content analysis where at least one real-world connection or example was detected."
+        />
+      </div>
+    </AdminCard>
+  )
+}
+
+function ClimateRoutinesCard({ data, insight }: { data: ClimateAverages; insight?: string | null }) {
+  return (
+    <AdminCard
+      n={4}
+      accent={LESSON_SECTION_ACCENT.routines}
+      title="Climate & Routines"
+      question="Directions, transitions, praise and redirections, as they sounded across your staff."
       howToRead="Found by listening for specific phrases: redirections, directions, encouragement and correction. It counts them; it doesn't judge whether a moment was handled well. No redirections in a recording can mean a calm room, or simply that the recording caught less of that part of class."
     >
       <div className="flex flex-col">
+        <StatRow
+          label="Sessions with clear directive language detected"
+          goal="Lessons with at least one clear, specific direction. 80% or more is a strength."
+          value={data.clearDirectivesRatePct != null ? `${data.clearDirectivesRatePct}%` : '—'}
+          sampleNote={sampleOr(data.directiveSampleSize, 'sessions')}
+          confidence={data.directiveConfidence}
+          tooltip="Percentage of sessions with at least one detected clear-directive phrase (a specific, actionable instruction)."
+        />
+        <StatRow
+          label="Transition language"
+          goal="Spoken cues for moving between activities, a sign of clear routines."
+          value={data.avgTransitionPer10Min != null ? `${data.avgTransitionPer10Min.toFixed(1)} per 10 min` : '—'}
+          sampleNote={sampleOr(data.transitionSampleSize, 'sessions')}
+          confidence={data.transitionConfidence}
+          tooltip="Median rate of detected activity-transition phrases per 10 minutes."
+        />
+        <StatRow
+          label="Positive vs. corrective tone"
+          goal="Above 50% means teachers encourage more than they correct."
+          value={data.positiveTonePct != null ? `${data.positiveTonePct}% positive` : '—'}
+          sampleNote={sampleOr(data.toneSampleSize, 'tone-language moments')}
+          confidence={data.toneConfidence}
+          tooltip="Share of detected positive-vs-corrective phrase moments that were positive, out of every such moment across these sessions."
+        />
         <StatRow
           label="Redirection language"
           goal="How often teachers redirect behavior. Compare grade bands before drawing conclusions."
@@ -1752,34 +1822,9 @@ function ClimateAveragesCard({ n, data, insight }: { n: number; data: ClimateAve
           confidence={data.redirectionMeasuredConfidence}
           tooltip="Absence of detected redirection language isn't proof of good classroom management — it can also mean the recording captured less classroom-management activity overall."
         />
-        <StatRow
-          label="Transition language"
-          goal="Spoken cues for moving between activities, a sign of clear routines."
-          value={data.avgTransitionPer10Min != null ? `${data.avgTransitionPer10Min.toFixed(1)} per 10 min` : '—'}
-          sampleNote={sampleOr(data.transitionSampleSize, 'sessions')}
-          confidence={data.transitionConfidence}
-          tooltip="Median rate of detected activity-transition phrases per 10 minutes."
-        />
-        <StatRow
-          label="Sessions with clear directive language detected"
-          goal="Lessons with at least one clear, specific direction. 80% or more is a strength."
-          value={data.clearDirectivesRatePct != null ? `${data.clearDirectivesRatePct}%` : '—'}
-          sampleNote={sampleOr(data.directiveSampleSize, 'sessions')}
-          confidence={data.directiveConfidence}
-          tooltip="Percentage of sessions with at least one detected clear-directive phrase (a specific, actionable instruction)."
-        />
-        <StatRow
-          label="Positive vs. corrective tone"
-          goal="Above 50% means teachers encourage more than they correct."
-          value={data.positiveTonePct != null ? `${data.positiveTonePct}% positive` : '—'}
-          sampleNote={sampleOr(data.toneSampleSize, 'tone-language moments')}
-          confidence={data.toneConfidence}
-          tooltip="Share of detected positive-vs-corrective phrase moments that were positive, out of every such moment across these sessions."
-        />
       </div>
       <p className="mt-3 text-xs text-ink-soft">
-        Keyword/phrase-matched counts only — clarity and effectiveness aren&rsquo;t judged automatically. Each stat
-        only counts sessions with real evidence for it.
+        Keyword/phrase-matched counts only — clarity and effectiveness aren&rsquo;t judged automatically.
       </p>
       {insight !== undefined && <AdminCoachNote text={insight} />}
     </AdminCard>
@@ -1877,6 +1922,24 @@ function BreakdownCard({ n, selectedOrgId }: { n: number; selectedOrgId: string 
               ) : (
                 <div className="mt-1 flex flex-col">
                   <StatRow
+                    label="Teacher talk"
+                    value={entry.metrics.avgTeacherTalkPct != null ? `${Math.round(entry.metrics.avgTeacherTalkPct)}%` : '—'}
+                    sampleNote={sampleOr(entry.metrics.talkSampleSize, 'sessions')}
+                    confidence={entry.metrics.talkConfidence}
+                  />
+                  <StatRow
+                    label="Speaking pace"
+                    value={entry.metrics.avgTeacherPaceWpm != null ? `${Math.round(entry.metrics.avgTeacherPaceWpm)} wpm` : '—'}
+                    sampleNote={sampleOr(entry.metrics.paceSampleSize, 'sessions')}
+                    confidence={entry.metrics.paceConfidence}
+                  />
+                  <StatRow
+                    label="Higher-order questions"
+                    value={entry.metrics.higherOrderPct != null ? `${entry.metrics.higherOrderPct}%` : '—'}
+                    sampleNote={sampleOr(entry.metrics.higherOrderSampleSize, 'questions')}
+                    confidence={entry.metrics.higherOrderConfidence}
+                  />
+                  <StatRow
                     label="Avg. wait time"
                     value={entry.metrics.avgWaitTimeSec != null ? `${entry.metrics.avgWaitTimeSec.toFixed(1)}s` : '—'}
                     sampleNote={sampleOr(entry.metrics.waitTimeSampleSize, 'sessions')}
@@ -1887,24 +1950,6 @@ function BreakdownCard({ n, selectedOrgId }: { n: number; selectedOrgId: string 
                     value={entry.metrics.avgWaitTime2Sec != null ? `${entry.metrics.avgWaitTime2Sec.toFixed(1)}s` : '—'}
                     sampleNote={sampleOr(entry.metrics.waitTime2SampleSize, 'sessions')}
                     confidence={entry.metrics.waitTime2Confidence}
-                  />
-                  <StatRow
-                    label="Speaking pace"
-                    value={entry.metrics.avgTeacherPaceWpm != null ? `${Math.round(entry.metrics.avgTeacherPaceWpm)} wpm` : '—'}
-                    sampleNote={sampleOr(entry.metrics.paceSampleSize, 'sessions')}
-                    confidence={entry.metrics.paceConfidence}
-                  />
-                  <StatRow
-                    label="Teacher talk"
-                    value={entry.metrics.avgTeacherTalkPct != null ? `${Math.round(entry.metrics.avgTeacherTalkPct)}%` : '—'}
-                    sampleNote={sampleOr(entry.metrics.talkSampleSize, 'sessions')}
-                    confidence={entry.metrics.talkConfidence}
-                  />
-                  <StatRow
-                    label="Higher-order questions"
-                    value={entry.metrics.higherOrderPct != null ? `${entry.metrics.higherOrderPct}%` : '—'}
-                    sampleNote={sampleOr(entry.metrics.higherOrderSampleSize, 'questions')}
-                    confidence={entry.metrics.higherOrderConfidence}
                   />
                   <StatRow
                     label="Redirection language"
@@ -2120,16 +2165,20 @@ function AdminCard({
   question,
   howToRead,
   aside,
+  accent: accentOverride,
   children,
 }: {
   n: number
+  // Fixed colour for a card that mirrors a teacher-side section, so it
+  // matches that section rather than its place in this page's cycle.
+  accent?: Accent
   title: string
   question: string
   howToRead?: string
   aside?: React.ReactNode
   children: React.ReactNode
 }) {
-  const accent: Accent = ACCENT_CYCLE[(n - 1) % ACCENT_CYCLE.length]
+  const accent: Accent = accentOverride ?? ACCENT_CYCLE[(n - 1) % ACCENT_CYCLE.length]
   return (
     <section className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2605,11 +2654,14 @@ function mergeTallies(a: Record<string, TallyEntry>, b: Record<string, TallyEntr
   return merged
 }
 
-type InsightsTab = 'overview' | 'practice' | 'climate' | 'communication'
+// 'lessons' holds the four Lesson Insights sections teachers see on their own
+// Lesson Debrief; it replaced separate Classroom practice and Classroom
+// climate tabs, whose split didn't match anything a teacher had in front of
+// them.
+type InsightsTab = 'overview' | 'lessons' | 'communication'
 const INSIGHTS_TABS: { id: InsightsTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
-  { id: 'practice', label: 'Classroom practice' },
-  { id: 'climate', label: 'Classroom climate' },
+  { id: 'lessons', label: 'Lesson Insights' },
   { id: 'communication', label: 'Communication & meetings' },
 ]
 
@@ -2704,16 +2756,24 @@ function CoachingInsightsPanel({ overview, selectedOrgId }: { overview: AdminOve
         </>
       )}
 
-      {tab === 'practice' && (
+      {tab === 'lessons' && (
         <>
           <LessonBasisNote coverage={overview.audioCoverage} />
-          <InstructionalAveragesCard
-            n={1}
+          <p className="-mt-2 text-xs text-ink-soft">
+            The same four sections teachers see on each Lesson Debrief, averaged across{' '}
+            {overview.instructionalAverages.totalAnalyzedSessions} recorded lesson
+            {overview.instructionalAverages.totalAnalyzedSessions === 1 ? '' : 's'} with enough clear audio. Each number
+            only counts lessons with real evidence for it, never padded with lessons where it wasn&rsquo;t measured.
+          </p>
+          <TalkParticipationCard data={overview.instructionalAverages} insight={buildTalkInsight(overview.instructionalAverages)} />
+          <QuestioningCheckingCard
             data={overview.instructionalAverages}
-            insight={buildInstructionalGroupInsight(overview.instructionalAverages)}
+            insight={buildQuestioningInsight(overview.instructionalAverages)}
           />
+          <ClarityContentCard data={overview.instructionalAverages} />
+          <ClimateRoutinesCard data={overview.climateAverages} insight={buildClimateGroupInsight(overview.climateAverages)} />
           <TallyBarList
-            n={2}
+            n={5}
             title="Every growth area, in full"
             question="All five areas lessons can point to, from most to least common."
             noun={['lesson', 'lessons']}
@@ -2730,7 +2790,7 @@ function CoachingInsightsPanel({ overview, selectedOrgId }: { overview: AdminOve
             )}
           />
           <TallyBarList
-            n={3}
+            n={6}
             title="Content notes, by theme"
             question="What the subject-matter notes on recorded lessons most often point to."
             noun={['note', 'notes']}
@@ -2740,13 +2800,6 @@ function CoachingInsightsPanel({ overview, selectedOrgId }: { overview: AdminOve
             totalTeachers={overview.totalTeachers}
             insight={buildTallyInsight(overview.contentNoteTally, (v) => v, 'content note theme', 'content notes')}
           />
-        </>
-      )}
-
-      {tab === 'climate' && (
-        <>
-          <LessonBasisNote coverage={overview.audioCoverage} />
-          <ClimateAveragesCard n={1} data={overview.climateAverages} insight={buildClimateGroupInsight(overview.climateAverages)} />
         </>
       )}
 

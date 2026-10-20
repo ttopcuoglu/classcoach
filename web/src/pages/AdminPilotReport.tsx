@@ -319,7 +319,7 @@ export default function AdminPilotReport() {
       <ReportSection
         n={++n}
         title="What the Classrooms Show"
-        blurb="School-wide averages from recorded lessons, never one teacher's, with what a good sign looks like."
+        blurb="School-wide averages from recorded lessons, never one teacher's, in the order teachers see them: Talk & Participation, Questioning & Checking, Climate & Routines."
         accent={A.forest}
       >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -333,11 +333,25 @@ export default function AdminPilotReport() {
             }
             accent={A.mint}
           />
+          {/* In the order and colours of the four Lesson Insights sections a
+              teacher sees: Talk & Participation, Questioning & Checking, then
+              Climate & Routines (Clarity & Content has no tile here). */}
           <StatTile
             label="Teacher talk"
             value={shown(inst.avgTeacherTalkPct, inst.talkConfidence, (v) => `${Math.round(v)}%`)}
             hint={inst.talkConfidence === 'none' ? 'Not enough lessons yet' : 'Share of the lesson. 65%+ in a lesson is flagged.'}
-            accent={A.mint}
+            accent={A.terracotta}
+          />
+          <StatTile
+            label="Speaking pace"
+            value={shown(inst.avgTeacherPaceWpm, inst.paceConfidence, (v) => `${Math.round(v)}`)}
+            unit={inst.avgTeacherPaceWpm != null && inst.paceConfidence !== 'none' ? ' wpm' : undefined}
+            hint={
+              inst.paceConfidence === 'none'
+                ? 'Not enough lessons yet'
+                : 'Everyday conversation runs about 150. An anchor, not a target.'
+            }
+            accent={A.terracotta}
           />
           <StatTile
             label="Wait time"
@@ -359,17 +373,6 @@ export default function AdminPilotReport() {
                 : 'Before the teacher speaks again. It is where a follow-up has to fit.'
             }
             accent={A.gold}
-          />
-          <StatTile
-            label="Speaking pace"
-            value={shown(inst.avgTeacherPaceWpm, inst.paceConfidence, (v) => `${Math.round(v)}`)}
-            unit={inst.avgTeacherPaceWpm != null && inst.paceConfidence !== 'none' ? ' wpm' : undefined}
-            hint={
-              inst.paceConfidence === 'none'
-                ? 'Not enough lessons yet'
-                : 'Everyday conversation runs about 150. An anchor, not a target.'
-            }
-            accent={A.mint}
           />
           <StatTile
             label="Positive tone"
