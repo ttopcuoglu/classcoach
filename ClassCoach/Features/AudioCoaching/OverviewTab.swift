@@ -141,6 +141,61 @@ enum QuestionMix: String, CaseIterable {
     }
 }
 
+/// Teacher-Anchored Wait Time — mirrors `pausesAfter`/`averagePause` in
+/// web/src/lib/thinkingPause.ts and `tawtOf` in AudioCoaching.tsx: after each
+/// question that asked students to explain or reason (not one the teacher
+/// answered themselves), the time from the end of the teacher's turn to the
+/// teacher speaking again, averaged to a tenth of a second.
+enum ThinkingPause {
+    private static let maxJoinGapSec = 2.0
+    private static let maxPauseSec = 30.0
+    private static let maxWordsAfter = 3
+
+    private static func words(_ t: String) -> [String] {
+        let cleaned = t.lowercased().map { $0.isLetter || $0.isNumber || $0 == "'" || $0 == " " ? $0 : " " }
+        return String(cleaned).split(separator: " ").map(String.init)
+    }
+
+    private static func norm(_ q: String) -> String {
+        String(q.lowercased().filter { $0.isLetter || $0.isNumber || $0 == " " }).trimmingCharacters(in: .whitespaces)
+    }
+
+    private static func sameMoment(_ aSec: Double, _ aQuote: String, _ bSec: Double, _ bQuote: String) -> Bool {
+        let na = norm(aQuote), nb = norm(bQuote)
+        return abs(aSec - bSec) <= 8 && !na.isEmpty && !nb.isEmpty && (na.hasPrefix(String(nb.prefix(20))) || nb.hasPrefix(String(na.prefix(20))))
+    }
+
+    static func pause(after t: Double, quote: String, in ordered: [TranscriptSegment]) -> Double? {
+        guard let idx = ordered.firstIndex(where: { $0.endSec > t }), ordered[idx].speakerLabel == "Teacher" else { return nil }
+        var end = idx
+        while end + 1 < ordered.count, ordered[end + 1].speakerLabel == "Teacher", ordered[end + 1].startSec - ordered[end].endSec <= maxJoinGapSec {
+            end += 1
+        }
+        let turn = words(ordered[idx...end].map(\.text).joined(separator: " "))
+        let tail = words(quote).suffix(3).joined(separator: " ")
+        var at = -1
+        if turn.count >= 3 { for i in 0...(turn.count - 3) where turn[i..<(i + 3)].joined(separator: " ") == tail { at = i + 3 } }
+        if at != -1 && turn.count - at > maxWordsAfter { return 0 }
+        guard let next = ordered[(end + 1)...].first(where: { $0.speakerLabel == "Teacher" }) else { return nil }
+        let gap = next.startSec - ordered[end].endSec
+        guard gap >= 0, gap <= maxPauseSec else { return nil }
+        return (gap * 10).rounded() / 10
+    }
+
+    static func tawt(_ session: AudioSessionWithSegments) -> Double? {
+        let selfAnswered = session.teachingMoves?.selfAnswered ?? []
+        let ordered = session.segments.filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }.sorted { $0.startSec < $1.startSec }
+        let thinking = QuestionMix.classify(session).filter { q in
+            q.mix != .recall && !selfAnswered.contains { sa in
+                sameMoment(q.entry.timestampSec, Redaction.withoutAddressedNames(q.entry.text), sa.timestampSec, Redaction.withoutAddressedNames(sa.quote))
+            }
+        }
+        let pauses = thinking.compactMap { pause(after: $0.entry.timestampSec, quote: Redaction.withoutAddressedNames($0.entry.text), in: ordered) }
+        guard !pauses.isEmpty else { return nil }
+        return ((pauses.reduce(0, +) / Double(pauses.count)) * 10).rounded() / 10
+    }
+}
+
 /// The Summary tab — mirrors `SummaryTab` in AudioCoaching.tsx: the headline,
 /// your one focus for next lesson, one card per Insights section, keep doing,
 /// and Try next time. Everything else lives in Insights; talking it through
@@ -209,6 +264,7 @@ struct OverviewTab: View {
         VStack(alignment: .leading, spacing: 14) {
             headlineCard
             focusCard
+            numbersCard
             sectionCards
             keepDoingCard
             tryNextTimeCard
@@ -321,6 +377,93 @@ struct OverviewTab: View {
             .background(AppTheme.gold, in: RoundedRectangle(cornerRadius: 22).offset(x: 5, y: 5))
             .padding(.trailing, 5).padding(.bottom, 5)
         }
+    }
+
+    // MARK: The lesson's numbers
+
+    /// One tile — mirrors the web Summary's tiles: the same seven numbers,
+    /// labels and colours.
+    private struct Tile: Identifiable {
+        var id: String { label }
+        let label: String
+        let value: String?
+        let unit: String
+        let tint: Color
+        var hint: String? = nil
+    }
+
+    private static func pct(_ v: Double?) -> String? { v.map { String(format: "%.1f", ($0 * 10).rounded() / 10) } }
+
+    private var tiles: [Tile] {
+        let teacher = session.teacherTalkPct
+        let students = session.studentTalkPct
+        let silence = teacher != nil && students != nil ? max(0, ((100 - teacher! - students!) * 10).rounded() / 10) : nil
+        var out = [
+            Tile(label: "You spoke", value: Self.pct(teacher), unit: "%", tint: Color(hex: 0xF5DBC8)),
+            Tile(label: "Students spoke", value: Self.pct(students), unit: "%", tint: Color(hex: 0xF5E7C4)),
+        ]
+        // The rest split the way Talk & Participation splits it; recordings
+        // with no sound reading keep one combined tile.
+        if let silence, let quiet = detail["quietSec"], let unresolved = detail["unresolvedSec"], quiet + unresolved > 0 {
+            let sound = (silence * unresolved / (quiet + unresolved) * 10).rounded() / 10
+            out.append(Tile(label: "Sound, no words", value: Self.pct(sound), unit: "%", tint: Color(hex: 0xE5E0EF)))
+            out.append(Tile(label: "Quiet", value: Self.pct(max(0, silence - sound)), unit: "%", tint: Color(hex: 0xDDE8F4)))
+        } else {
+            out.append(Tile(label: "Silence / other", value: Self.pct(silence), unit: "%", tint: Color(hex: 0xE5E0EF)))
+        }
+        out.append(Tile(label: "Pace", value: detail["teacherWordsPerMinute"].map { "\(Int($0.rounded()))" }, unit: "wpm", tint: Color(hex: 0xF4DFE4)))
+        out.append(Tile(label: "Questions", value: session.questionCount.map { "\($0)" }, unit: "", tint: Color(hex: 0xDCE7DF)))
+        let tawt = ThinkingPause.tawt(session)
+        out.append(Tile(label: "TAWT", value: tawt.map { String(format: "%.1f", $0) }, unit: "s", tint: Color(hex: 0xE6EBD2),
+                        hint: tawt == nil ? "No pause after a thinking question could be timed." : nil))
+        return out
+    }
+
+    private var hasSoundSplit: Bool { tiles.contains { $0.label == "Quiet" } }
+    @State private var readingOpen = false
+
+    @ViewBuilder private var numbersCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                ForEach(tiles) { t in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(t.label.uppercased()).font(.caption2.weight(.bold)).foregroundStyle(AppTheme.forest.opacity(0.6))
+                        (Text(t.value ?? "\u{2014}").font(.heading(.title)).foregroundColor(AppTheme.forest)
+                            + Text(t.value != nil && !t.unit.isEmpty ? " \(t.unit)" : "").font(.subheadline.weight(.bold)).foregroundColor(AppTheme.forest))
+                        if let hint = t.hint {
+                            Text(hint).font(.caption2).foregroundStyle(AppTheme.forest.opacity(0.7)).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
+                    .background(t.tint, in: RoundedRectangle(cornerRadius: 16))
+                }
+            }
+            DisclosureGroup(isExpanded: $readingOpen) {
+                VStack(alignment: .leading, spacing: 6) {
+                    readingLine("You spoke, Students spoke", "the share of the recording each voice took. The microphone hears you better than students.")
+                    if hasSoundSplit {
+                        readingLine("Sound, no words", "sound the microphone caught but couldn\u{2019}t turn into words, usually voices too far away or talking over each other.")
+                        readingLine("Quiet", "no sound at all: quiet work, pauses, a settled room.")
+                    } else {
+                        readingLine("Silence / other", "everything that was neither clearly you nor clearly a student: quiet, and voices too faint to place.")
+                    }
+                    readingLine("Pace", "your words a minute, short pauses included. Everyday conversation usually runs about \(AudioInsights.conversationalWpmRange).")
+                    readingLine("Questions", "the questions you asked, as the transcript caught them.")
+                    readingLine("TAWT (Teacher-Anchored Wait Time)", "after a question that asked students to explain or reason, how long until you spoke again, averaged. Three seconds or more gives most students time to think.")
+                }
+                .padding(.top, 6)
+            } label: {
+                Text("How to read these numbers").font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
+            }
+            .tint(AppTheme.forest)
+        }
+    }
+
+    private func readingLine(_ term: String, _ text: String) -> some View {
+        (Text("\(term) \u{00B7} ").font(.subheadline.weight(.semibold)).foregroundColor(AppTheme.textPrimary)
+            + Text(text).font(.subheadline).foregroundColor(AppTheme.textSecondary))
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: Section cards
