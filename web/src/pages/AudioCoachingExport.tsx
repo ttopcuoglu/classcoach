@@ -362,7 +362,36 @@ export default function AudioCoachingExport() {
               it is the question a teacher in a hard room is actually asking.
               Never a bid count — that number moves between readings while the
               run and the rung it reached do not. */}
-          {session.escalation && session.escalation.state !== 'confirmed_none' && (
+          {/* Repeated redirections, when the report has it — the same findings
+              and server-written copy as the in-app section. */}
+          {session.escalation?.repeatedRedirections && session.escalation.repeatedRedirections.state !== 'unread' && (
+            <div className="mt-4 break-inside-avoid rounded-2xl bg-gold-tint/50 p-5">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-terracotta-600">Repeated redirections</p>
+              {session.escalation.repeatedRedirections.headline && (
+                <p className="mt-2 text-sm font-semibold text-forest">{session.escalation.repeatedRedirections.headline}</p>
+              )}
+              {session.escalation.repeatedRedirections.findings.map((f) => (
+                <div key={`${f.expectation}-${f.startSec}`} className="mt-3">
+                  <p className="text-sm font-semibold text-forest">{f.title}</p>
+                  {f.lead.quote && (
+                    <p className="mt-1 text-sm italic text-forest">
+                      “{f.lead.quote}” · {formatTime(f.lead.timestampSec)}
+                    </p>
+                  )}
+                  <p className="mt-1 text-sm text-forest">{f.pattern}</p>
+                  {f.more.length > 0 && (
+                    <p className="mt-1 text-xs text-forest/80">
+                      More evidence: {f.more.map((m) => `“${m.quote}” (${formatTime(m.timestampSec)})`).join(' · ')}
+                    </p>
+                  )}
+                </div>
+              ))}
+              {session.escalation.repeatedRedirections.coverageNote && (
+                <p className="mt-2 text-[11px] text-forest/70">{session.escalation.repeatedRedirections.coverageNote}</p>
+              )}
+            </div>
+          )}
+          {session.escalation && !session.escalation.repeatedRedirections && session.escalation.state !== 'confirmed_none' && (
             <div className="mt-4 break-inside-avoid rounded-2xl bg-gold-tint/50 p-5">
               <p className="text-[11px] font-bold uppercase tracking-wide text-terracotta-600">
                 {session.escalation.episodes ? 'Keeping learning on track' : 'Did your asks hold?'}

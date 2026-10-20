@@ -39,6 +39,7 @@ import {
   generateContentNotes,
   type AudioContentNotes,
   type AudioEscalation,
+  type AudioRepeatedRedirections,
   type AudioHighlight,
   type AudioLessonContent,
   type AudioReflectMessage,
@@ -4139,12 +4140,14 @@ type PickOption = {
   finding?: string | null
   /// Anything else the panel should say before its moments.
   note?: React.ReactNode
+  /// Shown even with no items, when "nothing found" is itself the answer.
+  alwaysShow?: boolean
 }
 
 /// A row of pill buttons, one per category, and the chosen category's items
 /// below — "Examples & explanations · 4", tap to switch.
 function CategoryPicker({ options, tone, hint }: { options: PickOption[]; tone: 'forest' | 'lavender'; hint?: string }) {
-  const shown = options.filter((o) => o.items.length > 0)
+  const shown = options.filter((o) => o.items.length > 0 || o.alwaysShow)
   const [selected, setSelected] = useState(shown[0]?.key ?? '')
   const current = shown.find((o) => o.key === selected) ?? shown[0]
   const printAll = usePrintAll()
@@ -4884,6 +4887,47 @@ function HardLookTab({
   )
 }
 
+/// Repeated redirections, in Climate & Routines: one card per expectation the
+/// teacher returned to — the lead quote and time, the pattern, and the other
+/// quotes behind "More evidence" — then whether the teacher's voice was heard
+/// throughout, or where it was not. No next step, no claim that a correction
+/// failed, and no count in the copy.
+function RepeatedRedirectionsPanel({ read }: { read: AudioRepeatedRedirections }) {
+  if (read.state === 'unread') return <p className="text-sm text-ink-soft">This part of the lesson couldn’t be read for this report.</p>
+  return (
+    <div className="flex flex-col gap-3">
+      {read.findings.map((f) => (
+        <div key={`${f.expectation}-${f.startSec}`} className="flex flex-col gap-2 rounded-xl border-[1.5px] border-terracotta/30 bg-cream-card px-4 py-3.5">
+          <b className="text-sm text-ink">{f.title}</b>
+          <div className="flex items-baseline justify-between gap-4 text-sm text-ink">
+            <span>{f.lead.quote ? `“${f.lead.quote}”` : <span className="text-ink-soft">The wording here was too short or unclear to quote.</span>}</span>
+            <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(f.lead.timestampSec)}</span>
+          </div>
+          <p className="text-sm text-ink-soft">{f.pattern}</p>
+          {f.more.length > 0 && (
+            <DetailsOpenOnPaper className="group">
+              <summary className="cursor-pointer list-none text-sm font-semibold text-forest marker:hidden">
+                <span className="group-open:hidden">More evidence ▸</span>
+                <span className="hidden group-open:inline">More evidence ▾</span>
+              </summary>
+              <ul className="mt-2 flex flex-col gap-1.5">
+                {f.more.map((m) => (
+                  <li key={m.timestampSec} className="flex items-baseline justify-between gap-4 text-sm text-ink">
+                    <span>“{m.quote}”</span>
+                    <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(m.timestampSec)}</span>
+                  </li>
+                ))}
+              </ul>
+            </DetailsOpenOnPaper>
+          )}
+        </div>
+      ))}
+      {read.coverageNote && <p className="text-sm text-ink-soft">{read.coverageNote}</p>}
+      {read.corrections.length > 0 && <p className="-mb-1 mt-1 text-xs font-semibold text-ink-soft">Behavior corrections in this lesson</p>}
+    </div>
+  )
+}
+
 /// Keeping learning on track, in Climate & Routines: each stretch where
 /// reminders came as a pattern, as one teacher quote and its time, a short
 /// explanation, the related quotes behind "More evidence", and a next step
@@ -5049,6 +5093,22 @@ function ClimateRoutinesTab({
           : null
         : redirectFinding
 
+  // Repeated redirections: the read the section shows when the report has
+  // it; older reports keep the Keeping learning on track view above until
+  // they are re-read.
+  const repeated = esc?.repeatedRedirections
+  const redirectionItems: PickItem[] = repeated
+    ? repeated.corrections.map((c) => ({
+        tag: c.label,
+        quote: c.quote ?? undefined,
+        text: c.quote ? undefined : 'Too short or unclear to quote on its own.',
+        timestampSec: c.timestampSec,
+      }))
+    : (onTrackRows.length > 0
+        ? onTrackRows
+        : (episodes ?? []).map((e) => ({ quote: e.lead.quote ?? '', timestampSec: e.lead.timestampSec, tag: e.title }))
+      ).filter((r) => r.quote).map((r) => ({ tag: r.tag, quote: r.quote, timestampSec: r.timestampSec }))
+
   // 3. Encouragement & respect.
   const feedback = session.feedbackLog ?? []
   const specific = feedback.filter((f) => f.kind === 'specific')
@@ -5099,11 +5159,11 @@ function ClimateRoutinesTab({
         <div className="flex items-baseline justify-between gap-3">
           <p className="font-heading text-xl font-bold text-forest">From your lesson</p>
           <span className="text-sm text-ink-soft">
-            {directionRows.length + redirectRows.length + encourageRows.length} moments
+            {directionRows.length + redirectionItems.length + encourageRows.length} moments
           </span>
         </div>
         <p className="text-base font-semibold text-ink">How your words set up the work, kept it on track, and encouraged students.</p>
-        {directionRows.length + redirectRows.length + encourageRows.length === 0 ? (
+        {directionRows.length + redirectionItems.length + encourageRows.length === 0 && !repeated ? (
           <p className="text-sm text-ink-soft">No directions, redirections or feedback to a student were found in this lesson.</p>
         ) : (
           <CategoryPicker
@@ -5127,17 +5187,24 @@ function ClimateRoutinesTab({
                   ) : undefined,
                 items: directionRows.map((r) => ({ tag: r.tag, quote: r.quote, timestampSec: r.timestampSec })),
               },
-              {
-                key: 'redirection',
-                label: 'Keeping learning on track',
-                finding: onTrackFinding,
-                desc: 'Your words addressing behavior, apart from corrections about the content. One reminder tells little; what is worth a second look is the same reminder coming back, or an explanation that kept stopping.',
-                note: escNote,
-                items: (onTrackRows.length > 0
-                  ? onTrackRows
-                  : (episodes ?? []).map((e) => ({ quote: e.lead.quote ?? '', timestampSec: e.lead.timestampSec, tag: e.title }))
-                ).filter((r) => r.quote).map((r) => ({ tag: r.tag, quote: r.quote, timestampSec: r.timestampSec })),
-              },
+              repeated
+                ? {
+                    key: 'redirection',
+                    label: 'Repeated redirections',
+                    finding: repeated.headline,
+                    desc: 'Your words correcting behavior, each filed under what it was about. One correction tells little; the same one coming back is worth a second look.',
+                    note: <RepeatedRedirectionsPanel read={repeated} />,
+                    items: redirectionItems,
+                    alwaysShow: repeated.state !== 'unread' || redirectionItems.length > 0,
+                  }
+                : {
+                    key: 'redirection',
+                    label: 'Keeping learning on track',
+                    finding: onTrackFinding,
+                    desc: 'Your words addressing behavior, apart from corrections about the content. One reminder tells little; what is worth a second look is the same reminder coming back, or an explanation that kept stopping.',
+                    note: escNote,
+                    items: redirectionItems,
+                  },
               {
                 key: 'encouragement',
                 label: 'Encouragement & respect',

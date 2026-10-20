@@ -83,6 +83,12 @@ for (const id of sessionIds) {
       console.log(`      lead ${mmss(e.lead.timestampSec)}: ${e.lead.quote == null ? '(withheld)' : JSON.stringify(e.lead.quote.slice(0, 90))}`)
       for (const m of e.more) console.log(`        more ${mmss(m.timestampSec)}: ${JSON.stringify(m.quote.slice(0, 80))}`)
     }
+    const rr = read.repeatedRedirections
+    if (rr) {
+      console.log(`    REPEATED REDIRECTIONS: ${rr.state}  ${rr.headline ?? ''}  [${rr.coverageNote ?? ''}]`)
+      for (const f of rr.findings) console.log(`      ${f.title} — ${f.pattern}\n        lead ${mmss(f.lead.timestampSec)} ${JSON.stringify(f.lead.quote)}  +${f.more.length} more`)
+      for (const c of rr.corrections) console.log(`      ${mmss(c.timestampSec).padStart(6)} ${c.label.padEnd(22)} ${c.quote == null ? '(not quotable)' : JSON.stringify(c.quote.slice(0, 70))}`)
+    }
     if (read.state === 'confirmed_none') console.log('    nothing like this in what the recording caught, and enough was caught to mean it')
   }
 }

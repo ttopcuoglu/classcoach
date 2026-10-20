@@ -31,6 +31,17 @@ export function readsAsSpeech(text: string): boolean {
   return !DOUBLED_WORD.test(text)
 }
 
+/// Whether the wording can be trusted to be what the teacher said, whatever
+/// its length — the bar for COUNTING a line rather than showing it. "Shh."
+/// passes; garble and words we will not attribute do not. One doubled word
+/// is a stutter ("Don't don't feel comfortable. Can you get your Chromebook
+/// up…" is a real correction); two is noise.
+export function trustworthyWording(text: string): boolean {
+  const low = text.trim().toLowerCase()
+  const doubled = low.match(new RegExp(DOUBLED_WORD.source, 'gi'))?.length ?? 0
+  return doubled < 2 && !UNSAFE_TO_ATTRIBUTE.some((phrase) => low.includes(phrase))
+}
+
 /// Fails on garble, on language we will not attribute, and on fragments too
 /// short to carry their own context — "And quiet." quoted alone reads as
 /// barking at a room when it may have ended a full sentence.

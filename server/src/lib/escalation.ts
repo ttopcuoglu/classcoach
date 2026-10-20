@@ -35,6 +35,7 @@ import {
   transcriptForModel,
 } from './lessonObjective.ts'
 import { quoteOrNull } from './quoteSafety.ts'
+import { readRepeatedRedirections, type RepeatedRedirections } from './repeatedRedirections.ts'
 import { canClaimAbsence, type CoverageSource, capturedShare, sharePct } from './transcriptCoverage.ts'
 
 /// Ordered by force. The index IS the severity, so a climb is an index
@@ -130,6 +131,10 @@ export type EscalationRead = {
   /// resuming — including the single ones, which are routine and are shown
   /// as such rather than as a finding.
   interruptions?: { timestampSec: number; quote: string | null }[]
+  /// "Did the teacher repeatedly address the same behavior?" — the read the
+  /// Climate & Routines section shows (lib/repeatedRedirections.ts). Stored
+  /// here so it needs no column of its own. Absent on reads made before it.
+  repeatedRedirections?: RepeatedRedirections
 }
 
 /// One stretch where the reminders were a pattern. Never carries a count:
@@ -543,6 +548,23 @@ export async function readEscalation(
   durationSec?: number | null,
   /// For tryEscalation's --bids: every bid the read kept, before grouping.
   onBids?: (bids: AttentionBid[]) => void,
+): Promise<EscalationRead | null> {
+  // Two model calls side by side. The repeated-redirections read is what the
+  // report shows; the bid read stays for the PDF's older line and for old app
+  // builds. If the bid read fails the whole read is null, as before.
+  const lessonSec = metricsDetail?.totalDurationSec ?? durationSec ?? segments[segments.length - 1]?.endSec ?? 0
+  const [read, repeatedRedirections] = await Promise.all([
+    readAttentionBids(segments, metricsDetail, durationSec, onBids),
+    readRepeatedRedirections(segments, lessonSec),
+  ])
+  return read && { ...read, repeatedRedirections }
+}
+
+async function readAttentionBids(
+  segments: Segment[],
+  metricsDetail: CoverageSource | null | undefined,
+  durationSec: number | null | undefined,
+  onBids: ((bids: AttentionBid[]) => void) | undefined,
 ): Promise<EscalationRead | null> {
   const transcript = transcriptForModel(inScopeSegments(segments))
   const share = capturedShare(metricsDetail, durationSec)

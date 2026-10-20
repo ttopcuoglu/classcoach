@@ -980,6 +980,30 @@ export type AudioEscalation = {
   episodes?: AudioOnTrackEpisode[]
   /// Every ask that broke into an explanation, which then resumed.
   interruptions?: { timestampSec: number; quote: string | null }[]
+  /// What Climate & Routines shows. Absent on reads made before it.
+  repeatedRedirections?: AudioRepeatedRedirections
+}
+
+/// "Did the teacher repeatedly address the same behavior?"
+/// (server/src/lib/repeatedRedirections.ts). All copy is written on the
+/// server; it never claims a correction failed and never carries a count.
+export type AudioRepeatedRedirections = {
+  state: 'found' | 'none' | 'not_measurable' | 'unread'
+  headline: string | null
+  coverageNote: string | null
+  heardThroughout: boolean
+  silentStretches: { startSec: number; endSec: number }[]
+  findings: {
+    expectation: string
+    kind: 'stretch' | 'recurring'
+    startSec: number
+    endSec: number
+    title: string
+    pattern: string
+    lead: { quote: string | null; timestampSec: number }
+    more: { quote: string; timestampSec: number }[]
+  }[]
+  corrections: { quote: string | null; timestampSec: number; expectation: string; label: string }[]
 }
 
 /// One stretch of reminders that came as a pattern
