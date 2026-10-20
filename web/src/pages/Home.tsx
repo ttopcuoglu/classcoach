@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { keepDoing } from '../lib/keepDoing'
+import { lessonMonth } from '../lib/lessonMonth'
 import { Link } from 'react-router-dom'
 import {
   BookIcon,
@@ -286,10 +286,6 @@ function checkInAge(createdAt: string): string {
   return day === 'today' ? 'from earlier today' : `from ${day}`
 }
 
-function formatClock(sec: number): string {
-  return `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
-}
-
 export default function Home() {
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [name, setName] = useState<string | null>(null)
@@ -299,8 +295,8 @@ export default function Home() {
   const [telegramLinked, setTelegramLinked] = useState<boolean | null>(null)
   const [activity, setActivity] = useState<Activity[]>([])
   // Unfiltered, newest-first — drives the "Next" card's priority logic (has
-  // any lesson been recorded, is the latest one reflected on) and the "Keep
-  // doing" card, which reads the latest analyzed lesson.
+  // any lesson been recorded, is the latest one reflected on) and "Your
+  // lessons this month".
   const [allSessions, setAllSessions] = useState<AudioSession[]>([])
   // Planning Coach is one tool in the nav and one flag here. Its first three
   // tabs write LessonPlan rows and Review an Assignment writes its own table,
@@ -425,7 +421,11 @@ export default function Home() {
   // COACHING_PATH above) — this only ever names one concrete next action.
   const completedSessions = allSessions.filter((s) => s.status === 'analyzed' || s.status === 'locked')
   const latestCompletedSession = completedSessions[0] ?? null
-  const latestKeep = latestCompletedSession ? keepDoing(latestCompletedSession) : null
+  // Lessons that were recorded — not ones started and never sent, or failed.
+  const month = lessonMonth(
+    allSessions.filter((s) => s.status !== 'setup' && s.status !== 'failed').map((s) => new Date(s.sessionDate)),
+    today,
+  )
   // The whole record, with the one tool whose rows arrive on a different
   // request folded in.
   const toolsLastUsed: Partial<Record<ToolKey, number>> = {
@@ -719,27 +719,42 @@ export default function Home() {
         </div>
 
         <div className="flex flex-col rounded-3xl bg-mint-tint/50 p-6">
-          {/* One strength from the latest lesson, in the teacher's own words —
-              something to carry into today's class. It replaced a student-
-              voice donut: that number is the one a microphone hears worst,
-              and on Home it read as a verdict with nothing to explain it. */}
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">
-            {latestKeep ? `Latest lesson · ${relativeDay(latestCompletedSession!.sessionDate)}` : 'Your lessons'}
+          {/* The recording habit: lessons this month, the days they fell on,
+              and weeks in a row with one. Nothing here judges the teaching.
+              It replaced a student-voice donut — the number a microphone
+              hears worst, read on Home as a verdict. */}
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">{month.monthLabel}</p>
+          <h2 className="mt-1 font-heading text-lg font-bold text-forest">Your lessons this month</h2>
+          <p className="mt-3 flex items-baseline gap-2">
+            <span className="font-heading text-3xl font-extrabold text-forest">{month.count}</span>
+            <span className="text-sm text-ink-soft">lesson{month.count === 1 ? '' : 's'} recorded</span>
           </p>
-          <h2 className="mt-1 font-heading text-lg font-bold text-forest">Keep doing</h2>
-          {latestKeep ? (
-            <>
-              <p className="mt-3 text-sm leading-relaxed text-ink">{latestKeep.text}</p>
-              <p className="mt-2 text-sm italic text-ink-soft">
-                “{latestKeep.quote}” <span className="font-mono text-xs not-italic">{formatClock(latestKeep.timestampSec)}</span>
-              </p>
-              <Link to="/audio-coaching" className="mt-auto pt-4 text-sm font-semibold text-terracotta-600 hover:underline">
-                Open Lesson Debrief →
-              </Link>
-            </>
-          ) : (
-            <p className="mt-4 text-sm text-ink-soft">Record and analyze a lesson to see something worth keeping here.</p>
-          )}
+          <div className="mt-3 grid grid-cols-7 gap-1" role="img" aria-label={`${month.count} lessons recorded this month`}>
+            {Array.from({ length: month.firstWeekday }, (_, i) => (
+              <span key={`pad${i}`} />
+            ))}
+            {Array.from({ length: month.daysInMonth }, (_, i) => {
+              const day = i + 1
+              const recorded = month.recordedDays.has(day)
+              return (
+                <span
+                  key={day}
+                  title={recorded ? `Lesson recorded on the ${day}` : undefined}
+                  className={`h-3.5 rounded ${recorded ? 'bg-[#4F9A72]' : day > month.today ? 'bg-hairline/40' : 'bg-hairline'} ${day === month.today ? 'ring-2 ring-forest ring-offset-1 ring-offset-mint-tint' : ''}`}
+                />
+              )
+            })}
+          </div>
+          <p className="mt-3 text-sm text-ink">
+            {month.weekStreak >= 2
+              ? `${month.weekStreak} weeks in a row with a recording.`
+              : month.count > 0
+                ? 'Record one more this week to start a streak.'
+                : 'Record a lesson to start the month.'}
+          </p>
+          <Link to="/audio-coaching" className="mt-auto pt-4 text-sm font-semibold text-terracotta-600 hover:underline">
+            Record a lesson →
+          </Link>
         </div>
       </div>
 
