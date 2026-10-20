@@ -13,6 +13,7 @@ import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { UPLOAD_STAGE, transcribeEstimateSec, transcribeHint, transcribeStage } from '../lib/transcribeStages'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import { questionTags } from '../lib/questionTags'
+import { averagePause, pausesAfter } from '../lib/thinkingPause'
 import { setPlanningPrefill } from '../lib/communicationsPrefill'
 import { MIN_STRETCH_TO_SHOW_SEC, longestTeacherStretch } from '../lib/teacherStretch'
 import { createPlaybackQueue, primeAudioElement, splitIntoSentences, type PlaybackQueue } from '../lib/voicePlayback'
@@ -5606,7 +5607,9 @@ function QuestionsChecksPart({
     timestampSec: f.timestampSec,
     quote: withoutAddressedNames(f.text),
   }))
-  const named = questions.filter((q) => q.byName).length
+  const thinkingPause = averagePause(
+    pausesAfter(session.segments ?? [], questions.filter((q) => q.mix !== 'recall').map((q) => q.timestampSec)),
+  )
   const count = (k: MixKey) => questions.filter((q) => q.mix === k).length
   const beyond = count('explain') + count('reasoning')
   const [pick, setPick] = useState<QPick>(
@@ -5794,11 +5797,19 @@ function QuestionsChecksPart({
         ))}
       </div>
 
-      {questions.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 text-sm text-ink">
-          <b>Who you asked</b>
-          <span className="rounded-full bg-cream px-3 py-1">{questions.length - named} open to anyone</span>
-          {named > 0 && <span className="rounded-full bg-cream px-3 py-1">{named} to a student by name</span>}
+      {/* Thinking time: how long the room had after a question that asked
+          students to explain or reason, before anyone spoke. */}
+      {thinkingPause != null && (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-2xl border border-hairline bg-cream-card px-4 py-3.5">
+          <span className="font-heading text-3xl font-extrabold leading-none text-forest">
+            {thinkingPause.toFixed(1)}
+            <small className="ml-1 font-sans text-base font-bold">s</small>
+          </span>
+          <span className="min-w-0 flex-1 text-sm text-ink">
+            <b className="block text-forest">Average pause after a thinking question</b>
+            How long the room had to think after you asked students to explain or reason, before anyone spoke.
+            Three seconds or more gives most students time to think.
+          </span>
         </div>
       )}
     </div>
