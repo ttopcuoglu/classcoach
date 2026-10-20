@@ -5688,7 +5688,7 @@ function QuestionsChecksPart({
           ? 'No questions were heard. '
           : beyond === 0
             ? `All ${questions.length} questions asked students to recall something. `
-            : `${beyond} of ${questions.length} questions went beyond recall. `}
+            : `${beyond} of ${questions.length} were higher-order questions (explain or reasoning). `}
         {checks.length === 0
           ? 'No checks for understanding were heard.'
           : `You checked for understanding ${checks.length} time${checks.length === 1 ? '' : 's'}${

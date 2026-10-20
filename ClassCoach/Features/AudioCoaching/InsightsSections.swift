@@ -987,7 +987,7 @@ struct QuestionsSection: View {
         var q: String
         if questions.isEmpty { q = "No questions were heard. " }
         else if beyond == 0 { q = "All \(questions.count) questions asked students to recall something. " }
-        else { q = "\(beyond) of \(questions.count) questions went beyond recall. " }
+        else { q = "\(beyond) of \(questions.count) were higher-order questions (explain or reasoning). " }
         if checks.isEmpty { return q + "No checks for understanding were heard." }
         var c = "You checked for understanding \(checks.count) time\(checks.count == 1 ? "" : "s")"
         if everyone > 0 { c += ", " + (everyone == checks.count ? "each" : "\(everyone) of them") + " asking everyone" }
