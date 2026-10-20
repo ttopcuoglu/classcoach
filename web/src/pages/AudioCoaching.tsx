@@ -5607,9 +5607,9 @@ function QuestionsChecksPart({
     timestampSec: f.timestampSec,
     quote: withoutAddressedNames(f.text),
   }))
-  const thinkingPause = averagePause(
-    pausesAfter(session.segments ?? [], questions.filter((q) => q.mix !== 'recall').map((q) => q.timestampSec)),
-  )
+  const thinkingQuestions = questions.filter((q) => q.mix !== 'recall')
+  const thinkingPauses = pausesAfter(session.segments ?? [], thinkingQuestions)
+  const thinkingPause = averagePause(thinkingPauses)
   const count = (k: MixKey) => questions.filter((q) => q.mix === k).length
   const beyond = count('explain') + count('reasoning')
   const [pick, setPick] = useState<QPick>(
@@ -5810,6 +5810,28 @@ function QuestionsChecksPart({
             How long the room had to think after you asked students to explain or reason, before anyone spoke.
             Three seconds or more gives most students time to think.
           </span>
+          <div className="flex basis-full flex-col gap-2">
+            {thinkingQuestions.map((q, i) => {
+              const p = thinkingPauses[i]
+              return (
+                <div key={i} className="flex items-baseline justify-between gap-4 rounded-xl bg-cream px-3.5 py-2.5 text-sm text-ink">
+                  <span>
+                    “{q.quote}” <span className="font-mono text-xs text-ink-soft">{formatTime(q.timestampSec)}</span>
+                  </span>
+                  <span className="shrink-0 text-right text-xs text-ink-soft">
+                    {p ? (
+                      <>
+                        <b className="font-heading text-base text-forest">{p.sec.toFixed(1)} s</b>
+                        <span className="block">{p.next === 'kept_talking' ? 'you kept talking' : p.next === 'you' ? 'then you spoke' : 'then a student'}</span>
+                      </>
+                    ) : (
+                      'not measured'
+                    )}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>
