@@ -5483,6 +5483,20 @@ function QuestioningCheckingTab({
       tag: 'kind' in q ? (EXTEND_KIND_LABEL[(q as { kind: keyof typeof EXTEND_KIND_LABEL }).kind] ?? 'Follow-up') : 'Follow-up',
     })),
   ]
+  // What you said right after each answer you followed up — the same
+  // pairing the dots count, so the list and "X of Y" always agree. The kind
+  // comes from the follow-up read where it found the same moment.
+  const fuLogRaw = session.metricsLogs?.followUpLog ?? detail.followUpLog
+  const fuLog = Array.isArray(fuLogRaw) ? (fuLogRaw as { timestampSec: number; text: string }[]) : []
+  const pairedLines: Evidence[] = answers.flatMap((a, i) => {
+    if (!a.followed) return []
+    const nextAt = answers[i + 1]?.timestampSec ?? Infinity
+    const fu = fuLog.find((f) => f.timestampSec >= a.timestampSec && f.timestampSec < nextAt)
+    if (!fu) return []
+    const read = followLines.find((l) => Math.abs(l.timestampSec - fu.timestampSec) <= 5)
+    return [{ quote: withoutAddressedNames(fu.text), timestampSec: fu.timestampSec, tag: read?.tag ?? 'Follow-up' }]
+  })
+  const shownFollowUps = pairedLines.length > 0 ? pairedLines : followLines.slice(0, 1)
   const unfollowed = answers.filter((a) => !a.followed)
   const [showUnfollowed, setShowUnfollowed] = useState(false)
   const showRate = heard != null && followed != null && heard >= 3
@@ -5557,17 +5571,17 @@ function QuestioningCheckingTab({
             Too few student answers came through to count follow-ups{followLines.length > 0 ? ' — here is one the recording caught.' : '.'}
           </p>
         )}
-        {followLines[0] && (
-          <div className="flex items-baseline justify-between gap-4 rounded-xl bg-cream px-3.5 py-3 text-sm text-ink">
+        {shownFollowUps.map((l, i) => (
+          <div key={i} className="flex items-baseline justify-between gap-4 rounded-xl bg-cream px-3.5 py-3 text-sm text-ink">
             <div>
-              <span className="mb-1 block text-xs font-semibold text-ink-soft">{followLines[0].tag}</span>“{followLines[0].quote}”
+              <span className="mb-1 block text-xs font-semibold text-ink-soft">{l.tag}</span>“{l.quote}”
             </div>
-            <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(followLines[0].timestampSec)}</span>
+            <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(l.timestampSec)}</span>
           </div>
-        )}
+        ))}
         {unfollowed.length > 0 && (
           <>
-            <button type="button" onClick={() => setShowUnfollowed((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 hover:underline">
+            <button type="button" onClick={() => setShowUnfollowed((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-terracotta/40">
               {showUnfollowed ? 'Hide' : `Answers without a follow-up (${unfollowed.length})`}
             </button>
             {showUnfollowed && (

@@ -472,8 +472,15 @@ struct AudioAnswer: Decodable {
     let followed: Bool
 }
 
+/// What the teacher said after a student answer, from the phrase scan.
+struct AudioFollowUpLine: Decodable {
+    let timestampSec: Double
+    let text: String
+}
+
 private struct MetricsLogs: Decodable {
     let answerLog: [AudioAnswer]?
+    let followUpLog: [AudioFollowUpLine]?
 }
 
 struct AudioSession: Decodable, Identifiable {
@@ -501,6 +508,8 @@ struct AudioSession: Decodable, Identifiable {
     /// Each student answer the recording heard, and whether you followed it
     /// up — sent as metricsLogs.answerLog. Absent on older lessons.
     let answerLog: [AudioAnswer]?
+    /// The follow-ups those answers got — metricsLogs.followUpLog.
+    let followUpLog: [AudioFollowUpLine]?
     let highlights: [AudioHighlight]?
     let phases: [AudioPhase]?
     let questionLog: [AudioQuestionLogEntry]?
@@ -596,7 +605,9 @@ struct AudioSession: Decodable, Identifiable {
         // sends them as metricsLogs; this keeps the next such field harmless.
         let rawMetrics = try? container.decodeIfPresent([String: LenientNumber].self, forKey: .metricsDetail)
         metricsDetail = rawMetrics?.compactMapValues { $0.value }
-        answerLog = (try? container.decodeIfPresent(MetricsLogs.self, forKey: .metricsLogs))?.answerLog
+        let logs = try? container.decodeIfPresent(MetricsLogs.self, forKey: .metricsLogs)
+        answerLog = logs?.answerLog
+        followUpLog = logs?.followUpLog
         highlights = try container.decodeIfPresent([AudioHighlight].self, forKey: .highlights)
         phases = try container.decodeIfPresent([AudioPhase].self, forKey: .phases)
         questionLog = try container.decodeIfPresent([AudioQuestionLogEntry].self, forKey: .questionLog)
@@ -684,6 +695,7 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
     var cfuCount: Int? { session.cfuCount }
     var metricsDetail: [String: Double]? { session.metricsDetail }
     var answerLog: [AudioAnswer]? { session.answerLog }
+    var followUpLog: [AudioFollowUpLine]? { session.followUpLog }
     var highlights: [AudioHighlight]? { session.highlights }
     var phases: [AudioPhase]? { session.phases }
     var questionLog: [AudioQuestionLogEntry]? { session.questionLog }

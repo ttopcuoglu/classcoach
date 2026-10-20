@@ -1157,6 +1157,18 @@ struct QuestionsSection: View {
         .buttonStyle(.plain)
     }
 
+    private func pairedFollowUps(_ answers: [AudioAnswer], _ readLines: [EvidenceLine]) -> [EvidenceLine] {
+        let log = session.followUpLog ?? []
+        var out: [EvidenceLine] = []
+        for (i, a) in answers.enumerated() where a.followed {
+            let nextAt = i + 1 < answers.count ? answers[i + 1].timestampSec : .infinity
+            guard let fu = log.first(where: { $0.timestampSec >= a.timestampSec && $0.timestampSec < nextAt }) else { continue }
+            let tag = readLines.first { abs(($0.timestampSec ?? -99) - fu.timestampSec) <= 5 }?.tag ?? "Follow-up"
+            out.append(EvidenceLine(tag: tag, quote: fu.text, timestampSec: fu.timestampSec))
+        }
+        return out.isEmpty ? Array(readLines.prefix(1)) : out
+    }
+
     @ViewBuilder
     private func followUpsPart(heard: Int?, followed: Int?, showRate: Bool) -> some View {
         let answers = session.answerLog ?? []
@@ -1191,7 +1203,9 @@ struct QuestionsSection: View {
                     .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let line = followLines.first {
+            // What you said right after each answer you followed up — the
+            // same pairing the dots count, so the list and "X of Y" agree.
+            ForEach(Array(pairedFollowUps(answers, followLines).enumerated()), id: \.offset) { _, line in
                 EvidenceRow(line: line, fill: AppTheme.cream)
             }
             if !unfollowed.isEmpty {
