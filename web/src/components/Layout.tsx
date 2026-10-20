@@ -106,9 +106,9 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
   // reflects a personal subscription.
   const hasPlus = user?.plusAccess != null || user?.plan === 'plus'
   return (
-    <div className="flex min-h-screen bg-cream text-ink">
+    <div className="flex min-h-screen bg-cream text-ink print:min-h-0 print:bg-white">
       {/* Desktop sidebar */}
-      <aside className="hidden w-64 shrink-0 bg-forest md:flex md:flex-col">
+      <aside className="hidden w-64 shrink-0 bg-forest md:flex md:flex-col print:!hidden">
         <div className="flex flex-col items-start gap-1 px-6 py-6">
           <img src="/logo/wivoza-lockup-dark.png" alt="Wivoza" className="h-10 w-auto" />
           <p className="text-[11px] text-cream/50">Practice. Reflect. Grow.</p>
@@ -212,9 +212,9 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
         </div>
       </aside>
 
-      <div className="flex min-h-screen flex-1 flex-col">
+      <div className="flex min-h-screen flex-1 flex-col print:min-h-0">
         {/* Mobile top bar */}
-        <header className="flex items-center justify-between border-b border-hairline bg-cream-card px-4 py-3 md:hidden">
+        <header className="flex items-center justify-between border-b border-hairline bg-cream-card px-4 py-3 md:hidden print:!hidden">
           <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-6 w-auto" />
           <button type="button" onClick={handleLogout} className="text-sm font-medium text-ink-soft">
             Log out
@@ -224,13 +224,13 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
         {user != null && !hasPlus && (
           <Link
             to="/profile"
-            className="block bg-gold-tint px-4 py-2 text-center text-xs font-semibold text-terracotta-600 md:hidden"
+            className="block bg-gold-tint px-4 py-2 text-center text-xs font-semibold text-terracotta-600 md:hidden print:!hidden"
           >
             Unlock unlimited coaching — Upgrade to Wivoza Plus →
           </Link>
         )}
 
-        <main className="flex-1 px-4 py-6 pb-24 md:px-10 md:py-10 md:pb-10">
+        <main className="flex-1 px-4 py-6 pb-24 md:px-10 md:py-10 md:pb-10 print:!p-0">
           {/* Reading width everywhere except the admin reports, which carry their
               own section menu beside the content — at the reading width that
               left the dashboards about 670px, too narrow for a row of stats. */}
@@ -245,7 +245,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             picking one page for the user. Profile is the last slot rather than
             a category of its own, matching the account block the sidebar puts
             in the same corner on a wide screen. */}
-        <nav className="fixed inset-x-0 bottom-0 z-10 flex items-center justify-around border-t border-hairline bg-cream-card py-2 md:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-10 flex items-center justify-around border-t border-hairline bg-cream-card py-2 md:hidden print:!hidden">
           <NavLink to="/" end className={({ isActive }) => mobileNavClasses(isActive)}>
             <HomeIcon className="h-5 w-5" />
             Home

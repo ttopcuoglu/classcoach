@@ -14,6 +14,7 @@ import { UPLOAD_STAGE, transcribeEstimateSec, transcribeHint, transcribeStage } 
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import { questionTags } from '../lib/questionTags'
 import { averagePause, pausesAfter } from '../lib/thinkingPause'
+import { PrintAllContext, usePrintAll } from '../lib/printAll'
 import { setPlanningPrefill } from '../lib/communicationsPrefill'
 import { MIN_STRETCH_TO_SHOW_SEC, longestTeacherStretch } from '../lib/teacherStretch'
 import { createPlaybackQueue, primeAudioElement, splitIntoSentences, type PlaybackQueue } from '../lib/voicePlayback'
@@ -1661,6 +1662,25 @@ function ReportPanel({
 }) {
   // TEMPORARY preview params — removed before commit.
   const [tab, setTab] = useState<ReportTab>('summary')
+  // The whole report on paper: Summary, then each Insights section on its own
+  // page, everything opened up. Laid out, handed to the browser's print
+  // dialog (where Save as PDF lives), and put back once it closes. The Hard
+  // Look is never in it, as it never has been in the printed report.
+  const [printing, setPrinting] = useState(false)
+  useEffect(() => {
+    if (!printing) return
+    const before = document.title
+    // The browser names the PDF after the page title.
+    document.title = `${sessionTitle(session)} — Lesson Debrief`
+    const done = () => setPrinting(false)
+    window.addEventListener('afterprint', done)
+    const timer = window.setTimeout(() => window.print(), 400)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('afterprint', done)
+      document.title = before
+    }
+  }, [printing, session])
   const [insightsSection, setInsightsSection] = useState<InsightsSection>('talk')
   const [hardLookOpen, setHardLookOpen] = useState(false)
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null)
@@ -2087,7 +2107,7 @@ function ReportPanel({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between print:hidden">
         <button type="button" onClick={() => onExit()} className="text-sm font-medium text-ink-soft hover:text-ink">
           ← Back to sessions
         </button>
@@ -2136,18 +2156,23 @@ function ReportPanel({
               </span>
             )}
           </div>
-          <Link
-            to={`/audio-coaching/${session.id}/export`}
-            className="shrink-0 rounded-full bg-cream px-4 py-2.5 text-sm font-semibold text-forest transition-opacity hover:opacity-90"
+          <button
+            type="button"
+            onClick={() => setPrinting(true)}
+            className="shrink-0 rounded-full bg-cream px-4 py-2.5 text-sm font-semibold text-forest transition-opacity hover:opacity-90 print:hidden"
           >
-            Print / Save as PDF
-          </Link>
+            Save full report as PDF
+          </button>
         </div>
       </header>
 
-      <TabBar tab={tab} onSelect={setTab} />
+      <div className="print:hidden">
+        <TabBar tab={tab} onSelect={setTab} />
+      </div>
 
-      {tab === 'summary' && (
+      <PrintAllContext.Provider value={printing}>
+
+      {(tab === 'summary' || printing) && (
         <SummaryTab
           session={session}
           onUpdate={onUpdate}
@@ -2157,7 +2182,7 @@ function ReportPanel({
           classSummary={session.classSummary}
           classSummarySending={classSummarySending}
           hardLookDoor={
-            locked && !session.hardLook ? null : (
+            printing ? null : locked && !session.hardLook ? null : (
               <div className="flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-4">
                 <button
                   type="button"
@@ -2186,14 +2211,42 @@ function ReportPanel({
           }
           onNavigateInsights={(section) => handleViewSource('insights', '', section)}
           onDiscussWithCoach={handleDiscussWithCoach}
+          onSavePdf={() => setPrinting(true)}
         />
       )}
 
-      {tab === 'growth' && (
+      {/* On paper: the four Insights sections after the Summary, each on its
+          own page, with no Hard Look and no buttons. */}
+      {printing &&
+        (['talk', 'questions', 'content', 'routines'] as const).map((sec) => (
+          <div key={sec} className="break-before-page">
+            <SectionAccentContext.Provider value={INSIGHTS_SECTION_META[sec].accent}>
+              {sec === 'talk' && <TalkParticipationTab session={session} silencePct={silencePct} talkInsight={talkInsight} lastRow={null} onDiscuss={() => {}} />}
+              {sec === 'questions' && (
+                <QuestioningCheckingTab session={session} questioningInsight={questioningInsight} nextStep={session.nextSteps?.questions} lastRow={null} onDiscuss={() => {}} />
+              )}
+              {sec === 'content' && (
+                <LessonContentTab
+                  lessonContent={session.lessonContent}
+                  contentNotes={session.contentNotes}
+                  teachingMoves={session.teachingMoves ?? null}
+                  narrative={session.contentNarrative ?? null}
+                  lastRow={null}
+                  onDiscuss={() => {}}
+                />
+              )}
+              {sec === 'routines' && (
+                <ClimateRoutinesTab session={session} climateNarrative={session.climateNarrative ?? null} nextStep={session.nextSteps?.climate} lastRow={null} onDiscuss={() => {}} />
+              )}
+            </SectionAccentContext.Provider>
+          </div>
+        ))}
+
+      {tab === 'growth' && !printing && (
         <MyGrowthTab sessions={sessions} focusMetric={focusMetric} onFocusMetricChange={onFocusMetricChange} />
       )}
 
-      {tab === 'reflect' && (
+      {tab === 'reflect' && !printing && (
         <ReflectTab
           highlights={session.highlights}
           cfuMetric={cfuMetric}
@@ -2243,7 +2296,7 @@ function ReportPanel({
         />
       )}
 
-      {tab === 'insights' && (
+      {tab === 'insights' && !printing && (
         <div className="flex flex-col gap-5">
           <InsightsNav section={insightsSection} onSelect={setInsightsSection} />
           <div className="min-w-0">
@@ -2303,7 +2356,7 @@ function ReportPanel({
         </div>
       )}
 
-      {tab === 'specialist' && (
+      {tab === 'specialist' && !printing && (
         <SectionAccentContext.Provider value={INSIGHTS_SECTION_META.topic.accent}>
           <TopicTab
             lessonContent={session.lessonContent}
@@ -2322,7 +2375,7 @@ function ReportPanel({
           four sections, so unlike the Hard Look it cannot be split across
           them. Nothing is collapsed here — a teacher who opened this tab has
           already said what they want. */}
-      {tab === 'rubric' && (
+      {tab === 'rubric' && !printing && (
         <RubricLensTab
           rubricLens={session.rubricLens}
           locked={locked}
@@ -2332,6 +2385,8 @@ function ReportPanel({
           onGenerate={handleGenerateRubricLens}
         />
       )}
+
+      </PrintAllContext.Provider>
 
       <div className="rounded-xl border border-dashed border-hairline p-4 text-xs text-ink-soft">
         This report reflects what could be heard in your recording — talk patterns, questioning, and classroom
@@ -2343,7 +2398,7 @@ function ReportPanel({
 
       <Link
         to={`/audio-coaching/${session.id}/export`}
-        className="self-start text-sm font-medium text-forest hover:text-terracotta-600"
+        className="self-start text-sm font-medium text-forest hover:text-terracotta-600 print:hidden"
       >
         Open printable report →
       </Link>
@@ -2444,7 +2499,7 @@ function TryNextTimeList({
                   <button
                     type="button"
                     onClick={() => onMakeFocus(item.id)}
-                    className="mt-1 text-xs font-semibold text-[#8E3F22] hover:underline"
+                    className="mt-1 text-xs font-semibold text-[#8E3F22] hover:underline print:hidden"
                   >
                     Make this my focus
                   </button>
@@ -2454,7 +2509,7 @@ function TryNextTimeList({
           </li>
         ))}
       </ul>
-      <div className="border-t border-[#E8C9B4] pt-4">
+      <div className="border-t border-[#E8C9B4] pt-4 print:hidden">
         {!choosing ? (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <p className="text-sm font-semibold text-ink">Would you like to plan your next class with this in mind?</p>
@@ -2497,9 +2552,12 @@ function SummaryTab({
   onNavigateInsights,
   onDiscussWithCoach,
   onUpdate,
+  onSavePdf,
 }: {
   session: AudioSessionWithSegments
   onUpdate: (s: AudioSessionWithSegments) => void
+  /// The whole report — this Summary and every Insights section — as a PDF.
+  onSavePdf: () => void
   talkInsight: string | null
   questioningInsight: string | null
   cfuInsight: string | null
@@ -2671,7 +2729,7 @@ function SummaryTab({
 
       {/* How the lesson moved — only where the arc read found its stages. */}
       {arc.length > 0 && (
-        <div className="flex flex-col gap-3 rounded-3xl bg-cream-card p-5">
+        <div className="flex break-inside-avoid flex-col gap-3 rounded-3xl bg-cream-card p-5">
           <p className="font-heading text-xl font-bold text-forest">How the lesson moved</p>
           <div className="flex flex-col gap-1.5 sm:flex-row">
             {arc.map((st, i) => (
@@ -2691,7 +2749,7 @@ function SummaryTab({
       )}
 
       {/* The lesson's numbers. Insights, a tab away, has each one in full. */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="grid break-inside-avoid grid-cols-2 gap-3 sm:grid-cols-5">
         {tiles.map((t) => {
           const confident = isConfidentState(t.metric.state)
           return (
@@ -2722,7 +2780,20 @@ function SummaryTab({
 
       {hardLookDoor}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+      {/* The whole report, to keep or share. */}
+      <button
+        type="button"
+        onClick={onSavePdf}
+        className="flex items-center justify-between gap-4 rounded-2xl border border-hairline bg-cream-card p-4 text-left transition-colors hover:border-forest print:hidden"
+      >
+        <span>
+          <span className="block text-sm font-semibold text-forest">Save the full report as a PDF</span>
+          <span className="block text-xs text-ink-soft">This Summary and all four Insights sections, every moment opened up.</span>
+        </span>
+        <span className="shrink-0 text-sm font-semibold text-terracotta-600">Save PDF →</span>
+      </button>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 px-1 print:hidden">
         <span className="text-sm text-ink-soft">🔒 Audio was used for transcription only and is not stored.</span>
         <DiscussFooter
           compact
@@ -4075,8 +4146,34 @@ function CategoryPicker({ options, tone, hint }: { options: PickOption[]; tone: 
   const shown = options.filter((o) => o.items.length > 0)
   const [selected, setSelected] = useState(shown[0]?.key ?? '')
   const current = shown.find((o) => o.key === selected) ?? shown[0]
+  const printAll = usePrintAll()
   if (!current) return null
   const on = tone === 'forest' ? { bg: '#1F3A2E' } : { bg: '#6E62A0' }
+  const panel = (cur: PickOption) => (
+      <div className={`flex flex-col gap-3 rounded-2xl p-4 ${tone === 'forest' ? 'bg-cream' : 'bg-[#ECE8F4]'}`} aria-live="polite">
+          <div className="flex items-baseline justify-between gap-3">
+            <b className="text-sm text-forest">
+              {cur.label} · {cur.items.length}
+            </b>
+            {hint && !printAll && <span className="text-xs text-ink-soft">{hint}</span>}
+          </div>
+          {cur.finding && <p className="-mt-1 text-sm font-semibold text-ink">{cur.finding}</p>}
+          <p className="-mt-1 text-sm text-ink-soft">{cur.desc}</p>
+          {cur.note}
+          {cur.items.map((it, i) => (
+            <div key={i} className="flex items-baseline justify-between gap-4 rounded-xl bg-cream-card px-3.5 py-3 text-sm text-ink">
+              <div>
+                <span className="mb-1 block text-xs font-semibold text-ink-soft">{it.tag}</span>
+                {it.text && <span className="block">{it.text}</span>}
+                {it.quote && <span className={`block ${it.text ? 'mt-1 text-ink-soft' : ''}`}>“{it.quote}”</span>}
+              </div>
+              {it.timestampSec != null && <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(it.timestampSec)}</span>}
+            </div>
+          ))}
+        </div>
+  )
+  // On paper every category is shown, each with its own moments.
+  if (printAll) return <>{shown.map((o) => <div key={o.key}>{panel(o)}</div>)}</>
   return (
     <>
       <div className="flex flex-wrap gap-2" role="group">
@@ -4097,29 +4194,16 @@ function CategoryPicker({ options, tone, hint }: { options: PickOption[]; tone: 
           )
         })}
       </div>
-      <div className={`flex flex-col gap-3 rounded-2xl p-4 ${tone === 'forest' ? 'bg-cream' : 'bg-[#ECE8F4]'}`} aria-live="polite">
-        <div className="flex items-baseline justify-between gap-3">
-          <b className="text-sm text-forest">
-            {current.label} · {current.items.length}
-          </b>
-          {hint && <span className="text-xs text-ink-soft">{hint}</span>}
-        </div>
-        {current.finding && <p className="-mt-1 text-sm font-semibold text-ink">{current.finding}</p>}
-        <p className="-mt-1 text-sm text-ink-soft">{current.desc}</p>
-        {current.note}
-        {current.items.map((it, i) => (
-          <div key={i} className="flex items-baseline justify-between gap-4 rounded-xl bg-cream-card px-3.5 py-3 text-sm text-ink">
-            <div>
-              <span className="mb-1 block text-xs font-semibold text-ink-soft">{it.tag}</span>
-              {it.text && <span className="block">{it.text}</span>}
-              {it.quote && <span className={`block ${it.text ? 'mt-1 text-ink-soft' : ''}`}>“{it.quote}”</span>}
-            </div>
-            {it.timestampSec != null && <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(it.timestampSec)}</span>}
-          </div>
-        ))}
-      </div>
+      {panel(current)}
     </>
   )
+}
+
+/// A collapsible part of a section, open on paper: a closed one cannot be
+/// tapped open once it is printed.
+function DetailsOpenOnPaper(props: React.DetailsHTMLAttributes<HTMLDetailsElement>) {
+  const printAll = usePrintAll()
+  return <details {...props} open={printAll || props.open} />
 }
 
 /// Content Specialist: a specialist's ideas for teaching the subject — notes on
@@ -4351,7 +4435,7 @@ function LessonContentTab({
 
       {/* Optional: the academic vocabulary and who said it. */}
       {keyTerms.length > 0 && (
-        <details className="group rounded-2xl border-[1.5px] border-hairline">
+        <DetailsOpenOnPaper className="group rounded-2xl border-[1.5px] border-hairline">
           <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-4 px-5 py-4 marker:hidden">
             <span className="flex-1">
               <b className="block font-heading text-lg text-forest">Academic vocabulary</b>
@@ -4395,7 +4479,7 @@ function LessonContentTab({
                 </div>
               ))}
           </div>
-        </details>
+        </DetailsOpenOnPaper>
       )}
     </SectionShell>
   )
@@ -4986,7 +5070,7 @@ function ClimateRoutinesTab({
 
       {/* Optional: every set of directions against the four parts. */}
       {directions.length > 0 && (
-        <details className="group rounded-2xl border-[1.5px] border-hairline">
+        <DetailsOpenOnPaper className="group rounded-2xl border-[1.5px] border-hairline">
           <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-4 px-5 py-4 marker:hidden">
             <span className="flex-1">
               <b className="block font-heading text-lg text-forest">Your directions, part by part</b>
@@ -5020,7 +5104,7 @@ function ClimateRoutinesTab({
               ))}
             <p className="mt-2 text-xs text-ink-soft">A filled square is a part the direction named. Hover a row for its words.</p>
           </div>
-        </details>
+        </DetailsOpenOnPaper>
       )}
     </SectionShell>
   )
@@ -5150,7 +5234,9 @@ const EXTEND_KIND_LABEL = { probe: 'Probing', reasoning: 'Asking for reasoning',
 /// The lesson summary on Summary: the first paragraph — what the lesson was
 /// about — with the other two behind "Read more", beside Wivo's mark.
 function SummaryNoteCard({ text }: { text: string }) {
-  const [open, setOpen] = useState(false)
+  const [openState, setOpen] = useState(false)
+  // Everything is open on paper.
+  const open = openState || usePrintAll()
   const paras = splitParagraphs(text.trim())
   return (
     <div className="flex items-start gap-3 rounded-2xl bg-mint-tint/70 p-5">
@@ -5162,7 +5248,7 @@ function SummaryNoteCard({ text }: { text: string }) {
           </p>
         ))}
         {paras.length > 1 && (
-          <button type="button" onClick={() => setOpen((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 hover:underline">
+          <button type="button" onClick={() => setOpen((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 hover:underline print:hidden">
             {open ? 'Show less' : 'Read more'}
           </button>
         )}
@@ -5174,7 +5260,9 @@ function SummaryNoteCard({ text }: { text: string }) {
 /// The coach note as the card leads with it: the first sentence large, the
 /// rest a click away.
 function CoachNoteCard({ text }: { text: string }) {
-  const [open, setOpen] = useState(false)
+  const [openState, setOpen] = useState(false)
+  // Everything is open on paper.
+  const open = openState || usePrintAll()
   const full = text.trim()
   const lead = noteOpening(full)
   const rest = splitParagraphs(full.slice(lead.length).trim())
@@ -5185,7 +5273,7 @@ function CoachNoteCard({ text }: { text: string }) {
         <p className="text-base text-ink">{lead}</p>
         {open && rest.map((para, i) => <p key={i} className="text-sm text-ink-soft">{para}</p>)}
         {rest.length > 0 && (
-          <button type="button" onClick={() => setOpen((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 hover:underline">
+          <button type="button" onClick={() => setOpen((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 hover:underline print:hidden">
             {open ? 'Show less' : 'Read more'}
           </button>
         )}
@@ -5307,7 +5395,9 @@ function LongestStretchCard({
   read: NonNullable<AudioSessionWithSegments['teachingMoves']>['stretch'] | null
   segments: TranscriptSegment[]
 }) {
-  const [open, setOpen] = useState(false)
+  const [openState, setOpen] = useState(false)
+  // Everything is open on paper.
+  const open = openState || usePrintAll()
   // The read belongs to this stretch only if it found the same one.
   const matched = read && Math.abs(read.startSec - stretch.startSec) < 1 ? read : null
   const lines = segments.filter(
@@ -5342,7 +5432,7 @@ function LongestStretchCard({
         )}
       </div>
       {lines.length > 1 && (
-        <button type="button" onClick={() => setOpen((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 hover:underline">
+        <button type="button" onClick={() => setOpen((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 hover:underline print:hidden">
           {open ? 'Hide transcript' : 'Show transcript'}
         </button>
       )}
@@ -5390,7 +5480,8 @@ function SectionShell({
       {note && <CoachNoteCard text={note} />}
       {children}
       <KeepAndTry keep={keep} tryNext={tryNext} tryGoal={tryGoal} />
-      <div className="flex flex-col gap-3 border-t border-hairline pt-4">
+      {/* How to read this, the Hard Look and Coach: for the screen only. */}
+      <div className="flex flex-col gap-3 border-t border-hairline pt-4 print:hidden">
         <div className="flex flex-wrap items-center gap-2">
           {(lastRow ? (['read', 'hard'] as const) : (['read'] as const)).map((k) => (
             <button
@@ -5487,7 +5578,8 @@ function QuestioningCheckingTab({
   // the moves read, on lessons read since it existed.
   const tags = questionTags(session.segments ?? [])
   const housekeeping = moves?.housekeeping ?? []
-  const [showAlsoHeard, setShowAlsoHeard] = useState(false)
+  const [showAlsoHeardState, setShowAlsoHeard] = useState(false)
+  const showAlsoHeard = showAlsoHeardState || usePrintAll()
 
   const reasoningFirst = questions.find((q) => q.mix === 'reasoning') ?? questions.find((q) => q.mix === 'explain')
   const keep: KeepLine | null = reasoningFirst
@@ -5546,7 +5638,7 @@ function QuestioningCheckingTab({
             ]
               .filter(Boolean)
               .join(' · ')}{' '}
-            <span className="font-semibold text-terracotta-600">{showAlsoHeard ? 'Hide' : 'Show'}</span>
+            <span className="font-semibold text-terracotta-600 print:hidden">{showAlsoHeard ? 'Hide' : 'Show'}</span>
           </button>
           {showAlsoHeard && (
             <div className="flex flex-wrap gap-2 text-xs text-ink-soft">
@@ -5652,8 +5744,8 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
   // Every mark's id says what it is: questions from 0, checks from 1000,
   // answered yourself from 2000, follow-ups from 3000.
   const kindOf = (id: number): QPick => (id >= 3000 ? 'follow' : id >= 2000 ? 'self' : id >= 1000 ? 'checks' : questions[id].mix)
-  const moments: QMoment[] =
-    pick === 'checks'
+  const momentsFor = (k: QPick): QMoment[] =>
+    k === 'checks'
       ? checks.map((c, i) => ({
           id: 1000 + i,
           t: c.timestampSec,
@@ -5663,11 +5755,11 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
             .join(' · '),
           then: c.loop?.acted?.text ? withoutAddressedNames(c.loop.acted.text) : null,
         }))
-      : pick === 'self'
+      : k === 'self'
         ? selfAnswered.map((q, i) => ({ id: 2000 + i, t: q.timestampSec, quote: q.quote }))
-        : pick === 'follow'
+        : k === 'follow'
           ? followUps.map((q, i) => ({ id: 3000 + i, t: q.timestampSec, quote: q.quote }))
-          : questions.flatMap((q, i) => (q.mix === pick ? [{ id: i, t: q.timestampSec, quote: q.quote }] : []))
+          : questions.flatMap((q, i) => (q.mix === k ? [{ id: i, t: q.timestampSec, quote: q.quote }] : []))
 
   const dot = (color: string) => <i className="inline-block h-3 w-3 rounded-full" style={{ background: color }} />
   const pills: { key: QPick; label: string; n: number; swatch: React.ReactNode }[] = [
@@ -5684,12 +5776,47 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
   const ring = (who: string | undefined) => (who === 'asked_if_understood' ? 'border-dashed' : '')
   // A white edge keeps dots that fall close together readable as separate.
   const qDot = (color: string) => <i className="block h-3.5 w-3.5 rounded-full ring-2 ring-cream-card" style={{ background: color }} />
-  const listTitle =
-    pick === 'checks'
+  const printAll = usePrintAll()
+  const titleFor = (k: QPick, n: number) =>
+    k === 'checks'
       ? `Checks for understanding · ${checks.length}`
-      : pick === 'self' || pick === 'follow'
-        ? `${EXTRA_KIND[pick].label} · ${moments.length}`
-        : `${MIX[pick].label} · ${moments.length} of ${questions.length}`
+      : k === 'self' || k === 'follow'
+        ? `${EXTRA_KIND[k].label} · ${n}`
+        : `${MIX[k].label} · ${n} of ${questions.length}`
+
+  const listBlock = (k: QPick) => {
+    const list = momentsFor(k)
+    return (
+        <div className="flex flex-col gap-3 rounded-2xl bg-cream p-4" aria-live="polite">
+          <div className="flex items-baseline justify-between gap-3">
+            <b className="text-sm text-forest">{titleFor(k, list.length)}</b>
+            {!printAll && <span className="text-xs text-ink-soft">Tap a dot, or a kind above</span>}
+          </div>
+          <p className="-mt-1 text-sm text-ink-soft">
+            {k === 'checks'
+              ? `Moments you asked students to show or say what they understood${askedIf > 0 ? ` — ${askedIf} only asked whether they understood` : ''}. ${
+                  acted > 0 ? `You said what you'd do with the answers ${acted} time${acted === 1 ? '' : 's'}.` : 'No response to the answers was heard.'
+                }`
+              : k === 'self' || k === 'follow'
+                ? EXTRA_KIND[k].desc
+                : MIX[k].desc}
+          </p>
+          {list.map((m) => (
+            <div
+              key={m.id}
+              className={`flex items-baseline justify-between gap-4 rounded-xl px-3.5 py-3 text-sm text-ink ${hot === m.id ? 'bg-cream-card ring-2 ring-forest' : 'bg-cream-card'}`}
+            >
+              <div>
+                {m.tag && <span className="mb-1 block text-xs font-semibold text-ink-soft">{m.tag}</span>}
+                “{m.quote}”
+                {m.then && <span className="mt-1 block text-ink-soft">Then: “{m.then}”</span>}
+              </div>
+              <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(m.t)}</span>
+            </div>
+          ))}
+        </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-4 border-t border-dashed border-hairline pt-5">
@@ -5761,7 +5888,7 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
       </div>
 
       {/* The key, as the choice of what the list shows. */}
-      <div className="flex flex-wrap gap-2" role="group">
+      <div className="flex flex-wrap gap-2 print:hidden" role="group">
         {pills
           .filter((pl) => pl.n > 0)
           .map((pl) => {
@@ -5785,34 +5912,7 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
           })}
       </div>
 
-      <div className="flex flex-col gap-3 rounded-2xl bg-cream p-4" aria-live="polite">
-        <div className="flex items-baseline justify-between gap-3">
-          <b className="text-sm text-forest">{listTitle}</b>
-          <span className="text-xs text-ink-soft">Tap a dot, or a kind above</span>
-        </div>
-        <p className="-mt-1 text-sm text-ink-soft">
-          {pick === 'checks'
-            ? `Moments you asked students to show or say what they understood${askedIf > 0 ? ` — ${askedIf} only asked whether they understood` : ''}. ${
-                acted > 0 ? `You said what you'd do with the answers ${acted} time${acted === 1 ? '' : 's'}.` : 'No response to the answers was heard.'
-              }`
-            : pick === 'self' || pick === 'follow'
-              ? EXTRA_KIND[pick].desc
-              : MIX[pick].desc}
-        </p>
-        {moments.map((m) => (
-          <div
-            key={m.id}
-            className={`flex items-baseline justify-between gap-4 rounded-xl px-3.5 py-3 text-sm text-ink ${hot === m.id ? 'bg-cream-card ring-2 ring-forest' : 'bg-cream-card'}`}
-          >
-            <div>
-              {m.tag && <span className="mb-1 block text-xs font-semibold text-ink-soft">{m.tag}</span>}
-              “{m.quote}”
-              {m.then && <span className="mt-1 block text-ink-soft">Then: “{m.then}”</span>}
-            </div>
-            <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(m.t)}</span>
-          </div>
-        ))}
-      </div>
+      {printAll ? pills.filter((pl) => pl.n > 0).map((pl) => <div key={pl.key}>{listBlock(pl.key)}</div>) : listBlock(pick)}
 
       {/* Teacher-Anchored Wait Time: how long you left a question that asked
           students to explain or reason with the class, until you spoke again. */}

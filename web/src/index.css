@@ -72,4 +72,9 @@ body {
   body {
     background: #fff;
   }
+  /* A quote, a moment or a small card is read as one thing: never split it
+     across two pages. Whole sections still flow from page to page. */
+  .rounded-xl {
+    break-inside: avoid;
+  }
 }

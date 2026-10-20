@@ -11,6 +11,7 @@
 // evidence: none heard is not none done.
 
 import { useMemo, useState } from 'react'
+import { usePrintAll } from '../lib/printAll'
 import type { AudioSessionWithSegments } from '../lib/api'
 
 type MoveType = 'invite' | 'probe' | 'voices'
@@ -102,7 +103,9 @@ export default function BroughtStudentsIn({ session }: { session: AudioSessionWi
 
   const checks = (session.cfuLog ?? []).filter((c) => c.loop?.who !== 'not_a_check').map((c) => c.timestampSec)
   const [filter, setFilter] = useState<MoveType | null>(null)
-  const [expanded, setExpanded] = useState(false)
+  const [expandedState, setExpanded] = useState(false)
+  // Every moment, on paper.
+  const expanded = expandedState || usePrintAll()
   const [hot, setHot] = useState<number | null>(null)
 
   if (moments.length === 0 && !showRate) return null
@@ -281,7 +284,7 @@ export default function BroughtStudentsIn({ session }: { session: AudioSessionWi
               <button
                 type="button"
                 onClick={() => setExpanded((v) => !v)}
-                className="w-full border-t border-hairline py-3 text-sm font-semibold text-terracotta-600"
+                className="w-full border-t border-hairline py-3 text-sm font-semibold text-terracotta-600 print:hidden"
               >
                 {expanded ? 'Show fewer' : `Show all ${matching.length}`}
               </button>
