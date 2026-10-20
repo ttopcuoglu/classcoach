@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { keepDoing } from '../lib/keepDoing'
 import { Link } from 'react-router-dom'
 import {
   BookIcon,
@@ -285,32 +286,8 @@ function checkInAge(createdAt: string): string {
   return day === 'today' ? 'from earlier today' : `from ${day}`
 }
 
-function Donut({ pct }: { pct: number }) {
-  const size = 96
-  const stroke = 10
-  const radius = (size - stroke) / 2
-  const circumference = 2 * Math.PI * radius
-  const offset = circumference * (1 - Math.min(100, Math.max(0, pct)) / 100)
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
-      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--color-hairline)" strokeWidth={stroke} />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        stroke="var(--color-forest)"
-        strokeWidth={stroke}
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-      />
-      <text x="50%" y="52%" textAnchor="middle" dominantBaseline="middle" className="fill-forest text-lg font-bold">
-        {Math.round(pct)}%
-      </text>
-    </svg>
-  )
+function formatClock(sec: number): string {
+  return `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 }
 
 export default function Home() {
@@ -321,11 +298,9 @@ export default function Home() {
   // for a teacher who has already connected.
   const [telegramLinked, setTelegramLinked] = useState<boolean | null>(null)
   const [activity, setActivity] = useState<Activity[]>([])
-  const [sessions, setSessions] = useState<AudioSession[]>([])
-  // Unfiltered, newest-first — used only to drive the "Next" card's
-  // priority logic (has any lesson been recorded, is the latest one
-  // reflected on), separate from `sessions` above which is filtered/sorted
-  // for the classroom-pulse chart.
+  // Unfiltered, newest-first — drives the "Next" card's priority logic (has
+  // any lesson been recorded, is the latest one reflected on) and the "Keep
+  // doing" card, which reads the latest analyzed lesson.
   const [allSessions, setAllSessions] = useState<AudioSession[]>([])
   // Planning Coach is one tool in the nav and one flag here. Its first three
   // tabs write LessonPlan rows and Review an Assignment writes its own table,
@@ -364,10 +339,6 @@ export default function Home() {
     getAudioSessions()
       .then((all) => {
         setAllSessions([...all].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
-        const withVoice = all
-          .filter((s) => (s.status === 'analyzed' || s.status === 'locked') && s.studentTalkPct != null)
-          .sort((a, b) => new Date(a.sessionDate).getTime() - new Date(b.sessionDate).getTime())
-        setSessions(withVoice)
       })
       .catch(() => {})
 
@@ -446,14 +417,6 @@ export default function Home() {
     .map((token) => token.replace(/\.$/, ''))
     .find((token) => token && !HONORIFICS.has(token.toLowerCase()))
 
-  const latest = sessions[sessions.length - 1]
-  const first = sessions[0]
-  const pulseChange =
-    latest && first && sessions.length > 1 && latest.studentTalkPct != null && first.studentTalkPct != null
-      ? latest.studentTalkPct - first.studentTalkPct
-      : null
-  const sparkline = sessions.slice(-5)
-  const maxSpark = Math.max(1, ...sparkline.map((s) => s.studentTalkPct ?? 0))
 
   // Priority-ordered "Next" recommendation, cheapest/most-certain signal
   // first. Each rule only fires once everything above it doesn't apply, so
@@ -462,6 +425,7 @@ export default function Home() {
   // COACHING_PATH above) — this only ever names one concrete next action.
   const completedSessions = allSessions.filter((s) => s.status === 'analyzed' || s.status === 'locked')
   const latestCompletedSession = completedSessions[0] ?? null
+  const latestKeep = latestCompletedSession ? keepDoing(latestCompletedSession) : null
   // The whole record, with the one tool whose rows arrive on a different
   // request folded in.
   const toolsLastUsed: Partial<Record<ToolKey, number>> = {
@@ -754,44 +718,27 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="rounded-3xl bg-mint-tint/50 p-6">
-          {/* Not "This week": nothing here is filtered to one. The donut is the
-              most recent analyzed lesson whenever it was recorded, so the
-              label says which lesson rather than claiming a window the data
-              never had. */}
+        <div className="flex flex-col rounded-3xl bg-mint-tint/50 p-6">
+          {/* One strength from the latest lesson, in the teacher's own words —
+              something to carry into today's class. It replaced a student-
+              voice donut: that number is the one a microphone hears worst,
+              and on Home it read as a verdict with nothing to explain it. */}
           <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest">
-            {latest?.studentTalkPct == null ? 'Your lessons' : `Latest lesson · ${relativeDay(latest.sessionDate)}`}
+            {latestKeep ? `Latest lesson · ${relativeDay(latestCompletedSession!.sessionDate)}` : 'Your lessons'}
           </p>
-          <h2 className="mt-1 font-heading text-lg font-bold text-forest">Your classroom pulse</h2>
-          {latest?.studentTalkPct == null ? (
-            <p className="mt-6 text-sm text-ink-soft">
-              Record and analyze a lesson to see your student-voice trend here.
-            </p>
-          ) : (
+          <h2 className="mt-1 font-heading text-lg font-bold text-forest">Keep doing</h2>
+          {latestKeep ? (
             <>
-              <div className="mt-5 flex items-center gap-4">
-                <Donut pct={latest.studentTalkPct} />
-                <div>
-                  <p className="text-sm font-semibold text-forest">Student voice</p>
-                  <p className="text-xs text-ink-soft">
-                    {pulseChange == null
-                      ? 'From your most recent lesson'
-                      : `${pulseChange >= 0 ? 'Up' : 'Down'} ${Math.abs(Math.round(pulseChange))}% from your first lesson`}
-                  </p>
-                </div>
-              </div>
-              {sparkline.length > 1 && (
-                <div className="mt-5 flex items-end gap-1.5" aria-hidden="true">
-                  {sparkline.map((s, i) => (
-                    <div
-                      key={s.id}
-                      className={`flex-1 rounded-t ${i === sparkline.length - 1 ? 'bg-forest' : 'bg-gold'}`}
-                      style={{ height: `${Math.max(6, ((s.studentTalkPct ?? 0) / maxSpark) * 40)}px` }}
-                    />
-                  ))}
-                </div>
-              )}
+              <p className="mt-3 text-sm leading-relaxed text-ink">{latestKeep.text}</p>
+              <p className="mt-2 text-sm italic text-ink-soft">
+                “{latestKeep.quote}” <span className="font-mono text-xs not-italic">{formatClock(latestKeep.timestampSec)}</span>
+              </p>
+              <Link to="/audio-coaching" className="mt-auto pt-4 text-sm font-semibold text-terracotta-600 hover:underline">
+                Open Lesson Debrief →
+              </Link>
             </>
+          ) : (
+            <p className="mt-4 text-sm text-ink-soft">Record and analyze a lesson to see something worth keeping here.</p>
           )}
         </div>
       </div>
