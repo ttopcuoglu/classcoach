@@ -103,8 +103,8 @@ struct NextTimeItem: Identifiable, Equatable {
         add("content-further", "Take further · Clarity & Content",
             notes.first { $0.label == "Where it could go further" }?.text, lead: "Take this further")
         add("climate", "Climate & Routines", session.nextSteps?.climate)
-        add("content-worked", "Keep doing · Clarity & Content",
-            notes.first { $0.label == "What worked" }?.text, lead: "Keep doing this")
+        add("content-worked", "What worked · Clarity & Content",
+            notes.first { $0.label == "What worked" }?.text, lead: "What worked")
         return items
     }
 }

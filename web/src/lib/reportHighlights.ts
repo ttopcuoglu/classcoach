@@ -214,6 +214,6 @@ export function buildNextTimeItems(
     'Take this further',
   )
   add('climate', 'Climate & Routines', session.nextSteps?.climate)
-  add('content-worked', 'Keep doing · Clarity & Content', notes.find((n) => n.label === 'What worked')?.text, 'Keep doing this')
+  add('content-worked', 'What worked · Clarity & Content', notes.find((n) => n.label === 'What worked')?.text, 'What worked')
   return items
 }
