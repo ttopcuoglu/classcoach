@@ -1,6 +1,7 @@
-// How long the room had to think after a question: from the end of the
-// teacher's turn with the question in it to the next voice of anyone — a
-// student answering or the teacher speaking again.
+// How long the teacher left a question with the class: from the end of the
+// teacher's turn with the question in it to the moment the teacher spoke
+// again. A student answering inside that time is part of it — this is the
+// teacher's half, how long before they stepped back in.
 //
 // Read from the transcript, so it works on every lesson that has one. The
 // limits match the server's pause measure (audioAnalysis.ts): two teacher
@@ -15,12 +16,13 @@ const MAX_WORDS_AFTER = 3
 
 type Seg = { speakerLabel: string; startSec: number; endSec: number; text: string }
 
-export type Pause = { sec: number; next: 'you' | 'student' | 'kept_talking' }
+/// `answered`: a student was heard before the teacher spoke again.
+export type Pause = { sec: number; answered: boolean; keptTalking?: true }
 
 const words = (t: string) => t.toLowerCase().replace(/[^a-z0-9' ]/g, ' ').split(/\s+/).filter(Boolean)
 
-/// The pause after each question, in the order given, and whose voice ended
-/// it; null where it could not be measured. A question the teacher talked
+/// The time after each question until the teacher spoke again, in the order
+/// given; null where it could not be measured. A question the teacher talked
 /// straight past — more words in the same turn — is a pause of zero.
 export function pausesAfter(segments: Seg[], questions: { timestampSec: number; quote: string }[]): (Pause | null)[] {
   const ordered = segments.filter((s) => s.text.trim()).sort((a, b) => a.startSec - b.startSec)
@@ -41,12 +43,14 @@ export function pausesAfter(segments: Seg[], questions: { timestampSec: number; 
     const tail = q.slice(-3).join(' ')
     let at = -1
     for (let i = 0; i + 3 <= turn.length; i++) if (turn.slice(i, i + 3).join(' ') === tail) at = i + 3
-    if (at !== -1 && turn.length - at > MAX_WORDS_AFTER) return { sec: 0, next: 'kept_talking' }
-    const next = ordered[end + 1]
-    if (!next) return null
-    const gap = next.startSec - ordered[end].endSec
+    if (at !== -1 && turn.length - at > MAX_WORDS_AFTER) return { sec: 0, answered: false, keptTalking: true }
+    const rest = ordered.slice(end + 1)
+    const nextTeacher = rest.find((x) => x.speakerLabel === 'Teacher')
+    if (!nextTeacher) return null
+    const gap = nextTeacher.startSec - ordered[end].endSec
     if (gap < 0 || gap > MAX_PAUSE_SEC) return null
-    return { sec: Math.round(gap * 10) / 10, next: next.speakerLabel === 'Teacher' ? 'you' : 'student' }
+    const answered = rest.some((x) => x.speakerLabel !== 'Teacher' && x.startSec < nextTeacher.startSec)
+    return { sec: Math.round(gap * 10) / 10, answered }
   })
 }
 

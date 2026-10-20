@@ -5797,32 +5797,43 @@ function QuestionsChecksPart({
         ))}
       </div>
 
-      {/* Thinking time: how long the room had after a question that asked
-          students to explain or reason, before anyone spoke. */}
+      {/* Teacher-Anchored Wait Time: how long you left a question that asked
+          students to explain or reason with the class, until you spoke again. */}
       {thinkingPause != null && (
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-2xl border border-hairline bg-cream-card px-4 py-3.5">
-          <span className="font-heading text-3xl font-extrabold leading-none text-forest">
-            {thinkingPause.toFixed(1)}
-            <small className="ml-1 font-sans text-base font-bold">s</small>
-          </span>
-          <span className="min-w-0 flex-1 text-sm text-ink">
-            <b className="block text-forest">Average pause after a thinking question</b>
-            How long the room had to think after you asked students to explain or reason, before anyone spoke.
-            Three seconds or more gives most students time to think.
-          </span>
-          <div className="flex basis-full flex-col gap-2">
+        <div className="flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card px-4 py-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <p className="font-heading text-lg font-bold text-forest">Teacher-Anchored Wait Time (TAWT)</p>
+            <span className="font-heading text-3xl font-extrabold leading-none text-forest">
+              {thinkingPause.toFixed(1)}
+              <small className="ml-1 font-sans text-base font-bold">s</small>
+              <small className="ml-1.5 font-sans text-sm font-medium text-ink-soft">average</small>
+            </span>
+          </div>
+          <p className="text-sm leading-relaxed text-ink-soft">
+            After each question that asked students to think — to explain or to reason — the time from the end of your
+            question until you spoke again, with any student answer included. It shows how long you left the thinking with
+            the class before stepping back in. When no one answered, three seconds or more of silence gives most students
+            time to think.
+          </p>
+          <div className="flex flex-col gap-2">
             {thinkingQuestions.map((q, i) => {
               const p = thinkingPauses[i]
+              const kind = MIX[q.mix]
               return (
-                <div key={i} className="flex items-baseline justify-between gap-4 rounded-xl bg-cream px-3.5 py-2.5 text-sm text-ink">
-                  <span>
-                    “{q.quote}” <span className="font-mono text-xs text-ink-soft">{formatTime(q.timestampSec)}</span>
-                  </span>
+                <div key={i} className="flex items-start justify-between gap-4 rounded-xl bg-cream px-3.5 py-2.5 text-sm text-ink">
+                  <div className="min-w-0">
+                    <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-ink-soft">
+                      <i className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: kind.color }} />
+                      {kind.label}
+                      <span className="font-mono font-normal">· {formatTime(q.timestampSec)}</span>
+                    </span>
+                    “{q.quote}”
+                  </div>
                   <span className="shrink-0 text-right text-xs text-ink-soft">
                     {p ? (
                       <>
                         <b className="font-heading text-base text-forest">{p.sec.toFixed(1)} s</b>
-                        <span className="block">{p.next === 'kept_talking' ? 'you kept talking' : p.next === 'you' ? 'then you spoke' : 'then a student'}</span>
+                        <span className="block">{p.keptTalking ? 'you kept talking' : p.answered ? 'a student answered' : 'no one answered'}</span>
                       </>
                     ) : (
                       'not measured'
