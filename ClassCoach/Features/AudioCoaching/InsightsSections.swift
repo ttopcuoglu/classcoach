@@ -199,6 +199,8 @@ struct PickOption {
     var finding: String? = nil
     var chips: [(String, Int)] = []
     var note: String? = nil
+    /// A note that needs more than a line of text, shown where `note` is.
+    var noteView: AnyView? = nil
 }
 
 /// A row of pills, one per category, and the chosen category's moments below
@@ -243,6 +245,7 @@ struct CategoryPickerView: View {
                         Text(note).font(.caption).foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    if let noteView = current.noteView { noteView }
                     ForEach(current.items) { EvidenceRow(line: $0) }
                 }
                 .padding(14)
@@ -1394,12 +1397,42 @@ struct RoutinesSection: View {
             EvidenceLine(tag: $0.clarity == "actionable" ? "Said what to do" : $0.clarity == "vague" ? "Said only what to stop" : "Redirection",
                          quote: $0.quote, timestampSec: $0.timestampSec)
         }
-        let redirectFinding: String? = redirections.isEmpty ? nil
+        var redirectFinding: String? = redirections.isEmpty ? nil
             : redirections.count == 1 && redirections[0].clarity != nil
                 ? (redirections[0].clarity == "actionable" ? "Your one redirection told students what to do." : "Your one redirection said what to stop, not what to do instead.")
             : actionable.count + vague.count > 0
                 ? "\(actionable.count) of your \(redirections.count) redirection\(redirections.count == 1 ? "" : "s") told students what to do, not just what to stop."
             : "\(redirections.count) redirection\(redirections.count == 1 ? "" : "s")."
+
+        // Keeping learning on track: the stretches where reminders came as a
+        // pattern. Reads made before episodes existed fall back to whether an
+        // ask held — never the number of bids.
+        let esc = session.escalation
+        let episodes: [AudioOnTrackEpisode]? = esc?.state == "found" ? esc?.episodes : nil
+        let interruptions = esc?.interruptions ?? []
+        let inEpisode = { (sec: Double) in
+            (episodes ?? []).contains { sec >= ($0.startSec ?? 0) - 1 && sec <= ($0.endSec ?? $0.startSec ?? 0) + 1 }
+        }
+        let loneInterruptions = interruptions.filter { $0.timestampSec.map { !inEpisode($0) } ?? false }
+        var onTrackRows = redirectRows.map { r -> EvidenceLine in
+            guard let at = r.timestampSec,
+                  interruptions.contains(where: { abs(($0.timestampSec ?? -99) - at) < 3 }) else { return r }
+            return EvidenceLine(tag: "\(r.tag) \u{00B7} Paused your explanation", quote: r.quote, timestampSec: r.timestampSec)
+        }
+        if onTrackRows.isEmpty {
+            onTrackRows = (episodes ?? []).map { EvidenceLine(tag: $0.title ?? "", quote: $0.lead?.quote ?? "", timestampSec: $0.lead?.timestampSec) }
+        }
+        onTrackRows = onTrackRows.filter { !($0.quote ?? "").isEmpty }
+        if let episodes, !episodes.isEmpty {
+            redirectFinding = episodes.count == 1
+                ? "One stretch of the lesson where reminders came as a pattern, not one at a time."
+                : "More than one stretch where reminders came as a pattern, not one at a time. The strongest is first."
+        } else if esc?.state == "confirmed_none" || episodes != nil {
+            redirectFinding = redirections.isEmpty ? nil : "Your reminders were routine: none came back as a repeated pattern."
+        }
+        let onTrackNote: AnyView? = (episodes != nil || esc?.state == "not_measurable")
+            ? AnyView(OnTrackFindings(escalation: esc!, episodes: episodes ?? [], loneInterruptions: loneInterruptions))
+            : nil
 
         let feedback = session.feedbackLog ?? []
         let specific = feedback.filter { $0.kind == "specific" }
@@ -1440,9 +1473,10 @@ struct RoutinesSection: View {
                         PickOption(key: "directions", label: "Directions & routines",
                                    desc: "Directions for starting work, changing activities, materials, getting help and finishing \u{2014} and which of the four parts each named.",
                                    items: directionRows, finding: directionFinding, chips: byType),
-                        PickOption(key: "redirection", label: "Redirection & expectations",
-                                   desc: "Reminders and corrections, and whether each gave students a clear action to take.",
-                                   items: redirectRows, finding: redirectFinding, note: escalationNote),
+                        PickOption(key: "redirection", label: "Keeping learning on track",
+                                   desc: "Your words addressing behavior, apart from corrections about the content. One reminder tells little; what is worth a second look is the same reminder coming back, or an explanation that kept stopping.",
+                                   items: onTrackRows, finding: redirectFinding,
+                                   note: onTrackNote == nil ? escalationNote : nil, noteView: onTrackNote),
                         PickOption(key: "encouragement", label: "Encouragement & respect",
                                    desc: "What your words recognized, invitations to ask for help, and how you responded to mistakes.",
                                    items: encourageRows, finding: encourageFinding),
@@ -1491,5 +1525,103 @@ struct RoutinesSection: View {
             }
             Text("A filled square is a part the direction named.").font(.caption).foregroundStyle(AppTheme.textSecondary)
         }
+    }
+}
+
+/// Keeping learning on track — mirrors `AudioCoaching.tsx`'s
+/// `OnTrackFindings`: each stretch where reminders came as a pattern, as one
+/// teacher quote and its time, a short explanation, the related quotes behind
+/// "More evidence", and a next step only when the server judged the pattern
+/// specific enough to point at one. The copy is the server's; never a count.
+struct OnTrackFindings: View {
+    let escalation: AudioEscalation
+    let episodes: [AudioOnTrackEpisode]
+    let loneInterruptions: [AudioEscalationRepeat]
+
+    var body: some View {
+        if escalation.state == "not_measurable" {
+            if let reason = escalation.reason {
+                Text(reason).font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(Array(episodes.enumerated()), id: \.offset) { _, e in EpisodeCard(episode: e) }
+                ForEach(Array(loneInterruptions.enumerated()), id: \.offset) { _, i in
+                    let quote = i.quote.map { " (\u{201C}\($0.replacingOccurrences(of: "[.!?]+$", with: "", options: .regularExpression))\u{201D})" } ?? ""
+                    Text("At \(mmss(i.timestampSec ?? 0)) you paused an explanation to address behavior\(quote) and went straight back to it. Once on its own, that is a routine reminder.")
+                        .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+}
+
+private struct EpisodeCard: View {
+    let episode: AudioOnTrackEpisode
+    @State private var showMore = false
+
+    var body: some View {
+        let more = (episode.more ?? []).filter { !($0.quote ?? "").isEmpty }
+        VStack(alignment: .leading, spacing: 8) {
+            if let title = episode.title {
+                Text(title).font(.subheadline.weight(.bold)).foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let lead = episode.lead {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Group {
+                        if let q = lead.quote {
+                            Text("\u{201C}\(q)\u{201D}").foregroundStyle(AppTheme.textPrimary)
+                        } else {
+                            Text("The wording here was too unclear to quote.").foregroundStyle(AppTheme.textSecondary)
+                        }
+                    }
+                    .font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    if let at = lead.timestampSec {
+                        Text(mmss(at)).font(.caption.monospaced()).foregroundStyle(AppTheme.textSecondary)
+                    }
+                }
+            }
+            if let pattern = episode.pattern {
+                Text(pattern).font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !more.isEmpty {
+                Button { withAnimation { showMore.toggle() } } label: {
+                    Text(showMore ? "More evidence \u{25BE}" : "More evidence \u{25B8}")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
+                }
+                .buttonStyle(.plain)
+                if showMore {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(more.enumerated()), id: \.offset) { _, m in
+                            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                Text("\u{201C}\(m.quote ?? "")\u{201D}").font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 0)
+                                if let at = m.timestampSec {
+                                    Text(mmss(at)).font(.caption.monospaced()).foregroundStyle(AppTheme.textSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if let next = episode.nextStep, !next.isEmpty {
+                (Text("Next step: ").bold().foregroundColor(AppTheme.forest) + Text(next).foregroundColor(AppTheme.textPrimary))
+                    .font(.subheadline)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppTheme.cream, in: RoundedRectangle(cornerRadius: 10))
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.terracotta600.opacity(0.3), lineWidth: 1.5))
     }
 }

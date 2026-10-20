@@ -219,6 +219,34 @@ struct AudioEscalationRepeat: Decodable, Identifiable {
     let quote: String?
 }
 
+/// One stretch of reminders that came as a pattern
+/// (server/src/lib/escalation.ts findEpisodes). The title, pattern and next
+/// step are written on the server so web and iOS say the same thing; iOS only
+/// renders them. Never carries a count. Every field optional, and
+/// `expectation` stays a string so a new value can't break the decode.
+struct AudioOnTrackEpisode: Decodable, Identifiable {
+    var id: String { "\(startSec ?? 0)|\(title ?? "")" }
+    let startSec: Double?
+    let endSec: Double?
+    let expectation: String?
+    let interruptedExplanation: Bool?
+    let quickRepeats: Bool?
+    let climbed: Bool?
+    let backReference: Bool?
+    let lead: AudioEscalationRepeat?
+    let more: [AudioEscalationRepeat]?
+    let title: String?
+    let pattern: String?
+    let nextStep: String?
+}
+
+/// Decodes one array element, or nil if that element is malformed, so a
+/// single bad row costs that row rather than the array.
+struct LossyDecodable<T: Decodable>: Decodable {
+    let value: T?
+    init(from decoder: Decoder) throws { value = try? T(from: decoder) }
+}
+
 struct AudioEscalation: Decodable {
     /// "found" | "confirmed_none" | "not_measurable". Optional like the rest;
     /// an unrecognised or missing state renders nothing rather than guessing.
@@ -231,6 +259,32 @@ struct AudioEscalation: Decodable {
     let clusters: [AudioEscalationCluster]?
     let repeatedAsks: [AudioEscalationRepeat]?
     let capturedSharePct: Int?
+    /// Keeping learning on track: stretches where reminders came as a
+    /// pattern, strongest first. Nil on reads made before it existed, which
+    /// is what tells the report to fall back to whether an ask held.
+    let episodes: [AudioOnTrackEpisode]?
+    /// Every ask that broke into an explanation, which then resumed.
+    let interruptions: [AudioEscalationRepeat]?
+
+    private enum CodingKeys: String, CodingKey {
+        case state, reason, peakRung, clusters, repeatedAsks, capturedSharePct, episodes, interruptions
+    }
+
+    /// Hand-written so that nothing new can take the whole section down: a
+    /// strict decode of a new shape emptied every live iPhone app on
+    /// 2026-10-18. Each field is `try?`, and the two newest arrays drop a
+    /// malformed element rather than failing the array.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        state = try? c.decodeIfPresent(String.self, forKey: .state)
+        reason = try? c.decodeIfPresent(String.self, forKey: .reason)
+        peakRung = try? c.decodeIfPresent(String.self, forKey: .peakRung)
+        clusters = try? c.decodeIfPresent([AudioEscalationCluster].self, forKey: .clusters)
+        repeatedAsks = try? c.decodeIfPresent([AudioEscalationRepeat].self, forKey: .repeatedAsks)
+        capturedSharePct = try? c.decodeIfPresent(Int.self, forKey: .capturedSharePct)
+        episodes = (try? c.decodeIfPresent([LossyDecodable<AudioOnTrackEpisode>].self, forKey: .episodes))?.compactMap(\.value)
+        interruptions = (try? c.decodeIfPresent([LossyDecodable<AudioEscalationRepeat>].self, forKey: .interruptions))?.compactMap(\.value)
+    }
 
     /// How much force the teacher had brought to bear, in the same words the
     /// web report uses, so a teacher reading both sees one vocabulary.

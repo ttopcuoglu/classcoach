@@ -33,6 +33,10 @@ struct ClimateRoutinesTab: View {
     /// lesson that number came back 11, 12, 13, 13 and 13 while the run
     /// itself and the rung it reached never moved, so the run is shown and
     /// the number stays out of sight.
+    ///
+    /// Not on screen: nothing builds `ClimateRoutinesTab` any more, and the web
+    /// retired `EscalationCard`. What the report shows now is "Keeping learning
+    /// on track" in InsightsSections.swift (`OnTrackFindings`).
     @ViewBuilder
     private var escalationCard: some View {
         // Nil on every report analyzed before this existed. Showing nothing
