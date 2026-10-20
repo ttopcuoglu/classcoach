@@ -266,10 +266,9 @@ function SampleCard({ feature, eyebrow, title, before, after, pdf }: (typeof SAM
   )
 }
 
-// The hero shows Lesson Debrief, the feature that sets Wivoza apart: a
-// miniature of the real report's cover and numbers. The figures are the ones
-// in the published sample report (/samples/lesson-debrief.pdf) — an invented
-// class, not a real one — and the frame says "Sample" so nobody reads them as
+// The sample band's tiles: a miniature of the printed report's numbers. The
+// figures are the ones in the published sample report
+// (/samples/lesson-debrief.pdf) — an invented class, not a real one — and the frame says "Sample" so nobody reads them as
 // someone's results.
 const HERO_TILES = [
   { label: 'You spoke', value: '36.5', unit: '%', card: 'bg-peach-tint', ink: 'text-terracotta-600' },
@@ -278,6 +277,11 @@ const HERO_TILES = [
   { label: 'Avg. wait', value: '3.56', unit: 's', card: 'bg-mint-tint', ink: 'text-forest' },
 ]
 
+// Two screenshots of the real report (the Summary, and Talk & Participation's
+// numbers and minute-by-minute bars), taken from the dev preview with the
+// lesson swapped for an invented one (topic, date and every quoted line), so
+// no real class appears on the public site, with a loudness track added so
+// the talk chart shows all four colours (see scripts/capture-hero.mjs). Retake them when the report's layout changes.
 function ReportMockup() {
   return (
     <div className="relative w-full max-w-md">
@@ -289,44 +293,38 @@ function ReportMockup() {
             <span className="h-2.5 w-2.5 rounded-full bg-gold/70" />
             <span className="h-2.5 w-2.5 rounded-full bg-forest/30" />
           </div>
-          <p className="text-xs text-ink-soft">Your Lesson Debrief</p>
+          <p className="text-xs text-ink-soft">Your Lesson Debrief · Sample</p>
           <LockIcon className="h-4 w-4 text-ink-soft" />
         </div>
-
-        <div className="flex flex-col gap-2.5 rounded-xl bg-cream p-3 text-left">
-          <div className="rounded-xl bg-forest px-4 py-4 text-cream">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gold">Wivoza · Lesson Debrief</p>
-              <span className="rounded-full bg-cream/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cream">
-                Sample
-              </span>
-            </div>
-            <p className="mt-1.5 font-heading text-xl font-bold">
-              World History 10 <span className="text-gold">·</span> 8th period
-            </p>
-            <p className="text-xs text-cream/60">10th grade · 11:28 recorded</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            {HERO_TILES.map((t) => (
-              <div key={t.label} className={`rounded-xl px-3 py-2.5 ${t.card}`}>
-                <p className={`text-[10px] font-bold uppercase tracking-[0.12em] ${t.ink}`}>{t.label}</p>
-                <p className="font-heading text-2xl font-extrabold leading-tight text-forest">
-                  {t.value}
-                  {t.unit && <span className="ml-0.5 text-sm font-bold">{t.unit}</span>}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          <div className="rounded-xl border-l-4 border-gold bg-gold-tint/60 px-3 py-2.5">
-            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-terracotta-600">A strength to keep · 5:38</p>
-            <p className="mt-0.5 text-sm leading-snug text-ink">“What evidence in the testimony backs that up?”</p>
-          </div>
+        {/* The top of the Summary: the lesson, the one focus, and the first
+            row of section cards. The rest is cut off on purpose. */}
+        <div className="h-[30rem] overflow-hidden rounded-xl bg-cream sm:h-[34rem]">
+          <img
+            src="/samples/hero-debrief-summary.png"
+            alt="A sample Lesson Debrief Summary for an invented biology lesson: what the lesson covered, one focus for next lesson, and a card for each of the four sections."
+            width={1440}
+            height={2450}
+            className="w-full"
+          />
         </div>
       </div>
 
-      <div className="absolute -bottom-12 -left-3 flex items-center gap-2 rounded-xl border border-hairline bg-cream-card px-3.5 py-2.5 shadow-lg sm:-bottom-6 sm:-left-12">
+      {/* Talk & Participation: your share, your pace, and the recording
+          minute by minute. Same lesson as the Summary, so the 34% matches. */}
+      <div className="absolute -bottom-20 -right-3 w-72 overflow-hidden rounded-xl border border-hairline bg-cream shadow-lg sm:-right-12 sm:w-96">
+        <img
+          src="/samples/hero-debrief-talk.png"
+          alt="Talk and pace: the teacher spoke for 34% of the recording and students for 14%, the rest sound with no words or quiet, at 214 words a minute, with a bar for each moment of the lesson."
+          width={1340}
+          height={646}
+          loading="lazy"
+          className="w-full"
+        />
+      </div>
+
+      {/* Beside the report header, clear of the chart. Hidden on a phone, where
+          there is no room for it; the chips beside the headline say it. */}
+      <div className="absolute -left-3 top-36 hidden items-center gap-2 rounded-xl border border-hairline bg-cream-card px-3.5 py-2.5 shadow-lg sm:-left-12 sm:flex">
         <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-forest">
           <LockIcon className="h-4 w-4 text-gold" />
         </span>
@@ -572,7 +570,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             </p>
           </div>
 
-          <div className="flex justify-center py-6 lg:justify-end lg:py-0">
+          <div className="flex justify-center pb-24 pt-6 lg:justify-end lg:pb-20 lg:pt-0">
             <ReportMockup />
           </div>
         </div>
