@@ -349,7 +349,7 @@ export default function AdminPilotReport() {
             hint={
               inst.paceConfidence === 'none'
                 ? 'Not enough lessons yet'
-                : 'Everyday conversation runs about 150. An anchor, not a target.'
+                : 'Everyday conversation usually runs about 120–160. A range, not a target.'
             }
             accent={A.terracotta}
           />

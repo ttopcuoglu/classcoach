@@ -23,7 +23,7 @@ import {
   waitTime2Metric,
   speechRateMetric,
   leadingSilenceNote,
-  CONVERSATIONAL_WPM,
+  CONVERSATIONAL_WPM_RANGE,
   isConfidentState,
   MIN_DURATION_FOR_CFU_DETECTION_SEC,
   TINY_RECORDING_THRESHOLD_SEC,
@@ -249,8 +249,8 @@ export default function AudioCoachingExport() {
             <Stat label="Your pace" metric={pace} unit=" wpm" accent={A.terracotta} />
           </div>
           <p className="text-xs text-ink-soft">
-            Words a minute of your own speaking time. Everyday conversation runs about {CONVERSATIONAL_WPM} — an anchor
-            to place yourself against, not a target.
+            Words a minute of your own speaking time, short pauses included. Everyday conversation usually runs about
+            {CONVERSATIONAL_WPM_RANGE} — a range to place yourself against, not a target.
           </p>
           {(silencePct ?? 0) > 0 && leadingSilenceNote(rawNum('firstWordSec')) && (
             <p className="text-xs text-ink-soft">{leadingSilenceNote(rawNum('firstWordSec'))}</p>

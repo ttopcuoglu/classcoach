@@ -59,11 +59,13 @@ export function feedbackMeasurable(studentVoiceSegments: number | null | undefin
 // rule, so a missing count deliberately fails the floor too.
 export const MIN_WAIT_TIME_SAMPLES = 3
 
-/// Conversational English runs around 150 words a minute. Stated as an anchor
-/// a teacher can place themselves against, never as a target: there is no
-/// correct rate, and a fast stretch of storytelling is not a fault. The report
-/// gives the number and the anchor and stops there.
-export const CONVERSATIONAL_WPM = 150
+/// Everyday conversation usually runs about 120-160 words a minute, pauses
+/// included — and pace is measured with the teacher's short pauses included
+/// to match. A range rather than one number, because a single figure reads
+/// as a target. Stated as an anchor a teacher can place themselves against:
+/// there is no correct rate, and a fast stretch of storytelling is not a
+/// fault. The report gives the number and the range and stops there.
+export const CONVERSATIONAL_WPM_RANGE = '120–160'
 
 export function speechRateMetric(wpm: number | null | undefined): ConfidentMetric {
   if (wpm == null) {

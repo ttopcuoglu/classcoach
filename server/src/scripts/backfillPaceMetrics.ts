@@ -18,7 +18,13 @@ import { prisma } from '../lib/prisma.ts'
 //   tsx src/scripts/backfillPaceMetrics.ts --user you@example.com
 //   tsx src/scripts/backfillPaceMetrics.ts --user you@example.com --write
 //   tsx src/scripts/backfillPaceMetrics.ts --all [--write]
+//   tsx src/scripts/backfillPaceMetrics.ts --all --pace-only [--write]
+//
+// --pace-only rewrites speaking pace alone on every report that has one, for
+// when the pace measure changes (2026-10-20: short pauses now count). Nothing
+// else in metricsDetail is touched.
 const write = process.argv.includes('--write')
+const paceOnly = process.argv.includes('--pace-only')
 const all = process.argv.includes('--all')
 const userFlag = process.argv.indexOf('--user')
 const userEmail = userFlag === -1 ? null : process.argv[userFlag + 1]
@@ -33,7 +39,7 @@ if (userIds && userIds.length === 0) {
   console.error(`No user with email ${userEmail}`)
   process.exit(1)
 }
-const KEYS = ['teacherWordsPerMinute', 'waitTime2Sec', 'waitTime2SampleCount', 'firstWordSec'] as const
+const KEYS = paceOnly ? (['teacherWordsPerMinute'] as const) : (['teacherWordsPerMinute', 'waitTime2Sec', 'waitTime2SampleCount', 'firstWordSec'] as const)
 
 const rows = await prisma.audioSession.findMany({
   where: {
@@ -48,7 +54,8 @@ let changed = 0
 for (const r of rows) {
   const detail = (r.metricsDetail ?? null) as Record<string, number | null> | null
   if (!detail) continue
-  if (KEYS.every((k) => k in detail)) continue
+  if (!paceOnly && KEYS.every((k) => k in detail)) continue
+  if (paceOnly && detail.teacherWordsPerMinute == null) continue
 
   const segments = (
     await prisma.transcriptSegment.findMany({ where: { sessionId: r.id }, orderBy: { startSec: 'asc' } })
@@ -58,6 +65,7 @@ for (const r of rows) {
   const fresh = analyzeTranscript(segments).metricsDetail
   const merged: Record<string, number | null> = { ...detail }
   for (const k of KEYS) merged[k] = fresh[k] ?? null
+  if (paceOnly && merged.teacherWordsPerMinute === detail.teacherWordsPerMinute) continue
 
   // A locked report is one the teacher has closed. Adding a number to it is
   // still a change to something they consider finished, so it is skipped.
@@ -67,7 +75,7 @@ for (const r of rows) {
   }
   changed++
   console.log(
-    `${r.id.slice(0, 8)}: ${write ? 'WROTE' : 'would write'} wpm=${merged.teacherWordsPerMinute ?? '—'} wait2=${merged.waitTime2Sec ?? '—'} (n=${merged.waitTime2SampleCount ?? 0}) firstWord=${merged.firstWordSec ?? '—'}s`,
+    `${r.id.slice(0, 8)}: ${write ? 'WROTE' : 'would write'} wpm=${paceOnly ? `${detail.teacherWordsPerMinute} -> ` : ''}${merged.teacherWordsPerMinute ?? '—'} wait2=${merged.waitTime2Sec ?? '—'} (n=${merged.waitTime2SampleCount ?? 0}) firstWord=${merged.firstWordSec ?? '—'}s`,
   )
   if (write) await prisma.audioSession.update({ where: { id: r.id }, data: { metricsDetail: merged } })
 }

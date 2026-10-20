@@ -300,10 +300,11 @@ enum AudioInsights {
     /// Strength or Priority.
     static let minWaitTimeSamples = 3.0
 
-    /// Conversational English runs around this. Stated as an anchor a teacher
-    /// can place themselves against, never as a target: there is no correct
-    /// rate, and a fast stretch of storytelling is not a fault.
-    static let conversationalWpm = 150.0
+    /// Everyday conversation usually runs in this range, pauses included —
+    /// and pace is measured with the teacher's short pauses included to
+    /// match. A range rather than one number, which reads as a target. There
+    /// is no correct rate, and a fast stretch of storytelling is not a fault.
+    static let conversationalWpmRange = "120\u{2013}160"
 
     /// Long enough to be worth explaining. Below this the recording started
     /// with the lesson and there is nothing to say.

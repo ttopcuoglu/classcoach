@@ -1682,7 +1682,7 @@ function TalkParticipationCard({ data, insight }: { data: InstructionalAverages;
           sampleNote={sampleOr(data.paceSampleSize, 'sessions')}
           confidence={data.paceConfidence}
           tooltip="Median words a minute of teachers' own speaking time, not of the lesson. Exact arithmetic rather than a detection, so it is available on almost every lesson with a minute of teacher speech."
-          goal="Everyday conversation runs about 150. An anchor to compare against, not a target — there is no correct rate."
+          goal="Everyday conversation usually runs about 120–160. A range to compare against, not a target — there is no correct rate."
         />
       </div>
       {insight !== undefined && <AdminCoachNote text={insight} />}

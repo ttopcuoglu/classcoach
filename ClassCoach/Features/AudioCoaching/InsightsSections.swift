@@ -426,7 +426,7 @@ struct TalkSection: View {
         ]
         if let silenceNote { read.append(silenceNote) }
         if wpm != nil {
-            read.append("Pace is words a minute of your own speaking time. Everyday conversation runs about \(Int(AudioInsights.conversationalWpm)) \u{2014} an anchor to place yourself against, not a target.")
+            read.append("Pace is words a minute of your own speaking time, short pauses included. Everyday conversation usually runs about \(AudioInsights.conversationalWpmRange) \u{2014} a range to place yourself against, not a target.")
         }
         return SectionCard(
             section: .talk, note: note, keep: moves.keep, tryNext: session.nextSteps?.talk,
@@ -458,7 +458,7 @@ struct TalkSection: View {
                      session.studentTalkPct != nil ? "that came through as words" : "unavailable", FlowStrip.students)
             }
             tile("Your pace", wpm.map { "\(Int($0.rounded()))" } ?? "\u{2014}",
-                 wpm != nil ? "words a minute \u{00B7} conversation runs about \(Int(AudioInsights.conversationalWpm))" : "unavailable", nil)
+                 wpm != nil ? "words a minute \u{00B7} conversation usually runs \(AudioInsights.conversationalWpmRange)" : "unavailable", nil)
         }
     }
 

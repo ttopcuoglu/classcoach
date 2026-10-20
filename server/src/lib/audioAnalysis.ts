@@ -283,6 +283,38 @@ const PAUSE_AFTER_QUESTION_MAX_SEC = 30
 /// noise: a few short turns and one mis-transcription move it enormously.
 const MIN_TEACHER_SEC_FOR_RATE = 60
 
+/// Pauses this short inside the teacher's own turn count as speaking time
+/// for pace. The transcriber starts a new line at about a second of silence,
+/// so summing line durations alone measured a pause-free rate (190-220 on
+/// real lessons) against an anchor — everyday conversation — that includes
+/// its pauses. Joining a teacher's consecutive lines across gaps under 3s,
+/// with no student line between, puts the breaths and short pauses back and
+/// leaves student answers and silent work out: real lessons came down 10-35
+/// words a minute, to about 145-213.
+const PACE_PAUSE_MAX_SEC = 3
+
+/// Seconds of teacher speaking time for pace: consecutive teacher lines
+/// joined across short pauses.
+export function teacherSpeakingSecForPace(ordered: Segment[]): number {
+  let total = 0
+  let start: number | null = null
+  let end = 0
+  let previousWasTeacher = false
+  for (const s of ordered) {
+    const teacher = s.speakerLabel === 'Teacher'
+    if (teacher && previousWasTeacher && start != null && s.startSec - end <= PACE_PAUSE_MAX_SEC) {
+      end = Math.max(end, s.endSec)
+    } else {
+      if (start != null) total += end - start
+      start = teacher ? s.startSec : null
+      end = teacher ? s.endSec : 0
+    }
+    previousWasTeacher = teacher
+  }
+  if (start != null) total += end - start
+  return total
+}
+
 function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length
 }
@@ -1181,7 +1213,7 @@ export function analyzeTranscript(segments: Segment[]): AnalysisResult {
       answerLog,
       waitTimeSampleCount: waitTimes.length,
       teacherWordsPerMinute:
-        teacherTalkSec >= MIN_TEACHER_SEC_FOR_RATE ? Math.round((teacherWords / teacherTalkSec) * 60) : null,
+        teacherTalkSec >= MIN_TEACHER_SEC_FOR_RATE ? Math.round((teacherWords / teacherSpeakingSecForPace(ordered)) * 60) : null,
       waitTime2Sec:
         waitTime2s.length > 0 ? round(waitTime2s.reduce((sum, w) => sum + w, 0) / waitTime2s.length, 1) : null,
       waitTime2SampleCount: waitTime2s.length,

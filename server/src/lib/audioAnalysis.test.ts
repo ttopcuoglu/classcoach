@@ -102,6 +102,21 @@ test('pace is words over the teacher’s own speaking time, not over the lesson'
   assert.equal(a.metricsDetail.teacherWordsPerMinute, 120)
 })
 
+test('pace counts short pauses inside the teacher\'s turn, not student answers or long gaps', () => {
+  const sixty = Array.from({ length: 60 }, (_, i) => `w${i}`).join(' ')
+  const a = transcript(() => [
+    // Two 30s lines with a 2s breath between: 62s of speaking time.
+    { speakerLabel: 'Teacher', startSec: 0, endSec: 30, text: sixty },
+    { speakerLabel: 'Teacher', startSec: 32, endSec: 62, text: sixty },
+    // A student answer, then the teacher again: the answer is not hers.
+    { speakerLabel: 'Student', startSec: 63, endSec: 70, text: 'an answer' },
+    // After a 20s gap: a new turn, the gap left out.
+    { speakerLabel: 'Teacher', startSec: 90, endSec: 120, text: sixty },
+  ])
+  // 180 words over 62s + 30s.
+  assert.equal(a.metricsDetail.teacherWordsPerMinute, Math.round((180 / 92) * 60))
+})
+
 test('pace is withheld below a minute of teacher speech', () => {
   const a = transcript(() => [say('Teacher', 'Just a few words here', 10)])
   assert.equal(a.metricsDetail.teacherWordsPerMinute, null)

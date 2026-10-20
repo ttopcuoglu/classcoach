@@ -78,7 +78,7 @@ import {
   type ConfidentMetric,
   type TalkBalanceJudgment,
   leadingSilenceNote,
-  CONVERSATIONAL_WPM,
+  CONVERSATIONAL_WPM_RANGE,
   speechRateMetric,
 } from '../lib/reportConfidence'
 import { buildNextTimeItems, type NoticeCandidate } from '../lib/reportHighlights'
@@ -5355,8 +5355,8 @@ function TalkParticipationTab({
           {silenceNote && <p className="text-sm text-ink-soft">{silenceNote}</p>}
           {wpm != null && (
             <p className="text-sm text-ink-soft">
-              Pace is words a minute of your own speaking time. Everyday conversation runs about {CONVERSATIONAL_WPM} — an
-              anchor to place yourself against, not a target.
+              Pace is words a minute of your own speaking time, short pauses included. Everyday conversation usually runs
+              about {CONVERSATIONAL_WPM_RANGE} — a range to place yourself against, not a target.
             </p>
           )}
         </>
@@ -5512,7 +5512,7 @@ function TalkNumbers({ teacherPct, studentPct, wpm }: { teacherPct: number | nul
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
       {tile('You', teacherPct != null ? `${Math.round(teacherPct)}%` : '—', teacherPct != null ? 'of the recording' : 'unavailable', FLOW_COLOR.you)}
       {tile('Students', studentPct != null ? `${Math.round(studentPct)}%` : '—', studentPct != null ? 'that came through as words' : 'unavailable', FLOW_COLOR.other)}
-      {tile('Your pace', wpm != null ? String(Math.round(wpm)) : '—', wpm != null ? `words a minute · conversation runs about ${CONVERSATIONAL_WPM}` : 'unavailable', undefined)}
+      {tile('Your pace', wpm != null ? String(Math.round(wpm)) : '—', wpm != null ? `words a minute · conversation usually runs ${CONVERSATIONAL_WPM_RANGE}` : 'unavailable', undefined)}
     </div>
   )
 }

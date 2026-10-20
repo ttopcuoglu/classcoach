@@ -1702,7 +1702,7 @@ ${
       : 'No redirections were heard.'
   }
 Student names: ${metrics?.nameMentions ?? 'not measured'} mentions across ${metrics?.uniqueNames ?? 'not measured'} names.
-${metrics?.teacherWordsPerMinute != null ? `Teacher speaking pace: about ${metrics.teacherWordsPerMinute} words a minute of their own speaking time (everyday conversation runs about 150).` : 'Teacher speaking pace: not measured.'}
+${metrics?.teacherWordsPerMinute != null ? `Teacher speaking pace: about ${metrics.teacherWordsPerMinute} words a minute of their own speaking time, short pauses included (everyday conversation usually runs about 120-160).` : 'Teacher speaking pace: not measured.'}
 ${
     metrics?.waitTime2Sec != null
       ? `Pause after a student finished answering, before the teacher spoke: about ${metrics.waitTime2Sec}s across ${metrics.waitTime2SampleCount ?? 0} exchanges. This is a different number from the wait time above, which is the pause AFTER THE QUESTION.`

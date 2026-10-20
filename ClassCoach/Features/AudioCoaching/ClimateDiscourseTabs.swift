@@ -335,7 +335,7 @@ struct DiscourseDetailsTab: View {
                         readingNote(note)
                     }
                     if wpm != nil {
-                        readingNote("Pace is words a minute of your own speaking time. Everyday conversation runs about \(Int(AudioInsights.conversationalWpm)) — an anchor to place yourself against, not a target.")
+                        readingNote("Pace is words a minute of your own speaking time, short pauses included. Everyday conversation usually runs about \(AudioInsights.conversationalWpmRange) — a range to place yourself against, not a target.")
                     }
                 }
                 Divider()
