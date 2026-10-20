@@ -15,11 +15,16 @@ import { Link } from 'react-router-dom'
 
 export type Accent = { band: string; chip: string; tint: string; ink: string }
 
-export const ACCENTS: Record<'terracotta' | 'gold' | 'mint' | 'forest', Accent> = {
+export const ACCENTS: Record<'terracotta' | 'gold' | 'mint' | 'forest' | 'lavender' | 'sky' | 'rose' | 'olive', Accent> = {
   terracotta: { band: 'bg-terracotta', chip: 'bg-peach-tint', tint: 'bg-peach-tint/50', ink: 'text-terracotta-600' },
   gold: { band: 'bg-gold', chip: 'bg-gold-tint', tint: 'bg-gold-tint/50', ink: 'text-terracotta-600' },
   mint: { band: 'bg-brand-500', chip: 'bg-mint-tint', tint: 'bg-mint-tint/50', ink: 'text-forest' },
   forest: { band: 'bg-forest', chip: 'bg-mint-tint', tint: 'bg-mint-tint/40', ink: 'text-forest' },
+  // The Summary's number tiles, so each of the seven has its own colour.
+  lavender: { band: 'bg-forest', chip: 'bg-lavender-tint', tint: 'bg-lavender-tint/50', ink: 'text-forest' },
+  sky: { band: 'bg-forest', chip: 'bg-sky-tint', tint: 'bg-sky-tint/50', ink: 'text-forest' },
+  rose: { band: 'bg-forest', chip: 'bg-rose-tint', tint: 'bg-rose-tint/50', ink: 'text-forest' },
+  olive: { band: 'bg-forest', chip: 'bg-olive-tint', tint: 'bg-olive-tint/50', ink: 'text-forest' },
 }
 
 // Cycled so consecutive sections never share a colour — the accent is how a

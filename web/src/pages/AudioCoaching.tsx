@@ -2636,12 +2636,12 @@ function SummaryTab({
     { label: 'Students spoke', metric: getPresenceMetric(studentPct), unit: '%', accent: ACCENTS.gold },
     ...(split
       ? [
-          { label: 'Sound, no words', metric: getPresenceMetric(soundPct), unit: '%', accent: ACCENTS.mint },
-          { label: 'Quiet', metric: getPresenceMetric(quietPct), unit: '%', accent: ACCENTS.mint },
+          { label: 'Sound, no words', metric: getPresenceMetric(soundPct), unit: '%', accent: ACCENTS.lavender },
+          { label: 'Quiet', metric: getPresenceMetric(quietPct), unit: '%', accent: ACCENTS.sky },
         ]
-      : [{ label: 'Silence / other', metric: getPresenceMetric(silencePct), unit: '%', accent: ACCENTS.mint }]),
+      : [{ label: 'Silence / other', metric: getPresenceMetric(silencePct), unit: '%', accent: ACCENTS.lavender }]),
     // Words a minute of the teacher's own speaking time, as Talk & Participation shows it.
-    { label: 'Pace', metric: speechRateMetric(wpm != null ? Math.round(wpm) : null), unit: 'wpm', accent: ACCENTS.forest },
+    { label: 'Pace', metric: speechRateMetric(wpm != null ? Math.round(wpm) : null), unit: 'wpm', accent: ACCENTS.rose },
     { label: 'Questions', metric: getCountMetric({ count: session.questionCount, recordedSec: session.durationSec ?? 0 }), accent: ACCENTS.mint },
     // Teacher-Anchored Wait Time, the same number Questioning & Checking shows.
     {
@@ -2655,7 +2655,7 @@ function SummaryTab({
               reason: tawt.thinking.length === 0 ? 'No question asked students to explain or reason.' : 'No pause after a thinking question could be timed.',
             },
       unit: 's',
-      accent: ACCENTS.forest,
+      accent: ACCENTS.olive,
     },
   ]
 
@@ -2783,6 +2783,28 @@ function SummaryTab({
           )
         })}
       </div>
+      {/* What each number is, in a line, for a teacher meeting them here
+          before the Insights tab that has each in full. */}
+      <DetailsOpenOnPaper className="group -mt-1">
+        <summary className="cursor-pointer list-none text-sm font-semibold text-forest marker:hidden">
+          <span className="group-open:hidden">How to read these numbers ▸</span>
+          <span className="hidden group-open:inline">How to read these numbers ▾</span>
+        </summary>
+        <dl className="mt-2 grid gap-x-6 gap-y-1.5 text-sm text-ink-soft sm:grid-cols-2">
+          <div><dt className="inline font-semibold text-ink">You spoke, Students spoke · </dt><dd className="inline">the share of the recording each voice took. The microphone hears you better than students.</dd></div>
+          {split ? (
+            <>
+              <div><dt className="inline font-semibold text-ink">Sound, no words · </dt><dd className="inline">sound the microphone caught but couldn’t turn into words, usually voices too far away or talking over each other.</dd></div>
+              <div><dt className="inline font-semibold text-ink">Quiet · </dt><dd className="inline">no sound at all: quiet work, pauses, a settled room.</dd></div>
+            </>
+          ) : (
+            <div><dt className="inline font-semibold text-ink">Silence / other · </dt><dd className="inline">everything that was neither clearly you nor clearly a student: quiet, and voices too faint to place.</dd></div>
+          )}
+          <div><dt className="inline font-semibold text-ink">Pace · </dt><dd className="inline">your words a minute, short pauses included. Everyday conversation usually runs about {CONVERSATIONAL_WPM_RANGE}.</dd></div>
+          <div><dt className="inline font-semibold text-ink">Questions · </dt><dd className="inline">the questions you asked, as the transcript caught them.</dd></div>
+          <div><dt className="inline font-semibold text-ink">TAWT (Teacher-Anchored Wait Time) · </dt><dd className="inline">after a question that asked students to explain or reason, how long until you spoke again, averaged. Three seconds or more gives most students time to think.</dd></div>
+        </dl>
+      </DetailsOpenOnPaper>
 
       {/* Keep doing. */}
       {keep && (
