@@ -55,7 +55,7 @@ const STEPS = [
   },
   {
     title: 'Read the report',
-    body: 'Summary first: a plain-language read of the lesson, one strength, the evidence behind it, and your focus metric. Insights holds the detail. My Growth shows the same numbers trending across every session you’ve recorded.',
+    body: 'Summary first: what the lesson covered, your one focus for next lesson, one card for each of the four Insights sections, and one thing to keep doing. Insights holds the detail. My Growth shows the same numbers trending across every session you’ve recorded.',
   },
   {
     title: 'Talk it through',
@@ -66,11 +66,15 @@ const STEPS = [
 const TABS = [
   {
     name: 'Summary',
-    body: 'Lesson at a glance, one named strength, the evidence it came from, and a “Try next time” list you can carry straight into your next plan.',
+    body: 'What the lesson covered, your one focus for next lesson, a card for each Insights section, one thing to keep doing, and a “Try next time” list you can carry straight into your next plan.',
   },
   {
     name: 'Insights',
-    body: 'Four sections when you want the detail: Talk & Participation, Questioning & Checking, Clarity & Content, Climate & Routines. Ask for the Hard Look on any of them when you want the least generous reading the evidence supports.',
+    body: 'Four sections when you want the detail: Talk & Participation, Questioning & Checking, Clarity & Content, Climate & Routines — each shown in your own words, with the times you said them. Ask for the Hard Look on any of them when you want the least generous reading the evidence supports.',
+  },
+  {
+    name: 'Content Specialist',
+    body: 'A subject specialist’s ideas for teaching this topic — what worked, where it could go further, where students get stuck. Ideas for the subject, not a read of your teaching.',
   },
   {
     name: 'Rubric lens',
@@ -125,57 +129,47 @@ function SampleReport() {
       <div>
         <p className="text-lg font-semibold text-ink">Biology · Period 3</p>
         <p className="mt-0.5 text-xs text-ink-soft">Tue, Jan 14 · 9th grade · 41:20</p>
-        <p className="mt-1.5 text-xs text-ink-soft">Full lesson captured — enough evidence for every metric below.</p>
+        <p className="mt-1.5 text-xs text-ink-soft">Recorded 41:20 · 86% came through as audible speech</p>
       </div>
 
       <div className="rounded-xl border border-hairline bg-cream-card p-4">
-        <p className="text-sm font-semibold text-ink">Lesson at a glance</p>
-        <p className="mt-1.5 text-sm text-ink-soft">
-          Students worked through cell respiration, moving from a modelled example to small-group analysis.
-          The strongest stretch came after the second check for understanding, when four students built on
-          each other&apos;s reasoning without being prompted.
+        <p className="text-sm text-ink-soft">
+          Students worked through cell respiration, moving from a modelled example to small-group analysis of
+          what happens when oxygen runs short.
         </p>
       </div>
 
-      <div className="rounded-xl border border-mint-tint bg-mint-tint/50 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-forest">A strength to keep</p>
+      <div className="rounded-xl border-l-4 border-terracotta bg-peach-tint/50 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Your one focus for next lesson</p>
         <p className="mt-1.5 text-sm text-ink">
-          You asked 9 higher-order questions — 41% of your questions — well above a typical lesson.
+          After a student answers, ask one more “why?” before you move on — you followed up on 4 of 15 answers today.
         </p>
-      </div>
-
-      <div className="rounded-xl border border-mint-tint bg-gold-tint/40 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-forest">My focus · Talk ratio</p>
-          <span className="rounded-full bg-mint-tint/60 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-forest">
-            Strong evidence
-          </span>
-        </div>
-        <div className="mt-3 flex h-2.5 w-full overflow-hidden rounded-full" role="img" aria-label="Teacher 62 percent, students 27 percent, silence 11 percent">
-          <span className="bg-terracotta" style={{ width: '62%' }} />
-          <span className="bg-gold" style={{ width: '27%' }} />
-          <span className="bg-border" style={{ width: '11%' }} />
-        </div>
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-soft">
-          <span>You 62%</span>
-          <span>Students 27%</span>
-          <span>Silence 11%</span>
-        </div>
-        <p className="mt-3 text-sm text-ink">Down from 71% in your last session.</p>
-        <p className="mt-1 text-sm text-ink-soft">
-          Try next time: after the group task, ask one group to explain another group&apos;s reasoning.
-        </p>
+        <p className="mt-1.5 text-xs text-ink-soft">Suggested: where today’s pattern points · or pick another from Try next time</p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="rounded-xl border border-hairline bg-cream-card p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Who was heard</p>
-          <p className="mt-1.5 text-sm text-ink">14 separate student turns, spread across the period.</p>
-        </div>
-        <div className="rounded-xl border border-hairline bg-cream-card p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Questions opened</p>
-          <p className="mt-1.5 text-sm text-ink">22 questions · avg. wait 2.4s · 6 follow-ups.</p>
-        </div>
+        {[
+          { n: 1, name: 'Talk & Participation', big: '62%', line: 'of the recording was your voice' },
+          { n: 2, name: 'Questioning & Checking', big: '9 of 22', line: 'questions went beyond recall' },
+          { n: 3, name: 'Clarity & Content', big: '3', line: 'stages: opened with → built → applied to' },
+          { n: 4, name: 'Climate & Routines', big: '2 of 3', line: 'sets of directions named every part' },
+        ].map((c) => (
+          <div key={c.n} className="rounded-xl border border-hairline bg-cream-card p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+              {c.n} · {c.name}
+            </p>
+            <p className="mt-1.5 text-sm text-ink">
+              <strong className="font-heading text-lg font-extrabold text-forest">{c.big}</strong> {c.line}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-xl border border-mint-tint bg-mint-tint/50 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-forest">Keep doing</p>
+        <p className="mt-1.5 text-sm text-ink">
+          “What would change if the cell had no oxygen at all?” <span className="text-xs text-ink-soft">14:32</span>
+        </p>
       </div>
     </GuideSample>
   )
@@ -189,7 +183,7 @@ export default function GuideLessonDebrief() {
         title="Lesson Debrief"
         paragraphs={[
           'You can’t watch your own class while you’re teaching it. Lesson Debrief records one period and turns it into something you can actually look at afterward.',
-          'Wivoza transcribes the recording and hands back a report: how the talking was shared, what kinds of questions you asked, how long you waited for answers, how transitions went. Then you talk it through with your coach and decide what to change. No score, no rating, no one else sees it.',
+          'Wivoza transcribes the recording and hands back a report: how the talking was shared, what kinds of questions you asked, how you followed up on answers, how your directions sounded. Then you talk it through with your coach and decide what to change. No score, no rating, no one else sees it.',
         ]}
       />
 

@@ -155,7 +155,7 @@ const GETTING_STARTED: Chapter = {
         { label: 'Your next step', body: 'the greeting at the top suggests one concrete thing to do next — reflect on your last lesson, record your first one, or try a tool you haven\'t opened yet — with a button that takes you straight there.' },
         { label: 'A door to every tool', body: 'one-tap cards for Lesson Debrief, Talk It Through, and Practice, then Planning Coach and Communication Coach — and, until you connect it, a line pointing to Coach on Telegram.' },
         { label: 'Your coaching path', body: 'a static Notice → Practice → Try → Reflect explainer.' },
-        { label: 'Classroom pulse', body: 'a donut chart of your latest lesson\'s student-talk %, plus a sparkline once you have a few sessions.' },
+        { label: 'Your lessons this month', body: 'how many lessons you have recorded this month, the days they fell on, and how many weeks in a row had one. A recording habit, not a judgment of the teaching.' },
         { label: 'Mood check-in', body: 'tap Good / Okay / Stressed / Overwhelmed and Wivoza quietly suggests a relevant practice category.' },
         { label: 'Daily tip, quick links, and recent work', body: 'a tip box, a shortcut to Your growth, and a feed of your last few sessions.' },
       ],
@@ -201,18 +201,19 @@ const TELEGRAM: Feature = {
 }
 
 const REPORT_TABS: SpecItem[] = [
-  { label: 'Summary', body: 'the 60-second read, in the order you\'d want it: a plain-language "Lesson at a glance," one named Strength to keep, your focus metric with its current value and a "try next time" tip, an "Evidence from the lesson" row (who was heard, questions opened, and a moment worth revisiting), and a "Try next time" list that gathers every suggestion in the report in one place — then asks whether you want to plan your next class with it in mind, and carries the ones you tick into Planning Coach. Every card links through to the fuller detail in Insights.' },
-  { label: 'Insights', body: 'the detail, in four sections — see below. Each section can also be given the Hard Look: on request, the least generous reading its evidence supports, with the moments behind it. Where the recording cannot carry a criticism it says so, and it never appears in the printable report.' },
+  { label: 'Summary', body: 'the 60-second read. It opens with what the lesson covered, then your one focus for next lesson — suggested from the pattern across the report, or one you pick yourself. Below it, one card per Insights section with the number that section leads with, one thing to keep doing (with your own words and the time you said them), and a "Try next time" list that gathers every suggestion in the report. Any item on that list can become your focus, and the report asks whether you want to plan your next class with it in mind, carrying the ones you tick into Planning Coach. The whole-lesson Hard Look opens from here too.' },
+  { label: 'Insights', body: 'the detail, in four sections — see below. Each one opens with a short note, shows its evidence as your own words with timestamps, and ends with one thing to keep and one to try. Each can also be given the Hard Look: on request, the least generous reading its evidence supports, with the moments behind it. Where the recording cannot carry a criticism it says so, and it never appears in the printable report.' },
+  { label: 'Content Specialist', body: 'ideas for teaching this subject from a subject-area specialist\'s point of view — what worked, where it could go further, and where students tend to get stuck — each tied to a moment in the lesson. It is ideas for the topic, not a read of how you taught it.' },
   { label: 'Rubric lens', body: 'on request, this lesson sorted under the Danielson rubric\'s Domains 2 and 3 — the moments that speak to each component and one next step for it. Never a level or a score.' },
   { label: 'Reflect', body: 'a spoken debrief with Coach about what the report found. Pick a starting point (talk through today\'s highlights, explore a specific moment, reflect on how the lesson felt, or ask your own question), then talk it through — pause, resume, or type instead at any point. Finish with your own Strengths / Growth areas / My next step / Follow-up date notes, optionally drafted for you from the conversation, and a Lock button that makes the whole report permanently read-only.' },
-  { label: 'My Growth', body: 'seven measures trended across every session you\'ve recorded — your pace, your share of the talk, your longest unbroken stretch, the pause after an answer, follow-up questions, higher-order questions, and checks for understanding. Pick one as your active focus and it\'s highlighted here and on Summary.' },
+  { label: 'My Growth', body: 'seven measures trended across every session you\'ve recorded — your pace, your share of the talk, your longest unbroken stretch, the pause after an answer, follow-up questions, questions beyond recall, and checks for understanding. Pick one as your active focus and it\'s highlighted here and on Summary.' },
 ]
 
 const INSIGHTS_SECTIONS: SpecItem[] = [
-  { label: 'Talk & Participation', body: 'the teacher / student / silence split for the period, how many separate times students spoke, and a coach-voice read of what the balance suggests.' },
-  { label: 'Questioning & Checking', body: 'the questions you asked, tagged recall or higher-order, with the wait time after each and any follow-ups that built on it — plus the checks for understanding you used, with the actual moments behind the count.' },
-  { label: 'Clarity & Content', body: 'a detected stated objective (with the exact quote it came from), real-world connections, key vocabulary moments, teacher and student word clouds sized by frequency, and on-demand "content specialist" notes from a subject-area lens.' },
-  { label: 'Climate & Routines', body: 'transitions between activities, clear task directions given, student names used, positive-vs-corrective tone balance, and redirection language — each a plain count with a coach-voice note, never a behavior score.' },
+  { label: 'Talk & Participation', body: 'who was heard, and for how long: your share of the recording, the students\' share, and your pace in words a minute, then the recording minute by minute. Below that, how you brought students in — invitations to share, follow-ups that asked for more, and reaching beyond volunteers — on one timeline, with every moment in order.' },
+  { label: 'Questioning & Checking', body: 'your questions and checks for understanding on one timeline, each question sorted as recall, explain, or reasoning, so you can see how many went beyond recall. Then who you asked (open to anyone or a student by name) and your follow-ups — how many of the student answers the recording could hear you built on, and which ones you didn\'t.' },
+  { label: 'Clarity & Content', body: 'how the lesson moved — what it opened with, built, and applied to, with the times — then the moments you made the content clear, sorted into examples & explanations, linking ideas, and real-world connections, and how many of the lesson\'s key terms were heard from students.' },
+  { label: 'Climate & Routines', body: 'how your words set up the work, kept it on track, and encouraged students: directions & routines (and which of the four parts — what to do, the steps, how long, what to hand in — each set of directions named), redirection & expectations, and encouragement & respect. All as your own words, never a behavior score.' },
 ]
 
 const LESSON_DEBRIEF: Feature = {
@@ -222,7 +223,7 @@ const LESSON_DEBRIEF: Feature = {
   nav: 'Grow → Lesson Debrief',
   title: 'Lesson Debrief',
   guideTo: '/guide/lesson-debrief',
-  intro: 'Record a real class period; Wivoza transcribes it, asks you which voice is the teacher, and turns it into a five-tab report — no audio is ever kept, only the text and what it shows.',
+  intro: 'Record a real class period; Wivoza transcribes it, asks you which voice is the teacher, and turns it into a six-tab report — no audio is ever kept, only the text and what it shows.',
   specs: [
     { label: 'Before recording', body: 'class/subject, period, grade level, and session date are all optional.' },
     { label: 'While recording', body: 'a running timer with record, pause, resume, and stop controls, capturing entirely in your browser.' },
@@ -534,16 +535,18 @@ export default function Guide() {
             <FeatureBlock feature={LESSON_DEBRIEF} />
 
             <div className="rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
-              <h4 className="font-heading text-lg font-bold text-forest">Inside a Lesson Debrief report — all five tabs</h4>
+              <h4 className="font-heading text-lg font-bold text-forest">Inside a Lesson Debrief report — all six tabs</h4>
               <SpecList items={REPORT_TABS} />
               <h4 className="mt-7 font-heading text-lg font-bold text-forest">The four Insights sections</h4>
               <SpecList items={INSIGHTS_SECTIONS} />
               <div className="mt-5 flex items-start gap-3 rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">
                 <BrainIcon className="mt-0.5 h-5 w-5 shrink-0 text-forest" />
                 <p className="text-sm text-forest">
-                  Every number is honest about its own confidence — something Wivoza couldn't reliably
-                  measure shows as unavailable, never as a hidden zero, and a real confirmed zero always
-                  shows as a plain, full-strength zero. The two never look the same, on purpose.
+                  Every number is honest about its own confidence. The top of the report says how much of
+                  the recording came through as audible speech, and the numbers come only from that part.
+                  Something Wivoza couldn't reliably measure shows as unavailable, never as a hidden zero,
+                  and a real confirmed zero always shows as a plain, full-strength zero. The two never look
+                  the same, on purpose.
                 </p>
               </div>
             </div>
@@ -650,14 +653,15 @@ export default function Guide() {
           <SectionLabel n={8} label="For schools & districts" />
           <h2 className="mt-4 font-heading text-2xl font-extrabold text-forest sm:text-3xl">Admin dashboard</h2>
           <p className="mt-3 max-w-2xl text-lg text-ink-soft">
-            Visible only to school and district admins — built around aggregate trends, never an individual teacher's attempts or ratings.
+            Visible only to school and district admins — built around aggregate trends, never an individual teacher's recordings, reports, or ratings.
           </p>
           <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
             <SpecList
               items={[
-                { label: 'Overview', body: 'total and active-this-week teacher counts, a staff-wide growth signal, a weekly activity chart, practice-by-category breakdown, and a member list — each row with Remove from org, Suspend, and (for platform admins) Delete. Every admin sees this.' },
-                { label: 'Organizations', body: 'platform admins only — create, edit, or remove school and district accounts, including their join code and admin emails.' },
-                { label: 'Users', body: 'platform admins only — every account across Wivoza, including independent teachers who aren\'t part of any school.' },
+                { label: 'Dashboard', body: 'the at-a-glance read for the dates you choose: how many teachers have an account, set it up, used it, and came back; the three things worth a look this week; weekly participation; and which tools teachers have tried. Filter by grade band or subject, and download a pilot report (PDF) or the data (CSV).' },
+                { label: 'Coaching insights', body: 'what recorded lessons show across the staff, in the same four sections teachers see in their own Lesson Insights — shared strengths, shared growth areas, and the mix of questions asked — plus the classroom situations teachers practice, the conversations they prepare for, and the focus areas they chose for themselves. Lessons where less than half the recording came through as clear speech are left out, and the page says how many.' },
+                { label: 'Professional Learning', body: 'pick a growth area to work on as a school. Wivoza notes how often it shows up in lessons now, then whether it shows up in fewer lessons as your PD takes hold.' },
+                { label: 'People', body: 'the member list, with each teacher\'s status (active, inactive, not started, or suspended) and Suspend or Remove from school. Platform admins also manage school and district accounts and their join codes.' },
                 { label: 'Joining a school', body: 'a teacher enters a short code during onboarding or later from Profile & Settings; whoever\'s email is listed as that school\'s admin becomes its admin automatically.' },
               ]}
             />

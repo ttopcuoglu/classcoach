@@ -14,7 +14,7 @@ const CATEGORIES: Category[] = [
     items: [
       {
         q: 'Does my principal or administrator see my recordings or feedback?',
-        a: 'No. Admins — at the school level or platform-wide — only ever see aggregate trends across their staff, like overall activity levels or category breakdowns. They never see an individual teacher\'s recordings, transcripts, answers, or ratings. Every admin view says this plainly on screen.',
+        a: 'No. Admins — at the school level or platform-wide — only ever see aggregate trends across their staff, like how many teachers are using Wivoza, or how often clear directions or wait time come up across recorded lessons. No number is tied to a teacher, and they never see anyone\'s recordings, transcripts, reports, answers, or ratings. Every admin view says this plainly on screen.',
       },
       {
         q: 'Is Wivoza used to evaluate me?',
@@ -72,8 +72,16 @@ const CATEGORIES: Category[] = [
         a: 'A few days after a Talk It Through conversation, Coach checks in once on the next step you chose. It is one check-in at a time, and you can skip it or turn check-ins off.',
       },
       {
+        q: 'What do I get from a Lesson Debrief?',
+        a: 'A private report with six tabs. Summary is the 60-second read: what the lesson covered, one focus for next lesson, a card for each of four sections, and one thing to keep doing. Insights has the detail in those four sections — Talk & Participation, Questioning & Checking, Clarity & Content, and Climate & Routines — always shown in your own words, with the time you said them. Content Specialist offers a subject specialist\'s ideas for teaching the topic. Rubric lens, Reflect, and My Growth cover the rest.',
+      },
+      {
+        q: 'What if the recording only caught part of the lesson?',
+        a: 'The report says so at the top — how much of the recording came through as audible speech — and its numbers come only from that part. Anything it could not measure shows as unavailable rather than as a zero.',
+      },
+      {
         q: 'What is the Hard Look?',
-        a: 'An optional second reading of a Lesson Debrief that says the least generous thing the evidence can support, section by section, with the moments it is based on. You ask for it; it never appears on its own. Where the recording cannot carry a criticism it says so, and it is left out of the printable report, so it stays between you and Coach.',
+        a: 'An optional second reading of a Lesson Debrief that says the least generous thing the evidence can support, with the moments it is based on — for the whole lesson from the Summary, or for one section from the foot of that section. You ask for it; it never appears on its own. Where the recording cannot carry a criticism it says so, and it is left out of the printable report, so it stays between you and Coach.',
       },
       {
         q: 'Does the Rubric lens rate my lesson?',
@@ -109,7 +117,7 @@ const CATEGORIES: Category[] = [
       },
       {
         q: 'If my school joins, does my admin see what I\'ve been doing?',
-        a: 'Only in aggregate — overall activity levels and category trends across the whole staff, never your individual recordings, answers, or ratings. That boundary doesn\'t change based on how you were brought on.',
+        a: 'Only in aggregate — activity levels and patterns across the whole staff\'s recorded lessons, never your individual recordings, reports, answers, or ratings. That boundary doesn\'t change based on how you were brought on.',
       },
       {
         q: 'What if I switch schools?',

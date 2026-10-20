@@ -83,7 +83,7 @@ const MOMENTS = [
         tint: 'bg-peach-tint text-terracotta',
         title: 'Lesson Debrief',
         slug: 'lesson-debrief',
-        description: 'See classroom talk, questions, and pacing, with one list of what to try next. Then read it through the Danielson rubric, or ask for the Hard Look.',
+        description: 'See who was heard, what you asked, and how you followed up — in your own words, with one focus for next lesson. Add a specialist’s ideas, the Danielson rubric, or the Hard Look.',
       },
       {
         icon: HeadsetIcon,
@@ -151,7 +151,7 @@ const PLACES = [
     icon: ChatBubbleIcon,
     tint: 'bg-gold-tint text-terracotta-600',
     title: 'In Telegram',
-    description: 'Text Coach, send a voice note on the way home, or photograph the worksheet in front of you. Connect it from your Profile.',
+    description: 'Text Coach, send a voice note on the way home, photograph the worksheet in front of you, or forward the email you need to answer. Connect it from your Profile.',
     href: null,
     cta: null,
   },
@@ -361,15 +361,16 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       <header className="bg-cream">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5">
           <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-11 w-auto" />
-          <nav className="hidden items-center gap-6 whitespace-nowrap text-sm font-medium text-ink-soft xl:flex">
+          {/* Five items, not eight: the three reading pages share one
+              Resources menu, and "Why Wivoza" is a scroll away on the page
+              itself (it stays in the phone menu). Eight links in a row read as
+              a wall at laptop width. */}
+          <nav className="hidden items-center gap-7 whitespace-nowrap text-sm font-medium text-ink-soft lg:flex">
             <a href="#how-it-works" className="hover:text-ink">
               How it works
             </a>
             <a href="#what-you-can-do" className="hover:text-ink">
-              What you can do
-            </a>
-            <a href="#why-wivoza" className="hover:text-ink">
-              Why Wivoza
+              Features
             </a>
             <a href="#pricing" className="hover:text-ink">
               Pricing
@@ -377,15 +378,34 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             <Link to="/for-schools" className="hover:text-ink">
               For Schools
             </Link>
-            <Link to="/research" className="hover:text-ink">
-              Research
-            </Link>
-            <Link to="/guide" className="hover:text-ink">
-              Guide
-            </Link>
-            <Link to="/faq" className="hover:text-ink">
-              FAQ
-            </Link>
+            <div className="group relative">
+              <button
+                type="button"
+                aria-haspopup="true"
+                className="flex items-center gap-1 hover:text-ink group-focus-within:text-ink"
+              >
+                Resources
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className="h-4 w-4 transition-transform group-hover:rotate-180 group-focus-within:rotate-180">
+                  <path d="M5 8l5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              {/* pt-3 bridges the gap so the menu stays open while the
+                  pointer moves down onto it. */}
+              <div className="invisible absolute left-1/2 top-full z-20 -translate-x-1/2 pt-3 opacity-0 transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
+                <div className="flex w-56 flex-col rounded-2xl border border-hairline bg-cream-card p-2 shadow-lg">
+                  {[
+                    { to: '/guide', label: 'Guide', sub: 'Every feature, in full' },
+                    { to: '/faq', label: 'FAQ', sub: 'Privacy, cost, and how it works' },
+                    { to: '/research', label: 'Research', sub: 'The studies behind the design' },
+                  ].map((r) => (
+                    <Link key={r.to} to={r.to} className="rounded-xl px-3 py-2.5 hover:bg-cream">
+                      <span className="block font-semibold text-forest">{r.label}</span>
+                      <span className="block text-xs font-normal text-ink-soft">{r.sub}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
           </nav>
           <div className="flex items-center gap-2 sm:gap-5">
             <a href="#get-started" className="hidden text-sm font-medium text-ink-soft hover:text-ink sm:inline">
@@ -402,14 +422,14 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               type="button"
               onClick={() => setMobileNavOpen((open) => !open)}
               aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-hairline text-forest xl:hidden"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-hairline text-forest lg:hidden"
             >
               {mobileNavOpen ? <CloseIcon className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
             </button>
           </div>
         </div>
         {mobileNavOpen && (
-          <nav className="flex flex-col gap-1 border-t border-hairline bg-cream-card px-6 py-3 xl:hidden">
+          <nav className="flex flex-col gap-1 border-t border-hairline bg-cream-card px-6 py-3 lg:hidden">
             <a
               href="#get-started"
               onClick={() => setMobileNavOpen(false)}
@@ -429,7 +449,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               onClick={() => setMobileNavOpen(false)}
               className="rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-cream hover:text-ink"
             >
-              What you can do
+              Features
             </a>
             <a
               href="#why-wivoza"
@@ -506,7 +526,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             </h1>
             <p className="mt-6 max-w-md text-lg text-ink-soft">
               Record a lesson and see what your class really sounded like — who talked, what you
-              asked, how long you waited. Then plan, prepare, and practice with a private AI coach
+              asked, how you followed up. Then plan, prepare, and practice with a private AI coach
               that understands classrooms.
             </p>
 
