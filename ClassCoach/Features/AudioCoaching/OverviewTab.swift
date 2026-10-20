@@ -197,8 +197,8 @@ enum ThinkingPause {
 }
 
 /// The Summary tab — mirrors `SummaryTab` in AudioCoaching.tsx: the headline,
-/// your one focus for next lesson, one card per Insights section, keep doing,
-/// and Try next time. Everything else lives in Insights; talking it through
+/// your one focus for next lesson, how the lesson moved, the lesson's
+/// numbers, keep doing, and Try next time. Everything else lives in Insights; talking it through
 /// is Reflect.
 struct OverviewTab: View {
     let session: AudioSessionWithSegments
@@ -264,8 +264,8 @@ struct OverviewTab: View {
         VStack(alignment: .leading, spacing: 14) {
             headlineCard
             focusCard
+            lessonMovedCard
             numbersCard
-            sectionCards
             keepDoingCard
             tryNextTimeCard
         }
@@ -466,139 +466,42 @@ struct OverviewTab: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    // MARK: Section cards
+    // MARK: How the lesson moved
 
-    private struct Slice: Identifiable {
-        let id: Int
-        let weight: Double
-        let color: Color
-        var hatched = false
+    private static let arcRoleLabel = ["opened": "Opened with", "built": "Built", "applied": "Applied to", "practiced": "Practiced", "closed": "Closed with"]
+
+    private static func clock(_ sec: Double) -> String {
+        let s = Int(sec.rounded(.down))
+        return String(format: "%d:%02d", s / 60, s % 60)
     }
 
-    private var hatch: [Slice] { [Slice(id: 0, weight: 1, color: .clear, hatched: true)] }
-
-    /// The recording's split as the Talk section states it: you, students,
-    /// and the rest as sound-with-no-words and quiet where the envelope
-    /// measured them, else one "no reading" slice. Mirrors `recordingShares`.
-    private var talkSlices: [Slice] {
-        guard let teacher = session.teacherTalkPct else { return hatch }
-        let students = session.studentTalkPct ?? 0
-        let rest = max(0, 100 - teacher - students)
-        var slices = [Slice(id: 0, weight: teacher, color: Color(hex: 0x2F855A)),
-                      Slice(id: 1, weight: students, color: Color(hex: 0x8B7BC2))]
-        if let quiet = detail["quietSec"], let unresolved = detail["unresolvedSec"], quiet + unresolved > 0 {
-            slices.append(Slice(id: 2, weight: rest * unresolved / (quiet + unresolved), color: Color(hex: 0xD08A2A)))
-            slices.append(Slice(id: 3, weight: rest * quiet / (quiet + unresolved), color: Color(hex: 0x3F8FD8)))
-        } else {
-            slices.append(Slice(id: 2, weight: rest, color: .clear, hatched: true))
-        }
-        return slices.filter { $0.weight >= 0.5 }
-    }
-
-    private func bar(_ slices: [Slice]) -> some View {
-        GeometryReader { geo in
-            let total = max(0.0001, slices.reduce(0) { $0 + $1.weight })
-            let gaps = CGFloat(max(0, slices.count - 1)) * 3
-            HStack(spacing: 3) {
-                ForEach(slices) { slice in
-                    let width = max(2, (geo.size.width - gaps) * CGFloat(slice.weight / total))
-                    if slice.hatched {
-                        RoundedRectangle(cornerRadius: 3)
-                            .strokeBorder(Color(hex: 0x9C9486), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
-                            .frame(width: width)
-                    } else {
-                        RoundedRectangle(cornerRadius: 3).fill(slice.color).frame(width: width)
+    /// Mirrors the web Summary's "How the lesson moved": each stage the arc
+    /// read found, what it did, its title and when. Only where it found them.
+    @ViewBuilder private var lessonMovedCard: some View {
+        let arc = session.teachingMoves?.arc ?? []
+        if !arc.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("How the lesson moved").font(.heading(.title3)).foregroundStyle(AppTheme.forest)
+                VStack(spacing: 6) {
+                    ForEach(Array(arc.enumerated()), id: \.offset) { i, stage in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text((Self.arcRoleLabel[stage.role] ?? stage.role.capitalized).uppercased())
+                                .font(.caption.weight(.bold)).foregroundStyle(AppTheme.terracotta600)
+                            Text(stage.title).font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text("\(Self.clock(stage.startSec))\u{2013}\(i == arc.count - 1 ? "end" : Self.clock(stage.endSec))")
+                                .font(.caption.monospacedDigit()).foregroundStyle(AppTheme.textSecondary)
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppTheme.cream, in: RoundedRectangle(cornerRadius: 12))
                     }
                 }
             }
-        }
-        .frame(height: 12)
-    }
-
-    private func sectionCard(_ section: InsightsSection, stat: String, statNote: String?, slices: [Slice], take: String?) -> some View {
-        Button { onNavigateInsights(section) } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
-                    Text("\(section.number)")
-                        .font(.heading(.subheadline)).foregroundStyle(section.accent.onBand)
-                        .frame(width: 32, height: 32)
-                        .background(section.accent.band, in: RoundedRectangle(cornerRadius: 10))
-                    Text(section.title).font(.heading(.headline)).foregroundStyle(AppTheme.forest)
-                }
-                (Text(stat).font(.heading(.title)).foregroundColor(AppTheme.forest)
-                    + Text(statNote.map { "  \($0)" } ?? "").font(.subheadline).foregroundColor(AppTheme.textSecondary))
-                    .fixedSize(horizontal: false, vertical: true)
-                bar(slices)
-                if let take {
-                    Text(take).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Text("Open \(section.title) →").font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
-            }
-            .multilineTextAlignment(.leading)
             .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 22))
         }
-        .buttonStyle(.plain)
-    }
-
-    private static let arcRoleLabel = ["opened": "opened with", "built": "built", "applied": "applied to", "practiced": "practiced", "closed": "closed with"]
-
-    @ViewBuilder private var sectionCards: some View {
-        let moves = session.teachingMoves
-        let invitations = (moves?.participation?.invitations ?? moves?.invitations ?? []).count
-        let questions = QuestionMix.classify(session)
-        let count = { (k: QuestionMix) in questions.filter { $0.mix == k }.count }
-        let arc = moves?.arc ?? []
-        let explanations = moves?.explanations?.count ?? 0
-        let keyTerms = session.lessonContent?.keyTerms ?? []
-        let directions = (moves?.directions ?? []).sorted { $0.timestampSec < $1.timestampSec }
-        let complete = directions.filter { $0.parts.count == 4 }.count
-        let redirections = moves?.redirections ?? []
-        let actionable = redirections.filter { $0.clarity == "actionable" }.count
-        let arcColors = [Color(hex: 0xCFC6B4), Color(hex: 0x7FAE93), Color(hex: 0x1F3A2E), Color(hex: 0x2E5E46)]
-
-        sectionCard(
-            .talk,
-            stat: session.teacherTalkPct.map { "\(Int($0.rounded()))%" } ?? "—",
-            statNote: session.teacherTalkPct != nil ? "of the recording was your voice" : nil,
-            slices: talkSlices,
-            take: invitations > 0 ? "You opened the floor \(invitations) time\(invitations == 1 ? "" : "s")." : nil
-        )
-        sectionCard(
-            .questions,
-            stat: questions.isEmpty ? "—" : "\(count(.explain) + count(.reasoning)) of \(questions.count)",
-            statNote: questions.isEmpty ? nil : "questions went beyond recall",
-            slices: questions.isEmpty ? hatch : QuestionMix.allCases.enumerated().compactMap { i, k in
-                count(k) > 0 ? Slice(id: i, weight: Double(count(k)), color: k.color) : nil
-            },
-            take: (heard ?? 0) >= 3 && followed != nil ? "You followed up on \(followed!) of \(heard!) answers the recording could hear." : nil
-        )
-        sectionCard(
-            .content,
-            stat: arc.isEmpty ? "—" : "\(arc.count)",
-            statNote: arc.isEmpty ? nil : "stages: " + arc.map { Self.arcRoleLabel[$0.role] ?? $0.role }.joined(separator: " → "),
-            slices: arc.isEmpty ? hatch : arc.enumerated().map { i, stage in
-                Slice(id: i, weight: max(1, stage.endSec - stage.startSec), color: arcColors[i % 4])
-            },
-            take: [
-                explanations > 0 ? "You opened the content up \(explanations) time\(explanations == 1 ? "" : "s")." : nil,
-                keyTerms.isEmpty ? nil : "\(keyTerms.filter { $0.studentCount > 0 }.count) of \(keyTerms.count) key terms heard from students.",
-            ].compactMap { $0 }.joined(separator: " ").nilIfEmpty
-        )
-        sectionCard(
-            .routines,
-            stat: directions.count == 1 ? "\(directions[0].parts.count) of 4" : directions.count > 1 ? "\(complete) of \(directions.count)" : "—",
-            statNote: directions.count == 1 ? "parts named in your one set of directions"
-                : directions.count > 1 ? "directions named all four parts" : nil,
-            slices: directions.isEmpty ? hatch : directions.enumerated().map { i, d in
-                Slice(id: i, weight: 1, color: d.parts.count == 4 ? Color(hex: 0x1F3A2E) : d.parts.count >= 2 ? Color(hex: 0x7FAE93) : Color(hex: 0xCFC6B4))
-            },
-            take: redirections.count == 1
-                ? (actionable == 1 ? "Your one redirection told students what to do." : "Your one redirection said what to stop, not what to do instead.")
-                : redirections.count > 1 ? "\(actionable) of \(redirections.count) redirections told students what to do." : nil
-        )
     }
 
     // MARK: Keep doing
