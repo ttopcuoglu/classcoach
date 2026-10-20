@@ -5459,48 +5459,14 @@ function QuestioningCheckingTab({
   const moves = session.teachingMoves
   const questions = classifyQuestions(session)
   const count = (k: MixKey) => questions.filter((q) => q.mix === k).length
-  const byName = questions.filter((q) => q.byName).length
 
-  // Follow-ups: one dot per heard answer, filled where you followed up.
+  // The follow-up rate now lives only in the goal under Try next time; the
+  // follow-ups themselves are a kind on the questions timeline.
   const detail = (session.metricsDetail ?? {}) as Record<string, unknown>
-  const log = session.metricsLogs?.answerLog ?? detail.answerLog
-  const answers = Array.isArray(log) ? (log as { timestampSec: number; followed: boolean }[]) : []
   const heard = typeof detail.answersHeardCount === 'number' ? detail.answersHeardCount : null
   const followed = typeof detail.answersFollowedUpCount === 'number' ? detail.answersFollowedUpCount : null
-  const checksAll = (session.cfuLog ?? []).filter((c) => c.loop?.who !== 'not_a_check')
-  const followLines: Evidence[] = [
-    ...checksAll
-      .filter((c) => c.loop?.acted?.how === 'adjusted' && c.loop.acted.text)
-      .map((c) => ({ quote: c.loop!.acted!.text!, timestampSec: c.loop!.acted!.atSec, tag: 'Revisited a possible misunderstanding' })),
-    ...(moves?.participation?.extending ?? moves?.revisionPrompts ?? []).map((q) => ({
-      quote: q.quote,
-      timestampSec: q.timestampSec,
-      tag: 'kind' in q ? (EXTEND_KIND_LABEL[(q as { kind: keyof typeof EXTEND_KIND_LABEL }).kind] ?? 'Follow-up') : 'Follow-up',
-    })),
-  ]
-  // What you said right after each answer you followed up — the same
-  // pairing the dots count, so the list and "X of Y" always agree. The kind
-  // comes from the follow-up read where it found the same moment.
-  const fuLogRaw = session.metricsLogs?.followUpLog ?? detail.followUpLog
-  const fuLog = Array.isArray(fuLogRaw) ? (fuLogRaw as { timestampSec: number; text: string }[]) : []
-  const pairedLines: Evidence[] = answers.flatMap((a, i) => {
-    if (!a.followed) return []
-    const nextAt = answers[i + 1]?.timestampSec ?? Infinity
-    const fu = fuLog.find((f) => f.timestampSec >= a.timestampSec && f.timestampSec < nextAt)
-    if (!fu) return []
-    const read = followLines.find((l) => Math.abs(l.timestampSec - fu.timestampSec) <= 5)
-    return [{ quote: withoutAddressedNames(fu.text), timestampSec: fu.timestampSec, tag: read?.tag ?? 'Follow-up' }]
-  })
-  const shownFollowUps = pairedLines.length > 0 ? pairedLines : followLines.slice(0, 1)
-  const unfollowed = answers.filter((a) => !a.followed)
-  const [showUnfollowed, setShowUnfollowed] = useState(false)
   const showRate = heard != null && followed != null && heard >= 3
 
-  // Questions you answered yourself: you asked, and the answer came from you
-  // before a student had the chance. Its own count, because each one is a
-  // question students were not given time to answer.
-  const selfAnswered = moves?.selfAnswered ?? []
-  const [showSelfAnswered, setShowSelfAnswered] = useState(false)
   // Also heard: question marks that asked nothing of students. Tags are
   // counted from the transcript (lib/questionTags); housekeeping comes from
   // the moves read, on lessons read since it existed.
@@ -5535,8 +5501,8 @@ function QuestioningCheckingTab({
           <p className="text-sm text-ink-soft">
             Questions are the ones you asked and left with students — not "okay?", "right?" or "are we ready?". Each is
             sorted by what answering it asked for: recall, explaining why or how, or reasoning (justifying, comparing,
-            judging). A question you answered yourself before a student could is counted on its own, and tags like "right?"
-            and housekeeping questions are listed but not counted.
+            judging). A question you answered yourself before a student could, and a follow-up straight after a student answer,
+            each have their own colour on the timeline. Tags like "right?" and housekeeping questions are listed but not counted.
           </p>
           <p className="text-sm text-ink-soft">
             A check is a moment you asked students to show or say what they understood. Each says who it asked and what you
@@ -5552,33 +5518,7 @@ function QuestioningCheckingTab({
     >
       {/* Your questions and checks, on one lesson timeline; a key item shows
           its moments. */}
-      <QuestionsChecksPart session={session} questions={questions} byName={byName} />
-
-      {/* Questions you answered yourself, counted on their own. */}
-      {selfAnswered.length > 0 && (
-        <div className="flex flex-col gap-3 border-t border-dashed border-hairline pt-5">
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="font-heading text-xl font-bold text-forest">Questions you answered yourself</p>
-            <span className="font-heading text-2xl font-extrabold text-forest">{selfAnswered.length}</span>
-          </div>
-          <p className="text-base font-semibold text-ink">
-            {selfAnswered.length === 1
-              ? 'Once, you asked a question and gave the answer before a student could.'
-              : `${selfAnswered.length} times, you asked a question and gave the answer before a student could.`}
-          </p>
-          {(showSelfAnswered ? selfAnswered : selfAnswered.slice(0, 2)).map((q, i) => (
-            <div key={i} className="flex items-baseline justify-between gap-4 rounded-xl bg-cream px-3.5 py-3 text-sm text-ink">
-              <span>“{withoutAddressedNames(q.quote)}”</span>
-              <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(q.timestampSec)}</span>
-            </div>
-          ))}
-          {selfAnswered.length > 2 && (
-            <button type="button" onClick={() => setShowSelfAnswered((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-terracotta/40">
-              {showSelfAnswered ? 'Show fewer' : `Show all ${selfAnswered.length}`}
-            </button>
-          )}
-        </div>
-      )}
+      <QuestionsChecksPart session={session} questions={questions} />
 
       {/* Also heard: question marks that were not questions. Not counted. */}
       {(tags.length > 0 || housekeeping.length > 0) && (
@@ -5610,57 +5550,6 @@ function QuestioningCheckingTab({
         </div>
       )}
 
-      {/* Your follow-ups: a dot per answer heard, filled where you followed up. */}
-      <div className="flex flex-col gap-4 border-t border-dashed border-hairline pt-5">
-        <p className="font-heading text-xl font-bold text-forest">Your follow-ups</p>
-        {showRate ? (
-          <div className="flex flex-wrap items-center gap-4">
-            {answers.length > 0 && (
-              <span className="flex flex-wrap gap-1.5" role="img" aria-label={`${followed} of ${heard} answers followed up`}>
-                {answers.map((a, i) => (
-                  <i
-                    key={i}
-                    className="inline-block h-5 w-5 rounded-full border-2"
-                    style={{ borderColor: a.followed ? '#B4593A' : '#D8CDB8', background: a.followed ? '#B4593A' : 'transparent' }}
-                  />
-                ))}
-              </span>
-            )}
-            <p className="text-base font-semibold text-ink">
-              You followed up on {followed} of the {heard} student answers the recording could hear.
-            </p>
-          </div>
-        ) : (
-          <p className="text-sm text-ink-soft">
-            Too few student answers came through to count follow-ups{followLines.length > 0 ? ' — here is one the recording caught.' : '.'}
-          </p>
-        )}
-        {shownFollowUps.map((l, i) => (
-          <div key={i} className="flex items-baseline justify-between gap-4 rounded-xl bg-cream px-3.5 py-3 text-sm text-ink">
-            <div>
-              <span className="mb-1 block text-xs font-semibold text-ink-soft">{l.tag}</span>“{l.quote}”
-            </div>
-            <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(l.timestampSec)}</span>
-          </div>
-        ))}
-        {unfollowed.length > 0 && (
-          <>
-            <button type="button" onClick={() => setShowUnfollowed((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-terracotta/40">
-              {showUnfollowed ? 'Hide' : `Answers without a follow-up (${unfollowed.length})`}
-            </button>
-            {showUnfollowed && (
-              <div className="flex flex-wrap gap-2 text-xs text-ink-soft">
-                {unfollowed.map((a, i) => (
-                  <span key={i} className="rounded-full bg-cream px-2.5 py-1 font-mono">
-                    {formatTime(a.timestampSec)}
-                  </span>
-                ))}
-                <span className="basis-full">A student answered at these times and the next thing you said was not a follow-up.</span>
-              </div>
-            )}
-          </>
-        )}
-      </div>
     </SectionShell>
   )
 }
@@ -5672,32 +5561,59 @@ const CHECK_WHO: Record<string, string> = {
 }
 const CHECK_ACTED: Record<string, string> = { adjusted: 'You went back over it', confirmed: 'You confirmed and moved on' }
 
-type QPick = MixKey | 'checks'
-type QMoment = { t: number; quote: string; tag?: string; then?: string | null }
+type QPick = MixKey | 'self' | 'follow' | 'checks'
+type QMoment = { id: number; t: number; quote: string; tag?: string; then?: string | null }
+
+/// Two kinds beside the three a question can ask for, in their own colours:
+/// a question you answered yourself (asked, then answered before a student
+/// could), and a follow-up (what you said straight after a student answer,
+/// pushing on it).
+const EXTRA_KIND = {
+  self: { label: 'Answered yourself', color: '#C96A45', desc: 'You asked, and gave the answer before a student could.' },
+  follow: { label: 'Follow-up', color: '#E2BC5C', desc: 'Right after a student answered, you pushed on what they said.' },
+} as const
+
+const sameMoment = (a: { timestampSec: number; quote: string }, b: { timestampSec: number; quote: string }) => {
+  const norm = (q: string) => q.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim()
+  const na = norm(a.quote)
+  const nb = norm(b.quote)
+  return Math.abs(a.timestampSec - b.timestampSec) <= 8 && na.length > 0 && nb.length > 0 && (na.startsWith(nb.slice(0, 20)) || nb.startsWith(na.slice(0, 20)))
+}
 
 /// Your questions and checks for understanding on one lesson timeline: each
-/// question a dot in its kind's colour, each check a ring (solid when it asked
-/// everyone, dashed when it asked whether they understood). The key's pills
-/// choose which moments the list below shows; a dot shows its own. Checks the
-/// read found were not checks are left out. Never a claim that students
-/// understood.
+/// question a dot in its kind's colour — recall, explain, reasoning, answered
+/// yourself, follow-up — and each check a ring (solid when it asked everyone,
+/// dashed when it asked whether they understood). The key's pills choose
+/// which moments the list below shows; a dot shows its own. A question you
+/// answered yourself is shown as that and only that, not also as a question
+/// left with students. Checks the read found were not checks are left out.
+/// Never a claim that students understood.
 function QuestionsChecksPart({
   session,
-  questions,
-  byName,
+  questions: allQuestions,
 }: {
   session: AudioSessionWithSegments
   questions: ReturnType<typeof classifyQuestions>
-  byName: number
 }) {
   const checks = (session.cfuLog ?? []).filter((c) => c.loop?.who !== 'not_a_check')
+  const selfAnswered = (session.teachingMoves?.selfAnswered ?? []).map((q) => ({ timestampSec: q.timestampSec, quote: withoutAddressedNames(q.quote) }))
+  const questions = allQuestions.filter((q) => !selfAnswered.some((sa) => sameMoment(q, sa)))
+  // The follow-ups the answer log paired with a student answer — the same
+  // ones the follow-up count rests on.
+  const detail = (session.metricsDetail ?? {}) as Record<string, unknown>
+  const fuLogRaw = session.metricsLogs?.followUpLog ?? detail.followUpLog
+  const followUps = (Array.isArray(fuLogRaw) ? (fuLogRaw as { timestampSec: number; text: string }[]) : []).map((f) => ({
+    timestampSec: f.timestampSec,
+    quote: withoutAddressedNames(f.text),
+  }))
+  const named = questions.filter((q) => q.byName).length
   const count = (k: MixKey) => questions.filter((q) => q.mix === k).length
   const beyond = count('explain') + count('reasoning')
   const [pick, setPick] = useState<QPick>(
-    count('reasoning') > 0 ? 'reasoning' : count('explain') > 0 ? 'explain' : questions.length > 0 ? 'recall' : 'checks',
+    count('reasoning') > 0 ? 'reasoning' : count('explain') > 0 ? 'explain' : questions.length > 0 ? 'recall' : selfAnswered.length > 0 ? 'self' : 'checks',
   )
   const [hot, setHot] = useState<number | null>(null)
-  if (questions.length === 0 && checks.length === 0) {
+  if (questions.length === 0 && checks.length === 0 && selfAnswered.length === 0 && followUps.length === 0) {
     return (
       <div className="flex flex-col gap-2 border-t border-dashed border-hairline pt-5">
         <p className="font-heading text-xl font-bold text-forest">Your questions and checks</p>
@@ -5705,15 +5621,21 @@ function QuestionsChecksPart({
       </div>
     )
   }
-  const duration = session.durationSec ?? Math.max(60, ...questions.map((q) => q.timestampSec), ...checks.map((c) => c.timestampSec))
+  const duration =
+    session.durationSec ??
+    Math.max(60, ...questions.map((q) => q.timestampSec), ...checks.map((c) => c.timestampSec), ...selfAnswered.map((q) => q.timestampSec), ...followUps.map((q) => q.timestampSec))
   const x = (sec: number) => `${Math.min(98.5, Math.max(1.5, (sec / duration) * 100)).toFixed(2)}%`
   const everyone = checks.filter((c) => c.loop?.who === 'everyone').length
   const askedIf = checks.filter((c) => c.loop?.who === 'asked_if_understood').length
   const acted = checks.filter((c) => c.loop?.acted).length
 
+  // Every mark's id says what it is: questions from 0, checks from 1000,
+  // answered yourself from 2000, follow-ups from 3000.
+  const kindOf = (id: number): QPick => (id >= 3000 ? 'follow' : id >= 2000 ? 'self' : id >= 1000 ? 'checks' : questions[id].mix)
   const moments: QMoment[] =
     pick === 'checks'
-      ? checks.map((c) => ({
+      ? checks.map((c, i) => ({
+          id: 1000 + i,
           t: c.timestampSec,
           quote: withoutAddressedNames(c.text),
           tag: [c.loop ? CHECK_WHO[c.loop.who] : 'Check for understanding', c.loop?.acted ? CHECK_ACTED[c.loop.acted.how] : null]
@@ -5721,15 +5643,17 @@ function QuestionsChecksPart({
             .join(' · '),
           then: c.loop?.acted?.text ? withoutAddressedNames(c.loop.acted.text) : null,
         }))
-      : questions.filter((q) => q.mix === pick).map((q) => ({ t: q.timestampSec, quote: q.quote }))
+      : pick === 'self'
+        ? selfAnswered.map((q, i) => ({ id: 2000 + i, t: q.timestampSec, quote: q.quote }))
+        : pick === 'follow'
+          ? followUps.map((q, i) => ({ id: 3000 + i, t: q.timestampSec, quote: q.quote }))
+          : questions.flatMap((q, i) => (q.mix === pick ? [{ id: i, t: q.timestampSec, quote: q.quote }] : []))
 
+  const dot = (color: string) => <i className="inline-block h-3 w-3 rounded-full" style={{ background: color }} />
   const pills: { key: QPick; label: string; n: number; swatch: React.ReactNode }[] = [
-    ...(Object.keys(MIX) as MixKey[]).map((k) => ({
-      key: k as QPick,
-      label: MIX[k].label,
-      n: count(k),
-      swatch: <i className="inline-block h-3 w-3 rounded-full" style={{ background: MIX[k].color }} />,
-    })),
+    ...(Object.keys(MIX) as MixKey[]).map((k) => ({ key: k as QPick, label: MIX[k].label, n: count(k), swatch: dot(MIX[k].color) })),
+    { key: 'self', label: EXTRA_KIND.self.label, n: selfAnswered.length, swatch: dot(EXTRA_KIND.self.color) },
+    { key: 'follow', label: EXTRA_KIND.follow.label, n: followUps.length, swatch: dot(EXTRA_KIND.follow.color) },
     {
       key: 'checks',
       label: 'Checks for understanding',
@@ -5738,6 +5662,14 @@ function QuestionsChecksPart({
     },
   ]
   const ring = (who: string | undefined) => (who === 'asked_if_understood' ? 'border-dashed' : '')
+  // A white edge keeps dots that fall close together readable as separate.
+  const qDot = (color: string) => <i className="block h-3.5 w-3.5 rounded-full ring-2 ring-cream-card" style={{ background: color }} />
+  const listTitle =
+    pick === 'checks'
+      ? `Checks for understanding · ${checks.length}`
+      : pick === 'self' || pick === 'follow'
+        ? `${EXTRA_KIND[pick].label} · ${moments.length}`
+        : `${MIX[pick].label} · ${moments.length} of ${questions.length}`
 
   return (
     <div className="flex flex-col gap-4 border-t border-dashed border-hairline pt-5">
@@ -5749,10 +5681,12 @@ function QuestionsChecksPart({
       </div>
       <p className="text-base font-semibold text-ink">
         {questions.length === 0
-          ? 'No questions were heard. '
+          ? 'No questions were left with students. '
           : beyond === 0
             ? `All ${questions.length} questions asked students to recall something. `
             : `${beyond} of ${questions.length} were higher-order questions (explain or reasoning). `}
+        {selfAnswered.length > 0 &&
+          `${selfAnswered.length === 1 ? 'Once' : `${selfAnswered.length} times`} you answered your own question. `}
         {checks.length === 0
           ? 'No checks for understanding were heard.'
           : `You checked for understanding ${checks.length} time${checks.length === 1 ? '' : 's'}${
@@ -5763,9 +5697,15 @@ function QuestionsChecksPart({
       {/* One timeline: questions above, checks below. */}
       <div className="rounded-2xl border border-hairline bg-cream-card px-4 py-3.5">
         {[
-          // A white edge keeps dots that fall close together readable as separate.
-          { label: 'Questions', items: questions.map((q, i) => ({ i, t: q.timestampSec, on: pick === q.mix, node: <i className="block h-3.5 w-3.5 rounded-full ring-2 ring-cream-card" style={{ background: MIX[q.mix].color }} /> })) },
-          { label: 'Checks', items: checks.map((c, i) => ({ i: 1000 + i, t: c.timestampSec, on: pick === 'checks', node: <i className={`block h-3.5 w-3.5 rounded-full border-[2.5px] border-[#B4593A] bg-cream-card ring-2 ring-cream-card ${ring(c.loop?.who)}`} /> })) },
+          {
+            label: 'Questions',
+            items: [
+              ...questions.map((q, i) => ({ i, t: q.timestampSec, node: qDot(MIX[q.mix].color) })),
+              ...selfAnswered.map((q, i) => ({ i: 2000 + i, t: q.timestampSec, node: qDot(EXTRA_KIND.self.color) })),
+              ...followUps.map((q, i) => ({ i: 3000 + i, t: q.timestampSec, node: qDot(EXTRA_KIND.follow.color) })),
+            ],
+          },
+          { label: 'Checks', items: checks.map((c, i) => ({ i: 1000 + i, t: c.timestampSec, node: <i className={`block h-3.5 w-3.5 rounded-full border-[2.5px] border-[#B4593A] bg-cream-card ring-2 ring-cream-card ${ring(c.loop?.who)}`} /> })) },
         ].map((lane) => (
           <div key={lane.label} className="grid h-9 grid-cols-[72px_1fr] items-center">
             <span className="text-xs font-semibold text-ink-soft">{lane.label}</span>
@@ -5777,7 +5717,7 @@ function QuestionsChecksPart({
                   type="button"
                   aria-label={`${formatTime(it.t)}`}
                   onClick={() => {
-                    setPick(it.i >= 1000 ? 'checks' : questions[it.i].mix)
+                    setPick(kindOf(it.i))
                     setHot(it.i)
                   }}
                   // The button is the dot's own size, so the dot sits on the line.
@@ -5827,9 +5767,7 @@ function QuestionsChecksPart({
 
       <div className="flex flex-col gap-3 rounded-2xl bg-cream p-4" aria-live="polite">
         <div className="flex items-baseline justify-between gap-3">
-          <b className="text-sm text-forest">
-            {pick === 'checks' ? `Checks for understanding · ${checks.length}` : `${MIX[pick].label} · ${moments.length} of ${questions.length}`}
-          </b>
+          <b className="text-sm text-forest">{listTitle}</b>
           <span className="text-xs text-ink-soft">Tap a dot, or a kind above</span>
         </div>
         <p className="-mt-1 text-sm text-ink-soft">
@@ -5837,31 +5775,30 @@ function QuestionsChecksPart({
             ? `Moments you asked students to show or say what they understood${askedIf > 0 ? ` — ${askedIf} only asked whether they understood` : ''}. ${
                 acted > 0 ? `You said what you'd do with the answers ${acted} time${acted === 1 ? '' : 's'}.` : 'No response to the answers was heard.'
               }`
-            : MIX[pick].desc}
+            : pick === 'self' || pick === 'follow'
+              ? EXTRA_KIND[pick].desc
+              : MIX[pick].desc}
         </p>
-        {moments.map((m, i) => {
-          const isHot = hot != null && (pick === 'checks' ? hot - 1000 === i : questions.indexOf(questions.filter((q) => q.mix === pick)[i]) === hot)
-          return (
-            <div
-              key={i}
-              className={`flex items-baseline justify-between gap-4 rounded-xl px-3.5 py-3 text-sm text-ink ${isHot ? 'bg-cream-card ring-2 ring-forest' : 'bg-cream-card'}`}
-            >
-              <div>
-                {m.tag && <span className="mb-1 block text-xs font-semibold text-ink-soft">{m.tag}</span>}
-                “{m.quote}”
-                {m.then && <span className="mt-1 block text-ink-soft">Then: “{m.then}”</span>}
-              </div>
-              <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(m.t)}</span>
+        {moments.map((m) => (
+          <div
+            key={m.id}
+            className={`flex items-baseline justify-between gap-4 rounded-xl px-3.5 py-3 text-sm text-ink ${hot === m.id ? 'bg-cream-card ring-2 ring-forest' : 'bg-cream-card'}`}
+          >
+            <div>
+              {m.tag && <span className="mb-1 block text-xs font-semibold text-ink-soft">{m.tag}</span>}
+              “{m.quote}”
+              {m.then && <span className="mt-1 block text-ink-soft">Then: “{m.then}”</span>}
             </div>
-          )
-        })}
+            <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(m.t)}</span>
+          </div>
+        ))}
       </div>
 
       {questions.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 text-sm text-ink">
           <b>Who you asked</b>
-          <span className="rounded-full bg-cream px-3 py-1">{questions.length - byName} open to anyone</span>
-          {byName > 0 && <span className="rounded-full bg-cream px-3 py-1">{byName} to a student by name</span>}
+          <span className="rounded-full bg-cream px-3 py-1">{questions.length - named} open to anyone</span>
+          {named > 0 && <span className="rounded-full bg-cream px-3 py-1">{named} to a student by name</span>}
         </div>
       )}
     </div>
