@@ -55,7 +55,7 @@ const STEPS = [
   },
   {
     title: 'Read the report',
-    body: 'Summary first: what the lesson covered, your one focus for next lesson, one card for each of the four Insights sections, and one thing to keep doing. Insights holds the detail. My Growth shows the same numbers trending across every session you’ve recorded.',
+    body: 'Summary first: what the lesson covered, your one focus for next lesson, how the lesson moved, its numbers, and one thing to keep doing. Insights holds the detail. My Growth shows the same numbers trending across every session you’ve recorded.',
   },
   {
     title: 'Talk it through',
@@ -66,7 +66,7 @@ const STEPS = [
 const TABS = [
   {
     name: 'Summary',
-    body: 'What the lesson covered, your one focus for next lesson, a card for each Insights section, one thing to keep doing, and a “Try next time” list you can carry straight into your next plan.',
+    body: 'What the lesson covered, your one focus for next lesson, how the lesson moved, the lesson’s numbers, one thing to keep doing, and a “Try next time” list you can carry straight into your next plan. Save the whole report as a PDF from here.',
   },
   {
     name: 'Insights',
@@ -92,11 +92,11 @@ const TABS = [
 
 const STORY = [
   'Mr. Boateng is proud of third-period science. It’s discussion-based, students argue about evidence, and the room is never quiet. He records it expecting the report to confirm what he already believes.',
-  'It doesn’t, exactly. Talk & Participation shows he was speaking for 74% of the period. His average wait time after a question is 1.2 seconds.',
+  'It doesn’t, exactly. Talk & Participation shows he was speaking for 74% of the period. His Teacher-Anchored Wait Time — how long he leaves a thinking question with the class before he speaks again — is 1.2 seconds.',
   'His first reaction is to argue with it — a lot of that talk was him restating student ideas so the class could hear them. Which is true, and it’s also the finding.',
   'In the Reflect tab he says exactly that out loud. Coach asks what would happen if he waited instead of restating. He doesn’t love the answer: probably silence, and he’d fill it.',
   'His next step is small enough to actually do: after each open question, count to five in his head before saying anything. He writes it in his notes and sets a follow-up date for two weeks out.',
-  'The next recording isn’t a transformation. Wait time is 2.9 seconds and his talk share is 66% — better, not fixed. But My Growth now has two points on a line instead of one opinion, and he knows which direction it’s going.',
+  'The next recording isn’t a transformation. His wait time is 2.9 seconds and his talk share is 66% — better, not fixed. But My Growth now has two points on a line instead of one opinion, and he knows which direction it’s going.',
 ]
 
 const DEBRIEF_QUESTIONS = [
@@ -147,19 +147,36 @@ function SampleReport() {
         <p className="mt-1.5 text-xs text-ink-soft">Suggested: where today’s pattern points · or pick another from Try next time</p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="rounded-xl border border-hairline bg-cream-card p-4">
+        <p className="text-sm font-semibold text-ink">How the lesson moved</p>
+        <div className="mt-2 grid gap-1.5 sm:grid-cols-3">
+          {[
+            { role: 'Opened with', title: 'Recapping photosynthesis', time: '0:00–6:40' },
+            { role: 'Built', title: 'Walking through the respiration equation', time: '6:40–18:15' },
+            { role: 'Applied to', title: 'Groups predicting a cell short of oxygen', time: '18:15–end' },
+          ].map((st) => (
+            <div key={st.role} className="rounded-lg bg-cream px-3 py-2">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-terracotta-600">{st.role}</p>
+              <p className="text-sm font-semibold leading-snug text-ink">{st.title}</p>
+              <p className="font-mono text-[11px] text-ink-soft">{st.time}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         {[
-          { n: 1, name: 'Talk & Participation', big: '62%', line: 'of the recording was your voice' },
-          { n: 2, name: 'Questioning & Checking', big: '9 of 22', line: 'questions went beyond recall' },
-          { n: 3, name: 'Clarity & Content', big: '3', line: 'stages: opened with → built → applied to' },
-          { n: 4, name: 'Climate & Routines', big: '2 of 3', line: 'sets of directions named every part' },
-        ].map((c) => (
-          <div key={c.n} className="rounded-xl border border-hairline bg-cream-card p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-              {c.n} · {c.name}
-            </p>
-            <p className="mt-1.5 text-sm text-ink">
-              <strong className="font-heading text-lg font-extrabold text-forest">{c.big}</strong> {c.line}
+          { label: 'You spoke', value: '62', unit: '%', tint: 'bg-peach-tint' },
+          { label: 'Students spoke', value: '27', unit: '%', tint: 'bg-gold-tint' },
+          { label: 'Silence / other', value: '11', unit: '%', tint: 'bg-mint-tint' },
+          { label: 'Questions', value: '22', unit: '', tint: 'bg-mint-tint' },
+          { label: 'TAWT', value: '2.4', unit: 's', tint: 'bg-mint-tint' },
+        ].map((t) => (
+          <div key={t.label} className={`rounded-xl px-3 py-2.5 ${t.tint}`}>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-forest/60">{t.label}</p>
+            <p className="font-heading text-2xl font-extrabold leading-tight text-forest">
+              {t.value}
+              {t.unit && <span className="ml-0.5 text-sm font-bold">{t.unit}</span>}
             </p>
           </div>
         ))}

@@ -73,7 +73,15 @@ const CATEGORIES: Category[] = [
       },
       {
         q: 'What do I get from a Lesson Debrief?',
-        a: 'A private report with six tabs. Summary is the 60-second read: what the lesson covered, one focus for next lesson, a card for each of four sections, and one thing to keep doing. Insights has the detail in those four sections — Talk & Participation, Questioning & Checking, Clarity & Content, and Climate & Routines — always shown in your own words, with the time you said them. Content Specialist offers a subject specialist\'s ideas for teaching the topic. Rubric lens, Reflect, and My Growth cover the rest.',
+        a: 'A private report with six tabs. Summary is the 60-second read: what the lesson covered, one focus for next lesson, how the lesson moved, its numbers, and one thing to keep doing. Insights has the detail in those four sections — Talk & Participation, Questioning & Checking, Clarity & Content, and Climate & Routines — always shown in your own words, with the time you said them. Content Specialist offers a subject specialist\'s ideas for teaching the topic. Rubric lens, Reflect, and My Growth cover the rest.',
+      },
+      {
+        q: 'What is Teacher-Anchored Wait Time (TAWT)?',
+        a: 'After each question that asks students to explain or reason, how long you left it with the class before you spoke again, with any student answer included. The report lists each of those questions with its time, and whether a student answered, no one did, or you kept talking. It measures your side of the pause, which the microphone hears reliably even when students are faint. When no one answered, three seconds or more of silence gives most students time to think.',
+      },
+      {
+        q: 'Can I save or share a Lesson Debrief?',
+        a: 'Yes. On the Summary, choose Save the full report as a PDF. You get the Summary and all four Insights sections, each on its own page, with every list opened up. The Hard Look is never included. The PDF is yours to keep or pass on; nothing is shared unless you send it.',
       },
       {
         q: 'What if the recording only caught part of the lesson?',
@@ -81,7 +89,7 @@ const CATEGORIES: Category[] = [
       },
       {
         q: 'What is the Hard Look?',
-        a: 'An optional second reading of a Lesson Debrief that says the least generous thing the evidence can support, with the moments it is based on — for the whole lesson from the Summary, or for one section from the foot of that section. You ask for it; it never appears on its own. Where the recording cannot carry a criticism it says so, and it is left out of the printable report, so it stays between you and Coach.',
+        a: 'An optional second reading of a Lesson Debrief that says the least generous thing the evidence can support, with the moments it is based on — for the whole lesson from the Summary, or for one section from the foot of that section. You ask for it; it never appears on its own. Where the recording cannot carry a criticism it says so, and it is left out of the PDF, so it stays between you and Coach.',
       },
       {
         q: 'Does the Rubric lens rate my lesson?',

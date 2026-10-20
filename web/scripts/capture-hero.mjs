@@ -119,6 +119,10 @@ await evaluate(`
       'The lesson covers cellular respiration — how cells turn glucose and oxygen into usable energy — moving from a modelled walk through the equation to small groups predicting what happens when oxygen runs short.',
     'The framing of internal bad choices versus external forces is a strong organizing lens for comparing why empires fall—next time you could have students sort the specific causes (climate shift, earthquakes, river course changes, leadership decisions) into those two buckets for each empire before the simulation starts, so the categories are active tools rather than background narration.':
       'After a student answers, ask one more “why?” before you move on — today you followed up on 3 of the 9 answers the recording could hear.',
+    // How the lesson moved: the stages, renamed for the invented lesson.
+    'Reviewing prior empire topics': 'Recapping photosynthesis',
+    'Introducing the fall-of-empires simulation': 'Walking through the respiration equation',
+    'Harappan decline reading and questions': 'Groups predicting a cell short of oxygen',
   })});
   __after('From', 'Questioning & Checking');
   for (const n of __nodes()) if (/^[A-Z][a-z]{2} \\d{1,2}, \\d{4} at /.test(n.textContent.trim()) && n.parentElement.closest('header, [class*=bg-forest]')) n.textContent = 'Oct 14, 2026 at 10:05 AM';
@@ -138,14 +142,16 @@ const shoot = async (name, clip) => {
   console.log('wrote', name, Math.round(clip.width), 'x', Math.round(clip.height))
 }
 
-// 1. Summary: from the report title down to the end of the four section cards.
+// 1. Summary: from the report title down to the row of the lesson's numbers.
 const summaryClip = await evaluate(`(() => {
   const top = [...document.querySelectorAll('p,span')].find((e) => e.textContent.trim() === 'Wivoza · Lesson Debrief');
-  const cards = [...document.querySelectorAll('*')].filter((e) => e.children.length === 0 && e.textContent.trim() === 'Your one redirection said what to stop, not what to do instead.')[0];
+  const tile = [...document.querySelectorAll('p')].find((e) => e.textContent.trim() === 'TAWT');
   const t = top.getBoundingClientRect().top + scrollY - 20;
-  const b = cards.closest('a,button,div[class*=rounded]').getBoundingClientRect().bottom + scrollY + 16;
+  const b = tile.closest('.grid').getBoundingClientRect().bottom + scrollY + 16;
   return { x: 0, y: t, width: ${W}, height: b - t };
 })()`)
+const summaryLeak = await evaluate(`(() => { const m = (() => { const t = document.querySelector('main').innerText; return t.slice(0, t.indexOf('TAWT') + 20) })().match(/empire|Gupta|Harappan|Mauryan|Indus|bromine|Moroccan/gi); return m })()`)
+if (summaryLeak) throw new Error('real-lesson words left in the Summary: ' + summaryLeak.join(', '))
 await shoot('debrief-summary.png', summaryClip)
 
 // 2. Questioning & Checking: the questions-and-checks card.
