@@ -1,4 +1,5 @@
 import { readRoutines } from '../lib/routines.ts'
+import { readChecksLoop } from '../lib/checksLoop.ts'
 import { headlineFacts, writeHeadline } from '../lib/summaryHeadline.ts'
 import { readLessonArc } from '../lib/lessonArc.ts'
 import { readStretch } from '../lib/stretchBreak.ts'
@@ -831,6 +832,11 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
   // Needs the directions the teaching-moves read found, so it runs after it.
   const routines = teachingMoves ? await readRoutines(segments, teachingMoves.directions) : null
 
+  // Who each check asked and whether the teacher acted on what came back —
+  // Questioning & Checking's checks list. Null means the read failed and the
+  // checks log stands as it was.
+  const checksLog = await readChecksLoop(analysis.cfuLog, segments)
+
   // What the student talk was ABOUT, which needs the objective and so cannot
   // run alongside the two reads above. It is the only thing in this report
   // that can tell a discussion from a room talking over itself — every other
@@ -898,7 +904,7 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
       highlights: analysis.highlights,
       phases: analysis.phases,
       questionLog: analysis.questionLog,
-      cfuLog: analysis.cfuLog,
+      cfuLog: (checksLog ?? analysis.cfuLog) as unknown as Prisma.InputJsonValue,
       feedbackLog: analysis.feedbackLog,
       directiveLog: analysis.directiveLog,
       toneLog: analysis.toneLog,

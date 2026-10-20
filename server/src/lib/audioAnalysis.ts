@@ -51,6 +51,9 @@ export type CfuLogEntry = {
   /// What the check asked students for (lib/checkKinds.ts). Absent where it
   /// was not read.
   kind?: 'general' | 'explain' | 'evidence' | 'whole_class' | 'uncertainty' | 'not_a_check'
+  /// Who the check asked and whether the teacher acted on it
+  /// (lib/checksLoop.ts). Absent where it was not read.
+  loop?: import('./checksLoop.ts').CheckLoop
 }
 // One entry per teacher turn counted toward genericFeedbackCount/
 // specificFeedbackCount — text is the teacher's own turn; the preceding

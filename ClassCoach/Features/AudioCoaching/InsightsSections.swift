@@ -935,11 +935,13 @@ struct QuestionsSection: View {
             section: .questions, note: note, keep: keep, tryNext: session.nextSteps?.questions, tryGoal: goal,
             howToRead: [
                 "Questions are the ones you asked and left with students \u{2014} not \u{201C}okay?\u{201D}, \u{201C}right?\u{201D} or \u{201C}are we ready?\u{201D}. Each is sorted by what answering it asked for: recall, explaining why or how, or reasoning (justifying, comparing, judging).",
+                "A check is a moment you asked students to show or say what they understood. Each says who it asked and what you did next \u{2014} from your own words, so a check you acted on silently shows as nothing heard. It never says whether students understood.",
                 "A follow-up can only be spotted after a student answer the recording heard, so the dots count those answers only.",
             ],
             hardLook: hardLook, onDiscuss: onDiscuss
         ) {
             questionsPart(questions, count: count)
+            checksPart
             followUpsPart(heard: heard, followed: followed, showRate: showRate)
         }
     }
@@ -1008,6 +1010,44 @@ struct QuestionsSection: View {
                     }
                 }
                 .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+            }
+        }
+    }
+
+    private static let checkWho = ["everyone": "Asked everyone", "few": "A few answered", "asked_if_understood": "Asked if they understood"]
+    private static let checkActed = ["adjusted": "You went back over it", "confirmed": "You confirmed and moved on"]
+
+    /// Who each check asked and what you said next — never whether students
+    /// understood. Ones the read found were not checks are left out.
+    @ViewBuilder
+    private var checksPart: some View {
+        let checks = (session.cfuLog ?? []).filter { $0.loop?.who != "not_a_check" }
+        if !checks.isEmpty {
+            let read = checks.filter { $0.loop != nil }
+            let n = { (who: String) in read.filter { $0.loop?.who == who }.count }
+            let acted = read.filter { $0.loop?.acted != nil }.count
+            let parts = [
+                n("everyone") > 0 ? "\(n("everyone")) of \(checks.count) asked everyone to show or say an answer" : nil,
+                n("few") > 0 ? "\(n("few")) \(n("few") == 1 ? "was" : "were") answered by a few" : nil,
+                n("asked_if_understood") > 0 ? "\(n("asked_if_understood")) asked whether they understood" : nil,
+            ].compactMap { $0 }
+            VStack(alignment: .leading, spacing: 12) {
+                PartHeading(title: "Your checks for understanding", count: "\(checks.count) check\(checks.count == 1 ? "" : "s")")
+                if !read.isEmpty {
+                    Text(parts.joined(separator: "; ") + ". "
+                         + (acted > 0 ? "You said what you\u{2019}d do with the answers \(acted) time\(acted == 1 ? "" : "s")." : "No response to the answers was heard."))
+                        .font(.body.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                ForEach(Array(checks.enumerated()), id: \.offset) { _, c in
+                    let tag = [c.loop.flatMap { Self.checkWho[$0.who] } ?? "Check for understanding",
+                               c.loop?.acted.flatMap { Self.checkActed[$0.how] }].compactMap { $0 }.joined(separator: " \u{00B7} ")
+                    // The check in your words; what you said next, beneath it.
+                    EvidenceRow(line: EvidenceLine(tag: tag,
+                                                   text: "\u{201C}\(Redaction.withoutAddressedNames(c.text))\u{201D}",
+                                                   quote: c.loop?.acted?.text, timestampSec: c.timestampSec),
+                                fill: AppTheme.cream)
+                }
             }
         }
     }

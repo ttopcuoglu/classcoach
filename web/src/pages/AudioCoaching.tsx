@@ -5520,6 +5520,11 @@ function QuestioningCheckingTab({
             judging).
           </p>
           <p className="text-sm text-ink-soft">
+            A check is a moment you asked students to show or say what they understood. Each says who it asked and what you
+            did next — from your own words, so a check you acted on silently (scanning boards, changing course without
+            saying so) shows as nothing heard. It never says whether students understood.
+          </p>
+          <p className="text-sm text-ink-soft">
             A follow-up can only be spotted after a student answer the recording heard, so the dots count those answers
             only.
           </p>
@@ -5593,6 +5598,9 @@ function QuestioningCheckingTab({
         )}
       </div>
 
+      {/* Your checks for understanding: who each asked, and what you did next. */}
+      <ChecksPart session={session} />
+
       {/* Your follow-ups: a dot per answer heard, filled where you followed up. */}
       <div className="flex flex-col gap-4 border-t border-dashed border-hairline pt-5">
         <p className="font-heading text-xl font-bold text-forest">Your follow-ups</p>
@@ -5645,6 +5653,61 @@ function QuestioningCheckingTab({
         )}
       </div>
     </SectionShell>
+  )
+}
+
+const CHECK_WHO: Record<string, string> = {
+  everyone: 'Asked everyone',
+  few: 'A few answered',
+  asked_if_understood: 'Asked if they understood',
+}
+const CHECK_ACTED: Record<string, string> = { adjusted: 'You went back over it', confirmed: 'You confirmed and moved on' }
+
+/// Questioning & Checking's checks for understanding: who each asked, and
+/// what you said next. Ones the read found were not checks are left out.
+/// Never a claim that students understood.
+function ChecksPart({ session }: { session: AudioSessionWithSegments }) {
+  const checks = (session.cfuLog ?? []).filter((c) => c.loop?.who !== 'not_a_check')
+  if (checks.length === 0) return null
+  const read = checks.filter((c) => c.loop)
+  const n = (who: string) => read.filter((c) => c.loop!.who === who).length
+  const acted = read.filter((c) => c.loop!.acted).length
+  const parts = [
+    n('everyone') > 0 ? `${n('everyone')} of ${checks.length} asked everyone to show or say an answer` : null,
+    n('few') > 0 ? `${n('few')} ${n('few') === 1 ? 'was' : 'were'} answered by a few` : null,
+    n('asked_if_understood') > 0 ? `${n('asked_if_understood')} asked whether they understood` : null,
+  ].filter(Boolean)
+  return (
+    <div className="flex flex-col gap-4 border-t border-dashed border-hairline pt-5">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="font-heading text-xl font-bold text-forest">Your checks for understanding</p>
+        <span className="text-sm text-ink-soft">
+          {checks.length} check{checks.length === 1 ? '' : 's'}
+        </span>
+      </div>
+      {read.length > 0 && (
+        <p className="text-base font-semibold text-ink">
+          {parts.join('; ')}.{' '}
+          {acted > 0 ? `You said what you'd do with the answers ${acted} time${acted === 1 ? '' : 's'}.` : 'No response to the answers was heard.'}
+        </p>
+      )}
+      <div className="flex flex-col gap-2">
+        {checks.map((c, i) => (
+          <div key={i} className="flex items-baseline justify-between gap-4 rounded-xl bg-cream px-3.5 py-3 text-sm text-ink">
+            <div>
+              <span className="mb-1 block text-xs font-semibold text-ink-soft">
+                {[c.loop ? CHECK_WHO[c.loop.who] : 'Check for understanding', c.loop?.acted ? CHECK_ACTED[c.loop.acted.how] : null]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+              “{withoutAddressedNames(c.text)}”
+              {c.loop?.acted?.text && <span className="mt-1 block text-ink-soft">Then: “{withoutAddressedNames(c.loop.acted.text)}”</span>}
+            </div>
+            <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(c.timestampSec)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
